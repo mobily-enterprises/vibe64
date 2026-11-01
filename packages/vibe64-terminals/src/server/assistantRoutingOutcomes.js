@@ -50,9 +50,11 @@ function createAssistantRoutingOutcomes({
       const state = await read(context.runtime.store, sessionId);
       if (!state || state.mode !== "auto" || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
-          input.turnId !== state.turnId || input.stage !== state.stage) throw failure(
-        "The workflow outcome does not match the active request and turn."
-      );
+          input.turnId !== state.turnId || input.stage !== state.stage) {
+        throw failure(
+          "The workflow outcome does not match the active request and turn."
+        );
+      }
       await decisions.validateDecision(context, state, Boolean(state.followup));
       const native = await agent.sessionState(sessionId, context);
       if (!native?.turn?.active || native.turn.id && native.turn.id !== state.turnId) {
@@ -71,9 +73,11 @@ function createAssistantRoutingOutcomes({
       const plan = await readWorkPlan(context);
       const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
-          (input.expectedProgressRevision || null) !== plan.progressRevision)) throw failure(
-        "Read the complete current Plan and Progress before reporting this outcome."
-      );
+          (input.expectedProgressRevision || null) !== plan.progressRevision)) {
+        throw failure(
+          "Read the complete current Plan and Progress before reporting this outcome."
+        );
+      }
       if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
           workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
         throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.");

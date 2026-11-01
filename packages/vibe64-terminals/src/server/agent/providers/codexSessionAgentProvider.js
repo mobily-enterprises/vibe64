@@ -289,84 +289,102 @@ function createCodexSessionAgentProvider({
 
   function prepareConversationHost(sessionId, context = {}, mode = "main") {
     if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
-    if (mode === "renewalProof") return {
-      native: {
-        providerOwner: codexAppServerProviderOwner,
-        preparation: {
-          predecessor(options) {
-            return prepareRenewalProcessExitProof(renewalArchivedPredecessorContext(sessionId, options).session);
-          },
-          successor(options) {
-            return prepareRenewalProcessExitProof(renewalSuccessorProcessExitProofReleaseContext(sessionId, options).session);
+    if (mode === "renewalProof") {
+      return {
+        native: {
+          providerOwner: codexAppServerProviderOwner,
+          preparation: {
+            predecessor(options) {
+              return prepareRenewalProcessExitProof(renewalArchivedPredecessorContext(sessionId, options).session);
+            },
+            successor(options) {
+              return prepareRenewalProcessExitProof(renewalSuccessorProcessExitProofReleaseContext(sessionId, options).session);
+            }
           }
         }
-      }
-    };
-    if (mode === "renewal") return {
-      native: {
-        runOwner: codexAppServerRunOwner,
-        preparation: {
-          handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
-          seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
-        }
-      }
-    };
-    if (mode === "reconciliation") return {
-      native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
-    };
-    if (mode === "unsubscription") return {
-      native: {
-        runOwner: codexAppServerRunOwner,
-        preparation: {
-          enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
-          session: prepareCodexAppServerThreadUnsubscription,
-          failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
-          cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
-        }
-      }
-    };
-    if (mode === "invalidation") return {
-      native: {
-        runOwner: codexAppServerRunOwner,
-        preparation: {
-          enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
-        }
-      }
-    };
-    if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
-    if (mode === "storage") return {
-      native: {
-        providerOwner: codexAppServerProviderOwner,
-        errorPrefix: "vibe64_",
-        preparation: { storage: prepareNativeStorageProvider }
-      }
-    };
-    if (mode === "projectCleanup") return {
-      native: { runOwner: codexAppServerRunOwner, preparation: { projectCleanup: prepareCodexProjectCleanup } }
-    };
-    return (async () => {
-      if (mode === "readiness") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
       };
-      if (mode === "scoped" || mode === "create" || mode === "dispose") return {
-        ...(mode === "dispose" ? {
-          cleanupOptions: {
-            ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
-            changeover: context.changeover === true,
-            preserveProcessExitProof: context.preserveProcessExitProof === true,
-            renewalCleanup: context.renewalCleanup,
-            runtime: context.runtime,
-            session: context.session
-          }
-        } : {}),
-        namespace: codexTerminalNamespace(sessionId),
+    }
+    if (mode === "renewal") {
+      return {
         native: {
           runOwner: codexAppServerRunOwner,
-          providerOwner: codexAppServerProviderOwner,
-          namespace: codexTerminalNamespace(sessionId),
-          preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) }
+          preparation: {
+            handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
+            seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
+          }
         }
       };
+    }
+    if (mode === "reconciliation") {
+      return {
+        native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
+      };
+    }
+    if (mode === "unsubscription") {
+      return {
+        native: {
+          runOwner: codexAppServerRunOwner,
+          preparation: {
+            enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
+            session: prepareCodexAppServerThreadUnsubscription,
+            failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
+            cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
+          }
+        }
+      };
+    }
+    if (mode === "invalidation") {
+      return {
+        native: {
+          runOwner: codexAppServerRunOwner,
+          preparation: {
+            enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
+          }
+        }
+      };
+    }
+    if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
+    if (mode === "storage") {
+      return {
+        native: {
+          providerOwner: codexAppServerProviderOwner,
+          errorPrefix: "vibe64_",
+          preparation: { storage: prepareNativeStorageProvider }
+        }
+      };
+    }
+    if (mode === "projectCleanup") {
+      return {
+        native: { runOwner: codexAppServerRunOwner, preparation: { projectCleanup: prepareCodexProjectCleanup } }
+      };
+    }
+    return (async () => {
+      if (mode === "readiness") {
+        return {
+          native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
+        };
+      }
+      if (mode === "scoped" || mode === "create" || mode === "dispose") {
+        return {
+          ...(mode === "dispose" ? {
+            cleanupOptions: {
+              ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
+              changeover: context.changeover === true,
+              preserveProcessExitProof: context.preserveProcessExitProof === true,
+              renewalCleanup: context.renewalCleanup,
+              runtime: context.runtime,
+              session: context.session
+            }
+          } : {}),
+          namespace: codexTerminalNamespace(sessionId),
+          native: {
+            runOwner: codexAppServerRunOwner,
+            providerOwner: codexAppServerProviderOwner,
+            namespace: codexTerminalNamespace(sessionId),
+            preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) }
+          }
+        };
+      }
       const { runtime } = context;
       const session = context.session || await codexConversationStorage.readSession(sessionId);
       const messagePreparation = codexConversationPreparation.message(sessionId);
@@ -430,50 +448,62 @@ function createCodexSessionAgentProvider({
   }
 
   function prepareConversationRequest(method, context, input = {}) {
-    if (method === "releaseRenewalPredecessorProcessExitProof") return {
-      context: {
-        renewalId: input.renewalId,
-        runtime: context.runtime,
-        session: context.session
-      }
-    };
-    if (method === "releaseRenewalSuccessorProcessExitProof") return {
-      context: {
-        authorization: input.authorization,
-        renewalId: input.renewalId,
-        runtime: context.runtime,
-        session: context.session
-      }
-    };
-    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-      input: {
-        ...input,
-        agentSettings: codexAssistantSettings(context, input),
-        vibe64User: input.vibe64User || context.vibe64User || null
-      },
-      context: { runtime: context.runtime, session: context.session }
-    };
-    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
-      input,
-      context: { runtime: context.runtime, session: context.session }
-    };
+    if (method === "releaseRenewalPredecessorProcessExitProof") {
+      return {
+        context: {
+          renewalId: input.renewalId,
+          runtime: context.runtime,
+          session: context.session
+        }
+      };
+    }
+    if (method === "releaseRenewalSuccessorProcessExitProof") {
+      return {
+        context: {
+          authorization: input.authorization,
+          renewalId: input.renewalId,
+          runtime: context.runtime,
+          session: context.session
+        }
+      };
+    }
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
+      return {
+        input: {
+          ...input,
+          agentSettings: codexAssistantSettings(context, input),
+          vibe64User: input.vibe64User || context.vibe64User || null
+        },
+        context: { runtime: context.runtime, session: context.session }
+      };
+    }
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") {
+      return {
+        input,
+        context: { runtime: context.runtime, session: context.session }
+      };
+    }
     if (method === "ensureSession") return { context: {} };
-    if (method === "createConversation") return {
-      input: { ...input, agentSettings: codexAssistantSettings(context, input) },
-      context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }
-    };
-    if (method === "closeSession") return {
-      namespace: codexTerminalNamespace(context.sessionId),
-      sessionId: context.sessionId,
-      context,
-      options: {
-        changeover: context.changeover === true,
-        forgetConversationBinding: context.forgetConversationBinding === true,
-        preserveProcessExitProof: context.preserveProcessExitProof === true,
-        renewalCleanup: context.renewalCleanup,
-        session: context.session
-      }
-    };
+    if (method === "createConversation") {
+      return {
+        input: { ...input, agentSettings: codexAssistantSettings(context, input) },
+        context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }
+      };
+    }
+    if (method === "closeSession") {
+      return {
+        namespace: codexTerminalNamespace(context.sessionId),
+        sessionId: context.sessionId,
+        context,
+        options: {
+          changeover: context.changeover === true,
+          forgetConversationBinding: context.forgetConversationBinding === true,
+          preserveProcessExitProof: context.preserveProcessExitProof === true,
+          renewalCleanup: context.renewalCleanup,
+          session: context.session
+        }
+      };
+    }
     if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
       method
     )) {

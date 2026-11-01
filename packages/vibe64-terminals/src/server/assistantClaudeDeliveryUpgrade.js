@@ -92,7 +92,9 @@ export async function upgradeClaudeRejectedInput(context) {
             if ((await readUpgradeFile(afterPath)) !== `${patch.assistant_routing_request}\n`) {
               throw new Error("Prepared Claude repair no longer matches its original evidence. Inspect the backup before retrying.");
             }
-          } else if (original !== null) throw new Error("Original Claude repair evidence is no longer eligible. Inspect before retrying.");
+          } else if (original !== null) {
+            throw new Error("Original Claude repair evidence is no longer eligible. Inspect before retrying.");
+          }
           return { metadata: patch };
         }
       });

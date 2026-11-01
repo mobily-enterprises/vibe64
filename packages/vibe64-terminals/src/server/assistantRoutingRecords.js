@@ -60,18 +60,20 @@ function createAssistantRoutingRecords({
     const conversationId = context.routingConversationId;
     const scope = conversationId ? { sessionId, conversationId } : sessionId;
     const turn = await context.runtime.store.writeConversationSystemMessage(scope, notice);
-    if (turn) await publish(sessionId, {
-      reason: "assistant-routing-changed",
-      payload: {
-        assistantRoutingRequest: state,
-        clientRefresh: { includeList: false },
-        conversationLogPatch: {
-          type: "upsert-turn",
-          turn
-        },
-        ...(conversationId ? { conversationId } : {})
-      }
-    });
+    if (turn) {
+      await publish(sessionId, {
+        reason: "assistant-routing-changed",
+        payload: {
+          assistantRoutingRequest: state,
+          clientRefresh: { includeList: false },
+          conversationLogPatch: {
+            type: "upsert-turn",
+            turn
+          },
+          ...(conversationId ? { conversationId } : {})
+        }
+      });
+    }
   }
   async function currentGoal(sessionId, context) {
     const native = await agent.readGoal(sessionId, context);

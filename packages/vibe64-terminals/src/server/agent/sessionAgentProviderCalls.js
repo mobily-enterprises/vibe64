@@ -291,7 +291,9 @@ function createSessionAgentProviderCalls({
           // The original sender chooses historical attachment IDs before this
           // same authorized storage resolver prepares their native input.
           context.prepareMessage = message => attachments.prepareMessage(context, message, { durable: true });
-        } else providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
+        } else {
+          providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
+        }
       }
       if (method === "writeTerminal" && provider.id === "opencode") {
         providerInput = { ...providerInput, input: { ...input.input, attachments: [] } };

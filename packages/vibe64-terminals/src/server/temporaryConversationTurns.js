@@ -113,8 +113,11 @@ function createTemporaryConversationTurns({
     if (temporarySaves.get(sessionId) !== pending) return;
     if (result?.code === "vibe64_agent_write_mode_busy") {
       for (const conversationId of conversationIds) pending.conversationIds.add(conversationId);
-    } else if (pending.conversationIds.size) armTemporarySave(sessionId, pending);
-    else temporarySaves.delete(sessionId);
+    } else if (pending.conversationIds.size) {
+      armTemporarySave(sessionId, pending);
+    } else {
+      temporarySaves.delete(sessionId);
+    }
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
     // A turn without an event stream may carry onEvent: null (the provider call context sets it so).

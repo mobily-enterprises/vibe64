@@ -97,9 +97,11 @@ async function readPair(context, id = "") {
     ? null
     : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
   if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
-      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) throw planError(
-    "A plan or progress document is missing or changed. Restore the saved pair before continuing."
-  );
+      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) {
+    throw planError(
+      "A plan or progress document is missing or changed. Restore the saved pair before continuing."
+    );
+  }
   return {
     ...plan,
     progressText,
@@ -182,10 +184,12 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   } : null;
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
-      expectedProgressRevision !== (plan.progressRevision || "")) throw planError(
-    "The plan or progress changed. Read both again from the beginning.",
-    "vibe64_work_plan_changed"
-  );
+      expectedProgressRevision !== (plan.progressRevision || "")) {
+    throw planError(
+      "The plan or progress changed. Read both again from the beginning.",
+      "vibe64_work_plan_changed"
+    );
+  }
   const characters = Array.from(plan.text);
   const progress = Array.from(plan.progressText || "");
   const totalCharacters = characters.length + progress.length;

@@ -94,10 +94,12 @@ function createWorkspaceSetupExecution({
       label: "Preparing workspace",
       env: environment
     });
-    if (resource?.ok === false) throw Object.assign(new Error(resource.error || "Workspace preparation could not be admitted."), {
-      code: resource.code,
-      details: { admission: resource.admission }
-    });
+    if (resource?.ok === false) {
+      throw Object.assign(new Error(resource.error || "Workspace preparation could not be admitted."), {
+        code: resource.code,
+        details: { admission: resource.admission }
+      });
+    }
     let outcome = "failed";
     try {
       const admittedSetup = await runnerState.inspect({ environment, projectRoot: sourcePath, session });

@@ -95,10 +95,12 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
           });
           return transaction.readTurn(id);
         });
-        if (turn) await publish(input.sourceSession, {
-          reason: "project-message-changed",
-          payload: { conversationLogPatch: { type: "upsert-turn", turn } }
-        }).catch(publishError => reportFailure(publishError, receipt));
+        if (turn) {
+          await publish(input.sourceSession, {
+            reason: "project-message-changed",
+            payload: { conversationLogPatch: { type: "upsert-turn", turn } }
+          }).catch(publishError => reportFailure(publishError, receipt));
+        }
       }, { vibe64User: actor });
     }
     await writeReceipt("accepted");
@@ -113,10 +115,12 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
           messageId: input.messageId,
           turnMetadata: { projectMessage: { ...projectMessage, direction: "received" } }
         }, options);
-        if (result?.ok !== true) throw vibe64Error(
-          result?.error || "Project message delivery failed.",
-          result?.code || "vibe64_project_message_delivery_failed"
-        );
+        if (result?.ok !== true) {
+          throw vibe64Error(
+            result?.error || "Project message delivery failed.",
+            result?.code || "vibe64_project_message_delivery_failed"
+          );
+        }
       } catch (error) {
         reportFailure(error, receipt);
         await writeReceipt("failed", error.message);

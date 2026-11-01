@@ -207,19 +207,23 @@ async function createSessionConversationBinding(provider, sessionId, options = {
   if (engine === "codex") delete openingContext.selection;
   const scoped = (openingContext.assistantScope || openingContext.routingConversationId) && openingContext.scopedConversationId;
   const conversationId = scoped ? String(openingContext.scopedConversationId ?? "").trim() : "";
-  if (scoped) requireScopedConversationContext(
-    sessionId,
-    openingContext,
-    conversationId,
-    engine === "codex" ? "The scoped conversation must retain its original scope and native identity." : undefined
-  );
+  if (scoped) {
+    requireScopedConversationContext(
+      sessionId,
+      openingContext,
+      conversationId,
+      engine === "codex" ? "The scoped conversation must retain its original scope and native identity." : undefined
+    );
+  }
   const host = await provider.prepareConversationHost(sessionId, openingContext, scoped ? "scoped" : "main");
-  if (scoped) return {
-    sessionId,
-    namespace: `${host.namespace}\0${conversationId}`,
-    engine,
-    native: { ...host.native, scoped: { conversationId, context: openingContext } }
-  };
+  if (scoped) {
+    return {
+      sessionId,
+      namespace: `${host.namespace}\0${conversationId}`,
+      engine,
+      native: { ...host.native, scoped: { conversationId, context: openingContext } }
+    };
+  }
   const { runtime, session } = host.context;
   const original = createMainConversationBinding(runtime.store, sessionId, {
     runtime,

@@ -364,12 +364,14 @@ function createClaudeConversationHost({
         }
       };
     }
-    if (method === "closeSession") return {
-      namespace: claudeTerminalNamespace(context.sessionId),
-      sessionId: context.sessionId,
-      context,
-      options: context
-    };
+    if (method === "closeSession") {
+      return {
+        namespace: claudeTerminalNamespace(context.sessionId),
+        sessionId: context.sessionId,
+        context,
+        options: context
+      };
+    }
     if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
       method
     )) {
@@ -395,81 +397,101 @@ function createClaudeConversationHost({
   }
 
   function prepareConversationHost(sessionId, openingContext = {}, mode = "main", input = {}) {
-    if (mode === "detached") return {
-      native: {
-        owner: conversations,
-        get executionProfile() {
-          return input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
-        }
-      }
-    };
-    if (mode === "activity") return ownerContextFor({ ...openingContext, sessionId }).then(context => ({
-      context,
-      native: { owner: conversations }
-    }));
-    if (mode === "detachedCleanup") return {
-      native: { owner: conversations }
-    };
-    if (mode === "storage") return {
-      native: {
-        owner: conversations,
-        configRoot,
-        preparation: {
-          retirement(binding, context) {
-            return {
-              configRoot,
-              binding,
-              beforeDelete: context.beforeDelete,
-              signal: context.signal,
-              application: {
-                get saved() {
-                  return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null");
-                },
-                get terminalRunning() {
-                  return listTerminalSessions({
-                    namespace: claudeTerminalNamespace(context.sessionId),
-                    runningOnly: true
-                  }).length;
-                }
-              }
-            };
-          }
-        }
-      }
-    };
-    if (mode === "renewalProof") return {
-      native: { owner: conversations, application: cleanupApplication }
-    };
-    if (mode === "renewal") return {
-      native: {
-        owner: conversations,
-        preparation: {
-          handover: (handoverInput, context) => prepareRenewalHandover(context, handoverInput),
-          seed: (seedInput, context) => prepareRenewalSeed(context, seedInput)
-        }
-      }
-    };
-    if (mode === "reconciliation") return {
-      native: { owner: conversations, application: cleanupApplication }
-    };
-    if (mode === "projectCleanup" || mode === "invalidation") return {
-      native: {
-        owner: conversations,
-        application: cleanupApplication,
-        account: { queries: accountQueries, failure: accountQueryFailure }
-      }
-    };
-    return (async () => {
-      if (mode === "readiness" || mode === "settings") return {
-        native: { owner: conversations }
-      };
-      if (mode === "scoped" || mode === "create" || mode === "dispose") return {
-        namespace: claudeTerminalNamespace(sessionId),
+    if (mode === "detached") {
+      return {
         native: {
           owner: conversations,
-          preparation: { cleanup: prepareSessionCleanup }
+          get executionProfile() {
+            return input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+          }
         }
       };
+    }
+    if (mode === "activity") {
+      return ownerContextFor({ ...openingContext, sessionId }).then(context => ({
+        context,
+        native: { owner: conversations }
+      }));
+    }
+    if (mode === "detachedCleanup") {
+      return {
+        native: { owner: conversations }
+      };
+    }
+    if (mode === "storage") {
+      return {
+        native: {
+          owner: conversations,
+          configRoot,
+          preparation: {
+            retirement(binding, context) {
+              return {
+                configRoot,
+                binding,
+                beforeDelete: context.beforeDelete,
+                signal: context.signal,
+                application: {
+                  get saved() {
+                    return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null");
+                  },
+                  get terminalRunning() {
+                    return listTerminalSessions({
+                      namespace: claudeTerminalNamespace(context.sessionId),
+                      runningOnly: true
+                    }).length;
+                  }
+                }
+              };
+            }
+          }
+        }
+      };
+    }
+    if (mode === "renewalProof") {
+      return {
+        native: { owner: conversations, application: cleanupApplication }
+      };
+    }
+    if (mode === "renewal") {
+      return {
+        native: {
+          owner: conversations,
+          preparation: {
+            handover: (handoverInput, context) => prepareRenewalHandover(context, handoverInput),
+            seed: (seedInput, context) => prepareRenewalSeed(context, seedInput)
+          }
+        }
+      };
+    }
+    if (mode === "reconciliation") {
+      return {
+        native: { owner: conversations, application: cleanupApplication }
+      };
+    }
+    if (mode === "projectCleanup" || mode === "invalidation") {
+      return {
+        native: {
+          owner: conversations,
+          application: cleanupApplication,
+          account: { queries: accountQueries, failure: accountQueryFailure }
+        }
+      };
+    }
+    return (async () => {
+      if (mode === "readiness" || mode === "settings") {
+        return {
+          native: { owner: conversations }
+        };
+      }
+      if (mode === "scoped" || mode === "create" || mode === "dispose") {
+        return {
+          namespace: claudeTerminalNamespace(sessionId),
+          native: {
+            owner: conversations,
+            preparation: { cleanup: prepareSessionCleanup }
+          }
+        };
+      }
       const context = await contextFor({ ...openingContext, sessionId });
       const { runtime } = context;
       return {

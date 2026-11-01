@@ -113,11 +113,13 @@ function createAssistantRoutingCancellation({
       });
       await stop?.();
       if (waitForCleanup) await finished;
-      if (waitForCleanup) await exclusive(sessionId, routingOptions, async context => {
-        if ((await read(context.runtime.store, sessionId))?.helper) {
-          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
-        }
-      });
+      if (waitForCleanup) {
+        await exclusive(sessionId, routingOptions, async context => {
+          if ((await read(context.runtime.store, sessionId))?.helper) {
+            throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+          }
+        });
+      }
       return result;
     }
     if (!waitForCleanup) return cancelRouting();

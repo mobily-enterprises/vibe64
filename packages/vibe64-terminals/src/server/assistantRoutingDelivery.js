@@ -207,13 +207,15 @@ function createAssistantRoutingDelivery({
     records.mark(state.messageId, "dispatched");
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
     // A Cancel that arrived during dispatch stops the turn this message started.
-    if (records.isCancelling(sessionId, context, messageId)) await interrupt(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
-      component: "vibe64.assistant_routing",
-      event: "vibe64.assistant_routing.interrupt_failed",
-      sessionId: sessionId,
-      code: error?.code,
-      error: error?.message
-    }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
+    if (records.isCancelling(sessionId, context, messageId)) {
+      await interrupt(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.assistant_routing",
+        event: "vibe64.assistant_routing.interrupt_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
+    }
     state.status = "working";
     state.delivery = "accepted";
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";

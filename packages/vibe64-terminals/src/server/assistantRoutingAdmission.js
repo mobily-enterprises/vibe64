@@ -348,37 +348,39 @@ function createAssistantRoutingAdmission({
       if (refusedBeforeAdmission && error && typeof error === "object" && !error.delivery) error.delivery = "not-sent";
       throw error;
     });
-    if (direct === true) return exclusive(sessionId, options, async (current) => {
-      records.mark(input.messageId, "dispatch-called");
-      if (records.isCancelling(sessionId, current, input.messageId)) {
-        throw Object.assign(
-          failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled"),
-          { delivery: "not-sent" }
-        );
-      }
-      const result = await dispatch(sessionId, input, current);
-      records.mark(input.messageId, "dispatched");
-      // A Cancel that arrived during dispatch stops the turn this message started.
-      if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) {
-        await interrupt(sessionId, current).catch((error) => logOperationalEvent(logger, "warn", {
-          component: "vibe64.assistant_routing",
-          event: "vibe64.assistant_routing.interrupt_failed",
-          sessionId: sessionId,
-          code: error?.code,
-          error: error?.message
-        }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
-      }
-      if (result?.delivered === true && task.steeringRequestId) {
-        const persisted = await read(current.runtime.store, sessionId);
-        if (persisted?.messageId === task.steeringRequestId &&
-            !persisted.steering.some(({ messageId }) => messageId === input.messageId)) {
-          persisted.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
-          delete persisted.outcome;
-          await records.save(current, persisted);
+    if (direct === true) {
+      return exclusive(sessionId, options, async (current) => {
+        records.mark(input.messageId, "dispatch-called");
+        if (records.isCancelling(sessionId, current, input.messageId)) {
+          throw Object.assign(
+            failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled"),
+            { delivery: "not-sent" }
+          );
         }
-      }
-      return result;
-    });
+        const result = await dispatch(sessionId, input, current);
+        records.mark(input.messageId, "dispatched");
+        // A Cancel that arrived during dispatch stops the turn this message started.
+        if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) {
+          await interrupt(sessionId, current).catch((error) => logOperationalEvent(logger, "warn", {
+            component: "vibe64.assistant_routing",
+            event: "vibe64.assistant_routing.interrupt_failed",
+            sessionId: sessionId,
+            code: error?.code,
+            error: error?.message
+          }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
+        }
+        if (result?.delivered === true && task.steeringRequestId) {
+          const persisted = await read(current.runtime.store, sessionId);
+          if (persisted?.messageId === task.steeringRequestId &&
+            !persisted.steering.some(({ messageId }) => messageId === input.messageId)) {
+            persisted.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
+            delete persisted.outcome;
+            await records.save(current, persisted);
+          }
+        }
+        return result;
+      });
+    }
     if (direct) return direct;
     try {
       if (!state.resolvedMode) {

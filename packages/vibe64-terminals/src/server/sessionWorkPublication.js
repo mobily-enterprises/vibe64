@@ -86,10 +86,12 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     ? contributionAuthority.publishedCommit
     : canonicalCommit;
   if (context.contribution) {
-    if (contributionAuthority.missingPublished) throw saveError(
-      "This contribution branch was removed after it was pushed. Preserve its source and submit further work as a new contribution.",
-      "vibe64_contribution_branch_missing"
-    );
+    if (contributionAuthority.missingPublished) {
+      throw saveError(
+        "This contribution branch was removed after it was pushed. Preserve its source and submit further work as a new contribution.",
+        "vibe64_contribution_branch_missing"
+      );
+    }
     const expected = contributionAuthority.remoteAbsent ? "" : contributionAuthority.publishedCommit;
     if ((await readContributionHead(runCommand, context, options)).head !== expected) {
       throw saveError(

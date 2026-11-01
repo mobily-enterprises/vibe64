@@ -64,11 +64,13 @@ function prepareCopiedAssistantRouting(metadata = {}) {
   if (metadata.assistant_goal_intent) patch.assistant_goal_intent = "null";
   const request = parseRequest(metadata[STATE_KEY]);
   if (request) {
-    if (request.status !== "complete") Object.assign(request, {
-      stopped: true,
-      status: "waiting",
-      error: "Copied workflow is stopped. Inspect retained delivery before continuing."
-    });
+    if (request.status !== "complete") {
+      Object.assign(request, {
+        stopped: true,
+        status: "waiting",
+        error: "Copied workflow is stopped. Inspect retained delivery before continuing."
+      });
+    }
     if (request.helper) request.helper.executionId = "";
     // Keep uncertain delivery and the original message/turn receipt intact.
     patch[STATE_KEY] = JSON.stringify(request);

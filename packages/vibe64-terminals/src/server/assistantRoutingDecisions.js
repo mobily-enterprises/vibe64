@@ -181,8 +181,9 @@ function createAssistantRoutingDecisions({
 
   async function resolve(context, state, followup = false) {
     let purpose = state.mode;
-    if (followup) purpose = state.stage === "review" ? "review" : assistantWorkflowRole(state);
-    else if (state.mode !== "custom" && state.task === "deslop") {
+    if (followup) {
+      purpose = state.stage === "review" ? "review" : assistantWorkflowRole(state);
+    } else if (state.mode !== "custom" && state.task === "deslop") {
       purpose = state.resolvedMode === "senior" ? "deslop" : state.resolvedMode;
     }
     const decision = await agent.resolveAssistantPurpose({

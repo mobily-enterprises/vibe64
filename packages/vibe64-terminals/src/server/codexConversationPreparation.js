@@ -412,10 +412,12 @@ function createCodexConversationPreparation({
   }
 
   async function control(sessionId, options, input = {}) {
-    if (codexAppServerAdmissionError(sessionId)) return codexAppServerFrozenTurnInterruptResponse({
-      threadId: input.threadId || input.codexSessionId,
-      turnId: input.turnId || input.codexTurnId
-    });
+    if (codexAppServerAdmissionError(sessionId)) {
+      return codexAppServerFrozenTurnInterruptResponse({
+        threadId: input.threadId || input.codexSessionId,
+        turnId: input.turnId || input.codexTurnId
+      });
+    }
     const { session: _openingSession, ...currentOptions } = options || {};
     const current = await codexAppServerSessionContext(sessionId, { ...currentOptions, allowClosing: true });
     return current.ok === false ? current : codexAppServerControlPreparation(sessionId, current);

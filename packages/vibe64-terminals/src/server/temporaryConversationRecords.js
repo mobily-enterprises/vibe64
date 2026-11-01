@@ -22,11 +22,13 @@ import { temporaryConversationNamespace } from "./temporaryConversationRules.js"
 function createTemporaryConversationRecords({ sessionAgent, publishConversation }) {
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
-    if (!record) throw Object.assign(new Error("This conversation has been closed."), {
-      code: "vibe64_conversation_closed",
-      statusCode: 404,
-      conversationExpired: true
-    });
+    if (!record) {
+      throw Object.assign(new Error("This conversation has been closed."), {
+        code: "vibe64_conversation_closed",
+        statusCode: 404,
+        conversationExpired: true
+      });
+    }
     return record;
   }
 
@@ -48,10 +50,12 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     let patch;
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
       const current = await recordFor(ctx, record.conversationId);
-      if (requireOpen && current.state === "closing") throw Object.assign(new Error("This conversation is closing."), {
-        code: "vibe64_conversation_closing",
-        statusCode: 409
-      });
+      if (requireOpen && current.state === "closing") {
+        throw Object.assign(new Error("This conversation is closing."), {
+          code: "vibe64_conversation_closing",
+          statusCode: 409
+        });
+      }
       patch = patchFor(current);
       const next = { ...patch };
       const newTurn = lifecycle && next.messageId && next.messageId !== record.messageId;

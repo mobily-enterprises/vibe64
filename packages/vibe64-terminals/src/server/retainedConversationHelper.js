@@ -46,9 +46,11 @@ function createRetainedConversationHelper({
     if (!helper) return;
     const helperRoot = path.join(root, helper.scope.id);
     if (!scopePattern.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") ||
-        helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw cleanupFailure(
-      `its saved ${scopePrefix} receipt has invalid cleanup paths`
-    );
+        helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) {
+      throw cleanupFailure(
+        `its saved ${scopePrefix} receipt has invalid cleanup paths`
+      );
+    }
     const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId,
       cleanupExecutionId: helper.executionId,
@@ -66,15 +68,17 @@ function createRetainedConversationHelper({
 
   async function requireHelper(context, workloadId) {
     const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId }, { vibe64User: authenticatedVibe64User(context) });
-    if (!decision.available) throw Object.assign(
-      new Error(
-        `${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`
-      ),
-      {
-        code: "vibe64_colleague_helper_unavailable",
-        statusCode: 409
-      }
-    );
+    if (!decision.available) {
+      throw Object.assign(
+        new Error(
+          `${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`
+        ),
+        {
+          code: "vibe64_colleague_helper_unavailable",
+          statusCode: 409
+        }
+      );
+    }
     return decision;
   }
 

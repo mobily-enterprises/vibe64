@@ -302,14 +302,16 @@ function createServiceGoals({
         await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
         await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
       }
-      if (result.goal) return {
-        ...result,
-        goal: {
-          ...result.goal,
-          objective: assistantGoalObjective(result.goal.objective, pinned)
-        },
-        routing: { mode: pinned.mode, selection: pinned.selection }
-      };
+      if (result.goal) {
+        return {
+          ...result,
+          goal: {
+            ...result.goal,
+            objective: assistantGoalObjective(result.goal.objective, pinned)
+          },
+          routing: { mode: pinned.mode, selection: pinned.selection }
+        };
+      }
     }
     return result;
   }
@@ -481,7 +483,9 @@ function createServiceGoals({
                 // preferences saved before the native goal became observable.
                 if (latestPin === previousPin) {
                   await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
-                } else if (JSON.parse(latestPin || "null")?.objective !== prepared.pinned.objective) return;
+                } else if (JSON.parse(latestPin || "null")?.objective !== prepared.pinned.objective) {
+                  return;
+                }
                 if (latest.session.metadata.assistant_routing !== context.session.metadata.assistant_routing) {
                   const refreshed = await assistantContext.assistantSessionOptions(sessionId, { ...context, session: undefined });
                   const preferences = assistantRoutingFromMetadata(refreshed.session.metadata);

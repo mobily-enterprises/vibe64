@@ -43,12 +43,14 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(operationId) || !expectedId || !handover || handover.length > 64 * 1024) {
     fail("Replacement requires an operation id, exact predecessor id and a handover of at most 65536 characters.");
   }
-  if (conversation) return conversation.replace({
-    operationId,
-    expectedSegmentId: `${engineId}:${expectedId}`,
-    reason: "renewal",
-    briefing: handover
-  });
+  if (conversation) {
+    return conversation.replace({
+      operationId,
+      expectedSegmentId: `${engineId}:${expectedId}`,
+      reason: "renewal",
+      briefing: handover
+    });
+  }
   const messages = await readMainConversationHistory(store, sessionId);
   return changeoverFor(store, sessionId, { agent, context }).replace({
     engineId,

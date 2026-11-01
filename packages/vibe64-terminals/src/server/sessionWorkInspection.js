@@ -247,10 +247,12 @@ async function inspectSessionWorkDirect({
   const worktreeClean = worktreePorcelain.length === 0;
   let publishedCommit;
   if (inspectContributionPublication) {
-    if (!context.contribution) throw saveError(
-      "Publication inspection requires a bound contribution.",
-      "vibe64_contribution_authority_changed"
-    );
+    if (!context.contribution) {
+      throw saveError(
+        "Publication inspection requires a bound contribution.",
+        "vibe64_contribution_authority_changed"
+      );
+    }
     const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);
     publishedCommit = published.head;
     if (!publishedCommit && knownSubmittedCommit) {
@@ -272,10 +274,12 @@ async function inspectSessionWorkDirect({
         );
       }
     }
-    if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) throw saveError(
-      "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
-      "vibe64_contribution_branch_missing"
-    );
+    if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) {
+      throw saveError(
+        "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
+        "vibe64_contribution_branch_missing"
+      );
+    }
     if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {
       throw saveError(
         "The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",

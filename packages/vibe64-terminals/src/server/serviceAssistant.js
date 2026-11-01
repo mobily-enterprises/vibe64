@@ -214,9 +214,11 @@ function createServiceAssistant({
       throw new Error("The requested connection differs from the authorized assistant selection.");
     }
     let connection;
-    if (assistantSelection.engineId === "opencode") connection = await state.assistantRuntime.resolveConnection(assistantSelection);
-    else if (assistantSelection.engineId === "claude") connection = await codexProviderConnections.claudeProviderSettings(integrationId);
-    else {
+    if (assistantSelection.engineId === "opencode") {
+      connection = await state.assistantRuntime.resolveConnection(assistantSelection);
+    } else if (assistantSelection.engineId === "claude") {
+      connection = await codexProviderConnections.claudeProviderSettings(integrationId);
+    } else {
       await codexProviderConnections.runtimeOptions(integrationId);
       connection = await codexProviderConnections.read(integrationId, "codex");
     }
@@ -548,13 +550,15 @@ function createServiceAssistant({
     let completed = false;
     try {
       const saved = await sessionAccess.readAssistantSession(sessionId, options);
-      if (diagnostics) logOperationalEvent(logger, "warn", {
-        event: "vibe64.conversation.browser_timing",
-        sessionId,
-        phase,
-        completed: true,
-        durationMs: performance.now() - started
-      }, "Browser conversation opening timing.");
+      if (diagnostics) {
+        logOperationalEvent(logger, "warn", {
+          event: "vibe64.conversation.browser_timing",
+          sessionId,
+          phase,
+          completed: true,
+          durationMs: performance.now() - started
+        }, "Browser conversation opening timing.");
+      }
       phase = "native-open";
       started = performance.now();
       // The tool manifest resolves the saved selection, so it belongs to opening.
@@ -583,10 +587,12 @@ function createServiceAssistant({
           return { ...conversationState, pendingRequest: null, ...(conversationState.status === "unconfirmed" ? { status: "ready" } : {}) };
         },
         async inspectDelivery(input) {
-          if (await assistantRouting.isCancelled(sessionId, input.messageId, current)) return {
-            status: "cancelled",
-            messageId: input.messageId
-          };
+          if (await assistantRouting.isCancelled(sessionId, input.messageId, current)) {
+            return {
+              status: "cancelled",
+              messageId: input.messageId
+            };
+          }
           const receipt = await conversation.inspectDelivery(input);
           if (receipt?.status !== "unknown") return receipt;
           const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
@@ -595,13 +601,15 @@ function createServiceAssistant({
         }
       });
     } finally {
-      if (diagnostics) logOperationalEvent(logger, "warn", {
-        event: "vibe64.conversation.browser_timing",
-        sessionId,
-        phase,
-        completed,
-        durationMs: performance.now() - started
-      }, "Browser conversation opening timing.");
+      if (diagnostics) {
+        logOperationalEvent(logger, "warn", {
+          event: "vibe64.conversation.browser_timing",
+          sessionId,
+          phase,
+          completed,
+          durationMs: performance.now() - started
+        }, "Browser conversation opening timing.");
+      }
     }
   }
 

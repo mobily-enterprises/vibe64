@@ -89,111 +89,129 @@ function createOpenCodeSessionAgentProvider({
 
   function prepareConversationHost(sessionId, openingContext = {}, mode = "main") {
     if (mode === "activity") return { native: { owner: sharedRuntime, sessionId: openCodeSessionId(sessionId) } };
-    if (mode === "storage") return {
-      native: {
-        owner: sharedRuntime,
-        preparation: {
-          storage(options) {
-            const context = { sessionId, runtime: options.runtime, session: options.session };
-            return { process: () => prepareSharedProcess(context, options), failure: throwVibe64OpenCodeError };
-          }
-        }
-      }
-    };
-    if (mode === "renewalProof") return {
-      native: {
-        owner: sharedRuntime,
-        preparation: {
-          get cleanup() {
-            return prepareSessionCleanup(openingContext.sessionId, {
-              runtime: openingContext.runtime,
-              session: openingContext.session
-            });
-          },
-          get sessionId() {
-            return openCodeSessionId(openingContext.sessionId);
-          }
-        }
-      }
-    };
-    if (mode === "renewal") return {
-      native: {
-        owner: sharedRuntime,
-        preparation: {
-          handover: (input, context) => prepareRenewalHandover(sessionId, input, context),
-          seed: (input, context) => prepareRenewalSeed(sessionId, input, context)
-        }
-      }
-    };
-    if (mode === "reconciliation") return {
-      native: { owner: sharedRuntime, preparation: { session: prepareSessionReconciliation } }
-    };
-    if (mode === "invalidation") return {
-      native: {
-        owner: sharedRuntime,
-        preparation: {
-        /**
-         * A connection change gives the running server every saved connection.
-         */
-          connections: () => configuredConnections(),
-          get release() {
-            return {
-              ...processRelease,
-              ownsTarget: (target) => sessionEnvironments.has(target.key)
-            };
-          }
-        }
-      }
-    };
-    if (mode === "projectCleanup") return {
-      native: {
-        owner: sharedRuntime,
-        preparation: {
-          projectCleanup: () => ({
-            ...processRelease,
-            ownsTarget: (target) => sessionEnvironments.has(target.key)
-          })
-        }
-      }
-    };
-    return (async () => {
-      if (mode === "readiness") return {
-        native: { owner: sharedRuntime, preparation: { readiness: options => prepareSessionReadiness(sessionId, options) } }
-      };
-      if (mode === "dispose") return {
-        namespace: opencodeTerminalNamespace(sessionId),
+    if (mode === "storage") {
+      return {
         native: {
           owner: sharedRuntime,
           preparation: {
-          /**
-           * The cleanup context carries only these fields of the current conversation.
-           */
-            cleanup: current => prepareSessionCleanup(sessionId, {
-              assistantScope: current.assistantScope,
-              runtime: current.runtime,
-              session: current.session,
-              renewalCleanup: current.renewalCleanup
+            storage(options) {
+              const context = { sessionId, runtime: options.runtime, session: options.session };
+              return { process: () => prepareSharedProcess(context, options), failure: throwVibe64OpenCodeError };
+            }
+          }
+        }
+      };
+    }
+    if (mode === "renewalProof") {
+      return {
+        native: {
+          owner: sharedRuntime,
+          preparation: {
+            get cleanup() {
+              return prepareSessionCleanup(openingContext.sessionId, {
+                runtime: openingContext.runtime,
+                session: openingContext.session
+              });
+            },
+            get sessionId() {
+              return openCodeSessionId(openingContext.sessionId);
+            }
+          }
+        }
+      };
+    }
+    if (mode === "renewal") {
+      return {
+        native: {
+          owner: sharedRuntime,
+          preparation: {
+            handover: (input, context) => prepareRenewalHandover(sessionId, input, context),
+            seed: (input, context) => prepareRenewalSeed(sessionId, input, context)
+          }
+        }
+      };
+    }
+    if (mode === "reconciliation") {
+      return {
+        native: { owner: sharedRuntime, preparation: { session: prepareSessionReconciliation } }
+      };
+    }
+    if (mode === "invalidation") {
+      return {
+        native: {
+          owner: sharedRuntime,
+          preparation: {
+            /**
+         * A connection change gives the running server every saved connection.
+         */
+            connections: () => configuredConnections(),
+            get release() {
+              return {
+                ...processRelease,
+                ownsTarget: (target) => sessionEnvironments.has(target.key)
+              };
+            }
+          }
+        }
+      };
+    }
+    if (mode === "projectCleanup") {
+      return {
+        native: {
+          owner: sharedRuntime,
+          preparation: {
+            projectCleanup: () => ({
+              ...processRelease,
+              ownsTarget: (target) => sessionEnvironments.has(target.key)
             })
           }
         }
       };
-      if (mode === "scoped" || mode === "create" || mode === "detached" || mode === "detachedCleanup") return {
-        namespace: opencodeTerminalNamespace(sessionId),
-        native: {
-          owner: sharedRuntime,
-          preparation: {
-            cleanup: current => prepareSessionCleanup(sessionId, current),
-            creation: (input, options) => prepareConversationCreation(sessionId, input, options),
-            turn: (input, options) =>
-              prepareDetachedChatTurn(sessionId, input, { ...options, waitForCompletion: mode === "detached" }),
-            existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(
-              sessionId,
-              operation === "delete" ? { ...input, persistent: input.persistent || Boolean(options?.assistantScope) } : input,
-              options
-            )
+    }
+    return (async () => {
+      if (mode === "readiness") {
+        return {
+          native: { owner: sharedRuntime, preparation: { readiness: options => prepareSessionReadiness(sessionId, options) } }
+        };
+      }
+      if (mode === "dispose") {
+        return {
+          namespace: opencodeTerminalNamespace(sessionId),
+          native: {
+            owner: sharedRuntime,
+            preparation: {
+              /**
+           * The cleanup context carries only these fields of the current conversation.
+           */
+              cleanup: current => prepareSessionCleanup(sessionId, {
+                assistantScope: current.assistantScope,
+                runtime: current.runtime,
+                session: current.session,
+                renewalCleanup: current.renewalCleanup
+              })
+            }
           }
-        }
-      };
+        };
+      }
+      if (mode === "scoped" || mode === "create" || mode === "detached" || mode === "detachedCleanup") {
+        return {
+          namespace: opencodeTerminalNamespace(sessionId),
+          native: {
+            owner: sharedRuntime,
+            preparation: {
+              cleanup: current => prepareSessionCleanup(sessionId, current),
+              creation: (input, options) => prepareConversationCreation(sessionId, input, options),
+              turn: (input, options) =>
+                prepareDetachedChatTurn(sessionId, input, { ...options, waitForCompletion: mode === "detached" }),
+              existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(
+                sessionId,
+                operation === "delete" ? { ...input, persistent: input.persistent || Boolean(options?.assistantScope) } : input,
+                options
+              )
+            }
+          }
+        };
+      }
       const context = await contextFor(sessionId, openingContext);
       const { runtime } = context;
       return {
@@ -247,33 +265,43 @@ function createOpenCodeSessionAgentProvider({
   }
 
   function prepareConversationRequest(method, context, input = {}) {
-    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-      input,
-      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-    };
-    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
-      input: { conversationId: input.threadId || input.conversationId },
-      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-    };
-    if (method === "ensureSession") return {
-      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-    };
-    if (method === "createConversation") return {
-      input,
-      context: {
-        assistantScope: context.assistantScope,
-        assistantSelection: context.assistantSelection,
-        runtime: context.runtime,
-        session: context.session,
-        vibe64User: context.vibe64User
-      }
-    };
-    if (method === "closeSession") return {
-      namespace: opencodeTerminalNamespace(context.sessionId),
-      sessionId: context.sessionId,
-      context,
-      options: context
-    };
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
+      return {
+        input,
+        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      };
+    }
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") {
+      return {
+        input: { conversationId: input.threadId || input.conversationId },
+        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      };
+    }
+    if (method === "ensureSession") {
+      return {
+        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      };
+    }
+    if (method === "createConversation") {
+      return {
+        input,
+        context: {
+          assistantScope: context.assistantScope,
+          assistantSelection: context.assistantSelection,
+          runtime: context.runtime,
+          session: context.session,
+          vibe64User: context.vibe64User
+        }
+      };
+    }
+    if (method === "closeSession") {
+      return {
+        namespace: opencodeTerminalNamespace(context.sessionId),
+        sessionId: context.sessionId,
+        context,
+        options: context
+      };
+    }
     if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
       method
     )) {

@@ -84,27 +84,33 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
   function conversationOperation(provider, method) {
     if (!provider.conversationOperations?.includes(method)) return null;
     const runtimeOperation = RUNTIME_CONVERSATION_OPERATIONS[method];
-    if (runtimeOperation) return (context, ...args) => {
-      const perform = () => runtimeOperation.run(conversationRuntime, context, ...args);
-      return runtimeOperation.project ? provider.projectConversationResult(method, perform) : perform();
-    };
-    if (method === "closeSession") return async context => {
-      const closed = await conversationRuntime.disposeNative(provider.prepareConversationRequest(method, context));
-      if (!closed) throw new TypeError("Native conversation cleanup requires its configured conversation host.");
-      return closed.result;
-    };
-    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return (context, input) => {
-      // Preserve the provider's original input/options projection before its result boundary.
-      const request = provider.prepareConversationRequest(method, context, input);
-      const current = request.context === context ? context : {
-        ...request.context,
-        sessionId: context.sessionId,
-        providerId: context.providerId
+    if (runtimeOperation) {
+      return (context, ...args) => {
+        const perform = () => runtimeOperation.run(conversationRuntime, context, ...args);
+        return runtimeOperation.project ? provider.projectConversationResult(method, perform) : perform();
       };
-      return provider.projectConversationResult(method, () => method === "generateSessionRenewalHandover"
-        ? conversationRuntime.generateNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input })
-        : conversationRuntime.seedNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input }));
-    };
+    }
+    if (method === "closeSession") {
+      return async context => {
+        const closed = await conversationRuntime.disposeNative(provider.prepareConversationRequest(method, context));
+        if (!closed) throw new TypeError("Native conversation cleanup requires its configured conversation host.");
+        return closed.result;
+      };
+    }
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
+      return (context, input) => {
+      // Preserve the provider's original input/options projection before its result boundary.
+        const request = provider.prepareConversationRequest(method, context, input);
+        const current = request.context === context ? context : {
+          ...request.context,
+          sessionId: context.sessionId,
+          providerId: context.providerId
+        };
+        return provider.projectConversationResult(method, () => method === "generateSessionRenewalHandover"
+          ? conversationRuntime.generateNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input })
+          : conversationRuntime.seedNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input }));
+      };
+    }
     const command = CONVERSATION_COMMANDS[method];
     if (!command) {
       throw new TypeError("Conversation operations require their request and result adapters.");

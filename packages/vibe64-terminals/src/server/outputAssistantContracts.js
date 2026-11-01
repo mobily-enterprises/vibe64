@@ -197,17 +197,21 @@ export function outputStatusTool() {
           ? [[key, key === "targetId" ? result.output[key] : result.output[key].slice(0, 512)]] : []));
         if (result.output.error?.message) output.output.error = String(result.output.error.message).slice(0, 512);
       }
-      if (result.preview) output.preview = {
-        ...Object.fromEntries(["state", "message", "reason", "terminalId"].flatMap((key) => typeof result.preview[key] === "string"
-          ? [[key, key === "terminalId" ? result.preview[key] : result.preview[key].slice(0, 512)]] : [])),
-        ...Object.fromEntries(["canRestart", "canStart", "canShowLog"].map((key) => [key, result.preview[key] === true]))
-      };
-      if (result.previewIdentity) output.previewIdentity = {
-        available: result.previewIdentity.available === true,
-        disabledReason: String(result.previewIdentity.disabledReason || "").slice(0, 512),
-        names: (result.previewIdentity.identities || []).slice(0, 40).map(entry => entry.name),
-        truncated: (result.previewIdentity.identities || []).length > 40
-      };
+      if (result.preview) {
+        output.preview = {
+          ...Object.fromEntries(["state", "message", "reason", "terminalId"].flatMap((key) => typeof result.preview[key] === "string"
+            ? [[key, key === "terminalId" ? result.preview[key] : result.preview[key].slice(0, 512)]] : [])),
+          ...Object.fromEntries(["canRestart", "canStart", "canShowLog"].map((key) => [key, result.preview[key] === true]))
+        };
+      }
+      if (result.previewIdentity) {
+        output.previewIdentity = {
+          available: result.previewIdentity.available === true,
+          disabledReason: String(result.previewIdentity.disabledReason || "").slice(0, 512),
+          names: (result.previewIdentity.identities || []).slice(0, 40).map(entry => entry.name),
+          truncated: (result.previewIdentity.identities || []).length > 40
+        };
+      }
       if (result.outputTargets) {
         const targets = result.outputTargets.slice(0, 10);
         output.outputTargetCount = result.outputTargetCount ?? result.outputTargets.length;
@@ -235,9 +239,11 @@ export function outputStatusTool() {
               label: String(parameter.label || "").slice(0, 512),
               description: String(parameter.description || "").slice(0, 512)
             }));
-            if (result.lastOutputTarget?.id === target.id) summary.currentParameters = Object.fromEntries(parameters
-              .filter(parameter => typeof result.lastOutputTarget.outputParameters?.[parameter.id] === "string")
-              .map(parameter => [parameter.id, result.lastOutputTarget.outputParameters[parameter.id]]));
+            if (result.lastOutputTarget?.id === target.id) {
+              summary.currentParameters = Object.fromEntries(parameters
+                .filter(parameter => typeof result.lastOutputTarget.outputParameters?.[parameter.id] === "string")
+                .map(parameter => [parameter.id, result.lastOutputTarget.outputParameters[parameter.id]]));
+            }
           }
           return summary;
         });

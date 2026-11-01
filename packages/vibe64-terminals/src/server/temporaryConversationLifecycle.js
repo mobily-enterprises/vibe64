@@ -57,9 +57,11 @@ function createTemporaryConversationLifecycle({
       // Team members' temporary chats run on their own Fix it with AI or Custom model.
       const owner = isAssistantRoutingOwner(input.vibe64User || options.vibe64User);
       let inheritedPreferences = { mode: "fix" };
-      if (owner) inheritedPreferences = parentPreferences
-        ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
-        : { mode: "senior", override: parentSelection };
+      if (owner) {
+        inheritedPreferences = parentPreferences
+          ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
+          : { mode: "senior", override: parentSelection };
+      }
       const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
         : input.assistantRouting || inheritedPreferences;
       if (requestedPreferences.mode === "auto") {
@@ -108,8 +110,10 @@ function createTemporaryConversationLifecycle({
       context = ctx;
       const records = await ctx.runtime.store.listSessionConversations(sessionId);
       const conversations = [];
-      for (const record of records) conversations.push(savedOnly
-        ? await chatTurns.savedSnapshot(ctx, record) : await chatTurns.displaySnapshot(ctx, record));
+      for (const record of records) {
+        conversations.push(savedOnly
+          ? await chatTurns.savedSnapshot(ctx, record) : await chatTurns.displaySnapshot(ctx, record));
+      }
       return { ok: true, conversations: numberedConversations(conversations) };
     };
     let result = await chatTurns.write(sessionId, { ...options, lockWaitMs: 0 }, list);
@@ -157,10 +161,12 @@ function createTemporaryConversationLifecycle({
     if (result.ok === false || (!input.beforeMessageId && input.messageLimit === undefined)) return result;
     const messages = result.messages || [];
     const end = input.beforeMessageId ? messages.findIndex((message) => message.id === input.beforeMessageId) : messages.length;
-    if (end < 0) throw Object.assign(new Error("This message cursor no longer exists. Read the latest messages again."), {
-      code: "vibe64_conversation_cursor_missing",
-      statusCode: 409
-    });
+    if (end < 0) {
+      throw Object.assign(new Error("This message cursor no longer exists. Read the latest messages again."), {
+        code: "vibe64_conversation_cursor_missing",
+        statusCode: 409
+      });
+    }
     const start = Math.max(0, end - (input.messageLimit || 12));
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
   }
@@ -245,10 +251,12 @@ function createTemporaryConversationLifecycle({
           return completed;
         });
         throwIfAgentWriteBusy(record);
-        if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, {
-          ...options,
-          conversationId: record.conversationId
-        });
+        if (record?.conversationId) {
+          await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, {
+            ...options,
+            conversationId: record.conversationId
+          });
+        }
         return;
       } catch (error) {
         if (error?.code !== "vibe64_agent_write_mode_busy" || attempt >= temporaryCompletionAttempts) throw error;

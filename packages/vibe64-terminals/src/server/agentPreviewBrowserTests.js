@@ -144,8 +144,10 @@ function createAgentPreviewBrowserTests({
           terminalSessionId: terminal.id,
           signal: restoring ? null : options.signal
         });
-        if (!waited.ok) throw new Error(waited.status?.error || (waited.timeout
-          ? "Timed out waiting for Preview readiness." : "Preview failed to become ready."));
+        if (!waited.ok) {
+          throw new Error(waited.status?.error || (waited.timeout
+            ? "Timed out waiting for Preview readiness." : "Preview failed to become ready."));
+        }
       }
     });
     const result = await run();
@@ -189,13 +191,15 @@ function createAgentPreviewBrowserTests({
       );
       await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       const authorizeStart = await decision;
-      if (!authorizeStart) return commandFailure(
-        outcome === "expired" ? "The resource wait expired. Tests were not run."
-          : outcome === "cancelled" ? "The resource wait was cancelled. Tests were not run."
-            : "The original test command ended. Tests were not run.",
-        `vibe64_test_approval_${outcome}`,
-        { details: result.details }
-      );
+      if (!authorizeStart) {
+        return commandFailure(
+          outcome === "expired" ? "The resource wait expired. Tests were not run."
+            : outcome === "cancelled" ? "The resource wait was cancelled. Tests were not run."
+              : "The original test command ended. Tests were not run.",
+          `vibe64_test_approval_${outcome}`,
+          { details: result.details }
+        );
+      }
       options.signal.throwIfAborted();
       await validate();
       outcome = "resumed";
@@ -213,10 +217,12 @@ function createAgentPreviewBrowserTests({
 
   async function playwrightRun(sessionId, input, options = {}) {
     input = structuredClone(input);
-    if (state.browserTestRuns.has(sessionId) && !input.testRunToken) return commandFailure(
-      "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.",
-      "vibe64_test_approval_busy"
-    );
+    if (state.browserTestRuns.has(sessionId) && !input.testRunToken) {
+      return commandFailure(
+        "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.",
+        "vibe64_test_approval_busy"
+      );
+    }
     const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
     if (admission) return admission;
     const parent = input.testRunToken ? state.browserTestRuns.get(sessionId) : null;
