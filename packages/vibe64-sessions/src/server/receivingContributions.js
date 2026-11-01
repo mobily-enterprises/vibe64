@@ -99,8 +99,11 @@ function createReceivingContributions({
         code: "vibe64_contribution_authority_changed"
       });
     }
-    const session = await resolveConnectedSession(runtime, contribution,
-      await runtime.getSessionWithoutSource(contribution.id));
+    const session = await resolveConnectedSession(
+      runtime,
+      contribution,
+      await runtime.getSessionWithoutSource(contribution.id)
+    );
     return { contribution, runtime, session };
   }
 
@@ -288,8 +291,11 @@ function createReceivingContributions({
         }
       };
       let existing;
-      try { existing = await runtime.getSessionWithoutSource(contribution.id); }
-      catch (error) { if (error.code !== "vibe64_session_not_found") throw error; }
+      try {
+        existing = await runtime.getSessionWithoutSource(contribution.id);
+      } catch (error) {
+        if (error.code !== "vibe64_session_not_found") throw error;
+      }
       if (existing) {
         return named(publicSession(await resolveConnectedSession(runtime, contribution, existing)));
       }

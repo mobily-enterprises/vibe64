@@ -139,8 +139,12 @@ function createConnectedContributions({
     // publishes only work tested against every connected branch's latest commit.
     const checks = [];
     for (const binding of sessionConnectedSources(current)) {
-      const check = await executeConnectedAction(binding.projectSlug, ACTION_CHECK_CONTRIBUTION_UPDATES,
-        { contribution: binding.contribution }, requestContext);
+      const check = await executeConnectedAction(
+        binding.projectSlug,
+        ACTION_CHECK_CONTRIBUTION_UPDATES,
+        { contribution: binding.contribution },
+        requestContext
+      );
       if (check?.ok !== true) throw Object.assign(new Error(check?.error || "The connected source could not be checked for updates."), {
         code: check?.code || "vibe64_connected_source_unavailable",
         details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, ...check?.details }
@@ -195,9 +199,7 @@ function createConnectedContributions({
         failedRepository = reviewed.contribution.repository;
         // Earlier repositories can take time to publish. Recheck this source
         // at its turn rather than skipping work from the initial review snapshot.
-        const [item] = await inspectConnectedWork(
-          await runtime.getSessionWithoutSource(sessionId), requestContext, [reviewed]
-        );
+        const [item] = await inspectConnectedWork(await runtime.getSessionWithoutSource(sessionId), requestContext, [reviewed]);
         if (Object.entries(reviewed.destination).some(([key, value]) => item.destination?.[key] !== value)) {
           throw Object.assign(new Error("The connected Save destination changed. Inspect work and review it again."), {
             code: "vibe64_connected_save_review_changed"
@@ -274,7 +276,8 @@ function createConnectedContributions({
       if (self) {
         preparingRepository = self.repository;
         throw Object.assign(new Error(
-          "A project cannot prepare itself as a connected contribution."), { code: "vibe64_connected_source_self_reference" });
+          "A project cannot prepare itself as a connected contribution."
+        ), { code: "vibe64_connected_source_self_reference" });
       }
       const names = targets.map(target => target.repository.split("/").pop());
       if (targets.length) report(`Preparing connected projects: ${names.join(", ")}`);
@@ -287,7 +290,8 @@ function createConnectedContributions({
         const repository = target.fullName;
         const source = await executeConnectedAction(target.projectSlug, ACTION_INSPECT_CONTRIBUTION_SOURCE, {}, requestContext);
         if (source.repository !== repository) throw Object.assign(new Error(
-          "The receiving project changed repositories. Review the connection before preparing it."), {
+          "The receiving project changed repositories. Review the connection before preparing it."
+        ), {
           code: "vibe64_contribution_authority_changed"
         });
         let binding = sources.find(item => item.contribution.repository === repository);
@@ -331,8 +335,12 @@ function createConnectedContributions({
           // checkout is used as it is and the outcome is reported.
           report(`Updating connected project ${names[index]} to ${binding.contribution.integrationBranch}`);
           try {
-            update = await executeConnectedAction(binding.projectSlug, ACTION_UPDATE_CONTRIBUTION_WORK,
-              { contribution: binding.contribution }, requestContext);
+            update = await executeConnectedAction(
+              binding.projectSlug,
+              ACTION_UPDATE_CONTRIBUTION_WORK,
+              { contribution: binding.contribution },
+              requestContext
+            );
           } catch (error) {
             update = { ok: false, error: normalizeText(error?.message) };
           }
@@ -411,8 +419,11 @@ function createConnectedContributions({
   }
 
   async function prepareConnectedSources(sessionId, input, requestContext) {
-    return sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input,
-      context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext)));
+    return sessionResult(() => terminals.runConnectedSourcePreparation(
+      sessionId,
+      input,
+      context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext)
+    ));
   }
 
   async function reviewConnectedReplacement(sessionId, input, requestContext) {
@@ -470,7 +481,8 @@ function createConnectedContributions({
       for (const target of targets) {
         const binding = bindings.find(item => item.contribution.repository === target.fullName);
         if (!binding || binding.projectSlug !== target.projectSlug) throw Object.assign(new Error(
-          "The connected project list no longer matches this task. Prepare connected sources again."), {
+          "The connected project list no longer matches this task. Prepare connected sources again."
+        ), {
           code: "vibe64_connected_inputs_required"
         });
         const receiving = await executeConnectedAction(binding.projectSlug, ACTION_INSPECT_CONTRIBUTION_INPUTS, {

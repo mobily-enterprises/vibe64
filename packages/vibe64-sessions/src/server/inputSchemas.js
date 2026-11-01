@@ -296,7 +296,8 @@ const incomingChangeInputValidator = actionInput({
         type: "string",
         required: true,
         pattern: /^[a-f0-9]{40,64}$/u
-      }])) )
+      }])
+    ) )
   }
 });
 

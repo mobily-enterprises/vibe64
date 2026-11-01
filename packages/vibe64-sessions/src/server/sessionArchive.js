@@ -34,7 +34,9 @@ function readSessionArchiveOperation(metadata) {
   const stored = normalizeText(metadata?.session_archive_operation);
   if (!stored) return null;
   let operation = null;
-  try { operation = JSON.parse(stored); } catch { /* Refused below. */ }
+  try {
+    operation = JSON.parse(stored);
+  } catch { /* Refused below. */ }
   if (!operation || typeof operation !== "object" || Array.isArray(operation) ||
     !SESSION_ARCHIVE_STATUSES.has(operation.status) || !SESSION_ARCHIVE_PHASES.has(operation.phase)) {
     throw Object.assign(new Error("Session archive state is invalid; its recovery evidence was preserved."), {
@@ -163,9 +165,7 @@ function createSessionArchive({
             startedAt: previous.status === "running" && previous.startedAt || new Date().toISOString(),
             status: "running"
           };
-          const persist = () => runtime.store.writeMetadataValue(
-            sessionId, "session_archive_operation", JSON.stringify(operation)
-          );
+          const persist = () => runtime.store.writeMetadataValue(sessionId, "session_archive_operation", JSON.stringify(operation));
           async function advanceArchivePhase(phase) {
             operation.phase = phase;
             await persist();

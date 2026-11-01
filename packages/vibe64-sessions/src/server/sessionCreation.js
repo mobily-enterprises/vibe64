@@ -99,8 +99,8 @@ function createSessionCreation({
         }
         if ((currentProjectRequestContext().learningScope.noExercise && expectedCommit !== undefined) ||
           ["repositoryBranch", "pullRequestNumber", "expectedCommit",
-          "sourceContext", "sourcePath", "sourceRoot", "projectSessionSourceRoot", "createSessionSource"]
-          .some(name => Object.hasOwn(input, name))) {
+            "sourceContext", "sourcePath", "sourceRoot", "projectSessionSourceRoot", "createSessionSource"]
+            .some(name => Object.hasOwn(input, name))) {
           throw new TypeError(currentProjectRequestContext().learningScope.noExercise
             ? "A source-less learning session cannot select source, branch, pull request or commit options."
             : "A saved practice learning session cannot select different source, branch, pull request or commit options.");

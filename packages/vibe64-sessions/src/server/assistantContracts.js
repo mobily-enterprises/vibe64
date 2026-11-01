@@ -92,7 +92,9 @@ function sessionSummary(session) {
   const turn = session.agentSession?.turn;
   let preferences;
   const route = assistantRoutingRequestForDisplay(session.metadata);
-  try { preferences = assistantRoutingFromMetadata(session.metadata); } catch { /* No verified mode preferences. */ }
+  try {
+    preferences = assistantRoutingFromMetadata(session.metadata);
+  } catch { /* No verified mode preferences. */ }
   const fields = {
     sessionId: session.sessionId,
     sessionName: session.sessionName,
@@ -557,13 +559,20 @@ function repositoryHistoryTool() {
       })
     },
     transformResult(result) {
-      return { ok: result.ok === true, ...pickStrings(result, strings), ...pickBooleans(result, ["hasMore"]),
-        ...(Array.isArray(result.versions) ? { versions: result.versions.slice(0, 50).map((version) => ({
+      return {
+        ok: result.ok === true,
+        ...pickStrings(result, strings),
+        ...pickBooleans(result, ["hasMore"]),
+        ...(Array.isArray(result.versions) ? {
+          versions: result.versions.slice(0, 50).map((version) => ({
           // Every version reports each field, empty when Git gave none.
-          ...Object.fromEntries(
-            Object.entries(versionStrings).map(([key, maxLength]) => [key, String(version[key] || "").slice(0, maxLength)])
-          ),
-          isMerge: version.isMerge === true })) } : {}) };
+            ...Object.fromEntries(
+              Object.entries(versionStrings).map(([key, maxLength]) => [key, String(version[key] || "").slice(0, maxLength)])
+            ),
+            isMerge: version.isMerge === true
+          }))
+        } : {})
+      };
     }
   });
 }
@@ -596,7 +605,8 @@ function repositoryVersionFilesTool() {
             },
             status: shortText,
             added: { type: "integer", nullable: true, required: false },
-            deleted: { type: "integer", nullable: true, required: false } })
+            deleted: { type: "integer", nullable: true, required: false }
+          })
         }
       })
     },

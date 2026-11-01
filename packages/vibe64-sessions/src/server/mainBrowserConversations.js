@@ -20,8 +20,10 @@ function withoutFields(schema, excluded) {
   return Object.fromEntries(Object.entries(schema.getFieldDefinitions()).filter(([key]) => !excluded.includes(key)));
 }
 
-const messageFields = withoutFields(agentMessageActionInputValidator.schema,
-  ["sessionId", "message", "messageId", "attachmentIds", "submissionKind"]);
+const messageFields = withoutFields(
+  agentMessageActionInputValidator.schema,
+  ["sessionId", "message", "messageId", "attachmentIds", "submissionKind"]
+);
 const selectionFields = withoutFields(assistantSelectionUpdateActionInputValidator.schema, ["sessionId"]);
 const mainConversationDataSchema = createSchema(messageFields);
 const mainConversationSelectionSchema = createSchema(selectionFields);

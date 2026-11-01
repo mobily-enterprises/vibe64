@@ -311,17 +311,17 @@ function createRenewalCompletion({
     const completed = wasCompleted
       ? state
       : await mutateSessionRenewalState(runtime, state.sessionId, (current) => statePatch(current, {
-          completedAt: current.completedAt || commit.committedAt,
-          completionRetry: null,
-          error: null,
-          predecessorArchivedAt: current.predecessorArchivedAt || predecessorArchivedAt,
-          stage: SESSION_RENEWAL_STAGE.COMPLETED,
-          status: SESSION_RENEWAL_STATUS.COMPLETED,
-          successor: {
-            ...current.successor,
-            availableAt: current.successor?.availableAt || commit.committedAt
-          }
-        }));
+        completedAt: current.completedAt || commit.committedAt,
+        completionRetry: null,
+        error: null,
+        predecessorArchivedAt: current.predecessorArchivedAt || predecessorArchivedAt,
+        stage: SESSION_RENEWAL_STAGE.COMPLETED,
+        status: SESSION_RENEWAL_STATUS.COMPLETED,
+        successor: {
+          ...current.successor,
+          availableAt: current.successor?.availableAt || commit.committedAt
+        }
+      }));
     if (!wasCompleted) {
       await renewalAccess.publish(commit.successorSessionId, "session-renewal-successor-available", input.originId);
       await renewalAccess.publish(commit.successorSessionId, "session-renewal-completed", input.originId);

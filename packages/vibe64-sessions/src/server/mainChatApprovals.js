@@ -117,8 +117,11 @@ function createMainChatApprovals({
         : `This message was already ${entry.status}.`, "vibe64_main_chat_approval_decided", 409);
     }
     if (expectedRevision !== entry.revision) {
-      throw failure(`${entry.sender.displayName} changed this message. Review it again.`,
-        "vibe64_main_chat_approval_changed", 409);
+      throw failure(
+        `${entry.sender.displayName} changed this message. Review it again.`,
+        "vibe64_main_chat_approval_changed",
+        409
+      );
     }
   }
 
@@ -162,8 +165,11 @@ function createMainChatApprovals({
 
   async function enqueue(sessionId, { message, messageId = "", attachmentIds = [] }, { vibe64User }) {
     if (attachmentIds.length) {
-      throw failure("Messages for approval are text only. Remove the attachments and send again.",
-        "vibe64_main_chat_approval_text_only", 400);
+      throw failure(
+        "Messages for approval are text only. Remove the attachments and send again.",
+        "vibe64_main_chat_approval_text_only",
+        400
+      );
     }
     const sender = person(vibe64User);
     const id = ENTRY_ID_PATTERN.test(messageId) ? messageId : crypto.randomUUID();
@@ -178,8 +184,11 @@ function createMainChatApprovals({
       }
       if (existing) throw failure("Send this message again as a new message.", "vibe64_main_chat_approval_exists", 409);
       if (approvals.entries.filter((entry) => entry.status === "waiting" && entry.sender.id === sender.id).length >= WAITING_PER_SENDER) {
-        throw failure(`You have ${WAITING_PER_SENDER} messages waiting. Wait for ${team.ownerName || "the owner"} to review them, or withdraw one.`,
-          "vibe64_main_chat_approval_limit", 409);
+        throw failure(
+          `You have ${WAITING_PER_SENDER} messages waiting. Wait for ${team.ownerName || "the owner"} to review them, or withdraw one.`,
+          "vibe64_main_chat_approval_limit",
+          409
+        );
       }
       const now = new Date().toISOString();
       approvals.entries.push({

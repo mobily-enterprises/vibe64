@@ -75,8 +75,10 @@ function createSessionStartupRecovery({
    * so its reads and session changes belong to that project.
    */
   function recover() {
-    return project.runInProjectContext(project.currentProjectSlug(),
-      () => resumeInterruptedSessionWork({ resumeSessionArchives, resumeSessionRenewals }, stopping.signal));
+    return project.runInProjectContext(
+      project.currentProjectSlug(),
+      () => resumeInterruptedSessionWork({ resumeSessionArchives, resumeSessionRenewals }, stopping.signal)
+    );
   }
 
   function start() {

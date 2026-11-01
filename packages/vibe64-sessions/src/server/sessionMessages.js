@@ -202,8 +202,12 @@ function createSessionMessages({
    * @param {object} context
    */
   function approveMainChatMessage(input, context) {
-    return approveMainChatApproval(input.sessionId, input.approvalId, input,
-      { browserAuthority: mainBrowserAuthority(input.sessionId, context) });
+    return approveMainChatApproval(
+      input.sessionId,
+      input.approvalId,
+      input,
+      { browserAuthority: mainBrowserAuthority(input.sessionId, context) }
+    );
   }
 
   return Object.freeze({

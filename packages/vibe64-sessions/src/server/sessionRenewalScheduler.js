@@ -92,9 +92,9 @@ function createRenewalScheduler({
         : 0;
     const retryDelayMs = completionRetryAttempt > 0
       ? Math.min(
-          workflowLockRetryDelayMs * (2 ** Math.min(completionRetryAttempt - 1, 10)),
-          SESSION_RENEWAL_COMPLETION_RETRY_MAX_MS
-        )
+        workflowLockRetryDelayMs * (2 ** Math.min(completionRetryAttempt - 1, 10)),
+        SESSION_RENEWAL_COMPLETION_RETRY_MAX_MS
+      )
       : workflowLockRetryDelayMs;
     const timer = setTimeoutFn(() => {
       if (pendingWorkflowLockRetries.get(key) !== timer) {
@@ -140,30 +140,30 @@ function createRenewalScheduler({
       const exclusive = await runtime.store.runSessionRenewalWorkflowExclusive(
         sessionId,
         async () => {
-        const current = await readSessionRenewalState(runtime, sessionId);
-        if (!renewalNeedsWorkflow(current)) {
-          return current;
-        }
-        if (current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
-          return workflow.resumeConfirmedRenewal(sessionId, input);
-        }
-        if (current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING) {
+          const current = await readSessionRenewalState(runtime, sessionId);
+          if (!renewalNeedsWorkflow(current)) {
+            return current;
+          }
+          if (current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
+            return workflow.resumeConfirmedRenewal(sessionId, input);
+          }
+          if (current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING) {
           // A durable commit marker makes this forward-only. Without it the
           // archive, hidden activation, and selection preparation remain
           // reversible and still require the persisted actor.
-          if (!current.commit?.committedAt) {
-            const workflowInput = await workflowInputForPersistedActor(current, input);
-            return workflow.resumeConfirmedRenewal(sessionId, workflowInput);
+            if (!current.commit?.committedAt) {
+              const workflowInput = await workflowInputForPersistedActor(current, input);
+              return workflow.resumeConfirmedRenewal(sessionId, workflowInput);
+            }
+            return workflow.resumeConfirmedRenewal(sessionId, input);
           }
-          return workflow.resumeConfirmedRenewal(sessionId, input);
-        }
-        if (current.status === SESSION_RENEWAL_STATUS.COMPLETED) {
-          return workflow.resumeConfirmedRenewal(sessionId, input);
-        }
-        const workflowInput = await workflowInputForPersistedActor(current, input);
-        return current.stage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING
-          ? workflow.generateDraft(sessionId, workflowInput)
-          : workflow.resumeConfirmedRenewal(sessionId, workflowInput);
+          if (current.status === SESSION_RENEWAL_STATUS.COMPLETED) {
+            return workflow.resumeConfirmedRenewal(sessionId, input);
+          }
+          const workflowInput = await workflowInputForPersistedActor(current, input);
+          return current.stage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING
+            ? workflow.generateDraft(sessionId, workflowInput)
+            : workflow.resumeConfirmedRenewal(sessionId, workflowInput);
         },
         { waitMs: 0 }
       );

@@ -23,8 +23,11 @@ function mainConversationId({ projectSlug, sessionId } = {}) {
 function mainConversationTarget(id) {
   if (typeof id !== "string" || !id.startsWith(MAIN_CONVERSATION_PREFIX)) return null;
   let target;
-  try { target = JSON.parse(id.slice(MAIN_CONVERSATION_PREFIX.length)); }
-  catch { throw invalidConversation("Main"); }
+  try {
+    target = JSON.parse(id.slice(MAIN_CONVERSATION_PREFIX.length));
+  } catch {
+    throw invalidConversation("Main");
+  }
   if (!Array.isArray(target) || target.length !== 2 ||
       target.some(value => typeof value !== "string" || !value.trim())) {
     throw invalidConversation("Main");
@@ -42,8 +45,11 @@ function temporaryConversationId({ projectSlug, sessionId, conversationId } = {}
 function temporaryConversationTarget(id) {
   if (typeof id !== "string" || !id.startsWith(TEMPORARY_CONVERSATION_PREFIX)) return null;
   let target;
-  try { target = JSON.parse(id.slice(TEMPORARY_CONVERSATION_PREFIX.length)); }
-  catch { throw invalidConversation("temporary"); }
+  try {
+    target = JSON.parse(id.slice(TEMPORARY_CONVERSATION_PREFIX.length));
+  } catch {
+    throw invalidConversation("temporary");
+  }
   if (!Array.isArray(target) || target.length !== 3 || target.some(value => typeof value !== "string" || !value.trim())) {
     throw invalidConversation("temporary");
   }

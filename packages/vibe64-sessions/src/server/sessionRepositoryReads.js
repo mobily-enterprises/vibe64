@@ -88,7 +88,9 @@ function createSessionRepositoryReads({ project, terminals }) {
       // The Git result is confirmed. A failed UI notification must not turn
       // that success into a retry of a remote write.
       if (result.status !== "repair-review") {
-        try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
+        try {
+          await project.refreshGithub();
+        } catch { /* The next read reconstructs state from Git. */ }
       }
       return result;
     }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");

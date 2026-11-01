@@ -262,13 +262,13 @@ function createSessionRenewalController({
                 latest.status === SESSION_RENEWAL_STATUS.RUNNING &&
                 latest.stage === SESSION_RENEWAL_STAGE.OLD_QUIESCING
                   ? statePatch(latest, {
-                      approved: null,
-                      confirmedBy: null,
-                      continuedBy: null,
-                      error: null,
-                      stage: SESSION_RENEWAL_STAGE.DRAFT_READY,
-                      status: SESSION_RENEWAL_STATUS.REVIEW
-                    })
+                    approved: null,
+                    confirmedBy: null,
+                    continuedBy: null,
+                    error: null,
+                    stage: SESSION_RENEWAL_STAGE.DRAFT_READY,
+                    status: SESSION_RENEWAL_STATUS.REVIEW
+                  })
                   : undefined
               ));
             }

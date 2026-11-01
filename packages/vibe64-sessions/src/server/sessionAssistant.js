@@ -108,11 +108,14 @@ function createSessionAssistant({
     // Outside a lesson, a team member's session records main chat's starting
     // model only; their messages wait for the owner, so nothing runs as them here.
     const purpose = preferences.mode === "auto" ? "senior" : preferences.mode;
-    const decision = await terminals.resolveAssistantPurpose({
-      purpose,
-      ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {})
-    },
-    { vibe64User: direct ? vibe64User : { role: "owner" } }, direct ? undefined : { validateModels: false });
+    const decision = await terminals.resolveAssistantPurpose(
+      {
+        purpose,
+        ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {})
+      },
+      { vibe64User: direct ? vibe64User : { role: "owner" } },
+      direct ? undefined : { validateModels: false }
+    );
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
     if (direct) {
       await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
@@ -250,8 +253,12 @@ function createSessionAssistant({
           };
         };
         const update = async () => {
-          const result = await runVibe64AgentWriteExclusive(runtime, sessionId, () => apply(),
-            { operation: "update-assistant-selection" });
+          const result = await runVibe64AgentWriteExclusive(
+            runtime,
+            sessionId,
+            () => apply(),
+            { operation: "update-assistant-selection" }
+          );
           // Saving the next selection does not wait for native startup. Only
           // immediate idle changeover requires the admission/cleanup lock.
           return result.acquired ? result : { acquired: true, value: await apply({ deferred: true }) };
@@ -280,8 +287,12 @@ function createSessionAssistant({
           assistantSelection: exclusive.value.assistantSelection
         });
       };
-      const saved = await runtime.store.runSessionExclusive(sessionId, "assistant-settings", save,
-        { operation: "save-assistant-settings", waitMs: 10_000 });
+      const saved = await runtime.store.runSessionExclusive(
+        sessionId,
+        "assistant-settings",
+        save,
+        { operation: "save-assistant-settings", waitMs: 10_000 }
+      );
       if (!saved.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
       return saved.value;
     }, "Vibe64 could not update this session's assistant selection.");
