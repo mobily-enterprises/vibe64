@@ -95,7 +95,7 @@ function createServiceAgentProviders({
         timings: event.timings
       }, "Assistant delivery timing.");
     },
-    ...(assistantContext.mainToolCatalog ? { toolCatalog: assistantContext.mainToolCatalog } : {}),
+    toolCatalog: assistantContext.mainToolCatalog,
     authorize: authorizeMainConversation,
     host: {
       nativeTools: true,

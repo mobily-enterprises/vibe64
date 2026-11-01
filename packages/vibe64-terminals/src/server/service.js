@@ -71,7 +71,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
 
 /**
  * @param {object} dependencies
- * @param {ActionCatalogue | null} [dependencies.actions]
+ * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} [dependencies.env]
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
@@ -86,8 +86,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
  */
 function createService({
-  // readable-check: allow dependency-default - optional operation: without an action catalogue the assistant has no Vibe64 tools
-  actions = null,
+  actions,
   // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
   env = process.env,

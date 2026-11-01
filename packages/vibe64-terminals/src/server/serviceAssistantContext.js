@@ -11,10 +11,10 @@ import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shar
  * options built from them.
  * @param {object} dependencies
  * @param {ServiceSessionAccess} dependencies.sessionAccess
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  */
 function createServiceAssistantContext({ sessionAccess, actions }) {
-  const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
+  const mainToolCatalog = createServiceToolCatalog(actions, {
     // Discovery adds an identity envelope to each bounded result.
     maxToolResultBytes: 128 * 1024 + 1024,
     /**
@@ -24,14 +24,14 @@ function createServiceAssistantContext({ sessionAccess, actions }) {
       Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
         (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
         !context.assistantScope && !context.scopedConversationId)
-  }) : null;
+  });
   function applicationToolManifest(context) {
     // Tools decorate the context; a missing selection must not block cleanup.
     const selection = context.assistantSelection ||
       vibe64AssistantSelectionFromMetadata(context.session?.metadata, { required: false });
     const mainClaude = selection?.engineId === "claude" && !context.runtime?.learningScope &&
       !context.assistantScope && !context.temporaryConversationId && !context.scopedConversationId;
-    if (!mainToolCatalog || !mainClaude) return context;
+    if (!mainClaude) return context;
     const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });
     return { ...context, applicationTools: { schemas: toolSet.tools.map(mainToolCatalog.toOpenAiToolSchema) } };
   }

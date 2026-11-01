@@ -4,6 +4,14 @@ import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/se
 
 const publishNothing = async () => null;
 
+// The action catalogue the feature always passes, for a test that runs no actions: it lists none and refuses any.
+const NO_ACTIONS = Object.freeze({
+  listDefinitions: () => [],
+  execute: async ({ actionId }) => {
+    throw new Error(`This test registers no action ${actionId}.`);
+  }
+});
+
 // The project service operations a test's plain project double may leave out, answering as a project without
 // prepared resources, practice projects or a runtime root of its own would.
 const PROJECT_SERVICE_DOUBLE_DEFAULTS = Object.freeze({
@@ -27,15 +35,16 @@ function completedProjectDouble(project) {
 }
 
 /**
- * The terminals service's dependencies with the collaborators its feature always passes filled in: every session
- * change publisher (a test's own publishers replace the matching ones), the project runtime publisher, fresh project
- * services, the default production Env and saved values, and the project service operations a plain project double
- * leaves out.
+ * The terminals service's dependencies with the collaborators its feature always passes filled in: an empty action
+ * catalogue, every session change publisher (a test's own publishers replace the matching ones), the project runtime
+ * publisher, fresh project services, the default production Env and saved values, and the project service operations
+ * a plain project double leaves out.
  * @param {object} dependencies
  */
 function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServices = null, ...dependencies }) {
   completedProjectDouble(dependencies.project);
   return {
+    actions: NO_ACTIONS,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
@@ -52,4 +61,4 @@ function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServ
   };
 }
 
-export { completedProjectDouble, terminalsServiceCollaborators };
+export { NO_ACTIONS, completedProjectDouble, terminalsServiceCollaborators };

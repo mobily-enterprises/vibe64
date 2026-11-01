@@ -22,7 +22,7 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  * @param {SessionAttachments} dependencies.attachments
  * @param {RunMainAgentWrite} dependencies.runAgentWrite
  * @param {number} dependencies.routingWaitMs

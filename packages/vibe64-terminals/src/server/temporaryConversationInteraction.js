@@ -45,7 +45,7 @@ import {
  * @param {TemporaryConversationLifecycle} dependencies.chatLifecycle
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  * @param {SessionAttachments} dependencies.attachments
  * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -75,7 +75,7 @@ function createTemporaryConversationInteraction({
     const { runtime } = openingContext;
     async function execute(actionId, input, context) {
       const authority = context?.browserAuthority;
-      if (!actions || !authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
+      if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
         throw Object.assign(new Error("Temporary commands require their original action authority."), {
           code: "conversation_forbidden",
           statusCode: 403

@@ -29,6 +29,7 @@ import {
   createTerminalActions
 } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+import { NO_ACTIONS } from "../fixtures/terminalsServiceCollaborators.js";
 
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);
@@ -232,6 +233,7 @@ async function conversationFixture(root, engineId = "codex") {
       publishSessionChanged: async (...args) => { events.push(args); },
       prepareSelection: async () => {},
       publishConversation: async () => {},
+      actions: NO_ACTIONS,
       ...overrides
     });
     return service;
