@@ -252,7 +252,7 @@ test("conversation facades and subscription checks preserve real Fastify request
     const terminals = {
       openBrowserConversation() { assert.fail("Main goal reads use the existing goal action."); },
       openTemporaryBrowserConversation() { return { async readGoal() { goalReads += 1; return goal; } }; },
-      async readAgentGoal() { goalReads += 1; return goal; }
+      async readCanonicalAgentGoal() { goalReads += 1; return goal; }
     };
     for (const [contributorId, definitions] of [
       ["cookie-sessions", createSessionActions({ sessions: withMainChatOperations({}) }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)],
