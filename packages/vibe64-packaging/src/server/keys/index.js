@@ -17,7 +17,7 @@ export const publishingKeysUnlocked = definePreflightCheck({
   run: ({ keys }) => keys?.unlocked
     ? { ok: true, message: "Unlocked for this release." }
     : {
-      ok: false,
-      message: keys?.exists ? "Unlock your publishing keys to check sign-ins and sign." : "Create your publishing keys first."
-    }
+        ok: false,
+        message: keys?.exists ? "Unlock your publishing keys to check sign-ins and sign." : "Create your publishing keys first."
+      }
 });

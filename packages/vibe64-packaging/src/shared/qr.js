@@ -413,7 +413,9 @@ function reedSolomonRemainder(data, divisor) {
   for (const byte of data) {
     const factor = byte ^ result.shift();
     result.push(0);
-    divisor.forEach((coefficient, index) => { result[index] ^= multiply(coefficient, factor); });
+    divisor.forEach((coefficient, index) => {
+      result[index] ^= multiply(coefficient, factor);
+    });
   }
   return result;
 }
@@ -434,7 +436,9 @@ function encodeSegments(bytes, level) {
     const usedBits = 4 + countBits + bytes.length * 8;
     if (usedBits > capacityBits) continue;
     const bits = [];
-    const append = (value, length) => { for (let index = length - 1; index >= 0; index -= 1) bits.push((value >>> index) & 1); };
+    const append = (value, length) => {
+      for (let index = length - 1; index >= 0; index -= 1) bits.push((value >>> index) & 1);
+    };
     append(0x4, 4);
     append(bytes.length, countBits);
     for (const byte of bytes) append(byte, 8);

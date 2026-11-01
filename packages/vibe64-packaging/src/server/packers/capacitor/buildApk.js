@@ -22,13 +22,15 @@ async function requireToolchains(toolchains = {}) {
   const jdk = await describeJdk({ javaHome: toolchains.javaHome });
   const sdk = await describeAndroidSdk({ androidHome: toolchains.androidHome });
   if (!jdk.ok || !sdk.ok) {
-    throw publishError("VIBE64_PUBLISH_TOOLCHAIN_MISSING",
+    throw publishError(
+      "VIBE64_PUBLISH_TOOLCHAIN_MISSING",
       [jdk.ok ? "" : jdk.message, sdk.ok ? "" : sdk.message].filter(Boolean).join(" "),
       {
-      java: jdk.ok,
-      androidSdk: sdk.ok,
-      missing: sdk.missing || []
-    });
+        java: jdk.ok,
+        androidSdk: sdk.ok,
+        missing: sdk.missing || []
+      }
+    );
   }
   return { javaHome: jdk.javaHome, androidHome: sdk.androidHome };
 }

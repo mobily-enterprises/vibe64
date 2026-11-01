@@ -86,8 +86,12 @@ function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
     const child = spawn(command, args, { cwd, env, signal, stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout = tail(stdout + chunk); });
-    child.stderr.on("data", (chunk) => { stderr = tail(stderr + chunk); });
+    child.stdout.on("data", (chunk) => {
+      stdout = tail(stdout + chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = tail(stderr + chunk);
+    });
     child.on("error", (error) => resolve({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
     child.on("close", (exitCode) => resolve({ ok: exitCode === 0, exitCode, stdout, stderr }));
     if (stdin) child.stdin.end(stdin);
@@ -203,12 +207,14 @@ async function runBuildStage({
       }
       const result = await runCommand({ command: step.argv[0], args: step.argv.slice(1), cwd: step.cwd, env, signal, projectSlug });
       if (result?.ok !== true) {
-        throw publishError("VIBE64_PUBLISH_BUILD_FAILED",
+        throw publishError(
+          "VIBE64_PUBLISH_BUILD_FAILED",
           `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`,
           {
-          step: step.label,
-          output: tail(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`)
-        });
+            step: step.label,
+            output: tail(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`)
+          }
+        );
       }
     }
     const filesRoot = path.join(staging, "files");

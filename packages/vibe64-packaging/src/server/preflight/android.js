@@ -142,9 +142,9 @@ const androidDeveloperVerification = definePreflightCheck({
   run: ({ android }) => android.developerVerification === "registered"
     ? { ok: true, message: "Your developer identity is registered with Google." }
     : {
-      ok: false,
-      message: "Since 30 September 2026, phones in Brazil, Indonesia, Singapore and Thailand install apps only from verified developers; this goes worldwide in 2027. Elsewhere, installing on your own phone still works."
-    }
+        ok: false,
+        message: "Since 30 September 2026, phones in Brazil, Indonesia, Singapore and Thailand install apps only from verified developers; this goes worldwide in 2027. Elsewhere, installing on your own phone still works."
+      }
 });
 
 // The Android checks alone, and composed after the shared checks.

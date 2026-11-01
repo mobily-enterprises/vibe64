@@ -98,18 +98,18 @@ async function buildPackage({
   }
   const builtContent = content && !contentArtifacts
     ? (await buildPackage({
-      projectRoot,
-      commit,
-      packaging,
-      packageId: content.id,
-      planHash,
-      resultStore,
-      workRoot,
-      baseEnvironment,
-      cacheDirectory,
-      projectSlug,
-      signal
-    }, { runCommand })).artifacts
+        projectRoot,
+        commit,
+        packaging,
+        packageId: content.id,
+        planHash,
+        resultStore,
+        workRoot,
+        baseEnvironment,
+        cacheDirectory,
+        projectSlug,
+        signal
+      }, { runCommand })).artifacts
     : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
   try {
