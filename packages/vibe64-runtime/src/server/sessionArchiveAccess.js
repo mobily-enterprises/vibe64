@@ -17,6 +17,7 @@ import {
   readDirectoryEntries,
   runCommand
 } from "./sessionStoreLayout.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -156,7 +157,7 @@ function createSessionArchiveAccess({
   }
 
   async function withArchivedSession(sessionId, operation, options = {}) {
-    const { beforeWork } = options;
+    const { beforeWork = doNothing } = options;
     if (typeof operation !== "function") {
       throw new TypeError("Archived session work requires an operation.");
     }
@@ -180,7 +181,7 @@ function createSessionArchiveAccess({
         );
       }
       await archiveRecords.validateSessionArchive(archiveRecord.archivePath);
-      await beforeWork?.({ stage: "extract", archivePath: archiveRecord.archivePath });
+      await beforeWork({ stage: "extract", archivePath: archiveRecord.archivePath });
       return withExtractedSessionArchive(archiveRecord, async (sessionPaths, record) => {
         const session = await recordFiles.readSessionFromPaths(sessionPaths, record);
         if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -299,8 +300,8 @@ function createSessionArchiveAccess({
     return target;
   }
 
-  async function publishExtractedSessionArchive(session, { beforePublish, beforeWork } = {}) {
-    await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
+  async function publishExtractedSessionArchive(session, { beforePublish = doNothing, beforeWork = doNothing } = {}) {
+    await beforeWork({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
@@ -313,7 +314,7 @@ function createSessionArchiveAccess({
           "vibe64_session_archive_write_failed");
       }
       await archiveRecords.validateSessionArchive(candidatePath);
-      await beforePublish?.(candidatePath);
+      await beforePublish(candidatePath);
       const candidate = await open(candidatePath, "r");
       try { await candidate.sync(); } finally { await candidate.close(); }
       // Keep the archive index, metadata, messages and archival time unchanged.

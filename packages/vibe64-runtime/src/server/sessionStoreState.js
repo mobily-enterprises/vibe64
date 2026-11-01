@@ -5,6 +5,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { normalizeTargetRoot, vibe64Error } from "@local/vibe64-core/server/core";
 import { validateLearningSessionScope } from "./sessionRecordRules.js";
 import { createClockNow, systemClock } from "./sessionStoreLayout.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 const sessionMutationContext = new AsyncLocalStorage();
 
@@ -27,8 +28,8 @@ function createSessionStoreState({
   clock = systemClock,
   logger = silentLogger,
   learningScope = null,
-  onRenewalArchiveCommitStep = null,
-  onRenewalQuiesceStep = null,
+  onRenewalArchiveCommitStep = doNothing,
+  onRenewalQuiesceStep = doNothing,
   projectContextRoot = process.cwd(),
   projectRuntimeRoot = "",
   projectSessionSourceRoot = "",
@@ -47,12 +48,6 @@ function createSessionStoreState({
   }
   const normalizedStateRoot = path.resolve(resolvedProjectRuntimeRoot);
   const now = createClockNow(clock);
-  const renewalArchiveCommitStep = typeof onRenewalArchiveCommitStep === "function"
-    ? onRenewalArchiveCommitStep
-    : async () => undefined;
-  const renewalQuiesceStep = typeof onRenewalQuiesceStep === "function"
-    ? onRenewalQuiesceStep
-    : async () => undefined;
 
   return Object.freeze({
     admittedLearningScope,
@@ -61,8 +56,8 @@ function createSessionStoreState({
     normalizedStateRoot,
     now,
     projectSessionSourceRoot,
-    renewalArchiveCommitStep,
-    renewalQuiesceStep,
+    renewalArchiveCommitStep: onRenewalArchiveCommitStep,
+    renewalQuiesceStep: onRenewalQuiesceStep,
     sessionLockProcessPlatform,
     sessionMutationContext
   });

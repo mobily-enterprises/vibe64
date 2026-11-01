@@ -42,6 +42,9 @@ import {
 } from "./sessionStoreLayout.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
+/** A background task event is written unless its caller decides otherwise. */
+const writeEveryEvent = () => true;
+
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
 /** @typedef {import("./types.js").SessionStoreLocks} SessionStoreLocks */
@@ -402,7 +405,7 @@ function createSessionRecords({
     event = {},
     patch = {},
     reset = false,
-    shouldWrite = null
+    shouldWrite = writeEveryEvent
   } = {}) {
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedTaskId = assertSafeBackgroundTaskId(taskId);
@@ -422,7 +425,7 @@ function createSessionRecords({
         message: toText(event.message || patch.message),
         status
       };
-      if (typeof shouldWrite === "function" && !shouldWrite({
+      if (!shouldWrite({
         event: eventRecord,
         patch,
         previous,

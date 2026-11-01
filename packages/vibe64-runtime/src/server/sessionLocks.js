@@ -10,6 +10,7 @@ import {
 } from "@local/vibe64-execution/server";
 import { writeJsonFile } from "./sessionFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
@@ -204,7 +205,7 @@ async function acquireSessionLock(sessionPaths, lockName, {
   // The caller retries or falls back, so a refusal is routine information.
   expectedRefusal = false,
   logger,
-  onRejected = null,
+  onRejected = doNothing,
   operation = "",
   processPlatform = process.platform,
   waitMs = 0
@@ -296,7 +297,7 @@ async function acquireSessionLock(sessionPaths, lockName, {
       if (rejected || (operation && !contentionLogged)) {
         const owner = await readSessionLockOwner(lockPath);
         if (rejected) {
-          onRejected?.(toText(owner?.operation));
+          onRejected(toText(owner?.operation));
         }
         const acquiredAtMs = Date.parse(owner?.createdAt);
         logLockEvent(rejected ? "rejected" : "contended", {

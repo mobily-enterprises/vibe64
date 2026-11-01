@@ -83,7 +83,7 @@ async function createGitProject(root, {
 }
 
 async function createRenewalFixture(targetRoot, {
-  onRenewalArchiveCommitStep = null,
+  onRenewalArchiveCommitStep,
   renewalId = "renewal-archive-1",
   sourceSessionId = "renewal-source",
   successorSessionId = "renewal-successor",
