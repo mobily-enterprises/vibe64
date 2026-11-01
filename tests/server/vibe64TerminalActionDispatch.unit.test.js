@@ -274,8 +274,8 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
     const rejected = { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior." };
     const terminals = {
       openBrowserConversation() { assert.fail("Goal actions must use the original product service policy."); },
-      async readAgentGoal(...args) { calls.push({ method: "read", args, project: currentProjectRequestContext()?.slug }); return goal; },
-      async updateAgentGoal(...args) { calls.push({ method: "update", args, project: currentProjectRequestContext()?.slug }); return rejected; }
+      async readCanonicalAgentGoal(...args) { calls.push({ method: "read", args, project: currentProjectRequestContext()?.slug }); return goal; },
+      async updateCanonicalAgentGoal(...args) { calls.push({ method: "update", args, project: currentProjectRequestContext()?.slug }); return rejected; }
     };
     const actions = catalogue(terminals, projectContext, {
       resolveUser: async () => user,
@@ -288,11 +288,11 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
       id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }), context: { channel: "internal", surface: "app" }
     });
     assert.deepEqual(await facade.readGoal(), goal);
-    assert.deepEqual(calls[0], { method: "read", args: ["session-1", { sessionId: "session-1", vibe64User: actor }, { canonical: true }], project: slug });
+    assert.deepEqual(calls[0], { method: "read", args: ["session-1", { sessionId: "session-1", vibe64User: actor }], project: slug });
     const input = { action: "set", expectedSegmentId: null, expectedGoalId: null,
       messageId: "goal-one", objective: "Finish the requested work", tokenBudget: 1000 };
     assert.deepEqual(await facade.updateGoal(input), rejected, "original pre-admission failures are returned without manufacturing a goal or receipt");
-    assert.deepEqual(calls[1], { method: "update", args: ["session-1", { ...input, sessionId: "session-1", vibe64User: actor }, { canonical: true }], project: slug });
+    assert.deepEqual(calls[1], { method: "update", args: ["session-1", { ...input, sessionId: "session-1", vibe64User: actor }], project: slug });
     for (const actionId of [ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL]) {
       const definition = actions.getDefinition(actionId);
       assert.deepEqual(definition.channels, ["internal"]);
