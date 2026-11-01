@@ -37,6 +37,8 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/src/server/sourceFiles.js`
 - `packages/vibe64-source-editor/src/server/filePolicy.js`
 - `packages/vibe64-source-editor/src/server/fileAreas.js`
+- `packages/vibe64-source-editor/src/server/fileAreaStaging.js`
+- `packages/vibe64-source-editor/src/server/fileAreaTransfer.js`
 - `packages/vibe64-source-editor/src/server/integrations.js`
 - `packages/vibe64-source-editor/src/server/explanations.js`
 - `packages/vibe64-source-editor/src/server/fileIndex.js`
