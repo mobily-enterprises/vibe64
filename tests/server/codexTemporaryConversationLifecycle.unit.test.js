@@ -13653,7 +13653,7 @@ test("Main Codex active goal continues once after service restart and explicit P
     assert.equal(recovered.ok, false, JSON.stringify(recovered));
     assert.match(recovered.results[0].error, /removed during startup/u);
     assert.equal(recovered.results[1].resumed, true, "one unavailable project cannot suppress another goal");
-    delete project.listProjects;
+    project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
     assert.deepEqual(writes.map(([action]) => action), ["set", "active"]);
     assert.equal(writes[0][1], writes[1][1], "restart retains the same native conversation");
     const resumed = await resumedService.readAgentGoal(sessionId, options, { canonical: true });
@@ -13675,7 +13675,7 @@ test("Main Codex active goal continues once after service restart and explicit P
 
 
 test("Main Cancel answers while the goal settings lock is held and its goal pause holds until saved", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, createService, controllerOptions, runtime, sessionId, store, terminals }) => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
     runtime.listSessions = async () => [await store.readSession(sessionId)];
@@ -13726,6 +13726,7 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
       assert.equal(JSON.parse((await metadata()).assistant_goal_stop_request).intentId, intent.id,
         "the goal pause is recorded before it can be saved under the lock");
       // Nothing continues the goal before the pause is saved, not even a restart.
+      project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
       restarted = createService();
       configure(restarted);
       const recovered = await restarted.recoverActiveGoals();
