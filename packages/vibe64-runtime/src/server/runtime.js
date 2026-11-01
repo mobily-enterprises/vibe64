@@ -87,19 +87,13 @@ class Vibe64SessionRuntime {
     if (store && !isDeepStrictEqual(store.learningScope ?? null, this.learningScope)) {
       throw vibe64Error("The supplied session store must retain the exact admitted learning scope.", "vibe64_learning_scope_invalid");
     }
-    this.inspectSourceByDefault = inspectSourceByDefault !== false;
-    this.createSessionSource = typeof createSessionSource === "function"
-      ? createSessionSource
-      : null;
+    this.inspectSourceByDefault = inspectSourceByDefault;
+    this.createSessionSource = createSessionSource;
     this.projectSessionSourceRoot = toText(projectSessionSourceRoot);
-    this.promptEnvironment = promptEnvironment && ["object", "function"].includes(typeof promptEnvironment)
-      ? promptEnvironment
-      : process.env;
-    this.promptRenderer = typeof promptRenderer === "function"
-      ? promptRenderer
-      : renderGenesisPrompt;
-    this.sourceInspectionAvailable = sourceInspectionAvailable !== false;
-    this.sourceInspectionError = sourceInspectionError || null;
+    this.promptEnvironment = promptEnvironment;
+    this.promptRenderer = promptRenderer;
+    this.sourceInspectionAvailable = sourceInspectionAvailable;
+    this.sourceInspectionError = sourceInspectionError;
     this.projectContextRoot = projectContextRoot;
     this.stateRoot = toText(projectRuntimeRoot);
     if (!this.stateRoot && !store) {
