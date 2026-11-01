@@ -51,7 +51,9 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
       explanationChats.set(key, { ...current, status: "stopping" });
     }
     pendingTurn.controller.abort();
-    await pendingTurn.promise.catch((error) => { if (error?.name !== "AbortError") throw error; });
+    await pendingTurn.promise.catch((error) => {
+      if (error?.name !== "AbortError") throw error;
+    });
   }
   if (pendingTurn && !explanationChats.has(key)) {
     return normalizeSourceEditorExplanation({ id: explanationId, status: "stopped" });
@@ -70,8 +72,10 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
       cleanupExecutionId: helper.executionId,
       executionProfile: helper.executionProfile
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
-    if (stopped?.ok !== true) throw sourceEditorError(stopped?.error || "The source explanation could not be stopped.",
-      stopped?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed");
+    if (stopped?.ok !== true) throw sourceEditorError(
+      stopped?.error || "The source explanation could not be stopped.",
+      stopped?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed"
+    );
   } else if (!pendingTurn && threadId && turnId) {
     const result = await terminals.interruptDetachedAgentChatTurn(context.sessionId, {
       executionProfile: sourceEditorExecutionProfileSnapshot(explanation.executionProfile) ||
@@ -139,10 +143,10 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
 
   const tasks = [...explanationTurns.values()].filter((task) => task.sessionId === context.sessionId &&
     task.projectScope === currentProjectScopeKey() && (all || shouldCleanupSourceEditorExplanationRecord(task, {
-      activeIds,
-      nowMs,
-      originId
-    })));
+    activeIds,
+    nowMs,
+    originId
+  })));
   for (const task of tasks) task.controller.abort();
   await Promise.allSettled(tasks.map((task) => task.promise));
 

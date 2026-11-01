@@ -105,8 +105,12 @@ async function transferPlan(itemAt, itemPath, stats, policy, action = "moved or 
 function assertTransferSize(entries) {
   const bytes = entries.reduce((total, entry) => total + (entry.directory ? 0 : entry.stats.size), 0);
   if (bytes > TRANSFER_MAX_BYTES) {
-    throw sourceEditorError(`This is larger than the ${TRANSFER_MAX_LABEL} one move or copy can carry. Move or copy it in smaller parts.`,
-      "vibe64_files_transfer_too_large", {}, 413);
+    throw sourceEditorError(
+      `This is larger than the ${TRANSFER_MAX_LABEL} one move or copy can carry. Move or copy it in smaller parts.`,
+      "vibe64_files_transfer_too_large",
+      {},
+      413
+    );
   }
 }
 
@@ -183,8 +187,11 @@ async function transferEntry(from, to, input, mode) {
   }
   // The item is named through its open folder and arrives through the open
   // destination folder, so neither can be redirected outside its area.
-  return withAreaFolder(to, folder, (destination) => withAreaFolder(from, folderOf(sourcePath),
-    (origin) => transferItem(from, to, { input, mode, sourcePath, folder, origin, destination })));
+  return withAreaFolder(to, folder, (destination) => withAreaFolder(
+    from,
+    folderOf(sourcePath),
+    (origin) => transferItem(from, to, { input, mode, sourcePath, folder, origin, destination })
+  ));
 }
 
 async function transferItem(from, to, { input, mode, sourcePath, folder, origin, destination }) {

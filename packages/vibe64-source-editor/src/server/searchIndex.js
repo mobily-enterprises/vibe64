@@ -84,7 +84,9 @@ function createSourceEditorSearchIndex() {
         if (!closed) await run(context, "refresh");
       }).catch((error) => {
         entry.error = String(error.message || error);
-      }).finally(() => { entry.pending = null; });
+      }).finally(() => {
+        entry.pending = null;
+      });
       queue = entry.pending;
     }
     // Bound idle bookkeeping; durable indexes remain reusable on disk.

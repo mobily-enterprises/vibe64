@@ -45,12 +45,12 @@ export async function readSourceInterpretation(context, input, cacheKey) {
     record.fileHash === input.range.fileHash &&
     record.promptVersion === input.promptVersion
     ? {
-      body: record.body,
-      summary: record.summary,
-      title: record.title,
-      executionProfile: record.executionProfile,
-      model: record.model
-    } : null;
+        body: record.body,
+        summary: record.summary,
+        title: record.title,
+        executionProfile: record.executionProfile,
+        model: record.model
+      } : null;
 }
 
 export async function writeSourceInterpretation(context, input, cacheKey, template, isCurrent) {

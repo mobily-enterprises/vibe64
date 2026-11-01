@@ -26,8 +26,12 @@ const STAGING_STALE_DAYS = 7;
  */
 function keptError(context, keptAt) {
   const where = `${context.staging}/${path.basename(keptAt)}`;
-  return sourceEditorError(`This could not finish, and the item could not be put back. It is kept as “${where}” for ${STAGING_STALE_DAYS} days; move it back before then.`,
-    "vibe64_files_item_kept", { path: where }, 500);
+  return sourceEditorError(
+    `This could not finish, and the item could not be put back. It is kept as “${where}” for ${STAGING_STALE_DAYS} days; move it back before then.`,
+    "vibe64_files_item_kept",
+    { path: where },
+    500
+  );
 }
 
 /**
@@ -81,8 +85,12 @@ async function withStaging(context, perform) {
     if (error.code !== "EEXIST") throw error;
   });
   if (!(await lstat(absolutePath)).isDirectory()) {
-    throw sourceEditorError(`Files keeps unfinished items in “${context.staging}”, which is not a folder here. Move that item away, then try again.`,
-      "vibe64_files_staging_unavailable", { path: context.staging }, 409);
+    throw sourceEditorError(
+      `Files keeps unfinished items in “${context.staging}”, which is not a folder here. Move that item away, then try again.`,
+      "vibe64_files_staging_unavailable",
+      { path: context.staging },
+      409
+    );
   }
   return withAreaFolder(context, context.staging, perform);
 }

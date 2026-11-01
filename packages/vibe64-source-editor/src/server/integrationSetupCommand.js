@@ -38,7 +38,11 @@ function invalid(message = "The application returned an invalid integration setu
 function parseIntegrationSetupResponse(stdout, request) {
   if (typeof stdout !== "string" || Buffer.byteLength(stdout) > MAX_BYTES) invalid();
   let result;
-  try { result = JSON.parse(stdout); } catch { invalid(); }
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    invalid();
+  }
   if (!result || Array.isArray(result) || typeof result !== "object") invalid();
   if (request.operation.startsWith("ads-")) return parseAdsResponse(result, request);
   if (request.operation.startsWith("payments-")) return parsePaymentManagementResponse(result, request);
@@ -71,7 +75,11 @@ function parseIntegrationSetupResponse(stdout, request) {
   for (const key of ["authorizationUrl", "callbackUrl"]) {
     if (result[key] === undefined) continue;
     let url;
-    try { url = new URL(result[key]); } catch { invalid(); }
+    try {
+      url = new URL(result[key]);
+    } catch {
+      invalid();
+    }
     const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
     if (typeof result[key] !== "string" || result[key].length > 16384 ||
         (url.protocol !== "https:" && !localHttp) || url.username || url.password || url.hash ||
@@ -129,12 +137,12 @@ function parseAdsResponse(result, request) {
     if (Array.isArray(value)) {
       if (value.length > 200) invalid();
       value.forEach(item => check(item, depth + 1));
-    }
-    else if (record(value)) { for (const [key, item] of Object.entries(value)) {
-      if (!fields.has(key)) invalid();
-      check(item, depth + 1);
-    } }
-    else if (!["string", "number", "boolean"].includes(typeof value) && value !== null) invalid();
+    } else if (record(value)) {
+      for (const [key, item] of Object.entries(value)) {
+        if (!fields.has(key)) invalid();
+        check(item, depth + 1);
+      }
+    } else if (!["string", "number", "boolean"].includes(typeof value) && value !== null) invalid();
   }
   check(result.data);
   if (["ads-preview", "ads-campaign"].includes(request.operation) && !/^[a-f0-9]{64}$/.test(result.data.reviewId || "")) invalid();
@@ -171,9 +179,9 @@ function validateAdsSelection(operation, values) {
     if (operation === "ads-discover" && value === undefined) continue;
     const valid = field === "customerId" ? typeof value === "string" && /^[0-9]{10}$/.test(value)
       : field === "campaignId" ? typeof value === "string" && /^[0-9]{1,20}$/.test(value)
-      : field === "reviewId" ? typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
-      : field.endsWith("Confirmed") ? value === true
-      : typeof value === "string" && value.trim().length > 0 && value.length <= 100 && !/[\p{Cc}\p{Cf}]/u.test(value);
+        : field === "reviewId" ? typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+          : field.endsWith("Confirmed") ? value === true
+            : typeof value === "string" && value.trim().length > 0 && value.length <= 100 && !/[\p{Cc}\p{Cf}]/u.test(value);
     if (!valid) invalid(`Check advertising field ${field}.`, 422);
   }
   return structuredClone(values);
@@ -218,8 +226,8 @@ function parsePaymentManagementResponse(result, request) {
         result.protocol !== INTEGRATION_SETUP_PROTOCOL || result.requestId !== request.requestId || result.status !== "payments-readiness" ||
         result.paymentEnvironment !== request.paymentEnvironment || !text(result.providerAccountId) ||
         !Array.isArray(result.checks) || result.checks.length !== ids.length || new Set(
-          result.checks.map((check) => check?.id)
-        ).size !== ids.length ||
+      result.checks.map((check) => check?.id)
+    ).size !== ids.length ||
         result.checks.some((check) => !record(check, ["id", "status", "detail"]) || !ids.includes(check.id) ||
           !["passed", "failed", "unknown", "manual"].includes(check.status) || !text(check.detail, 500))) invalid();
     return result;
@@ -243,7 +251,7 @@ function parsePaymentManagementResponse(result, request) {
     } else invalid();
   }
   if (review.removed.some((id) => !planId(id)) || review.drift.some((item) =>
-      !record(item, ["planId", "reason"]) || !planId(item.planId) || !text(item.reason, 500))) invalid();
+    !record(item, ["planId", "reason"]) || !planId(item.planId) || !text(item.reason, 500))) invalid();
   return result;
 }
 

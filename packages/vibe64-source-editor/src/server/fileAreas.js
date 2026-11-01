@@ -111,8 +111,12 @@ function createFileArea(project, { repoChanged }) {
         throw error;
       });
       if (rootStats && !rootStats.isDirectory()) {
-        throw sourceEditorError(`This area's folder “${root}” is not a folder. Move that item away, then try again.`,
-          "vibe64_files_area_not_folder", { path: root }, 409);
+        throw sourceEditorError(
+          `This area's folder “${root}” is not a folder. Move that item away, then try again.`,
+          "vibe64_files_area_not_folder",
+          { path: root },
+          409
+        );
       }
       /**
        * Reads never create the folder; a missing one is simply empty.
@@ -154,9 +158,13 @@ function createFileArea(project, { repoChanged }) {
           }
         }, { operation: "source-editor-write", waitMs });
         if (!exclusive.acquired) {
-          throw sourceEditorError(toText(exclusive.value?.error) ||
+          throw sourceEditorError(
+            toText(exclusive.value?.error) ||
             "Another source-changing operation is starting. Try again in a moment.",
-            toText(exclusive.value?.code) || "vibe64_source_editor_write_busy", {}, 409);
+            toText(exclusive.value?.code) || "vibe64_source_editor_write_busy",
+            {},
+            409
+          );
         }
         return exclusive.value;
       };
@@ -183,28 +191,32 @@ function createFileArea(project, { repoChanged }) {
       throw sourceEditorError("This session's Drop Zone has expired.", "vibe64_files_expired", {}, 410);
     }
     const liveRoot = path.join(session.sessionRoot, "drop-zone");
-    return { key, session, run: async (perform) => {
-      if (!write) {
+    return {
+      key,
+      session,
+      run: async (perform) => {
+        if (!write) {
         // Normal reads do not mutate session metadata. Older live sessions get
         // their missing Drop Zone once, under the same archival mutation lease.
-        try {
-          await lstat(liveRoot);
-          return perform(context(liveRoot, { location: liveRoot }));
-        } catch (error) {
-          if (!isMissingPathError(error)) throw error;
+          try {
+            await lstat(liveRoot);
+            return perform(context(liveRoot, { location: liveRoot }));
+          } catch (error) {
+            if (!isMissingPathError(error)) throw error;
+          }
         }
+        return runtime.store.mutateSession(sessionId, async (sessionPaths) => {
+          const current = await runtime.store.readSessionSummary(sessionId);
+          if (sessionClosingReason(current) || current.status === "archived") {
+            throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_session_closing", {}, 409);
+          }
+          await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
+          const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, staging: STAGING_FOLDER });
+          if (write) await removeStaleStaging(dropZone);
+          return perform(dropZone);
+        });
       }
-      return runtime.store.mutateSession(sessionId, async (sessionPaths) => {
-        const current = await runtime.store.readSessionSummary(sessionId);
-        if (sessionClosingReason(current) || current.status === "archived") {
-          throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_session_closing", {}, 409);
-        }
-        await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
-        const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, staging: STAGING_FOLDER });
-        if (write) await removeStaleStaging(dropZone);
-        return perform(dropZone);
-      });
-    } };
+    };
   }
 
   /**

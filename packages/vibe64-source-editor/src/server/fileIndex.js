@@ -74,7 +74,9 @@ function createSourceEditorFileIndex({
     }).catch((error) => {
       if (entries.get(key) === entry) entries.delete(key);
       throw error;
-    }).finally(() => { entry.pending = null; });
+    }).finally(() => {
+      entry.pending = null;
+    });
     return entry.pending;
   }
 

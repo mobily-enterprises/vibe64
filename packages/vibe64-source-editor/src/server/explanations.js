@@ -134,8 +134,12 @@ function createExplanationOperations({
         if (helper.actorIdentity !== context.agentAccountIdentity ||
             helper.connectionIdentity !== context.agentRoutingDecision.connectionIdentity ||
             JSON.stringify(helper.selection) !== JSON.stringify(context.agentRoutingDecision.effectiveSelection)) {
-          throw sourceEditorError("This explanation uses a different AI or account. Start a new explanation to continue.",
-            "vibe64_source_explanation_destination_changed", {}, 409);
+          throw sourceEditorError(
+            "This explanation uses a different AI or account. Start a new explanation to continue.",
+            "vibe64_source_explanation_destination_changed",
+            {},
+            409
+          );
         }
         context.assistantHelper = helper;
       } else {
@@ -488,20 +492,26 @@ async function sourceEditorExplanationInput(context, input) {
   }
   const selectedLineCount = range.endLine - range.startLine + 1;
   if (scope !== "file" && symbolId === undefined && selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
-    throw sourceEditorError("Select a smaller code range before asking for an explanation.",
+    throw sourceEditorError(
+      "Select a smaller code range before asking for an explanation.",
       "vibe64_source_explanation_selection_too_large",
       {
-      maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
-      selectedLineCount
-    }, 413);
+        maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
+        selectedLineCount
+      },
+      413
+    );
   }
   if (scope !== "file" && selectedText.length > SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS) {
-    throw sourceEditorError("Select a smaller code range before asking for an explanation.",
+    throw sourceEditorError(
+      "Select a smaller code range before asking for an explanation.",
       "vibe64_source_explanation_selection_too_large",
       {
-      maxChars: SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS,
-      selectedChars: selectedText.length
-    }, 413);
+        maxChars: SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS,
+        selectedChars: selectedText.length
+      },
+      413
+    );
   }
   const selectedTextHash = sourceEditorTextHash(selectedText);
   const promptVersion = presentation ? sourceEditorInterfacePromptVersion(presentation) : SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION;

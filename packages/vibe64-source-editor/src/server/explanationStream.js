@@ -616,11 +616,11 @@ async function runTrackedSourceEditorAgentTurn(context, {
     const rejectedThreadId = toText(rejectedThread?.threadId);
     const cleanup = rejectedThreadId
       ? await cleanupRejectedSourceEditorExplanationThread(
-          context,
-          rejectedThreadId,
-          terminals,
-          rejectedThread.executionProfile
-        )
+        context,
+        rejectedThreadId,
+        terminals,
+        rejectedThread.executionProfile
+      )
       : null;
     const cleanupSucceeded = cleanup?.ok === true;
     const failure = sourceEditorErrorResponse(error);

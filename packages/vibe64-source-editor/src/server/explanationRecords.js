@@ -106,10 +106,15 @@ async function readSourceEditorExplanationCleanupRecords(context = {}) {
   try {
     const text = await readFile(ledgerPath, "utf8");
     let parsed;
-    try { parsed = JSON.parse(text); }
-    catch {
-      throw sourceEditorError(`This session's source explanation helper ledger (${SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE}) is unreadable; it was left unchanged.`,
-        "vibe64_source_explanation_ledger_invalid", {}, 409);
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw sourceEditorError(
+        `This session's source explanation helper ledger (${SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE}) is unreadable; it was left unchanged.`,
+        "vibe64_source_explanation_ledger_invalid",
+        {},
+        409
+      );
     }
     const rawRecords = Array.isArray(parsed)
       ? parsed
@@ -228,8 +233,10 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
     if (deleted?.ok !== true) {
       const reason = String(deleted?.error || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
-      throw sourceEditorError(`The source explanation helper could not be closed${reason ? `: ${reason}` : ""}.`,
-        deleted?.code || "vibe64_source_explanation_agent_cleanup_unconfirmed");
+      throw sourceEditorError(
+        `The source explanation helper could not be closed${reason ? `: ${reason}` : ""}.`,
+        deleted?.code || "vibe64_source_explanation_agent_cleanup_unconfirmed"
+      );
     }
     return deleted;
   }

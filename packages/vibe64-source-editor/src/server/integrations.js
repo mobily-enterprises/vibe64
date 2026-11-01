@@ -230,7 +230,9 @@ async function runApplicationIntegrationSetup({
   if (current.baseHash !== checked.baseHash) {
     throw sourceEditorError(
       "Integration configuration changed during setup. Reload it and check the application's connection before retrying.",
-      "vibe64_integration_configuration_changed", {}, 409
+      "vibe64_integration_configuration_changed",
+      {},
+      409
     );
   }
   return { ok: true, ...result };
@@ -269,17 +271,29 @@ function createIntegrationOperations({
     }
     const saved = await context.runtime.store.readIntegrationSetupRequest(context.sessionId, request.turnId);
     if (!saved || saved.requestId !== request.requestId || saved.integrationId !== input.integrationId) {
-      throw sourceEditorError("This integration setup request has changed or no longer exists.",
-        "vibe64_integration_setup_request_changed", {}, 409);
+      throw sourceEditorError(
+        "This integration setup request has changed or no longer exists.",
+        "vibe64_integration_setup_request_changed",
+        {},
+        409
+      );
     }
     const current = await readApplicationIntegrations(context);
     if (current.baseHash !== request.configurationHash) {
-      throw sourceEditorError("Integration configuration changed. Reload it before continuing.",
-        "vibe64_integration_configuration_changed", {}, 409);
+      throw sourceEditorError(
+        "Integration configuration changed. Reload it before continuing.",
+        "vibe64_integration_configuration_changed",
+        {},
+        409
+      );
     }
     if (saved.outcome !== "pending" && input.operation !== "status") {
-      throw sourceEditorError("This integration setup request has already been decided. Reload the conversation.",
-        "vibe64_integration_setup_request_decided", {}, 409);
+      throw sourceEditorError(
+        "This integration setup request has already been decided. Reload the conversation.",
+        "vibe64_integration_setup_request_decided",
+        {},
+        409
+      );
     }
     return saved;
   }
@@ -325,8 +339,12 @@ function createIntegrationOperations({
         if (savedRequest && savedRequest.outcome !== "pending") return { ...result, integrationSetup: savedRequest };
         if (input.setupRequest && result.status === "connected") {
           if (typeof result.verifiedAt !== "string" || !Number.isFinite(Date.parse(result.verifiedAt))) {
-            throw sourceEditorError("The application did not report a verified connection. Check the connection again.",
-              "vibe64_integration_setup_unverified", {}, 409);
+            throw sourceEditorError(
+              "The application did not report a verified connection. Check the connection again.",
+              "vibe64_integration_setup_unverified",
+              {},
+              409
+            );
           }
           const integrationSetup = await context.runtime.store.completeIntegrationSetupRequest(context.sessionId, {
             ...input.setupRequest,
@@ -361,7 +379,7 @@ function createIntegrationOperations({
           integration.authentication.method !== "oauth2" ||
           registration?.source !== "own" ||
         registration.clientId !== "MISSING" || Object.values(configuration.integrations).filter((item) =>
-          item.authentication.registrationRef === integration.authentication.registrationRef).length !== 1) {
+        item.authentication.registrationRef === integration.authentication.registrationRef).length !== 1) {
         throw sourceEditorError(
           "Choose a new, unshared supported OAuth registration before registering.",
           "vibe64_integration_registration_invalid",
@@ -441,8 +459,12 @@ function createIntegrationOperations({
             ...(client.clientSecretExpiresAt === undefined ? {} : { clientSecretExpiresAt: client.clientSecretExpiresAt })
           };
         } catch {
-          throw sourceEditorError(`The provider created a client, but local setup did not finish. Inspect Env for ${clientIdKey}, ${secretKey} and ${callbackKey}; values may already be saved. Recover that client before registering again.`,
-            "vibe64_integration_registration_incomplete", {}, 409);
+          throw sourceEditorError(
+            `The provider created a client, but local setup did not finish. Inspect Env for ${clientIdKey}, ${secretKey} and ${callbackKey}; values may already be saved. Recover that client before registering again.`,
+            "vibe64_integration_registration_incomplete",
+            {},
+            409
+          );
         }
       });
     });
