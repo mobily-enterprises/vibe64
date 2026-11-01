@@ -15,11 +15,12 @@ const PROJECT_SERVICE_DOUBLE_DEFAULTS = Object.freeze({
 });
 
 /**
- * Completes a plain project double in place, so the operations the test sets or replaces later stay its own.
+ * Completes a plain project double in place, so the operations the test sets or replaces later stay its own. A real
+ * (frozen) project service is left as it is.
  * @param {object} [project]
  */
 function completedProjectDouble(project) {
-  if (project && Object.getPrototypeOf(project) === Object.prototype) {
+  if (project && Object.isExtensible(project) && Object.getPrototypeOf(project) === Object.prototype) {
     Object.setPrototypeOf(project, PROJECT_SERVICE_DOUBLE_DEFAULTS);
   }
   return project;
