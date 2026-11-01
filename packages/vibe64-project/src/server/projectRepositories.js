@@ -176,29 +176,167 @@ function createProjectRepositories({
     return { project, actions };
   }
 
-  async function handleGithubIssues(input) {
+  /**
+   * Runs one GitHub issue operation in the current project and announces the change a write made.
+   * @param {string} operation
+   * @param {object} input
+   */
+  async function runGithubIssueOperation(operation, input) {
     return projectResult(async () => {
       const project = await selection.currentProjectState();
-      const result = await githubIssues(project, input, { env });
-      if (input.operation === "comment") {
+      const result = await githubIssues(project, { ...input, operation }, { env });
+      if (operation === "comment") {
         await notifyGithubChanged(project, {
           originId: input.originId,
           issueComment: { number: Number(input.number), id: result.comment.id, author: result.comment.author.login }
         }, "github-issue-commented");
-      } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(input.operation)) {
+      } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(operation)) {
         await notifyGithubChanged(project);
       }
       return result;
     });
   }
 
-  async function handleGithubPullRequests(input) {
+  /**
+   * Runs one GitHub pull request operation in the current project and announces the change a write made.
+   * @param {string} operation
+   * @param {object} input
+   */
+  async function runGithubPullRequestOperation(operation, input) {
     return projectResult(async () => {
       const project = await selection.currentProjectState();
-      const result = await githubPullRequests(project, input, { env });
-      if (["ready", "update-branch", "merge"].includes(input.operation)) await notifyGithubChanged(project);
+      const result = await githubPullRequests(project, { ...input, operation }, { env });
+      if (["ready", "update-branch", "merge"].includes(operation)) await notifyGithubChanged(project);
       return result;
     });
+  }
+
+  /**
+   * The project's GitHub issues, filtered and paged.
+   * @param {object} input
+   */
+  function listGithubIssues(input) {
+    return runGithubIssueOperation("list", input);
+  }
+
+  /**
+   * One GitHub issue with its comments.
+   * @param {object} input
+   */
+  function readGithubIssue(input) {
+    return runGithubIssueOperation("read", input);
+  }
+
+  /**
+   * Creates a GitHub issue.
+   * @param {object} input
+   */
+  function createGithubIssue(input) {
+    return runGithubIssueOperation("create", input);
+  }
+
+  /**
+   * Edits a GitHub issue's title and description.
+   * @param {object} input
+   */
+  function editGithubIssue(input) {
+    return runGithubIssueOperation("edit", input);
+  }
+
+  /**
+   * Comments on a GitHub issue.
+   * @param {object} input
+   */
+  function commentOnGithubIssue(input) {
+    return runGithubIssueOperation("comment", input);
+  }
+
+  /**
+   * Edits a comment on a GitHub issue.
+   * @param {object} input
+   */
+  function editGithubIssueComment(input) {
+    return runGithubIssueOperation("edit-comment", input);
+  }
+
+  /**
+   * Closes or reopens a GitHub issue.
+   * @param {object} input
+   */
+  function updateGithubIssueState(input) {
+    return runGithubIssueOperation("state", input);
+  }
+
+  /**
+   * The repository's GitHub labels and the person's label permissions.
+   * @param {object} input
+   */
+  function listGithubIssueLabels(input) {
+    return runGithubIssueOperation("labels", input);
+  }
+
+  /**
+   * Creates a GitHub repository label.
+   * @param {object} input
+   */
+  function createGithubIssueLabel(input) {
+    return runGithubIssueOperation("create-label", input);
+  }
+
+  /**
+   * Replaces, adds or removes a GitHub issue's labels.
+   * @param {object} input
+   */
+  function updateGithubIssueLabels(input) {
+    return runGithubIssueOperation("set-labels", input);
+  }
+
+  /**
+   * The people an issue comment can mention.
+   * @param {object} input
+   */
+  function listGithubIssueMentions(input) {
+    return runGithubIssueOperation("mentions", input);
+  }
+
+  /**
+   * The project's GitHub pull requests.
+   * @param {object} input
+   */
+  function listGithubPullRequests(input) {
+    return runGithubPullRequestOperation("list", input);
+  }
+
+  /**
+   * One GitHub pull request.
+   * @param {object} input
+   */
+  function readGithubPullRequest(input) {
+    return runGithubPullRequestOperation("read", input);
+  }
+
+  /**
+   * Marks a reviewed GitHub pull request ready for review.
+   * @param {object} input
+   */
+  function markGithubPullRequestReady(input) {
+    return runGithubPullRequestOperation("ready", input);
+  }
+
+  /**
+   * Updates a reviewed GitHub pull request's branch from its base.
+   * @param {object} input
+   */
+  function updateGithubPullRequestBranch(input) {
+    return runGithubPullRequestOperation("update-branch", input);
+  }
+
+  /**
+   * Merges a reviewed GitHub pull request.
+   * @param {object} input
+   */
+  function mergeGithubPullRequest(input) {
+    return runGithubPullRequestOperation("merge", input);
   }
 
   async function resolvePullRequestSource(input = {}) {
@@ -230,8 +368,22 @@ function createProjectRepositories({
     saveRepositoryWorkflow,
     refreshGithub,
     incomingRepository,
-    githubIssues: handleGithubIssues,
-    githubPullRequests: handleGithubPullRequests,
+    listGithubIssues,
+    readGithubIssue,
+    createGithubIssue,
+    editGithubIssue,
+    commentOnGithubIssue,
+    editGithubIssueComment,
+    updateGithubIssueState,
+    listGithubIssueLabels,
+    createGithubIssueLabel,
+    updateGithubIssueLabels,
+    listGithubIssueMentions,
+    listGithubPullRequests,
+    readGithubPullRequest,
+    markGithubPullRequestReady,
+    updateGithubPullRequestBranch,
+    mergeGithubPullRequest,
     resolvePullRequestSource,
     preparePullRequestSource: prepareSessionPullRequestSource,
     publishSessionPullRequest: publishPullRequestForSession

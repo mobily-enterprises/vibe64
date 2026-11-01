@@ -1,6 +1,7 @@
 import { githubApi, projectGithubFullName } from "./githubApi.js";
 import { readProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
 import { readTeamAiStatus } from "@local/vibe64-core/server/teamAiGate";
+import { assertLearningModeAllowsProject, learningModeProjectError, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { readProjectPromptHints } from "@local/vibe64-core/server/projectPromptHints";
@@ -170,6 +171,16 @@ function createService({
     return projectResult(() => projectContext.createWorkspaceProject(input));
   }
 
+  /**
+   * Creates a project in Develop mode; Learn mode has only the learner's practice projects.
+   * @param {object} input
+   */
+  async function createDevelopProject(input) {
+    const mode = await readLearningModeFor(input.vibe64User);
+    if (mode?.on) throw learningModeProjectError(mode);
+    return createProject(input);
+  }
+
   async function createRuntime(options = {}) {
     return sessionWork.createRuntime(options);
   }
@@ -225,6 +236,14 @@ function createService({
       const teamAi = await readTeamAiStatus({ actor });
       return teamAi ? { ...listed, teamAi } : listed;
     });
+  }
+
+  /**
+   * The project list as the person in the input sees it.
+   * @param {object} input
+   */
+  async function listProjectsFor(input) {
+    return listProjects({ actor: input.vibe64User });
   }
 
   async function managedDevelopmentDatabaseDefaults(input = {}) {
@@ -385,6 +404,15 @@ function createService({
     return projectResult(() => projectContext.selectWorkspaceProject(input));
   }
 
+  /**
+   * Selects a project the person's mode allows: practice projects in Learn mode, their own projects in Develop mode.
+   * @param {object} input
+   */
+  async function selectProjectInMode(input) {
+    await assertLearningModeAllowsProject({ actor: input.vibe64User, slug: input.slug });
+    return selectProject(input);
+  }
+
   return Object.freeze({
     readOnboarding,
     applyTemplate: applyProjectTemplate,
@@ -395,6 +423,7 @@ function createService({
       return selection.selectedTargetRoot();
     },
     createProject,
+    createDevelopProject,
     createRuntime,
     createSessionStore,
     readSelectedSessionSource,
@@ -407,6 +436,7 @@ function createService({
     developmentDatabasePolicy,
     listPracticeProjectSlugs,
     listProjects,
+    listProjectsFor,
     managedDevelopmentDatabaseDefaults,
     projectExecutionEnvironment: sessionEnvironment.projectExecutionEnvironment,
     projectInspectionEnvironment: sessionEnvironment.projectInspectionEnvironment,
@@ -425,8 +455,22 @@ function createService({
     saveRepositoryWorkflow: repositories.saveRepositoryWorkflow,
     refreshGithub: repositories.refreshGithub,
     incomingRepository: repositories.incomingRepository,
-    githubIssues: repositories.githubIssues,
-    githubPullRequests: repositories.githubPullRequests,
+    listGithubIssues: repositories.listGithubIssues,
+    readGithubIssue: repositories.readGithubIssue,
+    createGithubIssue: repositories.createGithubIssue,
+    editGithubIssue: repositories.editGithubIssue,
+    commentOnGithubIssue: repositories.commentOnGithubIssue,
+    editGithubIssueComment: repositories.editGithubIssueComment,
+    updateGithubIssueState: repositories.updateGithubIssueState,
+    listGithubIssueLabels: repositories.listGithubIssueLabels,
+    createGithubIssueLabel: repositories.createGithubIssueLabel,
+    updateGithubIssueLabels: repositories.updateGithubIssueLabels,
+    listGithubIssueMentions: repositories.listGithubIssueMentions,
+    listGithubPullRequests: repositories.listGithubPullRequests,
+    readGithubPullRequest: repositories.readGithubPullRequest,
+    markGithubPullRequestReady: repositories.markGithubPullRequestReady,
+    updateGithubPullRequestBranch: repositories.updateGithubPullRequestBranch,
+    mergeGithubPullRequest: repositories.mergeGithubPullRequest,
     resolvePullRequestSource: repositories.resolvePullRequestSource,
     preparePullRequestSource: repositories.preparePullRequestSource,
     publishSessionPullRequest: repositories.publishSessionPullRequest,
@@ -453,7 +497,8 @@ function createService({
     saveCollaborationSettings,
     savePromptHints,
     savePreviewApplicationIdentities: saveProjectPreviewApplicationIdentities,
-    selectProject
+    selectProject,
+    selectProjectInMode
   });
 }
 

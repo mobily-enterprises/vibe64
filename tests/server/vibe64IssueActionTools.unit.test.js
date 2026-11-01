@@ -1,3 +1,4 @@
+import { GITHUB_ISSUE_METHODS, githubOperationsDouble } from "../fixtures/githubProjectDouble.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -33,12 +34,10 @@ test("issue tools preserve exact requested writes, bounded reads and fresh proje
       mentions: { ok: true, users: Array.from({ length: 23 }, (_, i) => ({ login: `person-${i}`, name: `Person ${i}`, email: "private-email" })), warning: "Some collaborators could not load." }
     };
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-    actions.register({ contributorId: "issues", domain: "project", actions: createProjectActions({ project: {
-      async githubIssues(input) {
-        calls.push({ input, actor: currentProjectRequestContext().vibe64User, slug: currentProjectRequestContext().slug });
-        return results[input.operation];
-      }
-    } }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+    actions.register({ contributorId: "issues", domain: "project", actions: createProjectActions({ project: githubOperationsDouble(GITHUB_ISSUE_METHODS, async (input) => {
+      calls.push({ input, actor: currentProjectRequestContext().vibe64User, slug: currentProjectRequestContext().slug });
+      return results[input.operation];
+    }) }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => actor,
       authorizeProject() { if (!allowed) throw Object.assign(new Error("Project access revoked"), { statusCode: 403 }); } });
     const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });

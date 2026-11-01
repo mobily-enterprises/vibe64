@@ -1,9 +1,21 @@
+import { GITHUB_ISSUE_METHODS, GITHUB_PULL_REQUEST_METHODS } from "../fixtures/githubProjectDouble.js";
 import assert from "node:assert/strict";
 import os from "node:os";
 import test from "node:test";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
+
+
+/** The project service's named GitHub method for one case's category and operation. */
+function githubMethod(category, input) {
+  return (category === "githubIssues" ? GITHUB_ISSUE_METHODS : GITHUB_PULL_REQUEST_METHODS)[input.operation];
+}
+
+/** The case input without the operation its method name now carries. */
+function withoutOperation({ operation: _operation, ...input }) {
+  return input;
+}
 
 test("confirmed GitHub mutations refresh their captured project without making notification failure retryable", async (t) => {
   const osUser = os.userInfo();
@@ -79,7 +91,7 @@ test("confirmed GitHub mutations refresh their captured project without making n
       const beforeEvents = events.length;
       const beforeWarnings = warnings.length;
       const result = method === "publishSessionPullRequest"
-        ? await service[method](source, { ...input, vibe64User }) : await service[method]({ ...input, vibe64User });
+        ? await service[method](source, { ...input, vibe64User }) : await service[githubMethod(method, input)]({ ...withoutOperation(input), vibe64User });
       assert.equal(method === "publishSessionPullRequest" ? result.number === 7 : result.ok, true, JSON.stringify(result));
       if (input.operation === "update-branch") assert.equal(result.pending, true);
       assert.equal(replies.length, 0);
@@ -108,7 +120,7 @@ test("confirmed GitHub mutations refresh their captured project without making n
     selectedProject = project;
     replies = [...responses];
     const count = events.length;
-    const result = await service[method]({ ...input, vibe64User });
+    const result = await service[githubMethod(method, input)]({ ...withoutOperation(input), vibe64User });
     assert.equal(result.ok, input.operation === "read");
     assert.equal(events.length, count, "reads and failed writes do not publish changes");
   }

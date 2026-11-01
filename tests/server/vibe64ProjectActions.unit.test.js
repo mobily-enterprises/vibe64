@@ -17,6 +17,8 @@ import {
 } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
+import { createService } from "../../packages/vibe64-project/src/server/service.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const localUser = { username: "local", role: "owner" };
 
@@ -120,7 +122,7 @@ test("engineering settings actions preserve the selected source context", async 
 
 test("project mutations publish first-class action events", async () => {
   const action = featureAction({
-    async createProject() {
+    async createDevelopProject() {
       return {
         ok: true,
         project: {
@@ -283,8 +285,10 @@ test("repository policy changes carry only their public setting on the existing 
 test("Learn mode creates no projects and selects only the practice project; Develop never selects it", async (t) => {
   t.after(() => registerLearningModeReader(null));
   const calls = [];
-  const project = { createProject: input => { calls.push(["create", input.name]); return { ok: true }; },
-    selectProject: input => { calls.push(["select", input.slug]); return { ok: true }; } };
+  const project = createService({ logger: silentLogger, projectContext: {
+    createWorkspaceProject: input => { calls.push(["create", input.name]); return { ok: true }; },
+    selectWorkspaceProject: input => { calls.push(["select", input.slug]); return { ok: true }; }
+  } });
   const create = featureAction(project, ACTION_CREATE_PROJECT);
   const select = featureAction(project, ACTION_SELECT_PROJECT);
   const practiceSlug = "training-12345678123442348234123456789abc";

@@ -1,3 +1,4 @@
+import { GITHUB_ISSUE_METHODS, githubOperationsDouble } from "../fixtures/githubProjectDouble.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -52,7 +53,7 @@ test("issue routes preserve repeated label filters and browser origin with the a
       let received;
       registerRoutes(routeHttp(app), {
         projectContext,
-        project: { async githubIssues(input) { received = input; return { ok: true }; } },
+        project: githubOperationsDouble(GITHUB_ISSUE_METHODS, async (input) => { received = input; return { ok: true }; }),
         routeRelativePath: "vibe64",
         routeSurface: "app"
       });
@@ -98,7 +99,7 @@ test("issue editing routes bind identifiers and credentials to the authorized re
       let received;
       registerRoutes(routeHttp(app), {
         projectContext, routeRelativePath: "vibe64", routeSurface: "app",
-        project: { async githubIssues(input) { received = input; return { ok: true }; } }
+        project: githubOperationsDouble(GITHUB_ISSUE_METHODS, async (input) => { received = input; return { ok: true }; })
       });
       const user = { id: "viewer", role: "member" };
       for (const [method, path, body, expected] of [

@@ -37,10 +37,6 @@ const Vibe64ProjectFeature = defineFeature({
   provides: {
     project: "vibe64.project"
   },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEnv} capabilities.env

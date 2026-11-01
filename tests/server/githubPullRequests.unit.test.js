@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { GITHUB_PULL_REQUEST_METHODS, githubOperationsDouble } from "../fixtures/githubProjectDouble.js";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
@@ -412,9 +413,8 @@ test("PR mutation routes bind the action, project, number and identity to the au
     const app = testRouteApp();
     let received;
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-    actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project: {
-      async githubPullRequests(input) { received = input; return { ok: true }; }
-    } }).map((action) => ({ channels: ["api"], surfaces: ["app"], ...action })) });
+    actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project: githubOperationsDouble(GITHUB_PULL_REQUEST_METHODS,
+      async (input) => { received = input; return { ok: true }; }) }).map((action) => ({ channels: ["api"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user, authorizeProject: async () => {} });
     registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     for (const operation of ["ready", "update-branch", "merge"]) {

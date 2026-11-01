@@ -20,25 +20,25 @@ test("all project HTTP operations share canonical actions and current authority 
       ["GET", "/repository/branches", "repository.branches.read", "repositoryBranches", { name: "feature/search", offset: 0, limit: 10 }],
       ["PUT", "/repository/workflow", "repository.workflow.save", "saveRepositoryWorkflow", { requirePullRequest: true }],
       ["POST", "/repository/remote", "repository.remote", "repositoryRemote", { action: "pull", review: { head: "reviewed-head" }, merge: false }],
-      ["GET", "/issues", "issues.list", "githubIssues", { state: "all", search: "layout", cursor: null, labels: ["bug", "help wanted"] }],
-      ["POST", "/issues", "issues.create", "githubIssues", { title: "Report", body: "A description", labels: ["bug"] }],
-      ["GET", "/issue-labels", "issues.labels", "githubIssues", { search: "bug", offset: 20, limit: 20 }],
-      ["POST", "/issue-labels", "issues.create-label", "githubIssues", { name: "Review", color: "aabbcc" }],
-      ["GET", "/issue-mentions", "issues.mentions", "githubIssues", { number: "42", search: "author", offset: 0, limit: 10 }],
-      ["PUT", "/issues/:number/labels", "issues.set-labels", "githubIssues", { labels: [], labelMode: "replace" }],
-      ["GET", "/issues/:number", "issues.read", "githubIssues", { cursor: "older-comments" }],
-      ["POST", "/issues/:number/comments", "issues.comment", "githubIssues", { body: "Exact comment\n", originId: "browser" }],
-      ["PATCH", "/issues/:number", "issues.state", "githubIssues", { state: "closed" }],
-      ["PUT", "/issues/:number", "issues.edit", "githubIssues", { title: "New title", body: "" }],
-      ["PATCH", "/issues/:number/comments/:commentId", "issues.edit-comment", "githubIssues", { body: "Revised comment" }],
-      ["GET", "/pull-requests", "pull-requests.list", "githubPullRequests", { state: "merged", search: "layout", cursor: null }],
-      ["GET", "/pull-requests/:number", "pull-requests.read", "githubPullRequests", {}],
-      ["POST", "/pull-requests/:number/ready", "pull-requests.ready", "githubPullRequests", { review }],
-      ["POST", "/pull-requests/:number/update-branch", "pull-requests.update-branch", "githubPullRequests", { review }],
-      ["POST", "/pull-requests/:number/merge", "pull-requests.merge", "githubPullRequests", { review, mergeMethod: "squash" }],
-      ["GET", "/projects", "projects.list", "listProjects", {}],
-      ["POST", "/projects", "projects.create", "createProject", { name: "Example", slug: "example" }],
-      ["POST", "/projects/select", "projects.select", "selectProject", { slug: "example" }],
+      ["GET", "/issues", "issues.list", "listGithubIssues", { state: "all", search: "layout", cursor: null, labels: ["bug", "help wanted"] }],
+      ["POST", "/issues", "issues.create", "createGithubIssue", { title: "Report", body: "A description", labels: ["bug"] }],
+      ["GET", "/issue-labels", "issues.labels", "listGithubIssueLabels", { search: "bug", offset: 20, limit: 20 }],
+      ["POST", "/issue-labels", "issues.create-label", "createGithubIssueLabel", { name: "Review", color: "aabbcc" }],
+      ["GET", "/issue-mentions", "issues.mentions", "listGithubIssueMentions", { number: "42", search: "author", offset: 0, limit: 10 }],
+      ["PUT", "/issues/:number/labels", "issues.set-labels", "updateGithubIssueLabels", { labels: [], labelMode: "replace" }],
+      ["GET", "/issues/:number", "issues.read", "readGithubIssue", { cursor: "older-comments" }],
+      ["POST", "/issues/:number/comments", "issues.comment", "commentOnGithubIssue", { body: "Exact comment\n", originId: "browser" }],
+      ["PATCH", "/issues/:number", "issues.state", "updateGithubIssueState", { state: "closed" }],
+      ["PUT", "/issues/:number", "issues.edit", "editGithubIssue", { title: "New title", body: "" }],
+      ["PATCH", "/issues/:number/comments/:commentId", "issues.edit-comment", "editGithubIssueComment", { body: "Revised comment" }],
+      ["GET", "/pull-requests", "pull-requests.list", "listGithubPullRequests", { state: "merged", search: "layout", cursor: null }],
+      ["GET", "/pull-requests/:number", "pull-requests.read", "readGithubPullRequest", {}],
+      ["POST", "/pull-requests/:number/ready", "pull-requests.ready", "markGithubPullRequestReady", { review }],
+      ["POST", "/pull-requests/:number/update-branch", "pull-requests.update-branch", "updateGithubPullRequestBranch", { review }],
+      ["POST", "/pull-requests/:number/merge", "pull-requests.merge", "mergeGithubPullRequest", { review, mergeMethod: "squash" }],
+      ["GET", "/projects", "projects.list", "listProjectsFor", {}],
+      ["POST", "/projects", "projects.create", "createDevelopProject", { name: "Example", slug: "example" }],
+      ["POST", "/projects/select", "projects.select", "selectProjectInMode", { slug: "example" }],
       ["GET", "/onboarding", "onboarding.read", "readOnboarding", { sessionId: "session-1", templateOffset: 10, templateId: "official:jskit/public", purpose: "An invoice CLI" }],
       ["POST", "/templates/apply", "templates.apply", "applyTemplate", { sessionId: "session-1", templateId: "jskit:public" }],
       ["GET", "/env", "env.read", "readEnv", { environment: "dev", sessionId: "session-1" }],
@@ -58,7 +58,7 @@ test("all project HTTP operations share canonical actions and current authority 
     const project = Object.fromEntries(cases.map(([, , , method]) => [method, async (...args) => {
       const context = currentProjectRequestContext();
       calls.push({ method, args, actor: context.vibe64User, project: context.slug });
-      if (["createProject", "selectProject"].includes(method)) return { ok: true, project: { slug: args[0].slug } };
+      if (["createDevelopProject", "selectProjectInMode"].includes(method)) return { ok: true, project: { slug: args[0].slug } };
       return { ok: true };
     }]));
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });

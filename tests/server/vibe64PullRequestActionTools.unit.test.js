@@ -1,3 +1,4 @@
+import { GITHUB_PULL_REQUEST_METHODS, githubOperationsDouble } from "../fixtures/githubProjectDouble.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -38,12 +39,12 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
     const record = (input) => calls.push({ input, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug });
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "pull-requests", domain: "project", actions: [
-      ...createProjectActions({ project: { async githubPullRequests(input) {
+      ...createProjectActions({ project: githubOperationsDouble(GITHUB_PULL_REQUEST_METHODS, async (input) => {
         record(input);
         if (input.operation === "read" && missingHead) return { ...results.read, pullRequest: { ...pr,
           review: { ...review, headCommit: "" }, unavailableReason: "The source branch is no longer available." } };
         return results[input.operation];
-      } } }),
+      }) }),
       ...createSessionActions({ sessions: {
         async createSessionPullRequest(sessionId, input) { record({ sessionId, ...input }); return results.create; },
         async createSession(input) { record(input); return { ok: true, sessionId: "opened-pr", workspaceSetup: { status: "running" } }; }
