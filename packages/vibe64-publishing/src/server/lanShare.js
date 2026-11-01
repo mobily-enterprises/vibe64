@@ -103,7 +103,9 @@ function createLanShare({
       fileName,
       url: `http://${address}:${server.address().port}${route}`,
       expiresAt,
-      timer: setTimeout(() => { stop(); }, ttlMs)
+      timer: setTimeout(() => {
+        stop();
+      }, ttlMs)
     };
     share.timer.unref();
     return status();
