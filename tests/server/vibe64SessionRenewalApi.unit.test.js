@@ -39,6 +39,7 @@ import {
   withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 const RENEWAL_ACTION_IDS = Object.freeze([
   ACTION_INSPECT_SESSION_RENEWAL,
@@ -252,7 +253,7 @@ test("renewal actions use server action context identity and domain-native idemp
       return { ok: true };
     }
   };
-  const actions = createSessionActions({ sessions });
+  const actions = createSessionActions({ sessions }).map(underActionPolicy);
   const vibe64User = {
     role: "member",
     username: "ada"

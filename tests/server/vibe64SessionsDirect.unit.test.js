@@ -83,6 +83,7 @@ import {
 import {
   projectRuntimeRoot,
   sourceMetadata,
+  underActionPolicy,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
@@ -362,7 +363,7 @@ test("typing presence trusts the authenticated request user and never accepts a 
     sessionPresence,
     terminals: {}
   });
-  const action = createSessionActions({ sessions: service })
+  const action = createSessionActions({ sessions: service }).map(underActionPolicy)
     .find((candidate) => candidate.id === ACTION_UPDATE_SESSION_PRESENCE);
   const validated = action.input.schema.create({
     originId: "tab:member-1",
@@ -430,7 +431,7 @@ test("temporary typing presence requires a saved chat in the requested session",
     },
     terminals: {}
   });
-  const action = createSessionActions({ sessions: service })
+  const action = createSessionActions({ sessions: service }).map(underActionPolicy)
     .find((candidate) => candidate.id === ACTION_UPDATE_SESSION_PRESENCE);
   const context = { requestMeta: { request: { vibe64User: { username: "member", preferredName: "John" } } } };
   for (const [sessionId, conversationId, status] of [
@@ -4255,7 +4256,7 @@ test("integration continuation action forwards only request identity and authent
     } },
     publishSessionChanged: async (...args) => events.push(args)
   });
-  const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_RESUME_INTEGRATION_SETUP);
+  const action = createSessionActions({ sessions }).map(underActionPolicy).find((entry) => entry.id === ACTION_RESUME_INTEGRATION_SETUP);
   const actor = { username: "member" };
   const result = await action.execute({
     sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64),
@@ -4285,7 +4286,7 @@ test("integration setup skip needs no AI access and still validates the saved re
       terminals: { async requireAssistantAccess() { throw new Error("AI is unavailable."); } },
       publishSessionChanged: async (...args) => events.push(args)
     });
-    const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
+    const action = createSessionActions({ sessions }).map(underActionPolicy).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
     const input = { sessionId: "skip-request", turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
       vibe64User: { username: "owner" } };
     const context = { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: { username: "member", role: "member" } } } };
@@ -4601,7 +4602,7 @@ test("working notifications take the trusted project over extra payload or a con
 test("ordinary Working Send retains its original message input and carries only project browser authority", async () => {
   const calls = [];
   const actor = { uid: "42", username: "ada", role: "member" };
-  const definition = createSessionActions({ sessions: { sendAgentMessage(...args) { calls.push(args); return { ok: true }; } } })
+  const definition = createSessionActions({ sessions: { sendAgentMessage(...args) { calls.push(args); return { ok: true }; } } }).map(underActionPolicy)
     .find(value => value.id === ACTION_SEND_AGENT_MESSAGE);
   const input = { projectSlug: "working-project", sessionId: "working-session", message: "My original Working words", messageId: "work-request" };
   await definition.execute(input, { actor: { id: actor.uid }, vibe64Action: { user: actor,

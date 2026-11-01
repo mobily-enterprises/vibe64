@@ -7,6 +7,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 test("output tools share HTTP ownership and bounded state without grants, paths or commands", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
@@ -115,7 +116,7 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
 test("output definitions keep no lesson access; a practice project's output is an ordinary project's", async () => {
   const calls = [];
   const terminals = { outputTargetStatus: (...args) => { calls.push(args); return { ok: true }; } };
-  const definitions = createTerminalActions({ terminals });
+  const definitions = createTerminalActions({ terminals }).map(underActionPolicy);
   for (const suffix of ["outputs.read", "output-terminal.read", "output-result.read", "output-target.start", "output-target.open",
     "preview-identity.select", "output-target.stop", "output-terminal.close"]) {
     const action = definitions.find(item => item.id === `vibe64.terminals.${suffix}`);

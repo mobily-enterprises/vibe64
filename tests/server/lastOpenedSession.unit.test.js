@@ -10,6 +10,7 @@ import {
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 const ada = Object.freeze({ uid: 1001, username: "ada" });
 const bob = Object.freeze({ uid: 1002, username: "bob" });
@@ -162,7 +163,7 @@ test("the list and current-session actions pass the signed-in person to the serv
       async listSessions(input) { calls.push(["list", input.vibe64User]); return { ok: true }; },
       async updateCurrentSession(sessionId, options) { calls.push(["current", sessionId, options.vibe64User]); return { ok: true }; }
     }
-  });
+  }).map(underActionPolicy);
   const context = { vibe64Action: { user: ada, project: { slug: "alpha" } } };
   await actions.find((action) => action.id === ACTION_LIST_SESSIONS).execute({ projectSlug: "alpha" }, context);
   await actions.find((action) => action.id === ACTION_UPDATE_CURRENT_SESSION).execute({ projectSlug: "alpha", sessionId: "s3" }, context);

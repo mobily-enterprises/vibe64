@@ -16,12 +16,14 @@ import {
   createProjectActions
 } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 const localUser = { username: "local", role: "owner" };
 
 function featureAction(project, actionId = "") {
-  const action = createProjectActions({ project }).find((candidate) => candidate.id === actionId);
-  assert.ok(action, `Expected feature action ${actionId} to be registered.`);
+  const declared = createProjectActions({ project }).find((candidate) => candidate.id === actionId);
+  assert.ok(declared, `Expected feature action ${actionId} to be registered.`);
+  const action = underActionPolicy(declared);
   return { ...action, execute: (input, context = {}) => action.execute(input, { ...context, projectSlug: "catalogue", vibe64Action: { user: localUser, project: { slug: "catalogue" } } }) };
 }
 

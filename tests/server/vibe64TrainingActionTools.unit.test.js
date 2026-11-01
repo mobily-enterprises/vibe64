@@ -13,6 +13,7 @@ import { createCourseLock } from "../../packages/vibe64-training/src/server/cata
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 async function fixture(t, { presentation = false, released = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-actions-"));
@@ -206,7 +207,7 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   assert.equal(f.calls.length, 0);
   for (const definition of c.definitions) {
     // Owner-only creation refuses before resolving any login.
-    await assert.rejects(() => definition.execute({ vibe64User: { uid: 42 }, ...inputs[definition.id.replace("vibe64.training.", "")] }, { actor: { id: "42" } }),
+    await assert.rejects(() => underActionPolicy(definition).execute({ vibe64User: { uid: 42 }, ...inputs[definition.id.replace("vibe64.training.", "")] }, { actor: { id: "42" } }),
       { statusCode: definition.extensions.vibe64.ownerRequired ? 403 : 401 });
   }
 });

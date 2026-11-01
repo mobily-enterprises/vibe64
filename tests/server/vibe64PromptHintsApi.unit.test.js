@@ -20,6 +20,7 @@ import {
   withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);
@@ -81,7 +82,7 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
         };
       }
     }
-  });
+  }).map(underActionPolicy);
   const vibe64User = {
     username: "ada"
   };
@@ -249,7 +250,7 @@ test("prompt-hint cancellation without a draft passes route validation and reach
           return { ok: true, status: "cancelled" };
         }
       });
-      const actions = createTerminalActions({ terminals: app.service });
+      const actions = createTerminalActions({ terminals: app.service }).map(underActionPolicy);
       registerRoutes(app.http, {
         fastify: app.fastify, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
         terminals: app.service, uploads: { readSingleMultipartFile() {} }

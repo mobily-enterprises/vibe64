@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { localProjectKeyFromTargetRoot } from "@local/vibe64-core/server/studioProjectContext";
 import { EXTERNAL_PROJECT_LOCAL_ROOTS_DIR } from "@local/vibe64-core/server/projectState";
@@ -79,6 +80,22 @@ async function markHistoricalConversationRewound(store, sessionId, turnIds) {
   await writeFile(file, `${JSON.stringify(record)}\n`);
 }
 
+/**
+ * A declared action as the action catalogue runs it under the Vibe64 action
+ * policy: with its registered input, and an execute that applies the policy
+ * to already validated input. Tests that call one action directly use it.
+ * @param {object} definition
+ */
+function underActionPolicy(definition) {
+  return {
+    ...definition,
+    input: vibe64ActionPolicy.input(definition),
+    execute: (input, context = {}) => vibe64ActionPolicy.execute({
+      definition, input, context, run: (policyInput, policyContext) => definition.execute(policyInput, policyContext)
+    })
+  };
+}
+
 function renderTestGenesisPrompt({ action = {} } = {}) {
   const promptId = String(action.promptId || action.id || "test");
   return {
@@ -98,5 +115,6 @@ export {
   renderTestGenesisPrompt,
   sourcePath,
   sourceMetadata,
+  underActionPolicy,
   withTemporaryRoot
 };
