@@ -1,9 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
+import { API_BASE_PATH, matchesPathPrefix, normalizePathname, toRequestPathname } from "@jskit-ai/kernel/shared/surface/paths";
 
 const SPA_INDEX_FILE = "index.html";
-const API_BASE_PATH = "/api";
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -11,15 +10,6 @@ const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/robots.txt",
   "/manifest.webmanifest"
 ]);
-
-function toRequestPathname(urlValue) {
-  const rawUrl = String(urlValue || "").trim() || "/";
-  try {
-    return normalizePathname(new URL(rawUrl, "http://localhost").pathname || "/");
-  } catch {
-    return normalizePathname(rawUrl.split("?")[0] || "/");
-  }
-}
 
 function isApiPath(pathname) {
   return matchesPathPrefix(pathname, API_BASE_PATH);
@@ -29,15 +19,19 @@ function hasFileExtension(pathname) {
   return path.extname(normalizePathname(pathname)) !== "";
 }
 
-function resolveGlobalUiPaths(runtimeGlobalUiPaths = []) {
-  const paths = new Set(Array.isArray(runtimeGlobalUiPaths) ? runtimeGlobalUiPaths : []);
+/**
+ * The runtime's global UI paths plus the static files every surface serves.
+ * @param {readonly string[]} runtimeGlobalUiPaths
+ */
+function buildGlobalUiPaths(runtimeGlobalUiPaths) {
+  const paths = new Set(runtimeGlobalUiPaths);
   for (const staticPath of STATIC_GLOBAL_UI_PATHS) {
     paths.add(staticPath);
   }
   return [...paths];
 }
 
-function resolveStaticFilePath(pathname) {
+function toStaticFilePath(pathname) {
   const normalizedPathname = normalizePathname(pathname);
 
   const relativePath = normalizedPathname.replace(/^\/+/, "");
@@ -99,7 +93,7 @@ function registerSpaNotFoundHandler(app, { distRoot, hasWebBuild }) {
       });
     }
     if (hasFileExtension(pathname)) {
-      const staticFilePath = resolveStaticFilePath(pathname);
+      const staticFilePath = toStaticFilePath(pathname);
       if (hasWebBuild && staticFilePath && canServeStaticFile(distRoot, staticFilePath)) {
         return reply.sendFile(staticFilePath);
       }
@@ -123,6 +117,6 @@ function registerSpaNotFoundHandler(app, { distRoot, hasWebBuild }) {
 
 export {
   SPA_INDEX_FILE,
-  registerSpaNotFoundHandler,
-  resolveGlobalUiPaths
+  buildGlobalUiPaths,
+  registerSpaNotFoundHandler
 };

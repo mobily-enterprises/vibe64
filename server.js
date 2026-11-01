@@ -69,7 +69,7 @@ import {
 import {
   SPA_INDEX_FILE,
   registerSpaNotFoundHandler,
-  resolveGlobalUiPaths
+  buildGlobalUiPaths
 } from "./server/lib/spaFallback.js";
 import {
   browserUrlForListenAddress,
@@ -439,7 +439,7 @@ async function createServer(options = {}) {
     fastify: app,
     surfaceRuntime,
     serverSurface: runtimeEnv.SERVER_SURFACE,
-    globalUiPaths: resolveGlobalUiPaths(runtime.globalUiPaths)
+    globalUiPaths: buildGlobalUiPaths(runtime.globalUiPaths)
   });
 
   const localStartupRedirectPath = runtimeProfile.local === true &&
