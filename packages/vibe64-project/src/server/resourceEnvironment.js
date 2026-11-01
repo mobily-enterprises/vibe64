@@ -133,7 +133,9 @@ function validateVoiceResource(resource, bindings, values) {
   }
   if (!values) return;
   let endpoint;
-  try { endpoint = new URL(values.endpoint); } catch { /* Report the same safe setup error below. */ }
+  try {
+    endpoint = new URL(values.endpoint);
+  } catch { /* Report the same safe setup error below. */ }
   if (!endpoint || !["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
       !path.isAbsolute(values.accessTokenFile || "") || /[\0\r\n]/u.test(values.accessTokenFile)) {
     throw resourceEnvironmentError(
@@ -447,8 +449,8 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     (allowUnprepared && provided.prepared === false && provided.databaseToolEnvironment == null)
     ? null
     : normalizeDatabaseToolEnvironment(provided.databaseToolEnvironment, {
-        requireDistinctReader: true
-      });
+      requireDistinctReader: true
+    });
   if (databaseToolEnvironment && databaseToolEnvironment.kind !== managedDatabases[0].declaration.resource.kind) {
     throw resourceEnvironmentError(
       "The database tool kind does not match the managed resource.",
@@ -526,13 +528,13 @@ function localDatabaseServerDeclarations(resources = [], options = {}) {
         connectsWith: !values ? "" : values.url ? "url" : "fields",
         endpoint: !values ? null
           : values.url ? { url: values.url.trim() }
-          : {
-              database: toText(values.database),
-              host: toText(values.host),
-              password: values.password ?? "",
-              port: Number(values.port),
-              username: toText(values.username)
-            },
+            : {
+                database: toText(values.database),
+                host: toText(values.host),
+                password: values.password ?? "",
+                port: Number(values.port),
+                username: toText(values.username)
+              },
         fields,
         id: toText(resource.id),
         kind: resource.kind,

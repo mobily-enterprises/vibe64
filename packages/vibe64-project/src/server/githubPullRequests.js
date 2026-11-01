@@ -85,8 +85,10 @@ export async function githubPullRequests(project, input = {}, options = {}) {
   if (pullRequest.state === "OPEN" && headCommit && baseCommit) {
     const comparison = await api(`repos/${fullName}/compare/${baseCommit}...${headCommit}?per_page=1`, undefined, "GET");
     if (!Number.isSafeInteger(comparison.behind_by) || comparison.behind_by < 0) {
-      throw vibe64Error("GitHub could not compare the pull request branches. Refresh and try again.",
-        "vibe64_github_pull_requests_failed");
+      throw vibe64Error(
+        "GitHub could not compare the pull request branches. Refresh and try again.",
+        "vibe64_github_pull_requests_failed"
+      );
     }
     behindBase = comparison.behind_by;
   }
@@ -178,8 +180,10 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     throw vibe64Error(actions[operation], "vibe64_pull_request_action_unavailable");
   }
   if (!input.review || Object.entries(review).some(([key, value]) => input.review[key] !== value)) {
-    throw vibe64Error("This pull request changed since you reviewed it. Refresh and review its destination and changes again.",
-      "vibe64_pull_request_review_changed");
+    throw vibe64Error(
+      "This pull request changed since you reviewed it. Refresh and review its destination and changes again.",
+      "vibe64_pull_request_review_changed"
+    );
   }
   // Read immediately before writing, then let GitHub enforce the reviewed head and repository rules.
   const write = githubApi(input, {
@@ -195,16 +199,20 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     });
     const ready = marked.data?.markPullRequestReadyForReview?.pullRequest;
     if (ready?.id !== pullRequest.id || ready.isDraft !== false) {
-      throw vibe64Error("Ready for review could not be confirmed. Refresh the pull request before trying again.",
-        "vibe64_pull_request_result_unconfirmed");
+      throw vibe64Error(
+        "Ready for review could not be confirmed. Refresh the pull request before trying again.",
+        "vibe64_pull_request_result_unconfirmed"
+      );
     }
     return { ok: true, message: "Pull request marked ready for review." };
   }
   if (operation === "update-branch") {
     const accepted = await write(`repos/${fullName}/pulls/${number}/update-branch`, { expected_head_sha: review.headCommit }, "PUT");
     if (typeof accepted.message !== "string" || !accepted.message.trim()) {
-      throw vibe64Error("GitHub did not confirm the branch update request. Refresh the pull request before trying again.",
-        "vibe64_pull_request_result_unconfirmed");
+      throw vibe64Error(
+        "GitHub did not confirm the branch update request. Refresh the pull request before trying again.",
+        "vibe64_pull_request_result_unconfirmed"
+      );
     }
     // GitHub accepts this asynchronously; do not report the branch as already updated.
     return {
@@ -221,8 +229,10 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     merge_method: input.mergeMethod
   }, "PUT");
   if (merged.merged !== true) {
-    throw vibe64Error("GitHub did not confirm the merge. Refresh the pull request or view it on GitHub.",
-      "vibe64_pull_request_result_unconfirmed");
+    throw vibe64Error(
+      "GitHub did not confirm the merge. Refresh the pull request or view it on GitHub.",
+      "vibe64_pull_request_result_unconfirmed"
+    );
   }
   return { ok: true, message: `Merged into ${review.baseBranch}. Archive your session when you have finished with it.` };
 }

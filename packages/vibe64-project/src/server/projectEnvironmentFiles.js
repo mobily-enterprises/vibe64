@@ -169,9 +169,7 @@ async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], 
 }
 
 async function writeManagedGitExcludes(sourceRoot = "", relativePaths = [], options = {}) {
-  const { excludePath, existing, expected } = await managedGitExcludeProjection(
-    sourceRoot, relativePaths, options
-  );
+  const { excludePath, existing, expected } = await managedGitExcludeProjection(sourceRoot, relativePaths, options);
   if (existing === expected) {
     return;
   }

@@ -25,11 +25,10 @@ function connectedPackageType(connection, inspection) {
   const type = connection.type || inspection.defaultPackageType;
   if (!isConnectedPackageType(type)) throw vibe64Error(
     `Choose a package type for ${connection.name}, or declare Default package type in Connected development.`,
-    "vibe64_connected_package_type_required");
-  if (connectedPackageTypeUsesScript(type) && !connection.script) throw vibe64Error(
-    `Choose a project script for custom connection ${connection.name}.`, "vibe64_connected_custom_script_required");
-  if (!connectedPackageTypeUsesScript(type) && connection.script) throw vibe64Error(
-    `The ${type} connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid");
+    "vibe64_connected_package_type_required"
+  );
+  if (connectedPackageTypeUsesScript(type) && !connection.script) throw vibe64Error(`Choose a project script for custom connection ${connection.name}.`, "vibe64_connected_custom_script_required");
+  if (!connectedPackageTypeUsesScript(type) && connection.script) throw vibe64Error(`The ${type} connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid");
   return type;
 }
 
@@ -47,11 +46,11 @@ async function readConnectedDevelopmentInputs({
   const sourceRoot = sessionSourcePath(session);
   if (!sourceRoot || inspection?.status !== "ready") throw vibe64Error(
     "Declare Connected development in this project's Stack before preparing its connected source inputs.",
-    "vibe64_connected_development_required");
+    "vibe64_connected_development_required"
+  );
   const configured = await readConnectedProjects(sourceRoot);
   const bindings = sessionConnectedSources(session);
-  if (!Array.isArray(projects) || projects.length !== configured.projects.length) throw vibe64Error(
-    "The connected project list changed. Prepare its current sources again.", "vibe64_connected_sources_changed");
+  if (!Array.isArray(projects) || projects.length !== configured.projects.length) throw vibe64Error("The connected project list changed. Prepare its current sources again.", "vibe64_connected_sources_changed");
   const resolved = [];
   for (const connection of configured.projects) {
     const receiving = projects.find(project => project.repository === connection.repository);
@@ -62,9 +61,9 @@ async function readConnectedDevelopmentInputs({
         !isDeepStrictEqual(contribution, binding.contribution) || !receivingRoot ||
         receiving.session.sourceReady !== true) throw vibe64Error(
       `The authorized source for ${connection.repository} no longer matches this task. Prepare it again.`,
-      "vibe64_connected_sources_changed");
-    if (!(await lstat(receivingRoot)).isDirectory()) throw vibe64Error(
-      `The receiving source for ${connection.repository} must be an ordinary directory.`, "vibe64_connected_source_unavailable");
+      "vibe64_connected_sources_changed"
+    );
+    if (!(await lstat(receivingRoot)).isDirectory()) throw vibe64Error(`The receiving source for ${connection.repository} must be an ordinary directory.`, "vibe64_connected_source_unavailable");
     resolved.push({
       ...connection,
       type: connectedPackageType(connection, inspection),
@@ -104,8 +103,10 @@ async function readConnectedSourceProjection({
 }) {
   if (typeof relativePath !== "string" || !relativePath || path.isAbsolute(relativePath) || relativePath.includes("\\") ||
       relativePath.split(/[\\/]/u).some(part => ["", ".", "..", ".git"].includes(part.toLowerCase()))) {
-    throw vibe64Error("The connected sources file must be a safe project-relative path outside Git metadata.",
-      "vibe64_connected_source_file_invalid");
+    throw vibe64Error(
+      "The connected sources file must be a safe project-relative path outside Git metadata.",
+      "vibe64_connected_source_file_invalid"
+    );
   }
   const filePath = await assertProjectionPath(sourceRoot, relativePath, {
     label: "Connected sources file",
@@ -124,10 +125,14 @@ async function readConnectedSourceProjection({
     runtimes: ["git"],
     timeout: 30_000
   });
-  if (!tracked.ok) throw vibe64Error("Could not check whether the connected sources file is tracked. Preserve it and retry.",
-    "vibe64_connected_source_file_git_unavailable");
-  if (tracked.stdout) throw vibe64Error("The connected sources file is tracked. Choose a development-only location in Stack; source files were preserved.",
-    "vibe64_connected_source_file_tracked");
+  if (!tracked.ok) throw vibe64Error(
+    "Could not check whether the connected sources file is tracked. Preserve it and retry.",
+    "vibe64_connected_source_file_git_unavailable"
+  );
+  if (tracked.stdout) throw vibe64Error(
+    "The connected sources file is tracked. Choose a development-only location in Stack; source files were preserved.",
+    "vibe64_connected_source_file_tracked"
+  );
 
   let existing;
   let file;
@@ -142,7 +147,8 @@ async function readConnectedSourceProjection({
   } catch (error) {
     if (error.code !== "ENOENT") throw vibe64Error(
       "The connected sources file contains unrelated or invalid content. Preserve it and choose another location in Stack.",
-      "vibe64_connected_source_file_owned");
+      "vibe64_connected_source_file_owned"
+    );
   } finally {
     await file?.close();
   }
@@ -163,7 +169,8 @@ async function inspectConnectedWorkspaceSetup({
   try {
     if (inspection.status !== "ready") throw vibe64Error(
       "Declare Connected development in Stack to prepare this task's connected sources.",
-      "vibe64_connected_development_required");
+      "vibe64_connected_development_required"
+    );
     const { existing } = await readConnectedSourceProjection({
       sourceRoot,
       sessionId: session.sessionId,
@@ -190,14 +197,17 @@ async function inspectConnectedWorkspaceSetup({
     const custom = expected.filter(connection => connection.type === "custom");
     if (custom.length && !inspection.customRunner) throw vibe64Error(
       "Declare a Custom runner in Connected development to run this project's custom scripts.",
-      "vibe64_connected_custom_runner_required");
+      "vibe64_connected_custom_runner_required"
+    );
     // Vibe64 runs no package manager for a declared type; the project's own
     // Verify command must prove each non-custom ecosystem's treatment.
     const declaredTypes = [...new Set(expected.map(connection => connection.type)
       .filter(type => !connectedPackageTypeUsesScript(type)))];
     if (declaredTypes.length && !inspection.steps.some(step => step.phase === "verify")) {
-      throw vibe64Error(`Declare a Verify command for the connected ${declaredTypes.join(" and ")} packages.`,
-        "vibe64_connected_verification_required");
+      throw vibe64Error(
+        `Declare a Verify command for the connected ${declaredTypes.join(" and ")} packages.`,
+        "vibe64_connected_verification_required"
+      );
     }
     const customSteps = [];
     for (const connection of custom) {
@@ -205,8 +215,7 @@ async function inspectConnectedWorkspaceSetup({
         label: "Custom connection script",
         code: "vibe64_connected_custom_script"
       });
-      if (!(await lstat(script)).isFile()) throw vibe64Error(
-        `Custom connection script must be a project file: ${connection.script}.`, "vibe64_connected_custom_script_invalid");
+      if (!(await lstat(script)).isFile()) throw vibe64Error(`Custom connection script must be a project file: ${connection.script}.`, "vibe64_connected_custom_script_invalid");
       for (const phase of ["prepare", "verify"]) customSteps.push({
         ...inspection.customRunner,
         phase,
@@ -260,7 +269,8 @@ async function inspectConnectedDevelopmentInputs(input = {}) {
   const { existing, value, result } = await readConnectedDevelopmentInputs(input);
   if (!isDeepStrictEqual(existing, value)) throw vibe64Error(
     "The connected source map is missing or no longer matches this task. Prepare connected sources again before running development commands.",
-    "vibe64_connected_inputs_required");
+    "vibe64_connected_inputs_required"
+  );
   return {
     ...result,
     inputsHash: connectedDevelopmentHash(value),

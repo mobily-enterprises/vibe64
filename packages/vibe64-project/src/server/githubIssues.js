@@ -161,14 +161,16 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (operation === "list" && typeof selectedLabels === "string") selectedLabels = [selectedLabels];
   if (operation === "list" && Array.isArray(selectedLabels)) {
     selectedLabels = [...selectedLabels];
-    search = search.replace(/(?:^|\s)label:(?:"((?:\\.|[^"\\])*)"|([^\s"]+))(?=\s|$)/giu,
+    search = search.replace(
+      /(?:^|\s)label:(?:"((?:\\.|[^"\\])*)"|([^\s"]+))(?=\s|$)/giu,
       (match, quoted, bare) => {
         const label = quoted === undefined ? bare : quoted.replace(/\\(["\\])/gu, "$1");
         if (!selectedLabels.some((selected) => typeof selected === "string" && selected.toLowerCase() === label.toLowerCase())) {
           selectedLabels.push(label);
         }
         return "";
-      }).trim();
+      }
+    ).trim();
   }
   if (["create", "set-labels", "list"].includes(operation) &&
       (!Array.isArray(selectedLabels) || selectedLabels.length > 100 ||
@@ -183,7 +185,7 @@ export async function githubIssues(project, input = {}, options = {}) {
     uncertainWriteMessage: operation === "comment"
       ? "The comment could not be confirmed. Refresh the conversation before posting again."
       : operation === "create" ? "Issue creation could not be confirmed. Refresh the issue list before trying again."
-      : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
+        : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
   });
   const [owner, name] = fullName.split("/");
   if (operation === "mentions") {

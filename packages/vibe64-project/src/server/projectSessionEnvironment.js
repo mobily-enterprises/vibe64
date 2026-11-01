@@ -21,9 +21,11 @@ import { envScope } from "./projectEnvironment.js";
 function projectEnvironmentResult(resolved, input, userRecords) {
   if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
   const values = [];
-  const userByKey = new Map(runtimeConfigRecordsForScope([...(resolved.savedRecords || []), ...userRecords],
+  const userByKey = new Map(runtimeConfigRecordsForScope(
+    [...(resolved.savedRecords || []), ...userRecords],
     envScope(input),
-    { target: input.target }).map((record) => [record.key, record]));
+    { target: input.target }
+  ).map((record) => [record.key, record]));
   for (const [key, value] of Object.entries(resolved.projectEnvironment)) {
     // Managed resource addresses/credentials vary by session, not app size.
     if (Object.hasOwn(resolved.platformEnvironment || {}, key)) continue;
@@ -117,8 +119,8 @@ function createProjectSessionEnvironment({
         ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
         status: resolved.environmentInspectionFailed ? "unavailable"
           : !resolved.resourcesPrepared ? "not-prepared"
-          : resources.some(({ configured }) => !configured) ? "missing-configuration"
-          : "ready",
+              : resources.some(({ configured }) => !configured) ? "missing-configuration"
+                : "ready",
         keys: Object.keys(resolved.projectEnvironment).sort(),
         resources,
         ...(resolved.warning

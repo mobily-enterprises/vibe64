@@ -82,7 +82,8 @@ function createProjectRepositories({
         projectGithubFullName(candidate).toLowerCase() === fullName);
       if (matches.length !== 1) throw vibe64Error(
         `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
-        "vibe64_connected_project_registration_required");
+        "vibe64_connected_project_registration_required"
+      );
       return { ...connection, fullName, projectSlug: matches[0].slug };
     });
   }
@@ -110,19 +111,19 @@ function createProjectRepositories({
       environment
     });
     if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-    return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
+    return runProjectSourceExclusive(
+      selection.selectedProjectRuntimeRoot(),
       () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
-      { operation: "prepare-connected-development-inputs" });
+      { operation: "prepare-connected-development-inputs" }
+    );
   }
 
   async function connectedContributionSource(input = {}) {
     const current = await selection.currentProjectState();
     const repository = requireGithubRepository(current, "Connected contribution");
-    if (current.repositoryMode !== "github") throw vibe64Error(
-      "Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
+    if (current.repositoryMode !== "github") throw vibe64Error("Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
     const access = await inspectConnectedRepository(repository, input);
-    if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
-      `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
+    if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(`Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
     const integrationBranch = current.repository.defaultBranch;
     // Read only the integration branch; listing every branch made each
     // connected session start page through the whole repository.
@@ -138,9 +139,11 @@ function createProjectRepositories({
   async function saveRepositoryWorkflow(input) {
     return projectResult(async () => {
       requireGithubRepository(await selection.currentProjectState(), "Pull request workflow");
-      const workflow = await runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
+      const workflow = await runProjectSourceExclusive(
+        selection.selectedProjectRuntimeRoot(),
         () => saveProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot(), input.requirePullRequest),
-        { operation: "repository-workflow-settings" });
+        { operation: "repository-workflow-settings" }
+      );
       await publishProjectChanged({
         projectSlug: (await selection.currentProjectState()).slug,
         repositoryWorkflow: workflow

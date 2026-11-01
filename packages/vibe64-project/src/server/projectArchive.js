@@ -125,12 +125,14 @@ function createProjectArchiveService({
       // The archive holds and removes only the namespace, so the learner's
       // session sources must live inside it (one layout on both hosts).
       if (!pathInsideOrEqual(projectContextRoot, path.resolve(projectContext.projectSessionSourceRootForSlug(slug)))) {
-        throw Object.assign(new Error(
-          `Practice project ${slug} keeps its session sources outside its namespace; inspect it before retrying.`
-        ),
+        throw Object.assign(
+          new Error(
+            `Practice project ${slug} keeps its session sources outside its namespace; inspect it before retrying.`
+          ),
           {
-          code: "vibe64_practice_session_source_outside_namespace"
-        });
+            code: "vibe64_practice_session_source_outside_namespace"
+          }
+        );
       }
       return { practice: true, projectContextRoot };
     }

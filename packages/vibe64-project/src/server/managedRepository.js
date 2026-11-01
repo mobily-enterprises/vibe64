@@ -178,5 +178,7 @@ function repositoryServiceError(code = "", message = "", statusCode = 400) {
   return new AppError(statusCode, message, { code });
 }
 
-export { createManagedProjectRepositoryService, readProjectForService, assertProjectRepositoryMode,
-  assertProjectSessionAuthority, repositoryServiceError };
+export {
+  createManagedProjectRepositoryService, readProjectForService, assertProjectRepositoryMode,
+  assertProjectSessionAuthority, repositoryServiceError
+};

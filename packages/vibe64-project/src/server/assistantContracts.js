@@ -190,7 +190,7 @@ function issueSummary(issue) {
     number: issue.number,
     ...Object.fromEntries(Object.entries(issueFields).flatMap(([key, schema]) =>
       schema.type === "string" && typeof fields[key] === "string" ? [[key, fields[key].slice(0, schema.maxLength)]] :
-      schema.type === "boolean" && typeof fields[key] === "boolean" ? [[key, fields[key]]] : []))
+        schema.type === "boolean" && typeof fields[key] === "boolean" ? [[key, fields[key]]] : []))
   };
   if (typeof issue.body === "string") result.bodyTruncated = issue.body.length > 4000;
   if (issue.labels?.nodes) {

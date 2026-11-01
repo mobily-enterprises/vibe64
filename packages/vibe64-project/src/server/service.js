@@ -199,10 +199,10 @@ function createService({
     const explicitProjectContextRoot = String(input.projectContextRoot || "").trim();
     const store = explicitProjectContextRoot
       ? createVibe64SessionStore({
-          projectContextRoot: explicitProjectContextRoot,
-          projectRuntimeRoot: String(input.projectRuntimeRoot || "").trim(),
-          projectSessionSourceRoot: String(input.projectSessionSourceRoot || "").trim()
-        })
+        projectContextRoot: explicitProjectContextRoot,
+        projectRuntimeRoot: String(input.projectRuntimeRoot || "").trim(),
+        projectSessionSourceRoot: String(input.projectSessionSourceRoot || "").trim()
+      })
       : selection.sessionStore();
     const session = await store.readCurrentSession();
     if (!session) {

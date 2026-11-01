@@ -182,8 +182,8 @@ function createProjectSelection({ logger, projectContext }) {
       const listed = await projectContext.listProjects();
       const currentProject = listed.currentProject
         ? publicProject(listed.currentProject, {
-            selected: true
-          })
+          selected: true
+        })
         : null;
       const projects = listed.projects.map((project) => publicProject(project, {
         selected: project.selected
@@ -252,10 +252,10 @@ function createProjectSelection({ logger, projectContext }) {
     const session = await sessionStore().readCurrentSession();
     return session
       ? sourceForInput({
-          ...input,
-          session,
-          sessionId: session.sessionId
-        })
+        ...input,
+        session,
+        sessionId: session.sessionId
+      })
       : source;
   }
 

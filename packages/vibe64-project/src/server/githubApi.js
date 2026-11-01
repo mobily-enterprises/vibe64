@@ -53,7 +53,9 @@ export function githubApi(input, options = {}) {
       throw vibe64Error(result.error, result.code);
     }
     let value;
-    try { value = JSON.parse(result.stdout || ""); } catch { /* Handled as an unsuccessful response below. */ }
+    try {
+      value = JSON.parse(result.stdout || "");
+    } catch { /* Handled as an unsuccessful response below. */ }
     if (allowNotFound && method === "GET" && String(value?.status) === "404") return null;
     if (!result.ok || !value || value.errors?.length) {
       const output = String(result.stderr || "");

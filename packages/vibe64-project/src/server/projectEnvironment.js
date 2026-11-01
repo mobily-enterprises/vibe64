@@ -213,20 +213,20 @@ function createProjectEnvironment({
     }
     const provided = developmentDatabase
       ? await environmentForResources.call(resourceEnvironmentProvider, {
-          components: declaration.components,
-          ...developmentDatabase,
-          projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
-          resources: declaration.resources,
-          serviceDataRoot: selection.serviceDataRoot(),
-          sessionId: source.sessionId,
-          projectContextRoot: selection.selectedTargetRoot(),
-          sourceRoot
-        })
+        components: declaration.components,
+        ...developmentDatabase,
+        projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
+        resources: declaration.resources,
+        serviceDataRoot: selection.serviceDataRoot(),
+        sessionId: source.sessionId,
+        projectContextRoot: selection.selectedTargetRoot(),
+        sourceRoot
+      })
       : {};
     const contribution = developmentDatabase
       ? normalizeResourceEnvironment(declaration.resources, provided, {
-          allowUnprepared: !provisionResources
-        })
+        allowUnprepared: !provisionResources
+      })
       : {
           databaseToolEnvironment: null,
           environment: {},

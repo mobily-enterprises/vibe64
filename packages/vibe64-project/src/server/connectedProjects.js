@@ -26,47 +26,49 @@ function normalizeConnectedProjects(value) {
     invalid(`Expected a projects array with at most ${CONNECTED_PROJECTS_LIMIT} entries.`);
   }
   const repositories = new Set();
-  return { projects: value.projects.map((entry) => {
-    if (!isPlainObject(entry) ||
+  return {
+    projects: value.projects.map((entry) => {
+      if (!isPlainObject(entry) ||
         Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
-      invalid("Each project must contain name, repository and relationship, with optional type and script.");
-    }
-    // eslint-disable-next-line no-control-regex -- Display names must stay on one line without ASCII control characters.
-    if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 100 || /[\x00-\x1f\x7f]/u.test(entry.name)) {
-      invalid("Each project needs a name of 1–100 characters on one line.");
-    }
-    const match = typeof entry.repository === "string" && entry.repository.length <= 512 &&
+        invalid("Each project must contain name, repository and relationship, with optional type and script.");
+      }
+      // eslint-disable-next-line no-control-regex -- Display names must stay on one line without ASCII control characters.
+      if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 100 || /[\x00-\x1f\x7f]/u.test(entry.name)) {
+        invalid("Each project needs a name of 1–100 characters on one line.");
+      }
+      const match = typeof entry.repository === "string" && entry.repository.length <= 512 &&
       entry.repository.match(/^https:\/\/github\.com\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/iu);
-    if (!match || [".", ".."].includes(match[2])) {
-      invalid("Use a GitHub HTTPS repository URL without credentials, query or fragment.");
-    }
-    const repository = `${GITHUB_REPOSITORY_URL_PREFIX}${match[1]}/${match[2]}`.toLowerCase();
-    if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
-    repositories.add(repository);
-    if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
-    if (entry.type !== undefined && !isConnectedPackageType(entry.type)) {
-      invalid(`Type must be ${connectedPackageTypeListText()}, or omitted to use the consuming Stack default.`);
-    }
-    if (entry.script !== undefined && (typeof entry.script !== "string" || !entry.script.trim() || entry.script.length > 1024 ||
+      if (!match || [".", ".."].includes(match[2])) {
+        invalid("Use a GitHub HTTPS repository URL without credentials, query or fragment.");
+      }
+      const repository = `${GITHUB_REPOSITORY_URL_PREFIX}${match[1]}/${match[2]}`.toLowerCase();
+      if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
+      repositories.add(repository);
+      if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
+      if (entry.type !== undefined && !isConnectedPackageType(entry.type)) {
+        invalid(`Type must be ${connectedPackageTypeListText()}, or omitted to use the consuming Stack default.`);
+      }
+      if (entry.script !== undefined && (typeof entry.script !== "string" || !entry.script.trim() || entry.script.length > 1024 ||
         // eslint-disable-next-line no-control-regex -- Script paths must exclude ASCII control characters.
         /[\\:\x00-\x1f\x7f]/u.test(entry.script) ||
         entry.script.split("/").some(part => ["", ".", "..", ".git"].includes(part.toLowerCase())))) {
-      invalid("Script must be a project-relative path outside .git, without absolute paths or traversal.");
-    }
-    if (entry.type !== undefined && connectedPackageTypeUsesScript(entry.type) && entry.script === undefined) {
-      invalid("A custom connection requires its project-relative script.");
-    }
-    if (entry.type !== undefined && !connectedPackageTypeUsesScript(entry.type) && entry.script !== undefined) {
-      invalid(`The ${entry.type} connection cannot have a custom script; only custom connections select a script.`);
-    }
-    return {
-      name: entry.name.trim(),
-      repository,
-      relationship: entry.relationship,
-      ...(entry.type === undefined ? {} : { type: entry.type }),
-      ...(entry.script === undefined ? {} : { script: entry.script })
-    };
-  }) };
+        invalid("Script must be a project-relative path outside .git, without absolute paths or traversal.");
+      }
+      if (entry.type !== undefined && connectedPackageTypeUsesScript(entry.type) && entry.script === undefined) {
+        invalid("A custom connection requires its project-relative script.");
+      }
+      if (entry.type !== undefined && !connectedPackageTypeUsesScript(entry.type) && entry.script !== undefined) {
+        invalid(`The ${entry.type} connection cannot have a custom script; only custom connections select a script.`);
+      }
+      return {
+        name: entry.name.trim(),
+        repository,
+        relationship: entry.relationship,
+        ...(entry.type === undefined ? {} : { type: entry.type }),
+        ...(entry.script === undefined ? {} : { script: entry.script })
+      };
+    })
+  };
 }
 
 function connectionsPath(sourceRoot) {
@@ -124,5 +126,7 @@ function githubRepositoryFullName(repository) {
   return repository.slice(GITHUB_REPOSITORY_URL_PREFIX.length);
 }
 
-export { CONNECTED_PROJECTS_FILE, CONNECTED_PROJECTS_LIMIT, githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects,
-  saveConnectedProjects };
+export {
+  CONNECTED_PROJECTS_FILE, CONNECTED_PROJECTS_LIMIT, githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects,
+  saveConnectedProjects
+};
