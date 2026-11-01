@@ -184,197 +184,204 @@ function createIntegrationOperations({
     return saved;
   }
 
-  return {
-    async runIntegrationSetup(input = {}) {
-      return runSourceEditorOperation(async () => {
-        if (input.environment !== "development") {
-          throw sourceEditorError("Session integration setup requires the development environment.", "vibe64_integration_environment_invalid", {}, 422);
-        }
-        createIntegrationSetupRequest(input);
-        if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) && input.vibe64User && input.vibe64User.role !== "owner") {
-          throw sourceEditorError("Only the workspace owner can manage project payments or advertising.", "vibe64_owner_required", {}, 403);
-        }
-        const preflight = await runSourceEditorWriteExclusive(input, async (context) => {
-          await inspectIntegrationSetupRequest(context, input);
-          return inspectApplicationIntegrationSetup(context, input);
-        });
-        if (!preflight.setup) return preflight;
-        // Env preparation owns its own lock. Reinspect after it releases the
-        // lock so a changed configuration or declaration cannot run unchecked.
-        const env = await projectService.projectExecutionEnvironment({ sessionId: input.sessionId, reusePrepared: true });
-        return runSourceEditorWriteExclusive(input, async (context) => {
-          const savedRequest = await inspectIntegrationSetupRequest(context, input);
-          const setupOptions = {
-            sourceRoot: context.sourceRoot, env,
-            project: await projectService.readCurrentProject(), session: context.session,
-            selection: input, runCommand: integrationCommandRunner
-          };
-          // A repeated chat Connect must recover an existing attempt rather
-          // than replace it. Keep status and creation inside the same write lock.
-          let result;
-          if (savedRequest?.outcome === "pending" && input.operation === "connect") {
-            result = await runApplicationIntegrationSetup({ ...setupOptions,
-              selection: { ...input, operation: "status", verificationInput: undefined }
-            });
-          }
-          if (!result || ["disconnected", "reconnect-required", "cancelled"].includes(result.status)) {
-            result = await runApplicationIntegrationSetup(setupOptions);
-          }
-          if (savedRequest && savedRequest.outcome !== "pending") return { ...result, integrationSetup: savedRequest };
-          if (input.setupRequest && result.status === "connected") {
-            if (typeof result.verifiedAt !== "string" || !Number.isFinite(Date.parse(result.verifiedAt))) {
-              throw sourceEditorError("The application did not report a verified connection. Check the connection again.",
-                "vibe64_integration_setup_unverified", {}, 409);
-            }
-            const integrationSetup = await context.runtime.store.completeIntegrationSetupRequest(context.sessionId, {
-              ...input.setupRequest, verifiedAt: result.verifiedAt
-            });
-            if (integrationSetup.outcome === "completed") {
-              await publishSessionChanged(context.sessionId, { reason: "integration-setup-completed", session: null });
-            }
-            return { ...result, integrationSetup };
-          }
-          return result;
-        });
+  async function runIntegrationSetup(input = {}) {
+    return runSourceEditorOperation(async () => {
+      if (input.environment !== "development") {
+        throw sourceEditorError("Session integration setup requires the development environment.", "vibe64_integration_environment_invalid", {}, 422);
+      }
+      createIntegrationSetupRequest(input);
+      if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) && input.vibe64User && input.vibe64User.role !== "owner") {
+        throw sourceEditorError("Only the workspace owner can manage project payments or advertising.", "vibe64_owner_required", {}, 403);
+      }
+      const preflight = await runSourceEditorWriteExclusive(input, async (context) => {
+        await inspectIntegrationSetupRequest(context, input);
+        return inspectApplicationIntegrationSetup(context, input);
       });
-    },
+      if (!preflight.setup) return preflight;
+      // Env preparation owns its own lock. Reinspect after it releases the
+      // lock so a changed configuration or declaration cannot run unchecked.
+      const env = await projectService.projectExecutionEnvironment({ sessionId: input.sessionId, reusePrepared: true });
+      return runSourceEditorWriteExclusive(input, async (context) => {
+        const savedRequest = await inspectIntegrationSetupRequest(context, input);
+        const setupOptions = {
+          sourceRoot: context.sourceRoot, env,
+          project: await projectService.readCurrentProject(), session: context.session,
+          selection: input, runCommand: integrationCommandRunner
+        };
+        // A repeated chat Connect must recover an existing attempt rather
+        // than replace it. Keep status and creation inside the same write lock.
+        let result;
+        if (savedRequest?.outcome === "pending" && input.operation === "connect") {
+          result = await runApplicationIntegrationSetup({ ...setupOptions,
+            selection: { ...input, operation: "status", verificationInput: undefined }
+          });
+        }
+        if (!result || ["disconnected", "reconnect-required", "cancelled"].includes(result.status)) {
+          result = await runApplicationIntegrationSetup(setupOptions);
+        }
+        if (savedRequest && savedRequest.outcome !== "pending") return { ...result, integrationSetup: savedRequest };
+        if (input.setupRequest && result.status === "connected") {
+          if (typeof result.verifiedAt !== "string" || !Number.isFinite(Date.parse(result.verifiedAt))) {
+            throw sourceEditorError("The application did not report a verified connection. Check the connection again.",
+              "vibe64_integration_setup_unverified", {}, 409);
+          }
+          const integrationSetup = await context.runtime.store.completeIntegrationSetupRequest(context.sessionId, {
+            ...input.setupRequest, verifiedAt: result.verifiedAt
+          });
+          if (integrationSetup.outcome === "completed") {
+            await publishSessionChanged(context.sessionId, { reason: "integration-setup-completed", session: null });
+          }
+          return { ...result, integrationSetup };
+        }
+        return result;
+      });
+    });
+  }
 
-    async registerOAuthIntegration(input = {}) {
-      return runSourceEditorOperation(async () => {
-        if (input.vibe64User && input.vibe64User.role !== "owner") {
-          throw sourceEditorError("Only the workspace owner can register a project OAuth client.", "vibe64_owner_required", {}, 403);
+  async function registerOAuthIntegration(input = {}) {
+    return runSourceEditorOperation(async () => {
+      if (input.vibe64User && input.vibe64User.role !== "owner") {
+        throw sourceEditorError("Only the workspace owner can register a project OAuth client.", "vibe64_owner_required", {}, 403);
+      }
+      const draft = structuredClone(input.configuration);
+      const candidate = draft?.integrations?.[input.integrationId];
+      const candidateRegistration = draft?.registrations?.[candidate?.authentication?.registrationRef];
+      if (candidateRegistration?.clientId === "") candidateRegistration.clientId = "MISSING";
+      const configuration = validateIntegrationConfiguration(draft, {
+        providers: INTEGRATION_PROVIDERS, allowUnknownProviders: true
+      });
+      const integration = configuration.integrations[input.integrationId];
+      const registration = configuration.registrations[integration?.authentication.registrationRef];
+      if (!Object.hasOwn(OAUTH_CLIENT_REGISTRARS, integration?.provider) || integration.authentication.method !== "oauth2" || registration?.source !== "own" ||
+        registration.clientId !== "MISSING" || Object.values(configuration.integrations).filter((item) =>
+          item.authentication.registrationRef === integration.authentication.registrationRef).length !== 1) {
+        throw sourceEditorError("Choose a new, unshared supported OAuth registration before registering.", "vibe64_integration_registration_invalid", {}, 422);
+      }
+      const secretKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.clientSecretRef || "")?.[1];
+      const callbackKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.callbackUrlRef || "")?.[1];
+      const clientIdKey = `${input.integrationId.toUpperCase().replaceAll("-", "_")}_CLIENT_ID`;
+      const keys = [secretKey, callbackKey, clientIdKey];
+      if (!secretKey || !callbackKey || new Set(keys).size !== 3 || keys.some(runtimeConfigKeyIsVibe64Reserved) || !/^[A-Z_][A-Z0-9_]*$/u.test(clientIdKey)) {
+        throw sourceEditorError("Use distinct Env references for this client's secret, callback and recovery client ID.", "vibe64_integration_registration_invalid", {}, 422);
+      }
+      if (integration.provider === "n8n" && integration.settings?.oauthDiscovery?.resource !== new URL(integration.settings.serverUrl).href) {
+        throw sourceEditorError("Discover settings for the current n8n Server URL first.", "connector_discovery_required", {}, 422);
+      }
+      return runSourceEditorWriteExclusive(input, async (context) => {
+        const current = await readApplicationIntegrations(context);
+        if (current.baseHash !== input.baseHash) {
+          throw sourceEditorError("Configuration changed. Reload before registering a client.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
         }
-        const draft = structuredClone(input.configuration);
-        const candidate = draft?.integrations?.[input.integrationId];
-        const candidateRegistration = draft?.registrations?.[candidate?.authentication?.registrationRef];
-        if (candidateRegistration?.clientId === "") candidateRegistration.clientId = "MISSING";
-        const configuration = validateIntegrationConfiguration(draft, {
-          providers: INTEGRATION_PROVIDERS, allowUnknownProviders: true
+        const envInput = { sessionId: input.sessionId, environment: "dev" };
+        const environment = await projectService.readEnv(envInput);
+        if (!environment?.ok || !Array.isArray(environment.env?.records)) {
+          throw sourceEditorError("Read project Env before registering a client.", "vibe64_integration_registration_unavailable", {}, 503);
+        }
+        if (environment.env.records.some((record) => keys.includes(record.key) && record.valuePresent)) {
+          throw sourceEditorError("Registration Env keys already contain values. Recover the existing client or choose unused keys before registering another.", "vibe64_integration_registration_exists", {}, 409);
+        }
+        const expectedEndpoint = integration.settings?.oauthDiscovery?.oauth.registration_endpoint;
+        const client = await OAUTH_CLIENT_REGISTRARS[integration.provider](integration, {
+          callbackUrl: input.callbackUrl, fetchImpl: integrationDiscoveryFetch, expectedEndpoint
         });
-        const integration = configuration.integrations[input.integrationId];
-        const registration = configuration.registrations[integration?.authentication.registrationRef];
-        if (!Object.hasOwn(OAUTH_CLIENT_REGISTRARS, integration?.provider) || integration.authentication.method !== "oauth2" || registration?.source !== "own" ||
-          registration.clientId !== "MISSING" || Object.values(configuration.integrations).filter((item) =>
-            item.authentication.registrationRef === integration.authentication.registrationRef).length !== 1) {
-          throw sourceEditorError("Choose a new, unshared supported OAuth registration before registering.", "vibe64_integration_registration_invalid", {}, 422);
+        try {
+          const savedEnv = await projectService.saveEnvUserValues({ ...envInput, values: {
+            [secretKey]: { value: client.clientSecret, secret: true },
+            [callbackKey]: { value: input.callbackUrl, secret: false },
+            [clientIdKey]: { value: client.clientId, secret: false }
+          } });
+          if (!savedEnv?.ok) throw new Error("Env save failed.");
+          registration.clientId = client.clientId;
+          if (integration.provider === "n8n") integration.settings = { ...integration.settings, serverUrl: client.resource,
+            oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes } };
+          const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
+          const file = input.baseHash === null ? await createSourceEditorFile(context, change) : await saveSourceEditorFile(context, change);
+          return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file),
+            ...(client.clientSecretExpiresAt === undefined ? {} : { clientSecretExpiresAt: client.clientSecretExpiresAt }) };
+        } catch {
+          throw sourceEditorError(`The provider created a client, but local setup did not finish. Inspect Env for ${clientIdKey}, ${secretKey} and ${callbackKey}; values may already be saved. Recover that client before registering again.`,
+            "vibe64_integration_registration_incomplete", {}, 409);
         }
-        const secretKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.clientSecretRef || "")?.[1];
-        const callbackKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.callbackUrlRef || "")?.[1];
-        const clientIdKey = `${input.integrationId.toUpperCase().replaceAll("-", "_")}_CLIENT_ID`;
-        const keys = [secretKey, callbackKey, clientIdKey];
-        if (!secretKey || !callbackKey || new Set(keys).size !== 3 || keys.some(runtimeConfigKeyIsVibe64Reserved) || !/^[A-Z_][A-Z0-9_]*$/u.test(clientIdKey)) {
-          throw sourceEditorError("Use distinct Env references for this client's secret, callback and recovery client ID.", "vibe64_integration_registration_invalid", {}, 422);
-        }
-        if (integration.provider === "n8n" && integration.settings?.oauthDiscovery?.resource !== new URL(integration.settings.serverUrl).href) {
-          throw sourceEditorError("Discover settings for the current n8n Server URL first.", "connector_discovery_required", {}, 422);
-        }
-        return runSourceEditorWriteExclusive(input, async (context) => {
+      });
+    });
+  }
+
+  async function discoverN8nIntegration(input = {}) {
+    return runSourceEditorOperation(async () => {
+      await sourceEditorContext(input.sessionId);
+      const discovery = await discoverN8nOAuth({ serverUrl: input.serverUrl }, { fetchImpl: integrationDiscoveryFetch });
+      return { ok: true, discovery };
+    });
+  }
+
+  async function readIntegrations(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      return readApplicationIntegrations(context);
+    });
+  }
+
+  async function readIntegrationProviders(input = {}) {
+    return runSourceEditorOperation(async () => {
+      await sourceEditorContext(input.sessionId);
+      const search = String(input.search || "").trim().toLowerCase();
+      const matches = INTEGRATION_PROVIDERS.filter((provider) =>
+        `${provider.id} ${provider.name} ${provider.description || ""}`.toLowerCase().includes(search));
+      const offset = input.offset || 0;
+      return {
+        ok: true, total: matches.length, nextOffset: offset + 20 < matches.length ? offset + 20 : null,
+        providers: matches.slice(offset, offset + 20).map((provider) => ({
+          id: provider.id, name: provider.name, description: String(provider.description || "").slice(0, 512),
+          descriptionTruncated: String(provider.description || "").length > 512
+        }))
+      };
+    });
+  }
+
+  async function saveIntegrations(input = {}) {
+    return runSourceEditorOperation(async () => {
+      if (Object.hasOwn(input, "configuration") === Object.hasOwn(input, "changes")) {
+        throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_invalid", {}, 422);
+      }
+      if (input.baseHash !== null && !/^[a-f0-9]{64}$/u.test(String(input.baseHash || ""))) {
+        throw sourceEditorError("Reload the integration configuration before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
+      }
+      return runSourceEditorWriteExclusive(input, async (context) => {
+        const providers = INTEGRATION_PROVIDERS;
+        let candidate = input.configuration;
+        if (input.changes) {
           const current = await readApplicationIntegrations(context);
           if (current.baseHash !== input.baseHash) {
-            throw sourceEditorError("Configuration changed. Reload before registering a client.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
+            throw sourceEditorError("Integration configuration changed. Reload it before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
           }
-          const envInput = { sessionId: input.sessionId, environment: "dev" };
-          const environment = await projectService.readEnv(envInput);
-          if (!environment?.ok || !Array.isArray(environment.env?.records)) {
-            throw sourceEditorError("Read project Env before registering a client.", "vibe64_integration_registration_unavailable", {}, 503);
-          }
-          if (environment.env.records.some((record) => keys.includes(record.key) && record.valuePresent)) {
-            throw sourceEditorError("Registration Env keys already contain values. Recover the existing client or choose unused keys before registering another.", "vibe64_integration_registration_exists", {}, 409);
-          }
-          const expectedEndpoint = integration.settings?.oauthDiscovery?.oauth.registration_endpoint;
-          const client = await OAUTH_CLIENT_REGISTRARS[integration.provider](integration, {
-            callbackUrl: input.callbackUrl, fetchImpl: integrationDiscoveryFetch, expectedEndpoint
-          });
-          try {
-            const savedEnv = await projectService.saveEnvUserValues({ ...envInput, values: {
-              [secretKey]: { value: client.clientSecret, secret: true },
-              [callbackKey]: { value: input.callbackUrl, secret: false },
-              [clientIdKey]: { value: client.clientId, secret: false }
-            } });
-            if (!savedEnv?.ok) throw new Error("Env save failed.");
-            registration.clientId = client.clientId;
-            if (integration.provider === "n8n") integration.settings = { ...integration.settings, serverUrl: client.resource,
-              oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes } };
-            const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
-            const file = input.baseHash === null ? await createSourceEditorFile(context, change) : await saveSourceEditorFile(context, change);
-            return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file),
-              ...(client.clientSecretExpiresAt === undefined ? {} : { clientSecretExpiresAt: client.clientSecretExpiresAt }) };
-          } catch {
-            throw sourceEditorError(`The provider created a client, but local setup did not finish. Inspect Env for ${clientIdKey}, ${secretKey} and ${callbackKey}; values may already be saved. Recover that client before registering again.`,
-              "vibe64_integration_registration_incomplete", {}, 409);
-          }
-        });
-      });
-    },
-
-    async discoverN8nIntegration(input = {}) {
-      return runSourceEditorOperation(async () => {
-        await sourceEditorContext(input.sessionId);
-        const discovery = await discoverN8nOAuth({ serverUrl: input.serverUrl }, { fetchImpl: integrationDiscoveryFetch });
-        return { ok: true, discovery };
-      });
-    },
-
-    async readIntegrations(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return readApplicationIntegrations(context);
-      });
-    },
-
-    async readIntegrationProviders(input = {}) {
-      return runSourceEditorOperation(async () => {
-        await sourceEditorContext(input.sessionId);
-        const search = String(input.search || "").trim().toLowerCase();
-        const matches = INTEGRATION_PROVIDERS.filter((provider) =>
-          `${provider.id} ${provider.name} ${provider.description || ""}`.toLowerCase().includes(search));
-        const offset = input.offset || 0;
-        return {
-          ok: true, total: matches.length, nextOffset: offset + 20 < matches.length ? offset + 20 : null,
-          providers: matches.slice(offset, offset + 20).map((provider) => ({
-            id: provider.id, name: provider.name, description: String(provider.description || "").slice(0, 512),
-            descriptionTruncated: String(provider.description || "").length > 512
-          }))
-        };
-      });
-    },
-
-    async saveIntegrations(input = {}) {
-      return runSourceEditorOperation(async () => {
-        if (Object.hasOwn(input, "configuration") === Object.hasOwn(input, "changes")) {
-          throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_invalid", {}, 422);
-        }
-        if (input.baseHash !== null && !/^[a-f0-9]{64}$/u.test(String(input.baseHash || ""))) {
-          throw sourceEditorError("Reload the integration configuration before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
-        }
-        return runSourceEditorWriteExclusive(input, async (context) => {
-          const providers = INTEGRATION_PROVIDERS;
-          let candidate = input.configuration;
-          if (input.changes) {
-            const current = await readApplicationIntegrations(context);
-            if (current.baseHash !== input.baseHash) {
-              throw sourceEditorError("Integration configuration changed. Reload it before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
-            }
-            candidate = applyIntegrationConfigurationChanges(current.configuration, input.changes);
-            for (const [id, change] of Object.entries(input.changes.integrations || {})) {
-              if (change !== null && !providers.some((provider) => provider.id === candidate.integrations[id]?.provider)) {
-                throw sourceEditorError("Choose a provider available in Integrations.", "vibe64_integration_provider_unavailable", {}, 422);
-              }
+          candidate = applyIntegrationConfigurationChanges(current.configuration, input.changes);
+          for (const [id, change] of Object.entries(input.changes.integrations || {})) {
+            if (change !== null && !providers.some((provider) => provider.id === candidate.integrations[id]?.provider)) {
+              throw sourceEditorError("Choose a provider available in Integrations.", "vibe64_integration_provider_unavailable", {}, 422);
             }
           }
-          const configuration = validateIntegrationConfiguration(candidate, { providers, allowUnknownProviders: true });
-          if (configuration.extensions?.payments) validatePaymentConfiguration(configuration);
-          const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
-          const file = input.baseHash === null
-            ? await createSourceEditorFile(context, change)
-            : await saveSourceEditorFile(context, change);
-          if (input.baseHash === null) fileIndex.invalidate(context.sourceRoot);
-          searchIndex.invalidate(context.sourceRoot);
-          return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file) };
-        });
+        }
+        const configuration = validateIntegrationConfiguration(candidate, { providers, allowUnknownProviders: true });
+        if (configuration.extensions?.payments) validatePaymentConfiguration(configuration);
+        const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
+        const file = input.baseHash === null
+          ? await createSourceEditorFile(context, change)
+          : await saveSourceEditorFile(context, change);
+        if (input.baseHash === null) fileIndex.invalidate(context.sourceRoot);
+        searchIndex.invalidate(context.sourceRoot);
+        return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file) };
       });
-    }
-  };
+    });
+  }
+
+  return Object.freeze({
+    runIntegrationSetup,
+    registerOAuthIntegration,
+    discoverN8nIntegration,
+    readIntegrations,
+    readIntegrationProviders,
+    saveIntegrations
+  });
 }
 
 function applyIntegrationConfigurationChanges(configuration, changes) {

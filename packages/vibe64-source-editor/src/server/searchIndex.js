@@ -61,60 +61,62 @@ function createSourceEditorSearchIndex() {
     return JSON.parse(result.stdout);
   }
 
-  return {
-    async search(context, { query, limit }) {
-      if (closed) throw new Error("The file index is closed.");
-      if (!query) return { query, results: [], truncated: false, index: { state: "ready" } };
-      const key = context.sourceRoot;
-      const entry = entryFor(key);
-      let status = null;
-      try {
-        status = JSON.parse(await readFile(path.join(sourceEditorIndexDirectory(context), "status.json"), "utf8"));
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      const stale = !status || status.state !== "ready" || Date.now() - status.updatedAt >= MAX_AGE_MS;
-      const canRetry = !entry.error || Date.now() - entry.attemptedAt >= MAX_AGE_MS;
-      if (!entry.pending && (entry.dirty || (stale && canRetry))) {
-        entry.error = "";
-        entry.dirty = false;
-        entry.attemptedAt = Date.now();
-        // One finite refresh per service at a time, shared by simultaneous
-        // searches. No recursive filesystem watchers or idle polling.
-        entry.pending = queue.then(async () => {
-          if (!closed) await run(context, "refresh");
-        }).catch((error) => {
-          entry.error = String(error.message || error);
-        }).finally(() => { entry.pending = null; });
-        queue = entry.pending;
-      }
-      // Bound idle bookkeeping; durable indexes remain reusable on disk.
-      trimEntries(key);
-      const wasPending = Boolean(entry.pending);
-      const result = status?.searchable ? await run(context, "search", { query, limit }) : { results: [], truncated: false };
-      let state = "ready";
-      if (entry.error) state = "error";
-      else if (wasPending || entry.dirty) state = status?.updatedAt ? "refreshing" : "building";
-      return {
-        ...result,
-        query,
-        index: {
-          state,
-          scanned: status?.scanned || 0,
-          total: status?.total || 0,
-          error: entry.error
-        }
-      };
-    },
-    invalidate(sourceRoot) {
-      entryFor(sourceRoot).dirty = true;
-      trimEntries(sourceRoot);
-    },
-    close() {
-      closed = true;
-      return queue.finally(() => entries.clear());
+  async function search(context, { query, limit }) {
+    if (closed) throw new Error("The file index is closed.");
+    if (!query) return { query, results: [], truncated: false, index: { state: "ready" } };
+    const key = context.sourceRoot;
+    const entry = entryFor(key);
+    let status = null;
+    try {
+      status = JSON.parse(await readFile(path.join(sourceEditorIndexDirectory(context), "status.json"), "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
     }
-  };
+    const stale = !status || status.state !== "ready" || Date.now() - status.updatedAt >= MAX_AGE_MS;
+    const canRetry = !entry.error || Date.now() - entry.attemptedAt >= MAX_AGE_MS;
+    if (!entry.pending && (entry.dirty || (stale && canRetry))) {
+      entry.error = "";
+      entry.dirty = false;
+      entry.attemptedAt = Date.now();
+      // One finite refresh per service at a time, shared by simultaneous
+      // searches. No recursive filesystem watchers or idle polling.
+      entry.pending = queue.then(async () => {
+        if (!closed) await run(context, "refresh");
+      }).catch((error) => {
+        entry.error = String(error.message || error);
+      }).finally(() => { entry.pending = null; });
+      queue = entry.pending;
+    }
+    // Bound idle bookkeeping; durable indexes remain reusable on disk.
+    trimEntries(key);
+    const wasPending = Boolean(entry.pending);
+    const result = status?.searchable ? await run(context, "search", { query, limit }) : { results: [], truncated: false };
+    let state = "ready";
+    if (entry.error) state = "error";
+    else if (wasPending || entry.dirty) state = status?.updatedAt ? "refreshing" : "building";
+    return {
+      ...result,
+      query,
+      index: {
+        state,
+        scanned: status?.scanned || 0,
+        total: status?.total || 0,
+        error: entry.error
+      }
+    };
+  }
+
+  function invalidate(sourceRoot) {
+    entryFor(sourceRoot).dirty = true;
+    trimEntries(sourceRoot);
+  }
+
+  function close() {
+    closed = true;
+    return queue.finally(() => entries.clear());
+  }
+
+  return Object.freeze({ search, invalidate, close });
 }
 
 export { createSourceEditorSearchIndex, sourceEditorIndexDirectory };

@@ -191,136 +191,142 @@ function createExplanationOperations({
     return task.promise;
   }
 
-  return {
-    operations: {
-      async streamExplanation(input = {}, stream = {}) {
-        await streamSourceEditorOperation(async () => {
-          await runSourceEditorAgentOperation(input, async (context) => {
-            const explanationInput = await sourceEditorExplanationInput(context, input);
-            const cacheKey = sourceEditorExplanationCacheKey(context, explanationInput);
-            return explanationCache.run(cacheKey, {
-              completedCache: Boolean(context.agentAccountIdentitySignature),
-              force: input.force === true,
-              ...sourceEditorInterpretationCacheOptions(context, explanationInput, cacheKey, logger),
-              generate: () => streamSourceEditorExplanation(context, input, {
-                emit: stream.emit,
-                explanationChats,
-                explanationInput,
-                explanationTurns,
-                isClosed: stream.isClosed,
-                terminalService
-              }),
-              reuse: (template, cacheState) => createCachedSourceEditorExplanation(
-                context,
-                input,
-                explanationInput,
-                template,
-                {
-                  cacheState,
-                  emit: stream.emit,
-                  explanationChats,
-                  isClosed: stream.isClosed
-                }
-              ),
-              validateCompleted: (template) => sourceEditorCompletedCacheIdentityUnchanged(
-                terminalService,
-                context,
-                template
-              )
-            });
-          });
-        }, stream);
-      },
+  async function close() {
+    const tasks = [...explanationTurns.values()];
+    for (const task of tasks) task.controller.abort();
+    await Promise.allSettled(tasks.map((task) => task.promise));
+    explanationCache.close();
+  }
 
-      async streamExplanationFollowup(input = {}, stream = {}) {
-        await streamSourceEditorOperation(async () => {
-          await runSourceEditorAgentOperation(input, (context) => (
-            streamSourceEditorExplanationFollowup(context, input, {
+  async function streamExplanation(input = {}, stream = {}) {
+    await streamSourceEditorOperation(async () => {
+      await runSourceEditorAgentOperation(input, async (context) => {
+        const explanationInput = await sourceEditorExplanationInput(context, input);
+        const cacheKey = sourceEditorExplanationCacheKey(context, explanationInput);
+        return explanationCache.run(cacheKey, {
+          completedCache: Boolean(context.agentAccountIdentitySignature),
+          force: input.force === true,
+          ...sourceEditorInterpretationCacheOptions(context, explanationInput, cacheKey, logger),
+          generate: () => streamSourceEditorExplanation(context, input, {
+            emit: stream.emit,
+            explanationChats,
+            explanationInput,
+            explanationTurns,
+            isClosed: stream.isClosed,
+            terminalService
+          }),
+          reuse: (template, cacheState) => createCachedSourceEditorExplanation(
+            context,
+            input,
+            explanationInput,
+            template,
+            {
+              cacheState,
               emit: stream.emit,
               explanationChats,
-              explanationTurns,
-              isClosed: stream.isClosed,
-              terminalService
-            })
-          ));
-        }, stream);
-      },
-
-      async stopExplanation(input = {}) {
-        return runSourceEditorOperation(async () => {
-          const context = await sourceEditorContext(input.sessionId, {
-            vibe64User: input.vibe64User
-          });
-          return {
-            explanation: await stopSourceEditorExplanation(context, input.explanationId, {
-              explanationChats,
-              explanationTurns,
-              terminalService
-            }),
-            ok: true
-          };
+              isClosed: stream.isClosed
+            }
+          ),
+          validateCompleted: (template) => sourceEditorCompletedCacheIdentityUnchanged(
+            terminalService,
+            context,
+            template
+          )
         });
-      },
+      });
+    }, stream);
+  }
 
-      async deleteExplanation(input = {}) {
-        return runSourceEditorOperation(async () => {
-          const context = await sourceEditorContext(input.sessionId, {
-            vibe64User: input.vibe64User
-          });
-          return {
-            ...await deleteSourceEditorExplanation(context, input.explanationId, {
-              explanationChats,
-              explanationTurns,
-              terminalService
-            }),
-            ok: true
-          };
-        });
-      },
+  async function streamExplanationFollowup(input = {}, stream = {}) {
+    await streamSourceEditorOperation(async () => {
+      await runSourceEditorAgentOperation(input, (context) => (
+        streamSourceEditorExplanationFollowup(context, input, {
+          emit: stream.emit,
+          explanationChats,
+          explanationTurns,
+          isClosed: stream.isClosed,
+          terminalService
+        })
+      ));
+    }, stream);
+  }
 
-      async cleanupExplanations(input = {}) {
-        return runSourceEditorOperation(async () => {
-          const context = await sourceEditorContext(input.sessionId, {
-            vibe64User: input.vibe64User
-          });
-          return {
-            ...await cleanupSourceEditorExplanations(context, input, {
-              explanationChats,
-              explanationTurns,
-              terminalService
-            }),
-            ok: true
-          };
-        });
-      },
+  async function stopExplanation(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId, {
+        vibe64User: input.vibe64User
+      });
+      return {
+        explanation: await stopSourceEditorExplanation(context, input.explanationId, {
+          explanationChats,
+          explanationTurns,
+          terminalService
+        }),
+        ok: true
+      };
+    });
+  }
 
-      // Every explanation helper is closed on its own; one that cannot close
-      // keeps its record for the next close, is logged and is named here.
-      async closeExplanationsForSession(sessionId) {
-        const runtime = await projectService.createRuntime({ sessionId });
-        const result = await cleanupSourceEditorExplanations({ runtime, sessionId,
-          sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
-        }, {}, { all: true, explanationChats, explanationTurns, terminalService });
-        for (const failure of result.failures) {
-          logOperationalEvent(logger, "warn", { component: "vibe64-source-editor", event: "vibe64.source_explanation.cleanup_failed",
-            code: failure.code || "", error: failure.error, explanationId: failure.id, sessionId
-          }, "A source explanation helper could not be closed; its record was kept.");
-        }
-        const reasons = [...new Set(result.failures.map((failure) => failure.error))];
-        return { ...result, ok: result.failureCount === 0,
-          ...(result.failureCount ? { code: "vibe64_source_explanation_cleanup_failed",
-            error: result.failureCount === 1 ? reasons[0]
-              : `${result.failureCount} source explanation helpers could not be closed. ${reasons.join(" ")}` } : {}) };
-      },
-    },
+  async function deleteExplanation(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId, {
+        vibe64User: input.vibe64User
+      });
+      return {
+        ...await deleteSourceEditorExplanation(context, input.explanationId, {
+          explanationChats,
+          explanationTurns,
+          terminalService
+        }),
+        ok: true
+      };
+    });
+  }
 
-    async close() {
-      const tasks = [...explanationTurns.values()];
-      for (const task of tasks) task.controller.abort();
-      await Promise.allSettled(tasks.map((task) => task.promise));
-      explanationCache.close();
+  async function cleanupExplanations(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId, {
+        vibe64User: input.vibe64User
+      });
+      return {
+        ...await cleanupSourceEditorExplanations(context, input, {
+          explanationChats,
+          explanationTurns,
+          terminalService
+        }),
+        ok: true
+      };
+    });
+  }
+
+  // Every explanation helper is closed on its own; one that cannot close
+  // keeps its record for the next close, is logged and is named here.
+  async function closeExplanationsForSession(sessionId) {
+    const runtime = await projectService.createRuntime({ sessionId });
+    const result = await cleanupSourceEditorExplanations({ runtime, sessionId,
+      sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
+    }, {}, { all: true, explanationChats, explanationTurns, terminalService });
+    for (const failure of result.failures) {
+      logOperationalEvent(logger, "warn", { component: "vibe64-source-editor", event: "vibe64.source_explanation.cleanup_failed",
+        code: failure.code || "", error: failure.error, explanationId: failure.id, sessionId
+      }, "A source explanation helper could not be closed; its record was kept.");
     }
-  };
+    const reasons = [...new Set(result.failures.map((failure) => failure.error))];
+    return { ...result, ok: result.failureCount === 0,
+      ...(result.failureCount ? { code: "vibe64_source_explanation_cleanup_failed",
+        error: result.failureCount === 1 ? reasons[0]
+          : `${result.failureCount} source explanation helpers could not be closed. ${reasons.join(" ")}` } : {}) };
+  }
+
+  return Object.freeze({
+    streamExplanation,
+    streamExplanationFollowup,
+    stopExplanation,
+    deleteExplanation,
+    cleanupExplanations,
+    closeExplanationsForSession,
+    close
+  });
 }
 
 async function sourceEditorExplanationInput(context = {}, input = {}) {

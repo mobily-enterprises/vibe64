@@ -499,7 +499,7 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
     return explanation;
   };
 
-  return {
+  return Object.freeze({
     currentExplanation,
     emitEvent,
     finish,
@@ -514,7 +514,7 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
       // readable-check: allow setter-seam - not a slot: setExplanation replaces the stream's current explanation
       setExplanation
     })
-  };
+  });
 }
 
 /**

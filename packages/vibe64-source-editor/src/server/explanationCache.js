@@ -72,7 +72,7 @@ function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger
       } catch (error) {
         // Saving an optional interpretation must not fail a completed Helper
         // conversation or replace its existing stop/recovery lifecycle.
-        logger?.warn('Source interpretation could not be saved.', { path: input.range.path, error });
+        logger.warn('Source interpretation could not be saved.', { path: input.range.path, error });
       }
     }
   };
@@ -273,15 +273,14 @@ function createSourceEditorExplanationCache({
     }
   };
 
-  return Object.freeze({
-    close() {
-      closed = true;
-      completed.clear();
-      generations.clear();
-      inFlight.clear();
-    },
-    run
-  });
+  function close() {
+    closed = true;
+    completed.clear();
+    generations.clear();
+    inFlight.clear();
+  }
+
+  return Object.freeze({ close, run });
 }
 
 export {

@@ -19,7 +19,7 @@ function starredFilesPath(stateRoot, user) {
   return path.join(stateRoot, "source-editor", "stars", `${key}.json`);
 }
 
-async function readStarredFiles(filePath) {
+async function readStarredFilePaths(filePath) {
   try {
     const record = JSON.parse(await readFile(filePath, "utf8"));
     if (
@@ -37,10 +37,10 @@ async function readStarredFiles(filePath) {
   }
 }
 
-async function setStarredFile(filePath, relativePath, starred) {
+async function writeStarredFile(filePath, relativePath, starred) {
   // Serialize read-modify-write for one account without blocking other accounts.
   const operation = (pendingWrites.get(filePath) || Promise.resolve()).catch(() => {}).then(async () => {
-    const paths = await readStarredFiles(filePath);
+    const paths = await readStarredFilePaths(filePath);
     const next = starred
       ? [...new Set([...paths, relativePath])]
       : paths.filter((value) => value !== relativePath);
@@ -67,4 +67,4 @@ async function setStarredFile(filePath, relativePath, starred) {
   }
 }
 
-export { readStarredFiles, setStarredFile, starredFilesPath };
+export { readStarredFilePaths, starredFilesPath, writeStarredFile };

@@ -8,11 +8,12 @@ import { deleteSourceEditorExplanationAgentThread, mutateSourceEditorExplanation
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
 
+// Stopping, cleaning up and deleting source explanations, with the helper
+// threads they used.
+
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
 
-// Stopping, cleaning up and deleting source explanations, with the helper
-// threads they used.
 /**
  * @param {object} [context]
  * @param {string} [explanationId]

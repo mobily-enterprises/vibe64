@@ -7,7 +7,7 @@ import { pathMatchesPolicyPattern, sourceEditorFilePolicy, sourceEditorPathExclu
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { createSourceEditorFileObserver } from "./sourceChangeObserver.js";
-import { readStarredFiles, setStarredFile, starredFilesPath } from "./starredFiles.js";
+import { readStarredFilePaths, starredFilesPath, writeStarredFile } from "./starredFiles.js";
 import { createSourceEditorFileIndex } from "./fileIndex.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "./searchIndex.js";
 import { readSourceInterpretations } from "./sourceInterpretations.js";
@@ -195,193 +195,236 @@ function createService({
     return exclusive.value;
   }
 
-  const explanations = createExplanationOperations({
+  const {
+    streamExplanation,
+    streamExplanationFollowup,
+    stopExplanation,
+    deleteExplanation,
+    cleanupExplanations,
+    closeExplanationsForSession,
+    close: closeExplanations
+  } = createExplanationOperations({
     explanationCacheNow, logger,
     projectService, sourceEditorContext, temporaryRoot, terminalService
   });
 
-  return Object.freeze({
-    // Moves and copies into or out of Repo refresh its file and search indexes.
-    fileArea: createFileArea(projectService, { repoChanged(sourceRoot) {
-      fileIndex.invalidate(sourceRoot);
-      searchIndex.invalidate(sourceRoot);
-    } }),
-    ...createIntegrationOperations({
-      fileIndex, integrationCommandRunner, integrationDiscoveryFetch, projectService,
-      publishSessionChanged, runSourceEditorWriteExclusive, searchIndex, sourceEditorContext
-    }),
-    async readTree(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        if (!normalizeSourceEditorRelativePath(input.path) && !sourceEditorResultOffset(input.offset)) {
-          fileIndex.invalidate(context.sourceRoot);
-          searchIndex.invalidate(context.sourceRoot);
-        }
-        return {
-          ok: true,
-          policy: publicSourceEditorPolicy(context.policy),
-          root: "",
-          tree: await sourceEditorDirectoryPage(context, {
-            limit: input.limit,
-            offset: sourceEditorResultOffset(input.offset),
-            // Preserve the tree API's two-pass path normalization, including "./ src".
-            path: normalizeSourceEditorRelativePath(input.path)
-          })
-        };
-      });
-    },
+  // Moves and copies into or out of Repo refresh its file and search indexes.
+  function invalidateRepoIndexes(sourceRoot) {
+    fileIndex.invalidate(sourceRoot);
+    searchIndex.invalidate(sourceRoot);
+  }
 
-    async readFile(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId, { vibe64User: input.vibe64User });
-        const file = await readSourceEditorFile(context, input.path);
+  const fileArea = createFileArea(projectService, { repoChanged: invalidateRepoIndexes });
+  const {
+    runIntegrationSetup,
+    registerOAuthIntegration,
+    discoverN8nIntegration,
+    readIntegrations,
+    readIntegrationProviders,
+    saveIntegrations
+  } = createIntegrationOperations({
+    fileIndex, integrationCommandRunner, integrationDiscoveryFetch, projectService,
+    publishSessionChanged, runSourceEditorWriteExclusive, searchIndex, sourceEditorContext
+  });
+
+  async function readTree(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      if (!normalizeSourceEditorRelativePath(input.path) && !sourceEditorResultOffset(input.offset)) {
+        fileIndex.invalidate(context.sourceRoot);
+        searchIndex.invalidate(context.sourceRoot);
+      }
+      return {
+        ok: true,
+        policy: publicSourceEditorPolicy(context.policy),
+        root: "",
+        tree: await sourceEditorDirectoryPage(context, {
+          limit: input.limit,
+          offset: sourceEditorResultOffset(input.offset),
+          // Preserve the tree API's two-pass path normalization, including "./ src".
+          path: normalizeSourceEditorRelativePath(input.path)
+        })
+      };
+    });
+  }
+
+  async function readFile(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId, { vibe64User: input.vibe64User });
+      const file = await readSourceEditorFile(context, input.path);
+      return {
+        file,
+        interpretations: await readSourceInterpretations(context, file, sourceEditorInterfacePromptVersion),
+        revealTree: await sourceEditorFileRevealTree(context, file.path),
+        ok: true
+      };
+    });
+  }
+
+  async function downloadFile(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      return downloadSessionFile(context, input.path);
+    });
+  }
+
+  async function readStarredFiles(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      const paths = await readStarredFilePaths(starredFilesPath(context.runtime.stateRoot, input.vibe64User));
+      const files = [];
+      // Only inspect explicitly bookmarked paths, never scan or watch the tree.
+      for (const filePath of paths) {
+        try {
+          await sourceEditorExistingFile(context, filePath, { maxFileBytes: Infinity });
+          files.push({ path: filePath, available: true });
+        } catch (error) {
+          files.push({
+            path: filePath,
+            available: false,
+            reason: isMissingPathError(error) ? "Not found in this session" : "Unavailable in this session"
+          });
+        }
+      }
+      return { ok: true, files };
+    });
+  }
+
+  async function setStarredFile(input = {}) {
+    return runSourceEditorOperation(async () => {
+      if (typeof input.starred !== "boolean") {
+        throw sourceEditorError("Choose whether to star the file.", "vibe64_invalid_starred_file");
+      }
+      const context = await sourceEditorContext(input.sessionId);
+      const filePath = normalizeSourceEditorRelativePath(input.path);
+      if (!filePath) {
+        throw sourceEditorError("Choose a file to star.", "vibe64_invalid_source_editor_path");
+      }
+      if (input.starred) {
+        await sourceEditorExistingFile(context, filePath, { maxFileBytes: Infinity });
+      }
+      const paths = await writeStarredFile(starredFilesPath(context.runtime.stateRoot, input.vibe64User), filePath, input.starred);
+      return { ok: true, paths };
+    });
+  }
+
+  async function streamFileChanges(input = {}, stream = {}) {
+    const context = await sourceEditorContext(input.sessionId);
+    const file = await sourceEditorExistingFile(context, input.path);
+    return streamSourceEditorFileChanges(context, file, stream, sourceFileObserver);
+  }
+
+  async function saveFile(input = {}) {
+    const save = () => runSourceEditorOperation(async () => {
+      return runSourceEditorWriteExclusive(input, async (context) => {
+        const file = await saveSourceEditorFile(context, input);
+        searchIndex.invalidate(context.sourceRoot);
         return {
           file,
-          interpretations: await readSourceInterpretations(context, file, sourceEditorInterfacePromptVersion),
+          fileChange: sourceEditorFileChange(context, input, file),
+          ok: true
+        };
+      });
+    });
+    // A host save owner (Training's code-authorship ledger) may wrap this
+    // exact save; it never replaces it or selects a different file.
+    return fileSaveOwner ? runSourceEditorOperation(() => fileSaveOwner({ input, save })) : save();
+  }
+
+  function setFileSaveOwner(owner = null) {
+    if (owner !== null && typeof owner !== "function") throw new TypeError("A source file save owner must be a function.");
+    fileSaveOwner = owner;
+  }
+
+  async function createFile(input = {}) {
+    return runSourceEditorOperation(async () => {
+      return runSourceEditorWriteExclusive(input, async (context) => {
+        const file = await createSourceEditorFile(context, input);
+        fileIndex.invalidate(context.sourceRoot);
+        searchIndex.invalidate(context.sourceRoot);
+        return {
+          file,
+          fileChange: sourceEditorFileChange(context, input, file),
           revealTree: await sourceEditorFileRevealTree(context, file.path),
           ok: true
         };
       });
-    },
+    });
+  }
 
-    async downloadFile(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return downloadSessionFile(context, input.path);
-      });
-    },
-
-    async readStarredFiles(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        const paths = await readStarredFiles(starredFilesPath(context.runtime.stateRoot, input.vibe64User));
-        const files = [];
-        // Only inspect explicitly bookmarked paths, never scan or watch the tree.
-        for (const filePath of paths) {
-          try {
-            await sourceEditorExistingFile(context, filePath, { maxFileBytes: Infinity });
-            files.push({ path: filePath, available: true });
-          } catch (error) {
-            files.push({
-              path: filePath,
-              available: false,
-              reason: isMissingPathError(error) ? "Not found in this session" : "Unavailable in this session"
-            });
-          }
-        }
-        return { ok: true, files };
-      });
-    },
-
-    // readable-check: allow setter-seam - not a slot: setStarredFile stars a file for one person
-    async setStarredFile(input = {}) {
-      return runSourceEditorOperation(async () => {
-        if (typeof input.starred !== "boolean") {
-          throw sourceEditorError("Choose whether to star the file.", "vibe64_invalid_starred_file");
-        }
-        const context = await sourceEditorContext(input.sessionId);
-        const filePath = normalizeSourceEditorRelativePath(input.path);
-        if (!filePath) {
-          throw sourceEditorError("Choose a file to star.", "vibe64_invalid_source_editor_path");
-        }
-        if (input.starred) {
-          await sourceEditorExistingFile(context, filePath, { maxFileBytes: Infinity });
-        }
-        const paths = await setStarredFile(starredFilesPath(context.runtime.stateRoot, input.vibe64User), filePath, input.starred);
-        return { ok: true, paths };
-      });
-    },
-
-    async streamFileChanges(input = {}, stream = {}) {
+  async function listFiles(input = {}) {
+    return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
-      const file = await sourceEditorExistingFile(context, input.path);
-      return streamSourceEditorFileChanges(context, file, stream, sourceFileObserver);
-    },
+      return {
+        ok: true,
+        ...sourceEditorFileMatches(await fileIndex.read(context), input)
+      };
+    });
+  }
 
-    async saveFile(input = {}) {
-      const save = () => runSourceEditorOperation(async () => {
-        return runSourceEditorWriteExclusive(input, async (context) => {
-          const file = await saveSourceEditorFile(context, input);
-          searchIndex.invalidate(context.sourceRoot);
-          return {
-            file,
-            fileChange: sourceEditorFileChange(context, input, file),
-            ok: true
-          };
-        });
+  async function search(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      const found = await searchIndex.search(context, {
+        query: normalizeSourceEditorQuery(input.query || input.q),
+        limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
       });
-      // A host save owner (Training's code-authorship ledger) may wrap this
-      // exact save; it never replaces it or selects a different file.
-      return fileSaveOwner ? runSourceEditorOperation(() => fileSaveOwner({ input, save })) : save();
-    },
+      // The worker skips excluded paths; an index written before a policy
+      // change may still hold rows until its next refresh removes them.
+      return {
+        ok: true,
+        ...found,
+        results: found.results.filter((result) => !sourceEditorPathExcluded(context.policy, result.path))
+      };
+    });
+  }
 
+  async function resolvePath(input = {}) {
+    return runSourceEditorOperation(async () => {
+      const context = await sourceEditorContext(input.sessionId);
+      return {
+        ok: true,
+        ...await resolveSourceEditorPath(context, input)
+      };
+    });
+  }
+
+  async function close() {
+    await closeExplanations();
+    sourceFileObserver.close();
+    fileIndex.clear();
+    return searchIndex.close();
+  }
+
+  return Object.freeze({
+    fileArea,
+    runIntegrationSetup,
+    registerOAuthIntegration,
+    discoverN8nIntegration,
+    readIntegrations,
+    readIntegrationProviders,
+    saveIntegrations,
+    readTree,
+    readFile,
+    downloadFile,
+    readStarredFiles,
+    // readable-check: allow setter-seam - not a slot: setStarredFile stars a file for one person
+    setStarredFile,
+    streamFileChanges,
+    saveFile,
     // readable-check: allow setter-seam - cycle: vibe64.training requires vibe64.source-editor
-    setFileSaveOwner(owner = null) {
-      if (owner !== null && typeof owner !== "function") throw new TypeError("A source file save owner must be a function.");
-      fileSaveOwner = owner;
-    },
-
-    async createFile(input = {}) {
-      return runSourceEditorOperation(async () => {
-        return runSourceEditorWriteExclusive(input, async (context) => {
-          const file = await createSourceEditorFile(context, input);
-          fileIndex.invalidate(context.sourceRoot);
-          searchIndex.invalidate(context.sourceRoot);
-          return {
-            file,
-            fileChange: sourceEditorFileChange(context, input, file),
-            revealTree: await sourceEditorFileRevealTree(context, file.path),
-            ok: true
-          };
-        });
-      });
-    },
-
-    async listFiles(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return {
-          ok: true,
-          ...sourceEditorFileMatches(await fileIndex.read(context), input)
-        };
-      });
-    },
-
-    async search(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        const found = await searchIndex.search(context, {
-          query: normalizeSourceEditorQuery(input.query || input.q),
-          limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
-        });
-        // The worker skips excluded paths; an index written before a policy
-        // change may still hold rows until its next refresh removes them.
-        return {
-          ok: true,
-          ...found,
-          results: found.results.filter((result) => !sourceEditorPathExcluded(context.policy, result.path))
-        };
-      });
-    },
-
-    async resolvePath(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return {
-          ok: true,
-          ...await resolveSourceEditorPath(context, input)
-        };
-      });
-    },
-
-    ...explanations.operations,
-
-    async close() {
-      await explanations.close();
-      sourceFileObserver.close();
-      fileIndex.clear();
-      return searchIndex.close();
-    }
+    setFileSaveOwner,
+    createFile,
+    listFiles,
+    search,
+    resolvePath,
+    streamExplanation,
+    streamExplanationFollowup,
+    stopExplanation,
+    deleteExplanation,
+    cleanupExplanations,
+    closeExplanationsForSession,
+    close
   });
 }
 

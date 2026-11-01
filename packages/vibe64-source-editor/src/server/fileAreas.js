@@ -74,10 +74,10 @@ const CONFLICT_NAMES_MAX = 500;
 
 /**
  * @param {ProjectService} projectService
- * @param {object} [options]
- * @param {(sourceRoot: string) => void} [options.repoChanged]
+ * @param {object} options
+ * @param {(sourceRoot: string) => void} options.repoChanged
  */
-function createFileArea(projectService, { repoChanged = () => {} } = {}) {
+function createFileArea(projectService, { repoChanged }) {
 
   // Opens one area for this request: checks the caller and operation, resolves
   // its trusted root and returns run(perform), which holds the area's lock.
