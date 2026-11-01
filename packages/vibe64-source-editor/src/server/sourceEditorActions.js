@@ -5,9 +5,9 @@ import { integrationReadTool, integrationSetupTool } from "./integrationAssistan
 import { integrationSetupInputSchema } from "./integrationSetupInput.js";
 import { integrationConfigurationChangesSchema } from "./integrationConfigurationInput.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { sourceEditorFileCreatedEvent, sourceEditorFileSavedEvent, sourceEditorIntegrationsWrittenEvent } from "./events.js";
 
 /** @typedef {import("./types.js").SourceEditorService} SourceEditorService */
-/** @typedef {ReturnType<typeof import("./events.js").createSourceEditorFileChangedPublisher>} PublishFileChanged */
 
 const text = { type: "string", noTrim: true, required: false };
 const requiredText = { ...text, minLength: 1, required: true };
@@ -55,19 +55,11 @@ const explanationFollowupStreamSchema = createSchema({
 });
 
 /**
+ * The source editor's actions. A saved change is announced to the editors open on its session as the action's event.
  * @param {object} dependencies
  * @param {SourceEditorService} dependencies.sourceEditor
- * @param {PublishFileChanged} dependencies.publishFileChanged
  */
-function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
-  /**
-   * A saved change is announced to the editors open on its session.
-   */
-  async function announceChange(operation, change) {
-    const result = await change;
-    await publishFileChanged(result, { operation });
-    return result;
-  }
+function createSourceEditorActions({ sourceEditor }) {
   const integration = { ...origin, baseHash: { ...text, nullable: true, required: true }, configuration: { ...object, required: true } };
   // Only explicit product controls are exposed; source work stays with coding agents.
   return Object.freeze([
@@ -301,7 +293,8 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { assistant: integrationReadTool("integrations.save"), vibe64: PROJECT_OPERATION },
-      execute: (input) => announceChange(input.baseHash === null ? "created" : "saved", sourceEditor.saveIntegrations(input))
+      events: [sourceEditorIntegrationsWrittenEvent],
+      execute: (input) => sourceEditor.saveIntegrations(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -316,7 +309,8 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => announceChange(input.baseHash === null ? "created" : "saved", sourceEditor.registerOAuthIntegration(input))
+      events: [sourceEditorIntegrationsWrittenEvent],
+      execute: (input) => sourceEditor.registerOAuthIntegration(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -464,7 +458,8 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => announceChange("created", sourceEditor.createFile(input))
+      events: [sourceEditorFileCreatedEvent],
+      execute: (input) => sourceEditor.createFile(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -480,7 +475,8 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => announceChange("saved", sourceEditor.saveFile(input))
+      events: [sourceEditorFileSavedEvent],
+      execute: (input) => sourceEditor.saveFile(input)
     })
   ]);
 }

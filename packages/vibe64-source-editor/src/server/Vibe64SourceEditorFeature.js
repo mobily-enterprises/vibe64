@@ -1,9 +1,5 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
-
-import {
-  createSourceEditorFileChangedPublisher
-} from "./events.js";
 import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createSourceEditorActions } from "./sourceEditorActions.js";
@@ -56,8 +52,12 @@ const Vibe64SourceEditorFeature = defineFeature({
     terminals.setSourceEditorProvider(sourceEditor);
     return { sourceEditor };
   },
-  actions({ sourceEditor, events }) {
-    return createSourceEditorActions({ sourceEditor, publishFileChanged: createSourceEditorFileChangedPublisher(events) });
+  /**
+   * @param {object} capabilities
+   * @param {SourceEditorService} capabilities.sourceEditor
+   */
+  actions({ sourceEditor }) {
+    return createSourceEditorActions({ sourceEditor });
   },
   /**
    * @param {{ terminals: TerminalsService }} capabilities

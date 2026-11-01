@@ -32,7 +32,7 @@ async function withIntegrationTools(run) {
         const result = parseIntegrationSetupResponse(JSON.stringify({ protocol: request.protocol, requestId: request.requestId, ...state.setupResult }), request);
         return { ok: true, ...result, ...(state.setupRequestResult ? { integrationSetup: state.setupRequestResult } : {}) };
       }
-    }, publishFileChanged: async () => {} }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+    } }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.actor,
       authorizeProject() { if (!state.allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); } });
     const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });

@@ -90,7 +90,8 @@ integration and explanation inputs. HTTP JSON handlers execute those actions;
 downloads and multipart uploads retain transport framing while dispatching the
 same domain operation. Every action resolves the current actor and project access
 before calling the existing service. File-change publication follows successful
-create/save/integration writes in the action, including non-HTTP callers.
+create/save/integration writes as the action's declared event, including for
+non-HTTP callers.
 Unknown inputs fail canonical validation; integration setup cannot accept an
 executable, environment or source root supplied by a caller. Existing service
 revision, owner, path and session-admission checks still apply.

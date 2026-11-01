@@ -12,7 +12,8 @@ import { CurrentAppFeature } from "../../packages/current-app/src/server/Current
 import { StudioHealthFeature } from "../../packages/studio-health/src/server/StudioHealthFeature.js";
 import { Vibe64SourceEditorFeature } from "../../packages/vibe64-source-editor/src/server/Vibe64SourceEditorFeature.js";
 import {
-  createSourceEditorFileChangedPublisher
+  sourceEditorFileCreatedEvent,
+  sourceEditorFileSavedEvent
 } from "../../packages/vibe64-source-editor/src/server/events.js";
 import { Vibe64SystemGraphFeature } from "../../packages/vibe64-system-graph/src/server/Vibe64SystemGraphFeature.js";
 
@@ -149,48 +150,41 @@ test("remaining Vibe64 features use named capabilities and register direct route
   assert.equal(runtime.diagnostics().capabilityIds.includes("vibe64.system-graph"), true);
 });
 
-test("source editor publishes explicit top-level realtime events", async () => {
-  const published = [];
-  const events = {
-    async publish(event) {
-      published.push(event);
-      return event;
+test("source editor builds explicit top-level realtime events", async () => {
+  const saved = sourceEditorFileSavedEvent({
+    result: {
+      fileChange: {
+        hash: "hash-1",
+        originId: "tab-1",
+        path: "src/app.js",
+        projectSlug: "example",
+        sessionId: "session-1",
+        updatedAt: "2026-08-16T00:00:00.000Z"
+      },
+      ok: true
     }
-  };
-  const publishChanged = createSourceEditorFileChangedPublisher(events);
-
-  await publishChanged({
-    fileChange: {
-      hash: "hash-1",
-      originId: "tab-1",
-      path: "src/app.js",
-      projectSlug: "example",
-      sessionId: "session-1",
-      updatedAt: "2026-08-16T00:00:00.000Z"
-    },
-    ok: true
-  });
-  await publishChanged({ ok: false });
-
-  assert.equal(published.length, 1);
-  assert.equal(published[0].entityId, "session-1:src/app.js");
-  assert.equal(published[0].realtime.event, "vibe64.source-editor.file.changed");
-  assert.equal(published.every((event) => event.type === "entity.changed"), true);
-
-  await publishChanged({
-    fileChange: {
-      hash: "hash-2",
-      originId: "tab-2",
-      path: "src/new.js",
-      projectSlug: "example",
-      sessionId: "session-1",
-      updatedAt: "2026-08-16T00:01:00.000Z"
-    },
-    ok: true
-  }, {
-    operation: "created"
   });
 
-  assert.equal(published[1].operation, "created");
-  assert.equal(published[1].entityId, "session-1:src/new.js");
+  assert.equal(sourceEditorFileSavedEvent({ result: { ok: false } }), null);
+  assert.equal(saved.entityId, "session-1:src/app.js");
+  assert.equal(saved.realtime.event, "vibe64.source-editor.file.changed");
+  assert.equal(saved.type, "entity.changed");
+  assert.equal(saved.operation, "saved");
+
+  const created = sourceEditorFileCreatedEvent({
+    result: {
+      fileChange: {
+        hash: "hash-2",
+        originId: "tab-2",
+        path: "src/new.js",
+        projectSlug: "example",
+        sessionId: "session-1",
+        updatedAt: "2026-08-16T00:01:00.000Z"
+      },
+      ok: true
+    }
+  });
+
+  assert.equal(created.operation, "created");
+  assert.equal(created.entityId, "session-1:src/new.js");
 });

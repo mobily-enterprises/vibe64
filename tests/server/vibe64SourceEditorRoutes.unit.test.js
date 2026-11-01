@@ -24,7 +24,7 @@ import {
 const localUser = { username: "local", role: "owner" };
 
 function registerRoutes(http, options, authorizeProject = async () => {}) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: options.events });
   actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions(options).map((action) => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...action
   })) });
@@ -232,8 +232,10 @@ test("source file creation publishes a created refresh after the durable write",
       };
       const app = testRouteApp();
       registerRoutes(app.http, {
-        async publishFileChanged(result, options) {
-          calls.push(["publish", result, options]);
+        events: {
+          async publish(event) {
+            calls.push(["publish", event.operation, event.entityId, event.realtime.event]);
+          }
         },
         projectContext,
         routeRelativePath: "vibe64",
@@ -266,7 +268,7 @@ test("source file creation publishes a created refresh after the durable write",
           sessionId: "session-1",
           vibe64User: localUser
         }],
-        ["publish", created, { operation: "created" }]
+        ["publish", "created", "session-1:src/new.js", "vibe64.source-editor.file.changed"]
       ]);
     });
   });
@@ -306,15 +308,16 @@ test("source operations share validated inputs and fresh project authority acros
       ["POST", "/source-editor/file", "file.create", "createFile", { path: "new.js", originId: "browser" }],
       ["PUT", "/source-editor/file", "file.save", "saveFile", { path: "new.js", baseHash: "hash", text: "  content\n" }]
     ];
+    const fileChange = { hash: "hash", originId: "browser", path: "new.js", projectSlug: slug, sessionId: "session-1" };
     const sourceEditor = Object.fromEntries(cases.map(([, , , method]) => [method, async (...args) => {
       const context = currentProjectRequestContext();
       calls.push({ method, args, project: context.slug, actor: context.vibe64User });
-      return { ok: true, method };
+      return { ok: true, method, fileChange };
     }]));
     const app = testRouteApp();
     const actions = registerRoutes(app.http, {
       sourceEditor, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
-      async publishFileChanged(result, options) { changes.push({ result, options }); }
+      events: { async publish(event) { changes.push(event); } }
     }, async () => { if (!allowed) throw Object.assign(new Error("Project access revoked"), { statusCode: 403 }); });
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64/sessions/:sessionId${suffix}` });
@@ -342,7 +345,7 @@ test("source operations share validated inputs and fresh project authority acros
       allowed = true;
       await assert.rejects(execute({ ...input, vibe64User: { role: "owner" } }), { code: "ACTION_VALIDATION_FAILED" });
     }
-    assert.deepEqual(changes.map(({ options }) => options.operation), ["created", "created", "saved", "saved", "created", "created", "saved", "saved"]);
+    assert.deepEqual(changes.map(({ operation }) => operation), ["created", "created", "saved", "saved", "created", "created", "saved", "saved"]);
     const count = calls.length;
     for (const input of [{ path: "new.js" }, { path: "new.js", baseHash: "hash", text: [] }]) {
       await assert.rejects(actions.execute({ actionId: "vibe64.source-editor.file.save", input: { ...input, sessionId: "session-1", projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
