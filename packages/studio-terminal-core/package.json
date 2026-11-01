@@ -26,8 +26,8 @@
       "apiSummary": {
         "surfaces": [
           {
-            "subpath": "./server",
-            "summary": "Exports terminal access controls, Studio runtime identity, credential-home helpers, and managed services."
+            "subpath": "./server/*",
+            "summary": "Each module exports one concern: terminal access controls, Studio runtime identity, credential-home helpers, and managed services."
           }
         ]
       }
