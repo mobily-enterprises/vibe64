@@ -1,11 +1,9 @@
-import {
-  captureProjectRequestContext,
-  runWithProjectRequestContext
-} from "@local/vibe64-core/server/projectRequestContext";
+import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { agentWriteBusyError, runVibe64RenewalAgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { renewalSession } from "./serviceSessionAccess.js";
+import { inProjectContext } from "./workspaceSetupRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -102,9 +100,7 @@ function createServiceWorkspacePreparation({
             })
           });
         };
-        void setup.completion.then(() => requestContext
-          ? runWithProjectRequestContext(requestContext, publishCompleted)
-          : publishCompleted()).catch((error) => {
+        void setup.completion.then(() => inProjectContext(requestContext, publishCompleted)).catch((error) => {
           vibe64SessionDebugLog("server.terminals.workspaceSetup.publish.error", {
             error: vibe64SessionDebugError(error),
             sessionId

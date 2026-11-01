@@ -15,7 +15,7 @@ import {
   prepareSessionDetachedConversationRun,
   prepareSessionConversationStorage
 } from "./mainConversationBinding.js";
-import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { inProjectContext } from "./workspaceSetupRules.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
@@ -73,8 +73,7 @@ function createServiceMainConversationHost({
     const started = performance.now();
     let allowed = false;
     try {
-      const grant = await (context.browserProjectContext
-        ? runWithProjectRequestContext(context.browserProjectContext, readGrant) : readGrant());
+      const grant = await inProjectContext(context.browserProjectContext, readGrant);
       allowed = grant.actor.id === authority.actorId;
       return allowed;
     } finally {

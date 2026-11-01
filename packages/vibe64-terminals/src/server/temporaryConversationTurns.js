@@ -121,7 +121,7 @@ function createTemporaryConversationTurns({
     return record.providerConversationId ? requireSuccess(await sessionAgent.readConversation(sessionId,
       chatRecords.providerInput(record, { ...(messageId ? { messageId } : {}) }), nativeContext(ctx))) : { status: "ready" };
   }
-  const routingAgent = {
+  const routingAgent = Object.freeze({
     listCapabilities: (input, ctx) => sessionAgent.listCapabilities(input, nativeContext(ctx)),
     requireAssistantAccessForSelection: (input, ctx) => sessionAgent.requireAssistantAccessForSelection(input, nativeContext(ctx)),
     resolveAssistantPurpose: (input, ctx) => sessionAgent.resolveAssistantPurpose({ ...input, temporaryChat: true }, nativeContext(ctx)),
@@ -165,7 +165,7 @@ function createTemporaryConversationTurns({
         get context() { return chatRecords.selectedContext(nativeContext(ctx), record); }
       });
     }
-  };
+  });
 
   // Reuse the routing lifecycle with the temporary chat's existing metadata and
   // transcript scope. Native providers continue to receive the actual store.
@@ -266,7 +266,7 @@ function createTemporaryConversationTurns({
     });
   }
 
-  const persistentConversationFacilities = {
+  const persistentConversationFacilities = Object.freeze({
     operations: sessionAgent,
     publish: chatRecords.publish,
     records: {
@@ -404,7 +404,7 @@ function createTemporaryConversationTurns({
         };
       }
     }
-  };
+  });
 
   function persistentConversationOptions(ctx, record) {
     return { ...persistentConversationFacilities, sessionId: ctx.session.sessionId,

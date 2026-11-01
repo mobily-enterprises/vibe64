@@ -210,7 +210,7 @@ function createTemporaryConversationInteraction({
         }, { durable: true, conversationId: record.conversationId });
         fields.attachments = prepared.displayAttachments;
       }
-      const saved = await chatRecords.save(ctx, record, current => {
+      const saved = await chatRecords.saveWith(ctx, record, current => {
         const patch = { ...fields, ...(input.agentSettings ? { agentSettings: input.agentSettings } : {}) };
         if (fields.routingMetadata) {
           patch.routingMetadata = { ...current.routingMetadata,

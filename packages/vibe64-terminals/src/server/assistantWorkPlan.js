@@ -358,7 +358,7 @@ function planProgressUpgradeChanges(files) {
     put("current.json", JSON.stringify({ schemaVersion: 1, planRevision, progressRevision: null }) + "\n");
     changes.set("current.md", null);
   }
-  for (const file of files.filter(file => /^archive\/[a-f0-9]{64}\.md$/u.test(file.name))) {
+  for (const file of files.filter(entry => /^archive\/[a-f0-9]{64}\.md$/u.test(entry.name))) {
     validatePlan(file.text);
     const id = file.name.slice(8, 72);
     if (sha256Hex(file.text) !== id) throw planError("A legacy archive differs from its saved identity.");
@@ -368,7 +368,7 @@ function planProgressUpgradeChanges(files) {
     put(next, JSON.stringify({ schemaVersion: 1, planRevision: id, progressRevision: null, legacyArchive: true, archivedAt: file.archivedAt }) + "\n");
     changes.set(file.name, null);
   }
-  for (const file of files.filter(file => /^archive\/[a-f0-9]{64}\.json$/u.test(file.name))) validateRecord(file.text, file.name.slice(8, 72));
+  for (const file of files.filter(entry => /^archive\/[a-f0-9]{64}\.json$/u.test(entry.name))) validateRecord(file.text, file.name.slice(8, 72));
   return Array.from(changes, ([name, text]) => ({ name, text }));
 }
 

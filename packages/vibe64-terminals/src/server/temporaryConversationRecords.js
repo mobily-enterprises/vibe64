@@ -37,14 +37,15 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     };
   }
 
-  async function save(ctx, record, changes, { lifecycle = false, requireOpen = false } = {}) {
+  // The patch is derived from the conversation as saved, inside its write lock.
+  async function saveWith(ctx, record, patchFor, { lifecycle = false, requireOpen = false } = {}) {
     let patch;
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
       const current = await recordFor(ctx, record.conversationId);
       if (requireOpen && current.state === "closing") throw Object.assign(new Error("This conversation is closing."), {
         code: "vibe64_conversation_closing", statusCode: 409
       });
-      patch = typeof changes === "function" ? changes(current) : changes;
+      patch = patchFor(current);
       const next = { ...patch };
       const newTurn = lifecycle && next.messageId && next.messageId !== record.messageId;
       if (newTurn) {
@@ -66,6 +67,10 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
         phase: ["starting", "inProgress"].includes(saved.status) ? "working" : "" });
     }
     return saved;
+  }
+
+  async function save(ctx, record, patch, options = {}) {
+    return saveWith(ctx, record, () => patch, options);
   }
 
   function publish(ctx, conversationId, event) {
@@ -117,6 +122,7 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     recordFor,
     providerInput,
     save,
+    saveWith,
     publish,
     selectedContext,
     nativeBinding,
