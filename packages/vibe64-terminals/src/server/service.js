@@ -141,8 +141,11 @@ function createService({
   // account costs one status read per cache period.
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
-  // Parts built at the end, after the collaborators that call back into them.
-  /** @type {ServiceGoals} */
+  /**
+   * The goals, assistant and Main conversation host parts are built at the end, after the
+   * collaborators that call back into them.
+   * @type {ServiceGoals}
+   */
   let goals;
   /** @type {ServiceAssistant} */
   let assistant;
@@ -185,7 +188,7 @@ function createService({
       return;
     }
     if (!["claude-stream-turn-idle", "codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
-      String(payload?.reason || "").trim()
+      String(payload.reason || "").trim()
     )) {
       return;
     }
