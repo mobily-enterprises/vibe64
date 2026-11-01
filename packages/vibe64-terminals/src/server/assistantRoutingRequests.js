@@ -44,7 +44,9 @@ function parseCancelled(value) {
   try {
     const list = JSON.parse(value || "[]");
     return Array.isArray(list) ? list.filter(entry => typeof entry?.messageId === "string" && entry.messageId) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 /**
  * @param {Vibe64SessionStore} store

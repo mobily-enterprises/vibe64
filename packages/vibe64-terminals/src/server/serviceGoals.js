@@ -46,7 +46,11 @@ const MAIN_AI_CHANGED_GOAL_NOTICE = "Goal cancelled because the main AI changed 
  * that lock saves the stop and clears the request.
  */
 const goalStopRequestFor = session => {
-  try { return JSON.parse(session.metadata?.[GOAL_STOP_REQUEST] || "null")?.intentId || ""; } catch { return ""; }
+  try {
+    return JSON.parse(session.metadata?.[GOAL_STOP_REQUEST] || "null")?.intentId || "";
+  } catch {
+    return "";
+  }
 };
 
 const logIntentClearFailure = (logger, sessionId, error) => logOperationalEvent(logger, "warn", {
@@ -120,8 +124,11 @@ function createServiceGoals({
     const intent = readGoalIntent(await context.runtime.getSessionWithoutSource(sessionId));
     if (!intent?.active) return;
     goalAdmissions.get(intent.id)?.abort(new Error("Goal continuation was stopped before dispatch."));
-    await context.runtime.store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST,
-      JSON.stringify({ intentId: intent.id, requestedAt: new Date().toISOString() }));
+    await context.runtime.store.writeMetadataValue(
+      sessionId,
+      GOAL_STOP_REQUEST,
+      JSON.stringify({ intentId: intent.id, requestedAt: new Date().toISOString() })
+    );
     void changeGoalIntent(sessionId, context, () => null).catch(error => logIntentClearFailure(logger, sessionId, error));
   }
 
@@ -481,8 +488,12 @@ function createServiceGoals({
                   if (preferences) await assistantRouting.applyGoalSelection(sessionId, null, preferences, refreshed);
                 }
               };
-              const committed = await context.runtime.store.runSessionExclusive(sessionId, "assistant-settings", commit,
-                { operation: "apply-started-goal-settings", waitMs: 10_000 });
+              const committed = await context.runtime.store.runSessionExclusive(
+                sessionId,
+                "assistant-settings",
+                commit,
+                { operation: "apply-started-goal-settings", waitMs: 10_000 }
+              );
               if (!committed.acquired) {
                 throw new Error("The goal started, but its settings are still being saved. Pause it before retrying the settings change.");
               }
@@ -543,8 +554,11 @@ function createServiceGoals({
         nativeInput = { ...input, objective: observed.goal.objective };
       }
     }
-    const result = await sessionAgent.updateGoal(sessionId, nativeInput,
-    { ...context, canonicalGoal: canonical, ...(canonical ? { onGoalResult: completeResult } : {}) });
+    const result = await sessionAgent.updateGoal(
+      sessionId,
+      nativeInput,
+      { ...context, canonicalGoal: canonical, ...(canonical ? { onGoalResult: completeResult } : {}) }
+    );
     return canonical ? result : completeResult(result);
   }
 
@@ -573,16 +587,20 @@ function createServiceGoals({
       if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
       return { sessionId, resumed: true };
     } catch (error) {
-      logOperationalEvent(logger, "warn", {
-        event: "vibe64.agent_goal.account_change_continue_failed",
-        component: "vibe64.agent_goal",
-        projectSlug: sessionAccess.projectRuntimeContext().projectSlug,
-        sessionId,
-        actor: String(intent.actor?.username || ""),
-        code: error.code,
-        error: error.message
-      },
-      "A goal paused by an account change could not resume; it stays paused.");
+      logOperationalEvent(
+        logger,
+        "warn",
+        {
+          event: "vibe64.agent_goal.account_change_continue_failed",
+          component: "vibe64.agent_goal",
+          projectSlug: sessionAccess.projectRuntimeContext().projectSlug,
+          sessionId,
+          actor: String(intent.actor?.username || ""),
+          code: error.code,
+          error: error.message
+        },
+        "A goal paused by an account change could not resume; it stays paused."
+      );
       return { sessionId, ok: false, code: error.code, error: error.message };
     }
   }
@@ -611,19 +629,24 @@ function createServiceGoals({
       const recoverCurrentProject = async projectSlug => {
         for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
           if (state.lifecycle.closing) break;
-          try { results.push(await recoverSessionGoal(session.sessionId)); }
-          catch (error) {
+          try {
+            results.push(await recoverSessionGoal(session.sessionId));
+          } catch (error) {
             let actor = "";
-            try { actor = String(readGoalIntent(session)?.actor?.username || ""); } catch { /* An unreadable intent names no one. */ }
+            try {
+              actor = String(readGoalIntent(session)?.actor?.username || "");
+            } catch { /* An unreadable intent names no one. */ }
             try {
               const context = await assistantContext.assistantSessionOptions(session.sessionId);
               const expected = readGoalIntent(session);
-              await changeGoalIntent(session.sessionId,
+              await changeGoalIntent(
+                session.sessionId,
                 context,
                 latest => latest?.active && (latest.id === expected?.id || latest.restartOf === expected?.id) ? {
-                ...latest,
-                error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
-              } : null);
+                  ...latest,
+                  error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
+                } : null
+              );
             } catch { /* The original recovery failure remains visible in the operational log. */ }
             reportFailure(error, { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) });
           }

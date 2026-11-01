@@ -139,13 +139,23 @@ function createSessionAgentLifecycle({
   }
 
   function retireConversationHistory(sessionId, binding, options = {}) {
-    return callNativeHistoryOperation("retireConversationHistory", "Native history retirement is unavailable for this engine.",
-      sessionId, binding, options);
+    return callNativeHistoryOperation(
+      "retireConversationHistory",
+      "Native history retirement is unavailable for this engine.",
+      sessionId,
+      binding,
+      options
+    );
   }
 
   function listNativeConversationStorage(sessionId, binding, options = {}) {
-    return callNativeHistoryOperation("listNativeConversationStorage", "Native history inventory is unavailable for this engine.",
-      sessionId, binding, options);
+    return callNativeHistoryOperation(
+      "listNativeConversationStorage",
+      "Native history inventory is unavailable for this engine.",
+      sessionId,
+      binding,
+      options
+    );
   }
 
   async function closeProject(input = {}, options = {}) {

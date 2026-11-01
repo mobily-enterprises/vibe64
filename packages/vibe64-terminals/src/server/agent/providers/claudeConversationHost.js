@@ -99,14 +99,15 @@ function createClaudeConversationHost({
   agentPreviewCommand,
   agentSessionCommand
 }) {
-  const publishSessionChanged = publishMainConversationEvent.bind(
-    null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation
-  );
+  const publishSessionChanged = publishMainConversationEvent.bind(null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation);
   const providerConnections = createCodexProviderConnectionStore({ systemRoot });
   const configRoot = claudeConfigRoot({ env, credentialHome });
   const conversationStorage = createClaudeConversationStorage({ createError: claudeConversationError });
   const { metadata, ...nativeStorage } = conversationStorage;
-  const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged,
+  const messagePolicy = createClaudeConversationMessagePolicy({
+    env,
+    recordGitActor,
+    publishSessionChanged,
     onTiming(event) {
       // Timing is diagnostic only; a failing log sink must not fail the send.
       try {
@@ -119,7 +120,8 @@ function createClaudeConversationHost({
       } catch {
         // Ignore: timing diagnostics are best-effort.
       }
-    } });
+    }
+  });
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({
       env,
@@ -136,7 +138,9 @@ function createClaudeConversationHost({
       agentPreviewCommand,
       agentSessionCommand
     });
-  const conversations = createClaudeConversationOwner({ configRoot, createError: claudeConversationError,
+  const conversations = createClaudeConversationOwner({
+    configRoot,
+    createError: claudeConversationError,
     disconnectedMessage: "Claude was interrupted when Vibe64 disconnected.",
     store: nativeStorage,
     preparation: {
@@ -148,7 +152,11 @@ function createClaudeConversationHost({
       check: messagePolicy.check,
       message: messagePolicy.prepareMessage
     },
-    process: { prepare: prepareProcess, configure: configureProcess, configureTerminal, stopExecution,
+    process: {
+      prepare: prepareProcess,
+      configure: configureProcess,
+      configureTerminal,
+      stopExecution,
       create(options) {
         // The accepted native stream outlives its finite practice admission.
         // Keep only the CONTROL projection captured at creation; tool effects still use
@@ -160,8 +168,10 @@ function createClaudeConversationHost({
           onEvent: frame => runWithProjectRequestContext(projectContext || {}, () => options.onEvent(frame)),
           onFailure: failure => runWithProjectRequestContext(projectContext || {}, () => options.onFailure(failure)),
           ...(options.onControlRequest ? {
-            onControlRequest: (request, control) => runWithProjectRequestContext(projectContext || {},
-              () => options.onControlRequest(request, control))
+            onControlRequest: (request, control) => runWithProjectRequestContext(
+              projectContext || {},
+              () => options.onControlRequest(request, control)
+            )
           } : {})
         });
       }
@@ -196,8 +206,12 @@ function createClaudeConversationHost({
   /**
    * The owner calls back into its accounts and turn events, which are built from it.
    */
-  function prepareAccount(entry) { return accounts.prepareAccount(entry); }
-  function publishTurnEvent(entry, event) { return turnEvents(entry, event); }
+  function prepareAccount(entry) {
+    return accounts.prepareAccount(entry);
+  }
+  function publishTurnEvent(entry, event) {
+    return turnEvents(entry, event);
+  }
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
   async function contextFor(context) {
     const projectContext = captureProjectRequestContext();
@@ -230,7 +244,11 @@ function createClaudeConversationHost({
     if (listTerminalSessions({ namespace: claudeTerminalNamespace(entry.context.sessionId), runningOnly: true }).length) {
       throw claudeConversationError("Close the Claude Code terminal before sending in chat.", "vibe64_claude_terminal_active");
     }
-    return { get sessionClosing() { return sessionIsClosing(entry.context.session); } };
+    return {
+      get sessionClosing() {
+        return sessionIsClosing(entry.context.session);
+      }
+    };
   }
 
   async function sessionState(context, nativeState) {
@@ -259,15 +277,17 @@ function createClaudeConversationHost({
     const clientMessageId = sessionRenewalClientMessageId(kind, operationId);
     return {
       operationId,
-      get input() { return {
-        clientMessageId,
-        prompt,
-        outputSchema,
-        expectedThreadId: input.expectedThreadId,
-        forbiddenThreadId: input.forbiddenThreadId || input.oldThreadId,
-        requireFreshHistory: kind === "seed",
-        timeoutMs: 180_000
-      }; },
+      get input() {
+        return {
+          clientMessageId,
+          prompt,
+          outputSchema,
+          expectedThreadId: input.expectedThreadId,
+          forbiddenThreadId: input.forbiddenThreadId || input.oldThreadId,
+          requireFreshHistory: kind === "seed",
+          timeoutMs: 180_000
+        };
+      },
       options: {
         createError: claudeConversationError,
         unreadableCode: "vibe64_session_renewal_turn_unreadable",
@@ -280,7 +300,9 @@ function createClaudeConversationHost({
   function prepareRenewalHandover(context, input = {}) {
     const prepared = prepareRenewalTurn(input, "handover", sessionRenewalHandoverPrompt(input));
     return {
-      get input() { return prepared.input; },
+      get input() {
+        return prepared.input;
+      },
       options: prepared.options,
       completeResult: nativeResult =>
         completeClaudeSessionRenewalHandover({ input, prepared, context, metadata, contextFor }, nativeResult)
@@ -296,7 +318,9 @@ function createClaudeConversationHost({
       sessionRenewalAcknowledgementOutputSchema(approved)
     );
     return {
-      get input() { return prepared.input; },
+      get input() {
+        return prepared.input;
+      },
       options: prepared.options,
       completeResult: nativeResult =>
         completeClaudeSessionRenewalSeed({
@@ -331,8 +355,12 @@ function createClaudeConversationHost({
             return context.assistantScope && input.executionProfile
               ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : undefined;
           },
-          get persistent() { return input.persistent; },
-          get ephemeral() { return input.ephemeral; }
+          get persistent() {
+            return input.persistent;
+          },
+          get ephemeral() {
+            return input.ephemeral;
+          }
         }
       };
     }
@@ -394,11 +422,15 @@ function createClaudeConversationHost({
               beforeDelete: context.beforeDelete,
               signal: context.signal,
               application: {
-                get saved() { return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null"); },
-                get terminalRunning() { return listTerminalSessions({
-                  namespace: claudeTerminalNamespace(context.sessionId),
-                  runningOnly: true
-                }).length; }
+                get saved() {
+                  return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null");
+                },
+                get terminalRunning() {
+                  return listTerminalSessions({
+                    namespace: claudeTerminalNamespace(context.sessionId),
+                    runningOnly: true
+                  }).length;
+                }
               }
             };
           }
@@ -441,7 +473,9 @@ function createClaudeConversationHost({
       const context = await contextFor({ ...openingContext, sessionId });
       const { runtime } = context;
       return {
-        context, namespace: claudeTerminalNamespace(sessionId), publish: publishSessionChanged,
+        context,
+        namespace: claudeTerminalNamespace(sessionId),
+        publish: publishSessionChanged,
         async readContextUsage({ context: current, input: usageInput, signal }) {
           signal?.throwIfAborted();
           const entry = await conversations.acquire({ ...current, sessionId });
@@ -462,7 +496,9 @@ function createClaudeConversationHost({
             const id = nativeResult?.thread.id || toText(session.metadata.claude_conversation_id);
             const turn = conversations.readRetainedTurn(context.key, id, {
               nativeResult,
-              get saved() { return JSON.parse(session.metadata[`claude_conversation_${id}`] || "null"); }
+              get saved() {
+                return JSON.parse(session.metadata[`claude_conversation_${id}`] || "null");
+              }
             });
             return { session, threadId: id, turn, nativeResult };
           }

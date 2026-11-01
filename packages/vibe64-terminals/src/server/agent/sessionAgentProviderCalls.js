@@ -318,11 +318,11 @@ function createSessionAgentProviderCalls({
       if (method === "closeTerminal" && result?.ok !== false) state.terminalBindings.delete(terminalId);
       return executionProfileRequest
         ? rememberVerifiedExecutionProfile(
-            provider,
-            sessionId,
-            verifiedExecutionProfileResolution(provider, executionProfileRequest, result),
-            context
-          )
+          provider,
+          sessionId,
+          verifiedExecutionProfileResolution(provider, executionProfileRequest, result),
+          context
+        )
         : agentOperationResult(provider, sessionId, result);
     };
     const identity = toText(coalesceIdentity);
@@ -373,10 +373,10 @@ function createSessionAgentProviderCalls({
     const results = settled.map((outcome, index) => outcome.status === "fulfilled"
       ? outcome.value
       : agentOperationResult(targets[index], "", {
-          code: toText(outcome.reason?.code),
-          error: toText(outcome.reason?.message || outcome.reason) || `Assistant provider ${targets[index].id} failed.`,
-          ok: false
-        }));
+        code: toText(outcome.reason?.code),
+        error: toText(outcome.reason?.message || outcome.reason) || `Assistant provider ${targets[index].id} failed.`,
+        ok: false
+      }));
     const failed = results.filter((result) => result.ok === false);
     return Object.freeze({
       closed: results.reduce((total, result) => total + Number(result.closed || 0), 0),

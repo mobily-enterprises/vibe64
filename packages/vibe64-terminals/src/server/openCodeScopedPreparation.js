@@ -108,15 +108,25 @@ function createOpenCodeScopedPreparation({
     const context = await contextFor(sessionId, options);
     const executionProfile = openCodeExecutionProfile(input);
     return {
-      key: context.key, executionProfile, process: await prepareProcess(context, options),
-      get workdir() { return executionProfile ? sharedRoots().workdir : ""; },
-      get ephemeral() { return input.ephemeral === true; },
+      key: context.key,
+      executionProfile,
+      process: await prepareProcess(context, options),
+      get workdir() {
+        return executionProfile ? sharedRoots().workdir : "";
+      },
+      get ephemeral() {
+        return input.ephemeral === true;
+      },
       selection() {
         // The shared process keeps main chat's configuration; only this chat changes model.
         context.selection = options.assistantSelection || context.selection;
         return {
-          get agent() { return openCodeAgent(context.selection, executionProfile, context.assistantScope); },
-          get model() { return openCodeModel(context.selection, executionProfile); }
+          get agent() {
+            return openCodeAgent(context.selection, executionProfile, context.assistantScope);
+          },
+          get model() {
+            return openCodeModel(context.selection, executionProfile);
+          }
         };
       }
     };
@@ -130,7 +140,9 @@ function createOpenCodeScopedPreparation({
       key: context.key,
       executionProfile,
       process: await prepareProcess(context, options),
-      get workdir() { return executionProfile ? sharedRoots().workdir : ""; },
+      get workdir() {
+        return executionProfile ? sharedRoots().workdir : "";
+      },
       selection() {
         context.selection = options.assistantSelection || context.selection;
         const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
@@ -142,10 +154,17 @@ function createOpenCodeScopedPreparation({
             openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409),
           identityRequired: () =>
             openCodeError("vibe64_opencode_conversation_id_required", "OpenCode conversation id is required.", {}, 400),
-          input: { agent, get model() { return openCodeModel(context.selection, executionProfile); } },
+          input: {
+            agent,
+            get model() {
+              return openCodeModel(context.selection, executionProfile);
+            }
+          },
           registration: {
             executionProfile,
-            get promptContext() { return executionProfile ? null : promptContext("temporary", context.assistantScope); },
+            get promptContext() {
+              return executionProfile ? null : promptContext("temporary", context.assistantScope);
+            },
             onSelected: writeSessionEnvironmentRegistry
           }
         };
@@ -175,12 +194,18 @@ function createOpenCodeScopedPreparation({
       messages: {
         readError: openCodeMessageError,
         messageId: conversationMessageId,
-        get inputMessageId() { return input.messageId ? upstreamMessageId(input.messageId) : ""; }
+        get inputMessageId() {
+          return input.messageId ? upstreamMessageId(input.messageId) : "";
+        }
       },
       failure: throwVibe64OpenCodeError,
       onRemoved: writeSessionEnvironmentRegistry,
-      get scoped() { return context.assistantScope; },
-      get cleanupAfterDelete() { return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null; }
+      get scoped() {
+        return context.assistantScope;
+      },
+      get cleanupAfterDelete() {
+        return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null;
+      }
     };
   }
 
@@ -209,24 +234,42 @@ function createOpenCodeScopedPreparation({
     prepared.turn = ({ conversationId, tracked }) => {
       return {
         input: {
-          get steer() { return input.steer; },
-          get id() { return upstreamMessageId(input.messageId || input.operationId || randomUUID()); },
-          get steeringId() { return upstreamMessageId(input.messageId || randomUUID()); },
-          get agent() { return openCodeAgent(context.selection, executionProfile, context.assistantScope); },
-          get model() { return openCodeModel(context.selection, executionProfile); },
-          get prompt() { return { text: prompt }; },
-          get attachments() { return input.attachments; },
-          get outputSchema() { return input.outputSchema; }
+          get steer() {
+            return input.steer;
+          },
+          get id() {
+            return upstreamMessageId(input.messageId || input.operationId || randomUUID());
+          },
+          get steeringId() {
+            return upstreamMessageId(input.messageId || randomUUID());
+          },
+          get agent() {
+            return openCodeAgent(context.selection, executionProfile, context.assistantScope);
+          },
+          get model() {
+            return openCodeModel(context.selection, executionProfile);
+          },
+          get prompt() {
+            return { text: prompt };
+          },
+          get attachments() {
+            return input.attachments;
+          },
+          get outputSchema() {
+            return input.outputSchema;
+          }
         },
         options: {
           waitForCompletion,
-          get signal() { return options.signal; },
+          get signal() {
+            return options.signal;
+          },
           observation: () => detachedObservationProjection(context, onEvent),
-          get readiness() { return {
-            timeoutError: openCodeError(
-              "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
-            )
-          }; },
+          get readiness() {
+            return {
+              timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504)
+            };
+          },
           async beforeDispatch() {
             await onEvent({ threadId: conversationId, type: "thread" });
             await onPromptSending({ threadId: conversationId });

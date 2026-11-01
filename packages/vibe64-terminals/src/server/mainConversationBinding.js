@@ -35,10 +35,12 @@ function requireCompletedConversationRewind(session) {
   requireCompletedNativeConversationReplacement(session);
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.rewind && !state.rewind.completed) {
-    throw Object.assign(new Error(
-      "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading."
-    ),
-      { code: "vibe64_conversation_rewind_pending", statusCode: 409 });
+    throw Object.assign(
+      new Error(
+        "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading."
+      ),
+      { code: "vibe64_conversation_rewind_pending", statusCode: 409 }
+    );
   }
 }
 
@@ -205,8 +207,12 @@ async function createSessionConversationBinding(provider, sessionId, options = {
   if (engine === "codex") delete openingContext.selection;
   const scoped = (openingContext.assistantScope || openingContext.routingConversationId) && openingContext.scopedConversationId;
   const conversationId = scoped ? String(openingContext.scopedConversationId ?? "").trim() : "";
-  if (scoped) requireScopedConversationContext(sessionId, openingContext, conversationId,
-    engine === "codex" ? "The scoped conversation must retain its original scope and native identity." : undefined);
+  if (scoped) requireScopedConversationContext(
+    sessionId,
+    openingContext,
+    conversationId,
+    engine === "codex" ? "The scoped conversation must retain its original scope and native identity." : undefined
+  );
   const host = await provider.prepareConversationHost(sessionId, openingContext, scoped ? "scoped" : "main");
   if (scoped) return {
     sessionId,
@@ -222,7 +228,9 @@ async function createSessionConversationBinding(provider, sessionId, options = {
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
   const binding = {
-    ...conversation, namespace: host.namespace, engine,
+    ...conversation,
+    namespace: host.namespace,
+    engine,
     prepareInput: engine === "codex" && prepareInput ? async (input, current) => {
       const prepared = await prepareInput(input, current);
       return { ...prepared, actorContext: prepared.vibe64User || null };
@@ -238,8 +246,10 @@ async function createSessionConversationBinding(provider, sessionId, options = {
           const { usedTokens, windowTokens } = await host.readContextUsage({ context, signal, input });
           if (!Number.isSafeInteger(usedTokens) || usedTokens < 0 ||
               !Number.isSafeInteger(windowTokens) || windowTokens < 1) {
-            throw Object.assign(new Error("The selected assistant's context usage is unavailable. Retry after reconnecting it."),
-              { code: "vibe64_assistant_context_unavailable", statusCode: 503 });
+            throw Object.assign(
+              new Error("The selected assistant's context usage is unavailable. Retry after reconnecting it."),
+              { code: "vibe64_assistant_context_unavailable", statusCode: 503 }
+            );
           }
           const reserve = Math.max(32_768, Math.ceil(windowTokens * 0.05));
           const requestBytes = Buffer.byteLength(String(input.message || "")) +
@@ -257,20 +267,24 @@ async function createSessionConversationBinding(provider, sessionId, options = {
             if (await host.compactContext({ context, signal, input }) === false) return Math.max(bytes, 1024);
           } catch (error) {
             if (signal?.aborted) throw error;
-            throw Object.assign(new Error(
-              `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`
-            ),
-              { code: "vibe64_assistant_context_full", statusCode: 409 });
+            throw Object.assign(
+              new Error(
+                `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`
+              ),
+              { code: "vibe64_assistant_context_full", statusCode: 409 }
+            );
           } finally {
             await setPhase("preparing");
           }
           bytes = await room();
         }
         if (bytes < 1024) {
-          throw Object.assign(new Error(
-            "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant."
-          ),
-            { code: "vibe64_assistant_context_full", statusCode: 409 });
+          throw Object.assign(
+            new Error(
+              "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant."
+            ),
+            { code: "vibe64_assistant_context_full", statusCode: 409 }
+          );
         }
         return bytes;
       }
@@ -315,8 +329,12 @@ async function createSessionConversationBinding(provider, sessionId, options = {
 // Claude message preparation marks these stages on JSKIT's delivery observer.
 const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
 
-function requireScopedConversationContext(sessionId, context, conversationId,
-  message = "A scoped conversation requires its original scope and native identity.") {
+function requireScopedConversationContext(
+  sessionId,
+  context,
+  conversationId,
+  message = "A scoped conversation requires its original scope and native identity."
+) {
   if (!conversationId || (context.assistantScope
     ? context.assistantScope.id !== sessionId
     : context.session?.sessionId !== sessionId || !context.runtime)) {
@@ -392,10 +410,12 @@ function createMainConversationBinding(store, sessionId, context) {
         const current = context.readSession ? await context.readSession() : context.session;
         const selection = vibe64AssistantSelectionFromMetadata(current.metadata);
         const metadata = current.metadata;
-        const fail = (message) => { throw Object.assign(new Error(message), {
-          code: "vibe64_conversation_replacement_unavailable",
-          statusCode: 409
-        }); };
+        const fail = (message) => {
+          throw Object.assign(new Error(message), {
+            code: "vibe64_conversation_replacement_unavailable",
+            statusCode: 409
+          });
+        };
         if (metadata.agent_identity_provider !== selection.engineId || metadata.agent_identity_conversation_id !== expectedId ||
             !metadata.agent_identity_workdir) fail("The native predecessor identity changed or is incomplete.");
         const bindingNames = Object.keys(metadata).filter((name) =>

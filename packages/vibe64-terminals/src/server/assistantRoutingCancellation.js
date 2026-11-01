@@ -220,8 +220,11 @@ function createAssistantRoutingCancellation({
     const settled = new Set(unsettled.map(entry => entry.messageId));
     await store.mutateSession(sessionId, async () => {
       const current = await readCancelled(store, sessionId);
-      await store.writeMetadataValue(sessionId, CANCELLED_KEY,
-        JSON.stringify(current.map(entry => settled.has(entry.messageId) ? { ...entry, settled: true } : entry)));
+      await store.writeMetadataValue(
+        sessionId,
+        CANCELLED_KEY,
+        JSON.stringify(current.map(entry => settled.has(entry.messageId) ? { ...entry, settled: true } : entry))
+      );
     });
   }
 

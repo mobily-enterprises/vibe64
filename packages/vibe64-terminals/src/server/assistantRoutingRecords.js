@@ -122,8 +122,8 @@ function createAssistantRoutingRecords({
       message: [stage === "review"
         ? state.reviewMessage
         : "Continue the authorised work from its current state; preserve completed work and do not reduce scope.",
-        `Original request: ${state.input.message}`, `Accepted steering: ${JSON.stringify(state.steering || [])}`,
-        `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`].join("\n\n")
+      `Original request: ${state.input.message}`, `Accepted steering: ${JSON.stringify(state.steering || [])}`,
+      `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`].join("\n\n")
     };
     state.delivery = "pending";
     delete state.attemptedMessageId;

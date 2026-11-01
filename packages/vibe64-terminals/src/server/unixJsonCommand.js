@@ -155,14 +155,16 @@ async function unixJsonCommandServerIsHealthy(entry, options = {}) {
       generationId: entry.generationId,
       code: cause?.code || ""
     }, "Managed assistant control health could not be verified; existing listener retained.");
-    throw Object.assign(new Error(
-      "Managed assistant control health could not be verified. Retry the connection; existing command credentials and work have been retained.",
-      { cause }
-    ),
+    throw Object.assign(
+      new Error(
+        "Managed assistant control health could not be verified. Retry the connection; existing command credentials and work have been retained.",
+        { cause }
+      ),
       {
-      code: "vibe64_agent_control_unavailable",
-      retryable: true
-    });
+        code: "vibe64_agent_control_unavailable",
+        retryable: true
+      }
+    );
   }
 }
 

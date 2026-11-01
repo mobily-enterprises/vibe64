@@ -40,14 +40,10 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
     project: true,
     run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
   },
-  interruptDetachedChatTurn: {
-    run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  deleteDetachedChatThread: {
-    run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  listNativeConversationStorage: {
-    run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
-  retireConversationHistory: {
-    run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
+  interruptDetachedChatTurn: {run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
+  deleteDetachedChatThread: {run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input }) },
+  listNativeConversationStorage: {run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
+  retireConversationHistory: {run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
   updateSessionSettings: {
     project: true,
     run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input })
@@ -61,11 +57,10 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
       id: context.sessionId,
       context,
       input
-    }) },
-  releaseRenewalPredecessorProcessExitProof: {
-    run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
-  releaseRenewalSuccessorProcessExitProof: {
-    run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
+    })
+  },
+  releaseRenewalPredecessorProcessExitProof: {run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
+  releaseRenewalSuccessorProcessExitProof: {run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
 });
 
 const SCOPED_CONVERSATION_METHODS = new Set([
@@ -137,10 +132,13 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
         if (Object.hasOwn(request, "value")) return request.value;
         return provider.projectConversationResult(method, async () => {
           const goalOperation = method === "readGoal" ? "read" : method === "updateGoal" ? "update" : "";
-          const conversation = await openMainConversation(conversationRuntime,
+          const conversation = await openMainConversation(
+            conversationRuntime,
             method === "interruptTurn" ? { ...context, allowClosing: true } :
               context.canonicalGoal && goalOperation ? { ...context, goalOperation } : context,
-            request.prepareInput, context.canonicalGoal && goalOperation ? "canonical" : "native");
+            request.prepareInput,
+            context.canonicalGoal && goalOperation ? "canonical" : "native"
+          );
           return command(conversation, request);
         });
       };

@@ -49,8 +49,9 @@ function summary(result = {}, options = {}) {
   const messages = Array.isArray(result.messages) ? result.messages : [];
   const selected = includeMessages ? messages.slice(-12) : [];
   let preferences;
-  try { if (result.routingMetadata) preferences = assistantRoutingFromMetadata(result.routingMetadata); }
-  catch { /* No verified temporary-chat preferences. */ }
+  try {
+    if (result.routingMetadata) preferences = assistantRoutingFromMetadata(result.routingMetadata);
+  } catch { /* No verified temporary-chat preferences. */ }
   return {
     ...(preferences ? {
       chatMode: preferences.mode,

@@ -328,27 +328,27 @@ async function repositoryVersionFileDiff({
   const filePath = safeChangePath(requestedPath);
   const result = comparison.parent
     ? await git(context, [
-        "--no-literal-pathspecs",
-        "diff",
-        "--no-ext-diff",
-        "--find-renames",
-        "--unified=3",
-        comparison.parent,
-        commit,
-        "--",
-        ...exactFileDiffPathspecs(filePath)
-      ], { runCommand })
+      "--no-literal-pathspecs",
+      "diff",
+      "--no-ext-diff",
+      "--find-renames",
+      "--unified=3",
+      comparison.parent,
+      commit,
+      "--",
+      ...exactFileDiffPathspecs(filePath)
+    ], { runCommand })
     : await git(context, [
-        "--no-literal-pathspecs",
-        "show",
-        "--format=",
-        "--no-ext-diff",
-        "--find-renames",
-        "--unified=3",
-        commit,
-        "--",
-        ...exactFileDiffPathspecs(filePath)
-      ], { runCommand });
+      "--no-literal-pathspecs",
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--find-renames",
+      "--unified=3",
+      commit,
+      "--",
+      ...exactFileDiffPathspecs(filePath)
+    ], { runCommand });
   return {
     commit,
     ...boundedDiff(output(result), lineLimit),

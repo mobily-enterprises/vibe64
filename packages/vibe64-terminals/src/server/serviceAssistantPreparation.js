@@ -109,8 +109,10 @@ function createServiceAssistantPreparation({
         return;
       }
       if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;
-      await workspacePreparation.invalidateWorkspaceSetup(context,
-        `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`);
+      await workspacePreparation.invalidateWorkspaceSetup(
+        context,
+        `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
+      );
       logOperationalEvent(logger, "warn", {
         code: error.code,
         component: "vibe64.agent_skills",

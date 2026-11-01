@@ -258,8 +258,9 @@ function createPromptHintRequests({
     const readPaths = options.renewalCleanup
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const artifacts = await readPaths(normalizedSessionId, async (paths) => {
-      try { return await readdir(path.join(paths.artifactsRoot, PROMPT_HINT_TASK_DIRECTORY)); }
-      catch (error) {
+      try {
+        return await readdir(path.join(paths.artifactsRoot, PROMPT_HINT_TASK_DIRECTORY));
+      } catch (error) {
         if (isMissingPathError(error)) return [];
         throw error;
       }

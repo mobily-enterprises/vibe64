@@ -183,8 +183,11 @@ function createTemporaryConversationLifecycle({
   }
 
   async function deleteTemporaryConversation(sessionId, input, options = {}) {
-    try { await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }, { waitForCleanup: true }); }
-    catch (error) { if (!["vibe64_conversation_closed", "vibe64_conversation_closing"].includes(error.code)) throw error; }
+    try {
+      await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }, { waitForCleanup: true });
+    } catch (error) {
+      if (!["vibe64_conversation_closed", "vibe64_conversation_closing"].includes(error.code)) throw error;
+    }
     let context;
     const result = await chatTurns.write(sessionId, options, async (ctx) => {
       context = ctx;

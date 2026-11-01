@@ -315,17 +315,23 @@ function createCodexSessionAgentProvider({
       native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
     };
     if (mode === "unsubscription") return {
-      native: { runOwner: codexAppServerRunOwner, preparation: {
-        enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
-        session: prepareCodexAppServerThreadUnsubscription,
-        failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
-        cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
-      } }
+      native: {
+        runOwner: codexAppServerRunOwner,
+        preparation: {
+          enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
+          session: prepareCodexAppServerThreadUnsubscription,
+          failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
+          cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
+        }
+      }
     };
     if (mode === "invalidation") return {
-      native: { runOwner: codexAppServerRunOwner, preparation: {
-        enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
-      } }
+      native: {
+        runOwner: codexAppServerRunOwner,
+        preparation: {
+          enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
+        }
+      }
     };
     if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
     if (mode === "storage") return {
@@ -365,9 +371,11 @@ function createCodexSessionAgentProvider({
       const session = context.session || await codexConversationStorage.readSession(sessionId);
       const messagePreparation = codexConversationPreparation.message(sessionId);
       return {
-        context: { runtime, session }, namespace: codexTerminalNamespace(sessionId),
+        context: { runtime, session },
+        namespace: codexTerminalNamespace(sessionId),
         messageEnvironment: env,
-        publish: publishSessionChanged, checkpoint: checkpointCodexAppServerTurn,
+        publish: publishSessionChanged,
+        checkpoint: checkpointCodexAppServerTurn,
         state: codexConversationStorage.state(sessionId),
         async readContextUsage({ input, signal }) {
           signal?.throwIfAborted();
@@ -392,8 +400,10 @@ function createCodexSessionAgentProvider({
           }
           // Missing usage is zero only for a natively verified empty thread.
           // An existing thread without its receipt must never get a full budget.
-          const turns = await current.provider.listThreadTurns(target.threadId,
-            { limit: 1, sortDirection: "desc", itemsView: "summary" });
+          const turns = await current.provider.listThreadTurns(
+            target.threadId,
+            { limit: 1, sortDirection: "desc", itemsView: "summary" }
+          );
           signal?.throwIfAborted();
           if (!Array.isArray(turns.data) || turns.data.length || turns.nextCursor) {
             throw new Error("Codex's current context usage is unavailable. Restore its usage before transferring more history.");
@@ -474,7 +484,9 @@ function createCodexSessionAgentProvider({
       } : null;
       return {
         scopedConversationId: toText(input.conversationId) ? input.conversationId : undefined,
-        get input() { return message || { ...input, agentSettings: codexAssistantSettings(context, input) }; }
+        get input() {
+          return message || { ...input, agentSettings: codexAssistantSettings(context, input) };
+        }
       };
     }
     if (method === "sessionState" || method === "readGoal") return {};
@@ -528,9 +540,7 @@ function createCodexSessionAgentProvider({
     // A provider filter must not change the catalogue revision used by Apply.
     const catalog = connected && !configuredOnly
       ? await codexAssistantCatalog.modelCatalog({ signal: context.signal })
-      : codexConfiguredModelCatalog(
-          connected, VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING
-        );
+      : codexConfiguredModelCatalog(connected, VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING);
     return codexAssistantCapabilities(connected, catalog, await listConnections());
   }
 

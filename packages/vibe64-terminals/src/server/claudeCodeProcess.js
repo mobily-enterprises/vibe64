@@ -109,7 +109,10 @@ async function createClaudeCodeProcess({
   diagnostic("starting");
   try {
     const process = await nativeCreateClaudeCodeProcess({
-      ...options, onStarted, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
+      ...options,
+      onStarted,
+      permissionMode: "bypassPermissions",
+      settings: claudeFlagSettings(),
       // Cold startup includes managed Git probes; ordinary controls keep their 30-second deadline.
       initializationTimeoutMs: 90_000,
       onInitializationProgress: stage => diagnostic(`initialize_${stage}`),
@@ -134,8 +137,7 @@ async function createClaudeCodeProcess({
                 ? (newline < 0 ? "" : logs.stderr.slice(newline + 1))
                 : logs.stderr;
               stderr = sanitizeOperationText(tail, secrets).slice(-64 * 1024);
-            }
-            catch { /* Keep the startup error and the stop proof. */ }
+            } catch { /* Keep the startup error and the stop proof. */ }
           }
           return host.stop(id, ...args);
         }

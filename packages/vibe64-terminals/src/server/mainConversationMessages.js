@@ -127,10 +127,10 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
     const needsOpeningPrompt = sessionNeedsOpeningPrompt(preparedSession);
     const rendered = genesisTask || needsOpeningPrompt
       ? await runtime.renderPrompt(sessionId, {
-          input,
-          request: userRequest,
-          task: genesisTask || "start"
-        })
+        input,
+        request: userRequest,
+        task: genesisTask || "start"
+      })
       : { prompt: userRequest };
     vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.stage", {
       durationMs: Date.now() - stageStartedAt,
@@ -152,7 +152,9 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
     prepared.providerContextRefreshPending = providerContextRefreshPending;
     return {
       renderedPrompt,
-      get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
+      get turnSettings() {
+        return codexAppServerTurnSettings({ agentSettings, cwd: workdir });
+      }
     };
   }
 
@@ -283,7 +285,9 @@ function createClaudeConversationMessagePolicy({
     return prompt;
   }
 
-  function skipAdmission(entry, event) { return !entry.main || event.renewal; }
+  function skipAdmission(entry, event) {
+    return !entry.main || event.renewal;
+  }
 
   function check(entry, ctx) {
     if (entry.turn?.active && ctx.turnOwnership?.reusable === false) {
@@ -373,59 +377,80 @@ function createOpenCodeMainMessagePreparation({
     const prepared = await prepareMessageInput(sessionId, input, options);
     if (Object.hasOwn(prepared, "value")) return prepared;
     const { context, message, messageId } = prepared;
-    return { context, message, messageId, get key() { return context.key; }, input: {
-      duplicate: undefined,
-      get id() { return upstreamMessageId(messageId); },
-      get threadId() { return storedUpstreamSessionId(context); },
-      get workdir() { return context.workdir; },
-      onPromptRejected: () => onPromptRejected()
-    }, application: {
-      writeRun: (turn, state, error) => writeRun(context, turn, state, error),
-      monitor: messageMonitorProjection(context),
-      async prepare() {
-        const process = await prepareProcess(context, options);
-        return { process, get session() { return upstreamSessionOptions(context); } };
+    return {
+      context,
+      message,
+      messageId,
+      get key() {
+        return context.key;
       },
-      commit(conversationTurn) {
-        return publishConversationTurn(context, conversationTurn, "opencode-server-message-delivered");
-      }
-    }, project(result, actorFailure) {
-      if (result.ownerConflict) {
-        return {
-          code: "vibe64_agent_turn_owner_conflict",
-          delivered: false,
-          error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
-          ok: false,
-          refreshRecommended: true,
-          retryable: true,
-          thread: { id: result.threadId },
-          turn: result.turn
-        };
-      }
-      if (result.failure) {
-        const { error, threadId: currentThreadId, recovery } = result.failure;
-        if (recovery) return throwVibe64OpenCodeError(error);
-        if (actorFailure) {
-          return actorFailure;
-        }
-        const failureCode = toText(error?.code).replace(/^assistant_opencode_/u, "vibe64_opencode_");
-        if (failureCode.startsWith("vibe64_opencode_")) {
+      input: {
+        duplicate: undefined,
+        get id() {
+          return upstreamMessageId(messageId);
+        },
+        get threadId() {
+          return storedUpstreamSessionId(context);
+        },
+        get workdir() {
+          return context.workdir;
+        },
+        onPromptRejected: () => onPromptRejected()
+      },
+      application: {
+        writeRun: (turn, state, error) => writeRun(context, turn, state, error),
+        monitor: messageMonitorProjection(context),
+        async prepare() {
+          const process = await prepareProcess(context, options);
           return {
-            code: failureCode,
+            process,
+            get session() {
+              return upstreamSessionOptions(context);
+            }
+          };
+        },
+        commit(conversationTurn) {
+          return publishConversationTurn(context, conversationTurn, "opencode-server-message-delivered");
+        }
+      },
+      project(result, actorFailure) {
+        if (result.ownerConflict) {
+          return {
+            code: "vibe64_agent_turn_owner_conflict",
             delivered: false,
-            error: toText(error?.message) || "OpenCode prompt delivery failed.",
+            error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
             ok: false,
             refreshRecommended: true,
-            retryable: error?.retryable === true ||
-              ["vibe64_opencode_start_timeout", "vibe64_opencode_events_timeout"].includes(failureCode),
-            thread: { id: currentThreadId },
-            turn: result.failure.turn
+            retryable: true,
+            thread: { id: result.threadId },
+            turn: result.turn
           };
         }
-        throw error;
+        if (result.failure) {
+          const { error, threadId: currentThreadId, recovery } = result.failure;
+          if (recovery) return throwVibe64OpenCodeError(error);
+          if (actorFailure) {
+            return actorFailure;
+          }
+          const failureCode = toText(error?.code).replace(/^assistant_opencode_/u, "vibe64_opencode_");
+          if (failureCode.startsWith("vibe64_opencode_")) {
+            return {
+              code: failureCode,
+              delivered: false,
+              error: toText(error?.message) || "OpenCode prompt delivery failed.",
+              ok: false,
+              refreshRecommended: true,
+              retryable: error?.retryable === true ||
+              ["vibe64_opencode_start_timeout", "vibe64_opencode_events_timeout"].includes(failureCode),
+              thread: { id: currentThreadId },
+              turn: result.failure.turn
+            };
+          }
+          throw error;
+        }
+        return result;
       }
-      return result;
-    } };
+    };
   }
 
   async function prepareMessageInspection(sessionId = "", input = {}, options = {}) {
@@ -441,7 +466,9 @@ function createOpenCodeMainMessagePreparation({
     return {
       process: await prepareProcess(context, options),
       threadId,
-      get inputMessageId() { return upstreamMessageId(messageId); },
+      get inputMessageId() {
+        return upstreamMessageId(messageId);
+      },
       project(observation) {
         if (!observation) return { ok: true, admission: "unknown", messageId, threadId };
         const { accepted } = observation;
@@ -465,93 +492,106 @@ function createOpenCodeMainMessagePreparation({
     let actorFailure = null;
     let actorMetadata = null;
     prepared.input.duplicate = duplicate;
-    return { key: prepared.key, input: prepared.input, application: {
-      writeRun: prepared.application.writeRun,
-      monitor: prepared.application.monitor,
-      async prepare({ overwrite, threadId }) {
-        const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
-        const actor = learningRoot ? null : await recordGitActor({
-          env,
-          overwrite,
-          reason: "agent-message",
-          runtime: context.runtime,
-          session: context.session,
-          sourceRoot: sessionSourcePath(context.session),
-          threadId,
-          vibe64User: options.vibe64User,
-          workdir: context.workdir
-        });
-        if (actor?.ok === false) {
-          actorFailure = {
-            code: actor.code || "vibe64_opencode_git_actor_unavailable",
-            delivered: false,
-            error: actor.error || "GitHub identity is not available for this OpenCode message.",
-            ok: false,
-            refreshRecommended: true,
-            retryable: true
+    return {
+      key: prepared.key,
+      input: prepared.input,
+      application: {
+        writeRun: prepared.application.writeRun,
+        monitor: prepared.application.monitor,
+        async prepare({ overwrite, threadId }) {
+          const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
+          const actor = learningRoot ? null : await recordGitActor({
+            env,
+            overwrite,
+            reason: "agent-message",
+            runtime: context.runtime,
+            session: context.session,
+            sourceRoot: sessionSourcePath(context.session),
+            threadId,
+            vibe64User: options.vibe64User,
+            workdir: context.workdir
+          });
+          if (actor?.ok === false) {
+            actorFailure = {
+              code: actor.code || "vibe64_opencode_git_actor_unavailable",
+              delivered: false,
+              error: actor.error || "GitHub identity is not available for this OpenCode message.",
+              ok: false,
+              refreshRecommended: true,
+              retryable: true
+            };
+            throw new Error(actorFailure.error);
+          }
+          return prepared.application.prepare();
+        },
+        async prompt() {
+          actorMetadata = {
+            ...input.turnMetadata,
+            ...await conversationActorMetadata({
+              vibe64User: options.vibe64User
+            }),
+            ...conversationReviewActorMetadata(input.turnMetadata)
           };
-          throw new Error(actorFailure.error);
-        }
-        return prepared.application.prepare();
-      },
-      async prompt() {
-        actorMetadata = {
-          ...input.turnMetadata,
-          ...await conversationActorMetadata({
-            vibe64User: options.vibe64User
-          }),
-          ...conversationReviewActorMetadata(input.turnMetadata)
-        };
-        const genesisTask = toText(input.genesisTask);
-        const conversation = genesisTask
-          ? null
-          : await context.runtime.store.readConversationLogPage(context.sessionId, { limit: 1 });
-        const needsOpeningPrompt = Boolean(
-          genesisTask || (
-            !conversation?.pagination?.totalTurnCount &&
+          const genesisTask = toText(input.genesisTask);
+          const conversation = genesisTask
+            ? null
+            : await context.runtime.store.readConversationLogPage(context.sessionId, { limit: 1 });
+          const needsOpeningPrompt = Boolean(
+            genesisTask || (
+              !conversation?.pagination?.totalTurnCount &&
             sessionNeedsOpeningPrompt(context.session)
-          )
-        );
-        const rendered = needsOpeningPrompt
-          ? await context.runtime.renderPrompt(context.sessionId, {
+            )
+          );
+          const rendered = needsOpeningPrompt
+            ? await context.runtime.renderPrompt(context.sessionId, {
               input,
               request: message,
               task: genesisTask || "start"
             })
-          : { prompt: message };
-        const renderedPrompt = toText(rendered?.prompt) || message;
-        return {
-          get agent() { return context.selection.agentId; },
-          get model() { return openCodeModel(context.selection); },
-          get prompt() { return { text: renderedPrompt }; },
-          get attachments() { return input.attachments; },
-          beforeDispatch: threadId => onPromptSending({
-            threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
-          })
-        };
-      },
-      async commit(admitted) {
-        const conversationTurn = await context.runtime.store.writeConversationUserMessage(
-          context.sessionId,
-          {
-            attachments: input.displayAttachments,
-            messageId,
-            text: toText(input.displayMessage) || message,
-            turnMetadata: {
-              ...input.turnMetadata,
-              assistantSelection: context.selection,
-              ...actorMetadata,
-              engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-              upstreamMessageId: toText(admitted?.id)
+            : { prompt: message };
+          const renderedPrompt = toText(rendered?.prompt) || message;
+          return {
+            get agent() {
+              return context.selection.agentId;
+            },
+            get model() {
+              return openCodeModel(context.selection);
+            },
+            get prompt() {
+              return { text: renderedPrompt };
+            },
+            get attachments() {
+              return input.attachments;
+            },
+            beforeDispatch: threadId => onPromptSending({
+              threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
+            })
+          };
+        },
+        async commit(admitted) {
+          const conversationTurn = await context.runtime.store.writeConversationUserMessage(
+            context.sessionId,
+            {
+              attachments: input.displayAttachments,
+              messageId,
+              text: toText(input.displayMessage) || message,
+              turnMetadata: {
+                ...input.turnMetadata,
+                assistantSelection: context.selection,
+                ...actorMetadata,
+                engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
+                upstreamMessageId: toText(admitted?.id)
+              }
             }
-          }
-        );
-        await prepared.application.commit(conversationTurn);
-        return conversationTurn;
+          );
+          await prepared.application.commit(conversationTurn);
+          return conversationTurn;
+        }
+      },
+      project(result) {
+        return prepared.project(result, actorFailure);
       }
-    }, project(result) {
-      return prepared.project(result, actorFailure);
-    } };
+    };
   }
 
   return Object.freeze({

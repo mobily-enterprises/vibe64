@@ -224,8 +224,8 @@ function createCodexSessionRegistration({
   const localRuntime = runtimeProfileIsLocal(getStudioProjectContext().runtimeProfile);
   const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
     ? createPersonalAiProfileStore({
-        systemRoot: codexAppServerProviderOptions.systemRoot
-      })
+      systemRoot: codexAppServerProviderOptions.systemRoot
+    })
     : null;
 
   const providerConnections = createCodexProviderConnectionStore({ systemRoot: codexAppServerProviderOptions.systemRoot });
@@ -277,7 +277,9 @@ function createCodexSessionRegistration({
     /**
      * The native owner consumes these preparations only after construction.
      */
-    get runOwner() { return codexAppServerRunOwner; }
+    get runOwner() {
+      return codexAppServerRunOwner;
+    }
   });
   const {
     codexAppServerSessionProviderContext,
@@ -304,9 +306,7 @@ function createCodexSessionRegistration({
   });
   async function publishCodexConversationEvent(sessionId, event) {
     const { nativeGoal: _nativeGoal, ...publicEvent } = event;
-    return publishMainConversationEvent(
-      codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
-    );
+    return publishMainConversationEvent(codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent);
   }
   const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ project, publishSessionChanged });
   const codexAppServerRunOwner = createCodexAppServerRunOwner({

@@ -132,8 +132,10 @@ function createSessionAgentRouting({
     const connectionAccess = [];
     async function readSelectionAccess(assistantSelection) {
       const fact = {
-        ...await readFact(`access:${JSON.stringify(assistantSelection)}`,
-          () => routingSelectionAccess(assistantSelection, routingOptions))
+        ...await readFact(
+          `access:${JSON.stringify(assistantSelection)}`,
+          () => routingSelectionAccess(assistantSelection, routingOptions)
+        )
       };
       connectionAccess.push(fact);
       return fact;
@@ -149,8 +151,10 @@ function createSessionAgentRouting({
     const preflight = resolveAssistantPurpose({ ...resolution, validateModels: false });
     if (!preflight.available || !validateModels) return preflight;
     const catalogs = [];
-    const readCatalog = (provider, catalogInput) => readFact(`catalog:${provider.id}:${JSON.stringify(catalogInput)}`,
-      () => providerCapabilities(provider, catalogInput, { vibe64User: actor }));
+    const readCatalog = (provider, catalogInput) => readFact(
+      `catalog:${provider.id}:${JSON.stringify(catalogInput)}`,
+      () => providerCapabilities(provider, catalogInput, { vibe64User: actor })
+    );
     const catalogEngines = new Set(accessible.map((selection) => selection.engineId));
     for (const engineId of catalogEngines) {
       const selectionsForEngine = accessible.filter((selection) => selection.engineId === engineId);
@@ -159,9 +163,11 @@ function createSessionAgentRouting({
         if (engineId !== "opencode") {
           const providerIds = new Set(selectionsForEngine.map((selection) => selection.modelProviderId));
           catalogs.push(await readCatalog(provider, providerIds.size === 1
-            ? { modelProviderId: selectionsForEngine[0].modelProviderId,
+            ? {
+                modelProviderId: selectionsForEngine[0].modelProviderId,
                 // Curated Codex routes have static models; dispatch does not need GPT discovery.
-                ...(engineId === "codex" && !providerIds.has("openai") ? { configuredOnly: "true" } : {}) }
+                ...(engineId === "codex" && !providerIds.has("openai") ? { configuredOnly: "true" } : {})
+              }
             : {}));
           continue;
         }
@@ -235,7 +241,9 @@ function createSessionAgentRouting({
         const catalog = await connectedProviderCatalog(provider, options);
         if (hasConnectedAssistantModels(catalog)) connectedEngineIds.add(provider.id);
         catalogs.push(catalog);
-      } catch (error) { catalogErrors.set(provider.id, error.message); }
+      } catch (error) {
+        catalogErrors.set(provider.id, error.message);
+      }
     }));
     catalogs.sort((left, right) => left.engineId.localeCompare(right.engineId));
     const routeKey = (selection) => JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
@@ -315,7 +323,9 @@ function createSessionAgentRouting({
             if (role === "junior" && values.senior?.schema && values.senior.engineId !== value.engineId) {
               throw new Error("Senior and Junior must run in the same tool.");
             }
-          } catch (cause) { error = cause.message; }
+          } catch (cause) {
+            error = cause.message;
+          }
         }
         const { value: effective, followedRole } = assistantSetupRoleValue(values, role);
         return [role, {

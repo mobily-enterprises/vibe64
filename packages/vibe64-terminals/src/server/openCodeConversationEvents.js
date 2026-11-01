@@ -254,7 +254,9 @@ function createOpenCodeConversationEvents({
       failure(error) {
         if (error?.code === "assistant_opencode_observation_lost") error.code = "vibe64_opencode_observation_lost";
       },
-      closed() { dropOpenCodeProgress(context.sessionId); }
+      closed() {
+        dropOpenCodeProgress(context.sessionId);
+      }
     };
   }
 
@@ -308,14 +310,18 @@ function createOpenCodeConversationEvents({
           observation: () => observationProjection(context, options.onEvent),
           eventReady: options.eventReady,
           readiness: options.eventReady ? {
-            timeoutError: openCodeError(
-              "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504
-            )
+            timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504)
           } : undefined,
           finalResponse: {
-            get agent() { return context.selection.agentId; },
-            get model() { return openCodeModel(context.selection); },
-            get recoveryMessageId() { return upstreamMessageId(`${turn.id}:final-response`); },
+            get agent() {
+              return context.selection.agentId;
+            },
+            get model() {
+              return openCodeModel(context.selection);
+            },
+            get recoveryMessageId() {
+              return upstreamMessageId(`${turn.id}:final-response`);
+            },
             readError: openCodeMessageError
           },
           writeRun: (runTurn, state, error) => writeRun(context, runTurn, state, error),

@@ -70,7 +70,7 @@ function normalizedConflictRecovery(value = {}) {
   }
   const conflictPaths = Array.isArray(value.conflictPaths)
     ? [...new Set(value.conflictPaths.map(String).filter(Boolean))]
-      .sort((left, right) => left.localeCompare(right))
+        .sort((left, right) => left.localeCompare(right))
     : [];
   const recovery = {
     baseCommit: normalizeText(value.baseCommit),
@@ -171,8 +171,13 @@ async function checkSessionUpdatesDirect({
     canonicalCommit,
     sessionHead,
     worktreeTree,
-    changedPaths: (await changedPathsBetween(runCommand, context, context.baseCommit, worktreeTree,
-      { commandOptions, project })).slice(0, 100)
+    changedPaths: (await changedPathsBetween(
+      runCommand,
+      context,
+      context.baseCommit,
+      worktreeTree,
+      { commandOptions, project }
+    )).slice(0, 100)
   } : null;
   const [ahead, behind, canonicalInSession, canonicalTree] = await Promise.all([
     countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
@@ -192,9 +197,9 @@ async function checkSessionUpdatesDirect({
   const relationship = repositoryUpdateRelationship(ahead, behind);
   const incoming = behind > 0
     ? await incomingVersionsBetween(runCommand, context, sessionHead, canonicalCommit, {
-        commandOptions,
-        project
-      })
+      commandOptions,
+      project
+    })
     : { incomingVersions: [], incomingVersionsTruncated: false };
   return {
     ahead,
@@ -467,16 +472,20 @@ async function prepareSessionWorkUpdateDirect({
   });
   if (historyRewritten || historyReview) {
     if (context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-      throw saveError("The saved project history no longer descends from this session's starting version.",
-        "vibe64_session_update_history_diverged");
+      throw saveError(
+        "The saved project history no longer descends from this session's starting version.",
+        "vibe64_session_update_history_diverged"
+      );
     }
     const expected = { baseCommit: context.baseCommit, canonicalCommit, sessionHead: oldHead, worktreeTree: checkpointTree };
     const reviewedRepair = reviewedConflictId && conflictRecovery?.reviewId === reviewedConflictId &&
       conflictRecovery.baseCommit === context.baseCommit && conflictRecovery.canonicalCommit === canonicalCommit &&
       conflictRecovery.oldHead === oldHead && conflictRecovery.oldIndexTree === oldIndexTree;
     if (!reviewedRepair && (!historyReview || Object.entries(expected).some(([key, value]) => historyReview[key] !== value))) {
-      throw saveError("The project history was rewritten. Open Repository, check for updates, then review and reconcile this session.",
-        "vibe64_session_history_review_required");
+      throw saveError(
+        "The project history was rewritten. Open Repository, check for updates, then review and reconcile this session.",
+        "vibe64_session_history_review_required"
+      );
     }
   }
   const comparison = await sessionWorkComparison(runCommand, context, {
@@ -547,11 +556,11 @@ async function prepareSessionWorkUpdateDirect({
       : null;
     mergedSourceTree = currentRecovery
       ? await resolvedConflictTree(runCommand, context, {
-          currentRecovery,
-          previousRecovery: conflictRecovery,
-          reviewedConflictId,
-          project
-        })
+        currentRecovery,
+        previousRecovery: conflictRecovery,
+        reviewedConflictId,
+        project
+      })
       : mergeResult.mergedTree;
   }
   return {
@@ -591,12 +600,12 @@ async function regenerateSessionWorkUpdateDirect({
   const mergedCommit = mergedTree === prepared.canonicalTree
     ? prepared.canonicalCommit
     : await createVirtualCommit(runCommand, context, {
-        baseCommit: prepared.canonicalCommit,
-        commandOptions,
-        message: "Vibe64 session update result",
-        project,
-        tree: mergedTree
-      });
+      baseCommit: prepared.canonicalCommit,
+      commandOptions,
+      message: "Vibe64 session update result",
+      project,
+      tree: mergedTree
+    });
   return { ...prepared, mergedCommit, mergedTree };
 }
 

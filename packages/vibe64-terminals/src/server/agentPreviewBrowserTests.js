@@ -59,10 +59,10 @@ function createAgentPreviewBrowserTests({
 
   async function cancelPlaywrightRun(sessionId, runId) {
     const pending = state.browserTestRuns.get(sessionId);
-    if (!pending || pending.id !== runId) return commandFailure(
-      "That browser test is no longer active. Check playwright status before cancelling another run.", "vibe64_test_run_unavailable"
-    );
-    pending.cancelling ||= finishCancellation(sessionId, pending).finally(() => { pending.cancelling = null; });
+    if (!pending || pending.id !== runId) return commandFailure("That browser test is no longer active. Check playwright status before cancelling another run.", "vibe64_test_run_unavailable");
+    pending.cancelling ||= finishCancellation(sessionId, pending).finally(() => {
+      pending.cancelling = null;
+    });
     return pending.cancelling;
   }
 
@@ -193,7 +193,8 @@ function createAgentPreviewBrowserTests({
         outcome === "expired" ? "The resource wait expired. Tests were not run."
           : outcome === "cancelled" ? "The resource wait was cancelled. Tests were not run."
             : "The original test command ended. Tests were not run.",
-        `vibe64_test_approval_${outcome}`, { details: result.details }
+        `vibe64_test_approval_${outcome}`,
+        { details: result.details }
       );
       options.signal.throwIfAborted();
       await validate();

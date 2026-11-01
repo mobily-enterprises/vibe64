@@ -88,11 +88,14 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   if (context.contribution) {
     if (contributionAuthority.missingPublished) throw saveError(
       "This contribution branch was removed after it was pushed. Preserve its source and submit further work as a new contribution.",
-      "vibe64_contribution_branch_missing");
+      "vibe64_contribution_branch_missing"
+    );
     const expected = contributionAuthority.remoteAbsent ? "" : contributionAuthority.publishedCommit;
     if ((await readContributionHead(runCommand, context, options)).head !== expected) {
-      throw saveError("The contribution branch changed while Save was preparing. Inspect it before trying again.",
-        "vibe64_session_save_update_required");
+      throw saveError(
+        "The contribution branch changed while Save was preparing. Inspect it before trying again.",
+        "vibe64_session_save_update_required"
+      );
     }
     // The prepared commit descends from the observed head. The exact lease also
     // prevents ordinary push from recreating a ref removed by a racing discard.
@@ -115,9 +118,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   }
   let verified;
   try {
-    const remote = context.contribution ? (await readContributionHead(runCommand, context, options)).head : await gitOutput(
-      runCommand, context, ["ls-remote", "--heads", "origin", `refs/heads/${context.branch}`], options
-    );
+    const remote = context.contribution ? (await readContributionHead(runCommand, context, options)).head : await gitOutput(runCommand, context, ["ls-remote", "--heads", "origin", `refs/heads/${context.branch}`], options);
     verified = remote.split(/\s+/u)[0] || "";
   } catch (error) {
     if (["vibe64_contribution_discarded", "vibe64_contribution_discard_incomplete"].includes(error.code)) throw error;

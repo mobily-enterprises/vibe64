@@ -323,10 +323,10 @@ function createWorkspaceSetupStart({
     const attemptLabel = migrationTranscript
       ? ""
       : stateBase.transcript
-      ? (retry === true || (rerunFailed === true && stateBase.status === "failed")
-          ? "Workspace preparation retry started."
-          : "Workspace preparation started for updated configuration.")
-      : "Workspace preparation started.";
+        ? (retry === true || (rerunFailed === true && stateBase.status === "failed")
+            ? "Workspace preparation retry started."
+            : "Workspace preparation started for updated configuration.")
+        : "Workspace preparation started.";
     const transcript = appendWorkspaceSetupTranscript(
       stateBase.transcript,
       attemptLabel,

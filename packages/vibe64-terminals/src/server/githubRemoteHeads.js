@@ -70,8 +70,10 @@ function parseLsRefsResponse(bytes) {
     const line = bytes.toString("utf8", offset + 4, offset + size).replace(/\n$/u, "");
     offset += size;
     if (line.startsWith("ERR ")) {
-      throw remoteHeadsError(`The project's repository refused the branch read: ${line.slice(4).trim()}`,
-        "vibe64_session_update_check_failed");
+      throw remoteHeadsError(
+        `The project's repository refused the branch read: ${line.slice(4).trim()}`,
+        "vibe64_session_update_check_failed"
+      );
     }
     const [head, ref] = line.split(" ");
     if (!head || !ref) throw invalidListing();
@@ -97,15 +99,22 @@ async function readBoundedBody(response) {
 
 function failedStatusError(status) {
   if (status === 401) {
-    return remoteHeadsError("GitHub did not accept the signed-in account for this repository.",
-      "vibe64_session_update_authentication_failed", { authenticationRejected: true });
+    return remoteHeadsError(
+      "GitHub did not accept the signed-in account for this repository.",
+      "vibe64_session_update_authentication_failed",
+      { authenticationRejected: true }
+    );
   }
   if (status === 403 || status === 404) {
-    return remoteHeadsError("GitHub did not let the signed-in account read this repository.",
-      "vibe64_session_update_check_failed");
+    return remoteHeadsError(
+      "GitHub did not let the signed-in account read this repository.",
+      "vibe64_session_update_check_failed"
+    );
   }
-  return remoteHeadsError(`GitHub answered the repository check with HTTP ${status}.`,
-    "vibe64_session_update_check_failed");
+  return remoteHeadsError(
+    `GitHub answered the repository check with HTTP ${status}.`,
+    "vibe64_session_update_check_failed"
+  );
 }
 
 /**
@@ -121,16 +130,20 @@ async function listGithubRemoteHeads({
   token = ""
 } = {}) {
   if (!githubHttpsRemote(remoteUrl)) {
-    throw remoteHeadsError("Only a https://github.com repository can be read without Git.",
-      "vibe64_session_update_authority_unsupported");
+    throw remoteHeadsError(
+      "Only a https://github.com repository can be read without Git.",
+      "vibe64_session_update_authority_unsupported"
+    );
   }
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new TypeError("A GitHub head read needs a positive timeout.");
   }
   const authToken = String(token || "").trim();
   if (!authToken) {
-    throw remoteHeadsError("GitHub authentication is not ready for this repository.",
-      "vibe64_codex_git_command_github_auth_unavailable");
+    throw remoteHeadsError(
+      "GitHub authentication is not ready for this repository.",
+      "vibe64_codex_git_command_github_auth_unavailable"
+    );
   }
   const signal = AbortSignal.timeout(timeoutMs);
   try {
@@ -161,12 +174,17 @@ async function listGithubRemoteHeads({
     return parseLsRefsResponse(await readBoundedBody(response));
   } catch (error) {
     if (signal.aborted) {
-      throw remoteHeadsError(`The project's repository did not answer within ${Math.ceil(timeoutMs / 1000)} s.`,
-        "vibe64_session_update_check_timed_out", { timedOut: true });
+      throw remoteHeadsError(
+        `The project's repository did not answer within ${Math.ceil(timeoutMs / 1000)} s.`,
+        "vibe64_session_update_check_timed_out",
+        { timedOut: true }
+      );
     }
     if (String(error?.code || "").startsWith("vibe64_")) throw error;
-    throw remoteHeadsError("The project's repository could not be reached for its branch read.",
-      "vibe64_session_update_check_failed");
+    throw remoteHeadsError(
+      "The project's repository could not be reached for its branch read.",
+      "vibe64_session_update_check_failed"
+    );
   }
 }
 

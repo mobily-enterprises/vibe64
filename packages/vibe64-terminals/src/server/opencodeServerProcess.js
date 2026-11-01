@@ -394,9 +394,9 @@ async function createOpenCodeServerProcess({
     }),
     connections: [...(toText(modelProviderId) || String(apiKey) ? [{ apiKey, modelProviderId }] : []),
       ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({
-        providerId: toText(connection?.modelProviderId),
-        apiKey: String(connection?.apiKey || "")
-      })),
+      providerId: toText(connection?.modelProviderId),
+      apiKey: String(connection?.apiKey || "")
+    })),
     execution: createVibe64ConversationExecution({
       commandRunner: request => commandRunner({
         ...request,

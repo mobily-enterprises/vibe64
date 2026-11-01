@@ -133,8 +133,11 @@ function createTemporaryConversationTurns({
   const nativeContext = (ctx) => ({ ...ctx, runtime: ctx.conversationContext.runtime });
   async function nativeState(sessionId, ctx, messageId) {
     const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
-    return record.providerConversationId ? requireSuccess(await sessionAgent.readConversation(sessionId,
-      chatRecords.providerInput(record, { ...(messageId ? { messageId } : {}) }), nativeContext(ctx))) : { status: "ready" };
+    return record.providerConversationId ? requireSuccess(await sessionAgent.readConversation(
+      sessionId,
+      chatRecords.providerInput(record, { ...(messageId ? { messageId } : {}) }),
+      nativeContext(ctx)
+    )) : { status: "ready" };
   }
   const routingAgent = Object.freeze({
     listCapabilities: (input, ctx) => sessionAgent.listCapabilities(input, nativeContext(ctx)),
@@ -186,7 +189,9 @@ function createTemporaryConversationTurns({
         input,
         operations: sessionAgent,
         inputFor: chatRecords.providerInput,
-        get context() { return chatRecords.selectedContext(nativeContext(ctx), record); }
+        get context() {
+          return chatRecords.selectedContext(nativeContext(ctx), record);
+        }
       });
     }
   });
@@ -205,7 +210,8 @@ function createTemporaryConversationTurns({
     const metadata = selected.session.metadata;
     const store = ctx.runtime.store;
     const scope = { sessionId: ctx.session.sessionId, conversationId };
-    const scopedStore = { ...store,
+    const scopedStore = {
+      ...store,
       readMetadataValue: async (_id, key) => (await chatRecords.recordFor(ctx, conversationId)).routingMetadata?.[key],
       /**
        * Completion recovery can share the selection update's outer write lease.
@@ -263,18 +269,29 @@ function createTemporaryConversationTurns({
     return context;
   }
 
-  const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, logger, publish: publishSessionChanged,
+  const routing = createAssistantRouting({
+    systemRoot,
+    allowAuto: false,
+    agent: routingAgent,
+    logger,
+    publish: publishSessionChanged,
     /**
      * A send waits behind a sibling chat's slow assistant startup, as Main does,
      * instead of refusing after the shorter default wait.
      */
     exclusive: async (id, options, operation) => {
-      const result = await write(id, { ...options, lockWaitMs: options.lockWaitMs ?? routingWaitMs },
-        async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
+      const result = await write(
+        id,
+        { ...options, lockWaitMs: options.lockWaitMs ?? routingWaitMs },
+        async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true }))
+      );
       return throwIfAgentWriteBusy(result);
     },
-    open: async (id, options) => routingContext(await readSessionContext(id, options), options.conversationId,
-      { cleanup: options.routingCleanup === true }),
+    open: async (id, options) => routingContext(
+      await readSessionContext(id, options),
+      options.conversationId,
+      { cleanup: options.routingCleanup === true }
+    ),
     /**
      * Stop's interrupt of this chat's native turn.
      */
@@ -287,13 +304,15 @@ function createTemporaryConversationTurns({
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
-        throw Object.assign(new Error(
-          "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."
-        ),
+        throw Object.assign(
+          new Error(
+            "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."
+          ),
           {
-          code: "vibe64_codex_history_unsupported",
-          statusCode: 409
-        });
+            code: "vibe64_codex_history_unsupported",
+            statusCode: 409
+          }
+        );
       }
       if (record.assistantSelection.engineId !== selection.engineId) {
         await conversationRuntime.preparePersistentConversationChangeover({
@@ -441,15 +460,15 @@ function createTemporaryConversationTurns({
               }
             }
           }, {
-              ...ctx,
-              conversationId: record.conversationId
-            }, { recovered: true }).catch((error) => logOperationalEvent(logger, "warn", {
-              component: "vibe64.temporary_conversation",
-              event: "vibe64.temporary_conversation.recovered_turn_failed",
-              sessionId: sessionId,
-              code: error?.code,
-              error: error?.message
-            }, "A recovered temporary chat turn could not be routed; the next read retries it."));
+            ...ctx,
+            conversationId: record.conversationId
+          }, { recovered: true }).catch((error) => logOperationalEvent(logger, "warn", {
+            component: "vibe64.temporary_conversation",
+            event: "vibe64.temporary_conversation.recovered_turn_failed",
+            sessionId: sessionId,
+            code: error?.code,
+            error: error?.message
+          }, "A recovered temporary chat turn could not be routed; the next read retries it."));
         }
         const page = readPage ? await readPage() : null;
         return {
@@ -459,7 +478,8 @@ function createTemporaryConversationTurns({
           outcome,
           ...(includeAccess ? {
             canSteer: ["starting", "inProgress"].includes(response.status)
-              ? (await sessionAgent.assistantAccess(sessionId, ctx)).canUse : null } : {}),
+              ? (await sessionAgent.assistantAccess(sessionId, ctx)).canUse : null
+          } : {}),
           conversationId: record.conversationId,
           routingMetadata: { ...record.routingMetadata, assistant_routing: ctx.session.metadata.assistant_routing },
           messages,
@@ -529,7 +549,9 @@ function createTemporaryConversationTurns({
         return {
           input: prepared,
           receipt,
-          get presentation() { return presentation(input.presentation); }
+          get presentation() {
+            return presentation(input.presentation);
+          }
         };
       }
     }

@@ -7,7 +7,11 @@ import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 function parsed(raw, label) {
   let value;
-  try { value = JSON.parse(raw); } catch { throw new Error(`Saved ${label} is unreadable. Inspect it before upgrading.`); }
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error(`Saved ${label} is unreadable. Inspect it before upgrading.`);
+  }
   if (!isRecord(value)) throw new Error(`Saved ${label} must be an object.`);
   return value;
 }
@@ -63,12 +67,12 @@ function teamSetupSessionChanges({ metadata = {}, conversations = [], renewal })
     metadata: changedValues(metadata),
     conversations: conversations.map((record) => !record.routingMetadata ? record
       : {
-        ...record,
-        routingMetadata: {
-          ...record.routingMetadata,
-          ...changedValues(record.routingMetadata, record.recoveryOperation === "update")
-        }
-      })
+          ...record,
+          routingMetadata: {
+            ...record.routingMetadata,
+            ...changedValues(record.routingMetadata, record.recoveryOperation === "update")
+          }
+        })
   };
   const successor = renewal?.successor?.assistantRouting;
   if (isRecord(successor) && Object.hasOwn(successor, "workflowEngineId")) {

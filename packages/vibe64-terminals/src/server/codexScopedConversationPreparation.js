@@ -215,11 +215,11 @@ function createCodexScopedConversationPreparation({
         return (helperTurn
           ? codexAppServerHelperRuntimeOptionsForSession
           : codexAppServerRuntimeOptionsForSession)(session, {
-            runtime,
-            executionRoot,
-            toolHomeSource,
-            workdir
-          });
+          runtime,
+          executionRoot,
+          toolHomeSource,
+          workdir
+        });
       },
       async project(provider, providerOptions, helperRestore) {
         const agentSettings = isRecord(input.agentSettings) ? input.agentSettings : {};
@@ -328,7 +328,9 @@ function createCodexScopedConversationPreparation({
         threadId: conversationId
       }),
       authorized: {
-        get turnSettings() { return codexAppServerTurnSettings({ agentSettings: context.agentSettings, cwd: context.workdir }); }
+        get turnSettings() {
+          return codexAppServerTurnSettings({ agentSettings: context.agentSettings, cwd: context.workdir });
+        }
       },
       readOnly: Boolean(context.assistantScope),
       actorMetadata: context.actorMetadata,
@@ -336,8 +338,13 @@ function createCodexScopedConversationPreparation({
         if (["live_progress", "thinking"].includes(classification.kind)) {
           appendCodexAppServerEphemeralProgress(current, classification);
         }
-        forwardEvent({ type: "notification", classification, threadId: conversationId,
-          turnId: classification.turnId, scopeId: context.assistantScope?.id || "" });
+        forwardEvent({
+          type: "notification",
+          classification,
+          threadId: conversationId,
+          turnId: classification.turnId,
+          scopeId: context.assistantScope?.id || ""
+        });
       },
       projectResult(result) {
         if (executionProfile) {
@@ -360,7 +367,9 @@ function createCodexScopedConversationPreparation({
         }
         return undefined;
       },
-      get prompt() { return prompt; },
+      get prompt() {
+        return prompt;
+      },
       execution(context) {
         const executionProfile = isRecord(input.executionProfile) ? input.executionProfile : null;
         return {

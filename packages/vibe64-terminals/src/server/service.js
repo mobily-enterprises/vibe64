@@ -247,8 +247,12 @@ function createService({
     logger,
     agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
-      const result = await sessionAccess.runMainAgentWrite(sessionId, options, operation,
-        { operation: "assistant-routing", waitMs: options.lockWaitMs ?? AGENT_WRITE_WAIT_MS });
+      const result = await sessionAccess.runMainAgentWrite(
+        sessionId,
+        options,
+        operation,
+        { operation: "assistant-routing", waitMs: options.lockWaitMs ?? AGENT_WRITE_WAIT_MS }
+      );
       return throwIfAgentWriteBusy(result);
     },
     publish: publishAgentSessionChanged,

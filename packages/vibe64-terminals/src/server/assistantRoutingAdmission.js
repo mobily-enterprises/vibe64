@@ -94,8 +94,10 @@ function createAssistantRoutingAdmission({
         error: error?.message
       }, "Earlier cancels' cleanup failed; this message is still admitted."));
       if ((await readCancelled(context.runtime.store, sessionId)).some(entry => entry.messageId === input.messageId)) {
-        throw Object.assign(failure("This message was cancelled. Send it again as a new message.", "vibe64_assistant_message_cancelled"),
-          { delivery: "not-sent" });
+        throw Object.assign(
+          failure("This message was cancelled. Send it again as a new message.", "vibe64_assistant_message_cancelled"),
+          { delivery: "not-sent" }
+        );
       }
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
         (options.purpose || explicitDeslop ? { mode: options.purpose || "senior", review: false } : null);
@@ -165,8 +167,9 @@ function createAssistantRoutingAdmission({
         if (state.input.message !== input.message) {
           throw failure("A retry must keep the original message. Cancel it to send an edited request.");
         }
-        try { direct = await delivery.deliver(sessionId, context, state); }
-        catch (error) {
+        try {
+          direct = await delivery.deliver(sessionId, context, state);
+        } catch (error) {
           state.error = error.message;
           await records.save(context, state);
           throw error;
@@ -190,8 +193,10 @@ function createAssistantRoutingAdmission({
       }
       if (input.submissionKind === "steer") {
         const completed = ["complete", "completed"].includes(native?.turn?.runState || native?.turn?.state || native?.turn?.status);
-        throw Object.assign(failure("That turn has finished. Send this as a new request.",
-          completed ? "conversation_steer_turn_finished" : "conversation_not_steerable"), { delivery: "not-sent" });
+        throw Object.assign(failure(
+          "That turn has finished. Send this as a new request.",
+          completed ? "conversation_steer_turn_finished" : "conversation_not_steerable"
+        ), { delivery: "not-sent" });
       }
       if (routingState.running.has(key)) {
         throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
@@ -266,7 +271,8 @@ function createAssistantRoutingAdmission({
             ...(input.turnMetadata?.projectMessage || input.turnMetadata?.source || input.turnMetadata?.sender ? {
               turnMetadata: Object.fromEntries(
                 ["projectMessage", "source", "sender"].filter(name => input.turnMetadata[name])
-                  .map(name => [name, input.turnMetadata[name]]))
+                  .map(name => [name, input.turnMetadata[name]])
+              )
             } : {})
           },
           mode,

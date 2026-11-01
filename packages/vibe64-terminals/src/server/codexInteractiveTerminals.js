@@ -114,9 +114,13 @@ function createCodexInteractiveTerminals({
     }
     const runtime = options.runtime || await createRuntimeForSession();
     const session = options.session || await runtime.getSession(sessionId);
-    return codexAppServerRunOwner.runtimeForVisibleTerminal(sessionId, session, options,
+    return codexAppServerRunOwner.runtimeForVisibleTerminal(
+      sessionId,
+      session,
+      options,
       codexAppServerManagedThreadIdentity(session, options),
-      () => codexAppServerRuntimeOptionsForSession(session, { ...options, runtime }));
+      () => codexAppServerRuntimeOptionsForSession(session, { ...options, runtime })
+    );
   }
 
   async function startCodexTerminalSession(sessionId) {

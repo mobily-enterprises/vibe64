@@ -121,8 +121,10 @@ function createClaudeConversationAccounts({
     }
     const account = await accountStatus(context);
     if (account.error) {
-      throw claudeConversationError(`Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
-        "vibe64_claude_account_status_failed");
+      throw claudeConversationError(
+        `Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
+        "vibe64_claude_account_status_failed"
+      );
     }
     const email = toText(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
@@ -139,7 +141,9 @@ function createClaudeConversationAccounts({
     return {
       identity: accountIdentity(entry.context),
       allowAccountChange: entry.main === true || !entry.context.assistantScope,
-      get providerId() { return entry.context.selection.modelProviderId; },
+      get providerId() {
+        return entry.context.selection.modelProviderId;
+      },
       changedCode: "vibe64_claude_account_changed"
     };
   }

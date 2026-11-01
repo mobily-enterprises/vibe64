@@ -67,10 +67,10 @@ function createServiceAgentConversations({
       const result = await manageWorkPlan(context, restoring
         ? { operation: "reopen", archiveId: input.archiveId }
         : {
-          operation: "archive",
-          expectedRevision: input.expectedRevision,
-          expectedProgressRevision: input.expectedProgressRevision
-        }, "user");
+            operation: "archive",
+            expectedRevision: input.expectedRevision,
+            expectedProgressRevision: input.expectedProgressRevision
+          }, "user");
       if (restoring) result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
       await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
       return { ok: true, sessionId, ...result };
@@ -171,16 +171,22 @@ function createServiceAgentConversations({
         beforeWork: options.beforeArchiveWork
       });
     }
-    return sessionAccess.runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) => retire(session, false),
-      { operation: "retire-native-history" });
+    return sessionAccess.runMainAgentWrite(
+      sessionId,
+      { ...options, runtime },
+      ({ session }) => retire(session, false),
+      { operation: "retire-native-history" }
+    );
   }
 
   function replaceAgentConversation(sessionId, input = {}, options = {}) {
     return sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
-      const fail = (message) => { throw Object.assign(new Error(message), {
-        code: "vibe64_conversation_replacement_unavailable",
-        statusCode: 409
-      }); };
+      const fail = (message) => {
+        throw Object.assign(new Error(message), {
+          code: "vibe64_conversation_replacement_unavailable",
+          statusCode: 409
+        });
+      };
       if (context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session) ||
           sessionHasActiveAgentRun(context.session) || workspaceSetup.isRunning(sessionId)) {
         fail("Native context can be replaced only in an idle, open session.");

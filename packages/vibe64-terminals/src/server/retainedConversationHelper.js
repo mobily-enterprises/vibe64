@@ -37,9 +37,9 @@ function createRetainedConversationHelper({
     const detail = String(reason || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
     return Object.assign(new Error(`The ${scopePrefix} Helper could not be closed${detail ? `: ${detail}` : ""}. ` +
       `Retry before starting another ${scopePrefix}.`, cause ? { cause } : undefined), {
-        code: "vibe64_retained_helper_cleanup_failed",
-        statusCode: 409
-      });
+      code: "vibe64_retained_helper_cleanup_failed",
+      statusCode: 409
+    });
   }
   async function cleanup(context) {
     const helper = await receipt.read();
@@ -47,8 +47,8 @@ function createRetainedConversationHelper({
     const helperRoot = path.join(root, helper.scope.id);
     if (!scopePattern.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") ||
         helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw cleanupFailure(
-          `its saved ${scopePrefix} receipt has invalid cleanup paths`
-        );
+      `its saved ${scopePrefix} receipt has invalid cleanup paths`
+    );
     const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId,
       cleanupExecutionId: helper.executionId,
@@ -66,13 +66,15 @@ function createRetainedConversationHelper({
 
   async function requireHelper(context, workloadId) {
     const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId }, { vibe64User: authenticatedVibe64User(context) });
-    if (!decision.available) throw Object.assign(new Error(
-      `${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`
-    ),
+    if (!decision.available) throw Object.assign(
+      new Error(
+        `${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`
+      ),
       {
-      code: "vibe64_colleague_helper_unavailable",
-      statusCode: 409
-    });
+        code: "vibe64_colleague_helper_unavailable",
+        statusCode: 409
+      }
+    );
     return decision;
   }
 
@@ -134,9 +136,15 @@ function createRetainedConversationHelper({
         throw new Error(response?.error || "The Helper did not finish.");
       }
       responseText = response.text;
-    } catch (error) { failure = error; }
+    } catch (error) {
+      failure = error;
+    }
     // A failed run keeps its own reason; its cleanup failure is the cause.
-    try { await cleanup(context); } catch (error) { if (failure) failure.cause ??= error; else failure = error; }
+    try {
+      await cleanup(context);
+    } catch (error) {
+      if (failure) failure.cause ??= error; else failure = error;
+    }
     if (failure) throw failure;
     return responseText;
   }

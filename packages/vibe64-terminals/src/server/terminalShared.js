@@ -51,7 +51,7 @@ function codexSessionWorktreeUnavailableFailure({
       ? "Session clone was removed. Recover this session before continuing with Codex."
       : closingReason
         ? `Session is ${closingReason}. Codex cannot start while the worktree is being archived.`
-      : `Session clone directory does not exist: ${workdir}`,
+        : `Session clone directory does not exist: ${workdir}`,
     workdir: String(workdir || "").trim()
   });
 }

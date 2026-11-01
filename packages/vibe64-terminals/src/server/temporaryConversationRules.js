@@ -97,8 +97,7 @@ async function recentChatContext(store, sessionId) {
   const turns = await store.readConversationLog(sessionId, { presentation: true });
   const selected = turns.flatMap(turn => (turn.messages || []).filter(message =>
     ["user", "assistant", "commentary"].includes(message.role) && message.text?.trim() &&
-    !assistantGoalManagementMessage(message, turn) && !(message.role === "user" && turn.metadata?.projectMessage)
-  ).map((message, index) => ({
+    !assistantGoalManagementMessage(message, turn) && !(message.role === "user" && turn.metadata?.projectMessage)).map((message, index) => ({
     id: `main-context/${turn.turnId}/${index}`,
     role: message.role,
     text: visibleContextText(message),
@@ -145,10 +144,12 @@ function requireSuccess(result) {
   return result;
 }
 
-const teamTemporaryModesRefusal = () => Object.assign(new Error(
-  "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."
-),
-  { code: "vibe64_assistant_owner_required", statusCode: 403 });
+const teamTemporaryModesRefusal = () => Object.assign(
+  new Error(
+    "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."
+  ),
+  { code: "vibe64_assistant_owner_required", statusCode: 403 }
+);
 
 export {
   attemptedChangeover,

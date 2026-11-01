@@ -47,7 +47,9 @@ async function backUpClonedBranch(backupPath, label, record) {
     await writeJsonFileAtomic(backupPath, record, { directoryMode: 0o700, fileMode: 0o600 });
   }
   let saved = null;
-  try { saved = JSON.parse(await readFile(backupPath, "utf8")); } catch { /* Refused below. */ }
+  try {
+    saved = JSON.parse(await readFile(backupPath, "utf8"));
+  } catch { /* Refused below. */ }
   if (!isDeepStrictEqual(saved, record)) {
     throw new Error(`The backup for ${label} differs from its local copy of ${record.branch}; inspect ${backupPath} before upgrading.`);
   }

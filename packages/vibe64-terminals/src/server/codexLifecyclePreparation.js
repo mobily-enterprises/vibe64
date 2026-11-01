@@ -97,7 +97,9 @@ function createCodexLifecyclePreparation({
     providerOptions.routingModelProviderId = binding.modelProviderId;
     return {
       providerContext: codexAppServerSessionProviderContext(normalizeText(sessionId), providerOptions),
-      get toolHomeSource() { return providerOptions.toolHomeSource; }
+      get toolHomeSource() {
+        return providerOptions.toolHomeSource;
+      }
     };
   }
 
@@ -184,8 +186,12 @@ function createCodexLifecyclePreparation({
       sessionKey,
       restricted: Boolean(renewalCleanup),
       preserveProcessExitProof,
-      get changeover() { return options.changeover; },
-      get requireStopped() { return Boolean(renewalCleanup || options.changeover); },
+      get changeover() {
+        return options.changeover;
+      },
+      get requireStopped() {
+        return Boolean(renewalCleanup || options.changeover);
+      },
       async assertPublicAccess() {
         const publicRuntime = await createRuntimeForSession();
         await publicRuntime.getSession(normalizedSessionId);
@@ -201,21 +207,35 @@ function createCodexLifecyclePreparation({
         }
         let providerOptions = null;
         return {
-          get helpers() { return prepareCodexAppServerHelperRestoration({ runtime, session }); },
-          get projectRuntimeRoot() { return runtime.stateRoot; },
+          get helpers() {
+            return prepareCodexAppServerHelperRestoration({ runtime, session });
+          },
+          get projectRuntimeRoot() {
+            return runtime.stateRoot;
+          },
           get session() {
             providerOptions = codexAppServerRuntimeOptionsFromSessionMetadata(session);
             return {
-              get exists() { return Boolean(session); },
-              get providerOptions() { return providerOptions; },
-              set providerOptions(value) { providerOptions = value; },
-              get threadId() { return codexThreadIdForWorkdir(session, workdir); },
+              get exists() {
+                return Boolean(session);
+              },
+              get providerOptions() {
+                return providerOptions;
+              },
+              set providerOptions(value) {
+                providerOptions = value;
+              },
+              get threadId() {
+                return codexThreadIdForWorkdir(session, workdir);
+              },
               get unsubscribeParameters() {
                 const resolvedOptions = providerOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
                 const threadId = codexThreadIdForWorkdir(session, workdir);
                 return { providerOptions: resolvedOptions, workdir, threadId };
               },
-              get hasRuntime() { return sessionHasCodexAppServerRuntime(session); },
+              get hasRuntime() {
+                return sessionHasCodexAppServerRuntime(session);
+              },
               get persistedRuntimeHost() {
                 return codexAppServerPersistedRuntimeHost(session, providerOptions || {}, {
                   preserveProcessExitProof,
@@ -245,9 +265,9 @@ function createCodexLifecyclePreparation({
             const executionRoot = renewalCleanup
               ? sessionSourcePath(session)
               : await terminalSessionSourceRootForSession(
-                  project,
-                  normalizedSessionId
-                );
+                project,
+                normalizedSessionId
+              );
             if (executionRoot && !options.changeover && renewalCleanup?.kind !== "predecessor") {
               await cleanupCodexAttachments(executionRoot, normalizedSessionId, "", {
                 env: codexAttachmentEnv()
@@ -262,7 +282,9 @@ function createCodexLifecyclePreparation({
   async function prepareCodexProjectCleanup() {
     const runtime = await createRuntimeForSession();
     return {
-      get helpers() { return prepareCodexAppServerHelperRestoration({ runtime }); }
+      get helpers() {
+        return prepareCodexAppServerHelperRestoration({ runtime });
+      }
     };
   }
 

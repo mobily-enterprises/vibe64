@@ -297,8 +297,12 @@ function createCodexSessionRuntimeHost({
       workdir = ""
     } = options;
     return {
-      get executionRoot() { return normalizeText(executionRoot) || sessionSourcePath(session); },
-      get workdir() { return normalizeText(workdir) || sessionSourcePath(session); }
+      get executionRoot() {
+        return normalizeText(executionRoot) || sessionSourcePath(session);
+      },
+      get workdir() {
+        return normalizeText(workdir) || sessionSourcePath(session);
+      }
     };
   }
 
@@ -326,22 +330,22 @@ function createCodexSessionRuntimeHost({
     const baseTerminalEnv = suppliedTerminalEnv
       ? terminalEnv
       : learningRoot ? {} : await loadProjectExecutionEnv({
-          project,
-          runCommand,
-          runtime: effectiveRuntime,
-          session,
-          target: "codex"
-        });
+        project,
+        runCommand,
+        runtime: effectiveRuntime,
+        session,
+        target: "codex"
+      });
     const effectiveTerminalEnv = suppliedTerminalEnv || learningRoot
       ? baseTerminalEnv
       : {
-        ...baseTerminalEnv,
-        ...await codexManagedCommandEnv({
-          runtime: effectiveRuntime,
-          session,
-          sessionId: normalizeText(session.sessionId)
-        })
-      };
+          ...baseTerminalEnv,
+          ...await codexManagedCommandEnv({
+            runtime: effectiveRuntime,
+            session,
+            sessionId: normalizeText(session.sessionId)
+          })
+        };
     const selectedHome = await codexToolHomeResult(session);
     if (selectedHome.ok === false) throw new Error(selectedHome.error);
     toolHomeSource = selectedHome.toolHomeSource;
@@ -427,5 +431,7 @@ function createCodexSessionRuntimeHost({
   });
 }
 
-export { createCodexRuntimeHost, createCodexSessionRuntimeHost, codexAgentSettingsFromSession, codexSelectedModelProviderId,
-  codexThreadModelProvider };
+export {
+  createCodexRuntimeHost, createCodexSessionRuntimeHost, codexAgentSettingsFromSession, codexSelectedModelProviderId,
+  codexThreadModelProvider
+};

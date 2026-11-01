@@ -352,10 +352,10 @@ async function commitAuthorOptions({
     return answered
       ? { ok: true, options: answered }
       : commandFailure(
-          "Vibe64 could not read your Git name and email just now, so nothing was changed. Try again.",
-          "vibe64_session_git_author_unavailable",
-          { executionId: normalizeText(result?.execution?.id) || null }
-        );
+        "Vibe64 could not read your Git name and email just now, so nothing was changed. Try again.",
+        "vibe64_session_git_author_unavailable",
+        { executionId: normalizeText(result?.execution?.id) || null }
+      );
   }
   const values = {};
   for (const line of String(unset ? "" : result.stdout || "").split("\n")) {

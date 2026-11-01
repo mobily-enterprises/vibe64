@@ -160,14 +160,16 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
 function connectionChangeBusy(engineId = "opencode", sessionIds = []) {
   const label = engineId === "claude" ? "Claude Code" : "OpenCode";
   const where = sessionIds.length ? ` open in ${sessionIds.length === 1 ? "session" : "sessions"} ${sessionIds.join(", ")}` : "";
-  return Object.assign(new Error(
-    `Close ${label} native terminals${where}, then retry this connection change. The saved connection has not changed.`
-  ),
+  return Object.assign(
+    new Error(
+      `Close ${label} native terminals${where}, then retry this connection change. The saved connection has not changed.`
+    ),
     {
-    code: `vibe64_${engineId}_connection_in_use`,
-    statusCode: 409,
-    ...(sessionIds.length ? { details: { sessionIds } } : {})
-  });
+      code: `vibe64_${engineId}_connection_in_use`,
+      statusCode: 409,
+      ...(sessionIds.length ? { details: { sessionIds } } : {})
+    }
+  );
 }
 
 function bindingKey(sessionId, options = {}) {

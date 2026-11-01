@@ -64,8 +64,8 @@ function previewPublicOriginForLaunch({
   const configuredWorkspace = String(env?.[VIBE64_WORKSPACE_ENV] || "").trim().toLowerCase();
   const studioHostMatch = hostname
     ? studioHostMatchForPreview(hostname, {
-        publicUserDomain: configuredUserDomain
-      })
+      publicUserDomain: configuredUserDomain
+    })
     : configuredUserDomain && validPreviewWorkspace(configuredWorkspace)
       ? {
           baseDomain: configuredUserDomain,

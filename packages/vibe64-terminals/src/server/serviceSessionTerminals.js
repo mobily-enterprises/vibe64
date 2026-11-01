@@ -504,9 +504,13 @@ function createServiceSessionTerminals({
     const admissionFailure = sessionTerminalAdmissionFailure(sessionId, "agent");
     if (admissionFailure) return admissionFailure;
     if (input.attachmentIds?.length) {
-      return sessionAccess.runMainAgentWrite(sessionId, options, (context) =>
-        sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, context),
-      { operation: "attach-agent-terminal-files", waitMs: AGENT_WRITE_WAIT_MS });
+      return sessionAccess.runMainAgentWrite(
+        sessionId,
+        options,
+        (context) =>
+          sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, context),
+        { operation: "attach-agent-terminal-files", waitMs: AGENT_WRITE_WAIT_MS }
+      );
     }
     return sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
   }

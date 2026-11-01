@@ -182,7 +182,9 @@ function createOutputTargetPreviewTests({
   async function retryPreviewTestCleanup(sessionId) {
     const testRun = state.previewTestRuns.get(sessionId);
     if (!testRun?.finish) return { ok: false, error: "The browser test has not finished.", previewRecoveryRequired: true };
-    testRun.finishing ||= testRun.finish(true).finally(() => { testRun.finishing = null; });
+    testRun.finishing ||= testRun.finish(true).finally(() => {
+      testRun.finishing = null;
+    });
     return testRun.finishing;
   }
 

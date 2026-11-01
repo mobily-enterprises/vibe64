@@ -100,71 +100,76 @@ function createCodexHelperPreparation({
         "Vibe64 project runtime state is unavailable for Codex helper ownership."
       );
     }
-    return { projectRuntimeRoot, context: {
-      get sessionId() { return sessionId || session?.sessionId; },
-      async prepareRecord(record, ledger) {
-        const currentSession = normalizeText(session?.sessionId) === record.sessionId
-          ? session
-          : await effectiveRuntime.getSessionWithoutSource(record.sessionId);
-        return prepareCodexAppServerHelperThreadRestore(record, {
-          ledger,
-          runtime: effectiveRuntime,
-          session: currentSession
-        });
-      },
-      async publish({ records, failed, retiredBySession, normalizedSessionId }) {
-        const sessionIds = new Set(records.map((record) => record.sessionId));
-        if (normalizedSessionId) {
-          sessionIds.add(normalizedSessionId);
-        }
-        // Each session's notice is written on its own: one refused notice does not
-        // hide the others, and an archived or missing session has no one to tell.
-        const refused = [];
-        for (const id of sessionIds) {
-          const failures = failed.filter((failure) => !failure.sessionId || failure.sessionId === id);
-          const retired = retiredBySession.get(id) || [];
-          if (!failures.length && !retired.length) {
-            continue;
+    return {
+      projectRuntimeRoot,
+      context: {
+        get sessionId() {
+          return sessionId || session?.sessionId;
+        },
+        async prepareRecord(record, ledger) {
+          const currentSession = normalizeText(session?.sessionId) === record.sessionId
+            ? session
+            : await effectiveRuntime.getSessionWithoutSource(record.sessionId);
+          return prepareCodexAppServerHelperThreadRestore(record, {
+            ledger,
+            runtime: effectiveRuntime,
+            session: currentSession
+          });
+        },
+        async publish({ records, failed, retiredBySession, normalizedSessionId }) {
+          const sessionIds = new Set(records.map((record) => record.sessionId));
+          if (normalizedSessionId) {
+            sessionIds.add(normalizedSessionId);
           }
-          const status = failures.length ? "failed" : "ready";
-          const message = failures.length
-            ? `${failures.length} helper cleanup record(s) still need attention: ${failures[0].error}`
-            : `Cleaned up ${retired.length} stale helper ownership record(s).`;
-          try {
-            await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-helper-cleanup", {
-              event: {
-                kind: "cleanup-reconciled",
-                message,
-                status,
-                failed: failures,
-                retiredThreadIds: retired
-              },
-              patch: {
-                label: "Low-cost assistant cleanup",
-                message,
-                error: failures[0]?.error || "",
-                code: failures[0]?.code || "",
-                details: { failed: failures },
-                status,
-                retryable: failures.some((failure) => failure.retryable !== false)
+          // Each session's notice is written on its own: one refused notice does not
+          // hide the others, and an archived or missing session has no one to tell.
+          const refused = [];
+          for (const id of sessionIds) {
+            const failures = failed.filter((failure) => !failure.sessionId || failure.sessionId === id);
+            const retired = retiredBySession.get(id) || [];
+            if (!failures.length && !retired.length) {
+              continue;
+            }
+            const status = failures.length ? "failed" : "ready";
+            const message = failures.length
+              ? `${failures.length} helper cleanup record(s) still need attention: ${failures[0].error}`
+              : `Cleaned up ${retired.length} stale helper ownership record(s).`;
+            try {
+              await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-helper-cleanup", {
+                event: {
+                  kind: "cleanup-reconciled",
+                  message,
+                  status,
+                  failed: failures,
+                  retiredThreadIds: retired
+                },
+                patch: {
+                  label: "Low-cost assistant cleanup",
+                  message,
+                  error: failures[0]?.error || "",
+                  code: failures[0]?.code || "",
+                  details: { failed: failures },
+                  status,
+                  retryable: failures.some((failure) => failure.retryable !== false)
+                }
+              });
+            } catch (error) {
+              if (!["vibe64_session_archived", "vibe64_session_not_found"].includes(error?.code)) {
+                refused.push({ error, sessionId: id });
               }
-            });
-          } catch (error) {
-            if (!["vibe64_session_archived", "vibe64_session_not_found"].includes(error?.code)) {
-              refused.push({ error, sessionId: id });
             }
           }
-        }
-        if (refused.length) {
-          const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
-            .map(({ error: reason, sessionId: refusedId }) => `session ${refusedId} (${normalizeText(reason?.message || reason)})`)
-            .join("; ")}.`);
-          error.code = normalizeText(refused[0].error?.code);
-          error.retryable = true;
-          throw error;
+          if (refused.length) {
+            const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
+              .map(({ error: reason, sessionId: refusedId }) => `session ${refusedId} (${normalizeText(reason?.message || reason)})`)
+              .join("; ")}.`);
+            error.code = normalizeText(refused[0].error?.code);
+            error.retryable = true;
+            throw error;
+          }
         }
       }
-    } };
+    };
   }
 
   function prepareCodexAppServerHelperInventory({
@@ -198,7 +203,9 @@ function createCodexHelperPreparation({
         return {
           providerOptions,
           providerKey,
-          get sessionContext() { return codexAppServerSessionProviderContext(sessionId, providerOptions); }
+          get sessionContext() {
+            return codexAppServerSessionProviderContext(sessionId, providerOptions);
+          }
         };
       }
     };

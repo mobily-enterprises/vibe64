@@ -179,7 +179,10 @@ function createAssistantRoutingDelivery({
     records.mark(state.messageId, "selection-saved");
     const { onPromptSending = doNothing } = context;
     const result = await dispatch(sessionId, {
-      ...(followup ? {} : state.input), messageId, message, displayMessage,
+      ...(followup ? {} : state.input),
+      messageId,
+      message,
+      displayMessage,
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),

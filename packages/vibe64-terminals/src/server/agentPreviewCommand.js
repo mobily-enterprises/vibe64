@@ -279,12 +279,8 @@ async function prepareAgentPreviewCommand({
   const playwrightModulePath = packRoot
     ? path.join(packRoot, "playwright", "runtime", "lib", "node_modules", "playwright")
     : "";
-  const browserSocketPath = unixCommandSocketPath(
-    path.join(normalizedWrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME), { env }
-  );
-  const controlSocketPath = unixCommandSocketPath(
-    path.join(normalizedWrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME), { env }
-  );
+  const browserSocketPath = unixCommandSocketPath(path.join(normalizedWrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME), { env });
+  const controlSocketPath = unixCommandSocketPath(path.join(normalizedWrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME), { env });
   await writeWrapper({
     agentPlaywrightSource: agentPlaywrightCommandSource({
       managedNodePath,

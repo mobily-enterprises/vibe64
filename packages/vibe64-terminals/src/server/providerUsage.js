@@ -111,7 +111,9 @@ function createProviderUsage({ resolveConnection, logger, fetchImpl = fetch }) {
       const usage = connection?.apiKey && cached?.apiKey === connection.apiKey
         ? cached.usage : { status: "unavailable", windows: [] };
       return { ...usage, engineId: selection.engineId, modelProviderId: selection.modelProviderId };
-    } catch { return { status: "unavailable", windows: [] }; }
+    } catch {
+      return { status: "unavailable", windows: [] };
+    }
   }
 
   function observe(scope, sessionId, event, onUpdated) {

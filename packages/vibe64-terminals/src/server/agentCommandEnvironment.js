@@ -225,13 +225,16 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   const projectDropZoneRoot = toText(filePaths?.projectDropZoneRoot);
   if (projectBackupsRoot || projectDropZoneRoot) await runtime.store.prepareProjectFileAreas();
   return {
-    env: Object.assign({},
+    env: Object.assign(
+      {},
       genesisParserEnvironment({ environment: env }),
       ...steps.map((step) => normalizeObject(step.result?.env)),
       dropZoneRoot ? {
-      VIBE64_DROP_ZONE: dropZoneRoot
-    } : {}, projectDropZoneRoot ? { VIBE64_PROJECT_DROP_ZONE: projectDropZoneRoot } : {},
-    projectBackupsRoot ? { VIBE64_PROJECT_BACKUPS: projectBackupsRoot } : {}),
+        VIBE64_DROP_ZONE: dropZoneRoot
+      } : {},
+      projectDropZoneRoot ? { VIBE64_PROJECT_DROP_ZONE: projectDropZoneRoot } : {},
+      projectBackupsRoot ? { VIBE64_PROJECT_BACKUPS: projectBackupsRoot } : {}
+    ),
     hostWrapperDir,
     ok: true,
     shimDirs: withGenesisCommandShim([hostWrapperDir])

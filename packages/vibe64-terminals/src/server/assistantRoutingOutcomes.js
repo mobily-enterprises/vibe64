@@ -51,8 +51,8 @@ function createAssistantRoutingOutcomes({
       if (!state || state.mode !== "auto" || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
           input.turnId !== state.turnId || input.stage !== state.stage) throw failure(
-            "The workflow outcome does not match the active request and turn."
-          );
+        "The workflow outcome does not match the active request and turn."
+      );
       await decisions.validateDecision(context, state, Boolean(state.followup));
       const native = await agent.sessionState(sessionId, context);
       if (!native?.turn?.active || native.turn.id && native.turn.id !== state.turnId) {
@@ -72,8 +72,8 @@ function createAssistantRoutingOutcomes({
       const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
           (input.expectedProgressRevision || null) !== plan.progressRevision)) throw failure(
-            "Read the complete current Plan and Progress before reporting this outcome."
-          );
+        "Read the complete current Plan and Progress before reporting this outcome."
+      );
       if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
           workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
         throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.");
@@ -137,7 +137,8 @@ function createAssistantRoutingOutcomes({
       // A final reply asking the person waits for their answer, whatever outcome
       // was reported. Their reply is a new request; nothing resumes this one.
       if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantMessageAwaitingUserReply(
-        await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })))) {
+        await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })
+      ))) {
         Object.assign(state, { status: "waiting", awaitingAnswer: true, error: "Waiting for your answer. Reply in chat to continue." });
         await records.save(context, state);
         return;
@@ -165,12 +166,13 @@ function createAssistantRoutingOutcomes({
         }
         if (plan) {
           let archived;
-          try { archived = await manageWorkPlan(context, {
-            operation: "archive",
-            expectedRevision: plan.revision,
-            expectedProgressRevision: plan.progressRevision || ""
-          }, "review"); }
-          catch (error) {
+          try {
+            archived = await manageWorkPlan(context, {
+              operation: "archive",
+              expectedRevision: plan.revision,
+              expectedProgressRevision: plan.progressRevision || ""
+            }, "review");
+          } catch (error) {
             state.status = "waiting";
             state.error = `Review completed, but the plan could not be archived: ${error.message}. Use Plan history recovery after inspecting the saved pair.`;
             await records.save(context, state);
@@ -225,8 +227,9 @@ function createAssistantRoutingOutcomes({
         await records.save(context, state);
         return;
       }
-      try { await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true); }
-      catch (error) {
+      try {
+        await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
+      } catch (error) {
         state.status = "waiting";
         state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
         state.error = error.message;
@@ -238,8 +241,11 @@ function createAssistantRoutingOutcomes({
     if (!completed) return;
     const { context, state } = completed;
     let note;
-    try { note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy }); }
-    catch (error) { note = `Automatic save didn't run: ${error.message}`; }
+    try {
+      note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy });
+    } catch (error) {
+      note = `Automatic save didn't run: ${error.message}`;
+    }
     if (note) await records.writeNotice(context, state, { messageId: `assistant-plan-saved:${state.turnId}`, text: note });
   }
 
@@ -252,8 +258,7 @@ function createAssistantRoutingOutcomes({
         try {
           await records.cleanupHelper(context, state);
           state.helper = null;
-        }
-        catch (error) {
+        } catch (error) {
           state.status = "waiting";
           state.error = error.message;
           await records.save(context, state);

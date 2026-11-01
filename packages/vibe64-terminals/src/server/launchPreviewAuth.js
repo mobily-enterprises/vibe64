@@ -94,12 +94,12 @@ function previewIdentityCapability({
     disabledReason: available
       ? ""
       : !previewReady
-        ? String(preview.message || "Run the preview before selecting an application identity.")
-        : identitySupported
-          ? identityTypes.length < 1
-            ? "This preview does not advertise a supported application user identifier."
-            : "Preview identity authorization is unavailable. Restart the preview."
-          : "This preview does not support application identity switching.",
+          ? String(preview.message || "Run the preview before selecting an application identity.")
+          : identitySupported
+            ? identityTypes.length < 1
+              ? "This preview does not advertise a supported application user identifier."
+              : "Preview identity authorization is unavailable. Restart the preview."
+            : "This preview does not support application identity switching.",
     identities,
     identityTypes,
     rejectedIdentities: configuredIdentities

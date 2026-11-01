@@ -46,8 +46,9 @@ async function upgradeCompletedDiscussionPlan(context) {
         const paths = store.paths(incident.sessionId);
         const planPath = path.join(paths.sessionRoot, "work-plan/plan.md");
         let plan;
-        try { plan = await readFile(planPath, "utf8"); }
-        catch (error) {
+        try {
+          plan = await readFile(planPath, "utf8");
+        } catch (error) {
           if (error.code === "ENOENT") continue;
           throw error;
         }
@@ -66,8 +67,10 @@ async function upgradeCompletedDiscussionPlan(context) {
           "warning",
           `${path.basename(projectRuntimeRoot)}: restoring the verified completed plan and its matching display snapshot; no conversation messages change.`
         );
-        updates.push({ filePath: planPath, original: plan, contents: result.plan },
-          { filePath: requestPath, original, contents: JSON.stringify(result.request) });
+        updates.push(
+          { filePath: planPath, original: plan, contents: result.plan },
+          { filePath: requestPath, original, contents: JSON.stringify(result.request) }
+        );
       }
       return updates;
     }

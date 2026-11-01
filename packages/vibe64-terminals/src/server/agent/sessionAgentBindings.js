@@ -83,8 +83,10 @@ function createSessionAgentBindings({ state }) {
   function goalProvider(sessionId, options) {
     return providerFor({
       ...options,
-      providerId: sessionAgentProviderId(options,
-        bindings.get(bindingKey(sessionId, options)) || state.defaultProviderId)
+      providerId: sessionAgentProviderId(
+        options,
+        bindings.get(bindingKey(sessionId, options)) || state.defaultProviderId
+      )
     });
   }
 

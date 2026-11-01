@@ -143,10 +143,12 @@ function createAgentPreviewCommandLine({
         }
         const undeclared = identities.filter((identity) => !identityTypes.includes(normalizeText(identity?.type)));
         if (undeclared.length) {
-          return commandFailure(identityTypes.length
-            ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
-            : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
-          "vibe64_agent_preview_identities_type_undeclared");
+          return commandFailure(
+            identityTypes.length
+              ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
+              : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
+            "vibe64_agent_preview_identities_type_undeclared"
+          );
         }
         result = await project.savePreviewApplicationIdentities({ identities, sessionId });
       } else {
@@ -222,9 +224,9 @@ function createAgentPreviewCommandLine({
         const output = parsed.json
           ? JSON.stringify({ targets }, null, 2)
           : targets.map((target) => {
-              const reason = target.disabledReason ? ` — ${target.disabledReason}` : "";
-              return `${target.id}: ${target.label} (${target.presentation})${reason}`;
-            }).join("\n");
+            const reason = target.disabledReason ? ` — ${target.disabledReason}` : "";
+            return `${target.id}: ${target.label} (${target.presentation})${reason}`;
+          }).join("\n");
         return finish({
           ok: true,
           exitCode: 0,

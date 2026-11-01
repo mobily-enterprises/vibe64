@@ -337,22 +337,22 @@ function createOutputTargetLaunchStart({
           outputResultsMarker = String(spec.metadata?.outputResultsMarker || "").trim();
           const previewPublicOrigin = webOutput
             ? previewPublicOriginForLaunch({
-                env,
-                publicHost: input.publicHost,
-                publicProtocol: input.publicProtocol,
-                sessionId
-              })
+              env,
+              publicHost: input.publicHost,
+              publicProtocol: input.publicProtocol,
+              sessionId
+            })
             : "";
           let launchReadyConfirmed = false;
           await closeStoppedLaunchTerminals(sessionId);
           const existingReusableTerminal = forceRestart
             ? null
             : reusableLaunchTerminal(sessionId, {
-                launchEnvHash,
-                outputTargetId: outputTarget.id,
-                namespace,
-                spec
-              });
+              launchEnvHash,
+              outputTargetId: outputTarget.id,
+              namespace,
+              spec
+            });
           await cleanupSupersededLaunchTerminals({
             launchPreviewProxies: state.launchPreviewProxies,
             namespace,

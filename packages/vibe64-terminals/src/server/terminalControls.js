@@ -34,8 +34,12 @@ function createTerminalControls({
   }
 
   async function writeAgentTerminalKey(sessionId, terminalSessionId, { key, ...input }) {
-    return terminalSessionControlSnapshot(await writeAgentInput(sessionId, terminalSessionId, terminalKeyInput(key),
-      { ...input, trackGitActor: true }));
+    return terminalSessionControlSnapshot(await writeAgentInput(
+      sessionId,
+      terminalSessionId,
+      terminalKeyInput(key),
+      { ...input, trackGitActor: true }
+    ));
   }
 
   async function readGlobalCodexTerminalControl(terminalSessionId) {
@@ -51,8 +55,11 @@ function createTerminalControls({
   }
 
   async function writeGlobalCodexTerminalKey(terminalSessionId, { key, ...input }) {
-    return terminalSessionControlSnapshot(await writeGlobalInput(terminalSessionId, terminalKeyInput(key),
-      { ...input, trackGitActor: true }));
+    return terminalSessionControlSnapshot(await writeGlobalInput(
+      terminalSessionId,
+      terminalKeyInput(key),
+      { ...input, trackGitActor: true }
+    ));
   }
 
   return Object.freeze({

@@ -33,9 +33,9 @@ async function recoverSessionWorkSave({
   const preparedRef = operationId ? preparedSaveRef(context, operationId) : "";
   const recordedProposedCommit = preparedRef
     ? await optionalGitOutput(runCommand, context, ["rev-parse", "--verify", `${preparedRef}^{commit}`], {
-        commandOptions,
-        project
-      })
+      commandOptions,
+      project
+    })
     : "";
   const proposedCommit = normalizeText(recovery.proposedCommit) || recordedProposedCommit;
   if (
@@ -51,25 +51,25 @@ async function recoverSessionWorkSave({
   const expectedCanonicalCommit = normalizeText(recovery.expectedCanonicalCommit) || (
     proposedCommit
       ? await optionalGitOutput(runCommand, context, ["rev-parse", "--verify", `${proposedCommit}^`], {
-          commandOptions,
-          project
-        })
+        commandOptions,
+        project
+      })
       : ""
   );
   const recordedCheckpointCommit = operationId
     ? await optionalGitOutput(runCommand, context, [
-        "rev-parse",
-        "--verify",
-        `${saveCheckpointRef(context, operationId)}^{commit}`
-      ], { commandOptions, project })
+      "rev-parse",
+      "--verify",
+      `${saveCheckpointRef(context, operationId)}^{commit}`
+    ], { commandOptions, project })
     : "";
   const checkpointCommit = normalizeText(recovery.checkpointCommit) || recordedCheckpointCommit;
   const checkpointTree = normalizeText(recovery.checkpointTree) || (
     checkpointCommit
       ? await optionalGitOutput(runCommand, context, ["rev-parse", "--verify", `${checkpointCommit}^{tree}`], {
-          commandOptions,
-          project
-        })
+        commandOptions,
+        project
+      })
       : ""
   );
   if (!operationId || !expectedCanonicalCommit || !proposedCommit || !checkpointCommit || !checkpointTree) {

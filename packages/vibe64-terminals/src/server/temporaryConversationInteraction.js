@@ -88,7 +88,8 @@ function createTemporaryConversationInteraction({
       });
     }
     return {
-      sessionId, namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
+      sessionId,
+      namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
       engine: record.assistantSelection.engineId,
       async read(context, query = { limit: 12 }) {
         const observed = requireSuccess(await chatLifecycle.readTemporaryConversation(sessionId, { conversationId }, {
@@ -254,8 +255,12 @@ function createTemporaryConversationInteraction({
       }
       if (fields.routingMetadata) {
         const preferences = assistantRoutingFromMetadata(fields.routingMetadata);
-        await routing.applyGoalSelection(sessionId, null, preferences,
-          await chatTurns.routingContext(ctx, record.conversationId));
+        await routing.applyGoalSelection(
+          sessionId,
+          null,
+          preferences,
+          await chatTurns.routingContext(ctx, record.conversationId)
+        );
       }
       if (Object.hasOwn(input, "attachmentIds")) {
         const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, {
@@ -290,9 +295,12 @@ function createTemporaryConversationInteraction({
       ["sessionId", "conversationId", "vibe64User", "assistantRouting", "agentSettings"].includes(key));
     if (!settingsOnly) return chatTurns.write(sessionId, options, update);
     const context = await readSessionContext(sessionId, options);
-    const result = await context.runtime.store.runSessionExclusive(sessionId,
-      `assistant-settings-${input.conversationId}`, () => update(context),
-      { operation: "temporary-assistant-settings", waitMs: 10_000 });
+    const result = await context.runtime.store.runSessionExclusive(
+      sessionId,
+      `assistant-settings-${input.conversationId}`,
+      () => update(context),
+      { operation: "temporary-assistant-settings", waitMs: 10_000 }
+    );
     if (!result.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
     return result.value;
   }

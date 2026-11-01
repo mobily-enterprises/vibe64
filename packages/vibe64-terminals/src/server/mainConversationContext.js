@@ -32,14 +32,18 @@ function requireCompletedNativeConversationReplacement(session, options = {}) {
   const { requireBriefing = false } = options;
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.replacement?.status === "preparing") {
-    throw Object.assign(new Error("Native conversation replacement is unfinished. Retry that operation before starting assistant work."),
-      { code: "vibe64_conversation_replacement_pending", statusCode: 409 });
+    throw Object.assign(
+      new Error("Native conversation replacement is unfinished. Retry that operation before starting assistant work."),
+      { code: "vibe64_conversation_replacement_pending", statusCode: 409 }
+    );
   }
   if (requireBriefing && state?.replacement?.status === "ready") {
-    throw Object.assign(new Error(
-      "Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."
-    ),
-      { code: "vibe64_conversation_replacement_briefing_pending", statusCode: 409 });
+    throw Object.assign(
+      new Error(
+        "Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."
+      ),
+      { code: "vibe64_conversation_replacement_briefing_pending", statusCode: 409 }
+    );
   }
 }
 

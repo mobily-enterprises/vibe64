@@ -28,12 +28,14 @@ function goalOptions(options) {
 }
 
 function requireCanonicalGoalSupport(provider, options) {
-  if (options.canonicalGoal && !CANONICAL_GOAL_ENGINE_IDS.has(provider.id)) throw Object.assign(new Error(
-    "Canonical goal policy is not connected for this assistant."
-  ),
+  if (options.canonicalGoal && !CANONICAL_GOAL_ENGINE_IDS.has(provider.id)) throw Object.assign(
+    new Error(
+      "Canonical goal policy is not connected for this assistant."
+    ),
     {
-    code: "conversation_unsupported"
-  });
+      code: "conversation_unsupported"
+    }
+  );
 }
 
 /**

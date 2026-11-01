@@ -10,8 +10,10 @@ import {
 import { requireOpenCodeConnection } from "./openCodeHostPreparation.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { openCodeError, throwVibe64OpenCodeError,
-  openCodeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
+import {
+  openCodeError, throwVibe64OpenCodeError,
+  openCodeSessionId, opencodeTerminalNamespace
+} from "./terminalShared.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -60,8 +62,12 @@ function createOpenCodeLifecyclePreparation({
   const processRelease = {
     assertConnectionChange() {
       if (listTerminalSessions({ namespacePrefix: "vibe64-opencode:" }).some(terminal => terminal.status !== "exited")) {
-        throw openCodeError("vibe64_opencode_connection_in_use",
-          "Close OpenCode native terminals, then retry this connection change. The saved connection has not changed.", {}, 409);
+        throw openCodeError(
+          "vibe64_opencode_connection_in_use",
+          "Close OpenCode native terminals, then retry this connection change. The saved connection has not changed.",
+          {},
+          409
+        );
       }
     },
     async beforeRelease(target) {
@@ -88,7 +94,11 @@ function createOpenCodeLifecyclePreparation({
       /**
        * Helpers retain the original warm shared-service policy.
        */
-      options: { get retainSharedProcess() { return Boolean(options.assistantScope); } },
+      options: {
+        get retainSharedProcess() {
+          return Boolean(options.assistantScope);
+        }
+      },
       application: {
         ...processRelease,
         closeTerminals: () => closeTerminalSessionsForNamespace(opencodeTerminalNamespace(id)),
@@ -112,7 +122,9 @@ function createOpenCodeLifecyclePreparation({
     const context = await contextFor(sessionId, { ...options, allowClosing: true });
     return {
       key: context.key,
-      get threadId() { return storedUpstreamSessionId(context); },
+      get threadId() {
+        return storedUpstreamSessionId(context);
+      },
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
       failure: throwVibe64OpenCodeError
     };
@@ -122,12 +134,22 @@ function createOpenCodeLifecyclePreparation({
     let context = await contextFor(sessionId, { ...options, session: null });
     const admissionFailure = terminalNamespaceAdmissionFailure(opencodeTerminalNamespace(sessionId));
     if (admissionFailure) return { value: admissionFailure };
-    const changed = () => openCodeError("vibe64_agent_session_changed",
-      "The assistant session changed while its connection was being checked.", {}, 409);
+    const changed = () => openCodeError(
+      "vibe64_agent_session_changed",
+      "The assistant session changed while its connection was being checked.",
+      {},
+      409
+    );
     return {
-      get key() { return context.key; },
-      get selection() { return upstreamSessionOptions(context).selection; },
-      get workdir() { return context.workdir; },
+      get key() {
+        return context.key;
+      },
+      get selection() {
+        return upstreamSessionOptions(context).selection;
+      },
+      get workdir() {
+        return context.workdir;
+      },
       async connection() {
         return requireOpenCodeConnection(await resolveConnection({
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
@@ -151,19 +173,25 @@ function createOpenCodeLifecyclePreparation({
             throw openCodeError("vibe64_session_closing", "This session cannot prepare its assistant now.", {}, 409);
           }
           return operation({
-            get key() { return context.key; },
+            get key() {
+              return context.key;
+            },
             configuration() {
               const current = context;
               return {
                 process: () => prepareProcess(current, options),
-                get session() { return upstreamSessionOptions(current); }
+                get session() {
+                  return upstreamSessionOptions(current);
+                }
               };
             }
           }).catch(throwVibe64OpenCodeError);
         }, { operation: "prepare-agent-session", waitMs: 10_000 });
       },
       observation: {
-        get run() { return (context.session.agentRuns || []).find(agentRun => agentRun.id === OPENCODE_AGENT_RUN_ID); },
+        get run() {
+          return (context.session.agentRuns || []).find(agentRun => agentRun.id === OPENCODE_AGENT_RUN_ID);
+        },
         write(operation) {
           return runVibe64AgentWriteExclusive(context.runtime, sessionId, async () => {
             context = await contextFor(sessionId, { ...options, session: null });
@@ -188,14 +216,20 @@ function createOpenCodeLifecyclePreparation({
       .find((run) => run?.id === OPENCODE_AGENT_RUN_ID && run.active === true);
     return {
       activeRun,
-      get key() { return context.key; },
+      get key() {
+        return context.key;
+      },
       process: () => prepareProcess(context, options),
       session: () => upstreamSessionOptions(context),
-      get observation() { return {
-        writeRun: (turn, state, error) => writeRun(context, turn, state, error),
-        monitor: messageMonitorProjection(context),
-        get fallbackTurnId() { return upstreamMessageId(randomUUID()); }
-      }; },
+      get observation() {
+        return {
+          writeRun: (turn, state, error) => writeRun(context, turn, state, error),
+          monitor: messageMonitorProjection(context),
+          get fallbackTurnId() {
+            return upstreamMessageId(randomUUID());
+          }
+        };
+      },
       failure: throwVibe64OpenCodeError
     };
   }

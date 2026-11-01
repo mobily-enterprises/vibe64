@@ -79,9 +79,12 @@ async function writeRenewalMetadataEntries(sessionId, values, mutateSession, wri
  */
 function writeSessionRenewalMetadata(runtime, sessionId, values) {
   const { store } = runtime;
-  return writeRenewalMetadataEntries(sessionId, values,
+  return writeRenewalMetadataEntries(
+    sessionId,
+    values,
     (id, operation) => store.mutateSession(id, operation),
-    (id, name, value) => store.writeMetadataValue(id, name, value));
+    (id, name, value) => store.writeMetadataValue(id, name, value)
+  );
 }
 
 /**
@@ -92,9 +95,12 @@ function writeSessionRenewalMetadata(runtime, sessionId, values) {
  */
 function writeRenewedSessionMetadata(runtime, sessionId, values) {
   const { store } = runtime;
-  return writeRenewalMetadataEntries(sessionId, values,
+  return writeRenewalMetadataEntries(
+    sessionId,
+    values,
     (id, operation) => store.mutateSessionForRenewal(id, operation),
-    (id, name, value) => store.writeMetadataValueForRenewal(id, name, value));
+    (id, name, value) => store.writeMetadataValueForRenewal(id, name, value)
+  );
 }
 
 /**
@@ -201,8 +207,11 @@ function writeSessionRenewalHandoverTurnMetadata(runtime, sessionId, values) {
     threadId: "agent_renewal_handover_thread_id",
     turnId: "agent_renewal_handover_turn_id"
   };
-  return writeSessionRenewalMetadata(runtime, sessionId,
-    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value])));
+  return writeSessionRenewalMetadata(
+    runtime,
+    sessionId,
+    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value]))
+  );
 }
 
 function writeSessionRenewalSeedTurnMetadata(runtime, sessionId, values) {
@@ -212,8 +221,11 @@ function writeSessionRenewalSeedTurnMetadata(runtime, sessionId, values) {
     threadId: "agent_renewal_seed_thread_id",
     turnId: "agent_renewal_seed_turn_id"
   };
-  return writeRenewedSessionMetadata(runtime, sessionId,
-    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value])));
+  return writeRenewedSessionMetadata(
+    runtime,
+    sessionId,
+    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value]))
+  );
 }
 
 async function completeSessionRenewalHandover({
@@ -349,8 +361,9 @@ async function completeClaudeSessionRenewalSeed({
 }, nativeResult) {
   const result = { ...nativeResult, operationId: prepared.operationId, source: input.source };
   let acknowledgement;
-  try { acknowledgement = parseSessionRenewalAcknowledgement(result.text, approved); }
-  catch (failure) {
+  try {
+    acknowledgement = parseSessionRenewalAcknowledgement(result.text, approved);
+  } catch (failure) {
     failure.details = {
       ...failure.details,
       clientMessageId: result.clientMessageId,
@@ -403,7 +416,9 @@ function createCodexSessionRenewalPreparation({
         }
         return {
           runtimeOptions,
-          get persistedRuntimeHost() { return codexAppServerPersistedRuntimeHost(session, runtimeOptions); },
+          get persistedRuntimeHost() {
+            return codexAppServerPersistedRuntimeHost(session, runtimeOptions);
+          },
           complete({ sharedProcessRetained, existed, result }) {
             if (sharedProcessRetained) {
               return { ok: true, released: true, runtimeRecorded: true, sharedProcessRetained: true };
@@ -475,7 +490,9 @@ function createCodexSessionRenewalPreparation({
             clientMessageId,
             operationId,
             timeoutMs: CODEX_SESSION_RENEWAL_TURN_TIMEOUT_MS,
-            get prompt() { return sessionRenewalHandoverPrompt({ source }); }
+            get prompt() {
+              return sessionRenewalHandoverPrompt({ source });
+            }
           },
           context: {
             runtime,
@@ -496,7 +513,9 @@ function createCodexSessionRenewalPreparation({
             readExpectedTurnId() {
               return sessionRenewalHandoverTurnId(input, session, operationId);
             },
-            get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); },
+            get turnSettings() {
+              return codexAppServerTurnSettings({ agentSettings, cwd: workdir });
+            },
             writeMetadata(values) {
               return writeSessionRenewalHandoverTurnMetadata(runtime, sessionId, values);
             },
@@ -545,7 +564,9 @@ function createCodexSessionRenewalPreparation({
                 source: approved.source
               });
             },
-            get prompt() { return sessionRenewalSeedPrompt(approved); }
+            get prompt() {
+              return sessionRenewalSeedPrompt(approved);
+            }
           },
           context: {
             provider,
@@ -569,7 +590,9 @@ function createCodexSessionRenewalPreparation({
             readExpectedTurnId(threadId) {
               return sessionRenewalSeedTurnId(input, session, operationId, threadId);
             },
-            get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); },
+            get turnSettings() {
+              return codexAppServerTurnSettings({ agentSettings, cwd: workdir });
+            },
             writeMetadata(values) {
               return writeSessionRenewalSeedTurnMetadata(runtime, sessionId, values);
             },

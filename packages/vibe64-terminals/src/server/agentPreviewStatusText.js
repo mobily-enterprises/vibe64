@@ -132,8 +132,8 @@ function previewInspectionUrl(status = {}, options = {}) {
   if (proxyUrl) {
     return route
       ? previewPageUrl(proxyUrl, route, {
-          inheritBaseSearch: true
-        }) || proxyUrl
+        inheritBaseSearch: true
+      }) || proxyUrl
       : proxyUrl;
   }
   return "";

@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { readOpenCodeEnvironments, openCodeEnvironmentForDirectory, openCodeEnvironmentForSession,
+import {
+  readOpenCodeEnvironments, openCodeEnvironmentForDirectory, openCodeEnvironmentForSession,
   createOpenCodeConversationPlugin,
   assertOpenCodeModelProvider,
-    limitOpenCodeModelOutput } from "@jskit-ai/assistant-core/server/opencode-process";
+  limitOpenCodeModelOutput
+} from "@jskit-ai/assistant-core/server/opencode-process";
 import { vibe64Driver } from "@local/vibe64-genesis/server/promptContext";
 
 function text(value = "") {
@@ -81,7 +83,8 @@ function sessionCommand(command = "", selected = null) {
 }
 
 const Vibe64SessionEnvironment = async ({ client } = {}) => {
-  const common = await createOpenCodeConversationPlugin({ client,
+  const common = await createOpenCodeConversationPlugin({
+    client,
     registryPath: text(process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY),
     resolveHostInstructions: async (id) => {
       const selected = await sessionEnvironmentForUpstreamSession(id, client);
@@ -97,30 +100,35 @@ const Vibe64SessionEnvironment = async ({ client } = {}) => {
           }
         };
       }
-      return { conversation: selected.conversation, instructions: {
+      return {
+        conversation: selected.conversation,
+        instructions: {
         // Project guidance can change independently of the registry: read it
         // before every inference instead of supplying a cached revision.
-        placement: "append",
-        read: () => {
+          placement: "append",
+          read: () => {
           // Keep the compiler and native indexers out of OpenCode's plugin process.
           // The fixed composer shares OpenCode's existing managed process group.
-          const executable = fileURLToPath(new URL("../../bin/vibe64-genesis-host-context",
-            import.meta.resolve("@local/vibe64-genesis/server/promptContext")));
-          return new Promise((resolve, reject) => {
-            const child = execFile(executable, ["--instructions"], {
-              cwd: workdir,
-              timeout: 30_000,
-              maxBuffer: 256 * 1024,
-              encoding: "utf8"
-            }, (error, stdout) => {
-              if (error) reject(new Error("Project instructions could not be loaded. Retry the conversation.", { cause: error }));
-              else resolve(stdout);
+            const executable = fileURLToPath(new URL(
+              "../../bin/vibe64-genesis-host-context",
+              import.meta.resolve("@local/vibe64-genesis/server/promptContext")
+            ));
+            return new Promise((resolve, reject) => {
+              const child = execFile(executable, ["--instructions"], {
+                cwd: workdir,
+                timeout: 30_000,
+                maxBuffer: 256 * 1024,
+                encoding: "utf8"
+              }, (error, stdout) => {
+                if (error) reject(new Error("Project instructions could not be loaded. Retry the conversation.", { cause: error }));
+                else resolve(stdout);
+              });
+              child.stdin.on("error", () => {});
+              child.stdin.end(JSON.stringify({ workdir, promptContext }));
             });
-            child.stdin.on("error", () => {});
-            child.stdin.end(JSON.stringify({ workdir, promptContext }));
-          });
+          }
         }
-      } };
+      };
     }
   });
   return {
@@ -207,9 +215,7 @@ const Vibe64SessionEnvironment = async ({ client } = {}) => {
       ].filter(Boolean).join(path.delimiter);
     },
     "tool.execute.before": async (input = {}, output = {}) => {
-      const selected = await sessionEnvironmentForUpstreamSession(
-        input.sessionID || input.sessionId, client
-      );
+      const selected = await sessionEnvironmentForUpstreamSession(input.sessionID || input.sessionId, client);
       if (!selected) {
         throw new Error("Vibe64 could not verify this conversation's tool access. Reconnect the assistant.");
       }

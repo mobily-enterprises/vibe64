@@ -309,7 +309,7 @@ async function observedCanonicalCommit(runCommand, context, options = {}) {
       `${canonicalRef(context)}^{commit}`
     ], options),
     context.lastCanonicalCommit
-    ? await optionalGitOutput(runCommand, context, [
+      ? await optionalGitOutput(runCommand, context, [
         "rev-parse",
         "--verify",
         `${context.lastCanonicalCommit}^{commit}`
@@ -365,12 +365,12 @@ async function sessionWorkComparison(runCommand, context, {
   const changedPaths = worktreeTree === changeBaseTree
     ? []
     : await changedPathsBetween(
-        runCommand,
-        context,
-        changeBaseCommit,
-        worktreeTree,
-        options
-      );
+      runCommand,
+      context,
+      changeBaseCommit,
+      worktreeTree,
+      options
+    );
   return {
     baseTree,
     canonicalTree,

@@ -112,7 +112,9 @@ function createCodexAssistantCatalog({
     } = context;
     return codexAppServerRunOwner.readExecutionProfileModelCatalog(sessionId, {
       assistantScope,
-      get provider() { return context.provider; },
+      get provider() {
+        return context.provider;
+      },
       get helperRestoration() {
         return prepareCodexAppServerHelperRestoration({ runtime, session });
       },

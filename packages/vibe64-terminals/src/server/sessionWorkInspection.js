@@ -116,9 +116,9 @@ async function inspectSessionChangesDirect({
   const changedPathSet = new Set(work.changedPaths);
   const files = work.unsaved
     ? await sessionChangeFiles(runCommand, context, work.changeBaseCommit, work.worktreeTree, {
-        commandOptions,
-        project
-      }).then((items) => items.filter((item) => changedPathSet.has(item.path)))
+      commandOptions,
+      project
+    }).then((items) => items.filter((item) => changedPathSet.has(item.path)))
     : [];
   const { items: pageFiles, ...page } = pageRecords(files, {
     defaultLimit: DEFAULT_CHANGE_FILE_LIMIT,
@@ -128,9 +128,9 @@ async function inspectSessionChangesDirect({
   });
   const initialDiff = includeInitialDiff && page.offset === 0 && pageFiles.length > 0
     ? await sessionChangeDiff(runCommand, context, work, pageFiles[0].path, {
-        commandOptions,
-        project
-      })
+      commandOptions,
+      project
+    })
     : null;
   return {
     ...work,
@@ -247,13 +247,14 @@ async function inspectSessionWorkDirect({
   const worktreeClean = worktreePorcelain.length === 0;
   let publishedCommit;
   if (inspectContributionPublication) {
-    if (!context.contribution) throw saveError("Publication inspection requires a bound contribution.",
-      "vibe64_contribution_authority_changed");
+    if (!context.contribution) throw saveError(
+      "Publication inspection requires a bound contribution.",
+      "vibe64_contribution_authority_changed"
+    );
     const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);
     publishedCommit = published.head;
     if (!publishedCommit && knownSubmittedCommit) {
-      if (!isGitObjectId(knownSubmittedCommit)) throw saveError(
-        "The saved contribution evidence is invalid.", "vibe64_connected_integration_unknown");
+      if (!isGitObjectId(knownSubmittedCommit)) throw saveError("The saved contribution evidence is invalid.", "vibe64_connected_integration_unknown");
       publishedCommit = knownSubmittedCommit;
     }
     if (published.discarded || (publishedCommit && published.remoteAbsent)) {
@@ -265,16 +266,22 @@ async function inspectSessionWorkDirect({
       const [accepted, ref, extra] = observed.split(/\s+/u);
       if (ref !== target || extra || !isGitObjectId(accepted) ||
           !await commitIsAncestor(runCommand, context, publishedCommit, accepted, { commandOptions, project })) {
-        throw saveError("The removed contribution has not been proved integrated in this source. Check its receiving target and explicitly Update the connected session.",
-          published.discarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing");
+        throw saveError(
+          "The removed contribution has not been proved integrated in this source. Check its receiving target and explicitly Update the connected session.",
+          published.discarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing"
+        );
       }
     }
     if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) throw saveError(
       "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
-      "vibe64_contribution_branch_missing");
+      "vibe64_contribution_branch_missing"
+    );
     if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {
-      throw saveError("The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",
-        "vibe64_connected_source_update_required", { repository: context.contribution.repository, sessionId: context.sessionId });
+      throw saveError(
+        "The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",
+        "vibe64_connected_source_update_required",
+        { repository: context.contribution.repository, sessionId: context.sessionId }
+      );
     }
   }
   return {

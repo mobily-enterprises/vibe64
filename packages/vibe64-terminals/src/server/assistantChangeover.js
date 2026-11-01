@@ -34,10 +34,12 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   const operationId = String(input.operationId || "");
   const expectedId = String(input.expectedConversationId || "");
   const handover = typeof input.handover === "string" ? input.handover.trim() : "";
-  const fail = (message) => { throw Object.assign(new Error(message), {
-    code: "vibe64_conversation_replacement_unavailable",
-    statusCode: 409
-  }); };
+  const fail = (message) => {
+    throw Object.assign(new Error(message), {
+      code: "vibe64_conversation_replacement_unavailable",
+      statusCode: 409
+    });
+  };
   if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(operationId) || !expectedId || !handover || handover.length > 64 * 1024) {
     fail("Replacement requires an operation id, exact predecessor id and a handover of at most 65536 characters.");
   }
@@ -99,9 +101,9 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
     log,
     ...(initialMessages.length ? { maximumInitialMessages: 40 } : {})
   }).send({
-      engineId,
-      messages,
-      input,
-      turnMetadata: { engineId: engineId.split("/")[0] }
-    });
+    engineId,
+    messages,
+    input,
+    turnMetadata: { engineId: engineId.split("/")[0] }
+  });
 }

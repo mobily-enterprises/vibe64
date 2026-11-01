@@ -85,7 +85,9 @@ function createCodexConversationPreparation({
       provider: context.provider,
       threadId: codexAppServerTurnState(context.session).threadId ||
         codexThreadIdForWorkdir(context.session, context.workdir),
-      get providerKey() { return codexAppServerProviderKey(normalizeText(sessionId), context.providerOptions); },
+      get providerKey() {
+        return codexAppServerProviderKey(normalizeText(sessionId), context.providerOptions);
+      },
       get resumeOptions() {
         return codexAppServerThreadSettings({
           agentSettings: codexAgentSettingsFromSession(context.session),
@@ -313,7 +315,9 @@ function createCodexConversationPreparation({
             });
             return {
               providerOptions,
-              get mainThreadId() { return codexThreadIdForWorkdir(currentSession, workdir); }
+              get mainThreadId() {
+                return codexThreadIdForWorkdir(currentSession, workdir);
+              }
             };
           },
           async running() {

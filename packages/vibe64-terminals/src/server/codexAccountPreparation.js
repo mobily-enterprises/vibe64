@@ -96,9 +96,9 @@ function createCodexAccountPreparation({
     if (!toolHomeSource) {
       return codexToolHomeRequired
         ? nonRetryableTerminalFailure({
-            ok: false,
-            error: "Codex account storage is not available. Connect Codex before starting a Codex terminal."
-          })
+          ok: false,
+          error: "Codex account storage is not available. Connect Codex before starting a Codex terminal."
+        })
         : {
             ok: true,
             toolHomeSource: ""

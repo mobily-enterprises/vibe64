@@ -45,13 +45,15 @@ async function prepareCodexModelRouting(sessionId, _selection, { runtime, sessio
       ? session.metadata.agent_identity_model_provider : "");
   if (boundProvider && boundProvider !== "openai" || nativeConversationBindings(session).some((binding) =>
     binding.engineId === "codex" && !binding.retired && binding.modelProviderId !== "openai")) {
-    throw Object.assign(new Error(
-      "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models; its existing history and storage location have not been changed."
-    ),
+    throw Object.assign(
+      new Error(
+        "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models; its existing history and storage location have not been changed."
+      ),
       {
-      code: "vibe64_codex_history_unsupported",
-      statusCode: 409
-    });
+        code: "vibe64_codex_history_unsupported",
+        statusCode: 409
+      }
+    );
   }
   await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");
   session.metadata.codex_routing_home_provider = "openai";

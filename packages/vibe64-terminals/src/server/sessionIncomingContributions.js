@@ -68,8 +68,12 @@ async function inspectIncomingContributionsDirect({
     );
   }
   const targetRef = `refs/heads/${context.branch}`;
-  const output = await gitOutput(runCommand, context,
-    ["ls-remote", "--heads", context.remoteUrl, targetRef, "refs/heads/vibe64-incoming/*"], options);
+  const output = await gitOutput(
+    runCommand,
+    context,
+    ["ls-remote", "--heads", context.remoteUrl, targetRef, "refs/heads/vibe64-incoming/*"],
+    options
+  );
   const entries = new Map();
   let targetHead = "";
   for (const line of output.split("\n").filter(Boolean)) {
@@ -101,7 +105,9 @@ async function inspectIncomingContributionsDirect({
     if (entry.activeHead) refs.push({ remote: `refs/heads/vibe64-incoming/${entry.id}`, head: entry.activeHead });
     if (entry.discardedHead) refs.push({ remote: `refs/heads/vibe64-incoming/${entry.id}_discarded`, head: entry.discardedHead });
   }
-  refs.forEach((ref, index) => { ref.local = saveRef(context, operationId, `incoming-${index}`); });
+  refs.forEach((ref, index) => {
+    ref.local = saveRef(context, operationId, `incoming-${index}`);
+  });
   try {
     await git(runCommand, context, ["fetch", "--no-tags", "--no-write-fetch-head", context.remoteUrl,
       ...refs.map(ref => `+${ref.remote}:${ref.local}`)], options);
@@ -280,12 +286,15 @@ async function changeIncomingContributionDirect({
           runCommand
         });
         if (action === "merge" && !repairReview) {
-          throw saveError("This contribution conflicts with the integration branch. Use Fix it with AI or repair the listed files in this receiving session, then Review resolved conflicts before merging.",
-            "vibe64_incoming_merge_conflict", {
+          throw saveError(
+            "This contribution conflicts with the integration branch. Use Fix it with AI or repair the listed files in this receiving session, then Review resolved conflicts before merging.",
+            "vibe64_incoming_merge_conflict",
+            {
               conflictPaths: merged.conflictPaths,
               checkpointCommit: checkpoint.checkpointCommit,
               review: expected
-            });
+            }
+          );
         }
         repairedTree = await conflictWorktreeTree(runCommand, context, {
           conflictTree: merged.conflictTree,
@@ -320,8 +329,10 @@ async function changeIncomingContributionDirect({
           };
         }
         if (Object.keys(currentRepair).some(key => repairReview?.[key] !== currentRepair[key])) {
-          throw saveError("The receiving source changed after repair review. Review resolved conflicts again before merging.",
-            "vibe64_incoming_repair_changed");
+          throw saveError(
+            "The receiving source changed after repair review. Review resolved conflicts again before merging.",
+            "vibe64_incoming_repair_changed"
+          );
         }
       } else if (repairReview || action === "review-repair") {
         throw saveError(
@@ -424,22 +435,24 @@ async function changeIncomingContribution({
   runProjectSourceExclusive = async operation => operation()
 } = {}) {
   const context = incomingRepositoryContext(project, session);
-  return runProjectSourceExclusive(() => runSessionWorkOperation({
-    context,
-    project,
-    commandOptions,
-    runCommand,
-    input: {
-      action,
-      id,
-      review,
-      repairReview,
-      derivedArtifactPaths
-    },
-    label: "Updating incoming contribution",
-    operation: "incoming-change"
-  }),
-  { operation: `incoming-${action}:${id}` });
+  return runProjectSourceExclusive(
+    () => runSessionWorkOperation({
+      context,
+      project,
+      commandOptions,
+      runCommand,
+      input: {
+        action,
+        id,
+        review,
+        repairReview,
+        derivedArtifactPaths
+      },
+      label: "Updating incoming contribution",
+      operation: "incoming-change"
+    }),
+    { operation: `incoming-${action}:${id}` }
+  );
 }
 
 export {

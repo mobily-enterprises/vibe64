@@ -303,10 +303,18 @@ function createOpenCodeHostPreparation({
             connection,
             helperModelId,
             projectContextRoot,
-            get selection() { return context.selection; },
-            get sessionId() { return context.sessionId; },
-            get upstreamSessionId() { return storedUpstreamSessionId(context); },
-            get workdir() { return context.workdir; }
+            get selection() {
+              return context.selection;
+            },
+            get sessionId() {
+              return context.sessionId;
+            },
+            get upstreamSessionId() {
+              return storedUpstreamSessionId(context);
+            },
+            get workdir() {
+              return context.workdir;
+            }
           }
         };
       },

@@ -27,7 +27,9 @@ function previewDiagnosticUrl(value) {
   try {
     const url = new URL(String(value || ""));
     return ["http:", "https:"].includes(url.protocol) ? `${url.origin}${url.pathname}`.slice(0, 2048) : "";
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 export {

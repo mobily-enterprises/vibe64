@@ -363,12 +363,12 @@ function createAgentSessionCommandService({
           : environment.status === "not-prepared"
           // The assistant reads this mid-turn; starting Preview prepares the
           // workspace, so stale "not prepared" advice must not reach the person.
-          ? "Run vibe64-helper preview ensure --wait: starting Preview prepares the workspace and its managed resources. Read this status again before reporting preparation to the person. If preparation fails, fix the cause; the person can use Retry on its card."
-          : environment.status === "missing-configuration"
-          ? "Supply the missing application resource configuration through Development Env."
-          : environment.status === "unavailable"
-          ? "Correct the project environment declaration and retry."
-          : ""
+            ? "Run vibe64-helper preview ensure --wait: starting Preview prepares the workspace and its managed resources. Read this status again before reporting preparation to the person. If preparation fails, fix the cause; the person can use Retry on its card."
+            : environment.status === "missing-configuration"
+              ? "Supply the missing application resource configuration through Development Env."
+              : environment.status === "unavailable"
+                ? "Correct the project environment declaration and retry."
+                : ""
       };
     });
   }
@@ -600,14 +600,14 @@ function createAgentSessionCommandService({
     const proofs = owned?.supported === true
       ? (Array.isArray(owned.processExitProofs) ? owned.processExitProofs : [owned])
       : await Promise.all(executions.map((executionId) => (
-          stopExecution(executionId, {
-            reason: "session-close"
-          }).catch((error) => ({
-            error: error?.message || String(error),
-            executionId,
-            ok: false
-          }))
-        )));
+        stopExecution(executionId, {
+          reason: "session-close"
+        }).catch((error) => ({
+          error: error?.message || String(error),
+          executionId,
+          ok: false
+        }))
+      )));
     const closed = await commandServers.closeForSession(normalizedSessionId);
     const stoppedExecutionCount = owned?.supported === true
       ? Number(owned.closed || 0)

@@ -107,9 +107,9 @@ function createSessionAttachments({ project, env = process.env }) {
           throw Object.assign(new Error(closingReason
             ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
             : "This session is closing. Attachments cannot be added now."), {
-              code: "vibe64_agent_attachment_session_unavailable",
-              statusCode: 409
-            });
+            code: "vibe64_agent_attachment_session_unavailable",
+            statusCode: 409
+          });
         }
       }
     });

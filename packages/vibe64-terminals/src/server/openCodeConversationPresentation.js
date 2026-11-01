@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
+  vibe64AgentExecutionProfileAuditSnapshot
+} from "@local/vibe64-runtime/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
@@ -136,9 +138,12 @@ function createOpenCodeConversationPresentation({
         promptLabel: "Summarize progress"
       }, options);
       if (result?.ok !== true) throw new Error(result?.error || "The progress summary did not complete.");
-    } catch (error) { failure = error; }
-    try { await cleanupReasoningSummary(context); }
-    catch (error) {
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      await cleanupReasoningSummary(context);
+    } catch (error) {
       if (failure && error !== failure) error.cause = failure;
       failure = error;
     }
@@ -190,7 +195,9 @@ function createOpenCodeConversationPresentation({
       await cleanupReasoningSummary(state.context);
       state.entries.clear();
       temporaryConversations.delete(state.key);
-    }).finally(() => { state.disposal = null; });
+    }).finally(() => {
+      state.disposal = null;
+    });
     return state.disposal;
   }
 
@@ -271,7 +278,9 @@ function createOpenCodeConversationPresentation({
       });
       entry.written = true;
       if (turn) await publishConversationTurn(context, turn, "opencode-server-reasoning");
-    }).finally(() => { entry.writing = null; });
+    }).finally(() => {
+      entry.writing = null;
+    });
     return entry.writing;
   }
 

@@ -37,9 +37,9 @@ function createOpenCodeInteractiveTerminals({
     const id = toText(terminalSessionId);
     return id
       ? readTerminalSession(id, {
-          namespace: opencodeTerminalNamespace(sessionId),
-          outputLimit: OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
-        })
+        namespace: opencodeTerminalNamespace(sessionId),
+        outputLimit: OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
+      })
       : null;
   }
 

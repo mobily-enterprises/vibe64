@@ -144,28 +144,43 @@ function createOpenCodeSessionRenewalPreparation({
     return {
       input: {
         inputMessageId: upstreamMessageId(clientMessageId),
-        get prompt() { return input.prompt; },
+        get prompt() {
+          return input.prompt;
+        },
         agent: toText(target.selection?.agentId),
         model: openCodeModel(target.selection),
         timeoutMs: OPENCODE_RENEWAL_TIMEOUT_MS,
         readError: openCodeMessageError,
         createError(reason, message, { inputAccepted, ...details }) {
           if (reason === "thread_mismatch") {
-            return openCodeError("vibe64_session_renewal_thread_mismatch",
-              "The OpenCode predecessor history changed before handover generation.", details);
+            return openCodeError(
+              "vibe64_session_renewal_thread_mismatch",
+              "The OpenCode predecessor history changed before handover generation.",
+              details
+            );
           }
           if (reason === "fresh_thread_required") {
-            return openCodeError("vibe64_session_renewal_fresh_thread_required",
-              "The renewed OpenCode session does not own the expected fresh native history.", details);
+            return openCodeError(
+              "vibe64_session_renewal_fresh_thread_required",
+              "The renewed OpenCode session does not own the expected fresh native history.",
+              details
+            );
           }
           if (reason === "unrelated_history") {
-            return openCodeError("vibe64_session_renewal_fresh_thread_required",
-              "The successor OpenCode history contains unrelated conversation and cannot be used for renewal.", details);
+            return openCodeError(
+              "vibe64_session_renewal_fresh_thread_required",
+              "The successor OpenCode history contains unrelated conversation and cannot be used for renewal.",
+              details
+            );
           }
-          return openCodeError(`vibe64_session_renewal_turn_${reason}`, message || (reason === "unreadable"
-            ? "The exact OpenCode renewal turn did not produce a readable result."
-            : "OpenCode did not finish the session renewal turn."),
-          { clientMessageId, handoverPromptAccepted: inputAccepted, ...details }, 502);
+          return openCodeError(
+            `vibe64_session_renewal_turn_${reason}`,
+            message || (reason === "unreadable"
+              ? "The exact OpenCode renewal turn did not produce a readable result."
+              : "OpenCode did not finish the session renewal turn."),
+            { clientMessageId, handoverPromptAccepted: inputAccepted, ...details },
+            502
+          );
         }
       },
       options: renewal
@@ -182,7 +197,9 @@ function createOpenCodeSessionRenewalPreparation({
         const clientMessageId = sessionRenewalClientMessageId("handover", operationId);
         const prepared = prepareRenewalTurn(target, {
           clientMessageId,
-          get prompt() { return sessionRenewalHandoverPrompt({ source: input.source }); }
+          get prompt() {
+            return sessionRenewalHandoverPrompt({ source: input.source });
+          }
         }, { expectedThreadId: toText(input.expectedThreadId) });
         return {
           ...prepared,
@@ -218,7 +235,9 @@ function createOpenCodeSessionRenewalPreparation({
         });
         const prepared = prepareRenewalTurn(target, {
           clientMessageId,
-          get prompt() { return sessionRenewalSeedPrompt(approved); }
+          get prompt() {
+            return sessionRenewalSeedPrompt(approved);
+          }
         }, {
           expectedThreadId: toText(input.expectedThreadId),
           forbiddenThreadId: toText(input.forbiddenThreadId || input.oldThreadId),

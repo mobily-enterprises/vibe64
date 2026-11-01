@@ -98,47 +98,36 @@ function createServiceMainConversationHost({
 
   function prepareMainConversationOperation({ id, context, input, options, operation }) {
     if (operation === "closeProject") {
-      return prepareProjectConversationCleanup(
-        sessionAgent.conversationProvider(context.providerId), context, input
-      );
+      return prepareProjectConversationCleanup(sessionAgent.conversationProvider(context.providerId), context, input);
     }
     if (operation === "invalidateRuntimes") {
-      return prepareConversationRuntimeInvalidation(
-        sessionAgent.conversationProvider(context.providerId), context, input
-      );
+      return prepareConversationRuntimeInvalidation(sessionAgent.conversationProvider(context.providerId), context, input);
     }
     if (operation === "reconcileSessions") {
-      return prepareConversationReconciliation(
-        sessionAgent.conversationProvider(context.providerId), context, input, options
-      );
+      return prepareConversationReconciliation(sessionAgent.conversationProvider(context.providerId), context, input, options);
     }
     if (operation === "releaseRenewalPredecessorProcessExitProof" || operation === "releaseRenewalSuccessorProcessExitProof") {
-      return prepareSessionConversationRenewalProof(
-        sessionAgent.conversationProvider(context.providerId), id, context, input, operation
-      );
+      return prepareSessionConversationRenewalProof(sessionAgent.conversationProvider(context.providerId), id, context, input, operation);
     }
     if (operation === "inspectTemporaryActivity") {
       return prepareSessionConversationActivity(sessionAgent.conversationProvider(context.providerId), id, context);
     }
     if (operation === "unsubscribeSessions") {
-      return prepareConversationSubscriptionReset(
-        sessionAgent.conversationProvider(context.providerId), context, input
-      );
+      return prepareConversationSubscriptionReset(sessionAgent.conversationProvider(context.providerId), context, input);
     }
     return (async () => {
       if (operation === "listNativeConversationStorage" || operation === "retireConversationHistory") {
-        return prepareSessionConversationStorage(
-          sessionAgent.conversationProvider(input.engineId), id, context, input
-        );
+        return prepareSessionConversationStorage(sessionAgent.conversationProvider(input.engineId), id, context, input);
       }
       if (operation === "runDetachedConversation") {
-        return prepareSessionDetachedConversationRun(
-          sessionAgent.conversationProvider(context.providerId), id, context, input, options
-        );
+        return prepareSessionDetachedConversationRun(sessionAgent.conversationProvider(context.providerId), id, context, input, options);
       }
       if (operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation") {
         return prepareSessionDetachedConversationCleanup(
-          sessionAgent.conversationProvider(context.providerId), id, context, input,
+          sessionAgent.conversationProvider(context.providerId),
+          id,
+          context,
+          input,
           operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread"
         );
       }

@@ -52,7 +52,9 @@ async function readPlanFile(file, options = {}) {
   }
 }
 
-function planDirectory(context) { return path.dirname(workPlanPath(context)); }
+function planDirectory(context) {
+  return path.dirname(workPlanPath(context));
+}
 function pairPath(context, id = "") {
   if (id && !/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.");
   return id ? path.join(planDirectory(context), "archive", id + ".json") : path.join(planDirectory(context), "current.json");
@@ -69,7 +71,11 @@ function documentPath(context, kind, revision) {
 }
 function parsePairRecord(source, id = "") {
   let record;
-  try { record = JSON.parse(source); } catch { throw planError("The plan and progress record is invalid. Inspect its saved snapshot."); }
+  try {
+    record = JSON.parse(source);
+  } catch {
+    throw planError("The plan and progress record is invalid. Inspect its saved snapshot.");
+  }
   if (!record || record.schemaVersion !== 1 || !/^[a-f0-9]{64}$/u.test(record.planRevision) ||
       !(record.progressRevision === null || /^[a-f0-9]{64}$/u.test(record.progressRevision)) ||
       Object.keys(record)
@@ -92,8 +98,8 @@ async function readPair(context, id = "") {
     : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
   if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
       (progressText === null || sha256Hex(progressText) !== record.progressRevision))) throw planError(
-        "A plan or progress document is missing or changed. Restore the saved pair before continuing."
-      );
+    "A plan or progress document is missing or changed. Restore the saved pair before continuing."
+  );
   return {
     ...plan,
     progressText,
@@ -177,9 +183,9 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
       expectedProgressRevision !== (plan.progressRevision || "")) throw planError(
-        "The plan or progress changed. Read both again from the beginning.",
-        "vibe64_work_plan_changed"
-      );
+    "The plan or progress changed. Read both again from the beginning.",
+    "vibe64_work_plan_changed"
+  );
   const characters = Array.from(plan.text);
   const progress = Array.from(plan.progressText || "");
   const totalCharacters = characters.length + progress.length;
@@ -210,7 +216,9 @@ async function writePlan(file, text) {
   try {
     await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
     await rename(temporary, file);
-  } finally { await rm(temporary, { force: true }); }
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 async function saveDocument(context, kind, text) {

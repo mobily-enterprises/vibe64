@@ -110,7 +110,9 @@ function createOpenCodeSessionAgentProvider({
               session: openingContext.session
             });
           },
-          get sessionId() { return openCodeSessionId(openingContext.sessionId); }
+          get sessionId() {
+            return openCodeSessionId(openingContext.sessionId);
+          }
         }
       }
     };
@@ -127,16 +129,21 @@ function createOpenCodeSessionAgentProvider({
       native: { owner: sharedRuntime, preparation: { session: prepareSessionReconciliation } }
     };
     if (mode === "invalidation") return {
-      native: { owner: sharedRuntime, preparation: {
+      native: {
+        owner: sharedRuntime,
+        preparation: {
         /**
          * A connection change gives the running server every saved connection.
          */
-        connections: () => configuredConnections(),
-        get release() { return {
-          ...processRelease,
-          ownsTarget: (target) => sessionEnvironments.has(target.key)
-        }; }
-      } }
+          connections: () => configuredConnections(),
+          get release() {
+            return {
+              ...processRelease,
+              ownsTarget: (target) => sessionEnvironments.has(target.key)
+            };
+          }
+        }
+      }
     };
     if (mode === "projectCleanup") return {
       native: {
@@ -155,17 +162,20 @@ function createOpenCodeSessionAgentProvider({
       };
       if (mode === "dispose") return {
         namespace: opencodeTerminalNamespace(sessionId),
-        native: { owner: sharedRuntime, preparation: {
+        native: {
+          owner: sharedRuntime,
+          preparation: {
           /**
            * The cleanup context carries only these fields of the current conversation.
            */
-          cleanup: current => prepareSessionCleanup(sessionId, {
-            assistantScope: current.assistantScope,
-            runtime: current.runtime,
-            session: current.session,
-            renewalCleanup: current.renewalCleanup
-          })
-        } }
+            cleanup: current => prepareSessionCleanup(sessionId, {
+              assistantScope: current.assistantScope,
+              runtime: current.runtime,
+              session: current.session,
+              renewalCleanup: current.renewalCleanup
+            })
+          }
+        }
       };
       if (mode === "scoped" || mode === "create" || mode === "detached" || mode === "detachedCleanup") return {
         namespace: opencodeTerminalNamespace(sessionId),
@@ -176,9 +186,11 @@ function createOpenCodeSessionAgentProvider({
             creation: (input, options) => prepareConversationCreation(sessionId, input, options),
             turn: (input, options) =>
               prepareDetachedChatTurn(sessionId, input, { ...options, waitForCompletion: mode === "detached" }),
-            existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(sessionId,
+            existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(
+              sessionId,
               operation === "delete" ? { ...input, persistent: input.persistent || Boolean(options?.assistantScope) } : input,
-              options)
+              options
+            )
           }
         }
       };

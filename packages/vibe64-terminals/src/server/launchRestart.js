@@ -221,15 +221,15 @@ async function launchRestartState({
   const committedFiles = currentHead
     ? normalizedBaseline.head && normalizedBaseline.head !== currentHead
       ? await committedRestartPathsChangedSinceLaunch(
+        root,
+        await changedPathsFromGit(
           root,
-          await changedPathsFromGit(
-            root,
-            ["diff", "--name-only", "-z", `${normalizedBaseline.head}..${currentHead}`, "--"],
-            rules,
-            options
-          ),
-          normalizedBaseline
-        )
+          ["diff", "--name-only", "-z", `${normalizedBaseline.head}..${currentHead}`, "--"],
+          rules,
+          options
+        ),
+        normalizedBaseline
+      )
       : await committedRestartPathsFromUnbornLaunch(root, normalizedBaseline, rules, options)
     : [];
   const dirtyFiles = dirtyState.signature !== normalizedBaseline.dirtySignature ? dirtyState.files : [];

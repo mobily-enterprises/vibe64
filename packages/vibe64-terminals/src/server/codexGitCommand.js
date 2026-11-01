@@ -303,16 +303,16 @@ function createCodexGitCommandService({
     if (actor.githubRequired === false) {
       const commitAuthor = createsCommits
         ? await commitAuthorOptions({
-            actor,
-            answeredAuthors,
-            gatewayCommandRunner,
-            logger,
-            session,
-            toolHome: await resolveGithubHomeForStoredActor({
-              env,
-              ownerUserKey: normalizeText(vibe64User?.username || vibe64User?.osUsername)
-            })
+          actor,
+          answeredAuthors,
+          gatewayCommandRunner,
+          logger,
+          session,
+          toolHome: await resolveGithubHomeForStoredActor({
+            env,
+            ownerUserKey: normalizeText(vibe64User?.username || vibe64User?.osUsername)
           })
+        })
         : noCommitAuthor;
       if (commitAuthor.ok === false) {
         return commitAuthor;
@@ -509,10 +509,10 @@ function createCodexGitCommandService({
     const toolHome = actor.githubRequired === false || !requiresGithubToken
       ? localGitCommandToolHome()
       : await resolveGithubHomeForStoredActor({
-          accountMode: actor.actorScope,
-          env,
-          ownerUserKey: actor.actorUserKey
-        });
+        accountMode: actor.actorScope,
+        env,
+        ownerUserKey: actor.actorUserKey
+      });
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
     }
@@ -521,11 +521,11 @@ function createCodexGitCommandService({
     const credentialKey = actorCredentialKey(session, actor, toolHome);
     const githubToken = requiresGithubToken
       ? await readActorToken(credentialKey, {
-          actor,
-          gatewayCommandRunner: runWithinBudget,
-          session,
-          toolHome
-        })
+        actor,
+        gatewayCommandRunner: runWithinBudget,
+        session,
+        toolHome
+      })
       : { ok: true, token: "" };
     if (githubToken.ok === false) {
       return finish(githubToken, actor);

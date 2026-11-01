@@ -152,9 +152,15 @@ function createCodexConversationStorage({ project, runOwner }) {
         const current = await readCodexStateSession(sessionId);
         return {
           session: current,
-          get threadId() { return codexThreadIdForWorkdir(current, nativeStateWorkdir(current)); },
-          get run() { return current.agentRuns[0] || null; },
-          get nativeResult() { return { ok: true, sessionId, sessionUpdated: false, ...codexState(current) }; }
+          get threadId() {
+            return codexThreadIdForWorkdir(current, nativeStateWorkdir(current));
+          },
+          get run() {
+            return current.agentRuns[0] || null;
+          },
+          get nativeResult() {
+            return { ok: true, sessionId, sessionUpdated: false, ...codexState(current) };
+          }
         };
       }
     };

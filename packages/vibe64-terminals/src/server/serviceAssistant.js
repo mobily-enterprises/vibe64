@@ -59,11 +59,14 @@ function notSentDeliveryError(error, messageId) {
   // conversation_* codes are the shared conversation protocol's definite
   // rejections; the browser recovers from them by code.
   const readable = error instanceof AppError || /^(vibe64|conversation)_/u.test(String(error.code || ""));
-  return new AppError(status >= 400 && status < 500 ? status : 422,
-    readable ? error.message : "The message was not sent because Vibe64 could not prepare it. Your chat is saved; try again.", {
+  return new AppError(
+    status >= 400 && status < 500 ? status : 422,
+    readable ? error.message : "The message was not sent because Vibe64 could not prepare it. Your chat is saved; try again.",
+    {
       code: readable ? error.code : "vibe64_assistant_message_not_sent",
       details: { ...(readable && error.details && typeof error.details === "object" ? error.details : {}), delivery }
-    });
+    }
+  );
 }
 
 /**
@@ -420,8 +423,12 @@ function createServiceAssistant({
       messageId: input.messageId
     }, "Assistant message received.");
     void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
-      logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
-        "Prompt suggestion cleanup will be retried on session close.");
+      logOperationalEvent(
+        logger,
+        "warn",
+        { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
+        "Prompt suggestion cleanup will be retried on session close."
+      );
     });
     try {
       const result = await assistantRouting.send(sessionId, input, { ...options, deliveryMessageId: input.messageId });

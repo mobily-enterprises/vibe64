@@ -444,12 +444,12 @@ async function startLaunchPreviewProxy({
 
   const listen = publicOrigin
     ? await listenOnPreviewSocket(server, {
-        env,
-        publicOrigin
-      })
+      env,
+      publicOrigin
+    })
     : await listenOnPreviewPort(server, {
-        env
-      });
+      env
+    });
 
   server.unref();
   proxyOrigin = listen.origin;

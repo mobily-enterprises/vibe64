@@ -33,7 +33,9 @@ async function cleanupAssistantHelper(options = {}) {
     if (error?.reason === "cleanup_failed" || error?.reason === "cleanup_paths_invalid") throw error;
     throw options.fail(
       error?.message || "The assistant helper could not be closed. Cleanup will be retried when this session closes.",
-      error?.code, "cleanup_failed", error?.details
+      error?.code,
+      "cleanup_failed",
+      error?.details
     );
   }
 }
@@ -58,7 +60,9 @@ async function closeAssistantHelper({ agent, fail, prefix, record, stateRoot, vi
   if (deleted?.ok !== true) {
     throw fail(
       deleted?.error || "The assistant helper could not be closed. Cleanup will be retried when this session closes.",
-      deleted?.code, "cleanup_failed", deleted?.details
+      deleted?.code,
+      "cleanup_failed",
+      deleted?.details
     );
   }
   // Retire ownership after native cleanup, before removing the workdir a

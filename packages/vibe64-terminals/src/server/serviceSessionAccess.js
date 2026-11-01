@@ -34,9 +34,9 @@ async function runSessionRenewalOperation(
   // readable-check: allow method-probe - input validation: a caller's optional step before the turn starts
   const beforeStart = typeof options.beforeStart === "function"
     ? await options.beforeStart({
-        ...context,
-        input
-      })
+      ...context,
+      input
+    })
     : null;
   if (beforeStart?.ok === false) {
     return beforeStart;

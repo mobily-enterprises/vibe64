@@ -185,9 +185,9 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
   const checkpointSessionHead = normalizeText(checkpoint?.sessionHead);
   const currentSessionHead = checkpointSessionHead
     ? await gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD^{commit}"], {
-        commandOptions,
-        project
-      })
+      commandOptions,
+      project
+    })
     : "";
   if (checkpointSessionHead && currentSessionHead !== checkpointSessionHead) {
     throw saveError(
@@ -367,8 +367,13 @@ function deferredCacheMaintenance(context, verifiedCommit) {
 }
 
 function failedCacheMaintenance(context, verifiedCommit, error) {
-  return retryableMirrorMaintenance(context, verifiedCommit,
-    normalizeText(error?.code) || "vibe64_session_save_github_mirror_refresh_failed", "refresh_interrupted", false);
+  return retryableMirrorMaintenance(
+    context,
+    verifiedCommit,
+    normalizeText(error?.code) || "vibe64_session_save_github_mirror_refresh_failed",
+    "refresh_interrupted",
+    false
+  );
 }
 
 async function refreshSessionWorkSaveCacheDirect({
@@ -514,7 +519,9 @@ async function saveSessionWorkDirect({
       verifiedCommit = await publishPreparedSessionWorkSave(runCommand, context, {
         commandOptions,
         connectedWorkSnapshots: snapshots,
-        onPublicationAttempt() { publicationAttempted = true; },
+        onPublicationAttempt() {
+          publicationAttempted = true;
+        },
         prepared,
         project
       });
@@ -548,13 +555,13 @@ async function saveSessionWorkDirect({
     const cacheMaintenance = deferCacheMaintenance
       ? deferredCacheMaintenance(context, verifiedCommit)
       : await refreshSessionWorkSaveCacheDirect({
-          commandOptions,
-          operationId,
-          project,
-          runCommand,
-          session,
-          verifiedCommit
-        });
+        commandOptions,
+        operationId,
+        project,
+        runCommand,
+        session,
+        verifiedCommit
+      });
     if (cacheMaintenance.retryable === true) {
       await onProgress({
         cacheMaintenance,

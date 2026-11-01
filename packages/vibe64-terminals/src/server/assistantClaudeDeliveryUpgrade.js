@@ -24,9 +24,11 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
   if (request.delivery !== "uncertain") return {};
   const run = runs.findLast(value => value.engineId === "claude");
   if (run?.error !== rejectedBeforeWrite) return {};
-  const refuse = () => { throw new Error(
-    "Rejected Claude input has conflicting delivery evidence. Inspect its original request and native receipt before retrying."
-  ); };
+  const refuse = () => {
+    throw new Error(
+      "Rejected Claude input has conflicting delivery evidence. Inspect its original request and native receipt before retrying."
+    );
+  };
   if (request.schemaVersion !== 5 || request.status !== "waiting" ||
       typeof request.messageId !== "string" || !request.messageId ||
       request.attemptedMessageId !== request.messageId || request.followup ||
@@ -61,12 +63,15 @@ export async function upgradeClaudeRejectedInput(context) {
     const updates = [];
     for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
       const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const changes = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot,
+      const changes = await store.prepareAssistantRoutingStateUpgrade({
+        temporaryRoot,
         async transform({ sessionId, metadata }) {
           // This correction targets retained Main chat requests. Restorable
           // archives are inventoried by their owner but remain unchanged.
-          const routePath = await store.withReadableSessionPaths(sessionId,
-            paths => path.join(paths.metadataRoot, "assistant_routing_request"));
+          const routePath = await store.withReadableSessionPaths(
+            sessionId,
+            paths => path.join(paths.metadataRoot, "assistant_routing_request")
+          );
           const relative = relativePathInside(context.systemRoot, routePath);
           if (relative === null) return {};
           const beforePath = path.join(context.backupRoot, "before", relative);
@@ -89,7 +94,8 @@ export async function upgradeClaudeRejectedInput(context) {
             }
           } else if (original !== null) throw new Error("Original Claude repair evidence is no longer eligible. Inspect before retrying.");
           return { metadata: patch };
-        } });
+        }
+      });
       context.report(
         "info",
         `${path.basename(projectRuntimeRoot)}: ${changes.length} rejected Claude routing file(s); explicit Retry is required and nothing is sent.`
@@ -103,8 +109,11 @@ export async function upgradeClaudeRejectedInput(context) {
   // verifies all immutable backup/destination bytes before completing writes.
   if (resuming) {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-claude-repair-"));
-    try { await prepareUpdates(temporaryRoot); }
-    finally { await rm(temporaryRoot, { recursive: true, force: true }); }
+    try {
+      await prepareUpdates(temporaryRoot);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   }
   return publishStateUpgradeFiles({ ...context, prepareUpdates });
 }

@@ -95,7 +95,9 @@ function createClaudeConversationStorage({ createError: error }) {
       try {
         await writeFile(temporary, contents, { mode: 0o600 });
         await rename(temporary, file);
-      } finally { await rm(temporary, { force: true }); }
+      } finally {
+        await rm(temporary, { force: true });
+      }
     });
     // The queue tail only orders later saves; this save's own caller receives its failure.
     entry.saving = saving.catch(() => {});
@@ -108,7 +110,9 @@ function createClaudeConversationStorage({ createError: error }) {
 
   function readSessionConversations(ctx) {
     const records = session => ({
-      get context() { return { ...ctx, session }; },
+      get context() {
+        return { ...ctx, session };
+      },
       ids: Object.entries(session?.metadata || {})
         .filter(([key, value]) => key.startsWith("claude_conversation_") && key !== "claude_conversation_id" && value)
         .map(([key]) => key.slice("claude_conversation_".length))
@@ -150,7 +154,9 @@ function createClaudeConversationStorage({ createError: error }) {
         const saved = await readFile(scopedConversationPath(ctx, id), "utf8");
         if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.");
         return saved;
-      } catch (failure) { if (failure.code !== "ENOENT") throw failure; }
+      } catch (failure) {
+        if (failure.code !== "ENOENT") throw failure;
+      }
     })();
   }
 

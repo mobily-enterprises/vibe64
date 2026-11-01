@@ -185,8 +185,12 @@ async function closeTerminalControllersForSession(sessionId, controllers, {
     // several keep any step's refusal of a retry.
     if (failures.length === 1) {
       const { cause: _cause, ...fields } = typeof only.error === "object" && only.error ? only.error : {};
-      throw Object.assign(new Error(message, { cause: only.error }), fields,
-        { code: only.error?.code || "vibe64_session_stop_failed" }, labelled);
+      throw Object.assign(
+        new Error(message, { cause: only.error }),
+        fields,
+        { code: only.error?.code || "vibe64_session_stop_failed" },
+        labelled
+      );
     }
     throw Object.assign(new AggregateError(failures.map(({ error }) => error), message), {
       code: "vibe64_session_stop_failed",

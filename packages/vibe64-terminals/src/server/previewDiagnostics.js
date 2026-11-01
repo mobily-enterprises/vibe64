@@ -45,7 +45,9 @@ function createPreviewDiagnosticRecorder({ logger, now = Date.now }) {
       logOperationalEvent(logger, "warn", fields, "Preview browser diagnostic.");
       recorded += 1;
       return { ok: true, recorded: true };
-    } catch { return { ok: true, recorded: false }; }
+    } catch {
+      return { ok: true, recorded: false };
+    }
   };
 }
 

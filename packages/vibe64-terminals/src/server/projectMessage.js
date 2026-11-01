@@ -113,8 +113,10 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
           messageId: input.messageId,
           turnMetadata: { projectMessage: { ...projectMessage, direction: "received" } }
         }, options);
-        if (result?.ok !== true) throw vibe64Error(result?.error || "Project message delivery failed.",
-          result?.code || "vibe64_project_message_delivery_failed");
+        if (result?.ok !== true) throw vibe64Error(
+          result?.error || "Project message delivery failed.",
+          result?.code || "vibe64_project_message_delivery_failed"
+        );
       } catch (error) {
         reportFailure(error, receipt);
         await writeReceipt("failed", error.message);

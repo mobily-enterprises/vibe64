@@ -159,9 +159,9 @@ function createProjectServices({
     if (!result.supported) {
       const results = await Promise.allSettled([...project.services.values()]
         .filter((service) => !sessionId || service.sessionId === sessionId).map(async (service) => {
-        const stopped = await stopExecution(service.executionId, { termTimeoutMs: 30_000 });
-        if (stopped.scopeEmpty !== true) throw new Error(stopped.error || "Project service cleanup failed.");
-      }));
+          const stopped = await stopExecution(service.executionId, { termTimeoutMs: 30_000 });
+          if (stopped.scopeEmpty !== true) throw new Error(stopped.error || "Project service cleanup failed.");
+        }));
       const failures = results.filter(({ status }) => status === "rejected").map(({ reason: error }) => error);
       if (failures.length) throw new AggregateError(failures, "Project services could not be stopped.");
     }

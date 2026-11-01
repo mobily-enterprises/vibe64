@@ -1,4 +1,5 @@
-import { codexAppServerAgentRun,
+import {
+  codexAppServerAgentRun,
   codexAppServerInterruptUnavailableResponse as nativeCodexAppServerInterruptUnavailableResponse,
   codexAppServerFrozenTurnInterruptResponse as nativeCodexAppServerFrozenTurnInterruptResponse
 } from "@jskit-ai/assistant-core/server/codex-turn";
@@ -220,9 +221,9 @@ function createCodexSessionProviderHost(host) {
         if (!learningRoot) {
           const registry = await vibe64HostContextRegistry(runtimeRoot);
           await registry.register(
-          threadId,
-          vibe64SessionContextInput(threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary"),
-          workdir
+            threadId,
+            vibe64SessionContextInput(threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary"),
+            workdir
           );
         }
         const agentSettings = codexAgentSettingsFromSession(session);
@@ -248,7 +249,9 @@ function createCodexSessionProviderHost(host) {
     return {
       sessionId,
       providerOptions: options,
-      get providerKey() { return codexAppServerProviderKey(sessionId, options); },
+      get providerKey() {
+        return codexAppServerProviderKey(sessionId, options);
+      },
       keyFields: codexAppServerProviderKeyFields,
       assertAdmission() {
         const error = codexAppServerAdmissionError(sessionId);
@@ -256,7 +259,9 @@ function createCodexSessionProviderHost(host) {
       },
       prepare: (providerKey, identity) =>
         prepareCodexAppServerSessionProvider(sessionId, options, providerKey, identity),
-      get closing() { return host.runOwner.runtimeLifecycle.closing; },
+      get closing() {
+        return host.runOwner.runtimeLifecycle.closing;
+      },
       runOwner: host.runOwner,
       get runtimeHost() {
         return codexAppServerRuntimeHost({ ...options, preserveProcessExitProof: false });

@@ -165,12 +165,16 @@ function createAssistantRoutingDecisions({
         throw failure(result?.error || "Routing could not finish. Retry or choose a mode.");
       }
       decision = parseRoutingDecision(result.rawText || result.text);
-    } catch (error) { generationError = error; }
+    } catch (error) {
+      generationError = error;
+    }
     try {
       await interrupt;
       await records.cleanupHelper(context, state);
       await retainHelper(null);
-    } catch (error) { generationError = error; }
+    } catch (error) {
+      generationError = error;
+    }
     if (generationError) throw generationError;
     return decision;
   }
@@ -186,24 +190,24 @@ function createAssistantRoutingDecisions({
       reviewEnabled: state.review,
       override: state.task === "deslop" && state.mode !== "custom" ? undefined : state.override
     }, {
-        ...context,
-        vibe64User: state.submittedBy,
-        configuration: state.configuration
-      });
+      ...context,
+      vibe64User: state.submittedBy,
+      configuration: state.configuration
+    });
     if (!decision.available) throw failure(decision.message, decision.reasonCode);
     return decision;
   }
   function destinations(decision) {
     return decision.seniorJuniorPair
       ? {
-        ...decision.seniorJuniorPair,
-        ...(decision.router ? {
-          router: {
-            effectiveSelection: decision.router,
-            connectionIdentity: decision.routerConnectionIdentity
-          }
-        } : {})
-      }
+          ...decision.seniorJuniorPair,
+          ...(decision.router ? {
+            router: {
+              effectiveSelection: decision.router,
+              connectionIdentity: decision.routerConnectionIdentity
+            }
+          } : {})
+        }
       : { [decision.role]: decision };
   }
   async function validateDecision(context, state, followup = false) {

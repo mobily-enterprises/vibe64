@@ -223,20 +223,20 @@ function normalizedProvider(
   const upstreamModelById = new Map(upstreamModels.map((model) => [model.id, model]));
   const currentModels = currentModelIds instanceof Set
     ? [...currentModelIds].filter((modelId) => !(id === OPENCODE_ZEN_PROVIDER_ID && modelId === RETIRED_ZEN_MODEL_ID))
-      .map((modelId) => upstreamModelById.get(modelId) || normalizedModel({
-        id: modelId,
-        name: modelId,
-        status: "active"
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id))
+        .map((modelId) => upstreamModelById.get(modelId) || normalizedModel({
+          id: modelId,
+          name: modelId,
+          status: "active"
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id))
     : upstreamModels;
   const models = currentModels.map((model) => (
     accessRestricted && !enabledModelIds.has(model.id) && model.status === "available"
       ? {
-        ...model,
-        lockMessage: toText(modelAccess.warning) || "This model needs additional provider access.",
-        status: "locked"
-      }
+          ...model,
+          lockMessage: toText(modelAccess.warning) || "This model needs additional provider access.",
+          status: "locked"
+        }
       : model
   ));
   const upstreamDefaultModelId = toText(defaultModelId);

@@ -317,20 +317,20 @@ async function ensureLaunchPreviewProxy({
     }),
     executePreviewIdentityCommand: terminal?.metadata?.previewIdentity
       ? async ({ selection }) => {
-          const runner = previewIdentityCommandRunnerForLaunchTerminal({
-            context,
-            runCommand: options.runCommand,
-            targetHref,
-            terminal
-          });
-          if (!runner) {
-            const error = new Error("Application preview identity command is unavailable. Restart the preview.");
-            error.code = "vibe64_preview_identity_command_unavailable";
-            error.statusCode = 409;
-            throw error;
-          }
-          return runner(selection);
+        const runner = previewIdentityCommandRunnerForLaunchTerminal({
+          context,
+          runCommand: options.runCommand,
+          targetHref,
+          terminal
+        });
+        if (!runner) {
+          const error = new Error("Application preview identity command is unavailable. Restart the preview.");
+          error.code = "vibe64_preview_identity_command_unavailable";
+          error.statusCode = 409;
+          throw error;
         }
+        return runner(selection);
+      }
       : null,
     previewPublicOrigin: String(
       previewPublicOrigin ||

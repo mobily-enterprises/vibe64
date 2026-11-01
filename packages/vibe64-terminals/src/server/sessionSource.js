@@ -222,14 +222,14 @@ async function cloneCanonicalSource({
   };
   let cacheReferenceUsed = Boolean(referenceRoot);
   const clone = (cloneReferenceRoot = "") => runGit(preparationRoot, [
-      "clone",
-      "--no-hardlinks",
-      ...(cloneReferenceRoot ? ["--reference", cloneReferenceRoot] : []),
-      "--single-branch",
-      "--branch", branch,
-      source,
-      preparedSourcePath
-    ], roots, commandOptions);
+    "clone",
+    "--no-hardlinks",
+    ...(cloneReferenceRoot ? ["--reference", cloneReferenceRoot] : []),
+    "--single-branch",
+    "--branch", branch,
+    source,
+    preparedSourcePath
+  ], roots, commandOptions);
   try {
     try {
       await clone(referenceRoot);
@@ -466,8 +466,10 @@ async function createSessionSource({
       ...(contribution.replaces ? [`refs/heads/vibe64-incoming/${contribution.replaces}_discarded`] : [])
     ]);
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(expectedCommit) || !allowedRefs.has(expectedSourceRef)) {
-      throw sourceError("Contribution renewal requires its exact confirmed source commit and owned ref.",
-        "vibe64_contribution_renewal_source_invalid");
+      throw sourceError(
+        "Contribution renewal requires its exact confirmed source commit and owned ref.",
+        "vibe64_contribution_renewal_source_invalid"
+      );
     }
     project = {
       ...project,
@@ -477,8 +479,10 @@ async function createSessionSource({
       }
     };
   } else if (contribution && expectedSourceRef) {
-    throw sourceError("Only a confirmed renewal can select a contribution source ref.",
-      "vibe64_contribution_renewal_source_invalid");
+    throw sourceError(
+      "Only a confirmed renewal can select a contribution source ref.",
+      "vibe64_contribution_renewal_source_invalid"
+    );
   }
   const sessionId = toText(session.sessionId);
   const projectContextRoot = toText(runtime?.projectContextRoot);
@@ -540,10 +544,10 @@ async function createSessionSource({
       };
   const cache = canonical.mode === PROJECT_REPOSITORY_MODE_GITHUB
     ? await prepareGithubMirrorReference({
-        commandOptions: githubCommandOptions,
-        mirrorPath: canonical.mirrorPath,
-        remoteUrl: canonical.source
-      })
+      commandOptions: githubCommandOptions,
+      mirrorPath: canonical.mirrorPath,
+      remoteUrl: canonical.source
+    })
     : {
         attempted: false,
         referenceRoot: "",
@@ -551,8 +555,8 @@ async function createSessionSource({
       };
   const baseline = canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
     ? await ensureLocalProjectBaseline(standaloneSourceRoot, {
-        runCommand
-      })
+      runCommand
+    })
     : null;
   await mkdir(sourceParent, {
     recursive: true
@@ -567,10 +571,14 @@ async function createSessionSource({
   // The path appeared after the lstat check above: never adopt it.
   if (existingTopLevel) {
     throw path.resolve(existingTopLevel) === path.resolve(sourcePath)
-      ? sourceError("The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
-        "vibe64_session_source_exists")
-      : sourceError(`Session source path is already owned by another Git repository: ${sourcePath}`,
-        "vibe64_session_source_path_conflict");
+      ? sourceError(
+        "The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
+        "vibe64_session_source_exists"
+      )
+      : sourceError(
+        `Session source path is already owned by another Git repository: ${sourcePath}`,
+        "vibe64_session_source_path_conflict"
+      );
   }
   let resolvedBaseline;
   if (canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {

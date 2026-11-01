@@ -242,15 +242,15 @@ function createServiceSessionWork({
       const sessionSourceRoot = sessionSourcePath(session);
       const recorded = sessionSourceRoot
         ? await writeSessionGitCommandActor({
-            env,
-            reason,
-            runtime,
-            session,
-            sourceRoot: sessionSourceRoot,
-            threadId: session.metadata?.agent_identity_conversation_id || "",
-            vibe64User: input.vibe64User,
-            workdir: sessionSourceRoot
-          })
+          env,
+          reason,
+          runtime,
+          session,
+          sourceRoot: sessionSourceRoot,
+          threadId: session.metadata?.agent_identity_conversation_id || "",
+          vibe64User: input.vibe64User,
+          workdir: sessionSourceRoot
+        })
         : null;
       if (recorded?.ok !== false && recorded) {
         session = recorded.session || await runtime.getSessionWithoutSource(normalizedSessionId);
@@ -557,8 +557,12 @@ function createServiceSessionWork({
         });
         if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
         const session = await context.runtime.getSessionWithoutSource(sessionId);
-        const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution",
-          { createsCommits: input.action !== "discard" });
+        const { execution } = await sessionWorkExecution(
+          sessionId,
+          { ...context, session },
+          "incoming-contribution",
+          { createsCommits: input.action !== "discard" }
+        );
         return changeManagedIncomingContribution({
           project: projectRecord,
           session,
