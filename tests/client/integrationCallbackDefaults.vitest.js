@@ -122,10 +122,10 @@ it("defers reveal while inactive and cancels it when the session, environment or
 
 it("updates the application callback suggestion without changing an explicit override or saved Env reference", async () => {
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://sas-dogandgroom.hosting.vibe64.dev" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
   const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
   try {
-    expect(form.callbackUrl.value).toBe("https://sas-dogandgroom.hosting.vibe64.dev/integrations/google/callback");
+    expect(form.callbackUrl.value).toBe("https://person-dogandgroom.apps.example.test/integrations/google/callback");
     props.dashboardContext.applicationPublicUrl = "https://dogandgroom.example";
     await nextTick();
     expect(form.callbackUrl.value).toBe("https://dogandgroom.example/integrations/google/callback");
@@ -144,7 +144,7 @@ it("updates the application callback suggestion without changing an explicit ove
 
 it("prepares MCP registration from the current project callback, region and permissions before credentials exist", async () => {
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://sas-dogandgroom.hosting.vibe64.dev" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
   const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
   try {
     expect(form.clientRegistrationBody.value).toBe("");
@@ -155,7 +155,7 @@ it("prepares MCP registration from the current project callback, region and perm
     const request = JSON.parse(form.clientRegistrationBody.value);
     expect(request).toEqual({
       client_name: "dogandgroom — Amplitude",
-      redirect_uris: ["https://sas-dogandgroom.hosting.vibe64.dev/integrations/amplitude/callback"],
+      redirect_uris: ["https://person-dogandgroom.apps.example.test/integrations/amplitude/callback"],
       token_endpoint_auth_method: "client_secret_post",
       grant_types: ["authorization_code", "refresh_token"], response_types: ["code"],
       scope: "mcp:read offline_access"
@@ -173,7 +173,7 @@ it("prepares MCP registration from the current project callback, region and perm
     await nextTick();
     expect(form.clientRegistrationEndpoint.value).toBe("https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3/dcr/register");
     const atlassian = JSON.parse(form.clientRegistrationBody.value);
-    expect(atlassian.redirect_uris).toEqual(["https://sas-dogandgroom.hosting.vibe64.dev/integrations/atlassian/callback"]);
+    expect(atlassian.redirect_uris).toEqual(["https://person-dogandgroom.apps.example.test/integrations/atlassian/callback"]);
     expect(atlassian.scope.split(" ")).toEqual(form.selected.value.scopes);
     expect(atlassian).not.toHaveProperty("client_secret");
     expect(form.registration.value.clientId).toBe("");

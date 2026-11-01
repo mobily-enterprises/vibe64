@@ -174,21 +174,21 @@ it("shared original shell refs are per mount and only local composition supplies
     const root = { children: [] }, app = uiRenderer().createApp({ setup: () => () => Vue.h(context, { local }, { default: () => Vue.h(probe) }) });
     app.mount(root); return { app, captured };
   };
-  const local = mount(true), hosted = mount(false);
+  const local = mount(true), nonLocal = mount(false);
   try {
     expect(local.captured.VIBE64_ASSISTANT_VIEWER_KEY).toEqual({ actorKey: "local" });
-    expect(hosted.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
+    expect(nonLocal.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
     for (const key of ["VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY", "VIBE64_PAGE_FOCUS_KEY"]) {
       expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
-      expect(local.captured[key]).not.toBe(hosted.captured[key]);
+      expect(local.captured[key]).not.toBe(nonLocal.captured[key]);
     }
     // One page activity channel per shell for the lesson step bar's do beats.
     expect(typeof local.captured.VIBE64_PAGE_ACTIVITY_KEY.report).toBe("function");
-    expect(local.captured.VIBE64_PAGE_ACTIVITY_KEY).not.toBe(hosted.captured.VIBE64_PAGE_ACTIVITY_KEY);
+    expect(local.captured.VIBE64_PAGE_ACTIVITY_KEY).not.toBe(nonLocal.captured.VIBE64_PAGE_ACTIVITY_KEY);
     // One Learning environment controller per shell, closed until the overlay binds a viewer.
     expect(local.captured.VIBE64_LEARNING_KEY.state.open).toBe(false);
     expect(local.captured.VIBE64_LEARNING_KEY.state.actorKey).toBe("");
-    expect(local.captured.VIBE64_LEARNING_KEY).not.toBe(hosted.captured.VIBE64_LEARNING_KEY);
+    expect(local.captured.VIBE64_LEARNING_KEY).not.toBe(nonLocal.captured.VIBE64_LEARNING_KEY);
     expect(appSource()).toContain("<Vibe64LearningOverlay />");
     expect(appSource()).toContain("<Vibe64AssistantShellContext local>");
     expect(appSource()).toContain("<Vibe64LocalColleagueHost />");
@@ -203,7 +203,7 @@ it("shared original shell refs are per mount and only local composition supplies
     // A template auto-unwraps the injected ref, so Colleague receives the local navigator itself.
     expect(localSource).toContain(':navigate="navigate"');
     expect(localSource).not.toContain("createConversationRuntime");
-  } finally { local.app.unmount(); hosted.app.unmount(); }
+  } finally { local.app.unmount(); nonLocal.app.unmount(); }
 });
 
 // Local /app has no Projects page: it resolves by mode once the mode is read.

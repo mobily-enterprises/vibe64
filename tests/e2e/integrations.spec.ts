@@ -4666,7 +4666,7 @@ for (const { viewport, providerBatch } of [
       expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       if (providerBatch === "responsive" && viewport.name === "compact") {
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("After CLI update", { exact: true }).click();
-        const url = "https://sas-dogandgroom.hosting.vibe64.dev/integrations/google/callback";
+        const url = "https://person-dogandgroom.apps.example.test/integrations/google/callback";
         await panel.getByRole("textbox", { name: "Suggested callback URL", exact: true }).fill(url);
         await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
         await expect(panel.getByRole("textbox", { name: "Configured callback URL", exact: true })).toHaveValue("https://previous.example/callback");

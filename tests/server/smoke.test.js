@@ -284,14 +284,14 @@ test("started server defaults to Unix socket when PORT is not set", async (t) =>
   });
   const app = await startServer({
     listenSocket: socketPath,
-    publicOrigin: "https://tonymobily.vibe64.dev",
+    publicOrigin: "https://person.example.test",
     startupSlug: "beepollen"
   });
 
   try {
     assert.equal(app.vibe64Listen.transport, "socket");
     assert.equal(app.vibe64Listen.socketPath, socketPath);
-    assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/project/beepollen");
+    assert.equal(app.vibe64Url, "https://person.example.test/app/project/beepollen");
     await access(socketPath);
     const socketInfo = await lstat(socketPath);
     assert.equal(socketInfo.mode & 0o777, 0o600, "only this user reaches a local server socket");
@@ -303,7 +303,7 @@ test("started server defaults to Unix socket when PORT is not set", async (t) =>
   configureVibe64Host({ sharedGroupAccess: true });
   const sharedApp = await startServer({
     listenSocket: socketPath,
-    publicOrigin: "https://tonymobily.vibe64.dev",
+    publicOrigin: "https://person.example.test",
     startupSlug: "beepollen"
   });
   try {

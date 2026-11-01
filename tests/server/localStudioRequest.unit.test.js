@@ -137,12 +137,12 @@ test("local Studio request guard accepts authenticated OS-user Vibe64 requests f
   try {
     assert.equal(isLocalStudioRequest({
       headers: {
-        host: "mercmobily.users.vibe64.dev",
-        origin: "https://mercmobily.users.vibe64.dev"
+        host: "person.users.example.test",
+        origin: "https://person.users.example.test"
       },
       ip: "10.0.0.8",
       vibe64User: {
-        username: "mercmobily"
+        username: "person"
       }
     }), true);
   } finally {

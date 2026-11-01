@@ -107,12 +107,12 @@ describe("Vibe64 launch controls", () => {
 
   it("opens remote Studio launch targets through the preview proxy", () => {
     const browserWindow = fakeBrowserWindow({
-      href: "https://massimo.users.vibe64.dev/projects/jskit-project"
+      href: "https://person.users.example.test/projects/jskit-project"
     });
     const target = {
       href: "http://127.0.0.1:4100/home",
       kind: "url",
-      previewHref: "https://v64preview-abc123def456--massimo.vibe64.dev/home?vibe64_preview_token=token"
+      previewHref: "https://v64preview-abc123def456--person.example.test/home?vibe64_preview_token=token"
     };
     const session = {
       targetRoot: "/workspace/customer-app"
@@ -398,25 +398,25 @@ describe("Vibe64 launch controls", () => {
     ];
 
     expect(resolveLaunchPreviewDestination(actions, {
-      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
+      studioHref: "https://person.example.test/app/project/beepollen"
     })).toMatchObject({
       embedHref: "",
       unavailableReason: expect.stringMatching(/only reachable from the server/u)
     });
     expect(resolveLaunchPreviewDestination([{
       ...actions[0],
-      previewHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home"
+      previewHref: "https://v64preview-abc123--person.example.test/home"
     }], {
-      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
+      studioHref: "https://person.example.test/app/project/beepollen"
     })).toMatchObject({
-      displayHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home",
-      embedHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home"
+      displayHref: "https://v64preview-abc123--person.example.test/home",
+      embedHref: "https://v64preview-abc123--person.example.test/home"
     });
     expect(resolveLaunchPreviewDestination([{
       ...actions[0],
       previewHref: "http://127.0.0.1:49100/home?vibe64_preview_token=abc"
     }], {
-      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
+      studioHref: "https://person.example.test/app/project/beepollen"
     }).embedHref).toBe("");
   });
 
@@ -425,14 +425,14 @@ describe("Vibe64 launch controls", () => {
       {
         href: "http://127.0.0.1:4103/home",
         kind: "url",
-        previewHref: "http://v64preview-abc123def456--pass.vibe64.dev/home?vibe64_preview_token=abc"
+        previewHref: "http://v64preview-abc123def456--person.example.test/home?vibe64_preview_token=abc"
       }
     ];
 
     expect(resolveLaunchPreviewDestination(actions, {
-      studioHref: "https://pass.users.vibe64.dev/app/project/whs"
+      studioHref: "https://person.users.example.test/app/project/whs"
     })).toMatchObject({
-      displayHref: "http://v64preview-abc123def456--pass.vibe64.dev/home?vibe64_preview_token=abc",
+      displayHref: "http://v64preview-abc123def456--person.example.test/home?vibe64_preview_token=abc",
       embedHref: "",
       unavailableReason: expect.stringMatching(/HTTP previews cannot be embedded from HTTPS Studio/u)
     });

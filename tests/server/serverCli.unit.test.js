@@ -41,8 +41,8 @@ test("server CLI starts local editor mode for the current directory with no targ
     "http://127.0.0.1:3001/app"
   );
   assert.equal(
-    browserUrlForPublicOrigin("https://tonymobily.vibe64.dev"),
-    "https://tonymobily.vibe64.dev/app"
+    browserUrlForPublicOrigin("https://person.example.test"),
+    "https://person.example.test/app"
   );
 });
 
@@ -82,10 +82,10 @@ test("server CLI accepts one target directory and opens local editor mode", () =
     "http://127.0.0.1:3001/app/project/beta-2"
   );
   assert.equal(
-    browserUrlForPublicOrigin("https://tonymobily.vibe64.dev/", {
+    browserUrlForPublicOrigin("https://person.example.test/", {
       startupSlug: "beta-2"
     }),
-    "https://tonymobily.vibe64.dev/app/project/beta-2"
+    "https://person.example.test/app/project/beta-2"
   );
 });
 
