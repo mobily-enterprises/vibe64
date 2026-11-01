@@ -10,27 +10,21 @@ async function loadProjectExecutionEnvRecords({
   prepare = false,
   reusePrepared = false,
   includeResourceConfiguration = false,
-  project = {},
+  project,
   session = {},
   target = ""
-} = {}) {
-  const resolveEnvironment = prepare
-    ? project.projectExecutionEnvironment
-    : project.projectInspectionEnvironment;
-  if (typeof resolveEnvironment !== "function") {
-    return {
-      runtimeConfigEnv: {},
-      ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: null } : {})
-    };
-  }
+}) {
   const sessionId = String(session.sessionId || "").trim();
-  const env = await resolveEnvironment.call(project, {
+  const request = {
     ...(includeResourceConfiguration ? { includeResourceConfiguration: true } : {}),
     ...(reusePrepared ? { reusePrepared: true } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(sessionId ? { session } : {}),
     target: String(target || "").trim()
-  });
+  };
+  const env = prepare
+    ? await project.projectExecutionEnvironment(request)
+    : await project.projectInspectionEnvironment(request);
   return {
     runtimeConfigEnv: normalizeExecutionEnvRecord(includeResourceConfiguration ? env.environment : env),
     ...(includeResourceConfiguration && Object.hasOwn(env, "resourcePreparation")

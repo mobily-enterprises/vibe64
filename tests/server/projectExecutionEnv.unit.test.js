@@ -167,8 +167,9 @@ test("Codex context avoids source inspection while retaining workspace and accou
 });
 
 test("project execution environment is empty when the project declares none", async () => {
-  assert.deepEqual(await loadProjectExecutionEnv({}), {});
-  assert.deepEqual(await loadProjectExecutionEnvRecords({}), {
+  const project = { projectInspectionEnvironment: async () => ({}) };
+  assert.deepEqual(await loadProjectExecutionEnv({ project }), {});
+  assert.deepEqual(await loadProjectExecutionEnvRecords({ project }), {
     runtimeConfigEnv: {}
   });
 });
@@ -342,8 +343,9 @@ test("managed session credentials preserve resource configuration identity, but 
   });
 });
 
-test("resource configuration is explicitly unavailable without an environment resolver", async () => {
-  assert.deepEqual(await loadProjectExecutionEnvRecords({ includeResourceConfiguration: true }), {
+test("resource configuration is explicitly unavailable when the project reports none", async () => {
+  const project = { projectInspectionEnvironment: async () => ({ environment: {} }) };
+  assert.deepEqual(await loadProjectExecutionEnvRecords({ includeResourceConfiguration: true, project }), {
     runtimeConfigEnv: {}, resourceConfigurationFingerprint: null
   });
 });
