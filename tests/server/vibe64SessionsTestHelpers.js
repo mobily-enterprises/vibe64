@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { conversationContextGrant, mainBrowserAuthority } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
@@ -40,6 +41,7 @@ function createSessionsService(dependencies) {
   const terminals = withOperations(dependencies.terminals, NEUTRAL_TERMINAL_OPERATIONS);
   return createService({
     archivePreparation: prepareNothingForArchive,
+    logger: silentLogger,
     publishProjectChanged: async () => null,
     restoreRenewalActor: restoreStandaloneRenewalActor,
     publishSessionChanged: async () => null,
