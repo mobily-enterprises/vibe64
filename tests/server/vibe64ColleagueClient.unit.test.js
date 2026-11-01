@@ -20,6 +20,7 @@ import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 import * as navigationPanes from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
 // barrels need only presentation placeholders; all JavaScript stays installed.
@@ -1062,7 +1063,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     element = elementModule.exports.default.setup(elementProps, { expose() {} });
     return () => null;
   } });
-  const placement = createWebPlacementRuntime({ components: new Map() });
+  const placement = createWebPlacementRuntime({ components: new Map(), logger: silentLogger });
   placement.setContext({ surfaceConfig: { defaultSurfaceId: "app", surfacesById: {
     app: { id: "app", routeBase: "/", requiresWorkspace: false }
   } } });

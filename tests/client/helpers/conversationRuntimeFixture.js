@@ -1,5 +1,6 @@
 import { createRenderer, h, markRaw, onScopeDispose, reactive, toValue, watch } from "vue";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { useVibe64AgentSettings } from "../../../src/composables/useVibe64AgentSettings.js";
 const { createWebPlacementRuntime } = await import(new URL("./runtime.js",
   import.meta.resolve("@jskit-ai/shell-web/client/placement")).href);
@@ -45,7 +46,7 @@ export function provideConversationFixture(app, socket, actor = "local") {
     surfaceDefinitions: { app: { requiresWorkspace: false } },
     assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } }
   };
-  const placement = createWebPlacementRuntime({ components: new Map() });
+  const placement = createWebPlacementRuntime({ components: new Map(), logger: silentLogger });
   placement.setContext({ user: { id: actor }, surfaceConfig: {
     defaultSurfaceId: "app", surfacesById: { app: { id: "app", routeBase: "/app", requiresWorkspace: false } }
   } });
