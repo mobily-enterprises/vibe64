@@ -84,11 +84,14 @@ function createDatabaseAssistantTasks({
   async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, storage) {
     const saved = await storage.readArtifact(sessionId, artifact);
     let helper = null;
-    try { helper = saved ? JSON.parse(saved) : null; }
-    catch { throw databaseError(
-      `The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`,
-      "vibe64_database_assistant_receipt_invalid"
-    ); }
+    try {
+      helper = saved ? JSON.parse(saved) : null;
+    } catch {
+      throw databaseError(
+        `The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`,
+        "vibe64_database_assistant_receipt_invalid"
+      );
+    }
     if (!helper) return;
     const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope?.id || "");
     if (!/^database_[a-f0-9-]+$/u.test(helper.scope?.id || "") || helper.scope.workdir !== path.join(root, "workdir") ||
@@ -105,8 +108,10 @@ function createDatabaseAssistantTasks({
     }, { assistantSelection: helper.selection, vibe64User });
     if (result?.ok !== true) {
       const reason = String(result?.error || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
-      throw databaseError(`The database copilot helper could not be closed${reason ? `: ${reason}` : ""}. Retry before asking again.`,
-        result?.code || "vibe64_database_assistant_cleanup_failed");
+      throw databaseError(
+        `The database copilot helper could not be closed${reason ? `: ${reason}` : ""}. Retry before asking again.`,
+        result?.code || "vibe64_database_assistant_cleanup_failed"
+      );
     }
     const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
     await storage.mutateSession(sessionId, retire);
@@ -157,8 +162,9 @@ function createDatabaseAssistantTasks({
    */
   async function closeSessionAssistants(sessionId, runtime, storage) {
     const files = await storage.withReadableSessionPaths(sessionId, async (paths) => {
-      try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
-      catch (error) {
+      try {
+        return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks"));
+      } catch (error) {
         if (error.code === "ENOENT") return [];
         throw error;
       }
@@ -264,8 +270,11 @@ function createDatabaseAssistantTasks({
               return sessionQueries.execute(context, { schema, sql, signal: task.controller.signal });
             },
             messages: input.messages,
-            runAgentTurn: (turnInput, turnOptions) => terminals.runEphemeralAgentChatTurn(helper.scope,
-              { ...turnInput, executionProfile: profile }, turnOptions),
+            runAgentTurn: (turnInput, turnOptions) => terminals.runEphemeralAgentChatTurn(
+              helper.scope,
+              { ...turnInput, executionProfile: profile },
+              turnOptions
+            ),
             schema
           });
         } catch (error) {
@@ -298,8 +307,10 @@ function createDatabaseAssistantTasks({
         if (failure) throw failure;
         return result;
       });
-      if (!admitted.acquired) throw databaseError(admitted.value?.error || "The session is unavailable for a database question.",
-        admitted.value?.code || "vibe64_database_assistant_busy");
+      if (!admitted.acquired) throw databaseError(
+        admitted.value?.error || "The session is unavailable for a database question.",
+        admitted.value?.code || "vibe64_database_assistant_busy"
+      );
       return admitted.value;
     }).finally(() => activeAssistants.delete(task));
     activeAssistants.add(task);

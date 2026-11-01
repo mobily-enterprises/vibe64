@@ -189,23 +189,23 @@ function searchDatabaseSchema(schema = {}, value = "") {
   const ranked = catalogueRequested
     ? []
     : candidates
-        .map((table) => ({ score: tableSearchScore(table, search), table }))
-        .filter((entry) => entry.score > 0)
-        .sort((left, right) => (
-          right.score - left.score ||
+      .map((table) => ({ score: tableSearchScore(table, search), table }))
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => (
+        right.score - left.score ||
           toText(left.table.qualifiedName).localeCompare(toText(right.table.qualifiedName))
-        ));
+      ));
   const selected = ranked.slice(0, MAX_DATABASE_SCHEMA_MATCHES);
   const showCatalog = catalogueRequested || ranked.length === 0;
   return boundedSchemaResult({
     catalog: showCatalog
       ? tables
-          .map((table) => ({
-            kind: toText(table.kind),
-            qualifiedName: toText(table.qualifiedName)
-          }))
-          .sort((left, right) => left.qualifiedName.localeCompare(right.qualifiedName))
-          .slice(0, MAX_DATABASE_SCHEMA_CATALOG_ENTRIES)
+        .map((table) => ({
+          kind: toText(table.kind),
+          qualifiedName: toText(table.qualifiedName)
+        }))
+        .sort((left, right) => left.qualifiedName.localeCompare(right.qualifiedName))
+        .slice(0, MAX_DATABASE_SCHEMA_CATALOG_ENTRIES)
       : [],
     matchedCount: catalogueRequested ? tables.length : ranked.length,
     objects: selected.map(({ table }) => assistantTableView(schema, table)),

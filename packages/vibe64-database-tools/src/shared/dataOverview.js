@@ -30,7 +30,9 @@ export const DATA_OVERVIEW_INSTRUCTIONS = [
 ].join("\n");
 
 export function validateDataOverview(value) {
-  const fail = (message) => { throw new Error(`Data overview: ${message}`); };
+  const fail = (message) => {
+    throw new Error(`Data overview: ${message}`);
+  };
   const record = (item, fields, label) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) fail(`${label} must be an object.`);
     if (Object.keys(item).some((key) => !fields.includes(key))) fail(`${label} contains unknown fields.`);

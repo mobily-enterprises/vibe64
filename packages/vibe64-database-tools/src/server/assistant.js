@@ -324,8 +324,10 @@ async function runDatabaseAssistant({
       prompt,
       outputSchema: DATABASE_ASSISTANT_OUTPUT_SCHEMA,
       invalidResponseError,
-      failureError: vibe64Error("The database assistant could not complete this request.",
-        "vibe64_database_assistant_failed"),
+      failureError: vibe64Error(
+        "The database assistant could not complete this request.",
+        "vibe64_database_assistant_failed"
+      ),
       signal: agentContext.signal,
       toolCatalog,
       toolContext: agentContext,
@@ -365,9 +367,9 @@ async function runDatabaseAssistant({
   } catch (error) {
     throw contextLimitError(error)
       ? vibe64Error(
-          "The database assistant request does not fit the selected assistant context. Start a shorter database conversation and try again.",
-          "vibe64_database_assistant_context_too_large"
-        )
+        "The database assistant request does not fit the selected assistant context. Start a shorter database conversation and try again.",
+        "vibe64_database_assistant_context_too_large"
+      )
       : error;
   }
   if (

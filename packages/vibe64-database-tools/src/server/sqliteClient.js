@@ -69,7 +69,9 @@ class SQLiteConnection {
 }
 
 class SQLiteClient extends ClientSQLite {
-  _driver() { return {}; }
+  _driver() {
+    return {};
+  }
 
   async acquireRawConnection() {
     const connection = new SQLiteConnection();
@@ -84,14 +86,22 @@ class SQLiteClient extends ClientSQLite {
 
   async destroyRawConnection(connection) {
     if (!connection.closed) {
-      try { await connection.request("close"); } finally { await connection.cancel(); }
+      try {
+        await connection.request("close");
+      } finally {
+        await connection.cancel();
+      }
     } else {
       await connection.exited;
     }
   }
 
-  validateConnection(connection) { return !connection.closed; }
-  cancelQuery(connection) { return connection.cancel(); }
+  validateConnection(connection) {
+    return !connection.closed;
+  }
+  cancelQuery(connection) {
+    return connection.cancel();
+  }
 
   async _query(connection, query) {
     const result = await connection.request("query", {

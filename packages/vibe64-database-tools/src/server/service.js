@@ -156,8 +156,11 @@ function createService({
         readDataOverview(context.session, schema)
       ]);
       let decision;
-      try { decision = await assistantTasks.assistantDecision(context); }
-      catch (error) { decision = { available: false, message: error.message }; }
+      try {
+        decision = await assistantTasks.assistantDecision(context);
+      } catch (error) {
+        decision = { available: false, message: error.message };
+      }
       return {
         activeQueries: sessionQueries.list(context.sessionId),
         assistant: databaseAssistantAvailability(decision),
