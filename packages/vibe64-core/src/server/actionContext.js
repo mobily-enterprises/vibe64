@@ -202,8 +202,11 @@ function registerVibe64ActionContext(actions, {
       const measure = async (phase, operation) => {
         if (!diagnostic) return operation();
         const phaseStarted = performance.now();
-        try { return await operation(); }
-        finally { timings[phase] = (timings[phase] || 0) + performance.now() - phaseStarted; }
+        try {
+          return await operation();
+        } finally {
+          timings[phase] = (timings[phase] || 0) + performance.now() - phaseStarted;
+        }
       };
       try {
         const user = await measure("user", () => resolveUser({ request: context.requestMeta?.request || null, context }));
@@ -233,15 +236,19 @@ function registerVibe64ActionContext(actions, {
       } finally {
         const durationMs = diagnostic ? performance.now() - started : 0;
         if (diagnostic && (!completed || durationMs >= 100)) {
-          logOperationalEvent(logger, "warn", {
-            event: "vibe64.conversation.browser_timing",
-            phase: "authorization-detail",
-            sessionId: input.sessionId,
-            completed,
-            durationMs,
-            timings
-          },
-          "Browser conversation authorization stages.");
+          logOperationalEvent(
+            logger,
+            "warn",
+            {
+              event: "vibe64.conversation.browser_timing",
+              phase: "authorization-detail",
+              sessionId: input.sessionId,
+              completed,
+              durationMs,
+              timings
+            },
+            "Browser conversation authorization stages."
+          );
         }
       }
     }

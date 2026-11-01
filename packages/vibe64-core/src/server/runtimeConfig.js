@@ -355,11 +355,11 @@ function runtimeConfigEnvViewModel(config = {}) {
   const view = isPlainObject(source.view)
     ? source.view
     : runtimeConfigViewModel({
-        missing: source.missing,
-        records: source.records,
-        scope,
-        target: toText(source.target)
-      });
+      missing: source.missing,
+      records: source.records,
+      scope,
+      target: toText(source.target)
+    });
   return {
     environment: scope,
     records: Array.isArray(view.records) ? view.records : [],

@@ -96,9 +96,9 @@ function vibe64RouteHandler({
       try {
         response = projectScoped
           ? await runWithResolvedProjectRequestContext({
-              projectContext,
-              request
-            }, () => handler(request, reply))
+            projectContext,
+            request
+          }, () => handler(request, reply))
           : await handler(request, reply);
       } catch (error) {
         if (isProjectRequestError(error)) {

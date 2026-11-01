@@ -40,15 +40,15 @@ function publicTerminalSnapshot(session) {
 function registerTerminalWebSocketRoute(
   fastify,
   {
-  projectContext,
-  projectScoped = true,
-  routePath,
-  resize,
-  service,
-  serviceUnavailableMessage,
-  subscribe,
-  write
-} = {}
+    projectContext,
+    projectScoped = true,
+    routePath,
+    resize,
+    service,
+    serviceUnavailableMessage,
+    subscribe,
+    write
+  } = {}
 ) {
   if (!service || typeof service !== "object") {
     throw new Error(serviceUnavailableMessage || "Terminal service is unavailable.");
@@ -184,7 +184,9 @@ function registerTerminalWebSocketRoute(
           toolId
         }))).then((result) => {
           // readable-check: allow optional-call - optional operation: a subscription result may not need unsubscribing
-          if (closed) { result?.unsubscribe?.(); return; }
+          if (closed) {
+            result?.unsubscribe?.(); return;
+          }
           if (result?.ok === false) {
             closeWithError(
               1008,

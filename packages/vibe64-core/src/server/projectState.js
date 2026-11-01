@@ -41,8 +41,7 @@ async function listProjectRuntimeRoots(systemRoot) {
   try {
     if (!(await lstat(root)).isDirectory()) throw new Error("Project state inventory requires a regular projects directory.");
     entries = await readdir(root, { withFileTypes: true });
-  }
-  catch (error) {
+  } catch (error) {
     if (error.code === "ENOENT") return [];
     throw error;
   }

@@ -34,7 +34,9 @@ let approvalCountReader = null;
 function registerApprovalCountReader(reader) {
   if (typeof reader !== "function") throw new TypeError("An approval count reader must be a function.");
   approvalCountReader = reader;
-  return () => { if (approvalCountReader === reader) approvalCountReader = null; };
+  return () => {
+    if (approvalCountReader === reader) approvalCountReader = null;
+  };
 }
 
 /**

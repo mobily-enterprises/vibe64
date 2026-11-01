@@ -141,10 +141,10 @@ function resolveVibe64ServiceDataRoot({
   const resolvedSystemRoot = String(systemRoot || "").trim()
     ? normalizeRoot(systemRoot)
     : resolveVibe64SystemRoot({
-        env,
-        home,
-        runtimeProfile
-      });
+      env,
+      home,
+      runtimeProfile
+    });
   return path.join(resolvedSystemRoot, "services");
 }
 

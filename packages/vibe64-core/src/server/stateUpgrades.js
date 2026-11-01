@@ -123,7 +123,9 @@ async function readLedger(ledgerPath) {
     throw error;
   }
   let ledger;
-  try { ledger = JSON.parse(source); } catch {
+  try {
+    ledger = JSON.parse(source);
+  } catch {
     throw new Error("State upgrade ledger is not valid JSON; inspect it before retrying.");
   }
   if (ledger?.version !== 1 || !Array.isArray(ledger.applied) || ledger.applied.length > upgrades.length ||
@@ -209,13 +211,17 @@ async function recordStateUpgradeBaseline({ systemRoot, report = (level, message
   const ledgerPath = path.join(upgradeRoot, "applied.json");
   const refuseUnlessFresh = async ignoredPath => {
     if (await ledgerExists(ledgerPath)) {
-      throw Object.assign(new Error("State upgrade ledger already exists; a baseline is only for a new installation. Use --check/--apply."),
-        { code: BASELINE_LEDGER_EXISTS });
+      throw Object.assign(
+        new Error("State upgrade ledger already exists; a baseline is only for a new installation. Use --check/--apply."),
+        { code: BASELINE_LEDGER_EXISTS }
+      );
     }
     if (await containsState(systemRoot, ignoredPath)) {
-      throw Object.assign(new Error(`Vibe64 state without a state upgrade ledger in ${systemRoot}: inspect it before recording history. ` +
+      throw Object.assign(
+        new Error(`Vibe64 state without a state upgrade ledger in ${systemRoot}: inspect it before recording history. ` +
         "Its data may already be current, so replaying every upgrade may fail; a baseline would skip upgrades it may still need."),
-      { code: BASELINE_STATE_WITHOUT_LEDGER });
+        { code: BASELINE_STATE_WITHOUT_LEDGER }
+      );
     }
   };
   await refuseUnlessFresh();
@@ -381,8 +387,9 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
   try {
     await lstat(path.join(upgradeRoot, "apply.lock"));
     return busy();
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
   }
-  catch (error) { if (error.code !== "ENOENT") throw error; }
   return maintain();
 }
 

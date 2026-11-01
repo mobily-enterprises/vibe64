@@ -94,8 +94,8 @@ function createProjectPaths({
     if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return scope.projectRecordPath;
     return targetIsCatalogProjectHome(targetRoot)
       ? resolveProjectRecordPath({
-          projectRuntimeRoot: projectRuntimeRootForTarget(targetRoot)
-        })
+        projectRuntimeRoot: projectRuntimeRootForTarget(targetRoot)
+      })
       : "";
   }
 
@@ -118,9 +118,9 @@ function createProjectPaths({
     if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return scope.projectRuntimeRoot;
     return targetIsCatalogProjectHome(targetRoot)
       ? resolveCatalogProjectRuntimeRoot({
-          slug: path.basename(normalizeRoot(targetRoot)),
-          systemRoot
-        })
+        slug: path.basename(normalizeRoot(targetRoot)),
+        systemRoot
+      })
       : externalProjectRuntimeRootForTarget(targetRoot);
   }
 
@@ -148,8 +148,8 @@ function createProjectPaths({
     const sourceRoot = sourceRootForTarget(targetRoot);
     return sourceRoot
       ? resolveSourceConfigRoot({
-          sourceRoot
-        })
+        sourceRoot
+      })
       : "";
   }
 

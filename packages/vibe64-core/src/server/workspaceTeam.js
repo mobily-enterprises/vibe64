@@ -6,7 +6,9 @@ let teamReader = null;
 function registerWorkspaceTeamReader(reader) {
   if (typeof reader !== "function") throw new TypeError("A workspace team reader must be a function.");
   teamReader = reader;
-  return () => { if (teamReader === reader) teamReader = null; };
+  return () => {
+    if (teamReader === reader) teamReader = null;
+  };
 }
 
 async function readWorkspaceTeam() {

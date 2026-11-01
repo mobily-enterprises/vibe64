@@ -17,7 +17,9 @@ let readiness = null;
 function registerTeamAiReadiness(reader) {
   if (typeof reader !== "function") throw new TypeError("Team AI readiness needs its reader.");
   readiness = reader;
-  return () => { if (readiness === reader) readiness = null; };
+  return () => {
+    if (readiness === reader) readiness = null;
+  };
 }
 
 const isTeamMember = (actor) => Boolean(actor) && actor.role !== "owner";

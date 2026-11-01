@@ -268,9 +268,9 @@ function workspaceProjectRecord({
   const repositoryFields = projectRepositoryView(metadata);
   const repositoryStorage = projectRuntimeRoot
     ? projectRepositoryStorageRole({
-        mode: repositoryFields.repositoryMode,
-        projectRuntimeRoot
-      })
+      mode: repositoryFields.repositoryMode,
+      projectRuntimeRoot
+    })
     : null;
   const deletion = normalizeProjectDeletion(metadata.deletion);
   return {
@@ -280,8 +280,8 @@ function workspaceProjectRecord({
       : "",
     deploymentsRoot: projectRuntimeRoot
       ? resolveProjectDeploymentsRoot({
-          projectRuntimeRoot
-        })
+        projectRuntimeRoot
+      })
       : "",
     allowSharedDatabaseSessions: metadata.allowSharedDatabaseSessions === true,
     developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
@@ -301,20 +301,20 @@ function workspaceProjectRecord({
       : "",
     runtimeConfigRoot: projectRuntimeRoot
       ? resolveProjectRuntimeConfigRoot({
-          projectRuntimeRoot
-        })
+        projectRuntimeRoot
+      })
       : "",
     runtimeRoot: projectRuntimeRoot
       ? resolveProjectRuntimeFilesRoot({
-          projectRuntimeRoot
-        })
+        projectRuntimeRoot
+      })
       : "",
     runtime: publicProjectRuntimeOpenState(runtime),
     ...(deletion ? { deletion } : {}),
     sessionsRoot: projectRuntimeRoot
       ? resolveProjectSessionsRoot({
-          projectRuntimeRoot
-        })
+        projectRuntimeRoot
+      })
       : "",
     slug: path.basename(resolvedPath)
   };

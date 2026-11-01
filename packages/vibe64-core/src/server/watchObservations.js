@@ -47,11 +47,15 @@ function conversationObservation({
 
 function watchUpdate(watch, observation) {
   const previous = watch.cursor;
-  const cursor = { status: observation.status, runId: observation.runId,
+  const cursor = {
+    status: observation.status,
+    runId: observation.runId,
     // An answer first seen while work is active must remain eligible when it settles.
     answerId: watch.condition === "reply" && !observation.answered ? previous?.answerId || "" : observation.answerId,
-    error: observation.error, needsUser: observation.needsUser,
-    ...(observation.revision !== undefined ? { revision: observation.revision } : {}) };
+    error: observation.error,
+    needsUser: observation.needsUser,
+    ...(observation.revision !== undefined ? { revision: observation.revision } : {})
+  };
   if (JSON.stringify(previous) === JSON.stringify(cursor)) return { cursor, reason: "" };
   if (observation.attention) return { cursor, reason: "attention" };
   if (watch.condition === "reply" && observation.answered && observation.answerId !== previous?.answerId) return {

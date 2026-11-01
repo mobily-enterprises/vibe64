@@ -19,9 +19,11 @@ const controlCharacters = /[\x00-\x1f\x7f]/u;
  * or { follows } naming another role of the same setup, one level deep.
  */
 function validateAssistantRoutingConfiguration(value) {
-  const invalid = () => { throw new Error(
-    "Saved model routing has an unsupported shape. Restore or repair the settings before changing them."
-  ); };
+  const invalid = () => {
+    throw new Error(
+      "Saved model routing has an unsupported shape. Restore or repair the settings before changing them."
+    );
+  };
   if (!isPlainObject(value) || value.schemaVersion !== 5 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
       Object.keys(value).some((key) => !["schemaVersion", "revision", "owner", "nonOwner"].includes(key)) ||
       !isPlainObject(value.owner) || !isPlainObject(value.nonOwner)) invalid();

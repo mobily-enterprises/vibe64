@@ -42,8 +42,9 @@ function parse(source, label) {
   throw new Error(`${label} is invalid. Inspect it before upgrading state.`);
 }
 async function fileDigest(filePath) {
-  try { if (!(await lstat(filePath)).isFile()) throw new Error(`Upgrade requires a regular file: ${filePath}`); }
-  catch (error) {
+  try {
+    if (!(await lstat(filePath)).isFile()) throw new Error(`Upgrade requires a regular file: ${filePath}`);
+  } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
@@ -59,7 +60,9 @@ async function atomicCopy(source, destination) {
     await copyFile(source, temporary);
     await chmod(temporary, 0o600);
     await rename(temporary, destination);
-  } finally { await rm(temporary, { force: true }); }
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 /**
@@ -128,18 +131,20 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
       const stagedManifest = path.join(temporaryRoot, "manifest.json");
       await writeFile(stagedManifest, json(manifest), { mode: 0o600 });
       await atomicCopy(stagedManifest, manifestPath);
-    } finally { await rm(temporaryRoot, { recursive: true, force: true }); }
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   }
   if (manifest.version !== 1 || !Array.isArray(manifest.files) || !manifest.files.length ||
       new Set(manifest.files.map((entry) => entry?.path)).size !== manifest.files.length) throw new Error(
-        "State upgrade backup manifest is unsupported."
-      );
+    "State upgrade backup manifest is unsupported."
+  );
   // Preflight every original, replacement and destination before resuming writes.
   for (const entry of manifest.files) {
     if (!isPlainObject(entry) || typeof entry.path !== "string" || relativeFile(path.join(systemRoot, entry.path)) !== entry.path ||
         [entry.before, entry.after].some((value) => value !== null && !/^[a-f0-9]{64}$/u.test(value))) throw new Error(
-          "State upgrade backup manifest has an invalid file entry."
-        );
+      "State upgrade backup manifest has an invalid file entry."
+    );
     await verifyUpgradeParents(systemRoot, path.join(systemRoot, entry.path));
     for (const side of ["before", "after"]) {
       await verifyUpgradeParents(backupRoot, path.join(backupRoot, side, entry.path));

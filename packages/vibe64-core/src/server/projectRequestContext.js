@@ -42,7 +42,9 @@ let practiceRequestActor = null;
 function registerPracticeRequestActor(resolve) {
   if (typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
   practiceRequestActor = resolve;
-  return () => { if (practiceRequestActor === resolve) practiceRequestActor = null; };
+  return () => {
+    if (practiceRequestActor === resolve) practiceRequestActor = null;
+  };
 }
 
 function projectSlugFromRequest(request = {}) {

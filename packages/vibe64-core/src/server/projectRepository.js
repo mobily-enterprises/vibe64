@@ -40,8 +40,11 @@ async function saveProjectRepositoryWorkflow(projectRuntimeRoot, requirePullRequ
   if (!path.isAbsolute(projectRuntimeRoot || "") || typeof requirePullRequest !== "boolean") {
     throw new Error("Choose whether to require pull requests.");
   }
-  await writeFileAtomic(path.join(projectRuntimeRoot, "settings", "repository-workflow.json"),
-    JSON.stringify({ requirePullRequest }) + "\n", { fileMode: vibe64SharedModes().file });
+  await writeFileAtomic(
+    path.join(projectRuntimeRoot, "settings", "repository-workflow.json"),
+    JSON.stringify({ requirePullRequest }) + "\n",
+    { fileMode: vibe64SharedModes().file }
+  );
   return { requirePullRequest };
 }
 
@@ -229,7 +232,9 @@ function sessionConnectedContribution(session) {
   const serialized = session?.metadata?.connected_contribution;
   if (serialized === undefined) return null;
   let value;
-  try { value = JSON.parse(serialized); } catch { /* Invalid authority must not fall back to main. */ }
+  try {
+    value = JSON.parse(serialized);
+  } catch { /* Invalid authority must not fall back to main. */ }
   if (!isPlainObject(value) || value.schemaVersion !== 1 ||
       Object.keys(value).some(key => !["schemaVersion", "id", "repository", "integrationBranch", "baseCommit", "replaces"].includes(key)) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.id || "") ||
@@ -238,8 +243,10 @@ function sessionConnectedContribution(session) {
       typeof value.repository !== "string" || !/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/u.test(value.repository) ||
       !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
       typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
-    throw projectRepositoryMetadataError("vibe64_contribution_authority_invalid",
-      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before saving.");
+    throw projectRepositoryMetadataError(
+      "vibe64_contribution_authority_invalid",
+      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before saving."
+    );
   }
   return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
 }
@@ -255,9 +262,13 @@ function sessionConnectedSubmissions(session = {}) {
   const serialized = session.metadata?.connected_submissions;
   if (serialized === undefined) return [];
   let value;
-  try { value = JSON.parse(serialized); } catch { /* Never silently drop a publication requirement. */ }
-  const invalid = () => projectRepositoryMetadataError("vibe64_connected_submissions_invalid",
-    "This session's connected Save bindings are invalid. Preserve the session and inspect its bindings before saving.");
+  try {
+    value = JSON.parse(serialized);
+  } catch { /* Never silently drop a publication requirement. */ }
+  const invalid = () => projectRepositoryMetadataError(
+    "vibe64_connected_submissions_invalid",
+    "This session's connected Save bindings are invalid. Preserve the session and inspect its bindings before saving."
+  );
   if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.submissions) ||
       Object.keys(value).some(key => !["schemaVersion", "submissions"].includes(key))) throw invalid();
   const identities = new Set();
@@ -275,9 +286,13 @@ function sessionConnectedSources(session = {}) {
   const serialized = session.metadata?.connected_sources;
   if (serialized === undefined) return [];
   let value;
-  try { value = JSON.parse(serialized); } catch { /* Preserve invalid source ownership for repair. */ }
-  const invalid = () => projectRepositoryMetadataError("vibe64_connected_sources_invalid",
-    "This session's connected source bindings are invalid. Preserve its sources and inspect the saved bindings before preparing them.");
+  try {
+    value = JSON.parse(serialized);
+  } catch { /* Preserve invalid source ownership for repair. */ }
+  const invalid = () => projectRepositoryMetadataError(
+    "vibe64_connected_sources_invalid",
+    "This session's connected source bindings are invalid. Preserve its sources and inspect the saved bindings before preparing them."
+  );
   if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources) ||
       Object.keys(value).some(key => !["schemaVersion", "sources"].includes(key))) throw invalid();
   const repositories = new Set();
@@ -317,8 +332,10 @@ function sessionRepositoryProject(project, session, options = {}) {
     if (session.metadata.github_pull_request || session.metadata.repository_branch ||
         normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_GITHUB ||
         repository !== contribution.repository || project.repository?.defaultBranch !== contribution.integrationBranch) {
-      throw projectRepositoryMetadataError("vibe64_contribution_authority_changed",
-        "This contribution's repository or integration branch changed. Review its source binding before saving.");
+      throw projectRepositoryMetadataError(
+        "vibe64_contribution_authority_changed",
+        "This contribution's repository or integration branch changed. Review its source binding before saving."
+      );
     }
     return {
       ...project,

@@ -47,8 +47,9 @@ function createLearningSpaceProjects({
     for (const part of directory.slice(current.length).split(path.sep)) {
       current = path.join(current, part);
       let info;
-      try { info = await lstat(current); }
-      catch (error) {
+      try {
+        info = await lstat(current);
+      } catch (error) {
         if (error.code === "ENOENT") return false;
         throw error;
       }
@@ -86,15 +87,17 @@ function createLearningSpaceProjects({
     if (!practiceId) return null;
     const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
     let metadata;
-    try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
-    catch (error) {
+    try {
+      metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot }));
+    } catch (error) {
       if (error instanceof SyntaxError || error.code === "ENOTDIR") return skipLearningSpaceEntry(slug, "unreadable project record");
       throw error;
     }
     if (!isPlainObject(metadata) || !metadata.training) return null;
     let training;
-    try { training = normalizeProjectTraining(metadata.training); }
-    catch (error) {
+    try {
+      training = normalizeProjectTraining(metadata.training);
+    } catch (error) {
       if (error.code === "vibe64_project_training_invalid") return skipLearningSpaceEntry(slug, "invalid training marker");
       throw error;
     }
@@ -161,8 +164,9 @@ function createLearningSpaceProjects({
   async function isLearningSpaceRuntime(slug, projectRuntimeRoot) {
     if (!PRACTICE_SLUG_PATTERN.test(slug)) return false;
     let metadata;
-    try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
-    catch (error) {
+    try {
+      metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot }));
+    } catch (error) {
       if (error instanceof SyntaxError) return false;
       throw error;
     }

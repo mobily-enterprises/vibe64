@@ -57,10 +57,10 @@ function createStudioProjectContext({
   const projectCatalogEnabled = projectCatalogEnabledForRuntimeProfile(runtimeProfile);
   const projectsRoot = projectCatalogEnabled
     ? resolveStudioProjectsRoot({
-        env,
-        explicitRoot: explicitProjectsRoot,
-        home
-      })
+      env,
+      explicitRoot: explicitProjectsRoot,
+      home
+    })
     : String(explicitProjectsRoot || "").trim()
       ? normalizeRoot(explicitProjectsRoot)
       : "";
