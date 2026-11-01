@@ -6,7 +6,9 @@
     :append-icon="mdiMenuDown"
     :aria-label="label"
     @click="emit('update:modelValue', true)"
-  ><span class="usage-picker__label">{{ label }}</span></v-btn>
+  >
+    <span class="usage-picker__label">{{ label }}</span>
+  </v-btn>
   <v-dialog :model-value="modelValue" fullscreen transition="dialog-bottom-transition" @update:model-value="emit('update:modelValue', $event)">
     <v-card class="usage-picker__dialog">
       <v-toolbar density="comfortable" color="surface">

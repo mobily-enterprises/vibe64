@@ -24,54 +24,56 @@
         </div>
         <button v-for="program in outline.programs || []" :key="program.id" type="button" class="subsystem-inspector__program nodrag nopan" @click="$emit('open-program', program.id)"><strong>{{ program.title }} →</strong><span>{{ program.description }}</span></button>
       </section>
-        <section ref="interfaceElement" class="subsystem-inspector__section" aria-label="Subsystem interface">
-          <h3>Interface <small v-if="outline.publicEntries.some(entry => entry.coverage !== 'complete')" title="Export analysis is partial. Unknown return information is omitted.">Partial</small></h3>
-          <p v-if="!outline.publicEntries.length" class="subsystem-inspector__hint" title="No intended directory-level contract is recorded; observed imports and available exports are shown separately.">Intended API not declared.</p>
-          <p v-if="outline.dependencyCoverage !== 'complete' && !outline.owner.opaque" class="subsystem-inspector__coverage" role="status" title="Unobserved imports do not prove an export is internal or unused.">Import analysis {{ outline.dependencyCoverage || 'unavailable' }}.</p>
-          <label v-if="(outline.exportCount || outline.publicSymbols.length) > 12" class="subsystem-inspector__search">Find a signature<input v-model="symbolQuery" type="search" placeholder="Operation, component, value or type" /></label>
-          <details v-for="group in signatureGroups" :key="group.key" class="subsystem-inspector__surface nodrag nopan" :open="group.primary" @toggle="$event.target.open && expandedGroups.add(group.key)">
-            <summary :title="group.explanation">{{ group.title }} · {{ group.count }}</summary>
-            <div v-if="group.primary || expandedGroups.has(group.key)">
-              <div class="subsystem-inspector__signatures">
-                <template v-for="symbol in group.symbols.slice(0, 200)" :key="`${symbol.source?.symbolId || symbol.importPaths?.join(',')}:${symbol.qualifiedName || symbol.name}:${symbol.start?.line || ''}`">
-                  <div v-if="symbol.source" class="subsystem-inspector__declaration">
-                    <button type="button" class="subsystem-inspector__signature nodrag nopan" :title="`Open ${symbol.source.path}:${symbol.source.line || ''}`" @click="$emit('inspect', symbol.source)">
-                      <small>{{ symbol.kind || 'Declaration' }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType" class="subsystem-inspector__returns">→ {{ symbol.returnType }}</span><span class="subsystem-inspector__source">{{ basename(symbol.source.path) }} ↗</span>
-                      <span v-if="symbol.declared || symbol.importPaths?.length" class="subsystem-inspector__evidence">Declared export</span>
-                    </button>
-                    <details v-if="symbol.consumers?.length" class="subsystem-inspector__consumers nodrag nopan">
-                      <summary :title="symbol.consumerEvidence === 'file' || group.key === 'candidates' ? 'Show files that import the source file; use of this particular export is unproven.' : 'Show files that import this declaration.'">{{ symbol.consumerEvidence === 'file' || group.key === 'candidates' ? 'Source file imported by' : 'Imported by' }} {{ [...new Set(symbol.consumers.map(file => file.subsystemId))].length }} subsystem{{ new Set(symbol.consumers.map(file => file.subsystemId)).size === 1 ? '' : 's' }} · {{ symbol.consumers.length }} file{{ symbol.consumers.length === 1 ? '' : 's' }}</summary>
-                      <button v-for="file in symbol.consumers" :key="file.id" type="button" class="subsystem-inspector__consumer" @click="$emit('inspect', { path: file.path })"><code>{{ file.path }}</code><span aria-hidden="true">→</span></button>
-                    </details>
-                    <p v-else-if="group.key === 'available'" class="subsystem-inspector__no-imports" title="No imports are recorded in the current analysis. This does not prove the export is unused.">No recorded imports</p>
-                  </div>
-                  <div v-else class="subsystem-inspector__signature subsystem-inspector__signature--unresolved"><small>{{ symbol.kind || 'Declaration' }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType" class="subsystem-inspector__returns">→ {{ symbol.returnType }}</span><span>{{ outline.owner.opaque ? 'External package' : 'Implementation location not resolved' }}</span></div>
-                </template>
-              </div>
-              <p v-if="group.symbols.length > 200" class="subsystem-inspector__hint">Showing 200 matches. Refine the search.</p>
-              <p v-if="symbolQuery && !group.symbols.length" class="subsystem-inspector__hint">No declarations match this search.</p>
+      <section ref="interfaceElement" class="subsystem-inspector__section" aria-label="Subsystem interface">
+        <h3>Interface <small v-if="outline.publicEntries.some(entry => entry.coverage !== 'complete')" title="Export analysis is partial. Unknown return information is omitted.">Partial</small></h3>
+        <p v-if="!outline.publicEntries.length" class="subsystem-inspector__hint" title="No intended directory-level contract is recorded; observed imports and available exports are shown separately.">Intended API not declared.</p>
+        <p v-if="outline.dependencyCoverage !== 'complete' && !outline.owner.opaque" class="subsystem-inspector__coverage" role="status" title="Unobserved imports do not prove an export is internal or unused.">Import analysis {{ outline.dependencyCoverage || 'unavailable' }}.</p>
+        <label v-if="(outline.exportCount || outline.publicSymbols.length) > 12" class="subsystem-inspector__search">Find a signature<input v-model="symbolQuery" type="search" placeholder="Operation, component, value or type"></label>
+        <details v-for="group in signatureGroups" :key="group.key" class="subsystem-inspector__surface nodrag nopan" :open="group.primary" @toggle="$event.target.open && expandedGroups.add(group.key)">
+          <summary :title="group.explanation">{{ group.title }} · {{ group.count }}</summary>
+          <div v-if="group.primary || expandedGroups.has(group.key)">
+            <div class="subsystem-inspector__signatures">
+              <template v-for="symbol in group.symbols.slice(0, 200)" :key="`${symbol.source?.symbolId || symbol.importPaths?.join(',')}:${symbol.qualifiedName || symbol.name}:${symbol.start?.line || ''}`">
+                <div v-if="symbol.source" class="subsystem-inspector__declaration">
+                  <button type="button" class="subsystem-inspector__signature nodrag nopan" :title="`Open ${symbol.source.path}:${symbol.source.line || ''}`" @click="$emit('inspect', symbol.source)">
+                    <small>{{ symbol.kind || 'Declaration' }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType" class="subsystem-inspector__returns">→ {{ symbol.returnType }}</span><span class="subsystem-inspector__source">{{ basename(symbol.source.path) }} ↗</span>
+                    <span v-if="symbol.declared || symbol.importPaths?.length" class="subsystem-inspector__evidence">Declared export</span>
+                  </button>
+                  <details v-if="symbol.consumers?.length" class="subsystem-inspector__consumers nodrag nopan">
+                    <summary :title="symbol.consumerEvidence === 'file' || group.key === 'candidates' ? 'Show files that import the source file; use of this particular export is unproven.' : 'Show files that import this declaration.'">{{ symbol.consumerEvidence === 'file' || group.key === 'candidates' ? 'Source file imported by' : 'Imported by' }} {{ [...new Set(symbol.consumers.map(file => file.subsystemId))].length }} subsystem{{ new Set(symbol.consumers.map(file => file.subsystemId)).size === 1 ? '' : 's' }} · {{ symbol.consumers.length }} file{{ symbol.consumers.length === 1 ? '' : 's' }}</summary>
+                    <button v-for="file in symbol.consumers" :key="file.id" type="button" class="subsystem-inspector__consumer" @click="$emit('inspect', { path: file.path })"><code>{{ file.path }}</code><span aria-hidden="true">→</span></button>
+                  </details>
+                  <p v-else-if="group.key === 'available'" class="subsystem-inspector__no-imports" title="No imports are recorded in the current analysis. This does not prove the export is unused.">No recorded imports</p>
+                </div>
+                <div v-else class="subsystem-inspector__signature subsystem-inspector__signature--unresolved"><small>{{ symbol.kind || 'Declaration' }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType" class="subsystem-inspector__returns">→ {{ symbol.returnType }}</span><span>{{ outline.owner.opaque ? 'External package' : 'Implementation location not resolved' }}</span></div>
+              </template>
             </div>
-          </details>
-          <details v-if="outline.programStatus !== 'valid' || outline.programDiagnostics?.length" class="subsystem-inspector__technical nodrag nopan"><summary>Analysis details</summary>
-            <p v-if="outline.programStatus !== 'valid'">Genesis explanation index needs repair.</p>
-            <p v-for="diagnostic in outline.programDiagnostics || []" :key="diagnostic.code + diagnostic.message">{{ diagnostic.message }}</p>
-          </details>
-          <details v-if="outline.publicEntries.length" class="subsystem-inspector__technical nodrag nopan"><summary>Import paths · {{ outline.publicEntries.length }}</summary>
-            <div v-for="(entry, index) in outline.publicEntries" :key="index"><code>{{ entry.importPath }}</code><p>{{ entry.conditions.join(' · ') || 'Default conditions' }}<span v-if="entry.target"> · {{ entry.target }}</span></p><p v-if="!entry.symbols.length">Public declarations have not been resolved for this path.</p></div>
-          </details>
-        </section>
-        <section v-if="outline.operations.length" class="subsystem-inspector__section">
-          <h3>Receives UI calls <span>{{ outline.operations.length }}</span></h3>
-          <button v-for="call in outline.operations" :key="call.id" type="button" class="subsystem-inspector__signature nodrag nopan" @click="$emit('inspect', { path: call.file.path, symbol: call.controllerSymbol })"><code>{{ [call.key?.protocol, call.key?.method, call.key?.operation].filter(Boolean).join(' · ') || call.id }}</code><span>{{ basename(call.file.path) }} ↗<template v-if="call.pages.length"> · {{ call.pages.map(page => page.title).join(', ') }}</template></span></button>
-        </section>
-      <section v-if="!outline.owner.opaque" ref="filesElement" class="subsystem-inspector__section subsystem-inspector__files">
-          <h3>Files <span>{{ outline.files.length }}</span></h3><p class="subsystem-inspector__hint">Click a file to open it. Bars compare source size.</p>
-          <div class="subsystem-inspector__file-tools nodrag nopan">
-            <label class="subsystem-inspector__search">Find a file<input v-model="query" type="search" placeholder="Name or path" /></label>
-            <label class="subsystem-inspector__sort">Sort<select v-model="sortBy"><option value="name">Name</option><option value="type">File type</option><option value="size">Size · largest first</option></select></label>
+            <p v-if="group.symbols.length > 200" class="subsystem-inspector__hint">Showing 200 matches. Refine the search.</p>
+            <p v-if="symbolQuery && !group.symbols.length" class="subsystem-inspector__hint">No declarations match this search.</p>
           </div>
-          <Vibe64SubsystemTreeBranch :items="tree" :folder-state="folderState" :searching="!!query.trim()" :selected-id="selected?.id || ''" @select="selected = $event" @inspect="$emit('inspect', $event)" />
-          <p v-if="!tree.length" class="subsystem-inspector__hint">No files match this search.</p>
+        </details>
+        <details v-if="outline.programStatus !== 'valid' || outline.programDiagnostics?.length" class="subsystem-inspector__technical nodrag nopan">
+          <summary>Analysis details</summary>
+          <p v-if="outline.programStatus !== 'valid'">Genesis explanation index needs repair.</p>
+          <p v-for="diagnostic in outline.programDiagnostics || []" :key="diagnostic.code + diagnostic.message">{{ diagnostic.message }}</p>
+        </details>
+        <details v-if="outline.publicEntries.length" class="subsystem-inspector__technical nodrag nopan">
+          <summary>Import paths · {{ outline.publicEntries.length }}</summary>
+          <div v-for="(entry, index) in outline.publicEntries" :key="index"><code>{{ entry.importPath }}</code><p>{{ entry.conditions.join(' · ') || 'Default conditions' }}<span v-if="entry.target"> · {{ entry.target }}</span></p><p v-if="!entry.symbols.length">Public declarations have not been resolved for this path.</p></div>
+        </details>
+      </section>
+      <section v-if="outline.operations.length" class="subsystem-inspector__section">
+        <h3>Receives UI calls <span>{{ outline.operations.length }}</span></h3>
+        <button v-for="call in outline.operations" :key="call.id" type="button" class="subsystem-inspector__signature nodrag nopan" @click="$emit('inspect', { path: call.file.path, symbol: call.controllerSymbol })"><code>{{ [call.key?.protocol, call.key?.method, call.key?.operation].filter(Boolean).join(' · ') || call.id }}</code><span>{{ basename(call.file.path) }} ↗<template v-if="call.pages.length"> · {{ call.pages.map(page => page.title).join(', ') }}</template></span></button>
+      </section>
+      <section v-if="!outline.owner.opaque" ref="filesElement" class="subsystem-inspector__section subsystem-inspector__files">
+        <h3>Files <span>{{ outline.files.length }}</span></h3><p class="subsystem-inspector__hint">Click a file to open it. Bars compare source size.</p>
+        <div class="subsystem-inspector__file-tools nodrag nopan">
+          <label class="subsystem-inspector__search">Find a file<input v-model="query" type="search" placeholder="Name or path"></label>
+          <label class="subsystem-inspector__sort">Sort<select v-model="sortBy"><option value="name">Name</option><option value="type">File type</option><option value="size">Size · largest first</option></select></label>
+        </div>
+        <Vibe64SubsystemTreeBranch :items="tree" :folder-state="folderState" :searching="!!query.trim()" :selected-id="selected?.id || ''" @select="selected = $event" @inspect="$emit('inspect', $event)" />
+        <p v-if="!tree.length" class="subsystem-inspector__hint">No files match this search.</p>
       </section>
     </div>
   </section>

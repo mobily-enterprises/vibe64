@@ -41,7 +41,9 @@
         role="switch"
         :aria-checked="showUntouched"
         @click="emit('update:showUntouched', !showUntouched)"
-      >Show untouched ({{ layout.untouched }})</v-chip>
+      >
+        Show untouched ({{ layout.untouched }})
+      </v-chip>
     </template>
 
     <template v-else>

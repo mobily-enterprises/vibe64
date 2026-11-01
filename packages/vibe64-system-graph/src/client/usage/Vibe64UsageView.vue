@@ -42,7 +42,9 @@
             role="switch"
             :aria-checked="exactOnly"
             @click="exactOnly = !exactOnly"
-          >Exact only</v-chip>
+          >
+            Exact only
+          </v-chip>
           <v-btn v-if="!compact" class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
         </div>
       </header>
@@ -146,7 +148,9 @@
                   role="switch"
                   :aria-checked="showPlumbing"
                   @click="showPlumbing = !showPlumbing"
-                >Show shared plumbing ({{ webView.plumbing }})</v-chip>
+                >
+                  Show shared plumbing ({{ webView.plumbing }})
+                </v-chip>
               </template>
             </Vibe64UsageWebCanvas>
           </template>

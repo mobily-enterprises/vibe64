@@ -36,10 +36,12 @@
     <div v-show="usageState.view === 'map'" ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), goBack($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
       <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}<details v-if="refreshOutput"><summary>Command output</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ refreshOutput }}</pre></details></v-alert>
       <v-alert v-if="!refreshing && architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Re-scan project</v-btn></v-alert>
-      <VueFlow v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
+      <VueFlow
+        v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
         :zoom-on-double-click="false" :zoom-on-scroll="false" :zoom-on-pinch="false" :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false" :elevate-nodes-on-select="false"
         :default-edge-options="{ markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#7895a4' } }"
-        @init="initialize" @nodes-initialized="fitIfPending" @node-click="selectNode" @node-drag-start="dragging = true" @node-drag-stop="rearrangeSubsystem" @viewport-change="compact = $event.zoom < 0.5" @viewport-change-end="viewportChanged" @pane-click="clearSelection">
+        @init="initialize" @nodes-initialized="fitIfPending" @node-click="selectNode" @node-drag-start="dragging = true" @node-drag-stop="rearrangeSubsystem" @viewport-change="compact = $event.zoom < 0.5" @viewport-change-end="viewportChanged" @pane-click="clearSelection"
+      >
         <template #node-page="{ data, selected }">
           <article class="storyboard-page" :class="{ 'storyboard-page--compact': compact, 'storyboard-page--root': !data.parentId, 'storyboard-page--selected': selected, 'architecture-context': expandedSubsystemId && data.id !== selectedPageId }" :title="[data.title, ...data.identities, data.file].filter(Boolean).join('\n')">
             <Handle v-if="data.parentId" id="parent" type="target" :position="Position.Top" />
@@ -61,44 +63,50 @@
           </aside>
         </template>
         <template #node-subsystem-detail="{ data }">
-          <div class="subsystem-zoom__context"><article class="subsystem-zoom nodrag nopan" aria-label="Zoomed subsystem" @wheel="!$event.ctrlKey && $event.stopPropagation()" @touchmove="($event.touches.length !== 2) && $event.stopPropagation()">
-            <nav class="subsystem-zoom__breadcrumbs" aria-label="Architecture location">
-              <button type="button" class="subsystem-zoom__back nodrag nopan" aria-label="Back to previous view" @click="goBack">← Back</button>
-              <button type="button" class="nodrag nopan" @click="closeDetail">Engine</button><span>›</span>
-              <button v-if="fileRequest || programId" type="button" class="nodrag nopan" @click="showSubsystem">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
-              <template v-if="currentProgram"><span>›</span><strong>{{ currentProgram.title }}</strong></template>
-              <template v-else-if="fileRequest && parentProgram"><span>›</span><button type="button" @click="openProgram(parentProgram.id)">{{ parentProgram.title }}</button></template>
-              <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
-              <button v-if="!data.owner.opaque" type="button" class="subsystem-zoom__usage nodrag nopan" @click="showUsageForDetail(data.owner)">Show usage</button>
-              <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest || programId ? 'Back to previous view' : 'Back to Engine'" title="Close this view (Esc)" @click="goBack($event)">×</button>
-            </nav>
-            <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
-            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :open-file="openFile" :update-location="updateFileLocation" :open-program="openProgram"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
-            <Vibe64ProgramInspector v-if="retainedProgram" v-show="programId" :key="retainedProgram.id" :active="props.active && !!programId" :program="retainedProgram" :architecture="architecture" :owner="architecture.subsystems.find(owner => owner.id === retainedProgram.subsystemId)" @inspect="openFile"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64ProgramInspector>
-            <div v-show="!fileRequest && !programId" class="subsystem-zoom__body">
-              <div v-if="retainedOutline?.owner.id !== data.owner.id" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
-              <Vibe64SubsystemInspector v-if="retainedOutline" v-show="retainedOutline.owner.id === data.owner.id" embedded :outline="retainedOutline" @inspect="openFile" @open-program="openProgram"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
-            </div>
-          </article></div>
+          <div class="subsystem-zoom__context">
+            <article class="subsystem-zoom nodrag nopan" aria-label="Zoomed subsystem" @wheel="!$event.ctrlKey && $event.stopPropagation()" @touchmove="($event.touches.length !== 2) && $event.stopPropagation()">
+              <nav class="subsystem-zoom__breadcrumbs" aria-label="Architecture location">
+                <button type="button" class="subsystem-zoom__back nodrag nopan" aria-label="Back to previous view" @click="goBack">← Back</button>
+                <button type="button" class="nodrag nopan" @click="closeDetail">Engine</button><span>›</span>
+                <button v-if="fileRequest || programId" type="button" class="nodrag nopan" @click="showSubsystem">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
+                <template v-if="currentProgram"><span>›</span><strong>{{ currentProgram.title }}</strong></template>
+                <template v-else-if="fileRequest && parentProgram"><span>›</span><button type="button" @click="openProgram(parentProgram.id)">{{ parentProgram.title }}</button></template>
+                <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
+                <button v-if="!data.owner.opaque" type="button" class="subsystem-zoom__usage nodrag nopan" @click="showUsageForDetail(data.owner)">Show usage</button>
+                <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest || programId ? 'Back to previous view' : 'Back to Engine'" title="Close this view (Esc)" @click="goBack($event)">×</button>
+              </nav>
+              <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
+              <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :open-file="openFile" :update-location="updateFileLocation" :open-program="openProgram"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
+              <Vibe64ProgramInspector v-if="retainedProgram" v-show="programId" :key="retainedProgram.id" :active="props.active && !!programId" :program="retainedProgram" :architecture="architecture" :owner="architecture.subsystems.find(owner => owner.id === retainedProgram.subsystemId)" @inspect="openFile"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64ProgramInspector>
+              <div v-show="!fileRequest && !programId" class="subsystem-zoom__body">
+                <div v-if="retainedOutline?.owner.id !== data.owner.id" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
+                <Vibe64SubsystemInspector v-if="retainedOutline" v-show="retainedOutline.owner.id === data.owner.id" embedded :outline="retainedOutline" @inspect="openFile" @open-program="openProgram"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
+              </div>
+            </article>
+          </div>
         </template>
         <template #node-subsystem="{ data, selected }">
-          <article class="engine-subsystem" :class="{ 'engine-subsystem--compact': compact, 'engine-subsystem--library': data.library, 'engine-subsystem--support': data.placementKind === 'support', 'engine-subsystem--entry': data.entryFiles.length, 'engine-subsystem--cycle': data.cycleLabel, 'engine-subsystem--selected': selected, 'engine-subsystem--expanded': data.expanded, 'architecture-context': expandedSubsystemId && !data.expanded }"
-            :title="`${data.root}\n${data.description || 'Description not recorded.'}${data.sourceLines != null ? '\n' + data.sourceLines.toLocaleString() + ' measured source lines' : ''}${data.cycleLabel ? '\n' + data.cycleLabel : ''}${data.entryFiles.length ? '\nEntry files: ' + data.entryFiles.join(', ') : ''}`">
+          <article
+            class="engine-subsystem" :class="{ 'engine-subsystem--compact': compact, 'engine-subsystem--library': data.library, 'engine-subsystem--support': data.placementKind === 'support', 'engine-subsystem--entry': data.entryFiles.length, 'engine-subsystem--cycle': data.cycleLabel, 'engine-subsystem--selected': selected, 'engine-subsystem--expanded': data.expanded, 'architecture-context': expandedSubsystemId && !data.expanded }"
+            :title="`${data.root}\n${data.description || 'Description not recorded.'}${data.sourceLines != null ? '\n' + data.sourceLines.toLocaleString() + ' measured source lines' : ''}${data.cycleLabel ? '\n' + data.cycleLabel : ''}${data.entryFiles.length ? '\nEntry files: ' + data.entryFiles.join(', ') : ''}`"
+          >
             <template v-for="port in ports" :key="port.id"><Handle :id="port.id" :type="port.type" :position="port.position" /></template>
-            <Handle v-for="(receiver, index) in data.receivers || []" :key="receiver.id" :id="`controller:${receiver.id}`" type="target" :position="Position.Left"
-              :style="{ top: `${(index + 1) * 100 / (data.receivers.length + 1)}%` }" />
+            <Handle
+              v-for="(receiver, index) in data.receivers || []" :key="receiver.id" :id="`controller:${receiver.id}`" type="target" :position="Position.Left"
+              :style="{ top: `${(index + 1) * 100 / (data.receivers.length + 1)}%` }"
+            />
             <span v-if="data.arrangeable" class="engine-subsystem__grip" role="button" tabindex="0" aria-label="Rearrange subsystem" title="Drag to arrange. Arrow keys move sideways." @keydown.left.stop.prevent="moveSubsystem(data.id, -1)" @keydown.right.stop.prevent="moveSubsystem(data.id, 1)" @dblclick.stop>⠿</span>
             <div class="engine-subsystem__content">
-            <div v-if="data.entryFiles.length" class="engine-subsystem__start">Start here</div>
-            <div class="engine-subsystem__meta"><span>{{ data.library ? 'Shared library' : data.opaque ? 'Opaque package' : data.entryFiles.length ? 'Entry point' : data.provenance === 'fallback' ? 'Directory group' : 'Subsystem' }}</span><span v-if="data.version">{{ data.version }}</span></div>
-            <h2>{{ data.title }}</h2>
-            <div v-if="data.root" class="engine-subsystem__directory">{{ data.root }}</div>
-            <p class="engine-subsystem__description">{{ data.description || (data.opaque ? 'Public package boundary. Internals stay opaque.' : 'Description not recorded.') }}</p>
-            <div class="engine-subsystem__api" :title="data.publicSummary">{{ data.publicSummary }}</div>
-            <div class="engine-subsystem__size" :title="data.opaque ? 'Package internals are not measured.' : `${data.measuredFiles} of ${data.fileIds.length} files measured; physical source lines include comments and blanks. Card area has a readability floor.`">
-              {{ data.opaque ? 'Unmeasured package' : data.sourceLines == null ? 'Size unavailable' : `${data.sizePartial ? '~' : ''}${data.sourceLines.toLocaleString()} source lines` }}<span v-if="!data.opaque"> · {{ data.fileIds.length }} files</span>
-            </div>
-            <div v-if="data.receivers?.length" class="engine-subsystem__receivers"><span v-for="receiver in data.receivers.slice(0, 2)" :key="receiver.id" :title="receiver.path">↳ {{ receiver.path.split('/').pop() }}</span><span v-if="data.receivers.length > 2" :title="data.receivers.map(receiver => receiver.path).join('\n')">+ {{ data.receivers.length - 2 }} receiving files</span></div>
+              <div v-if="data.entryFiles.length" class="engine-subsystem__start">Start here</div>
+              <div class="engine-subsystem__meta"><span>{{ data.library ? 'Shared library' : data.opaque ? 'Opaque package' : data.entryFiles.length ? 'Entry point' : data.provenance === 'fallback' ? 'Directory group' : 'Subsystem' }}</span><span v-if="data.version">{{ data.version }}</span></div>
+              <h2>{{ data.title }}</h2>
+              <div v-if="data.root" class="engine-subsystem__directory">{{ data.root }}</div>
+              <p class="engine-subsystem__description">{{ data.description || (data.opaque ? 'Public package boundary. Internals stay opaque.' : 'Description not recorded.') }}</p>
+              <div class="engine-subsystem__api" :title="data.publicSummary">{{ data.publicSummary }}</div>
+              <div class="engine-subsystem__size" :title="data.opaque ? 'Package internals are not measured.' : `${data.measuredFiles} of ${data.fileIds.length} files measured; physical source lines include comments and blanks. Card area has a readability floor.`">
+                {{ data.opaque ? 'Unmeasured package' : data.sourceLines == null ? 'Size unavailable' : `${data.sizePartial ? '~' : ''}${data.sourceLines.toLocaleString()} source lines` }}<span v-if="!data.opaque"> · {{ data.fileIds.length }} files</span>
+              </div>
+              <div v-if="data.receivers?.length" class="engine-subsystem__receivers"><span v-for="receiver in data.receivers.slice(0, 2)" :key="receiver.id" :title="receiver.path">↳ {{ receiver.path.split('/').pop() }}</span><span v-if="data.receivers.length > 2" :title="data.receivers.map(receiver => receiver.path).join('\n')">+ {{ data.receivers.length - 2 }} receiving files</span></div>
             </div>
             <div v-if="data.cycleLabel" class="engine-subsystem__warning" role="img" :aria-label="data.cycleLabel" :title="data.cycleLabel">{{ data.cycleLabel }}</div>
           </article>
@@ -125,10 +133,12 @@
       <div v-else-if="!expandedSubsystemId" class="ui-storyboard__legend">Drag empty space to pan · Zoom into a subsystem to explore · Use ⠿ to arrange <span>Entry points emphasised · Supporting directories subdued</span></div>
       <div v-if="entryWarning" class="ui-storyboard__notice" role="status">{{ entryWarning }}</div>
     </div>
-    <Vibe64UsageView v-if="usageMounted" v-show="usageState.view === 'usage'" class="ui-storyboard__usage"
+    <Vibe64UsageView
+      v-if="usageMounted" v-show="usageState.view === 'usage'" class="ui-storyboard__usage"
       :active="props.active && usageState.view === 'usage'" :session-id="props.sessionId" :state="usageState" :find-request="usageFind"
       :snapshot-key="usageSnapshotKey" :refreshing="refreshing"
-      @update:state="usageState = usageStateFromQuery($event)" @refresh="refresh" @open-source-file="emit('open-source-file', $event)" @select-preview="emit('select-preview')" />
+      @update:state="usageState = usageStateFromQuery($event)" @refresh="refresh" @open-source-file="emit('open-source-file', $event)" @select-preview="emit('select-preview')"
+    />
   </section>
 </template>
 
