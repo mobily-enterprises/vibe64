@@ -32,7 +32,8 @@ function createUsageRecording({
     readRequests,
     readRequestFunctions,
     recordInteraction,
-    delete: deleteRecording
+    delete: deleteRecording,
+    close
   } = createService({
     admission,
     events,
@@ -51,7 +52,8 @@ function createUsageRecording({
     readRequests,
     readRequestFunctions,
     recordInteraction,
-    delete: deleteRecording
+    delete: deleteRecording,
+    close
   });
 }
 

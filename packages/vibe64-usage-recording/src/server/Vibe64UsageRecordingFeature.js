@@ -69,6 +69,14 @@ const Vibe64UsageRecordingFeature = defineFeature({
    */
   actions({ usageRecording }) {
     return createUsageRecordingActions({ usageRecording });
+  },
+  /**
+   * Setup registers no recording; each start registers its own, and shutdown stops every one still running.
+   * @param {object} _capabilities
+   * @param {{ outputs: { usageRecording: UsageRecordingService } }} context
+   */
+  shutdown(_capabilities, { outputs }) {
+    return outputs.usageRecording.close();
   }
 });
 

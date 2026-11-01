@@ -71,7 +71,7 @@ async function recorder(t, { status = "active", startResult = null, admission, t
   });
   const call = (method, input = {}) => inProject(() => service[method]({ sessionId: SESSION_ID, ...input }));
   const current = async () => (await call("readCurrent")).recording;
-  return { call, current, published, root, session, sessionRoot, sourceRoot, starts };
+  return { call, current, published, root, service, session, sessionRoot, sourceRoot, starts };
 }
 
 // A stand-in tracer: the lines a recorder writes into the recording directory.
@@ -321,6 +321,16 @@ test("stop during starting succeeds, and a session that ends stops its recording
   await inProject(() => stopActiveUsageRecording(SCOPE, SESSION_ID));
   const ended = await waitFor(current, (value) => value?.id === next.id && value.state === "stopped", "session end");
   assert.equal(ended.stopReason, "session-ended");
+});
+
+test("server shutdown stops every running recording, so none stays registered", async (t) => {
+  const { call, current, service } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  assert.equal(activeUsageRecording(SCOPE, SESSION_ID).recordingId, recording.id);
+  await service.close();
+  assert.equal(activeUsageRecording(SCOPE, SESSION_ID), null);
+  const stopped = await current();
+  assert.deepEqual([stopped.id, stopped.state, stopped.stopReason], [recording.id, "stopped", "error"]);
 });
 
 test("a terminal target records its run and stops when it exits", async (t) => {

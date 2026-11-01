@@ -669,6 +669,19 @@ function createService({
     return { ok: true };
   }
 
+  /**
+   * Server shutdown stops every running recording and waits for each to finish, so none stays registered for the
+   * launcher or the Preview proxy. Each ends as one an earlier server process left running ends: with an error.
+   */
+  async function close() {
+    const results = await Promise.allSettled([...live.values()].map(async (entry) => {
+      await stopEntry(entry, "error");
+      await entry.finished;
+    }));
+    const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+    if (failures.length > 0) throw new AggregateError(failures, "Usage recordings did not stop cleanly.");
+  }
+
   return Object.freeze({
     readTargets,
     start,
@@ -679,7 +692,8 @@ function createService({
     readRequests,
     readRequestFunctions,
     recordInteraction,
-    delete: deleteRecording
+    delete: deleteRecording,
+    close
   });
 }
 
