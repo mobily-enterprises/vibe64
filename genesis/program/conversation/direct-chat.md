@@ -1234,6 +1234,13 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-genesis/src/server/hostContextRegistry.js`
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingRequests.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingAdmission.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingDecisions.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingGoals.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`

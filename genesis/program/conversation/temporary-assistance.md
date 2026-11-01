@@ -181,6 +181,9 @@ Changing the composer selection never rewrites historical attribution.
 
 - `packages/vibe64-core/src/server/featureRoutes.js`
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingAdmission.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
 - `packages/vibe64-runtime/src/server/assistantRoutingStateUpgrade.js`
 - `tests/server/assistantRoutingStateUpgrade.unit.test.js`
 - `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`

@@ -9,6 +9,7 @@ import {
   runRegisteredPlaywrightCommand
 } from "./agentPreviewBrowserWorker.js";
 import { waitForPreviewReady } from "./agentPreviewStatusText.js";
+import { doNothing } from "./doNothing.js";
 
 /** @typedef {ReturnType<typeof import("./agentPreviewCommandState.js").createAgentPreviewCommandState>} AgentPreviewCommandState */
 /** @typedef {ReturnType<typeof import("./agentPreviewWorkerRegistry.js").createAgentPreviewWorkerRegistry>} AgentPreviewWorkerRegistry */
@@ -16,9 +17,6 @@ import { waitForPreviewReady } from "./agentPreviewStatusText.js";
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {typeof import("@local/vibe64-execution/server").vibe64ManagedExecutionProvider} Vibe64ManagedExecutionProvider */
 /** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64Execution} StopVibe64Execution */
-
-// A browser test's progress text has nowhere to go when its caller streams none.
-function writeNoOutput() {}
 
 /**
  * A session's browser tests: the one run a session may have at a time, its
@@ -108,7 +106,8 @@ function createAgentPreviewBrowserTests({
   }
 
   async function withTestApproval(sessionId, input, options, targetId, operation, validate) {
-    const { onOutput = writeNoOutput } = options;
+    // A browser test's progress text has nowhere to go when its caller streams none.
+    const { onOutput = doNothing } = options;
     const run = (startTarget) => launchTarget.withPreviewTarget(sessionId, targetId, async (token) => {
       const pending = state.browserTestRuns.get(sessionId);
       if (pending?.admissionId) {

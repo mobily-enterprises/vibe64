@@ -1,0 +1,193 @@
+import { readWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
+import {
+  VIBE64_ASSISTANT_SELECTION_METADATA,
+  serializeVibe64AssistantSelection,
+  sameVibe64AssistantSelection,
+  vibe64AssistantSelectionFromMetadata
+} from "@local/vibe64-runtime/shared";
+import {
+  assistantModePrompt,
+  assistantWorkflowInstructions,
+  assistantGoalIsActive,
+  assistantWorkflowRole
+} from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  failure,
+  activeMessage,
+  withSelection,
+  usesWorkPlan,
+  recentVisibleMessages
+} from "./assistantRoutingRequests.js";
+
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
+/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
+/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
+
+/**
+ * Delivery of a routed request, or of its follow-up, to the chosen AI, and the attribution its turn carries.
+ * @param {object} dependencies
+ * @param {AssistantRoutingState} dependencies.routingState
+ * @param {AssistantRoutingRecords} dependencies.records
+ * @param {AssistantRoutingDecisions} dependencies.decisions
+ * @param {SessionAgentManager} dependencies.agent
+ * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
+ * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
+ * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
+ */
+function createAssistantRoutingDelivery({
+  routingState,
+  records,
+  decisions,
+  agent,
+  dispatch,
+  prepareSelection,
+  interrupt
+}) {
+  async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
+    if (!routingState.allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.");
+    const store = context.runtime.store;
+    context = { ...context, vibe64User: state.submittedBy };
+    const modelRole = assistantWorkflowRole(state);
+    const role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
+    const implementing = state.stage === "implementation";
+    const followupLabel = state.stage === "review" ? "Senior review" : state.stage === "planning" ? "Continue planning" : "Continue implementation";
+    const selection = state.assignments[modelRole];
+    const input = activeMessage(state);
+    const messageId = input.messageId || state.messageId;
+    const displayMessage = input.displayMessage || input.message;
+    const selectedContext = withSelection(context, selection);
+    selectedContext.expectedConnectionIdentity = decisions.destinations(state.decision || {})[modelRole]?.connectionIdentity;
+    const uncertain = state.delivery === "uncertain";
+    if (uncertain || state.attemptedMessageId === messageId) {
+      const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext)
+        .catch(error => { if (!inspectionOnly) throw error; return null; });
+      // Only the AI's proof that it never received the attempt makes it
+      // unsent; a retry then sends it normally.
+      if (receipt?.admission === "not-admitted") {
+        delete state.attemptedMessageId;
+        state.delivery = followup ? "pending" : "failed"; state.status = "waiting";
+        await records.save(context, state);
+        if (inspectionOnly) return { status: "not-sent", messageId, error: "This request was not sent." };
+      } else {
+        if (inspectionOnly && receipt?.admission !== "accepted") return { ok: false, delivered: false, messageId };
+        if (receipt?.admission !== "accepted") throw failure("Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.", "vibe64_assistant_routing_delivery_uncertain");
+        await store.writeConversationUserMessage(sessionId, {
+          messageId, text: displayMessage,
+          attachments: followup ? [] : state.input.displayAttachments,
+          turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantSelection: selection, assistantRouting: attribution(state, followup),
+            ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
+        });
+        state.status = "working"; state.delivery = "accepted";
+        state.turnId = receipt.turnId || "";
+        delete state.error;
+        await records.save(context, state);
+        return { ok: true, delivered: true, messageId, threadId: state.threadId };
+      }
+    }
+    // Explicit inspection may use only the original uncertain-receipt branch.
+    // It cannot continue into selection, preparation or native dispatch.
+    if (inspectionOnly) return null;
+    if (followup && state.mode !== "auto") throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
+    if (state.stopped) throw failure("This request was stopped. Send a new request to continue.");
+    await decisions.validateDecision(context, state, followup);
+    records.mark(state.messageId, "deliver-validated");
+    const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+    const expected = followup ? state.deliverySelection : state.observedSelection;
+    const { goal, pinned } = await records.currentGoal(sessionId, context);
+    const workflow = assistantGoalIsActive(goal) && pinned?.workflowEngineId;
+    if ((workflow && workflow !== state.workflowEngineId) ||
+        !sameVibe64AssistantSelection(currentSelection, expected) && !sameVibe64AssistantSelection(currentSelection, state.deliverySelection)) {
+      throw failure("The orchestrator changed while this request was being prepared. Cancel it and send a new request.");
+    }
+    if (state.helper) throw failure("The routing helper still needs cleanup before this request can be delivered.");
+    const native = await agent.sessionState(sessionId, context);
+    if (native?.turn?.active) throw failure("Wait for the current turn to finish before sending a new request.");
+    // The goal read above is already inside this same exclusive section.
+    if (followup && assistantGoalIsActive(goal)) {
+      state.status = "waiting"; state.error = "Finish or cancel the goal before resuming this workflow."; await records.save(context, state);
+      return { ok: true, skipped: true };
+    }
+    if (followup && (native?.pendingRequests?.length || native?.turn?.waitingForInput)) {
+      throw failure("Answer the pending question or approval before continuing.");
+    }
+    if (followup) {
+      const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+      const messages = await recentVisibleMessages(store, sessionId, 5);
+      if ((plan?.revision || null) !== state.followup.planRevision ||
+          JSON.stringify(messages) !== JSON.stringify(state.followup.messages) || usesWorkPlan(state) && plan?.status !== "active" && !(state.stage === "review" && plan?.status === "completed")) {
+        throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.");
+      }
+    }
+    if (!followup && state.mode === "auto" && state.input.planRevision) {
+      const plan = await readWorkPlan(context);
+      if (!plan || plan.status !== "active" || plan.revision !== state.input.planRevision) {
+        throw failure("The active plan changed before execution started. Read it and send your execution request again.");
+      }
+    }
+    const includePlanInstructions = state.task !== "deslop" && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
+    let message = assistantModePrompt(role, input.message, {
+      intent: state.task || (state.mode === "auto" ? state.stage === "review" ? "review" : state.reason : ""),
+      browserReview: state.workflow && implementing,
+      planInstructions: includePlanInstructions ? workPlanInstructions(role) : ""
+    });
+    if (state.workflow || state.mode === "auto" && state.stage === "planning") message += "\n\n" + assistantWorkflowInstructions(state);
+    await prepareSelection(sessionId, selection, context);
+    state.deliverySelection = selection;
+    // Save the delivery selection before the session selection changes. The
+    // sending status adds no recovery meaning before dispatch, so one save
+    // records both.
+    state.status = "working"; state.delivery = "sending";
+    await records.save(context, state);
+    selectedContext.session.metadata = { ...context.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) };
+    await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
+    records.mark(state.messageId, "selection-saved");
+    const result = await dispatch(sessionId, {
+      ...(followup ? {} : state.input), messageId, message, displayMessage,
+      ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
+      turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantRouting: attribution(state, followup), ...(followup ? { actor: "app", actorLabel: followupLabel } : {}) },
+      onPromptSending: async ({ threadId }) => {
+        // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
+        if (!followup) await context.onPromptSending?.({ threadId, assistantSelection: selection });
+        state.threadId = threadId; state.attemptedMessageId = messageId;
+        // Persist the attempt before dispatch, but keep a live send in progress.
+        // Only a lost response or restart makes its delivery uncertain.
+        await records.save(context, state);
+      },
+      onPromptRejected: async () => {
+        delete state.attemptedMessageId;
+        state.delivery = followup ? "pending" : "failed"; state.status = "waiting";
+        await records.save(context, state);
+      }
+    }, selectedContext);
+    records.mark(state.messageId, "dispatched");
+    if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
+    // A Cancel that arrived during dispatch stops the turn this message started.
+    if (records.isCancelling(sessionId, context, messageId)) await interrupt(sessionId, context).catch(() => {});
+    state.status = "working"; state.delivery = "accepted";
+    state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
+    if (state.workflow === true || state.mode === "auto" && state.stage === "planning") routingState.liveFollowupRequests.set(records.keyFor(sessionId, context), state.messageId);
+    delete state.error;
+    await records.save(context, state);
+    return { ...result, assistantRoutingRequest: state };
+  }
+  function attribution(state, followup) {
+    const modelRole = assistantWorkflowRole(state);
+    const destination = decisions.destinations(state.decision || {})[modelRole];
+    let resolvedMode = state.resolvedMode;
+    if (state.stage === "review") resolvedMode = "review";
+    else if (state.task === "deslop" && resolvedMode === "senior") resolvedMode = "deslop";
+    return { requestedMode: state.mode, resolvedMode,
+      workflowEngineId: state.workflowEngineId, destination: state.assignments[modelRole],
+      configuredSelection: destination?.configuredSelection,
+      reason: state.reason || "", parentMessageId: followup ? state.messageId : "", settingsRevision: state.settingsRevision };
+  }
+
+  return Object.freeze({
+    deliver
+  });
+}
+
+export {
+  createAssistantRoutingDelivery
+};
