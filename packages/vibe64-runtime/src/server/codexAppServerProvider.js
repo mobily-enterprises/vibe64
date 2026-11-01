@@ -458,7 +458,7 @@ function codexAppServerRuntimeHost(options = {}) {
     ownedRuntime: options.ownedRuntime,
     verifyOwnerScope: options.verifyOwnerScope,
     reason: options.reason,
-    ownerId: normalizeAgentText(options.runtimeInstanceId || options.session?.sessionId || options.session?.id),
+    ownerId: normalizeAgentText(options.runtimeInstanceId || options.session?.sessionId),
     providerHome: Boolean(curatedCodexProvider(options.modelProviderId)),
     compatibility: {
       attachmentHostRoot: codexAttachmentHostRoot({ env: options.env }),

@@ -12,7 +12,7 @@ const request = { protocol: INTEGRATION_SETUP_PROTOCOL, requestId: "request-1", 
 const reply = (values = {}) => ({ protocol: request.protocol, requestId: request.requestId, status: "disconnected", ...values });
 const options = {
   sourceRoot: "/tmp/application", command: { argv: ["node", "scripts/integrations.js"], workdir: "." },
-  env: { GOOGLE_SECRET: "private-value" }, runtimes: ["nodejs"], project: { id: "one" }, session: { id: "editing" },
+  env: { GOOGLE_SECRET: "private-value" }, runtimes: ["nodejs"], project: { id: "one" }, session: { sessionId: "editing" },
   selection: { operation: "status", integrationId: "calendar" }
 };
 

@@ -141,7 +141,7 @@ async function cleanupRejectedSourceEditorExplanationThread(
   }
   try {
     const cleanup = await terminalService.deleteDetachedAgentChatThread(
-      context.sessionId || context.session?.sessionId || context.session?.id,
+      context.sessionId,
       {
         executionProfile: sourceEditorExecutionProfileSnapshot(executionProfile) ||
           sourceEditorExecutionProfileRequest(),

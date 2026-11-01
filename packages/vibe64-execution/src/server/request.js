@@ -249,7 +249,7 @@ function normalizeExecutionDescriptor(value = {}, {
     );
   }
   const ownerId = normalizeExecutionIdentifier(
-    execution.ownerId || session.sessionId || session.id
+    execution.ownerId || session.sessionId
   );
   if (lifecycle === "service" && !ownerId) {
     throw commandRequestError(
@@ -281,7 +281,7 @@ function normalizeExecutionDescriptor(value = {}, {
       execution.projectSlug || project.slug || project.projectSlug
     ),
     sessionId: normalizeExecutionIdentifier(
-      execution.sessionId || session.sessionId || session.id
+      execution.sessionId || session.sessionId
     )
   });
 }
