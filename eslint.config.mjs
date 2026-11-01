@@ -71,13 +71,5 @@ export default [
       "max-lines": "off",
       "max-lines-per-function": "off"
     }
-  },
-  {
-    // One browser script, rendered whole by the single function that returns it.
-    files: ["packages/vibe64-terminals/src/server/launchPreviewBridge.js"],
-    rules: {
-      "max-lines": "off",
-      "max-lines-per-function": "off"
-    }
   }
 ];
