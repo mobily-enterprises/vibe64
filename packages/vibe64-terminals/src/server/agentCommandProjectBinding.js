@@ -4,7 +4,7 @@ import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
-function projectContextRoot(project = {}) {
+function projectContextRoot(project) {
   const root = normalizeText(project?.projectRoot || project?.path);
   return root ? path.resolve(root) : "";
 }
@@ -59,12 +59,9 @@ function createAgentCommandProjectBinding(projectService, errors, { capture = ()
     return binding;
   }
 
-  return Object.freeze({
-    bind,
-    forget,
-    get: (sessionId = "") => bindings.get(normalizeText(sessionId)) || null,
-    run
-  });
+  const get = (sessionId = "") => bindings.get(normalizeText(sessionId)) || null;
+
+  return Object.freeze({ bind, forget, get, run });
 }
 
 export { createAgentCommandProjectBinding };

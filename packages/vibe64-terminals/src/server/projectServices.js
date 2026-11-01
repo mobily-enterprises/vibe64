@@ -202,7 +202,7 @@ function createProjectServices({
       throw new Error("The destination project is closing or closed. Reopen it before sending.");
     }
   }
-  return { ensure, beginClose, opened, close, closeSession, closeAll, assertOpen };
+  return Object.freeze({ ensure, beginClose, opened, close, closeSession, closeAll, assertOpen });
 }
 
 export { createProjectServices };

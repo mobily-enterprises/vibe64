@@ -85,12 +85,12 @@ function createPreviewProxyConnectionTracker({
     sockets.clear();
   }
 
-  return {
+  return Object.freeze({
     destroyAll,
     sockets,
     trackRequest,
     trackSocket
-  };
+  });
 }
 
 function bindPreviewProxySocketPair(left, right, {

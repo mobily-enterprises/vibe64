@@ -571,66 +571,74 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       })
     };
 
-    return {
-      args: () => {
-        return launchTargetTerminalArgs({
-          launchActions: openTarget.href
-            ? [
-                {
-                  href: openTarget.href,
-                  kind: "url",
-                  label: openTarget.label
-                }
-              ]
-            : [],
-          port,
-          startupCommands
-        });
-      },
+    function args() {
+      return launchTargetTerminalArgs({
+        launchActions: openTarget.href
+          ? [
+              {
+                href: openTarget.href,
+                kind: "url",
+                label: openTarget.label
+              }
+            ]
+          : [],
+        port,
+        startupCommands
+      });
+    }
+
+    function env({ id, fingerprint = false } = {}) {
+      // Allocation is runtime identity; configured path and environment still
+      // participate in reuse. Port zero keeps the fingerprint allocation-free.
+      const environmentTargetHref = fingerprint ? `http://127.0.0.1:0${urlPath}` : agentTargetHref;
+      const previewAuthSecret = previewAuthSecretValue && !id
+        ? PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER
+        : previewAuthSecretValue;
+      if (previewAuthSecretValue && id) {
+        writePreviewAuthSecret(previewAuthSecretPath({
+          sessionRoot: session.sessionRoot || "",
+          terminalSessionId: id || ""
+        }), previewAuthSecretValue);
+      }
+      return normalizeLaunchEnv({
+        ...(launch.env || {}),
+        ...launchAgentEnv,
+        VIBE64_LAUNCH_AGENT_HREF: environmentTargetHref,
+        ...previewIdentityCommandEnvironment({
+          previewIdentity,
+          secret: previewAuthSecret
+        })
+      });
+    }
+
+    function onClose() {
+      releasePortReservation();
+    }
+
+    function onStop() {
+      releasePortReservation();
+    }
+
+    return Object.freeze({
+      args,
       command: "bash",
       commandPreview: startupCommands.map((entry) => entry.commandPreview || entry.command).join("\n"),
       cwd: workdir,
-      env: ({ id, fingerprint = false } = {}) => {
-        // Allocation is runtime identity; configured path and environment still
-        // participate in reuse. Port zero keeps the fingerprint allocation-free.
-        const environmentTargetHref = fingerprint ? `http://127.0.0.1:0${urlPath}` : agentTargetHref;
-        const previewAuthSecret = previewAuthSecretValue && !id
-          ? PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER
-          : previewAuthSecretValue;
-        if (previewAuthSecretValue && id) {
-          writePreviewAuthSecret(previewAuthSecretPath({
-            sessionRoot: session.sessionRoot || "",
-            terminalSessionId: id || ""
-          }), previewAuthSecretValue);
-        }
-        return normalizeLaunchEnv({
-          ...(launch.env || {}),
-          ...launchAgentEnv,
-          VIBE64_LAUNCH_AGENT_HREF: environmentTargetHref,
-          ...previewIdentityCommandEnvironment({
-            previewIdentity,
-            secret: previewAuthSecret
-          })
-        });
-      },
+      env,
       metadata,
       ok: true,
       allowedRoots: Array.isArray(launch.allowedRoots)
         ? launch.allowedRoots.map((root) => normalizeText(root)).filter(Boolean)
         : [],
-      onClose: () => {
-        releasePortReservation();
-      },
-      onStop: () => {
-        releasePortReservation();
-      },
+      onClose,
+      onStop,
       readinessMarker: readiness.readinessMarker,
       releasePortReservation,
       restartOnChange: launch.restartOnChange || null,
       // Vibe64's readiness probes use Node independently of the application runtime.
       runtimes: normalizeLaunchRuntimes([...(launch.runtimes || []), "node26"]),
       reuseRunning: true
-    };
+    });
   } catch (error) {
     releasePortReservation();
     throw error;

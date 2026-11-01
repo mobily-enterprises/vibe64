@@ -376,18 +376,22 @@ async function createVibe64OutputTargetTerminalSpec({
     }),
     session: context.session || {}
   });
-  if (spec?.ok !== false) {
-    spec.stackHash = outputs.stackHash;
-    spec.resourceWorkflow = resourceWorkflowRecipe(target, outputs.resourceEstimates);
-    spec.metadata = {
-      ...(spec.metadata || {}),
-      outputTargetId: targetView.id,
-      outputTargetLabel: targetView.label
-    };
-    delete spec.metadata.launchTargetId;
-    delete spec.metadata.launchTargetLabel;
+  if (spec?.ok === false) {
+    return spec;
   }
-  return spec;
+  const metadata = {
+    ...(spec.metadata || {}),
+    outputTargetId: targetView.id,
+    outputTargetLabel: targetView.label
+  };
+  delete metadata.launchTargetId;
+  delete metadata.launchTargetLabel;
+  return {
+    ...spec,
+    stackHash: outputs.stackHash,
+    resourceWorkflow: resourceWorkflowRecipe(target, outputs.resourceEstimates),
+    metadata
+  };
 }
 
 function resourceWorkflowRecipe(target, estimates) {
