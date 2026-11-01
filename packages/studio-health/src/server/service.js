@@ -234,7 +234,7 @@ async function gitIdentityCheck({ runCommand, studioRoot }) {
   };
 }
 
-async function inspectWorkspace({ packs = true, project, studioRoot }) {
+async function inspectWorkspace({ packs, project, studioRoot }) {
   try {
     await access(path.join(studioRoot, "package.json"));
     const catalog = await project.listProjects();
@@ -278,7 +278,7 @@ const LOCAL_ACCOUNT_HINTS = Object.freeze({
   default: ""
 });
 
-async function inspectAccounts({ connections, input, packs = true }) {
+async function inspectAccounts({ connections, input, packs }) {
   try {
     const result = await connections.getStatus(input);
     if (result?.ok === false) throw new Error(result.error || result.blockedReason || "Account status could not be read.");
@@ -389,11 +389,7 @@ function createService({
   project,
   runCommand = runVibe64Command,
   studioRoot
-} = {}) {
-  if (!connections || !project || !studioRoot) {
-    throw new TypeError("Studio Health requires account, project, and Studio-root services.");
-  }
-
+}) {
   async function inspect(input) {
     const packs = Boolean(runtimePackRoot());
     const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
@@ -501,7 +497,5 @@ function createService({
 
 export {
   commandCheck,
-  createService,
-  inspectAccounts,
-  inspectWorkspace
+  createService
 };
