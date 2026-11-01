@@ -132,9 +132,9 @@ function createSessionWork({
    * A session's work with each connected contribution's status, read through
    * the person's request to each receiving project.
    * @param {string} sessionId
-   * @param {object} [requestContext]
+   * @param {object} requestContext
    */
-  function inspectSessionWork(sessionId, requestContext = {}) {
+  function inspectSessionWork(sessionId, requestContext) {
     return inspectWork(sessionId, requestContext, {
       includeConnected: true,
       inspectContributionPublication: false,
@@ -221,7 +221,7 @@ function createSessionWork({
     }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
   }
 
-  async function saveSessionWork(sessionId, input = {}, requestContext = {}) {
+  async function saveSessionWork(sessionId, input, requestContext = {}) {
     if (input.connectedReview !== undefined) return connectedContributions.saveConnectedWork(sessionId, input, requestContext);
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
@@ -509,9 +509,9 @@ function createSessionWork({
 
   /**
    * @param {string} sessionId
-   * @param {object} [input]
+   * @param {object} input
    */
-  function updateSessionWork(sessionId, input = {}) {
+  function updateSessionWork(sessionId, input) {
     return updateWork(sessionId, input, false);
   }
 

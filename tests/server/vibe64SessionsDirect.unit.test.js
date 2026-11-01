@@ -953,7 +953,7 @@ test("session work inspection includes the durable native Save operation", async
     }
   });
 
-  const result = await service.inspectSessionWork("session-1");
+  const result = await service.inspectSessionWork("session-1", {});
   assert.equal(result.ok, true);
   assert.equal(result.unsaved, true);
   assert.equal(result.activeOperation, null);
@@ -987,19 +987,19 @@ test("overlapping work reads share one inspection only for the same project and 
       }
     }
   });
-  const tabs = Array.from({ length: 6 }, () => service.inspectSessionWork("session-1"));
+  const tabs = Array.from({ length: 6 }, () => service.inspectSessionWork("session-1", {}));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(inspections.length, 1);
 
   projectRoot = "/project-b";
-  const otherProject = service.inspectSessionWork("session-1");
+  const otherProject = service.inspectSessionWork("session-1", {});
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(inspections.length, 2);
   assert.equal(inspections[1].projectRoot, "/project-b");
 
   projectRoot = "/project-a";
   canonicalCommit = "canonical-new";
-  const changedSource = service.inspectSessionWork("session-1");
+  const changedSource = service.inspectSessionWork("session-1", {});
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(inspections.length, 3);
   inspections[0].resolve({ unsaved: true });
@@ -1009,12 +1009,12 @@ test("overlapping work reads share one inspection only for the same project and 
   assert.equal((await otherProject).unsaved, false);
   assert.equal((await changedSource).unsaved, false);
 
-  const failed = service.inspectSessionWork("session-1");
+  const failed = service.inspectSessionWork("session-1", {});
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(inspections.length, 4, "Completed reads must not be cached.");
   inspections[3].reject(new Error("Inspection failed"));
   assert.equal((await failed).ok, false);
-  const retry = service.inspectSessionWork("session-1");
+  const retry = service.inspectSessionWork("session-1", {});
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(inspections.length, 5, "Failed reads must not be cached.");
   inspections[4].resolve({ unsaved: true });
@@ -1040,6 +1040,9 @@ test("session work inspection returns operations read after repository inspectio
           store: {
             async readBackgroundTask(_sessionId, taskId) {
               return taskId === "save-work" ? saveTask : updateTask;
+            },
+            async writeBackgroundTaskEvent(_sessionId, _taskId, { patch }) {
+              return { ...saveTask, ...patch };
             }
           }
         };
@@ -1049,6 +1052,13 @@ test("session work inspection returns operations read after repository inspectio
     terminals: {
       async requireAssistantAccess() {
         return { ok: true };
+      },
+      // The running Save still holds the session, so its recovery is refused for now.
+      async recoverSessionWorkSave() {
+        throw Object.assign(new Error("Another assistant operation is starting."), {
+          code: "vibe64_agent_write_mode_busy",
+          retryable: true
+        });
       },
       async inspectSessionWork() {
         saveTask = {
@@ -1062,7 +1072,7 @@ test("session work inspection returns operations read after repository inspectio
     }
   });
 
-  const result = await service.inspectSessionWork("session-1");
+  const result = await service.inspectSessionWork("session-1", {});
 
   assert.equal(result.ok, true);
   assert.equal(result.unsaved, false);
@@ -1132,7 +1142,7 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     }
   });
 
-  const result = await service.inspectSessionWork("session-1");
+  const result = await service.inspectSessionWork("session-1", {});
   assert.equal(result.ok, true);
   assert.equal(result.operation.status, "ready");
   assert.equal(recoverCalls, 1);
@@ -1174,31 +1184,31 @@ test("unknown Save publication survives failed recovery and service restart with
       return { saveCommit: "saved", reconciled: true, status: "saved" };
     }
   } });
-  const first = await restart().inspectSessionWork("session-1");
+  const first = await restart().inspectSessionWork("session-1", {});
   assert.equal(first.operation.code, "vibe64_session_save_publication_unknown");
   assert.equal(first.operation.status, "failed");
-  assert.equal((await restart().saveSessionWork("session-1")).code, "vibe64_session_save_publication_unknown");
+  assert.equal((await restart().saveSessionWork("session-1", {})).code, "vibe64_session_save_publication_unknown");
   assert.equal(saves, 0);
   assert.deepEqual(metadata, {});
   reachable = true;
   const resumed = restart();
-  const recovered = await resumed.inspectSessionWork("session-1");
+  const recovered = await resumed.inspectSessionWork("session-1", {});
   assert.equal(recovered.operation.status, "ready");
   assert.equal(recovered.operation.code, "");
   assert.deepEqual(metadata, { canonical_commit: "saved", base_commit: "saved" });
-  await resumed.inspectSessionWork("session-1");
+  await resumed.inspectSessionWork("session-1", {});
   assert.equal(recoveryCalls, 3, "a confirmed recovery is not repeated");
   assert.equal(saves, 0);
   unpublished = true;
   task = { id: "save-work", operationId: "uncertain-save", status: "failed", stage: "publishing",
     code: "vibe64_pull_request_required", error: "GitHub requires a pull request." };
   const originalRejection = { ...task };
-  const rejected = await restart().inspectSessionWork("session-1");
+  const rejected = await restart().inspectSessionWork("session-1", {});
   assert.deepEqual(rejected.operation, originalRejection,
     "a verifier proving no publication must preserve the original actionable rejection");
   assert.equal(saves, 0);
   task = { ...task, code: "vibe64_session_save_publication_unknown", error: "remote was unavailable" };
-  const notPublished = await restart().inspectSessionWork("session-1");
+  const notPublished = await restart().inspectSessionWork("session-1", {});
   assert.equal(notPublished.operation.code, "vibe64_session_save_interrupted_retryable",
     "fresh proof of no publication must clear an unknown outcome and allow a deliberate retry");
   assert.equal(notPublished.operation.retryable, true);
@@ -1277,7 +1287,7 @@ test("work inspection recovers an interrupted prepared Update and advances its b
     }
   });
 
-  const result = await service.inspectSessionWork("session-1");
+  const result = await service.inspectSessionWork("session-1", {});
   assert.equal(result.ok, true);
   assert.equal(result.updateOperation.status, "ready");
   assert.equal(recoverCalls, 1);
@@ -1287,7 +1297,7 @@ test("work inspection recovers an interrupted prepared Update and advances its b
   ]);
   assert.equal(writes[0][0], "update-session");
   assert.equal(writes[0][1].event.kind, "update-recovered");
-  await service.inspectSessionWork("session-1");
+  await service.inspectSessionWork("session-1", {});
   assert.equal(recoverCalls, 1);
   assert.equal(prepareCalls, 1);
 });
@@ -1361,9 +1371,9 @@ test("work inspection observes a live Save without mistaking it for an interrupt
     }
   });
 
-  const saving = service.saveSessionWork("session-1");
+  const saving = service.saveSessionWork("session-1", {});
   await saveStartedPromise;
-  const inspected = await service.inspectSessionWork("session-1");
+  const inspected = await service.inspectSessionWork("session-1", {});
   assert.equal(inspected.operation.status, "running");
   assert.deepEqual(inspected.activeOperation, {
     kind: "save",
@@ -1375,7 +1385,7 @@ test("work inspection observes a live Save without mistaking it for an interrupt
   const saved = await saving;
   assert.equal(saved.ok, true);
   assert.equal(saved.operation.status, "ready");
-  const afterSave = await service.inspectSessionWork("session-1");
+  const afterSave = await service.inspectSessionWork("session-1", {});
   assert.equal(afterSave.activeOperation, null);
 });
 
@@ -1504,7 +1514,7 @@ test("Save authority races become a ready update requirement rather than an AI f
     }
   });
 
-  const result = await service.saveSessionWork("session-1");
+  const result = await service.saveSessionWork("session-1", {});
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_session_save_update_required");
   assert.equal(backgroundTask.status, "ready");
@@ -1688,7 +1698,7 @@ for (const namingFallback of [false, true]) {
         }
       });
 
-      const saved = await service.saveSessionWork(sessionId);
+      const saved = await service.saveSessionWork(sessionId, {});
       assert.equal(saved.ok, true);
 
       const reloadedStore = createVibe64SessionStore({
@@ -1776,7 +1786,7 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
     }
   });
 
-  const result = await service.saveSessionWork("session-1");
+  const result = await service.saveSessionWork("session-1", {});
 
   assert.equal(result.ok, true);
   assert.equal(result.operation.status, "ready");
@@ -1850,7 +1860,7 @@ test("a reconciled Save supersedes an older failed session update", async () => 
     }
   });
 
-  const result = await service.saveSessionWork("session-1");
+  const result = await service.saveSessionWork("session-1", {});
 
   assert.equal(result.ok, true);
   assert.equal(tasks.get("update-session").status, "ready");
@@ -1915,7 +1925,7 @@ test("work inspection repairs a failed update superseded by a later reconciled S
     }
   });
 
-  const result = await service.inspectSessionWork("session-1");
+  const result = await service.inspectSessionWork("session-1", {});
 
   assert.equal(result.ok, true);
   assert.equal(result.updateOperation.status, "ready");
@@ -1989,7 +1999,7 @@ test("work inspection resolves a failed Update the session repaired outside Save
     [{ ...repaired, targetInHead: true, updateNeeded: true }, /contains the saved version this Update was trying to apply/u]
   ]) {
     const { inspected, service, tasks } = failedUpdateInspection(evidence);
-    const result = await service.inspectSessionWork("session-1");
+    const result = await service.inspectSessionWork("session-1", {});
     assert.equal(result.ok, true);
     assert.deepEqual(inspected, [{ sessionId: "session-1", targetCommit: "a".repeat(40) }]);
     assert.equal(result.updateOperation.status, "ready");
@@ -2018,7 +2028,7 @@ test("work inspection keeps a failed Update, with its reason, while the conflict
     Object.assign(new Error("git is unavailable"), { code: "git_failed" })
   ]) {
     const { conflictMessage, service, tasks } = failedUpdateInspection(evidence);
-    const result = await service.inspectSessionWork("session-1");
+    const result = await service.inspectSessionWork("session-1", {});
     assert.equal(result.ok, true);
     assert.equal(result.updateOperation.status, "failed");
     assert.equal(result.updateOperation.code, "vibe64_session_update_conflict");
@@ -2152,7 +2162,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     }
   });
 
-  const failed = await service.updateSessionWork("session-1");
+  const failed = await service.updateSessionWork("session-1", {});
   assert.equal(failed.ok, false);
   assert.equal(tasks.get("update-session").status, "failed");
   assert.deepEqual(tasks.get("update-session").conflictRecovery, conflictRecovery);
@@ -2191,12 +2201,12 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     };
     tasks.set("update-session", previous);
     denyWrite = true;
-    const denied = await service.updateSessionWork("session-1");
+    const denied = await service.updateSessionWork("session-1", {});
     assert.equal(denied.code, "vibe64_agent_write_mode_busy");
     assert.equal(tasks.get("update-session"), previous);
 
     denyWrite = false;
-    const fresh = await service.updateSessionWork("session-1");
+    const fresh = await service.updateSessionWork("session-1", {});
     assert.equal(fresh.ok, true);
     assert.notEqual(fresh.operation.operationId, previous.operationId);
     assert.equal(fresh.operation.status, "ready");
@@ -2205,7 +2215,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
   }
   assert.equal(preparations.length, 3);
   rejectPreparation = true;
-  const preparedFailed = await service.updateSessionWork("session-1");
+  const preparedFailed = await service.updateSessionWork("session-1", {});
   assert.equal(preparedFailed.ok, true, "A preparation startup failure must not undo successful Update.");
   assert.equal(preparedFailed.operation.status, "ready");
   session.workspaceSetup = { status: "failed", diagnostic: "Dependency installation failed." };
@@ -2626,7 +2636,7 @@ test("native Save rejects every active provider state before touching Git", asyn
     }
   });
 
-  const result = await service.saveSessionWork("session-1");
+  const result = await service.saveSessionWork("session-1", {});
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_session_save_agent_active");
   assert.equal(saveCalls, 1);
@@ -2709,7 +2719,7 @@ test("live workspace preparation prevents retry and archive races", async () => 
     }
   });
 
-  const archived = await service.archiveSession("session-1");
+  const archived = await service.archiveSession("session-1", {});
   assert.equal(archived.ok, false);
   assert.equal(archived.code, "vibe64_workspace_setup_running");
 
@@ -2730,7 +2740,7 @@ test("archiving retains main and temporary routing cleanup records", async () =>
       getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, markSessionClosing: async () => { closed = true; } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: {},
       setupRunner: { isRunning: () => false, wait: () => null } });
-    const result = await service.archiveSession("session-1");
+    const result = await service.archiveSession("session-1", {});
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_assistant_routing_pending");
     assert.equal(closed, false);
@@ -2765,7 +2775,7 @@ test("archive cancels exact pending routing outside its lock and retains deliver
           calls.push("stop-native");
         } },
       setupRunner: { isRunning: () => false, wait: () => null } });
-    assert.equal((await service.archiveSession("session-1")).ok, true);
+    assert.equal((await service.archiveSession("session-1", {})).ok, true);
     assert.deepEqual(calls, ["cancel", "closing", "stop-native", "archive"]);
     assert.deepEqual(JSON.parse(metadata.assistant_routing_request), { ...route, stopped: true });
   }
@@ -2788,12 +2798,12 @@ test("archive cancellation failures retain the session and a reload retries clea
       session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true, helper: null });
     }, closeSessionTerminals: async () => {} },
     setupRunner: { isRunning: () => false, wait: () => null } };
-  const failed = await createService(options).archiveSession("session-1");
+  const failed = await createService(options).archiveSession("session-1", {});
   assert.equal(failed.code, "cleanup-failed");
   assert.equal(archived, false);
   assert.equal(JSON.parse(session.metadata.assistant_routing_request).helper.conversationId, "owned-helper");
   cleanupFailed = false;
-  assert.equal((await createService(options).archiveSession("session-1")).ok, true);
+  assert.equal((await createService(options).archiveSession("session-1", {})).ok, true);
   assert.equal(archived, true);
 });
 
@@ -2814,7 +2824,7 @@ test("archive preserves pin and renewal guards before cancelling routing and rej
           stopped: guard === "stopped-replacement" });
         preparing = guard === "preparation";
       } }, setupRunner: { isRunning: () => preparing, wait: () => null } });
-    const result = await service.archiveSession("session-1");
+    const result = await service.archiveSession("session-1", {});
     assert.equal(result.ok, false);
     assert.equal(cancelled, ["pinned", "renewal"].includes(guard) ? 0 : 1);
     if (["replacement", "stopped-replacement"].includes(guard)) assert.equal(result.code, "vibe64_assistant_routing_pending");
@@ -2882,7 +2892,7 @@ test("an active Save keeps archiving out of its agent-write window", async () =>
   });
   await saveStartedPromise;
 
-  const blocked = await service.archiveSession("session-1");
+  const blocked = await service.archiveSession("session-1", {});
   assert.equal(blocked.ok, false);
   assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
   assert.equal(blocked.retryable, true);
@@ -2890,7 +2900,7 @@ test("an active Save keeps archiving out of its agent-write window", async () =>
 
   finishSave();
   await saving;
-  const archived = await service.archiveSession("session-1");
+  const archived = await service.archiveSession("session-1", {});
   assert.equal(archived.ok, true);
   assert.deepEqual(calls, [
     "save-started",
@@ -2953,7 +2963,7 @@ test("active archiving keeps Save out of its agent-write window", async () => {
     }
   });
 
-  const archiving = service.archiveSession("session-1");
+  const archiving = service.archiveSession("session-1", {});
   await cleanupStartedPromise;
   let saveRan = false;
   const save = await runVibe64AgentWriteExclusive(runtime, "session-1", async () => {
@@ -3020,12 +3030,12 @@ test("failed archiving cleanup releases the agent-write lock for retry", async (
     }
   });
 
-  const failed = await service.archiveSession("session-1");
+  const failed = await service.archiveSession("session-1", {});
   assert.equal(failed.ok, false);
   assert.equal(failed.code, "vibe64_test_cleanup_failed");
   assert.deepEqual(calls, ["closing", "terminals:1", "clear-closing"]);
 
-  const retried = await service.archiveSession("session-1");
+  const retried = await service.archiveSession("session-1", {});
   assert.equal(retried.ok, true);
   assert.deepEqual(calls, [
     "closing",
@@ -3082,9 +3092,9 @@ test("concurrent archiving has one cleanup owner", async () => {
     }
   });
 
-  const first = service.archiveSession("session-1");
+  const first = service.archiveSession("session-1", {});
   await cleanupStartedPromise;
-  const second = await service.archiveSession("session-1");
+  const second = await service.archiveSession("session-1", {});
   assert.equal(second.ok, false);
   assert.equal(second.code, "vibe64_agent_write_mode_busy");
   assert.equal(cleanupCount, 1);
@@ -3105,7 +3115,8 @@ test("archiving a session releases its managed resources after terminals stop", 
     status: "active"
   };
   const runtime = {
-    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
+    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; },
+      async runSessionExclusive(_sessionId, _operationName, operation) { return { acquired: true, value: await operation() }; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -3141,7 +3152,7 @@ test("archiving a session releases its managed resources after terminals stop", 
     }
   });
 
-  const result = await service.archiveSession("session-1");
+  const result = await service.archiveSession("session-1", {});
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["closing", "terminals", "resources:session-1", "archive"]);
 });
@@ -3157,7 +3168,8 @@ test("archiving a source-creation failure does not release resources that were n
     status: "blocked"
   };
   const runtime = {
-    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
+    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; },
+      async runSessionExclusive(_sessionId, _operationName, operation) { return { acquired: true, value: await operation() }; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -3193,7 +3205,7 @@ test("archiving a source-creation failure does not release resources that were n
     }
   });
 
-  const result = await service.archiveSession("failed-source");
+  const result = await service.archiveSession("failed-source", {});
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["closing", "terminals", "archive"]);
 });
@@ -3327,7 +3339,7 @@ test("unavailable routing and failed initialization do not create a session", as
       resolveAssistantPurpose: async () => ({ available: false, message: "Plan unavailable", reasonCode: "vibe64_assistant_routing_invalid" }),
       requireAssistantSelectionAccess: async () => { assert.fail("No available destination to authorize"); }
     });
-    const result = await harness.service.createSession();
+    const result = await harness.service.createSession({});
     assert.equal(result.ok, false);
     assert.equal(result.code, failedSetup ? "vibe64_assistant_routing_stale" : "vibe64_assistant_routing_invalid");
     assert.equal(harness.runtimeCreations, 0);
@@ -3661,7 +3673,7 @@ test("session responses enforce the ordinary three-session policy on the server"
       openSessionCount: 2
     });
 
-    const third = await harness.service.createSession();
+    const third = await harness.service.createSession({});
     assert.equal(third.ok, true);
     assert.equal(third.sessionId, "session-3");
     assert.equal(third.creation.canCreate, false);
@@ -3671,7 +3683,7 @@ test("session responses enforce the ordinary three-session policy on the server"
       openSessionCount: 3
     });
 
-    const rejected = await harness.service.createSession();
+    const rejected = await harness.service.createSession({});
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, "vibe64_session_creation_limit");
     assert.deepEqual(rejected.details, {
@@ -3693,10 +3705,10 @@ test("shared database override admits the third session and rejects a fourth on 
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
     });
     assert.equal((await harness.service.listSessions({})).creation.canCreate, true);
-    const third = await harness.service.createSession();
+    const third = await harness.service.createSession({});
     assert.equal(third.ok, true, JSON.stringify(third));
     assert.equal(third.limits.maxOpenSessions, 3);
-    const fourth = await harness.service.createSession();
+    const fourth = await harness.service.createSession({});
     assert.equal(fourth.ok, false);
     assert.equal(fourth.code, "vibe64_session_creation_limit");
     assert.equal(harness.creationInputs.length, 1);
@@ -3804,7 +3816,7 @@ test("an unfinished renewal durably reserves the shared-database session slot", 
           maxOpenSessions: 1,
           openSessionCount: 1
         });
-        const rejected = await harness.service.createSession();
+        const rejected = await harness.service.createSession({});
         assert.equal(rejected.code, "vibe64_session_creation_limit");
         assert.equal(harness.creationInputs.length, 0);
       });
@@ -3833,9 +3845,9 @@ test("shared-session admission releases its lock before workspace setup starts",
       }
     });
 
-    const acceptedRequest = harness.service.createSession();
+    const acceptedRequest = harness.service.createSession({});
     await setupStarted;
-    const rejected = await harness.service.createSession();
+    const rejected = await harness.service.createSession({});
 
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, "vibe64_session_creation_limit");
@@ -3867,9 +3879,9 @@ test("shared-session admission releases its lock before realtime publication", a
       scope: "project"
     });
 
-    const acceptedRequest = harness.service.createSession();
+    const acceptedRequest = harness.service.createSession({});
     await publicationStarted;
-    const rejected = await harness.service.createSession();
+    const rejected = await harness.service.createSession({});
 
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, "vibe64_session_creation_limit");
@@ -3984,25 +3996,20 @@ test("internal contribution creation retains normal admission and cannot select 
   });
 });
 
-test("reserved creation refuses original durable session evidence or unavailable absence authority before runtime writes", async () => {
-  for (const existingEvidence of [true, false]) {
-    await withTemporaryRoot(async targetRoot => {
-      const runtimeRoot = projectRuntimeRoot(targetRoot);
-      const sessionId = "training-pinned-session";
-      const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: runtimeRoot });
-      const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot });
-      if (existingEvidence) await store.createSession({ sessionId, runtimeKind: "genesis" });
-      else delete harness.runtime.store.assertSessionCreationAbsent;
-      const result = await harness.service.createSession({}, { sessionId, expectedCommit: "a".repeat(40) });
-      assert.equal(result.ok, false);
-      if (existingEvidence) {
-        assert.equal(result.code, "vibe64_session_creation_state_conflict");
-        assert.equal((await store.readSession(sessionId)).sessionId, sessionId);
-      } else assert.match(result.error, /absence check/);
-      assert.equal(harness.creationInputs.length, 0);
-      assert.equal(harness.openSessions.length, 0);
-    });
-  }
+test("reserved creation refuses original durable session evidence before runtime writes", async () => {
+  await withTemporaryRoot(async targetRoot => {
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionId = "training-pinned-session";
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: runtimeRoot });
+    const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot });
+    await store.createSession({ sessionId, runtimeKind: "genesis" });
+    const result = await harness.service.createSession({}, { sessionId, expectedCommit: "a".repeat(40) });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_session_creation_state_conflict");
+    assert.equal((await store.readSession(sessionId)).sessionId, sessionId);
+    assert.equal(harness.creationInputs.length, 0);
+    assert.equal(harness.openSessions.length, 0);
+  });
 });
 
 for (const reservedSessionId of [undefined, "training-reserved-session"]) {

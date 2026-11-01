@@ -1,6 +1,6 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { closeTerminalSessionsForNamespace } from "@local/vibe64-execution/server/terminalSessions";
-import { CODEX_APP_SERVER_RUNTIME_BUSY_CODE } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { CODEX_APP_SERVER_RUNTIME_BUSY_CODE } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexAppServerThreadSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { cleanupCodexAttachments, releaseCodexSessionAttachments } from "./codexAttachments.js";
 import { codexThreadIdForWorkdir, withCodexState } from "./codexConversationStorage.js";

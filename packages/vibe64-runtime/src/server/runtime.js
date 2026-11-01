@@ -126,18 +126,17 @@ class Vibe64SessionRuntime {
 
   /**
    * @param {object} request
-   * @param {object} [request.metadata]
+   * @param {object} request.metadata
    * @param {string} [request.sessionId]
    * @param {object} [request.sourceContext] what createSessionSource receives besides the session
    * @param {string} [request.status]
    */
   async createSession({
-    // readable-check: allow dependency-default - input validation: a new session without metadata has none
-    metadata = {},
+    metadata,
     sessionId = "",
     sourceContext = {},
     status = VIBE64_SESSION_STATUS.ACTIVE
-  } = {}) {
+  }) {
     const session = await this.store.createSession({
       runtimeKind: GENESIS_SESSION_KIND,
       metadata,

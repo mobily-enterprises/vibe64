@@ -121,9 +121,9 @@ const Vibe64SessionsFeature = defineFeature({
     return createSessionActions({ sessions });
   },
   /**
-   * A server that holds one project resumes that project's interrupted
-   * archives and renewals without waiting for them. A hosted server, which
-   * holds none, recovers each project at its own boundary.
+   * When the server has a target project, boot resumes that project's
+   * interrupted archives and renewals without waiting for them; otherwise
+   * boot does nothing.
    * @param {object} capabilities
    * @param {ProjectService} capabilities.project
    * @param {{ outputs: { sessions: SessionsService } }} context

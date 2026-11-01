@@ -92,6 +92,7 @@ function createService({
   });
   const connected = createConnectedContributions({
     actions,
+    logger,
     project,
     terminals
   });

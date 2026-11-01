@@ -83,6 +83,7 @@ test("plain runtime creates a Genesis session and awaits source materialization"
     });
 
     const created = await runtime.createSession({
+      metadata: {},
       sessionId: "plain-session",
       sourceContext: {
         vibe64User: {
@@ -275,7 +276,7 @@ test("plain runtime refuses to return a session without chat-ready source", asyn
     });
 
     await assert.rejects(
-      () => runtime.createSession({ sessionId: "missing-source" }),
+      () => runtime.createSession({ metadata: {}, sessionId: "missing-source" }),
       { code: "vibe64_session_source_creator_required" }
     );
     const blocked = await runtime.store.readSession("missing-source");
@@ -346,7 +347,7 @@ test("session lists omit source creation across runtime instances until success 
           runtimeKind: "genesis", sessionId: "healthy", metadata: sourceMetadata(targetRoot, "healthy")
         });
         await mkdir(sourcePath(targetRoot, "healthy"), { recursive: true });
-        const creating = runtime.createSession({ sessionId: "creating" });
+        const creating = runtime.createSession({ metadata: {}, sessionId: "creating" });
         const outcome = fails ? assert.rejects(creating, /Clone failed/u) : creating;
         await entered.promise;
         const duplicate = assert.rejects(observer.createSession({ sessionId: "creating" }), {
@@ -498,7 +499,7 @@ test("a blocked session whose source creation failed can be archived", async () 
     });
 
     await assert.rejects(
-      () => runtime.createSession({ sessionId: "failed-source" }),
+      () => runtime.createSession({ metadata: {}, sessionId: "failed-source" }),
       { code: "vibe64_session_source_creator_required" }
     );
     await mkdir(failedSourcePath, {
@@ -1011,7 +1012,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
         return { prompt: "Original Genesis exercise prompt" };
       }
     });
-    const created = await runtime.createSession({ sessionId: "practice-learning", sourceContext: { originalActor: "learner42" } });
+    const created = await runtime.createSession({ metadata: {}, sessionId: "practice-learning", sourceContext: { originalActor: "learner42" } });
     assert.equal(sourceCreates, 1); assert.equal(created.sourceReady, true); assert.equal(created.sourcePath, sourcePath(root, created.sessionId));
     assert.equal(created.nativeExecutionRoot, created.sourcePath); assert.equal(created.purpose, "learning");
     assert.deepEqual(created.learning, { schemaVersion: 1, ...scope, conversationId: created.sessionId });

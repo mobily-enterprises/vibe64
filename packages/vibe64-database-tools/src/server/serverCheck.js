@@ -202,6 +202,7 @@ async function postgresqlCheck(endpoint, { timeoutMs }) {
   const client = pgClient(endpoint, timeoutMs);
   client.on("error", () => {});
   try {
+    // Closing the client is best-effort cleanup; the check's own result or error is what the caller gets.
     await withTimeout(client.connect(), timeoutMs + 500, () => client.end().catch(() => {}));
     const result = await withTimeout(client.query("SHOW server_version"), timeoutMs);
     return { product: "PostgreSQL", version: String(result.rows?.[0]?.server_version || "").split(" ")[0] };

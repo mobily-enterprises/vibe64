@@ -12,7 +12,7 @@ import {
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
   codexCliResumeCommand
-} from "./codexAppServerProvider.js";
+} from "./codexAppServerAgent.js";
 import { vibe64SessionDebugLog } from "./sessionDebugLog.js";
 
 import {
@@ -171,8 +171,7 @@ async function writeCodexAppServerIdentityMetadata({
   // recorded before is reported so its owner can release it once stopped.
   const previousRuntimeDir = renewalInternal
     ? ""
-    // readable-check: allow optional-call - optional operation: a store without metadata reads has no previous runtime folder
-    : toText((await runtime.store.readMetadata?.(sessionId))?.agent_transport_runtime_dir);
+    : toText((await runtime.store.readMetadata(sessionId)).agent_transport_runtime_dir);
   await mutateSession(sessionId, async () => {
     await Promise.all(Object.entries(metadata).map(([name, value]) => (
       writeMetadataValue(sessionId, name, String(value || ""))

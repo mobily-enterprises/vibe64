@@ -156,6 +156,9 @@ async function controllerHarness({
       async mutateSession(_sessionId, operation) {
         return operation();
       },
+      async runSessionExclusive(_sessionId, _operationName, operation) {
+        return { acquired: true, value: await operation() };
+      },
       async readConversationLogPage() {
         return {
           conversationLog: userMessages.slice(-1).map((message) => ({ user: message })),

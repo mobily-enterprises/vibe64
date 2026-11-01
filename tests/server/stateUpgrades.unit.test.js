@@ -16,7 +16,7 @@ import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server
 import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { upgradeIndependentProviderCredentials as clearProviderCredentials } from "../../packages/vibe64-accounts/src/server/providerCredentialsUpgrade.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
-import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";

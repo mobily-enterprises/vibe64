@@ -13,7 +13,7 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
-import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
+import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
@@ -82,9 +82,8 @@ test("runtime env files load broadly while runtime config stays explicit", async
       "JSKIT_REALTIME_DEBUG=1"
     ].join("\n"), "utf8");
 
-    loadRuntimeEnvFiles({
-      appEnvFile
-    });
+    // The app root's .env loads once per process; this file stands in for it.
+    process.loadEnvFile(appEnvFile);
 
     assert.equal(process.env.HOST, "0.0.0.0");
     assert.equal(process.env.PORT, "3939");

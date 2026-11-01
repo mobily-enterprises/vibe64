@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { isTrustedStudioWebSocketRequest, requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
@@ -10,7 +11,7 @@ import { conversationTransportSchema } from "./conversationTransportSchema.js";
 const SUBSCRIBE_ACTION_ID = "vibe64.conversation.subscribe";
 
 function conversationUnavailable() {
-  return Object.assign(new Error("This conversation is unavailable."), { code: "conversation_forbidden", statusCode: 403 });
+  return new AppError(403, "This conversation is unavailable.", { code: "conversation_forbidden" });
 }
 
 /**

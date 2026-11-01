@@ -68,6 +68,9 @@ function fakeRuntime({
       },
       async readConversationLog() {
         return conversationLog;
+      },
+      async readMetadata() {
+        return {};
       }
     };
   store.mutateSessionForRenewal = store.mutateSession;

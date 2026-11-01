@@ -106,7 +106,7 @@ function createSessionArchive({
     }
   }
 
-  async function archiveSession(sessionId, input = {}) {
+  async function archiveSession(sessionId, input) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         const error = new Error("Wait for workspace preparation to finish before archiving this session.");
@@ -274,7 +274,7 @@ function createSessionArchive({
       }
       if (operation?.status === "failed") continue;
       if (operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived") continue;
-      const result = await archiveSession(session.sessionId);
+      const result = await archiveSession(session.sessionId, {});
       if (result?.ok === false) failures.push({ sessionId: session.sessionId, ...result });
     }
     return { failures };

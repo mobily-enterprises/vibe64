@@ -1,4 +1,4 @@
-import { CODEX_APP_SERVER_PROVIDER_ID } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { CODEX_APP_SERVER_PROVIDER_ID } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 

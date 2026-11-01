@@ -683,7 +683,7 @@ test("scope saving and session creation share one project policy boundary", asyn
       scope: "project"
     });
     await namingStarted;
-    const creating = sessionsService.createSession();
+    const creating = sessionsService.createSession({});
     await new Promise((resolve) => setTimeout(resolve, 80));
     assert.equal(createCalls, 0);
 

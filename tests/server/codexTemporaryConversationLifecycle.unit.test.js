@@ -52,7 +52,7 @@ import {
   codexAppServerRuntimeDir,
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
-} from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+} from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   MINIMUM_CODEX_VERSION

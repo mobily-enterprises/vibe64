@@ -32,7 +32,7 @@ import {
   readCodexSelectedAccountAccess,
   startCodexAppServerProcess,
   stopCodexAppServerRuntime
-} from "@local/vibe64-runtime/server/codexAppServerProvider";
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexAppServerRequestIsInvalid, codexTurnInput } from "@jskit-ai/assistant-core/server/codex-provider";
 import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION, CODEX_APP_SERVER_TRANSPORT, codexAppServerHelperHomeDir, codexAppServerHelperWorkspaceDir } from "@jskit-ai/assistant-core/server/codex-process";
 import {

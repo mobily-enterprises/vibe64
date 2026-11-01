@@ -554,7 +554,7 @@ test("PR update notifications reach only sessions sharing the same source branch
   const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, async readCurrentProject() { return project; } },
     async publishSessionChanged() {}, terminals: { async requireAssistantAccess() {},
       async saveSessionWork(_id, input) { await input.onRepositoryWriteAcquired(); return { ok: true, saveCommit: "new", reconciled: true }; } } });
-  const result = await service.saveSessionWork("pr-one");
+  const result = await service.saveSessionWork("pr-one", {});
   assert.equal(result.ok, true, result.error);
   assert.ok(writes.some(([id]) => id === "pr-two"));
   assert.ok(writes.every(([id]) => id === "pr-one" || id === "pr-two"));

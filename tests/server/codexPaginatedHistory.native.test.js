@@ -12,7 +12,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   CodexAppServerAgentProvider,
   startCodexAppServerProcess
-} from "@local/vibe64-runtime/server/codexAppServerProvider";
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { ensureCodexAppServerThreadForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
 const codexVersion = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });

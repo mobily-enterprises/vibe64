@@ -35,12 +35,12 @@ function fakeClock() {
   const timers = new Set();
   return {
     now: () => time,
-    setTimer(callback, delay) {
+    setTimeoutFn(callback, delay) {
       const timer = { at: time + delay, callback, unref() {} };
       timers.add(timer);
       return timer;
     },
-    clearTimer(timer) {
+    clearTimeoutFn(timer) {
       timers.delete(timer);
     },
     pending: () => timers.size,
@@ -147,11 +147,11 @@ function harness(t, projects = { alpha: 3 }) {
   });
   const errors = [];
   const probe = createRepositoryUpdateProbe({
-    clearTimer: clock.clearTimer,
+    clearTimeoutFn: clock.clearTimeoutFn,
     now: clock.now,
     onError: (error) => errors.push(error),
     probe: (slug, options) => sessions.probeRepositoryUpdates(slug, options),
-    setTimer: clock.setTimer
+    setTimeoutFn: clock.setTimeoutFn
   });
   t.after(() => probe.close());
   return { clock, errors, probe, publications, state };

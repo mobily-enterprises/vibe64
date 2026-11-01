@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
@@ -158,10 +159,9 @@ function createSessionAssistant({
       // Main chat's mode, review and model are the owner's, with or without a
       // goal, except in a team member's own lesson.
       if (!isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
-        throw Object.assign(new Error(
-          "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model."
-        ),
-          { code: "vibe64_main_chat_approval_required", statusCode: 403 });
+        throw new AppError(403, "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model.", {
+          code: "vibe64_main_chat_approval_required"
+        });
       }
       const runtime = await project.createRuntimeWithoutSource();
       const save = async () => {

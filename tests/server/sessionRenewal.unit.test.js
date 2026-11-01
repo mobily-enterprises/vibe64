@@ -1732,10 +1732,10 @@ test("same-named sessions in two catalogue projects schedule by durable renewal 
 
   await Promise.all([
     projectScope.run(first, () => controller.requestSessionRenewalDraft(OLD_SESSION_ID, {
-      operationKey: "renewal:hosted-first"
+      operationKey: "renewal:project-first"
     })),
     projectScope.run(second, () => controller.requestSessionRenewalDraft(OLD_SESSION_ID, {
-      operationKey: "renewal:hosted-second"
+      operationKey: "renewal:project-second"
     }))
   ]);
   await Promise.all([
@@ -3340,8 +3340,11 @@ async function runRealGitSuccessorProofScenario({
       300,
       25
     );
-    assert.equal(failed.error.code, "vibe64_session_renewal_successor_source_invalid");
-    assert.equal(failed.stage, SESSION_RENEWAL_STAGE.SUCCESSOR_CREATING);
+    assert.deepEqual(
+      { code: failed.error.code, stage: failed.stage },
+      { code: "vibe64_session_renewal_successor_source_invalid", stage: SESSION_RENEWAL_STAGE.SUCCESSOR_CREATING },
+      JSON.stringify(failed.error)
+    );
     assert.equal(failed.successor.sessionId, undefined);
     assert.equal(context.calls.discard, 1);
     assert.equal(context.sessions.has(successorId), false);

@@ -10,7 +10,7 @@ import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/serve
 import { vibe64HostContextEnvironment, vibe64HostContextRegistry, vibe64ConversationInstructions } from "@local/vibe64-genesis/server";
 import {
   CODEX_APP_SERVER_EXECUTION_MODES, codexAppServerRuntimeBaseDir, codexAppServerRuntimeHost
-} from "@local/vibe64-runtime/server/codexAppServerProvider";
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexAppServerThreadSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";

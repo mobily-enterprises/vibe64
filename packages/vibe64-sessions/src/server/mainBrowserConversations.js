@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { conversationTransportSchema } from "./conversationTransportSchema.js";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
@@ -26,7 +27,7 @@ const mainConversationDataSchema = createSchema(messageFields);
 const mainConversationSelectionSchema = createSchema(selectionFields);
 
 function unavailable(message = "This Main conversation is unavailable.", code = "conversation_forbidden", statusCode = 403) {
-  return Object.assign(new Error(message), { code, statusCode });
+  return new AppError(statusCode, message, { code });
 }
 
 function pickFields(input, fields) {

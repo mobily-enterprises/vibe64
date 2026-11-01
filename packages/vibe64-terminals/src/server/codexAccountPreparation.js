@@ -1,4 +1,4 @@
-import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { mkdir } from "node:fs/promises";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { CODEX_RECONNECT_REQUIRED_CODE, CODEX_RECONNECT_REQUIRED_MESSAGE } from "@local/vibe64-core/shared";

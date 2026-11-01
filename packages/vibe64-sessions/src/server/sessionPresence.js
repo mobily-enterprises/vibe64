@@ -126,22 +126,22 @@ function createSessionPresencePublisher({ events }) {
 
 /**
  * @param {object} dependencies
- * @param {typeof clearTimeout} [dependencies.clearTimer]
+ * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
  * @param {number} [dependencies.idleMs]
  * @param {number} [dependencies.maxEntries]
  * @param {() => number} [dependencies.now]
  * @param {(error: Error) => void} dependencies.onPublishError
  * @param {ReturnType<typeof createSessionPresencePublisher>} dependencies.publishPresence
- * @param {typeof setTimeout} [dependencies.setTimer]
+ * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  */
 function createSessionPresenceService({
-  clearTimer = clearTimeout,
+  clearTimeoutFn = clearTimeout,
   idleMs = SESSION_PRESENCE_IDLE_MS,
   maxEntries = SESSION_PRESENCE_MAX_ENTRIES,
   now = () => Date.now(),
   onPublishError,
   publishPresence,
-  setTimer = setTimeout
+  setTimeoutFn = setTimeout
 }) {
   const entries = new Map();
   let closed = false;
@@ -170,7 +170,7 @@ function createSessionPresenceService({
     }
     entries.delete(key);
     if (entry.timer) {
-      clearTimer(entry.timer);
+      clearTimeoutFn(entry.timer);
       entry.timer = null;
     }
     return true;
@@ -194,7 +194,7 @@ function createSessionPresenceService({
   }
 
   function scheduleExpiry(key, entry, delay) {
-    entry.timer = setTimer(() => {
+    entry.timer = setTimeoutFn(() => {
       void expireEntry(key, entry);
     }, delay);
     entry.timer.unref();
