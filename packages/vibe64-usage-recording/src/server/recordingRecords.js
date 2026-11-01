@@ -19,7 +19,8 @@ const DIAGNOSTIC_REASONS = Object.freeze({
   RECORDER_FAILED: "The recorder stopped after an internal error."
 });
 
-const isoNow = (now) => new Date(now()).toISOString();
+/** An epoch-milliseconds time as an ISO 8601 timestamp. */
+const isoTime = (milliseconds) => new Date(milliseconds).toISOString();
 
 function publicRecording(record) {
   const {
@@ -86,7 +87,7 @@ function createRecordingRecords({
         operation: "updated",
         entityId: record.id,
         scope: { kind: "global", id: null },
-        occurredAt: isoNow(now),
+        occurredAt: isoTime(now()),
         realtime: {
           audience: { room: vibe64SessionViewersRoom(entry.projectSlug, record.sessionId) },
           event: USAGE_RECORDING_CHANGED_EVENT,
@@ -172,4 +173,4 @@ function createRecordingRecords({
 
 /** @typedef {ReturnType<typeof createRecordingRecords>} RecordingRecords */
 
-export { createRecordingRecords, isoNow, publicRecording };
+export { createRecordingRecords, isoTime, publicRecording };
