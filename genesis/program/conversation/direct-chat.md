@@ -1344,6 +1344,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/codexStartupHealth.js`
 - `packages/vibe64-terminals/src/server/terminalShared.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
+- `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
+- `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-terminals/src/server/codexTurnOutcomeNotice.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`

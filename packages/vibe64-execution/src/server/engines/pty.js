@@ -8,10 +8,8 @@ import {
 import {
   DEFAULT_SYSTEM_PATH
 } from "../runtime/resolveRuntimePath.js";
-import {
-  closeTerminalSession,
-  startTerminalSession
-} from "./terminalSessions.js";
+import { startTerminalSession } from "./terminalSessions.js";
+import { closeTerminalSession } from "./terminalSessionClosing.js";
 import {
   execHelperPath,
   helperOperationForRequest,
