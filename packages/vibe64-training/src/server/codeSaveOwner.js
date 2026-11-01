@@ -4,8 +4,8 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 /** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 
 /**
- * Practice projects are ordinary projects (Learning v2), so the learner edits
- * their code in the ordinary Files editor through the project-scoped
+ * Practice projects are ordinary projects, so the learner edits their code in
+ * the ordinary Files editor through the project-scoped
  * vibe64.source-editor.file.save. This owner, installed on the source editor,
  * records that save in the learner's code-authorship ledger, which the
  * authorship owner does only while the attempt that owns the practice project
@@ -16,26 +16,11 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
  * A host with several learner stores (for example normal and author-preview)
  * passes `selectOwners({ actor, attemptId })`, which returns the store's
  * { authorship } holding that attempt, or null.
- */
-function validOwners(owners) {
-  // readable-check: allow method-probe - test asserts error: an owner without the original authorship save is refused with a TypeError
-  if (typeof owners?.authorship?.saveLearnerFile !== "function") {
-    throw new TypeError("Lesson code saves require the original authorship owner.");
-  }
-  return owners;
-}
-
-/**
  * @param {object} dependencies
- * @param {TrainingCodeAuthorship} [dependencies.authorship]
- * @param {(request: { actor: object, attemptId: string }) => Promise<object | null>} [dependencies.selectOwners]
+ * @param {TrainingCodeAuthorship} [dependencies.authorship] the authorship owner of a host with one learner store
+ * @param {(request: { actor: object, attemptId: string }) => Promise<{ authorship: TrainingCodeAuthorship } | null>} [dependencies.selectOwners]
  */
-function createTrainingCodeSaveOwner({ authorship, selectOwners } = {}) {
-  if (selectOwners !== undefined && typeof selectOwners !== "function") {
-    throw new TypeError("Lesson code save selection must be a function.");
-  }
-  const fixed = selectOwners ? null : validOwners({ authorship });
-  const select = selectOwners || (async () => fixed);
+function createTrainingCodeSaveOwner({ authorship, selectOwners = async () => ({ authorship }) }) {
   return async function saveCodeFile({ input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     const context = currentProjectRequestContext();
@@ -43,9 +28,9 @@ function createTrainingCodeSaveOwner({ authorship, selectOwners } = {}) {
     const attemptId = practiceIdFromSlug(context?.slug);
     const actor = context?.vibe64User;
     if (!attemptId || !actor) return save();
-    const selected = await select({ actor, attemptId });
+    const selected = await selectOwners({ actor, attemptId });
     if (!selected) return save();
-    return validOwners(selected).authorship.saveLearnerFile({ actor, attemptId, input, save });
+    return selected.authorship.saveLearnerFile({ actor, attemptId, input, save });
   };
 }
 

@@ -298,10 +298,6 @@ function createTrainingDeclaredCheckOwner({
     const pin = pinnedLessonKey(attempt.pin);
     const lesson = await content.readLesson(pin);
     const { check, files: declaredFiles } = openCodeStep(lesson, input.stepId);
-    // readable-check: allow method-probe - optional operation: an installation without code ledgers answers CHECK_UNDECLARED
-    if (typeof learners.readCodeLedger !== "function" || typeof content.readExercise !== "function") {
-      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installation cannot verify code steps.");
-    }
     const declared = await content.readCheck({ ...pin, checkId: check.id });
     const exercise = await content.readExercise(pin);
     const result = (outcome, extra = {}) => ({ checkResult: { check: check.id, observationId: input.observationId, outcome }, ...extra });

@@ -9,6 +9,7 @@ import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
+import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 
 // Learn mode (Rev 4 H1) over the real learner store: a saved per-learner flag,
@@ -51,8 +52,8 @@ function actionsFixture(f, { exercises = null } = {}) {
   const published = [];
   const auth = { user: ALICE };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingActions({ catalogue: { readCatalogue() { throw new Error("unused"); } }, learners: f.learners, exercises,
-    publishLearnerChanged: createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event.realtime.payload); } }) });
+  const definitions = createTrainingActions({ operations: createTrainingOperations({ catalogue: { readCatalogue() { throw new Error("unused"); } }, learners: f.learners, exercises,
+    publishLearnerChanged: createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event.realtime.payload); } }) }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,

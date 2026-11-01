@@ -8,8 +8,10 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createTrainingLearnerState, learnerIdentity } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingLearnerNotesActions } from "../../packages/vibe64-training/src/server/learnerNotesActions.js";
+import { createTrainingLearnerNotesOperations } from "../../packages/vibe64-training/src/server/learnerNotesOperations.js";
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/shared/learnerEvents.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 // Learning v2 learner notes (contract C7) over the real learner store. Notes
 // never read lesson content, so the installed content reader refuses any use.
@@ -28,7 +30,7 @@ async function fixture(t) {
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const auth = { user: ALICE };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingLearnerNotesActions({ learners, publishLearnerChanged });
+  const definitions = createTrainingLearnerNotesActions({ learnerNotes: createTrainingLearnerNotesOperations({ learners, publishLearnerChanged }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
@@ -59,7 +61,7 @@ test("Colleague reads and rewrites the notes; clearing is the learner's browser 
     ["vibe64.training.learner-notes.read", "vibe64.training.learner-notes.update"]);
   for (const name of ["learner-notes.read", "learner-notes.update"]) {
     const definition = f.definitions.find(value => value.id === `vibe64.training.${name}`);
-    assert.equal(definition.channels, undefined, `${name} uses the provider's default channels`);
+    assert.deepEqual(definition.channels, VIBE64_QUERY.channels, `${name} uses the default channels`);
     assert.equal(definition.extensions.assistant.alwaysAvailable, true);
     assert.equal(typeof definition.extensions.assistant.output.schema.getFieldDefinitions, "function");
     assert.match(definition.extensions.assistant.description, /never (decide|affect)/u);

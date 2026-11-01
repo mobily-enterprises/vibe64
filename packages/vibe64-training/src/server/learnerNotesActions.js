@@ -1,18 +1,18 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { MAX_NOTES_CHARS } from "./learnerState.js";
 import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
-import { requestId, text } from "./trainingActions.js";
-import { runLearnerAction } from "./stepActions.js";
+import { requestId, revision, text } from "./actionSchemas.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
-/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
-/** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
+/** @typedef {import("./types.js").TrainingLearnerNotesOperations} TrainingLearnerNotesOperations */
 
-// Learning v2 learner notes (contract C7): Colleague's private summary of the
-// person it teaches. The learner store keeps them in that learner's own
-// Learning state; the authenticated actor alone selects them, so another
-// learner or the workspace owner can never read them. They never take part in
-// step results or completion. The learner sees, edits and clears them in L.
+// Colleague's private summary of the person it teaches; the learner sees, edits
+// and clears it in L.
+const TRAINING_LEARNER_NOTES_ACTIONS = Object.freeze({
+  CLEAR_NOTES: "vibe64.training.learner-notes.clear",
+  READ_NOTES: "vibe64.training.learner-notes.read",
+  UPDATE_NOTES: "vibe64.training.learner-notes.update"
+});
 const notesSchema = createSchema({
   text: { type: "string", required: true, noTrim: true, minLength: 0, maxLength: MAX_NOTES_CHARS },
   revision: { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER },
@@ -28,41 +28,16 @@ const notesOutput = {
     changed: { type: "boolean", required: false }
   })
 };
-// Required on every change: the 32-entry replay window cannot stop a retry
-// that arrives later, but the revision it replaces always refuses older text.
-const expectedRevision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
-
 /**
+ * Training's learner notes actions, each one call on its notes operation.
  * @param {object} dependencies
- * @param {TrainingLearners} dependencies.learners
- * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
+ * @param {TrainingLearnerNotesOperations} dependencies.learnerNotes
  */
-function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) {
-  async function save(actor, context, input) {
-    // The learner's own browser channel is the learner; every other caller of
-    // this action is Colleague acting for the same signed-in person.
-    const updatedBy = context.channel === "api" ? "learner" : "colleague";
-    const result = await learners.saveTeacherNotes({ actor, updatedBy, ...input });
-    if (result.changed) await publishLearnerChanged({ actor, reason: "notes" });
-    return { ok: true, notes: result.notes, replayed: result.replayed, changed: result.changed };
-  }
-
-  const readNotes = async (_input, actor) => ({ ok: true, notes: await learners.readTeacherNotes({ actor }) });
-  const updateNotes = (input, actor, context) => save(actor, context, {
-    text: input.text,
-    requestId: input.requestId,
-    expectedRevision: input.expectedRevision
-  });
-  const clearNotes = (input, actor, context) => save(actor, context, {
-    text: "",
-    requestId: input.requestId,
-    expectedRevision: input.expectedRevision
-  });
-
+function createTrainingLearnerNotesActions({ learnerNotes }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.training.learner-notes.read",
+      id: TRAINING_LEARNER_NOTES_ACTIONS.READ_NOTES,
       input: { mode: "create", schema: createSchema({}) },
       extensions: {
         assistant: {
@@ -72,17 +47,19 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runLearnerAction(readNotes, input, context)
+      execute: (input, context) => learnerNotes.readNotes(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.learner-notes.update",
+      id: TRAINING_LEARNER_NOTES_ACTIONS.UPDATE_NOTES,
       input: {
         mode: "create",
         schema: createSchema({
           text: { type: "string", required: true, noTrim: true, minLength: 1, maxLength: MAX_NOTES_CHARS },
           requestId,
-          expectedRevision
+          // Required on every change: the 32-entry replay window cannot stop a retry that arrives later, but the
+          // revision it replaces always refuses older text.
+          expectedRevision: revision
         })
       },
       idempotency: "domain_native",
@@ -94,19 +71,19 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runLearnerAction(updateNotes, input, context)
+      execute: (input, context) => learnerNotes.updateNotes(input, context)
     }),
     // The learner's own Clear in Learning; it is not one of Colleague's tools.
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.learner-notes.clear",
-      input: { mode: "create", schema: createSchema({ requestId, expectedRevision }) },
-      idempotency: "domain_native",
+      id: TRAINING_LEARNER_NOTES_ACTIONS.CLEAR_NOTES,
+      input: { mode: "create", schema: createSchema({ requestId, expectedRevision: revision }) },
       channels: ["api"],
+      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: (input, context) => runLearnerAction(clearNotes, input, context)
+      execute: (input, context) => learnerNotes.clearNotes(input, context)
     })
   ]);
 }
 
-export { createTrainingLearnerNotesActions };
+export { createTrainingLearnerNotesActions, TRAINING_LEARNER_NOTES_ACTIONS };

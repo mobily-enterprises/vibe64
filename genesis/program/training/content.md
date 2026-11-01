@@ -33,8 +33,11 @@ infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
 - `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/learnerPreparation.js`
 - `packages/vibe64-training/src/server/practiceHistoryReader.js`
+- `packages/vibe64-training/src/server/practiceHistoryRecords.js`
 - `packages/vibe64-training/src/server/learnerNotesActions.js`
+- `packages/vibe64-training/src/server/learnerNotesOperations.js`
 - `src/components/learning/Vibe64LearningTeacherNotes.vue`
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-core/src/server/projectRecordMetadata.js`

@@ -72,7 +72,7 @@ async function verifySourcePin(sourceRoot, pin) {
  * Only an admitted owner operation supplies these paths and pins. This service
  * does not authenticate callers, select content, enable courses or run exercises.
  */
-function createTrainingContentInstaller({ systemRoot } = {}) {
+function createTrainingContentInstaller({ systemRoot }) {
   const root = absoluteDirectory(systemRoot, "Training system root");
   const reader = createInstalledTrainingContent({ systemRoot: root });
 

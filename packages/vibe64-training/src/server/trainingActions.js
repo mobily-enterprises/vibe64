@@ -1,543 +1,34 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
-import { boundedTrainingResult } from "./errors.js";
-import { lessonAvailableTo } from "./lessonAvailability.js";
+import { WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { attemptId, courseId, id, release, requestId, resultOutput, revision, text } from "./actionSchemas.js";
 
-/** @typedef {import("./types.js").TrainingService} TrainingService */
-/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
-/** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
-/** @typedef {import("./types.js").TrainingContent} TrainingContent */
-/** @typedef {import("./types.js").TrainingExercises} TrainingExercises */
-/** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
+/** @typedef {import("./types.js").TrainingOperations} TrainingOperations */
 
-const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
-const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
-const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
-const requestId = { ...text, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" };
-const attemptId = { ...text, maxLength: 36, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
-const opaque = { type: "object", additionalProperties: true, required: true };
-const resultOutput = {
-  mode: "replace",
-  schema: createSchema({
-    ok: { type: "boolean", required: true },
-    available: { type: "boolean", required: true },
-    revision: { ...revision, required: false },
-    activeSummaryCurrent: { type: "boolean", required: false },
-    courses: { type: "array", required: false, items: opaque },
-    canCreateCourses: {
-      type: "boolean",
-      required: false
-    },
-    canTryPreviews: {
-      type: "boolean",
-      required: false
-    },
-    course: {
-      ...opaque,
-      required: false
-    },
-    domains: { type: "array", required: false, items: opaque },
-    repository: { ...text, required: false, maxLength: 256 },
-    catalogueCommit: { ...text, required: false, maxLength: 64 },
-    changed: { type: "boolean", required: false },
-    retired: { type: "array", required: false, maxLength: 16, items: { ...text, maxLength: 32 } },
-    lessonProgress: { type: "array", required: false, items: opaque },
-    attempts: { type: "array", required: false, maxLength: 32, items: opaque },
-    active: { ...opaque, required: false, nullable: true },
-    attempt: { ...opaque, required: false },
-    history: { type: "array", required: false, items: opaque },
-    replayed: { type: "boolean", required: false },
-    completion: { ...opaque, required: false, nullable: true },
-    learningMode: { ...opaque, required: false },
-    previewReady: { type: "boolean", required: false },
-    setupStatus: { ...text, required: false, maxLength: 64 },
-    error: { ...text, required: false, maxLength: 512 }
-  })
-};
-
-/**
- * Records may omit optional parts; a missing part projects as {}.
- */
-function pick(value = {}, fields) {
-  return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
-}
-
-function pin(value) {
-  return {
-    course: pick(value.course, ["courseId", "release"]),
-    topic: pick(value.topic, ["topicId", "release", "commit", "topicHash"]),
-    lesson: pick(value.lesson, ["code", "hash"])
-  };
-}
-
-function preparation(value) {
-  return {
-    ...pick(value, ["phase", "initialSessionId", "observedAt"]),
-    ...(value.failure ? { failure: pick(value.failure, ["stage", "code", "message"]) } : {})
-  };
-}
-
-function active(value) {
-  if (!value) return null;
-  return {
-    attemptId: value.attemptId,
-    pin: pin(value.pin),
-    ...(value.preparation ? { projectSlug: value.projectSlug, preparation: preparation(value.preparation) } : {}),
-    ...(value.ended ? { ended: pick(value.ended, ["requestId", "revision", "reason"]) } : {})
-  };
-}
-
-function completion(value) {
-  return value ? pick(value, ["lessonCode", "lessonHash", "required", "passed", "completed"]) : null;
-}
-
-const boundedResult = result => boundedTrainingResult(result, {
-  message: "The training result exceeds 128 KiB. Ask the owner to inspect the content; no teaching text or progress was silently omitted." });
-
-function operationError(cause) {
-  if (cause.code === "VIBE64_TRAINING_PREPARATION_BUSY") {
-    return Object.assign(new Error(
-      "This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt."
-    ),
-      {
-      code: cause.code,
-      statusCode: 409,
-      cause
-    });
-  }
-  // Learner notes failures already carry notes-specific recovery text; the
-  // generic attempt wording below would send the learner to the wrong place.
-  if (/^VIBE64_TRAINING_NOTES_/u.test(cause.code || "")) {
-    return Object.assign(new Error(cause.message), {
-      code: cause.code,
-      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-      cause
-    });
-  }
-  const unconfirmed = String(cause.code || "").includes("SAVE_UNCONFIRMED");
-  return Object.assign(new Error(unconfirmed
-    ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."
-    : "The training operation could not complete. Keep the saved attempt and ask the owner to inspect its exact content, state or preparation; no automatic repair was performed."),
-    {
-      code: cause.code || "VIBE64_TRAINING_OPERATION_FAILED",
-      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-      cause
-    });
-}
-
-function installError(cause) {
-  if (/^VIBE64_TRAINING_(COURSE|CATALOGUE|AVAILABLE|TOPIC|SOURCE)_/u.test(cause.code || "")) return cause;
-  return Object.assign(new Error(
-    `The course could not be installed: ${String(cause.message || "unknown failure").slice(0, 300)} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`
-  ),
-    {
-    code: cause.code || "VIBE64_TRAINING_COURSE_INSTALL_FAILED",
-    ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-    cause
-  });
-}
-
-/**
- * A practice project exists only once preparation began for an exercise lesson.
- * The learning space says whether it still exists; a deleted or archived one
- * is left out (learning.read lists attempts with their slug). A presence check
- * that fails keeps the project listed instead of failing the whole read: one
- * bad record must not hide the learner's progress.
- */
-async function practiceSlug({ attempt, actor, learningSpace }) {
-  const slug = attempt.projectSlug;
-  if (!attempt.preparation || attempt.preparation.phase === "reserved") return "";
-  // readable-check: allow method-probe - optional operation: without a learning space the practice project stays listed
-  if (typeof learningSpace?.exists !== "function") return slug;
-  try {
-    return await learningSpace.exists({ actor, attemptId: attempt.attemptId }) ? slug : "";
-  } catch {
-    return slug;
-  }
-}
-
-function attemptSummary(attempt, slug = "") {
-  const failure = attempt.preparation?.failure;
-  return {
-    attemptId: attempt.attemptId,
-    pin: pin(attempt.pin),
-    ...(attempt.preparation ? {
-      preparation: {
-        ...pick(attempt.preparation, ["phase", "observedAt"]),
-        ...(failure ? { failure: pick(failure, ["code", "message"]) } : {})
-      }
-    } : {}),
-    ...(slug ? { practiceSlug: slug } : {}),
-    ...(attempt.ended ? { ended: pick(attempt.ended, ["revision", "reason"]) } : {})
-  };
-}
-
-const endedResult = result => ({
-  ok: true,
-  available: true,
-  revision: result.revision,
-  attempt: active(result.attempt),
-  active: active(result.active),
-  replayed: result.replayed === true,
-  previewReady: false
+const TRAINING_ACTIONS = Object.freeze({
+  CREATE_COURSE: "vibe64.training.courses.create",
+  FINISH_LESSON: "vibe64.training.lesson.finish",
+  INSTALL_COURSE: "vibe64.training.course.install",
+  LIST_AVAILABLE_COURSES: "vibe64.training.available.list",
+  LIST_COURSES: "vibe64.training.courses.list",
+  READ_LEARNING: "vibe64.training.learning.read",
+  READ_LEARNING_MODE: "vibe64.training.learning-mode.read",
+  RESTART_LESSON: "vibe64.training.lesson.restart",
+  RESUME_LESSON: "vibe64.training.lesson.resume",
+  SET_LEARNING_MODE: "vibe64.training.learning-mode.set",
+  START_LESSON: "vibe64.training.lesson.start"
 });
-const prepared = result => {
-  if (result?.ok === false || !result?.attempt) {
-    throw Object.assign(new Error("Exercise preparation did not return a saved attempt."), { code: "VIBE64_TRAINING_PREPARATION_FAILED" });
-  }
-  if (result.attempt.ended) return { ...endedResult(result), completion: null };
-  return {
-    ok: true,
-    available: true,
-    revision: result.revision,
-    active: active(result.attempt),
-    completion: completion(result.completion),
-    previewReady: false,
-    ...(result.setup?.status ? { setupStatus: result.setup.status } : {})
-  };
-};
 
 /**
- * Runs one Training action for the signed-in learner, with its result bounded.
- * A refusal the person can act on reports its owner's own message; any other
- * failure reports the attempt-preserving operation error.
- * @param {string} name the action's name after "vibe64.training."
- * @param {(input: object, actor: object, context: object) => Promise<object>} operation
- * @param {object} input
- * @param {object} context
- */
-async function runTrainingOperation(name, operation, input, context) {
-  const actor = authenticatedVibe64User(context);
-  if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), {
-    code: "vibe64_auth_required",
-    statusCode: 401
-  });
-  try {
-    return boundedResult(await operation(input, actor, context));
-  } catch (cause) {
-    if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
-    // Course creation reports the catalogue owner's own corrective message.
-    if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
-    // Lesson refusals (a preview course, another lesson in progress with
-    // its details, an incomplete lesson, the archive limit or a pinned
-    // session) report their own message; nothing was changed.
-    if (/^lesson\./u.test(name) && cause.statusCode < 500 &&
-        /^(VIBE64_TRAINING_(COURSE_PREVIEW|LESSON_|PRACTICE_|ATTEMPT_MISSING|STATE_REVISION)|vibe64_project_pinned)/u.test(
-          cause.code || ""
-        )) throw cause;
-    // Catalogue reads and installs report their owner's corrective message.
-    if (["available.list", "course.install"].includes(name)) throw installError(cause);
-    throw operationError(cause);
-  }
-}
-
-/**
- * What each Training action does for the signed-in learner: course reads and
- * installs, the learner's state and Learn mode, and starting, resuming,
- * restarting or finishing a lesson. An absent optional collaborator answers
- * that its operation is unavailable here.
+ * Training's course, learning and lesson actions, each one call on its operation.
  * @param {object} dependencies
- * @param {TrainingService["catalogue"]} dependencies.catalogue
- * @param {TrainingLearners} dependencies.learners
- * @param {TrainingContent | null} dependencies.content
- * @param {TrainingExercises | null} dependencies.exercises
- * @param {TrainingService["courseInstaller"] | null} dependencies.courseInstaller
- * @param {TrainingLearningSpace | null} dependencies.learningSpace
- * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
+ * @param {TrainingOperations} dependencies.operations
  */
-function createTrainingOperations({
-  catalogue,
-  learners,
-  content,
-  exercises,
-  courseInstaller,
-  learningSpace,
-  publishLearnerChanged
-}) {
-  // A pinned lesson's steps never change, so each is read once; who may take
-  // them is decided per read (lessonAvailability.js). Without the installed
-  // reader (actions composed for catalogue reads only) every lesson is listed.
-  const pinnedSteps = new Map();
-  async function lessonListedFor(actor, topic, lesson) {
-    // readable-check: allow method-probe - optional operation: without the installed reader every lesson is listed
-    if (typeof content?.readLesson !== "function") return true;
-    const key = JSON.stringify([topic.topicId, topic.commit, topic.manifestHash, lesson.code, lesson.hash]);
-    if (!pinnedSteps.has(key)) {
-      pinnedSteps.set(key, content.readLesson({
-        topicId: topic.topicId,
-        commit: topic.commit,
-        topicHash: topic.manifestHash,
-        lessonCode: lesson.code,
-        lessonHash: lesson.hash
-      }).then(read => read.steps || [],
-        error => error?.code === "VIBE64_TRAINING_LESSON_UNUSABLE" ? "unusable" : null));
-    }
-    const steps = await pinnedSteps.get(key);
-    // One this Vibe64 cannot teach is left out and named on its course.
-    if (steps === "unusable") return "unusable";
-    // A lesson that cannot be read here (a draft, a retired format) stays listed; starting it explains.
-    return steps === null || lessonAvailableTo({ steps }, actor);
-  }
-  const unavailable = (operation = "preparation") => ({
-    ok: false,
-    available: false,
-    error: operation === "close" ? "Finishing or restarting lessons is unavailable in this installation. Nothing was changed."
-      : "Lesson exercise preparation is unavailable in this installation. Reading learning state and teaching content does not prepare an exercise."
-  });
-  // Learn mode (Rev 4 H1): a saved per-learner flag, separate from any
-  // lesson; the current lesson is the one in progress. The shell and
-  // Colleague read it; every tab of this learner rereads it on
-  // vibe64.training.learner.changed.
-  // readable-check: allow method-probe - optional operation: a learner store without Learn mode answers that it is unavailable
-  const modeAvailable = typeof learners.readLearningMode === "function";
-  const learningModeView = mode =>
-    mode ? pick(mode, ["on", "currentAttemptId", "lessonCode", "lessonTitle", "lessonStage", "practiceSlug"]) : { on: false };
-  const notifyLearner = async (actor, lessonAttemptId, reason = "lesson") => {
-    await publishLearnerChanged({ actor, attemptId: lessonAttemptId, reason });
-  };
-  /**
-   * Starting, restarting, resuming or finishing a lesson changes the current
-   * lesson. A failure may already have changed it (the mode set, the old
-   * attempt archived), so every tab rereads either way.
-   */
-  const announced = async (actor, operation, lessonAttemptId = "") => {
-    let result;
-    try { result = await operation(); }
-    catch (error) {
-      await notifyLearner(actor, lessonAttemptId).catch(() => {});
-      throw error;
-    }
-    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || lessonAttemptId);
-    return result;
-  };
-
-  async function listCourses(_input, actor) {
-    const result = await catalogue.readCatalogue({ includeLessonTitles: true });
-    const courses = [];
-    for (const entry of result.courses) {
-      // A lesson this person cannot take here (its places are not this
-      // installation's, or not open to them) is left out, as is a topic left empty.
-      const lessons = [];
-      const unusable = [];
-      for (const topic of entry.lock.topics) {
-        for (const lesson of topic.lessons) {
-          const listed = await lessonListedFor(actor, topic, lesson);
-          if (listed === "unusable") unusable.push({ topic, lesson });
-          else if (listed) lessons.push({ topic, lesson });
-        }
-      }
-      const topics = entry.lock.topics.filter(topic => lessons.some(item => item.topic === topic));
-      courses.push({ entry, topics, lessons, unusable });
-    }
-    return { ok: true, available: true, revision: result.revision,
-      // readable-check: allow method-probe - optional operation: a catalogue without custom courses does not offer them
-      canCreateCourses: actor?.role === "owner" && typeof catalogue.createCourse === "function",
-      canTryPreviews: actor?.role === "owner",
-      courses: courses.map(({ entry, topics, lessons, unusable }) => ({
-      ...pick(entry.course, ["courseId", "release", "title", "status", "orientation"]), enabled: entry.enabled,
-      topics: topics.map(topic => ({
-        topicId: topic.topicId,
-        release: topic.release,
-        title: (entry.topicTitles || []).find(value => value.topicId === topic.topicId && value.release === topic.release)?.title ||
-          topic.topicId
-      })),
-      lessons: lessons.map(({ topic, lesson }) => {
-        const matches = (entry.lessonTitles || []).filter(value => value.topicId === topic.topicId &&
-          value.topicRelease === topic.release && value.code === lesson.code && value.hash === lesson.hash);
-        const title = matches[0]?.title;
-        if (matches.length !== 1 || typeof title !== "string" || title.length < text.minLength || title.length > text.maxLength) {
-          throw new Error("The installed catalogue did not return one bounded title for this exact lesson pin.");
-        }
-        return {
-          ...pick(lesson, ["code", "hash", "status", "required"]),
-          title,
-          topicId: topic.topicId,
-          topicRelease: topic.release
-        };
-      }),
-      // Installed lessons this version of Vibe64 cannot teach, by title.
-      unusableLessons: unusable.map(({ topic, lesson }) => ({
-        code: lesson.code,
-        title: (entry.lessonTitles || []).find(value => value.topicId === topic.topicId && value.topicRelease === topic.release &&
-          value.code === lesson.code && value.hash === lesson.hash)?.title || lesson.code
-      }))
-    })) };
-  }
-
-  async function listAvailableCourses() {
-    // readable-check: allow method-probe - optional operation: without a course installer the catalogue answers that installing is unavailable
-    if (typeof courseInstaller?.listAvailable !== "function") {
-      return {
-        ok: false,
-        available: false,
-        error: "Installing courses from the catalogue is unavailable in this installation. Installed courses are unchanged."
-      };
-    }
-    const result = await courseInstaller.listAvailable();
-    return {
-      ok: true,
-      available: true,
-      repository: result.repository,
-      catalogueCommit: result.commit,
-      domains: result.domains,
-      courses: result.courses
-    };
-  }
-
-  async function installCourse(input) {
-    // readable-check: allow method-probe - optional operation: without a course installer the catalogue answers that installing is unavailable
-    if (typeof courseInstaller?.installCourse !== "function") {
-      return {
-        ok: false,
-        available: false,
-        error: "Installing courses from the catalogue is unavailable in this installation. No course was installed."
-      };
-    }
-    const result = await courseInstaller.installCourse(pick(input, ["courseId", "release"]));
-    return {
-      ok: true,
-      available: true,
-      changed: result.changed === true,
-      catalogueCommit: result.catalogueCommit,
-      retired: Array.isArray(result.retired) ? result.retired : [],
-      ...(Number.isSafeInteger(result.revision) ? { revision: result.revision } : {}),
-      course: { ...pick(result.course, ["courseId", "release", "title", "status"]), enabled: true }
-    };
-  }
-
-  async function readLearning(_input, actor) {
-    const result = await learners.readState({ actor, includeCompletion: true });
-    const attempts = [];
-    for (const attempt of result.progress.attempts) {
-      attempts.push(attemptSummary(attempt, await practiceSlug({ attempt, actor, learningSpace })));
-    }
-    return { ok: true, available: true, learnerId: result.progress.learnerId, revision: result.revision,
-      activeSummaryCurrent: result.activeSummaryCurrent, active: active(result.active), completion: completion(result.completion),
-      lessonProgress: (result.lessonCompletions || []).map(value =>
-        pick(value, ["lessonCode", "lessonHash", "required", "passed", "completed", "open"])),
-      history: result.progress.attempts.filter(value => value.ended).map(active), attempts,
-      // An unreadable mode record must not hide the learner's progress.
-      ...(modeAvailable ? await learners.readLearningMode({ actor, includeTitle: true })
-        .then(mode => ({ learningMode: learningModeView(mode) }), () => ({})) : {}) };
-  }
-
-  async function readLearningMode(_input, actor) {
-    if (!modeAvailable) return { ok: false, available: false, error: "Learn mode is unavailable in this installation." };
-    return { ok: true, available: true, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
-  }
-
-  async function setLearningMode(input, actor) {
-    // readable-check: allow method-probe - optional operation: a learner store without Learn mode answers that it is unavailable
-    if (typeof learners.setLearningMode !== "function") return { ok: false, available: false, error: "Learn mode is unavailable in this installation." };
-    const changed = (await learners.readLearningMode({ actor })).on !== input.on;
-    if (changed) {
-      await learners.setLearningMode({ actor, on: input.on });
-      await notifyLearner(actor, "", "learning-mode");
-    }
-    return {
-      ok: true,
-      available: true,
-      changed,
-      learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true }))
-    };
-  }
-
-  async function createCourse(input) {
-    // readable-check: allow method-probe - optional operation: a catalogue without custom courses answers that they are unavailable
-    if (typeof catalogue.createCourse !== "function") {
-      return { ok: false, available: false, error: "Custom courses are unavailable in this installation. No course was created." };
-    }
-    const result = await catalogue.createCourse(pick(input, ["title", "topics", "expectedRevision"]));
-    return {
-      ok: true,
-      available: true,
-      revision: result.revision,
-      course: { ...pick(result.entry.course, ["courseId", "release", "title", "status"]), enabled: result.entry.enabled }
-    };
-  }
-
-  async function startLesson(input, actor) {
-    // readable-check: allow method-probe - optional operation: without exercise preparation lessons answer that they are unavailable
-    if (typeof exercises?.startLesson !== "function") return unavailable();
-    return announced(actor, async () => prepared(await exercises.startLesson({
-      actor,
-      ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision", "archiveCurrent"])
-    })));
-  }
-
-  async function resumeLesson(input, actor) {
-    // readable-check: allow method-probe - optional operation: without exercise preparation lessons answer that they are unavailable
-    if (typeof exercises?.prepareLesson !== "function") return unavailable();
-    return announced(actor, async () => prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), input.attemptId);
-  }
-
-  async function restartLesson(input, actor, context) {
-  // readable-check: allow method-probe - optional operation: without exercise preparation lessons answer that they are unavailable
-  if (typeof exercises?.restartLesson !== "function") return unavailable("close");
-  // The learner's own Restart button (the api channel) is its confirmation.
-  if (context.channel !== "api" && input.confirmed !== true) {
-    throw Object.assign(new Error(
-      "Ask the person to confirm restarting this exact lesson, then repeat with confirmed: true. Nothing was changed."
-    ),
-      { code: "VIBE64_TRAINING_LESSON_UNCONFIRMED", statusCode: 409 });
-  }
-  return announced(actor, async () => prepared(await exercises.restartLesson({
-    actor,
-    ...pick(input, ["attemptId", "requestId", "expectedRevision"])
-  })), input.attemptId);
-    }
-
-  async function finishLesson(input, actor) {
-    // readable-check: allow method-probe - optional operation: without exercise preparation lessons answer that they are unavailable
-    if (typeof exercises?.finishLesson !== "function") return unavailable("close");
-    const result = await announced(actor, () => exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) }),
-      input.attemptId);
-    return { ok: true, available: true, changed: result.closed === true };
-  }
-
-  return Object.freeze({
-    listCourses, listAvailableCourses, installCourse, readLearning, readLearningMode,
-    // readable-check: allow setter-seam - not a slot: setLearningMode switches one learner's Learn mode
-    setLearningMode,
-    createCourse, startLesson, resumeLesson, restartLesson, finishLesson
-  });
-}
-
-/**
- * Composition supplies the original readers and one exercise preparation owner.
- * @param {object} dependencies
- * @param {TrainingService["catalogue"]} dependencies.catalogue
- * @param {TrainingLearners} dependencies.learners
- * @param {TrainingContent | null} dependencies.content
- * @param {TrainingExercises | null} dependencies.exercises
- * @param {TrainingService["courseInstaller"] | null} dependencies.courseInstaller
- * @param {TrainingLearningSpace | null} dependencies.learningSpace
- * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
- */
-function createTrainingActions({
-  catalogue,
-  learners,
-  content,
-  exercises,
-  courseInstaller,
-  learningSpace,
-  publishLearnerChanged
-}) {
-  const operations = createTrainingOperations({
-    catalogue,
-    learners,
-    content,
-    exercises,
-    courseInstaller,
-    learningSpace,
-    publishLearnerChanged
-  });
-
+function createTrainingActions({ operations }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.training.courses.list",
+      id: TRAINING_ACTIONS.LIST_COURSES,
       input: { mode: "create", schema: createSchema({}) },
       extensions: {
         assistant: {
@@ -547,11 +38,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("courses.list", operations.listCourses, input, context)
+      execute: (input, context) => operations.listCourses(input, context)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.training.available.list",
+      id: TRAINING_ACTIONS.LIST_AVAILABLE_COURSES,
       input: { mode: "create", schema: createSchema({}) },
       extensions: {
         assistant: {
@@ -561,16 +52,16 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("available.list", operations.listAvailableCourses, input, context)
+      execute: (input, context) => operations.listAvailableCourses(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.course.install",
+      id: TRAINING_ACTIONS.INSTALL_COURSE,
       input: {
         mode: "create",
         schema: createSchema({
-          courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
-          release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+          courseId,
+          release
         })
       },
       idempotency: "domain_native",
@@ -582,25 +73,31 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("course.install", operations.installCourse, input, context)
+      execute: (input, context) => operations.installCourse(input, context)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.training.learning.read",
+      id: TRAINING_ACTIONS.READ_LEARNING,
       input: { mode: "create", schema: createSchema({}) },
-      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
-        description: "Read this signed-in learner's saved lessons and verified progress: the active attempt, ended attempts in history, every retained attempt in attempts (with practiceSlug when it has a practice project) and per-lesson completion in lessonProgress. This is read-only: no reservation, practice project or repair is performed. A saved preparation phase is an earlier checkpoint, not proof that setup is still running or that Preview is ready; use lesson.resume with the same attemptId to recheck an exercise lesson's setup. Read lesson.read for the active lesson's steps and step results before teaching it.",
-        transformResult(result) {
-        // Own identity binds the browser's lesson requests (L), never the model's tool result.
-        const visible = { ...result };
-        delete visible.learnerId;
-        return visible;
-      } }, vibe64: WORKSPACE_OPERATION },
-      execute: (input, context) => runTrainingOperation("learning.read", operations.readLearning, input, context)
+      extensions: {
+        assistant: {
+          alwaysAvailable: true,
+          output: resultOutput,
+          description: "Read this signed-in learner's saved lessons and verified progress: the active attempt, ended attempts in history, every retained attempt in attempts (with practiceSlug when it has a practice project) and per-lesson completion in lessonProgress. This is read-only: no reservation, practice project or repair is performed. A saved preparation phase is an earlier checkpoint, not proof that setup is still running or that Preview is ready; use lesson.resume with the same attemptId to recheck an exercise lesson's setup. Read lesson.read for the active lesson's steps and step results before teaching it.",
+          transformResult(result) {
+            // Own identity binds the browser's lesson requests (L), never the model's tool result.
+            const visible = { ...result };
+            delete visible.learnerId;
+            return visible;
+          }
+        },
+        vibe64: WORKSPACE_OPERATION
+      },
+      execute: (input, context) => operations.readLearning(input, context)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.training.learning-mode.read",
+      id: TRAINING_ACTIONS.READ_LEARNING_MODE,
       input: { mode: "create", schema: createSchema({}) },
       extensions: {
         assistant: {
@@ -610,11 +107,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("learning-mode.read", operations.readLearningMode, input, context)
+      execute: (input, context) => operations.readLearningMode(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.learning-mode.set",
+      id: TRAINING_ACTIONS.SET_LEARNING_MODE,
       input: {
         mode: "create",
         schema: createSchema({ on: { type: "boolean", required: true } })
@@ -628,11 +125,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("learning-mode.set", operations.setLearningMode, input, context)
+      execute: (input, context) => operations.setLearningMode(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.courses.create",
+      id: TRAINING_ACTIONS.CREATE_COURSE,
       input: {
         mode: "create",
         schema: createSchema({
@@ -646,7 +143,7 @@ function createTrainingActions({
               required: true,
               schema: createSchema({
                 topicId: { ...text, maxLength: 64 },
-                release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+                release
               })
             }
           },
@@ -662,16 +159,16 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OWNER_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("courses.create", operations.createCourse, input, context)
+      execute: (input, context) => operations.createCourse(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.lesson.start",
+      id: TRAINING_ACTIONS.START_LESSON,
       input: {
         mode: "create",
         schema: createSchema({
-          courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
-          release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+          courseId,
+          release,
           lessonCode: id,
           requestId,
           expectedRevision: revision,
@@ -687,11 +184,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("lesson.start", operations.startLesson, input, context)
+      execute: (input, context) => operations.startLesson(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.lesson.resume",
+      id: TRAINING_ACTIONS.RESUME_LESSON,
       input: { mode: "create", schema: createSchema({ attemptId }) },
       idempotency: "domain_native",
       extensions: {
@@ -702,11 +199,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("lesson.resume", operations.resumeLesson, input, context)
+      execute: (input, context) => operations.resumeLesson(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.lesson.restart",
+      id: TRAINING_ACTIONS.RESTART_LESSON,
       input: {
         mode: "create",
         schema: createSchema({
@@ -725,11 +222,11 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("lesson.restart", operations.restartLesson, input, context)
+      execute: (input, context) => operations.restartLesson(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.training.lesson.finish",
+      id: TRAINING_ACTIONS.FINISH_LESSON,
       input: {
         mode: "create",
         schema: createSchema({ attemptId, expectedRevision: revision })
@@ -743,11 +240,9 @@ function createTrainingActions({
         },
         vibe64: WORKSPACE_OPERATION
       },
-      execute: (input, context) => runTrainingOperation("lesson.finish", operations.finishLesson, input, context)
+      execute: (input, context) => operations.finishLesson(input, context)
     })
   ]);
 }
 
-// The bounded projections and schema a host's own Training actions reuse.
-export { active as attemptProjection, attemptId, attemptSummary, boundedResult, completion as completionProjection, createTrainingActions,
-  id, operationError, pick, practiceSlug, prepared as preparedResult, requestId, resultOutput, revision, text };
+export { createTrainingActions, TRAINING_ACTIONS };

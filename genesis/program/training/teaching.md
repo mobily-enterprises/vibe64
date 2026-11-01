@@ -8,16 +8,23 @@ teacher conversation.
 ## Sources
 
 - Main: `packages/vibe64-training/src/server/trainingActions.js`
+- `packages/vibe64-training/src/server/trainingOperations.js`
+- `packages/vibe64-training/src/server/trainingResults.js`
+- `packages/vibe64-training/src/server/actionSchemas.js`
 - `packages/vibe64-training/src/server/stepActions.js`
+- `packages/vibe64-training/src/server/stepOperations.js`
 - `packages/vibe64-training/src/server/errors.js`
 - `packages/vibe64-training/src/server/stepChecks.js`
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-training/src/server/Vibe64TrainingFeature.js`
+- `packages/vibe64-training/src/server/trainingRuntime.js`
+- `packages/vibe64-training/src/server/localLearnerActor.js`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/declaredCheck.js`
 - `packages/vibe64-training/src/server/codeAuthorship.js`
-- `packages/vibe64-training/src/server/codeEditorActions.js`
+- `packages/vibe64-training/src/server/codeSaveOwner.js`
 - `packages/vibe64-training/src/server/visualResourceActions.js`
+- `packages/vibe64-training/src/server/lessonVisuals.js`
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-training/src/server/learnerState.js`
 - `packages/vibe64-training/src/server/installedContent.js`
@@ -30,13 +37,16 @@ teacher conversation.
 
 ### Shared lesson operations
 
-`trainingActions.js` provides the shared-catalogue operations courses list and create,
+`trainingActions.js` defines the actions courses list and create,
 available list, course install, learning read, lesson start, lesson resume,
-lesson end and retained-pin lesson continuation. They use Core's fresh actor
+lesson end and retained-pin lesson continuation; each executes one
+`trainingOperations.js` operation, which maps its errors and results
+(`trainingResults.js`). They use Core's fresh actor
 context and expose bounded saved facts without source paths, executable
-controllers or shell authority. A host supplies the existing exercise
-preparation/retirement owner; without its relevant method,
-start/resume/restart/finish/delete reports unavailable. `learning.read` returns progress,
+controllers or shell authority. Every host supplies the exercise
+preparation/retirement owner, the installed content and the course installer;
+a host without a learning space supplies `NO_LEARNING_SPACE`, so listing and
+deleting archived lessons report unavailable. `learning.read` returns progress,
 completion, per-lesson summaries and bounded ended history; the learner identity
 reaches only the browser, never Colleague's tool result. Readers do not reserve or repair
 state. An ended start replay returns its original target and actual current
@@ -52,10 +62,9 @@ through `learningSpace.closeAttempt`, keyed by attemptId, so a stopped close
 resumes. Every lesson action tells the learner's tabs to reread
 (`learner.changed`), also when it fails part-way. Switching Learn/Develop (`learning-mode.set`) never ends a lesson.
 The host derives the exact pin from that actor's verified history; the model
-cannot supply a pin or source. Missing host/content or capacity refusal retains
-history.
+cannot supply a pin or source. A capacity refusal retains history.
 
-`stepActions.js` adds the step operations `lesson.read`, `step.observe`,
+`stepActions.js` adds the step actions, executed by `stepOperations.js`: `lesson.read`, `step.observe`,
 `step.check.run`, `step.answer`, `step.done`, `step.review.run`,
 `step.evidence.read`, `reader.save`, `practice.list` and
 `practice.archived.delete`. A step result is recorded only for the learner's own action:

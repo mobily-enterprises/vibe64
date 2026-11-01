@@ -13,14 +13,9 @@ import { learnerIdentity } from "./learnerState.js";
  * client like the session notices; each host's realtime authorization admits
  * it only for the learner it names. A notification failure never changes or
  * repeats the saved operation.
- * Without runtime events a saved change goes unannounced; readers see it on
- * their next read.
+ * @param {RuntimeEvents} events
  */
-async function announceNoLearnerChange() {}
-
-/** @param {RuntimeEvents | null} events */
 function createTrainingLearnerChangedPublisher(events) {
-  if (!events) return announceNoLearnerChange;
   return async function publishLearnerChanged({ actor, attemptId, reason = "" } = {}) {
     const learnerId = learnerIdentity(actor).id;
     try {

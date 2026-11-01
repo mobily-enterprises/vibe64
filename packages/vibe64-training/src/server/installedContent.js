@@ -102,7 +102,7 @@ async function inventory(directory) {
  * Only the composing server may admit drafts for an isolated author preview.
  * Read inputs cannot change this choice; ordinary learner readers refuse drafts.
  */
-function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false } = {}) {
+function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false }) {
   if (typeof systemRoot !== "string" || !systemRoot || !path.isAbsolute(systemRoot)) {
     throw new Error("Installed teaching content needs an absolute server-owned system root.");
   }
@@ -422,7 +422,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
 
   async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash, metadataOnly = false, admissionOnly = false } = {}) {
     // Scope admission needs the freshly verified identity, not a second copy of
-    // every exercise byte. Preparation keeps the complete original result.
+    // every exercise byte. Preparation reads the complete result.
     if (admissionOnly === true && metadataOnly !== true) throw new TypeError("Admission reads cannot supply exercise content.");
     const reader = admissionOnly === true ? readAdmissionIdentity : metadataOnly === true ? readLessonIdentity : readLesson;
     const lesson = await reader({ topicId, commit, topicHash, lessonCode, lessonHash });

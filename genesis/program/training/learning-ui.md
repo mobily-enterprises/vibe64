@@ -292,7 +292,7 @@ routing. No server route registers an `/api/learning/<attempt>/…` path and no
 action declares `learningAccess`.
 
 Authorship: Training installs `createTrainingCodeSaveOwner`
-(`codeEditorActions.js`) on the source editor with `setFileSaveOwner`. The
+(`codeSaveOwner.js`) on the source editor with `setFileSaveOwner`. The
 ordinary `vibe64.source-editor.file.save` then records the save in the learner's
 authorship ledger (`codeAuthorship.js` `saveLearnerFile`) only when the request
 project is the actor's own practice project with an active attempt; every other

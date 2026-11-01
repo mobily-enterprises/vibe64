@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createTrainingService } from "@local/vibe64-training/server/preparation";
+import { NO_LEARNING_SPACE } from "@local/vibe64-training/server/learning-space";
 
 const actor = { uid: 123, username: "learner" };
 const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -79,7 +80,7 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
         return session;
       } }; }
     },
-    terminals: { async workspaceSetupIsPrepared(id) { calls.push(["setup-check", id]); return true; } },
+    terminals: { async workspaceSetupIsPrepared(id) { calls.push(["setup-check", id]); return true; }, waitForWorkspaceSetup() { return null; } },
     sessions: { async createSession(input, options) { calls.push(["session-create", input, options]); session = { sessionId: options.sessionId, status: "open", workspaceSetup: { status: setup } }; return session; } }
   };
   return { root, sourceRoot, projectRoot, owners, calls, attempt, state, scopes, get failure() { return failure; },
@@ -313,23 +314,6 @@ test("an ended reservation replay is returned without preparing or reactivating 
   assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve"]);
 });
 
-test("missing exercise provisioner refuses before preparation effects while retaining the original reservation", async t => {
-  for (const missing of [undefined, {}, { createManagedGitProject() {} }, { verifyTrainingProjectSource() {} }]) {
-    const f = await fixture(t);
-    f.owners.projectRepositoryService = missing;
-    const service = createTrainingService(f.owners);
-    await assert.rejects(service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-start" }),
-      { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE", statusCode: 409 });
-    assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve", "mode", "lock", "lesson"]);
-    assert.equal(f.attempt.preparation.phase, "reserved");
-    assert.equal(f.failure, null);
-    assert.equal(f.state().revision, 1);
-    await assert.rejects(service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
-    assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve", "mode", "lock", "lesson", "lock", "lesson"]);
-    await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
-  }
-});
-
 test("no-exercise preparation does not require an exercise provisioner", async t => {
   const f = await fixture(t);
   f.owners.projectRepositoryService = undefined;
@@ -548,7 +532,7 @@ test("finish is refused until every required step passed, then archives the atte
   assert.deepEqual(await f.service.deleteLesson({ actor, attemptId }), { ok: true, attemptId, closed: true });
   assert.deepEqual(f.calls, [["close", { actor, attemptId, archive: true, reason: "finished" }],
     ["close", { actor, attemptId, archive: false, reason: "deleted" }]]);
-  const service = createTrainingService({ ...f.owners, learningSpace: null });
+  const service = createTrainingService({ ...f.owners, learningSpace: NO_LEARNING_SPACE });
   await assert.rejects(service.deleteLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PRACTICE_UNAVAILABLE" });
 });
 

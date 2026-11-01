@@ -14,7 +14,7 @@ import { createTrainingDeclaredCheckOwner } from "../../packages/vibe64-training
 import { createTrainingCodeAuthorship } from "../../packages/vibe64-training/src/server/codeAuthorship.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
-import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeEditorActions.js";
+import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeSaveOwner.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 // A fixture code lesson executed through the actual bounded native gateway.
@@ -240,7 +240,6 @@ test("the ordinary Files editor save in the learner's own active practice projec
   await inProject(f.projectSlug, f.actor, () => save("// after the lesson\n"));
   assert.equal(plainSaves, 5, "the ended lesson's project keeps ordinary saves");
   assert.equal(await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId }), null);
-  assert.throws(() => createTrainingCodeSaveOwner({ authorship: {}, learners: f.learners }), TypeError);
 });
 
 test("a host with several learner stores selects the store holding the practice project's attempt for each save", async t => {
@@ -267,10 +266,6 @@ test("a host with several learner stores selects the store holding the practice 
   await inPractice(() => save(solved));
   assert.equal(plainSaves, 3);
   assert.equal(await entries(), 1, "the selected store's ledger records the learner's save");
-  selected = { authorship: {}, learners: f.learners };
-  await assert.rejects(inPractice(() => save("// invalid store\n")), TypeError);
-  assert.equal(plainSaves, 3, "an invalid selected store never saves");
-  assert.throws(() => createTrainingCodeSaveOwner({ selectOwners: "normal" }), TypeError);
 });
 
 test("a v2 code step keys its ledger by the entered step and only the learner's own Check records the pass", async t => {

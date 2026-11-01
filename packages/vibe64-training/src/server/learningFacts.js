@@ -12,10 +12,14 @@ import { learningVocabulary } from "../shared/learningVocabulary.js";
 // available here.
 const readers = new Map();
 
-// readable-check: allow module-registry - filled by a composing host repository; convert with its supplier
-function registerLearningFact({ id, read } = {}) {
-  if (typeof read !== "function") throw new TypeError(`Fact ${id} needs its reader.`);
-  // A provider set up again (one per server process; tests build several) replaces its reader.
+/**
+ * @param {object} fact
+ * @param {string} fact.id
+ * @param {(request: { actor: object, projectSlug: string, context: object }) => Promise<{ holds: boolean, reason?: string }>} fact.read
+ */
+// readable-check: allow module-registry - filled by this feature's setup and a composing host's; convert with its supplier
+function registerLearningFact({ id, read }) {
+  // A feature set up again replaces its reader.
   learningVocabulary.register({ facts: [id] });
   readers.set(id, read);
 }

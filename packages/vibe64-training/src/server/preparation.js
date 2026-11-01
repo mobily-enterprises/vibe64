@@ -53,7 +53,7 @@ function requireSuccess(result) {
  * @param {InstalledTrainingCatalogue} dependencies.catalogue
  * @param {InstalledTrainingContent} dependencies.content
  * @param {TrainingLearnerState} dependencies.learners
- * @param {TrainingLearningSpace | null} dependencies.learningSpace
+ * @param {TrainingLearningSpace} dependencies.learningSpace
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {ManagedProjectRepositoryService} dependencies.projectRepositoryService
  * @param {ProjectService} dependencies.project
@@ -90,7 +90,7 @@ function createTrainingService({
   }
 
   /**
-   * Rev 4 (H4): one lesson in progress at a time. A different lesson in
+   * One lesson in progress at a time. A different lesson in
    * progress refuses once with its title (the client's one confirmation);
    * archiveCurrent archives it first, under the same admitted revision.
    */
@@ -139,7 +139,7 @@ function createTrainingService({
           details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(content, current.pin) } });
       }
       if (expectedRevision !== saved.revision) throw revisionConflict();
-      await requireCloser().closeAttempt({ actor, attemptId: current.attemptId, archive: true, reason: "archived" });
+      await learningSpace.closeAttempt({ actor, attemptId: current.attemptId, archive: true, reason: "archived" });
       revision = (await learners.readState({ actor })).revision;
     }
     return reserveAndPrepare({ actor, requestId, expectedRevision: revision, pin });
@@ -153,7 +153,7 @@ function createTrainingService({
   }
 
   /**
-   * Restart (H5): archive this attempt, then a new attempt of the same pinned
+   * Restart: archive this attempt, then a new attempt of the same pinned
    * lesson with a fresh project, teacher and results. A retry with the same
    * request finishes a stopped restart: the close is resumable and the
    * reservation replays.
@@ -170,12 +170,12 @@ function createTrainingService({
     }
     if (!attempt.ended) await requireStartable(actor, attempt.pin);
     // For an attempt already archived this finishes a close that stopped part-way.
-    await requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
+    await learningSpace.closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
     return reserveAndPrepare({ actor, requestId, expectedRevision: (await learners.readState({ actor })).revision, pin: attempt.pin });
   }
 
   /**
-   * Completing the lesson archives the attempt as one bundle (H5); the
+   * Completing the lesson archives the attempt as one bundle; the
    * learner store keeps the completion. Refused unless every required step passed.
    */
   async function finishLesson({ actor, attemptId, expectedRevision } = {}) {
@@ -191,31 +191,20 @@ function createTrainingService({
         );
       }
     }
-    return requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "finished" });
+    return learningSpace.closeAttempt({ actor, attemptId, archive: true, reason: "finished" });
   }
 
   /**
-   * Delete (H5): the project and the teacher conversation go, with no archive.
+   * Delete: the project and the teacher conversation go, with no archive.
    */
   async function deleteLesson({ actor, attemptId } = {}) {
-    return requireCloser().closeAttempt({ actor, attemptId, archive: false, reason: "deleted" });
+    return learningSpace.closeAttempt({ actor, attemptId, archive: false, reason: "deleted" });
   }
 
-  function requireCloser() {
-    // readable-check: allow method-probe - optional operation: without a learning space closing a lesson answers that it is unavailable
-    if (typeof learningSpace?.closeAttempt !== "function") {
-      throw trainingError(
-        "VIBE64_TRAINING_PRACTICE_UNAVAILABLE",
-        "Closing lessons is unavailable in this installation. Nothing was changed."
-      );
-    }
-    return learningSpace;
-  }
-
-  // Creating the exercise session starts the original asynchronous Workspace
-  // setup, so the first preparation normally returns "preparing". When that
-  // exact setup run finishes, recheck the same attempt through this original
-  // owner, as Resume would; it records ready only when setup is proven.
+  // Creating the exercise session starts the asynchronous Workspace setup, so
+  // the first preparation normally returns "preparing". When that exact setup
+  // run finishes, recheck the same attempt through prepareLesson, as Resume
+  // would; it records ready only when setup is proven.
   const setupFollowUps = new Map();
   function followSetup({ actor, attemptId, setupRun }) {
     if (setupFollowUps.has(attemptId)) return;
@@ -238,13 +227,6 @@ function createTrainingService({
       let saved = await learners.resumeAttempt({ actor, attemptId });
       const lesson = await content.readLesson(pinnedLessonKey(saved.attempt.pin));
       if (!lesson.lesson.exercise) return { ...saved, previewReady: false };
-      // readable-check: allow method-probe - optional operation: an installation without exercise preparation answers EXERCISE_UNAVAILABLE
-      if (typeof projectRepositoryService?.createManagedGitProject !== "function" || typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
-        throw trainingError(
-          "VIBE64_TRAINING_EXERCISE_UNAVAILABLE",
-          "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation."
-        );
-      }
       saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision });
       const { attempt } = saved;
       const initialSessionId = attempt.preparation.initialSessionId;
@@ -290,7 +272,7 @@ function createTrainingService({
               vibe64User: actor
             }, { initializeProject: async ({ projectRoot }) => {
               // readExercise already verifies every byte against the installed pin.
-              // Retain the original managed initializer's Git commit and rollback.
+              // The managed initializer keeps its Git commit and rollback.
               for (const file of exercise.files) {
                 const relative = file.path;
                 if (!relative ||
@@ -323,7 +305,7 @@ function createTrainingService({
                   "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement."
                 );
               }
-              // Prove the original exercise before the first session exists.
+              // Prove the exercise before the first session exists.
               const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({
                 slug: attempt.projectSlug,
                 training
@@ -354,12 +336,11 @@ function createTrainingService({
               );
             }
             // The setup runner is keyed in this Project context.
-            // readable-check: allow optional-call - optional operation: a terminal service without workspace setup has nothing to wait for
-            setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
+            setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup(initialSessionId) || null;
             return current;
           });
           stage = "setup";
-          // Creating a session starts the original asynchronous Workspace setup.
+          // Creating a session starts the asynchronous Workspace setup.
           // A pending/failed setup is not success, and prepared is not running Preview.
           if (session.workspaceSetup?.status !== "succeeded") {
             const current = await learners.resumeAttempt({ actor, attemptId });

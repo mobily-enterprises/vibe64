@@ -12,13 +12,18 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { createTrainingStepActions } from "../../packages/vibe64-training/src/server/stepActions.js";
+import { createTrainingStepOperations } from "../../packages/vibe64-training/src/server/stepOperations.js";
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/shared/learnerEvents.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
+import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
 import { registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
 import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
+import { createTrainingLessonVisuals } from "../../packages/vibe64-training/src/server/lessonVisuals.js";
+import { NO_LEARNING_SPACE } from "../../packages/vibe64-training/src/server/learningSpace.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the
@@ -68,17 +73,18 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     return actionId === "vibe64.terminals.outputs.read" ? { ok: true, activeTerminal: { id: "terminal-1" } } : { ok: true };
   } };
   const steps = createTrainingStepChecks({ learners, content, checks, actions: inner });
+  // Without a learning space, the exercise host cannot close the lesson.
   const exercises = practice ? { async deleteLesson(value) { removed.push(value); return { ok: true, attemptId: value.attemptId, closed: true }; },
-    ...(typeof practice === "object" ? practice : {}) } : null;
+    ...(typeof practice === "object" ? practice : {}) } : { deleteLesson: value => NO_LEARNING_SPACE.closeAttempt(value) };
   const practiceCalls = [];
   const learningSpace = practice ? {
     async list(actor) { practiceCalls.push(["list", actor]); return { current: null, archived: [] }; },
     async exists() { return true; },
     async deleteArchive(value) { practiceCalls.push(["deleteArchive", value]); return { ok: true, ...value, removed: true }; },
-    ...(typeof practice === "object" ? practice : {}) } : null;
+    ...(typeof practice === "object" ? practice : {}) } : NO_LEARNING_SPACE;
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingStepActions({ learners, attemptLearners: learners, content, steps, exercises, learningSpace, publishLearnerChanged });
+  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners, attemptLearners: learners, content, steps, exercises, learningSpace, publishLearnerChanged }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
@@ -113,7 +119,7 @@ test("browser-only step actions are api-only and absent from Colleague's tools; 
   }
   for (const name of ASSISTANT) {
     const definition = f.definitions.find(value => value.id === `vibe64.training.${name}`);
-    assert.equal(definition.channels, undefined, `${name} uses the provider's default channels`);
+    assert.deepEqual(definition.channels, VIBE64_QUERY.channels, `${name} uses the default channels`);
     assert.equal(definition.extensions.assistant.alwaysAvailable, true);
     assert.equal(typeof definition.extensions.assistant.output.schema.getFieldDefinitions, "function");
     assert.doesNotMatch(definition.extensions.assistant.description, /teaching-brief|Main teacher|supervisor/u);
@@ -287,10 +293,10 @@ test("a practice presence check that fails keeps that project listed without fai
   const f = await fixture(t, { practice: learningSpace });
   const attempt = await f.start();
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
+  actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ operations: createTrainingOperations({
     publishLearnerChanged: async () => {},
     catalogue: { async readCatalogue() { throw new Error("not read by learning.read"); } }, learners: f.learners, learningSpace
-  }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
+  }) }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
     authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
   const read = await actions.execute({ actionId: "vibe64.training.learning.read", input: {}, context: { channel: "api", surface: "app" } });
@@ -325,11 +331,13 @@ test("a practice project no longer in the learning space is no longer offered fo
 test("practice actions without the learning space report unavailable and change nothing", async t => {
   const f = await fixture(t, { practice: false });
   const practiceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  for (const [name, input] of [["practice.list", {}], ["lesson.delete", { attemptId: practiceId }],
-    ["practice.archived.delete", { attemptId: practiceId }]]) {
+  for (const [name, input] of [["practice.list", {}], ["practice.archived.delete", { attemptId: practiceId }]]) {
     const result = await f.execute(name, input);
     assert.deepEqual([result.ok, result.available], [false, false], name);
   }
+  const deleted = await f.execute("lesson.delete", { attemptId: practiceId });
+  assert.deepEqual([deleted.ok, deleted.available], [false, true]);
+  assert.match(deleted.error, /unavailable in this installation/u);
   assert.deepEqual(f.published, []);
 });
 
@@ -407,11 +415,11 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
     terminals: { async workspaceSetupIsPrepared() { return true; } }
   });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({
+  actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({ operations: createTrainingOperations({
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
     learners: f.learners, exercises, publishLearnerChanged: async () => {}
-  }), ...createTrainingStepActions({ learners: f.learners, attemptLearners: f.learners, content: f.content, steps: { read() {} }, exercises,
-    publishLearnerChanged: async () => {} })]
+  }) }), ...createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners: f.learners, attemptLearners: f.learners, content: f.content, steps: { read() {} }, exercises,
+    publishLearnerChanged: async () => {} }) })]
     .filter(definition => definition.id !== "vibe64.training.lesson.read" && !/step\.|reader\./u.test(definition.id))
     .map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
@@ -499,8 +507,8 @@ test("the plain visual route reads a diagram of any retained attempt, including 
   await f.learners.endAttempt({ actor: f.auth.user, attemptId: attempt.attemptId, requestId: "leave-one", expectedRevision: revision, reason: "deleted" });
   assert.ok((await f.learners.readState({ actor: f.auth.user })).progress.attempts[0].ended);
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  actions.register({ contributorId: "visuals", domain: "training", actions: createTrainingVisualResourceActions({
-    learners: f.learners, content: f.content }) });
+  actions.register({ contributorId: "visuals", domain: "training", actions: createTrainingVisualResourceActions({ lessonVisuals: createTrainingLessonVisuals({
+    learners: f.learners, content: f.content }) }) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
     authorizeProject() { throw new Error("no project"); } });
   const read = await actions.execute({ actionId: TRAINING_VISUAL_RESOURCE_ACTION, input: { attemptId: attempt.attemptId, visualId: "flow" },

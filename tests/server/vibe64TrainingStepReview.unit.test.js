@@ -13,6 +13,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState, validateStepEntry } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { createTrainingStepActions } from "../../packages/vibe64-training/src/server/stepActions.js";
+import { createTrainingStepOperations } from "../../packages/vibe64-training/src/server/stepOperations.js";
 import { createTrainingStepReviewer } from "../../packages/vibe64-training/src/server/stepReview.js";
 
 // The review check end to end over the real bundler, installed content,
@@ -93,8 +94,8 @@ async function fixture(t) {
     evidence, reviewer: createTrainingStepReviewer({ learners, terminals }) });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const published = [];
-  const definitions = createTrainingStepActions({ learners, attemptLearners: learners, content, steps,
-    publishLearnerChanged: async event => { published.push(event); } });
+  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners, attemptLearners: learners, content, steps,
+    publishLearnerChanged: async event => { published.push(event); } }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => user,

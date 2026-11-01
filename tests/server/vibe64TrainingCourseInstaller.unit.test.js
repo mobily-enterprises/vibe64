@@ -9,6 +9,7 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-c
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
+import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingCourseInstaller } from "../../packages/vibe64-training/src/server/courseInstaller.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
@@ -243,9 +244,8 @@ test("catalogue actions require a signed-in user and report install results", as
   const f = await fixture(t);
   const auth = { user: null };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const missing = { readCatalogue: f.catalogue.readCatalogue };
-  const definitions = createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
-    courseInstaller: f.make() });
+  const definitions = createTrainingActions({ operations: createTrainingOperations({ publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
+    courseInstaller: f.make() }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
   const execute = (name, input = {}) => actions.execute({ actionId: `vibe64.training.${name}`, input, context: { channel: "api", surface: "app" } });
@@ -261,14 +261,6 @@ test("catalogue actions require a signed-in user and report install results", as
   assert.deepEqual({ ...installed, catalogueCommit: undefined }, { ok: true, available: true, changed: true, catalogueCommit: undefined, retired: [], revision: 1,
     course: { courseId: "first-course", release: "0.1.0", title: "First course", status: "released", enabled: true } });
   await assert.rejects(execute("course.install", { courseId: "first-course", release: "9.9.9" }), { code: "VIBE64_TRAINING_COURSE_NOT_AVAILABLE" });
-  const unavailable = createActionCatalogue({ policy: vibe64ActionPolicy });
-  unavailable.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: missing,
-    learners: { readState() {} } }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
-  registerVibe64ActionContext(unavailable, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
-  const result = await unavailable.execute({ actionId: "vibe64.training.course.install", input: { courseId: "first-course", release: "0.1.0" },
-    context: { channel: "api", surface: "app" } });
-  assert.equal(result.ok, false);
-  assert.equal(result.available, false);
 });
 
 test("an update installs the newer release and removes the older one, freeing its place, while saved lessons resume", async (t) => {

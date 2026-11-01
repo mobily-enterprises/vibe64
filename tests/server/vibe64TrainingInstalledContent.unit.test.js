@@ -727,6 +727,7 @@ test("conversation admission refuses changed pins, manifests, draft selection an
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
+import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
@@ -740,11 +741,11 @@ async function titleCatalogue(f, extra = {}) {
   await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
   return { catalogue, course, lock };
 }
-function titleActions(f, catalogue, content = null) {
+function titleActions(f, catalogue, content = createInstalledTrainingContent({ systemRoot: f.systemRoot })) {
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue, content,
+  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ operations: createTrainingOperations({ publishLearnerChanged: async () => {}, catalogue, content,
     learners: createTrainingLearnerState({ systemRoot: f.systemRoot })
-  }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
+  }) }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => ({ uid: 42, username: "reader", role: "member" }),
     authorizeProject() { assert.fail("Course title reads must not require a project."); } });
   const execute = (input = {}) => actions.execute({ actionId: "vibe64.training.courses.list", input, context: { channel: "api", surface: "app" } });

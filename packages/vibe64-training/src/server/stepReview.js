@@ -92,12 +92,6 @@ function createTrainingStepReviewer({ learners, terminals }) {
    * Helper's private root and its receipt.
    */
   async function review({ actor, lesson, step, evidence, context = {} } = {}) {
-    // readable-check: allow method-probe - optional operation: an installation without an AI Helper answers CHECK_UNDECLARED
-    if (["resolveAssistantPurpose", "resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation"]
-      // readable-check: allow method-probe - optional operation: an installation without an AI Helper answers CHECK_UNDECLARED
-      .some(name => typeof terminals?.[name] !== "function")) {
-      throw reviewFailure("Reviews need an AI Helper, which this installation does not provide.", "VIBE64_TRAINING_CHECK_UNDECLARED");
-    }
     return learners.runReviewExclusive({ actor }, async ({ root, receipt }) => {
       const helper = createRetainedConversationHelper({
         terminals,

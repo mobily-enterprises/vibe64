@@ -5,6 +5,7 @@ import { learnThreadFile, releaseLearnThread } from "@local/vibe64-core/server/l
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { learnerIdentity } from "./learnerState.js";
 import { pinnedLessonKey } from "./installedContent.js";
+import { conflictFailure } from "./errors.js";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
@@ -21,7 +22,7 @@ const PRIVATE = Object.freeze({ directoryMode: 0o700, fileMode: 0o600 });
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 
 /**
- * The attempt lifecycle in the learning space (Learning v2 Rev 4 H4/H5).
+ * The attempt lifecycle in the learning space.
  * An attempt is the parent of its practice project (training-<attemptId>,
  * when the lesson has one), its step results and its teacher conversation.
  * closeAttempt is the one implementation behind finish, restart,
@@ -337,4 +338,27 @@ function missingAsEmpty(error) {
   throw error;
 }
 
-export { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, lessonTitle, MAX_ARCHIVES };
+/**
+ * The learning space of an installation without practice projects to list or close: every attempt keeps its slug,
+ * listing and deleting answer that they are unavailable, and closing a lesson is refused with nothing changed.
+ */
+const NO_LEARNING_SPACE = Object.freeze({
+  async list() {
+    return {
+      ok: false,
+      available: false,
+      error: "Listing lessons is unavailable in this installation. Nothing was changed."
+    };
+  },
+  async exists() {
+    return true;
+  },
+  async closeAttempt() {
+    throw conflictFailure("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
+  },
+  async deleteArchive() {
+    return null;
+  }
+});
+
+export { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, lessonTitle, MAX_ARCHIVES, NO_LEARNING_SPACE };

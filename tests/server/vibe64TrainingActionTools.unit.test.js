@@ -8,6 +8,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
+import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
@@ -82,9 +83,17 @@ async function fixture(t, { presentation = false, released = false } = {}) {
       return { ...await learners.resumeAttempt(value), sourceRoot: "/PRIVATE_SOURCE", previewReady: true };
     }
   };
-  function register(host = null, replacements = {}) {
+  function register(host = exercises, replacements = {}) {
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-    const definitions = createTrainingActions({ catalogue, learners, exercises: host, publishLearnerChanged: async () => {}, ...replacements });
+    const operations = createTrainingOperations({
+      catalogue,
+      learners,
+      content,
+      exercises: host,
+      publishLearnerChanged: async () => {},
+      ...replacements
+    });
+    const definitions = createTrainingActions({ operations });
     actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
       authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
@@ -144,22 +153,6 @@ test("training queries share API/tool catalogue contracts and fresh member autho
   assert.equal(current.activeSummaryCurrent, false);
   assert.equal(current.active.attemptId, input.attemptId);
   assert.deepEqual(await inventory(f.systemRoot), before);
-});
-
-test("standalone missing exercise host reports unavailable without reservation or claiming Preview readiness", async t => {
-  const f = await fixture(t);
-  const c = f.register();
-  const before = await inventory(f.systemRoot);
-  const start = await c.execute("lesson.start", f.input);
-  assert.equal(start.ok, false);
-  assert.equal(start.available, false);
-  assert.match(start.error, /unavailable/u);
-  const resume = await c.tool("lesson.resume", { attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
-  assert.equal(resume.ok, true);
-  assert.equal(resume.result.ok, false);
-  assert.equal(resume.result.available, false);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  assert.equal((await f.learners.readState({ actor: f.auth.user })).active, null);
 });
 
 test("host start and resume receive exact admitted IDs and same actor while projections exclude private preparation fields", async t => {
@@ -239,7 +232,7 @@ test("oversized projections and native failures remain bounded, truthful and sou
   const saved = await f.reserve();
   // The retired teaching brief was this bound's largest reader; an oversized
   // catalogue projection now proves the same shared result bound.
-  const large = f.register(null, { catalogue: { ...f.catalogue, async readCatalogue() {
+  const large = f.register(f.exercises, { catalogue: { ...f.catalogue, async readCatalogue() {
     return { revision: 1, courses: [{ enabled: true, lock: { topics: [] },
       course: { courseId: "large", release: "0.1.0", title: "x".repeat(128 * 1024), status: "released" } }] };
   } } });
@@ -300,20 +293,11 @@ test("finish and ended-start replay expose the original target and actual active
   await assert.rejects(readFile(path.join(f.systemRoot, "projects")), { code: "ENOENT" });
 });
 
-test("restart and finish are unavailable without their host and reject malformed or unauthorized input before effects", async t => {
+test("restart and finish reject malformed or unauthorized input before effects", async t => {
   const f = await fixture(t);
   const saved = await f.reserve();
   const input = { attemptId: saved.attempt.attemptId, requestId: "close-one", expectedRevision: saved.revision };
   const inputs = { "lesson.restart": input, "lesson.finish": { attemptId: input.attemptId, expectedRevision: input.expectedRevision } };
-  const absent = f.register();
-  const before = await inventory(f.systemRoot);
-  for (const name of ["lesson.restart", "lesson.finish"]) {
-    const unavailable = await absent.tool(name, inputs[name]);
-    assert.equal(unavailable.ok, true);
-    assert.deepEqual([unavailable.result.ok, unavailable.result.available], [false, false]);
-    assert.match(unavailable.result.error, /unavailable in this installation/u);
-  }
-  assert.deepEqual(await inventory(f.systemRoot), before);
   const c = f.register(f.exercises);
   for (const name of ["lesson.restart", "lesson.finish"]) {
     for (const change of [{ attemptId: "../attempt" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "deleted" }, { archive: true }]) {
@@ -429,14 +413,18 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   } } };
   const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
   const { training } = await Vibe64TrainingFeature.setup({ actionCatalogue: actions, http,
+    env: {},
+    events: { async publish() {} },
+    logger: { warn() {} },
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
     sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
-  // Learning v2 publishes learner-scoped realtime notices through the optional runtime events.
-  assert.deepEqual(Vibe64TrainingFeature.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
+  // Learner-scoped realtime notices go through the runtime events.
+  assert.deepEqual(Vibe64TrainingFeature.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" });
+  assert.equal(Vibe64TrainingFeature.requires.events, "runtime.events");
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
-  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
-    "learningSpace", "publishLearnerChanged", "steps"]);
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises",
+    "learnerNotes", "learners", "learningSpace", "lessonVisuals", "operations", "publishLearnerChanged", "stepOperations", "steps"]);
   // Rev 4 C2: the standalone learning space lists and closes attempts with
   // the shared project archive service.
   assert.deepEqual(Object.keys(training.learningSpace).sort(), ["closeAttempt", "deleteArchive", "exists", "list"]);

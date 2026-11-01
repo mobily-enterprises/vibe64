@@ -47,10 +47,6 @@ async function runExerciseResponseCheck({
   checkId,
   stepId
 }) {
-  // readable-check: allow method-probe - optional operation: an installation without exercise checks answers CHECK_UNDECLARED
-  if (typeof checks?.runOrientationCheck !== "function") {
-    throw stepFailure("The installed exercise response check is unavailable in this host.");
-  }
   const outputs = requireResult(await actions.execute({
     actionId: "vibe64.terminals.outputs.read",
     input: target,
@@ -82,10 +78,6 @@ async function runExerciseResponseCheck({
  * authorship-qualified result.
  */
 async function runCodeCheckObservation({ checks, context, actor, attemptId, sessionId, observationId, checkId, stepId }) {
-  // readable-check: allow method-probe - optional operation: an installation without code checks answers CHECK_UNDECLARED
-  if (typeof checks?.runCodeCheck !== "function") {
-    throw stepFailure("The installed code check is unavailable in this host.");
-  }
   const checked = await checks.runCodeCheck({ actor, signal: context.signal, attemptId, sessionId, observationId, stepId });
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome) || !["learner", "other"].includes(checked.authorship) ||
@@ -448,7 +440,7 @@ function createTrainingStepChecks({
 
   /**
    * The server comparator: the only reader of a choice step's answer, which
-   * never appears in readLesson (contract C1).
+   * never appears in readLesson.
    */
   async function answer({ actor, attemptId, stepId, selected, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "answer a question");
@@ -459,10 +451,6 @@ function createTrainingStepChecks({
     if (!Array.isArray(selected) || !selected.length || selected.length > options || new Set(selected).size !== selected.length ||
         selected.some(value => !Number.isSafeInteger(value) || value < 0 || value >= options)) {
       throw stepFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400);
-    }
-    // readable-check: allow method-probe - test asserts error: content without readChoiceAnswer answers VIBE64_TRAINING_CHECK_UNDECLARED
-    if (typeof content.readChoiceAnswer !== "function") {
-      throw stepFailure("This installation cannot compare the answer for this step.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
     const { answer: expected } = await content.readChoiceAnswer({ ...pinnedLessonKey(attempt.pin), stepId });
     const chosen = [...selected].sort((left, right) => left - right);
@@ -502,10 +490,6 @@ function createTrainingStepChecks({
   }
 
   function requireEvidence() {
-    // readable-check: allow method-probe - optional operation: without step evidence reading practice work answers CHECK_UNDECLARED
-    if (typeof evidence?.read !== "function") {
-      throw stepFailure("Reading practice work is unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
-    }
     return evidence;
   }
 
@@ -528,8 +512,6 @@ function createTrainingStepChecks({
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind !== "review") throw stepFailure("This step has no review check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
-    // readable-check: allow method-probe - optional operation: without a reviewer review steps answer CHECK_UNDECLARED
-    if (typeof reviewer?.review !== "function") throw stepFailure("Reviews are unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     const entry = await savedEntry(actor, attempt);
     const previous = entry.results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
@@ -634,8 +616,6 @@ function createTrainingStepChecks({
    * entry keeps it. Other steps, ended attempts and absent practice record none.
    */
   async function enterStep({ actor, attemptId, stepId } = {}) {
-    // readable-check: allow method-probe - optional operation: without code authorship a step records no baseline
-    if (typeof authorship?.recordStepBaseline !== "function") return { recorded: false };
     return authorship.recordStepBaseline({ actor, attemptId, stepId });
   }
 
