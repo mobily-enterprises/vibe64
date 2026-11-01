@@ -3,6 +3,7 @@ import test from "node:test";
 import { fixture, publishPlanFixture, planDocument, reportOutcome } from "../fixtures/assistantRouting.js";
 import { manageWorkPlan, readWorkPlan, readWorkPlanHistory } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { assistantWorkflowUpgradeChanges, parseRoutingDecision, assistantWorkflowInstructions } from "@local/vibe64-runtime/shared/assistantRouting";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const request = { messageId: "request-1", message: "Execute the plan", submissionKind: "send" };
 const end = (state, result = "completed") => ({ payload: { agentRun: { active: false, state: result, providerTurnId: state.turnId } } });
@@ -330,7 +331,7 @@ test("the bound plan helper returns workflow identity without a plan and forward
   await f.service.send("session-1", request, f.context);
   f.context.runtime.store.readSessionSourceDescriptor = async () => ({ metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: `${f.context.runtime.stateRoot}/sessions/active/session-1/source` } });
   const calls = [];
-  const commands = createAgentSessionCommandService({ projectService: {
+  const commands = createAgentSessionCommandService({ logger: silentLogger, projectService: {
     readCurrentProject: async () => ({ slug: "fixture", projectRoot: f.context.runtime.stateRoot }),
     createSessionStore: async () => f.context.runtime.store,
     runInProjectContext: async (_slug, operation) => operation()

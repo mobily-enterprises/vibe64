@@ -122,7 +122,7 @@ function createVibe64TerminalsFeature({
         // All feature boot hooks (including hosted execution/auth configuration)
         // have completed before recovery can admit work.
         setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
-          logger?.warn({ code: error.code, error: error.message }, "Active goals could not be recovered after server restart.");
+          logger.warn({ code: error.code, error: error.message }, "Active goals could not be recovered after server restart.");
         }));
       });
       return { terminals };

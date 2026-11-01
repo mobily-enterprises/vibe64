@@ -16,6 +16,7 @@ import {
   agentPlaywrightCommandSource,
   configureVibe64Host
 } from "../../packages/vibe64-execution/src/server/index.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
 test.afterEach(() => configureVibe64Host(null));
@@ -168,7 +169,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
       "}));"
     ].join("\n") + "\n"
   );
-  const commandService = createAgentPreviewCommandService({
+  const commandService = createAgentPreviewCommandService({ logger: silentLogger,
     projectService: {
       runInProjectContext: (_slug, operation) => operation(),
       projectInspectionEnvironment: async () => ({})

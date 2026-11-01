@@ -16,6 +16,7 @@ import {
   initializeGenesisProject
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 test("agent shell commands run as session-owned managed executions and drain on session close", async (t) => {
   for (const [name, value] of Object.entries({ GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" })) {
@@ -53,7 +54,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
   };
   await writeFile(path.join(temporaryRoot, ".keep"), "");
   const setupRetries = [];
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     async retryWorkspaceSetup(id) {
       setupRetries.push(id);
       return { state: { status: "running", currentLabel: "Install dependencies" } };
@@ -272,7 +273,7 @@ test("session status gives the assistant the stored reason a repository needs he
   const message = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
   const tasks = new Map([["update-session", { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" },
     error: message, finishedAt: "2026-10-25T14:49:52.000Z", operationId: "update-1", status: "failed" }]]);
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     projectService: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
@@ -315,7 +316,7 @@ test("project contract decisions are one shared predicate and keep agent status 
   const descriptor = { metadata: { source_kind: "session_clone", source_path: sourceRoot,
     source_path_authority: "managed_session_source" }, sessionId: "session-1" };
   let failure;
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     projectService: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },

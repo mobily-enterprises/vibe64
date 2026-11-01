@@ -8,6 +8,7 @@ import test from "node:test";
 
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { createAgentDatabaseCommandService, prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "session"];
 
@@ -128,7 +129,7 @@ test("helper and individual database commands use the same authenticated session
   const databaseTools = {
     async refreshSchema(input) { calls.push(input); return { ok: true, schema: { tables: [] } }; }
   };
-  const command = createAgentDatabaseCommandService({ projectService: {
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: {
     async readCurrentProject() { return { slug: "demo", projectRoot: root }; },
     async runInProjectContext(slug, operation) { assert.equal(slug, "demo"); return operation(); }
   }, readDatabaseTools: () => databaseTools });

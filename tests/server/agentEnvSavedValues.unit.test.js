@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createAgentEnvCommandService } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const linkedRecord = {
   editable: false, key: "PAYMENTS_KEY", label: "From Test vault: Payments — main", owner: "system",
@@ -42,7 +43,7 @@ function testVault() {
 }
 
 async function boundCommand(records = [], actor = { username: "teammate", role: "member" }) {
-  const command = createAgentEnvCommandService({ projectService: projectService(records) });
+  const command = createAgentEnvCommandService({ logger: silentLogger, projectService: projectService(records) });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
 }

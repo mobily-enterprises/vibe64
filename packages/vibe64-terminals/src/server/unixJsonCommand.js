@@ -17,7 +17,7 @@ function subscribeUnixCommandControlChanges(listener) {
 function reportUnixCommandControlChange(entry, reason, receivedGeneration = "") {
   const event = { socketPath: entry.socketPath, sessionId: entry.sessionId,
     generationId: entry.generationId, reason };
-  logOperationalEvent(entry.commandService?.logger, reason === "rejected" ? "warn" : "info", {
+  logOperationalEvent(entry.commandService.logger, reason === "rejected" ? "warn" : "info", {
     component: "vibe64.agent_controls", event: `vibe64.agent_controls.${reason}`,
     ...event, receivedGeneration: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(receivedGeneration) ? receivedGeneration : ""
   }, "Managed assistant control lifecycle changed.");
@@ -103,7 +103,7 @@ async function unixJsonCommandServerIsHealthy(entry = {}, {
     if (DEAD_UNIX_COMMAND_SOCKET_CODES.has(String(cause?.code || ""))) return false;
     // An uncertain probe must not retire a live listener and invalidate every
     // assistant that inherited its controls. Only a proven dead socket is replaceable.
-    logOperationalEvent(entry.commandService?.logger, "warn", {
+    logOperationalEvent(entry.commandService.logger, "warn", {
       component: "vibe64.agent_controls", event: "vibe64.agent_controls.health_unavailable",
       sessionId, socketPath, generationId: entry.generationId, code: cause?.code || ""
     }, "Managed assistant control health could not be verified; existing listener retained.");

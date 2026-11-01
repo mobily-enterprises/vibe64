@@ -36,6 +36,7 @@ import {
 } from "./agentPreviewBrowserWorker.js";
 
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -229,6 +230,19 @@ function browserWorkerToken({
     .digest("hex");
 }
 
+/**
+ * @param {object} options
+ * @param {number} [options.browserIdleTimeoutMs]
+ * @param {number} [options.browserSuspendAfterMs]
+ * @param {number} [options.browserControlHealthFailureLimit]
+ * @param {number} [options.browserControlHealthIntervalMs]
+ * @param {ReturnType<typeof createAgentPreviewCommandService>} options.commandService
+ * @param {RuntimeEnv} [options.env]
+ * @param {object} [options.project]
+ * @param {string} [options.sessionId]
+ * @param {string} [options.worktreePath]
+ * @param {string} [options.wrapperHostDir]
+ */
 async function prepareAgentPreviewCommand({
   browserIdleTimeoutMs = DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS,
   browserSuspendAfterMs = DEFAULT_PREVIEW_BROWSER_SUSPEND_AFTER_MS,
@@ -240,10 +254,10 @@ async function prepareAgentPreviewCommand({
   sessionId = "",
   worktreePath = "",
   wrapperHostDir = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
-  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) {
+  if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},
       ok: false

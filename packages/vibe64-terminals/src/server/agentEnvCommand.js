@@ -88,12 +88,12 @@ const commandServers = createSessionCommandServers({
 
 /**
  * @param {object} dependencies
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {object | null} [dependencies.productionEnvironmentProvider] a host's production Env values
  */
 function createAgentEnvCommandService({
-  logger = null,
+  logger,
   projectService,
   // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
   productionEnvironmentProvider = null
@@ -467,14 +467,20 @@ function createAgentEnvCommandService({
   });
 }
 
+/**
+ * @param {object} options
+ * @param {ReturnType<typeof createAgentEnvCommandService>} options.commandService
+ * @param {string} [options.sessionId]
+ * @param {string} [options.wrapperHostDir]
+ */
 async function prepareAgentEnvCommand({
   commandService,
   sessionId = "",
   wrapperHostDir = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
-  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) {
+  if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},
       ok: false

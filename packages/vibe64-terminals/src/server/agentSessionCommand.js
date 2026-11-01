@@ -155,7 +155,7 @@ const commandServers = createSessionCommandServers({
  * @param {(request: object) => Promise<object>} dependencies.readProjectPreview
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -167,7 +167,7 @@ function createAgentSessionCommandService({
   readProjectPreview,
   reportWorkflowOutcome,
   retryWorkspaceSetup,
-  logger = null,
+  logger,
   projectService,
   publishSessionChanged,
   runCommand = runVibe64Command,
@@ -596,14 +596,20 @@ function createAgentSessionCommandService({
   });
 }
 
+/**
+ * @param {object} options
+ * @param {ReturnType<typeof createAgentSessionCommandService>} options.commandService
+ * @param {string} [options.sessionId]
+ * @param {string} [options.wrapperHostDir]
+ */
 async function prepareAgentSessionCommand({
   commandService,
   sessionId = "",
   wrapperHostDir = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
-  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) {
+  if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},
       ok: false

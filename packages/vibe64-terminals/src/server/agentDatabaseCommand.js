@@ -206,11 +206,11 @@ const commandServers = createSessionCommandServers({
 
 /**
  * @param {object} dependencies
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {() => object | null} dependencies.readDatabaseTools the installed database tools service, or null without one
  */
-function createAgentDatabaseCommandService({ logger = null, projectService, readDatabaseTools }) {
+function createAgentDatabaseCommandService({ logger, projectService, readDatabaseTools }) {
   const projectBinding = createAgentCommandProjectBinding(projectService, {
     sessionRequired: ["Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required"],
     projectRequired: ["Vibe64 database command could not bind this session to a project.", "vibe64_agent_database_command_project_required"],
@@ -290,13 +290,19 @@ function createAgentDatabaseCommandService({ logger = null, projectService, read
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
   }
 
-  return Object.freeze({ bindSession, closeAllForSession, run });
+  return Object.freeze({ bindSession, closeAllForSession, logger, run });
 }
 
-async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wrapperHostDir = "" } = {}) {
+/**
+ * @param {object} options
+ * @param {ReturnType<typeof createAgentDatabaseCommandService>} options.commandService
+ * @param {string} [options.sessionId]
+ * @param {string} [options.wrapperHostDir]
+ */
+async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wrapperHostDir = "" }) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
-  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) return { env: {}, ok: false };
+  if (!normalizedSessionId || !normalizedWrapperHostDir) return { env: {}, ok: false };
   await commandService.bindSession(normalizedSessionId);
   await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource());
   const server = await commandServers.ensure({

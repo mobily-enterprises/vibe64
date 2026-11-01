@@ -15,6 +15,7 @@ import {
   createAgentEnvCommandService,
   prepareAgentEnvCommand
 } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 function createProjectService({
   records = []
@@ -182,7 +183,7 @@ test("agent Env status reports both scopes without exposing values", async () =>
       valuePresent: true
     }]
   });
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     projectService: project
   });
@@ -215,7 +216,7 @@ test("agent Env status reports both scopes without exposing values", async () =>
 test("agent Env persists and reports empty development and production values", async () => {
   const project = createProjectService();
   const production = createProductionProvider();
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     projectService: project
   });
@@ -298,7 +299,7 @@ test("agent Env creates development values through the project service and never
       valuePresent: false
     }]
   });
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     projectService: project
   });
   await command.bindSession("development-session");
@@ -329,7 +330,7 @@ test("agent Env creates development values through the project service and never
 test("agent Env production writes use only the host production provider", async () => {
   const project = createProjectService();
   const production = createProductionProvider();
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     projectService: project
   });
@@ -374,7 +375,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
       valuePresent: true
     }]
   });
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     projectService: project
   });
   await command.bindSession("guard-session");
@@ -401,7 +402,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
 
 test("agent Env refuses a stale session binding after the project identity changes", async () => {
   const project = createProjectService();
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     projectService: project
   });
   await command.bindSession("stale-session");
@@ -433,7 +434,7 @@ test("agent Env removes only stored user values", async () => {
       valuePresent: true
     }]
   });
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     projectService: project
   });
   await command.bindSession("remove-session");
@@ -460,7 +461,7 @@ test("agent Env removes only stored user values", async () => {
 test("agent Env wrapper forwards stdin over its authenticated session socket", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-"));
   const project = createProjectService();
-  const command = createAgentEnvCommandService({
+  const command = createAgentEnvCommandService({ logger: silentLogger,
     projectService: project
   });
   const sessionId = "wrapper-session";
@@ -527,7 +528,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
 test("agent Env preparation repairs one missing cached socket and fences its old generation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-repair-"));
   const project = createProjectService();
-  const command = createAgentEnvCommandService({ projectService: project });
+  const command = createAgentEnvCommandService({ logger: silentLogger, projectService: project });
   const sessionId = "env-repair-session";
   try {
     const options = {

@@ -69,6 +69,7 @@ import {
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
 const PREDECESSOR_ID = "renewal-resource-predecessor";
@@ -208,10 +209,10 @@ async function createLiveResourceSet({
 }) {
   const sessionId = session.sessionId;
   const wrapperRoot = path.join(path.dirname(targetRoot), "cmd", sessionId);
-  const envCommands = createAgentEnvCommandService({
+  const envCommands = createAgentEnvCommandService({ logger: silentLogger,
     projectService: commandProject
   });
-  const previewCommands = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
+  const previewCommands = createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return { ok: true, previewTarget: { available: false, href: "" } };

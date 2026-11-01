@@ -18,6 +18,7 @@ import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { vibe64Driver } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -213,7 +214,7 @@ process.stdout.write(JSON.stringify({
     startWorkflow: async () => ({ ok: true, workflow: null }),
     ...workflowHooks
   });
-  const commandService = createAgentPreviewCommandService({
+  const commandService = createAgentPreviewCommandService({ logger: silentLogger,
     projectService,
     launchTarget: controller, runManagedCommand: runCommand,
     stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null,

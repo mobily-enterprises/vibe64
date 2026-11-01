@@ -9,6 +9,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { readProjectPreview, sendProjectMessage } from "../../packages/vibe64-terminals/src/server/projectMessage.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "project-message-history-"));
@@ -116,7 +117,7 @@ test("the installed helper sends through its bound socket and supplies server-ow
   const root = await mkdtemp(path.join(os.tmpdir(), "project-message-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     projectService: {
       readCurrentProject: async () => ({ slug: "online", projectRoot: root }),
       runInProjectContext: async (slug, operation) => { assert.equal(slug, "online"); return operation(); },
@@ -220,7 +221,7 @@ test("project-preview returns the other project's current Preview URL through th
   const root = await mkdtemp(path.join(os.tmpdir(), "project-preview-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     projectService: {
       readCurrentProject: async () => ({ slug: "inspector", projectRoot: root }),
       runInProjectContext: async (slug, operation) => { assert.equal(slug, "inspector"); return operation(); },

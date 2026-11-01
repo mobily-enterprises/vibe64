@@ -11,6 +11,7 @@ import { createAgentSessionCommandService, prepareAgentSessionCommand } from "..
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
 import { upgradePlanSession, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plans-"));
@@ -163,7 +164,7 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const store = { ...f.context.runtime.store, readMetadataValue: async () => JSON.stringify(request),
     readSessionSourceDescriptor: async () => ({ sessionId: f.context.session.sessionId,
       metadata: { source_kind: "session_clone", source_path: path.join(f.root, "sessions", "active", f.context.session.sessionId, "source"), source_path_authority: "managed_session_source" } }) };
-  const service = createAgentSessionCommandService({ projectService: {
+  const service = createAgentSessionCommandService({ logger: silentLogger, projectService: {
     createSessionStore: async () => store, readCurrentProject: async () => ({ slug: "project", projectRoot: f.root }),
     runInProjectContext: async (_slug, callback) => callback()
   }, publishSessionChanged: async (_id, event) => events.push(event) });

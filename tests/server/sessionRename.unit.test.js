@@ -15,6 +15,7 @@ import { registerRoutes } from "../../packages/vibe64-sessions/src/server/regist
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
 
@@ -76,7 +77,7 @@ test("the real chat helper renames only its bound session and cannot use the she
   const f = await fixture(t);
   const wrapperHostDir = path.join(f.root, "wrappers");
   const project = { slug: "test", projectRoot: f.root };
-  const service = createAgentSessionCommandService({
+  const service = createAgentSessionCommandService({ logger: silentLogger,
     projectService: {
       readCurrentProject: async () => project,
       createSessionStore: async () => f.store,
