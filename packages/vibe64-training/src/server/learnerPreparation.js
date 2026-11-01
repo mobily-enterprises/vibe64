@@ -47,8 +47,8 @@ function createLearnerPreparation({
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
       throw failure(
-        "VIBE64_TRAINING_ATTEMPT_MISSING",
         "This learner has no matching active reservation. Read the current learning state before preparing.",
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
         404
       );
     }
@@ -60,8 +60,8 @@ function createLearnerPreparation({
     }
     if (!release) {
       throw failure(
-        "VIBE64_TRAINING_PREPARATION_BUSY",
         "This learner's exercise is being prepared. Retry the same attempt after that operation finishes.",
+        "VIBE64_TRAINING_PREPARATION_BUSY",
         409
       );
     }
@@ -69,8 +69,8 @@ function createLearnerPreparation({
       const state = await loadState(paths);
       if (state.progress.activeAttemptId !== attemptId) {
         throw failure(
-          "VIBE64_TRAINING_ATTEMPT_MISSING",
           "The active attempt changed. Read the current learning state before preparing.",
+          "VIBE64_TRAINING_ATTEMPT_MISSING",
           404
         );
       }
@@ -100,8 +100,8 @@ function createLearnerPreparation({
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
       throw failure(
-        "VIBE64_TRAINING_ATTEMPT_MISSING",
         "This learner has no matching active reservation. Read the current learning state before preparing.",
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
         404
       );
     }
@@ -110,15 +110,15 @@ function createLearnerPreparation({
       const state = await loadState(paths);
       if (state.progress.activeAttemptId !== attemptId) {
         throw failure(
-          "VIBE64_TRAINING_ATTEMPT_MISSING",
           "The active attempt changed. Read the current learning state before preparing.",
+          "VIBE64_TRAINING_ATTEMPT_MISSING",
           404
         );
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       await verifyActiveLesson(state.progress);
       if (!attempt.preparation) {
-        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This lesson has no practice project to prepare.", 409);
+        throw failure("This lesson has no practice project to prepare.", "VIBE64_TRAINING_EXERCISE_MISSING", 409);
       }
       const sessionId = attemptSessionId(attemptId);
       if (observedFailure) validatePreparation({ phase: "preparing", initialSessionId: sessionId, failure: observedFailure }, attemptId);
@@ -130,15 +130,15 @@ function createLearnerPreparation({
         next = current.phase === "reserved" ? { phase: "preparing", initialSessionId: sessionId } : current;
       } else if (current.phase === "reserved") {
         throw failure(
-          "VIBE64_TRAINING_PREPARATION_CONFLICT",
           "Begin and save this attempt's exact session identity before project or session effects.",
+          "VIBE64_TRAINING_PREPARATION_CONFLICT",
           409
         );
       } else if (operation === "start") {
         // Recorded before the practice session exists; a retry before it
         // exists re-verifies the same exercise and may record again.
         if (current.phase === "ready") {
-          throw failure("VIBE64_TRAINING_PREPARATION_CONFLICT", "A prepared lesson keeps the start commit it recorded.", 409);
+          throw failure("A prepared lesson keeps the start commit it recorded.", "VIBE64_TRAINING_PREPARATION_CONFLICT", 409);
         }
         next = { ...current, startCommit: input.startCommit };
       } else if (operation === "ready") {
@@ -157,8 +157,8 @@ function createLearnerPreparation({
       }
       if (expectedRevision !== state.revision) {
         throw failure(
-          "VIBE64_TRAINING_STATE_REVISION_CONFLICT",
           "Learning preparation changed. Read the current revision before reporting another observation.",
+          "VIBE64_TRAINING_STATE_REVISION_CONFLICT",
           409
         );
       }

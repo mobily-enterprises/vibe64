@@ -2,7 +2,7 @@
  * Training's coded refusals: an Error carrying a stable code, an optional HTTP
  * status and any extra fields (cause, details) the caller names.
  */
-function trainingFailure(code, message, options = {}) {
+function trainingFailure(message, code, options = {}) {
   const { statusCode, ...details } = options;
   return Object.assign(new Error(message), { code, ...(statusCode ? { statusCode } : {}), ...details });
 }
@@ -10,15 +10,15 @@ function trainingFailure(code, message, options = {}) {
 /**
  * A refusal with an HTTP status, 409 unless named.
  */
-function conflictFailure(code, message, statusCode = 409) {
-  return trainingFailure(code, message, { statusCode });
+function conflictFailure(message, code, statusCode = 409) {
+  return trainingFailure(message, code, { statusCode });
 }
 
 /**
  * A refusal with the status and cause the caller names.
  */
-function causedFailure(code, message, statusCode, cause) {
-  return trainingFailure(code, message, { statusCode, ...(cause ? { cause } : {}) });
+function causedFailure(message, code, statusCode, cause) {
+  return trainingFailure(message, code, { statusCode, ...(cause ? { cause } : {}) });
 }
 
 const MAX_RESULT_BYTES = 128 * 1024;
@@ -29,7 +29,7 @@ const MAX_RESULT_BYTES = 128 * 1024;
 function boundedTrainingResult(result, options = {}) {
   const { message, statusCode } = options;
   if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESULT_BYTES) {
-    throw trainingFailure("VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE", message, { statusCode });
+    throw trainingFailure(message, "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE", { statusCode });
   }
   return structuredClone(result);
 }

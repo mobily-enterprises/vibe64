@@ -19,27 +19,27 @@ import { pinnedLessonKey } from "./installedContent.js";
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
-function trainingError(code, message) {
-  return trainingFailure(code, message, { statusCode: 409 });
+function trainingError(message, code) {
+  return trainingFailure(message, code, { statusCode: 409 });
 }
 
-const revisionConflict = () => trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT",
-  "Learning state changed. Read the current revision and retry.");
-const missingAttempt = () => Object.assign(trainingError("VIBE64_TRAINING_ATTEMPT_MISSING",
-  "This is not your lesson in progress. Nothing was changed."), { statusCode: 404 });
+const revisionConflict = () => trainingError("Learning state changed. Read the current revision and retry.",
+  "VIBE64_TRAINING_STATE_REVISION_CONFLICT");
+const missingAttempt = () => Object.assign(trainingError("This is not your lesson in progress. Nothing was changed.",
+  "VIBE64_TRAINING_ATTEMPT_MISSING"), { statusCode: 404 });
 
 // The session owner's refusals for an actor with no usable AI yet (none
 // connected, or no model routed). A practice session needs one, so the lesson
 // asks the learner to set up their AI and continue the same saved lesson.
 const AI_UNAVAILABLE_CODES = new Set(["vibe64_assistant_workflow_unavailable", "vibe64_assistant_role_unconfigured"]);
 const AI_REQUIRED_MESSAGE = "This lesson's practice project needs your AI, which isn't set up yet. Set up your AI, then press Continue lesson: your lesson waits where it is.";
-const aiRequired = cause => Object.assign(trainingError(TRAINING_PRACTICE_AI_REQUIRED_CODE, AI_REQUIRED_MESSAGE), { cause });
+const aiRequired = cause => Object.assign(trainingError(AI_REQUIRED_MESSAGE, TRAINING_PRACTICE_AI_REQUIRED_CODE), { cause });
 
 function requireSuccess(result) {
   if (result?.ok === false) {
     throw trainingError(
-      result.code || "VIBE64_TRAINING_PREPARATION_FAILED",
-      result.error || "Exercise preparation failed. Resume the same attempt."
+      result.error || "Exercise preparation failed. Resume the same attempt.",
+      result.code || "VIBE64_TRAINING_PREPARATION_FAILED"
     );
   }
   return result;
@@ -79,13 +79,13 @@ function createTrainingService({
     const taught = await content.readLesson(pinnedLessonKey(pin));
     if (taught.lesson.schemaVersion !== 3) {
       throw trainingError(
-        "VIBE64_TRAINING_LESSON_RETIRED",
-        "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again."
+        "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again.",
+        "VIBE64_TRAINING_LESSON_RETIRED"
       );
     }
     if (!lessonAvailableTo(taught, actor)) {
-      throw Object.assign(trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE",
-        "This lesson needs screens this Vibe64 does not have for you, so it cannot start here. Nothing was changed."), { statusCode: 422 });
+      throw Object.assign(trainingError("This lesson needs screens this Vibe64 does not have for you, so it cannot start here. Nothing was changed.",
+        "VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE"), { statusCode: 422 });
     }
   }
 
@@ -99,19 +99,19 @@ function createTrainingService({
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
     if (!entry?.enabled) {
       throw trainingError(
-        "VIBE64_TRAINING_COURSE_UNAVAILABLE",
-        "This exact course release is not enabled on this server. Read the courses again and start from a listed release, or resume your saved lesson."
+        "This exact course release is not enabled on this server. Read the courses again and start from a listed release, or resume your saved lesson.",
+        "VIBE64_TRAINING_COURSE_UNAVAILABLE"
       );
     }
     // A preview course is for the workspace owner to review before release;
     // its admitted attempt is otherwise an ordinary saved lesson.
     if (entry.course.status !== "released" && actor?.role !== "owner") {
-      throw Object.assign(trainingError("VIBE64_TRAINING_COURSE_PREVIEW",
-        "This preview course can be tried only by the workspace owner until it is released."), { statusCode: 403 });
+      throw Object.assign(trainingError("This preview course can be tried only by the workspace owner until it is released.",
+        "VIBE64_TRAINING_COURSE_PREVIEW"), { statusCode: 403 });
     }
     const topic = entry.lock.topics.find(value =>
       value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
-    if (!topic) throw trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE", "Choose a published lesson in the approved course release.");
+    if (!topic) throw trainingError("Choose a published lesson in the approved course release.", "VIBE64_TRAINING_LESSON_UNAVAILABLE");
     const lesson = topic.lessons.find(value => value.code === lessonCode);
     const pin = {
       course: { courseId, release },
@@ -186,8 +186,8 @@ function createTrainingService({
       if (expectedRevision !== saved.revision) throw revisionConflict();
       if (!(saved.completion && saved.completion.passed >= saved.completion.required)) {
         throw trainingError(
-          "VIBE64_TRAINING_LESSON_INCOMPLETE",
-          "Pass every required step before finishing this lesson. Nothing was changed."
+          "Pass every required step before finishing this lesson. Nothing was changed.",
+          "VIBE64_TRAINING_LESSON_INCOMPLETE"
         );
       }
     }
@@ -254,15 +254,15 @@ function createTrainingService({
                 existing.metadata.deletion ||
                 existing.metadata.repository?.mode !== "managed_git") {
               throw trainingError(
-                "VIBE64_TRAINING_PROJECT_CONFLICT",
-                "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created."
+                "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created.",
+                "VIBE64_TRAINING_PROJECT_CONFLICT"
               );
             }
           } else {
             if (attempt.preparation.phase === "ready") {
               throw trainingError(
-                "VIBE64_TRAINING_PROJECT_MISSING",
-                "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement."
+                "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement.",
+                "VIBE64_TRAINING_PROJECT_MISSING"
               );
             }
             requireSuccess(await projectRepositoryService.createManagedGitProject({
@@ -280,8 +280,8 @@ function createTrainingService({
                     path.posix.isAbsolute(relative) ||
                     relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
                   throw trainingError(
-                    "VIBE64_TRAINING_EXERCISE_PATH_INVALID",
-                    "The verified exercise contains an invalid source path. Ask the owner to inspect its content release."
+                    "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.",
+                    "VIBE64_TRAINING_EXERCISE_PATH_INVALID"
                   );
                 }
                 const destination = path.join(projectRoot, relative);
@@ -301,8 +301,8 @@ function createTrainingService({
               if (error.code !== "vibe64_session_not_found") throw error;
               if (attempt.preparation.phase === "ready") {
                 throw trainingError(
-                  "VIBE64_TRAINING_SESSION_MISSING",
-                  "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement."
+                  "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.",
+                  "VIBE64_TRAINING_SESSION_MISSING"
                 );
               }
               // Prove the exercise before the first session exists.
@@ -325,14 +325,14 @@ function createTrainingService({
             }
             if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
               throw trainingError(
-                "VIBE64_TRAINING_SESSION_CONFLICT",
-                "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected."
+                "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.",
+                "VIBE64_TRAINING_SESSION_CONFLICT"
               );
             }
             if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
               throw trainingError(
-                "VIBE64_TRAINING_SETUP_CHANGED",
-                "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created."
+                "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.",
+                "VIBE64_TRAINING_SETUP_CHANGED"
               );
             }
             // The setup runner is keyed in this Project context.

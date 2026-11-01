@@ -21,7 +21,7 @@ const MAX_SEPARATE_ENTRIES = 255;
  */
 async function readDeclaredFiles(source, files) {
   if (!path.isAbsolute(source || "") || await realpath(source) !== source) {
-    throw conflictFailure("VIBE64_TRAINING_CODE_SOURCE_UNSAFE", "The lesson session source is not its original canonical directory.");
+    throw conflictFailure("The lesson session source is not its original canonical directory.", "VIBE64_TRAINING_CODE_SOURCE_UNSAFE");
   }
   const result = [];
   for (const file of files) {
@@ -29,12 +29,12 @@ async function readDeclaredFiles(source, files) {
     let stat;
     try { stat = await lstat(filename); } catch (error) {
       if (error.code === "ENOENT") {
-        throw conflictFailure("VIBE64_TRAINING_CODE_FILE_MISSING", `The lesson file ${file} is missing from your practice project.`);
+        throw conflictFailure(`The lesson file ${file} is missing from your practice project.`, "VIBE64_TRAINING_CODE_FILE_MISSING");
       }
       throw error;
     }
     if (!stat.isFile() || stat.isSymbolicLink() || await realpath(filename) !== filename || stat.size > MAX_FILE_BYTES) {
-      throw conflictFailure("VIBE64_TRAINING_CODE_FILE_UNSAFE", `The lesson file ${file} is not an ordinary file of at most 1 MiB.`);
+      throw conflictFailure(`The lesson file ${file} is not an ordinary file of at most 1 MiB.`, "VIBE64_TRAINING_CODE_FILE_UNSAFE");
     }
     const bytes = await readFile(filename);
     result.push({ path: file, sha256: sha256Hex(bytes), bytes });
@@ -116,7 +116,7 @@ function createTrainingCodeAuthorship({
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(attempt.preparation.initialSessionId);
       if (!session || session.sessionId !== attempt.preparation.initialSessionId) {
-        throw conflictFailure("VIBE64_TRAINING_CODE_SESSION_STALE", "The prepared lesson session is unavailable.");
+        throw conflictFailure("The prepared lesson session is unavailable.", "VIBE64_TRAINING_CODE_SESSION_STALE");
       }
       return readDeclaredFiles(sessionSourcePath(session), files);
     });
@@ -172,8 +172,8 @@ function createTrainingCodeAuthorship({
       const tracking = Boolean(current && await openCodeStep(attempt, current.steps[0].stepId));
       if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
         throw conflictFailure(
-          "VIBE64_TRAINING_CODE_LEDGER_FULL",
-          "This code step recorded too many separate edits. Ask the lesson owner to review it."
+          "This code step recorded too many separate edits. Ask the lesson owner to review it.",
+          "VIBE64_TRAINING_CODE_LEDGER_FULL"
         );
       }
       const saved = await save();

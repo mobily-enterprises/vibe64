@@ -48,14 +48,14 @@ const codeInputSchema = createSchema({
 });
 const DEFAULT_CODE_TIMEOUT_SECONDS = 15;
 
-function failure(code, message, extra = {}) {
-  return trainingFailure(code, message, { statusCode: 409, ...extra });
+function failure(message, code, extra = {}) {
+  return trainingFailure(message, code, { statusCode: 409, ...extra });
 }
 
 async function canonicalDirectory(directory) {
   if (!path.isAbsolute(directory || "") || !(await lstat(directory)).isDirectory() ||
       await realpath(directory) !== directory) {
-    throw failure("VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE", "The check requires the original canonical session artifact directory.");
+    throw failure("The check requires the original canonical session artifact directory.", "VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE");
   }
 }
 
@@ -67,17 +67,17 @@ function activeRun(status, session, input) {
       status.output?.state !== "ready" || status.output.targetId !== "app" || status.output.presentationKind !== "web" ||
       metadata?.sessionId !== input.sessionId || metadata.outputTargetId !== "app" ||
       metadata.sessionRoot !== session.sessionRoot || metadata.sessionSourceRoot !== source) {
-    throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "Use the exact ready App run belonging to this prepared lesson session.");
+    throw failure("Use the exact ready App run belonging to this prepared lesson session.", "VIBE64_TRAINING_CHECK_RUN_STALE");
   }
   const target = new URL(metadata.targetUrl);
   if (target.protocol !== "http:" || !["127.0.0.1", "[::1]"].includes(target.hostname) ||
       target.username || target.password || target.search || target.hash || !target.port ||
       Number(target.port) !== metadata.port) {
-    throw failure("VIBE64_TRAINING_CHECK_ORIGIN_INVALID", "The App run has no valid allocated private loopback origin.");
+    throw failure("The App run has no valid allocated private loopback origin.", "VIBE64_TRAINING_CHECK_ORIGIN_INVALID");
   }
   const relative = path.relative(source, metadata.runRoot || "");
   if (!path.isAbsolute(metadata.runRoot || "") || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The App run no longer belongs to this lesson source.");
+    throw failure("The App run no longer belongs to this lesson source.", "VIBE64_TRAINING_CHECK_RUN_STALE");
   }
   return {
     terminalId: terminal.id,
@@ -111,7 +111,7 @@ function createTrainingDeclaredCheckOwner({
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
     if (!attempt || attempt.attemptId !== input.attemptId || attempt.preparation?.phase !== "ready" ||
         attempt.preparation.initialSessionId !== input.sessionId) {
-      throw failure("VIBE64_TRAINING_CHECK_ATTEMPT_STALE", "Use this learner's exact active prepared lesson attempt.");
+      throw failure("Use this learner's exact active prepared lesson attempt.", "VIBE64_TRAINING_CHECK_ATTEMPT_STALE");
     }
     return attempt;
   }
@@ -128,12 +128,12 @@ function createTrainingDeclaredCheckOwner({
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(input.sessionId);
       if (!session || session.sessionId !== input.sessionId) {
-        throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
+        throw failure("The exact prepared lesson session is unavailable.", "VIBE64_TRAINING_CHECK_RUN_STALE");
       }
       const run = activeRun(await terminals.outputTargetStatus(input.sessionId), session, input);
       const paths = runtime.store.paths(input.sessionId);
       if (paths.sessionRoot !== session.sessionRoot) {
-        throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson session artifact identity changed.");
+        throw failure("The lesson session artifact identity changed.", "VIBE64_TRAINING_CHECK_RUN_STALE");
       }
       await canonicalDirectory(paths.sessionRoot);
       await mkdir(paths.artifactsRoot, { recursive: true, mode: 0o700 });
@@ -144,7 +144,7 @@ function createTrainingDeclaredCheckOwner({
         for (const file of [declared.file, ...declared.assets]) {
           const relative = file.path.split("/");
           if (relative.some(part => !part || part === "." || part === ".." || part.includes("\\")) || path.isAbsolute(file.path)) {
-            throw failure("VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE", "The installed check has an unsafe file path.");
+            throw failure("The installed check has an unsafe file path.", "VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE");
           }
           const destination = path.join(scratch, ...relative);
           await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
@@ -157,7 +157,7 @@ function createTrainingDeclaredCheckOwner({
         if (canonicalJson(before.pin) !== canonicalJson(attempt.pin) ||
             before.projectSlug !== attempt.projectSlug ||
             canonicalJson(beforeRun) !== canonicalJson(run)) {
-          throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson or App run changed before check execution.");
+          throw failure("The lesson or App run changed before check execution.", "VIBE64_TRAINING_CHECK_RUN_STALE");
         }
         cleanupSafe = false;
         const result = await runCommand({
@@ -195,8 +195,8 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(result?.execution?.id || "") &&
           ["finished", "rejected"].includes(result.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(result.code));
-        if (!cleanupSafe) throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+        if (!cleanupSafe) throw failure("The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+          "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
           { execution: result?.execution, scratch });
         signal?.throwIfAborted();
         const current = await readAttempt(actor, input);
@@ -206,15 +206,15 @@ function createTrainingDeclaredCheckOwner({
             current.projectSlug !== attempt.projectSlug ||
             canonicalJson(freshRun) !== canonicalJson(run)) {
           throw failure(
-            "VIBE64_TRAINING_CHECK_RUN_STALE",
-            "The lesson or App run changed while its check was executing. Repeat the actual application interaction."
+            "The lesson or App run changed while its check was executing. Repeat the actual application interaction.",
+            "VIBE64_TRAINING_CHECK_RUN_STALE"
           );
         }
         const stdout = String(result.stdout ?? "");
         if (result.timedOut || result.signal || result.code || Buffer.byteLength(stdout) > 4096 || String(result.stderr || "").trim()) {
           throw failure(
-            result.code || "VIBE64_TRAINING_CHECK_FAILED",
-            "The declared check did not return a bounded successful execution result."
+            "The declared check did not return a bounded successful execution result.",
+            result.code || "VIBE64_TRAINING_CHECK_FAILED"
           );
         }
         const row = JSON.parse(stdout.trim());
@@ -236,13 +236,13 @@ function createTrainingDeclaredCheckOwner({
             ]) ||
             row.check !== checkId || row.outcome !== "verified" || row.instanceId !== input.instanceId || row.interactionId !== input.interactionId ||
             row.requestId !== input.requestId || typeof row.message !== "string" || !row.message || row.message.length > 256) {
-          throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The check result does not match this exact server interaction.");
+          throw failure("The check result does not match this exact server interaction.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
         }
         return { checkResult: { check: checkId, observationId: input.observationId, outcome: "passed" } };
       } catch (error) {
         if (!cleanupSafe && error.code !== "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED") {
-          throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-            "The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+          throw failure("The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+            "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
             {
             cause: error,
             scratch
@@ -263,7 +263,7 @@ function createTrainingDeclaredCheckOwner({
     const step = lessonHasSteps(lesson.lesson) ? lesson.lesson.steps?.find(value => value.id === id) : null;
     const check = declaredStepCheck(lesson.lesson, step);
     if (!check || check.kind === "code") {
-      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare an exercise response check.");
+      throw failure("This lesson step does not declare an exercise response check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
     return check.id;
   }
@@ -271,7 +271,7 @@ function createTrainingDeclaredCheckOwner({
   function safeRelative(file) {
     const relative = file.split("/");
     if (relative.some(part => !part || part === "." || part === ".." || part.includes("\\")) || path.isAbsolute(file)) {
-      throw failure("VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE", "The installed code check has an unsafe file path.");
+      throw failure("The installed code check has an unsafe file path.", "VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE");
     }
     return relative;
   }
@@ -281,7 +281,7 @@ function createTrainingDeclaredCheckOwner({
    */
   function openCodeStep(lesson, id) {
     const code = codeStepOf(lesson, id);
-    if (!code) throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare a code check.");
+    if (!code) throw failure("This lesson step does not declare a code check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     return code;
   }
 
@@ -306,11 +306,11 @@ function createTrainingDeclaredCheckOwner({
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(input.sessionId);
       if (!session || session.sessionId !== input.sessionId) {
-        throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
+        throw failure("The exact prepared lesson session is unavailable.", "VIBE64_TRAINING_CHECK_RUN_STALE");
       }
       const paths = runtime.store.paths(input.sessionId);
       if (paths.sessionRoot !== session.sessionRoot) {
-        throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson session artifact identity changed.");
+        throw failure("The lesson session artifact identity changed.", "VIBE64_TRAINING_CHECK_RUN_STALE");
       }
       const files = await readDeclaredFiles(sessionSourcePath(session), declaredFiles);
       const checked = files.map(file => ({ path: file.path, sha256: file.sha256 }));
@@ -349,7 +349,7 @@ function createTrainingDeclaredCheckOwner({
         }
         signal?.throwIfAborted();
         if (!sameAttempt(await readAttempt(actor, input))) {
-          throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson changed before its code check ran.");
+          throw failure("The lesson changed before its code check ran.", "VIBE64_TRAINING_CHECK_RUN_STALE");
         }
         const timeoutSeconds = check.timeoutSeconds || DEFAULT_CODE_TIMEOUT_SECONDS;
         const cwd = path.join(scratch, ...(exerciseRoot ? exerciseRoot.split("/") : []));
@@ -384,12 +384,12 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(run?.execution?.id || "") &&
           ["finished", "rejected"].includes(run.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(run.code));
-        if (!cleanupSafe) throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+        if (!cleanupSafe) throw failure("The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+          "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
           { execution: run?.execution, scratch });
         signal?.throwIfAborted();
         if (!sameAttempt(await readAttempt(actor, input))) {
-          throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson changed while its code check was running. Check your code again.");
+          throw failure("The lesson changed while its code check was running. Check your code again.", "VIBE64_TRAINING_CHECK_RUN_STALE");
         }
         if (run.timedOut) {
           return result("not-yet-passed", {
@@ -400,13 +400,13 @@ function createTrainingDeclaredCheckOwner({
         }
         const stdout = String(run.stdout ?? "");
         if (run.signal || run.code || Buffer.byteLength(stdout) > 4096) {
-          throw failure(run.code || "VIBE64_TRAINING_CHECK_FAILED", "The declared code check did not return a bounded execution result.");
+          throw failure("The declared code check did not return a bounded execution result.", run.code || "VIBE64_TRAINING_CHECK_FAILED");
         }
         let row = null;
         try { row = JSON.parse(stdout.trim()); } catch { /* Learner code may crash the check before it reports. */ }
         const keys = row && typeof row === "object" && !Array.isArray(row) ? canonicalJson(Object.keys(row).sort()) : "";
         if (row && Object.hasOwn(row, "filesHash") && row.filesHash !== filesHash) {
-          throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The code check result does not belong to the files it was given.");
+          throw failure("The code check result does not belong to the files it was given.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
         }
         if (run.exitCode === 0 && run.ok === true && keys === canonicalJson(["check", "filesHash", "outcome"]) &&
             row.check === check.id && row.outcome === "verified") {
@@ -423,11 +423,11 @@ function createTrainingDeclaredCheckOwner({
             reason: "The check could not finish with your code: it stopped with an error before reporting a result."
           });
         }
-        throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The code check returned an unexpected result.");
+        throw failure("The code check returned an unexpected result.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
       } catch (error) {
         if (!cleanupSafe && error.code !== "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED") {
-          throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-            "The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+          throw failure("The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+            "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
             {
             cause: error,
             scratch

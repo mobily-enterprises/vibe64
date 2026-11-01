@@ -37,8 +37,8 @@ function createLearnerReviews({ createNamespace, userPaths }) {
     const release = await tryAcquireExclusiveFileLock(paths.reviewLock);
     if (!release) {
       throw failure(
-        "VIBE64_TRAINING_REVIEW_BUSY",
         "A review of your work is already running. Wait for it to finish, then check again.",
+        "VIBE64_TRAINING_REVIEW_BUSY",
         409
       );
     }

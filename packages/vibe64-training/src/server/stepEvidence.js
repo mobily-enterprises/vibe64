@@ -32,7 +32,7 @@ const commitPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u;
 const excludes = PRACTICE_AGENT_GUIDANCE_EXCLUDES.map(folder => `:(exclude)${folder.replace(/\/$/u, "")}`);
 
 function evidenceFailure(message, code = "VIBE64_TRAINING_EVIDENCE_UNREADABLE") {
-  return trainingFailure(code, message, { statusCode: 409 });
+  return trainingFailure(message, code, { statusCode: 409 });
 }
 
 const nulList = text => String(text || "").split("\0").filter(Boolean);

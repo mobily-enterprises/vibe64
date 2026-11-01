@@ -354,7 +354,7 @@ const NO_LEARNING_SPACE = Object.freeze({
     return true;
   },
   async closeAttempt() {
-    throw conflictFailure("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
+    throw conflictFailure("Closing lessons is unavailable in this installation. Nothing was changed.", "VIBE64_TRAINING_PRACTICE_UNAVAILABLE");
   },
   async deleteArchive() {
     return null;

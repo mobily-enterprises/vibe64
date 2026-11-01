@@ -62,8 +62,8 @@ function createLearnerNotes({
     try {
       return notesProjection(await readNotesRecord(paths));
     } catch (cause) {
-      throw failure("VIBE64_TRAINING_NOTES_STATE_INVALID",
-        `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
+      throw failure(`Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
+        "VIBE64_TRAINING_NOTES_STATE_INVALID", null, { cause });
     }
   }
 
@@ -77,8 +77,8 @@ function createLearnerNotes({
     if (typeof value !== "string" || value.length > MAX_NOTES_CHARS || !validNotesText(value) ||
         !requestPattern.test(requestId || "") || !["colleague", "learner"].includes(updatedBy) ||
         (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0))) {
-      throw failure("VIBE64_TRAINING_NOTES_INVALID",
-        `Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`, 400);
+      throw failure(`Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`,
+        "VIBE64_TRAINING_NOTES_INVALID", 400);
     }
     const textHash = sha256Hex(value);
     await createNamespace(paths);
@@ -92,15 +92,15 @@ function createLearnerNotes({
       try {
         record = await readNotesRecord(paths);
       } catch (cause) {
-        throw failure("VIBE64_TRAINING_NOTES_STATE_INVALID",
-          `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`, null, { cause });
+        throw failure(`Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`,
+          "VIBE64_TRAINING_NOTES_STATE_INVALID", null, { cause });
       }
       const replay = record?.requests.find(request => request.requestId === requestId);
       if (replay) {
         if (replay.textHash !== textHash) {
           throw failure(
-            "VIBE64_TRAINING_NOTES_REQUEST_REUSED",
             "This request ID already saved different notes. Use a new request ID.",
+            "VIBE64_TRAINING_NOTES_REQUEST_REUSED",
             409
           );
         }
@@ -108,11 +108,11 @@ function createLearnerNotes({
       }
       const current = record?.revision || 0;
       if (expectedRevision !== undefined && expectedRevision !== current) {
-        throw failure(TRAINING_NOTES_CHANGED_CODE,
-          "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.", 409);
+        throw failure("The notes changed since they were read. Read them again and save the combined summary; nothing was saved.",
+          TRAINING_NOTES_CHANGED_CODE, 409);
       }
       if (current === Number.MAX_SAFE_INTEGER) {
-        throw failure("VIBE64_TRAINING_NOTES_REVISION_LIMIT", "Learner notes reached their revision limit. Nothing was saved.", null);
+        throw failure("Learner notes reached their revision limit. Nothing was saved.", "VIBE64_TRAINING_NOTES_REVISION_LIMIT", null);
       }
       const next = {
         schemaVersion: 1,
@@ -126,16 +126,16 @@ function createLearnerNotes({
       const validated = validateContent(notesSchema, next, "Learner notes");
       if (Buffer.byteLength(JSON.stringify(validated)) > MAX_NOTES_BYTES) {
         throw failure(
-          "VIBE64_TRAINING_NOTES_INVALID",
           "The learner notes exceed their storage bound. Shorten them; nothing was saved.",
+          "VIBE64_TRAINING_NOTES_INVALID",
           400
         );
       }
       try {
         await writeJsonFileAtomic(paths.notes, validated, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
-        throw failure("VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
-          "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
+        throw failure("The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
+          "VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
           null,
             { cause });
       }

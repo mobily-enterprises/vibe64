@@ -415,7 +415,7 @@ async function acquireRecordLock(lockPath, code, message) {
     await new Promise(resolve => setTimeout(resolve, 50));
     release = await tryAcquireExclusiveFileLock(lockPath);
   }
-  if (!release) throw failure(code, message, 409);
+  if (!release) throw failure(message, code, 409);
   return release;
 }
 
@@ -432,8 +432,8 @@ function assertLearningSystemRoot(systemRoot) {
   }
 }
 
-function failure(code, message, statusCode, details = {}) {
-  return trainingFailure(code, message, { statusCode, ...details });
+function failure(message, code, statusCode, details = {}) {
+  return trainingFailure(message, code, { statusCode, ...details });
 }
 
 function learnerIdentity(actor) {

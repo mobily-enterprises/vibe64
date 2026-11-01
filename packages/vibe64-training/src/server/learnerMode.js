@@ -38,8 +38,8 @@ function createLearnerMode({
     let on;
     try { on = await readMode(paths); } catch (cause) {
       throw failure(
-        "VIBE64_TRAINING_STATE_INVALID",
         `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
+        "VIBE64_TRAINING_STATE_INVALID",
         null,
         { cause }
       );
@@ -75,7 +75,7 @@ function createLearnerMode({
    */
   async function setLearningMode({ actor, on } = {}) {
     const paths = userPaths(actor);
-    if (typeof on !== "boolean") throw failure("VIBE64_TRAINING_MODE_INVALID", "Set Learn mode on or off.", 400);
+    if (typeof on !== "boolean") throw failure("Set Learn mode on or off.", "VIBE64_TRAINING_MODE_INVALID", 400);
     await createNamespace(paths);
     await writeJsonFileAtomic(paths.mode, { schemaVersion: 2, learnerId: paths.learner.id, on }, { directoryMode: 0o700, fileMode: 0o600 });
     return learningModeView(paths, { includeTitle: true });

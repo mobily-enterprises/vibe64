@@ -23,7 +23,7 @@ const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-
 const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
 
 function stepFailure(message, code = "VIBE64_TRAINING_STEP_INVALID", statusCode = 409) {
-  return trainingFailure(code, message, { statusCode });
+  return trainingFailure(message, code, { statusCode });
 }
 
 function requireResult(result, failure) {

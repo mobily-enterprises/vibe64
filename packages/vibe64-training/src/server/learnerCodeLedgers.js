@@ -55,8 +55,8 @@ function createLearnerCodeLedgers({
     const release = await tryAcquireExclusiveFileLock(paths.codeLedgerLock);
     if (!release) {
       throw failure(
-        "VIBE64_TRAINING_CODE_LEDGER_BUSY",
         "Another save of this lesson's code is being recorded. Save again in a moment.",
+        "VIBE64_TRAINING_CODE_LEDGER_BUSY",
         409
       );
     }
@@ -68,7 +68,7 @@ function createLearnerCodeLedgers({
     if (typeof operation !== "function") throw new Error("Update the code ledger of an exact attempt.");
     const attempt = await activeAttemptForProject({ actor, attemptId });
     if (!attempt) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "Continue this practice project's lesson before recording code work.", 404);
+      throw failure("Continue this practice project's lesson before recording code work.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     }
     return withLedgerLock(paths, async () => {
       const current = await readCodeLedgerRecord(paths, attemptId);

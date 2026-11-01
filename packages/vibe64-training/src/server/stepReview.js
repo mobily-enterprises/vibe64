@@ -48,7 +48,7 @@ const OUTPUT_SCHEMA = Object.freeze({
 });
 
 function reviewFailure(message, code = "VIBE64_TRAINING_REVIEW_FAILED") {
-  return trainingFailure(code, message, { statusCode: 409 });
+  return trainingFailure(message, code, { statusCode: 409 });
 }
 
 /**

@@ -142,7 +142,7 @@ function createTrainingStepOperations({
   async function readAttempt(actor, attempt) {
     const state = await attemptLearners.readState({ actor, attemptId: attempt });
     const saved = state.progress.attempts.find(value => value.attemptId === attempt);
-    if (!saved) throw conflictFailure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
+    if (!saved) throw conflictFailure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     return { state, attempt: saved };
   }
   /**
@@ -178,7 +178,7 @@ function createTrainingStepOperations({
     }));
     const count = pageBodies(projected, lesson.notesText);
     const index = input.page ?? 0;
-    if (index >= count) throw conflictFailure("ACTION_VALIDATION_FAILED", `This lesson has ${count} page(s).`, 400);
+    if (index >= count) throw conflictFailure(`This lesson has ${count} page(s).`, "ACTION_VALIDATION_FAILED", 400);
     for (const step of projected) if (step.bodyPage !== index) delete step.bodyText;
     const progress = await steps.read({ actor, attemptId: attempt.attemptId });
     // readable-check: allow method-probe - optional operation: a learner store without reader positions reads none
@@ -276,8 +276,8 @@ function createTrainingStepOperations({
    */
   async function removePractice(run, reason, input, actor, context) {
     if (context.channel !== "api" && input.confirmed !== true) {
-      throw conflictFailure("VIBE64_TRAINING_PRACTICE_UNCONFIRMED",
-        "Ask the person to confirm this deletion, then repeat with confirmed: true.");
+      throw conflictFailure("Ask the person to confirm this deletion, then repeat with confirmed: true.",
+        "VIBE64_TRAINING_PRACTICE_UNCONFIRMED");
     }
     let result;
     try { result = await run(input, actor); }

@@ -160,8 +160,8 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       };
     } catch (cause) {
       throw failure(
-        "VIBE64_TRAINING_STATE_INVALID",
         `Learning state is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+        "VIBE64_TRAINING_STATE_INVALID",
         null,
         { cause }
       );
@@ -238,17 +238,17 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       const lesson = await verifyInstalled(attempt.pin);
       if (!lesson.lesson.exercise) {
         throw failure(
-          "VIBE64_TRAINING_EXERCISE_MISSING",
           "This saved lesson has no practice project. Use its source-less learning conversation.",
+          "VIBE64_TRAINING_EXERCISE_MISSING",
           409
         );
       }
       if (workInactive) {
-        throw failure("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting practice work.", 409);
+        throw failure("Resume this exact confirmed active lesson before admitting practice work.", "VIBE64_TRAINING_ATTEMPT_INACTIVE", 409);
       }
       throw failure(
-        "VIBE64_TRAINING_EXERCISE_UNAVAILABLE",
         "This installed content reader cannot supply the lesson's exact bundled exercise.",
+        "VIBE64_TRAINING_EXERCISE_UNAVAILABLE",
         409
       );
     }
@@ -265,8 +265,8 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       if (error?.code === "VIBE64_TRAINING_EXERCISE_MISSING") {
         await verifyInstalled(attempt.pin);
         throw failure(
-          "VIBE64_TRAINING_EXERCISE_MISSING",
           "This saved lesson has no practice project. Use its source-less learning conversation.",
+          "VIBE64_TRAINING_EXERCISE_MISSING",
           409
         );
       }
@@ -305,11 +305,11 @@ function createPracticeHistoryReader({ systemRoot, content }) {
     }
     const state = await loadState(paths);
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
-    if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
+    if (!attempt) throw failure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     if (attempt.practiceId) {
       throw failure(
-        "VIBE64_TRAINING_ATTEMPT_CONFLICT",
         "This attempt continues a learning-space practice project; read it by its practice project.",
+        "VIBE64_TRAINING_ATTEMPT_CONFLICT",
         409
       );
     }
@@ -412,8 +412,8 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       }
       return { revision: record?.revision || 0, lessons: record?.lessons || [] };
     } catch (cause) {
-      throw failure("VIBE64_TRAINING_STATE_INVALID",
-        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+      throw failure(`Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+        "VIBE64_TRAINING_STATE_INVALID",
         null,
           { cause });
     }
