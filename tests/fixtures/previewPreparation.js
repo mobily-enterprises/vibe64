@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -93,6 +94,7 @@ require("node:http").createServer((_request, response) => {
   const terminals = createTerminalService({
     codexTerminalController: { codexToolHomeRequired: false },
     env: { VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
+    logger: silentLogger,
     projectService: project,
     publishSessionChanged
   });

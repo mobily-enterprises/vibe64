@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -15,7 +16,7 @@ test("plan service reads the actual session without AI and preserves private ren
   await store.createSession({ sessionId, runtimeKind: "genesis" });
   const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id) };
   const unused = () => assert.fail("Reading a plan must not inspect or change project configuration.");
-  const service = createService({ env: {}, projectService: { createRuntime: async () => runtime,
+  const service = createService({ env: {}, logger: silentLogger, projectService: { createRuntime: async () => runtime,
     createSessionStore: async () => store, readCurrentProject: unused, readEnv: unused,
     runInProjectContext: unused, saveEnvUserValues: unused },
     codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } });

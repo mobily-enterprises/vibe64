@@ -75,7 +75,7 @@ function notSentDeliveryError(error, messageId) {
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  * @param {CodexAppServerProviderOptions} dependencies.codexProviderOptions
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ConversationRuntime} dependencies.mainConversations
  * @param {OpenCodeSessionRegistration} dependencies.opencode
  * @param {object} dependencies.opencodeTerminalController
@@ -143,7 +143,23 @@ function createServiceAssistant({
   function createConversationHost(scope) {
     const credentialHome = appCredentialContext();
     if (credentialHome.ok === false) throw new Error(credentialHome.error);
-    return {
+
+    function prepareOpenCodeHost(input) {
+      return opencode.hostPreparation.conversationHost(input);
+    }
+
+    async function prepareCodexHost({ providerId }) {
+      // Same account/runtime scope as main chat. The conversation's workdir
+      // and command environment belong to its thread, not this service.
+      const options = { ...codexProviderOptions,
+        ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
+        executionMode: "", executionRoot: "", workdir: "", project: {}, session: {},
+        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })), userKey: "" };
+      options.runtimeDir ||= codexAppServerRuntimeDir(options);
+      return { ...codexAppServerRuntimeHost(options), options };
+    }
+
+    return Object.freeze({
       workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
       allowAccountChange: scope.allowAccountChange === true,
       env: { ...homeEnvForUser(credentialHome, env),
@@ -153,18 +169,9 @@ function createServiceAssistant({
         opencode: opencodeTerminalController.command || operatorCliCommand("opencode", { env }) },
       execution: createVibe64ConversationExecution({ credentialHome, capturePurpose: "account",
         execution: { ownerId: scope.id }, operationId: "conversation", label: "Assistant conversation" }),
-      opencode: input => opencode.hostPreparation.conversationHost(input),
-      async codex({ providerId }) {
-        // Same account/runtime scope as main chat. The conversation's workdir
-        // and command environment belong to its thread, not this service.
-        const options = { ...codexProviderOptions,
-          ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
-          executionMode: "", executionRoot: "", workdir: "", project: {}, session: {},
-          terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })), userKey: "" };
-        options.runtimeDir ||= codexAppServerRuntimeDir(options);
-        return { ...codexAppServerRuntimeHost(options), options };
-      }
-    };
+      opencode: prepareOpenCodeHost,
+      codex: prepareCodexHost
+    });
   }
 
   async function resolveConversationConfiguration(assistantSelection, systemPrompt, options = {}) {
@@ -374,7 +381,7 @@ function createServiceAssistant({
         try {
           sessionNaming.start(await assistantContext.assistantSessionOptions(sessionId, options), input.messageId);
         } catch (error) {
-          logger?.warn({ error: error.message, sessionId }, "Session naming could not start.");
+          logger.warn({ error: error.message, sessionId }, "Session naming could not start.");
         }
       }
       if (result?.ok === false) {

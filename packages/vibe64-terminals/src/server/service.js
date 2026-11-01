@@ -100,7 +100,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} [dependencies.env]
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
  * @param {ProjectServices | null} [dependencies.projectServices]
  * @param {ProjectService} dependencies.projectService
@@ -115,8 +115,7 @@ function createService({
   codexTerminalController = {},
   env = process.env,
   inspectAgentSkills = inspectGenesisSkills,
-  // readable-check: allow dependency-default - optional operation: without a logger the service's operational warnings are dropped
-  logger = null,
+  logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
   // readable-check: allow dependency-default - optional operation: without supplied project services the service creates its own
@@ -281,7 +280,7 @@ function createService({
         }
       },
       send: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
-      reportFailure: (error, receipt) => logger?.warn({
+      reportFailure: (error, receipt) => logger.warn({
         event: "vibe64.project_message.delivery_failed", error: error.message, code: error.code,
         sourceProject: input.sourceProject, sourceSession: input.sourceSession, ...receipt
       }, "Accepted project message failed during asynchronous delivery.")

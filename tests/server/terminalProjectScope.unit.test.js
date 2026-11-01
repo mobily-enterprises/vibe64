@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
@@ -71,7 +72,7 @@ test("Vibe64 terminal roots never fall back to the hosted namespace", () => {
 test("shared conversation hosts preserve Claude's native profile lookup", () => {
   for (const env of [{}, { CLAUDE_CONFIG_DIR: "/tmp/selected-claude-profile" }, { CLAUDE_CONFIG_DIR: "" }]) {
     const unused = () => assert.fail("Preparing a shared host must not read or change project state.");
-    const service = createService({ env, projectService: { readCurrentProject: unused, readEnv: unused,
+    const service = createService({ env, logger: silentLogger, projectService: { readCurrentProject: unused, readEnv: unused,
       runInProjectContext: unused, saveEnvUserValues: unused, createRuntime: unused, createSessionStore: unused } });
     const host = service.createConversationHost({ id: "colleague-profile", workdir: "/tmp/colleague-profile",
       runtimeRoot: "/tmp/colleague-profile-runtime" });

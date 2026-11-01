@@ -2,24 +2,15 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  composeGithubTerminalHome,
-  logGithubCredentialHomeResolution,
-  normalizeGithubAccountMode,
-  resolveGithubHomeForActor,
-  resolveGithubHomeForStoredActor
+  normalizeGithubAccountMode
 } from "@local/vibe64-execution/server";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import {
-  terminalOwnerFromGithubToolHome
-} from "@local/studio-terminal-core/server/terminalOwnership";
-import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-
-const NO_GITHUB_TERMINAL_USER_KEY = "runtime";
 
 function responseError(message = "", code = "vibe64_session_git_actor_failed", extra = {}) {
   return {
@@ -68,7 +59,7 @@ function sessionGitCommandActorMetadata({
   );
   const ownerScope = accountMode === GITHUB_ACCOUNT_MODE_USER ? "user" : "local";
   const ownerUserKey = ownerScope === "user"
-    ? normalizeText(vibe64User?.username || vibe64User?.osUsername)
+    ? trimmedText(vibe64User?.username || vibe64User?.osUsername)
     : GITHUB_ACCOUNT_MODE_LOCAL;
   if (ownerScope === "user" && !ownerUserKey) {
     return responseError(
@@ -76,8 +67,8 @@ function sessionGitCommandActorMetadata({
       "vibe64_os_user_required"
     );
   }
-  const normalizedSessionId = normalizeText(session.sessionId || session.id);
-  const normalizedSourceRoot = normalizeText(sourceRoot);
+  const normalizedSessionId = trimmedText(session.sessionId);
+  const normalizedSourceRoot = trimmedText(sourceRoot);
   if (!normalizedSessionId || !normalizedSourceRoot) {
     return responseError(
       "Session Git command actor metadata requires a session id and source root.",
@@ -86,13 +77,13 @@ function sessionGitCommandActorMetadata({
   }
   return {
     metadata: actorMetadataRecord({
-      reason: normalizeText(reason),
+      reason: trimmedText(reason),
       scope: ownerScope,
       sessionId: normalizedSessionId,
       sourceRoot: normalizedSourceRoot,
-      threadId: normalizeText(threadId),
+      threadId: trimmedText(threadId),
       userKey: ownerUserKey,
-      workdir: normalizeText(workdir)
+      workdir: trimmedText(workdir)
     }),
     ok: true
   };
@@ -106,8 +97,8 @@ function sessionGitCommandActorMetadataFromExistingActor({
   threadId = "",
   workdir = ""
 } = {}) {
-  const normalizedSessionId = normalizeText(session.sessionId || session.id || actor.sessionId);
-  const normalizedSourceRoot = normalizeText(sourceRoot) || normalizeText(actor.sourceRoot);
+  const normalizedSessionId = trimmedText(session.sessionId || actor.sessionId);
+  const normalizedSourceRoot = trimmedText(sourceRoot) || trimmedText(actor.sourceRoot);
   if (!actor.actorScope || !actor.actorUserKey || !normalizedSessionId || !normalizedSourceRoot) {
     return responseError(
       "Session Git command actor metadata requires a session id, source root, and stored actor.",
@@ -116,13 +107,13 @@ function sessionGitCommandActorMetadataFromExistingActor({
   }
   return {
     metadata: actorMetadataRecord({
-      reason: normalizeText(reason) || normalizeText(actor.actorReason),
-      scope: normalizeText(actor.actorScope),
+      reason: trimmedText(reason) || trimmedText(actor.actorReason),
+      scope: trimmedText(actor.actorScope),
       sessionId: normalizedSessionId,
       sourceRoot: normalizedSourceRoot,
-      threadId: normalizeText(threadId) || normalizeText(actor.threadId),
-      userKey: normalizeText(actor.actorUserKey),
-      workdir: normalizeText(workdir) || normalizeText(actor.workdir)
+      threadId: trimmedText(threadId) || trimmedText(actor.threadId),
+      userKey: trimmedText(actor.actorUserKey),
+      workdir: trimmedText(workdir) || trimmedText(actor.workdir)
     }),
     ok: true,
     preservedActor: true
@@ -141,16 +132,16 @@ function sessionWithGitCommandActorMetadata(session = {}, metadata = {}) {
 
 function sessionGitCommandActorFromMetadata(session = {}) {
   const metadata = session.metadata || {};
-  const sessionId = normalizeText(metadata.session_git_command_actor_session_id);
+  const sessionId = trimmedText(metadata.session_git_command_actor_session_id);
   const actor = {
-    actorReason: normalizeText(metadata.session_git_command_actor_reason),
-    actorScope: normalizeText(metadata.session_git_command_actor_scope),
-    actorUpdatedAt: normalizeText(metadata.session_git_command_actor_updated_at),
-    actorUserKey: normalizeText(metadata.session_git_command_actor_user_key),
+    actorReason: trimmedText(metadata.session_git_command_actor_reason),
+    actorScope: trimmedText(metadata.session_git_command_actor_scope),
+    actorUpdatedAt: trimmedText(metadata.session_git_command_actor_updated_at),
+    actorUserKey: trimmedText(metadata.session_git_command_actor_user_key),
     sessionId,
-    sourceRoot: normalizeText(metadata.session_git_command_actor_source_root),
-    threadId: normalizeText(metadata.session_git_command_actor_thread_id),
-    workdir: normalizeText(metadata.session_git_command_actor_workdir)
+    sourceRoot: trimmedText(metadata.session_git_command_actor_source_root),
+    threadId: trimmedText(metadata.session_git_command_actor_thread_id),
+    workdir: trimmedText(metadata.session_git_command_actor_workdir)
   };
   if (!actor.actorScope || !actor.actorUserKey || !actor.sessionId || !actor.sourceRoot) {
     return responseError(
@@ -178,7 +169,7 @@ async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", meta
   if (!runtime) {
     return false;
   }
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = trimmedText(sessionId);
   const entries = Object.entries(metadata)
     .filter(([name]) => SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS.includes(name));
   if (!normalizedSessionId || !entries.length) {
@@ -191,13 +182,13 @@ async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", meta
   };
   await runtime.store.mutateSession(normalizedSessionId, writeEntries);
   vibe64SessionDebugLog("server.sessionGitCommandActor.recorded", {
-    actorScope: normalizeText(metadata.session_git_command_actor_scope),
-    actorUserKey: normalizeText(metadata.session_git_command_actor_user_key),
-    reason: normalizeText(metadata.session_git_command_actor_reason) || normalizeText(reason),
+    actorScope: trimmedText(metadata.session_git_command_actor_scope),
+    actorUserKey: trimmedText(metadata.session_git_command_actor_user_key),
+    reason: trimmedText(metadata.session_git_command_actor_reason) || trimmedText(reason),
     sessionId: normalizedSessionId,
-    sourceRoot: normalizeText(metadata.session_git_command_actor_source_root),
-    threadId: normalizeText(metadata.session_git_command_actor_thread_id),
-    workdir: normalizeText(metadata.session_git_command_actor_workdir)
+    sourceRoot: trimmedText(metadata.session_git_command_actor_source_root),
+    threadId: trimmedText(metadata.session_git_command_actor_thread_id),
+    workdir: trimmedText(metadata.session_git_command_actor_workdir)
   });
   return true;
 }
@@ -214,7 +205,7 @@ async function recordSessionGitCommandActor({
   vibe64User = null,
   workdir = ""
 } = {}) {
-  const normalizedSessionId = normalizeText(sessionId) || normalizeText(session.sessionId || session.id);
+  const normalizedSessionId = trimmedText(sessionId) || trimmedText(session.sessionId);
   const sessionContext = {
     ...session,
     sessionId: normalizedSessionId
@@ -248,12 +239,12 @@ async function recordSessionGitCommandActor({
     });
   if (actorMetadata?.ok === false) {
     vibe64SessionDebugLog("server.sessionGitCommandActor.recordFailed", {
-      code: normalizeText(actorMetadata.code),
-      error: normalizeText(actorMetadata.error),
-      reason: normalizeText(reason),
+      code: trimmedText(actorMetadata.code),
+      error: trimmedText(actorMetadata.error),
+      reason: trimmedText(reason),
       sessionId: normalizedSessionId,
-      sourceRoot: normalizeText(sourceRoot),
-      workdir: normalizeText(workdir)
+      sourceRoot: trimmedText(sourceRoot),
+      workdir: trimmedText(workdir)
     });
     return actorMetadata;
   }
@@ -277,110 +268,19 @@ async function recordSessionGitCommandActor({
   };
 }
 
-async function resolveSessionGitCommandActorTerminalHome({
-  env = process.env,
-  logger = null,
-  operation = "",
-  session = {},
-  terminalKind = ""
-} = {}) {
-  if (!sessionRequiresGithubActor(session)) {
-    return resolveNoGithubSessionTerminalHome({
-      env
-    });
-  }
-  const actor = sessionGitCommandActorFromMetadata(session);
-  if (actor?.ok === false) {
-    logGithubCredentialHomeResolution(logger, {
-      ...actor,
-      accountMode: "",
-      credentialScope: "",
-      ownerUserKey: "",
-      toolHomeSource: ""
-    }, {
-      operation,
-      terminalKind
-    });
-    return actor;
-  }
-  const context = await resolveGithubHomeForStoredActor({
-    accountMode: actor.actorScope,
-    env,
-    ownerUserKey: actor.actorUserKey
-  });
-  logGithubCredentialHomeResolution(logger, context, {
-    operation,
-    terminalKind
-  });
-  if (context?.ok === false) {
-    return {
-      ...context,
-      error: context.error || "GitHub account storage is not available for this session actor."
-    };
-  }
-  const terminalHome = composeGithubTerminalHome(context);
-  if (terminalHome?.ok === false) {
-    return {
-      ...terminalHome,
-      error: terminalHome.error || "Terminal account storage is not available for this session actor."
-    };
-  }
-  return {
-    ...terminalHome,
-    actor,
-    hostGid: terminalHome.hostGid,
-    hostUid: terminalHome.hostUid,
-    owner: terminalOwnerFromGithubToolHome(terminalHome),
-    ok: true
-  };
-}
-
 // A local-source session only exchanges work with its local folder; that
 // folder's own upstream, even on GitHub, never makes it a GitHub session.
 function sessionRequiresGithubActor(session = {}) {
   const metadata = session.metadata || {};
-  if (normalizeText(metadata.repository_mode) === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) return false;
-  const repository = normalizeText(metadata.github_repository || session.github_repository);
-  const remoteUrl = normalizeText(metadata.source_remote_url);
+  if (trimmedText(metadata.repository_mode) === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) return false;
+  const repository = trimmedText(metadata.github_repository || session.github_repository);
+  const remoteUrl = trimmedText(metadata.source_remote_url);
   return Boolean(repository || /(?:^|[.@/:])github\.com(?:[/:]|$)/iu.test(remoteUrl));
-}
-
-function resolveNoGithubSessionTerminalHome({
-  env = process.env
-} = {}) {
-  const context = resolveGithubHomeForActor({
-    accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
-    env
-  });
-  if (context?.ok === false) {
-    return context;
-  }
-  return {
-    actor: {
-      actorScope: "app",
-      actorUserKey: NO_GITHUB_TERMINAL_USER_KEY,
-      actorSource: "session_repository_profile"
-    },
-    githubRequired: false,
-    githubToolHomeSource: "",
-    hostGid: context.hostGid,
-    hostUid: context.hostUid,
-    ok: true,
-    owner: {
-      githubCredentialScope: "app",
-      githubToolHomeSource: "",
-      ownerScope: "app",
-      ownerUserKey: NO_GITHUB_TERMINAL_USER_KEY
-    },
-    credentialScope: "app",
-    toolHomeSource: context.toolHomeSource
-  };
 }
 
 export {
   SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   recordSessionGitCommandActor,
-  resolveSessionGitCommandActorTerminalHome,
   sessionRequiresGithubActor,
   sessionGitCommandActorFromMetadata,
   sessionGitCommandActorMetadata,

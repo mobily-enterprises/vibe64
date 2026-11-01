@@ -56,11 +56,11 @@ function parseSessionName(value) {
  */
 function createSessionNaming({ agent, publishSessionChanged, logger, signal = null }) {
   const active = new Map();
-  const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId || session.id}`;
+  const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId}`;
 
   async function nameFirstMessage(agentContext, messageId) {
     const { runtime, session } = agentContext;
-    const sessionId = session.sessionId || session.id;
+    const sessionId = session.sessionId;
     if (session.metadata?.label || (await runtime.store.readBackgroundTask(sessionId, TASK_ID))?.startedAt) return;
     const first = await runtime.store.readFirstUserMessage(sessionId);
     if (!first || first.messageId !== messageId) return;
@@ -114,29 +114,31 @@ function createSessionNaming({ agent, publishSessionChanged, logger, signal = nu
     }
   }
 
-  return {
-    start(agentContext, messageId) {
-      const id = sessionKey(agentContext);
-      if (active.has(id)) return;
-      const context = captureProjectRequestContext();
-      const pending = runWithProjectRequestContext(context, () => nameFirstMessage(agentContext, messageId))
-        .catch((error) => {
-          logger?.warn({
-            error: error.message,
-            sessionId: agentContext.session.sessionId || agentContext.session.id
-          }, "Session naming failed.");
-        })
-        .finally(() => active.delete(id));
-      active.set(id, pending);
-    },
-    async closeSession(agentContext) {
-      await active.get(sessionKey(agentContext));
-      await cleanupBackgroundTaskHelper({ agent, agentContext, taskId: TASK_ID, fail: namingError, prefix: "naming" });
-    },
-    async close() {
-      await Promise.all(active.values());
-    }
-  };
+  function start(agentContext, messageId) {
+    const id = sessionKey(agentContext);
+    if (active.has(id)) return;
+    const context = captureProjectRequestContext();
+    const pending = runWithProjectRequestContext(context, () => nameFirstMessage(agentContext, messageId))
+      .catch((error) => {
+        logger.warn({
+          error: error.message,
+          sessionId: agentContext.session.sessionId
+        }, "Session naming failed.");
+      })
+      .finally(() => active.delete(id));
+    active.set(id, pending);
+  }
+
+  async function closeSession(agentContext) {
+    await active.get(sessionKey(agentContext));
+    await cleanupBackgroundTaskHelper({ agent, agentContext, taskId: TASK_ID, fail: namingError, prefix: "naming" });
+  }
+
+  async function close() {
+    await Promise.all(active.values());
+  }
+
+  return Object.freeze({ start, closeSession, close });
 }
 
 export { createSessionNaming, parseSessionName };

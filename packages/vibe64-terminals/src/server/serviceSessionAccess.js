@@ -7,7 +7,7 @@ import {
   runVibe64AgentWriteExclusive,
   runVibe64RenewalAgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
-import { recordValue } from "./serviceSessionRecords.js";
+import { isRecord } from "./isRecord.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -49,7 +49,7 @@ async function runSessionRenewalOperation(
   if (beforeStart?.ok === false) {
     return beforeStart;
   }
-  const nextInput = recordValue(beforeStart?.input)
+  const nextInput = isRecord(beforeStart?.input)
     ? {
         ...input,
         ...beforeStart.input

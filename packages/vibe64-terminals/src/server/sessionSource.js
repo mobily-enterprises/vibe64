@@ -467,7 +467,7 @@ async function createSessionSource({
     throw sourceError("Only a confirmed renewal can select a contribution source ref.",
       "vibe64_contribution_renewal_source_invalid");
   }
-  const sessionId = normalizeText(session.sessionId || session.id);
+  const sessionId = normalizeText(session.sessionId);
   const projectContextRoot = normalizeText(runtime?.projectContextRoot);
   const managedSessionSourceRoot = normalizeText(runtime?.projectSessionSourceRoot);
   if (!sessionId || !projectContextRoot || !managedSessionSourceRoot || !store) {

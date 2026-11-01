@@ -1,11 +1,5 @@
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 
-function recordValue(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : null;
-}
-
 function agentRunIsActive(run = {}) {
   // Codex acknowledges Resume before its scheduler starts the next turn.
   if (run.providerGoalStatus === "active" && run.providerGoalThreadId &&
@@ -27,11 +21,10 @@ function sessionHasActiveAgentRun(session = {}) {
 }
 
 function sessionRecordId(session) {
-  return String(session?.sessionId || session?.id || "").trim();
+  return String(session?.sessionId || "").trim();
 }
 
 export {
-  recordValue,
   sessionHasActiveAgentRun,
   sessionRecordId
 };

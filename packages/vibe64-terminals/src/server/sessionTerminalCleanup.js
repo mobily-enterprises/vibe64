@@ -5,17 +5,17 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
-import { recordValue } from "./serviceSessionRecords.js";
+import { record } from "./record.js";
 
 function renewalPredecessorTerminalCleanupContext(session = {}, {
   renewalId = "",
   runtime = null
 } = {}) {
-  const sessionRecord = recordValue(session);
+  const sessionRecord = record(session);
   const normalizedRenewalId = String(renewalId || "").trim();
-  const sessionId = String(sessionRecord?.sessionId || "").trim();
-  const metadata = recordValue(sessionRecord?.metadata) || {};
-  const status = String(sessionRecord?.status || "").trim();
+  const sessionId = String(sessionRecord.sessionId || "").trim();
+  const metadata = record(sessionRecord.metadata);
+  const status = String(sessionRecord.status || "").trim();
   const quiescedId = String(metadata.renewal_quiesced_id || "").trim();
   const isActive = status === VIBE64_SESSION_STATUS.ACTIVE;
   const isExactQuiesced = status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
@@ -50,10 +50,10 @@ function renewalSuccessorTerminalCleanupContext(session = {}, {
   renewalId = "",
   runtime = null
 } = {}) {
-  const sessionRecord = recordValue(session);
+  const sessionRecord = record(session);
   const normalizedRenewalId = String(renewalId || "").trim();
-  const sessionId = String(sessionRecord?.sessionId || "").trim();
-  const metadata = recordValue(sessionRecord?.metadata) || {};
+  const sessionId = String(sessionRecord.sessionId || "").trim();
+  const metadata = record(sessionRecord.metadata);
   if (
     !runtime ||
     !sessionId ||
@@ -122,8 +122,8 @@ async function closeTerminalControllerForSession({
 async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
   controllerOptions = {},
   eventPrefix = "server.terminals.closeSessionTerminals",
-  logger = null
-} = {}) {
+  logger
+}) {
   let closed = 0;
   const failures = [];
   for (const entry of controllers) {

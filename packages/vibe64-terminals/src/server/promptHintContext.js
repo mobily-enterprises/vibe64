@@ -107,7 +107,7 @@ function createPromptHintContext({
 
   // The prompt hint helper's durable record. No draft or prompt is ever stored in it.
   function promptHintHelperRecord(context, artifact) {
-    const sessionId = context.session.sessionId || context.session.id;
+    const sessionId = context.session.sessionId;
     const store = context.runtime.store;
     return {
       async read() {
