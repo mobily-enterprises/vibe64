@@ -1368,6 +1368,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/mainConversationMessages.js`
 - `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
 - Main: `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentProviderCalls.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentConversationOperations.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentGoals.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentLifecycle.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
@@ -3417,7 +3421,8 @@ native identity and the original single cleanup remain unchanged. Successful
 startup and later normal Stop do not capture another startup diagnostic.
 
 The ordinary entry is `service.assistantSessionOptions` / `runMainAgentWrite`,
-then `sessionAgentManager.callSessionProvider` and `conversationOperation`, then
+then the session agent manager's `callSessionProvider` (`agent/sessionAgentProviderCalls.js`) and
+`providerOperation` (`agent/sessionAgentConversationOperations.js`), then
 JSKIT's common conversation runtime. Main and retained read, Send/Start, Wait,
 Stop, Delete and supported goal commands use that dispatcher. The three
 `agent/providers/*SessionAgentProvider.js` modules supply
@@ -3589,7 +3594,7 @@ application supplies its persistence, authorization and terminal facilities;
 it must not choose native cleanup steps or retire a binding before all awaited
 cleanup effects succeed.
 
-`sessionAgentManager.closeSession` uses the common runtime's `disposeNative` for
+The session agent manager's `closeSession` (`agent/sessionAgentLifecycle.js`) uses the common runtime's `disposeNative` for
 retained, unready and uncached native owners. Its configured disposal host prepares
 the original application context and options without opening a Main record. The
 same JSKIT driver/owner performs cleanup; no provider close fallback remains for
