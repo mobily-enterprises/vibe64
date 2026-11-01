@@ -510,7 +510,10 @@ test("OpenCode Stop cancels an in-flight history read without waiting for its re
   await reading.promise;
   const started = Date.now();
   assert.equal((await harness.controller.interruptTurn("session-1")).turn.state, "interrupted");
-  assert.ok(Date.now() - started < 500);
+  // The read above ends only on abort, so a Stop that waited for its response would never return: any bound well
+  // under the test timeout proves the cancellation. 2 s leaves room for a loaded runner (500 ms failed under load).
+  const elapsedMs = Date.now() - started;
+  assert.ok(elapsedMs < 2_000, `Stop waited ${elapsedMs} ms for the in-flight history read`);
 });
 
 test("OpenCode carries an early error forward but keeps Stop available until native work is idle", async (t) => {
