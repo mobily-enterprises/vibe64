@@ -366,107 +366,107 @@ function createService({
     throw new TypeError("Studio Health requires account, project, and Studio-root services.");
   }
 
-  return Object.freeze({
-    async inspect(input) {
-      const packs = Boolean(runtimePackRoot());
-      const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
-      const check = (definition) => commandCheck({ plainExit: !packs, ...definition });
-      // With packs every row is needed, exactly as before; without them the
-      // person's own tools come from the shared check.
-      const commandChecks = [
-        ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
-        ...(packs ? packCommandChecks(check, { runCommand, studioRoot }) : []),
-        check({
-          id: "genesis",
-          label: "Genesis",
-          group: "Runtime",
-          command: path.join(genesisPackageBinDirectory(), "genesis"),
-          args: ["--help"],
-          runtimes: ["node26"],
-          runCommand,
-          studioRoot,
-          expected: "The installed genesis-compiler package exposes the Genesis CLI.",
-          explanation: packs ? "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities."
-            : "Part of Vibe64: it helps the AI understand how your projects are built.",
-          isValid: (output) => compactOutput(output).startsWith("Usage:"),
-          summarize: () => "Genesis is ready."
-        }),
-        check({
-          id: "playwright",
-          label: "Playwright runtime",
-          group: "Browser",
-          command: playwrightRuntimeVersionCommandArgs()[0],
-          args: playwrightRuntimeVersionCommandArgs().slice(1),
-          runtimes: ["node26", "playwright"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The managed Playwright CLI matches the active pinned runtime." : "Playwright is installed on this computer.",
-          explanation: packs ? "Vibe64 owns browser automation versions instead of allowing project installs to download Chrome."
-            : "Browser checks of your app use the Playwright installed on this computer.",
-          isValid: isValidPlaywrightRuntimeOutput,
-          summarize: summarizePlaywrightRuntimeOutput
-        }),
-        check({
-          id: "playwright-browser",
-          label: packs ? "Pinned browser" : "Playwright browser",
-          group: "Browser",
-          command: playwrightBrowserLaunchCommandArgs()[0],
-          args: playwrightBrowserLaunchCommandArgs().slice(1),
-          runtimes: ["node26", "playwright"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The managed Chromium paths exist and its headless shell launches."
-            : "Playwright's Chromium is installed and its headless shell launches.",
-          explanation: packs ? "Browser verification launches Vibe64's pinned Chromium headless shell without downloading a project-local browser."
-            : "Browser checks launch the Chromium headless shell that Playwright installed on this computer.",
-          isValid: isValidPlaywrightBrowserLaunchOutput,
-          summarize: summarizePlaywrightBrowserLaunchOutput
-        })
-      ];
+  async function inspect(input) {
+    const packs = Boolean(runtimePackRoot());
+    const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
+    const check = (definition) => commandCheck({ plainExit: !packs, ...definition });
+    // With packs every row is needed, exactly as before; without them the
+    // person's own tools come from the shared check.
+    const commandChecks = [
+      ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
+      ...(packs ? packCommandChecks(check, { runCommand, studioRoot }) : []),
+      check({
+        id: "genesis",
+        label: "Genesis",
+        group: "Runtime",
+        command: path.join(genesisPackageBinDirectory(), "genesis"),
+        args: ["--help"],
+        runtimes: ["node26"],
+        runCommand,
+        studioRoot,
+        expected: "The installed genesis-compiler package exposes the Genesis CLI.",
+        explanation: packs ? "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities."
+          : "Part of Vibe64: it helps the AI understand how your projects are built.",
+        isValid: (output) => compactOutput(output).startsWith("Usage:"),
+        summarize: () => "Genesis is ready."
+      }),
+      check({
+        id: "playwright",
+        label: "Playwright runtime",
+        group: "Browser",
+        command: playwrightRuntimeVersionCommandArgs()[0],
+        args: playwrightRuntimeVersionCommandArgs().slice(1),
+        runtimes: ["node26", "playwright"],
+        runCommand,
+        studioRoot,
+        expected: packs ? "The managed Playwright CLI matches the active pinned runtime." : "Playwright is installed on this computer.",
+        explanation: packs ? "Vibe64 owns browser automation versions instead of allowing project installs to download Chrome."
+          : "Browser checks of your app use the Playwright installed on this computer.",
+        isValid: isValidPlaywrightRuntimeOutput,
+        summarize: summarizePlaywrightRuntimeOutput
+      }),
+      check({
+        id: "playwright-browser",
+        label: packs ? "Pinned browser" : "Playwright browser",
+        group: "Browser",
+        command: playwrightBrowserLaunchCommandArgs()[0],
+        args: playwrightBrowserLaunchCommandArgs().slice(1),
+        runtimes: ["node26", "playwright"],
+        runCommand,
+        studioRoot,
+        expected: packs ? "The managed Chromium paths exist and its headless shell launches."
+          : "Playwright's Chromium is installed and its headless shell launches.",
+        explanation: packs ? "Browser verification launches Vibe64's pinned Chromium headless shell without downloading a project-local browser."
+          : "Browser checks launch the Chromium headless shell that Playwright installed on this computer.",
+        isValid: isValidPlaywrightBrowserLaunchOutput,
+        summarize: summarizePlaywrightBrowserLaunchOutput
+      })
+    ];
 
-      const [workspace, accounts, local, commands] = await Promise.all([
-        inspectWorkspace({ packs, projectService, studioRoot }),
-        inspectAccounts({ connectionsService, input, packs }),
-        packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
-        Promise.all(commandChecks)
-      ]);
-      // Without packs the person's own tools lead; Vibe64's own parts follow.
-      const ordered = packs ? [workspace, ...accounts, ...commands] : [...local, ...accounts, workspace, ...commands];
-      // One Playwright row is enough: the browser can't run without Playwright.
-      const playwrightMissing = !packs && ordered.some((entry) => entry?.id === "playwright" && entry.status !== "pass");
-      const checks = ordered.filter((entry) => entry && !(playwrightMissing && entry.id === "playwright-browser")).map((entry) => {
-        if (packs) return { ...entry, need: "needed" };
-        const need = entry.need || (OPTIONAL_CHECKS.has(entry.id) ? "optional" : "needed");
-        const optionalMiss = need === "optional" && entry.status === "fail";
-        return {
-          ...entry,
-          need,
-          status: optionalMiss ? "warn" : entry.status,
-          ...(optionalMiss && entry.id.startsWith("playwright") ? { tool: playwrightTool() } : {})
-        };
-      });
-      const needed = checks.filter((entry) => entry.need === "needed");
-      const failed = needed.filter((entry) => entry.status !== "pass").length;
+    const [workspace, accounts, local, commands] = await Promise.all([
+      inspectWorkspace({ packs, projectService, studioRoot }),
+      inspectAccounts({ connectionsService, input, packs }),
+      packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
+      Promise.all(commandChecks)
+    ]);
+    // Without packs the person's own tools lead; Vibe64's own parts follow.
+    const ordered = packs ? [workspace, ...accounts, ...commands] : [...local, ...accounts, workspace, ...commands];
+    // One Playwright row is enough: the browser can't run without Playwright.
+    const playwrightMissing = !packs && ordered.some((entry) => entry?.id === "playwright" && entry.status !== "pass");
+    const checks = ordered.filter((entry) => entry && !(playwrightMissing && entry.id === "playwright-browser")).map((entry) => {
+      if (packs) return { ...entry, need: "needed" };
+      const need = entry.need || (OPTIONAL_CHECKS.has(entry.id) ? "optional" : "needed");
+      const optionalMiss = need === "optional" && entry.status === "fail";
       return {
-        ok: true,
-        healthy: failed === 0,
-        checks,
-        summary: {
-          failed,
-          passed: needed.length - failed,
-          total: needed.length,
-          optionalMissing: checks.filter((entry) => entry.need === "optional" && entry.status !== "pass").length
-        },
-        updatedAt: new Date().toISOString()
+        ...entry,
+        need,
+        status: optionalMiss ? "warn" : entry.status,
+        ...(optionalMiss && entry.id.startsWith("playwright") ? { tool: playwrightTool() } : {})
       };
-    },
+    });
+    const needed = checks.filter((entry) => entry.need === "needed");
+    const failed = needed.filter((entry) => entry.status !== "pass").length;
+    return {
+      ok: true,
+      healthy: failed === 0,
+      checks,
+      summary: {
+        failed,
+        passed: needed.length - failed,
+        total: needed.length,
+        optionalMissing: checks.filter((entry) => entry.need === "optional" && entry.status !== "pass").length
+      },
+      updatedAt: new Date().toISOString()
+    };
+  }
 
-    // The rows a screen shows for named tools: run now, nothing remembered.
-    async checkTools(input) {
-      const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
-      return checkLocalTools(ids, { cwd: studioRoot, runCommand });
-    }
-  });
+  // The rows a screen shows for named tools: run now, nothing remembered.
+  async function checkTools(input) {
+    const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
+    return checkLocalTools(ids, { cwd: studioRoot, runCommand });
+  }
+
+  return Object.freeze({ inspect, checkTools });
 }
 
 export {

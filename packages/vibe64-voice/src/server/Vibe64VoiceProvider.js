@@ -29,10 +29,9 @@ function registerVoiceCatalogueRoute(fastify, actions) {
  * @param {ReturnType<typeof resolveVoiceProxyConfig>} proxyConfig
  */
 function createVoice(proxyConfig) {
-  return Object.freeze({
-    available: proxyConfig.available,
-    readCatalogue: () => readVoiceCatalogue(proxyConfig)
-  });
+  const readCatalogue = () => readVoiceCatalogue(proxyConfig);
+
+  return Object.freeze({ available: proxyConfig.available, readCatalogue });
 }
 
 const Vibe64VoiceProvider = defineFeature({

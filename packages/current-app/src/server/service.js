@@ -110,25 +110,25 @@ function createService({
     }
   }
 
-  return Object.freeze({
-    async inspectCurrentApp(input) {
-      return currentAppResult(async () => {
-        const root = await rootForInput(input);
-        if (!root) {
-          return unconfiguredCurrentApp("", "Choose a project source or session before inspecting Vibe64 outputs.");
+  async function inspectCurrentApp(input) {
+    return currentAppResult(async () => {
+      const root = await rootForInput(input);
+      if (!root) {
+        return unconfiguredCurrentApp("", "Choose a project source or session before inspecting Vibe64 outputs.");
+      }
+      try {
+        const [environment, resourcesPreparing] = await Promise.all([projectEnvironment(input), resourcesBeingPrepared(input)]);
+        return outputsView(root, await inspectOutputs({ environment, projectRoot: root, resourcesPreparing }));
+      } catch (error) {
+        if (!EXPECTED_UNCONFIGURED_CODES.has(String(error?.code || ""))) {
+          throw error;
         }
-        try {
-          const [environment, resourcesPreparing] = await Promise.all([projectEnvironment(input), resourcesBeingPrepared(input)]);
-          return outputsView(root, await inspectOutputs({ environment, projectRoot: root, resourcesPreparing }));
-        } catch (error) {
-          if (!EXPECTED_UNCONFIGURED_CODES.has(String(error?.code || ""))) {
-            throw error;
-          }
-          return unconfiguredCurrentApp(root, String(error?.message || ""));
-        }
-      });
-    }
-  });
+        return unconfiguredCurrentApp(root, String(error?.message || ""));
+      }
+    });
+  }
+
+  return Object.freeze({ inspectCurrentApp });
 }
 
 export {
