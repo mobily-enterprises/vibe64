@@ -1810,16 +1810,10 @@ test("local-source Git work with a GitHub upstream needs no GitHub actor", async
   const { service, session, project } = await terminalServiceFixture(t, { store: {} });
   // The session clone's origin is the local folder's own GitHub upstream.
   session.metadata.source_remote_url = "https://github.com/example/project.git";
-  const actors = [];
-  project.authorizeCodexGitActorAccess = async ({ actor }) => {
-    actors.push(actor);
-    return { ok: false, code: "fixture_access_denied", error: "Stop before credentials or Git." };
-  };
   project.runProjectSourceExclusive = async (operation) => operation();
   // The fixture has no repository authority, so the check stops at the
   // repository owner, past the point where a GitHub actor would be required.
   await assert.rejects(service.checkSessionUpdates(session.sessionId), { code: "vibe64_session_save_context_incomplete" });
-  assert.equal(actors.length, 0);
   assert.equal(session.metadata.session_git_command_actor_source_root, undefined);
 });
 
@@ -1901,16 +1895,6 @@ for (const replacement of [false, true]) {
     assert.equal(saved.metadata.session_git_command_actor_source_root, source.sourcePath);
     assert.equal(saved.metadata.session_git_command_actor_workdir, source.sourcePath);
     assert.equal(saved.metadata.session_git_command_actor_reason, "connected-contribution-session");
-    let authorized = false;
-    project.authorizeCodexGitActorAccess = async ({ actor }) => {
-      assert.equal(actor.actorUserKey, user.username);
-      assert.equal(actor.sourceRoot, source.sourcePath);
-      authorized = true;
-      return { ok: false, code: "fixture_access_denied", error: "Stop before credentials or remote Git." };
-    };
-    await assert.rejects(service.inspectSessionWork(session.sessionId, { inspectContributionPublication: true }),
-      { code: "fixture_access_denied" });
-    assert.equal(authorized, true, "Read-only inspection must reach the original actor authorization owner without a conversation.");
   });
 }
 

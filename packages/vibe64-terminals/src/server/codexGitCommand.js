@@ -242,19 +242,6 @@ function createCodexGitCommandService({
     return result;
   }
 
-  /**
-   * Resolved per call: the project service may install its hook after construction.
-   */
-  function actorAccessAuthorizer() {
-    if (typeof authorizeActorAccess === "function") {
-      return authorizeActorAccess;
-    }
-    // readable-check: allow method-probe - optional operation: a project service without Git actor authorization admits every actor
-    return typeof project.authorizeCodexGitActorAccess === "function"
-      ? project.authorizeCodexGitActorAccess.bind(project)
-      : null;
-  }
-
   async function actorAccessRefusal(authorize, { actor, deniedMessage, session, workdir }) {
     const access = await authorize({
       actor,
@@ -300,7 +287,7 @@ function createCodexGitCommandService({
     if (actor.ok === false) {
       return actor;
     }
-    const authorize = actor.githubRequired !== false && actorAccessAuthorizer();
+    const authorize = actor.githubRequired !== false && authorizeActorAccess;
     if (authorize) {
       const refusal = await actorAccessRefusal(authorize, {
         actor,
@@ -472,7 +459,7 @@ function createCodexGitCommandService({
     if (cwd.ok === false) {
       return finish(cwd, actor);
     }
-    const authorize = actor.githubRequired !== false && actorAccessAuthorizer();
+    const authorize = actor.githubRequired !== false && authorizeActorAccess;
     if (authorize) {
       stage = "authorization";
       const refusal = await actorAccessRefusal(authorize, {
