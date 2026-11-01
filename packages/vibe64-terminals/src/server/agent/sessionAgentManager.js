@@ -12,10 +12,10 @@ import { createSessionAgentRouting } from "./sessionAgentRouting.js";
 import { createSessionAgentGoals } from "./sessionAgentGoals.js";
 import { createSessionAgentLifecycle } from "./sessionAgentLifecycle.js";
 
-/** @typedef {ReturnType<typeof import("../sessionAttachments.js").createSessionAttachments>} SessionAttachments */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+/** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
+/** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 
-function normalizeProvider(provider = {}) {
+function normalizeProvider(provider) {
   const id = normalizeText(provider?.id);
   const transportId = normalizeText(provider?.transportId);
   if (!id || !transportId) {

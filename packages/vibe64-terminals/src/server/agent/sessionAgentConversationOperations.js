@@ -1,6 +1,6 @@
 import { openMainConversation } from "../mainConversationBinding.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+/** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 
 const CONVERSATION_COMMANDS = Object.freeze({
   sendMessage: (conversation, request) => conversation.send(request.input),

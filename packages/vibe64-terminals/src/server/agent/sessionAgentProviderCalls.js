@@ -17,12 +17,12 @@ import {
   verifiedExecutionProfileResolution
 } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("../sessionAttachments.js").createSessionAttachments>} SessionAttachments */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
-/** @typedef {ReturnType<typeof import("./sessionAgentManagerState.js").createSessionAgentManagerState>} SessionAgentManagerState */
-/** @typedef {ReturnType<typeof import("./sessionAgentBindings.js").createSessionAgentBindings>} SessionAgentBindings */
-/** @typedef {ReturnType<typeof import("./sessionAgentAccess.js").createSessionAgentAccess>} SessionAgentAccess */
-/** @typedef {ReturnType<typeof import("./sessionAgentConversationOperations.js").createSessionAgentConversationOperations>} SessionAgentConversationOperations */
+/** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
+/** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
+/** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
+/** @typedef {import("../types.js").SessionAgentConversationOperations} SessionAgentConversationOperations */
 
 const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "limits",

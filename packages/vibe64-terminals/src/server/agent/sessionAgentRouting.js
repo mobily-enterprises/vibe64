@@ -13,8 +13,8 @@ import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/proje
 import { isPracticeProjectRuntime } from "../practiceAgentGuidance.js";
 import { assistantUser } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionAgentManagerState.js").createSessionAgentManagerState>} SessionAgentManagerState */
-/** @typedef {ReturnType<typeof import("./sessionAgentBindings.js").createSessionAgentBindings>} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
+/** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 
 function mergeRoutingCatalogPage(catalog, page, revisionError) {
   catalog ||= { ...page, modelProviders: [] };

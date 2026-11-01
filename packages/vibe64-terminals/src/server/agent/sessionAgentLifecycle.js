@@ -9,10 +9,10 @@ import {
   sessionAgentProviderId
 } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionAgentManagerState.js").createSessionAgentManagerState>} SessionAgentManagerState */
-/** @typedef {ReturnType<typeof import("./sessionAgentBindings.js").createSessionAgentBindings>} SessionAgentBindings */
-/** @typedef {ReturnType<typeof import("./sessionAgentAccess.js").createSessionAgentAccess>} SessionAgentAccess */
-/** @typedef {ReturnType<typeof import("./sessionAgentConversationOperations.js").createSessionAgentConversationOperations>} SessionAgentConversationOperations */
+/** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
+/** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
+/** @typedef {import("../types.js").SessionAgentConversationOperations} SessionAgentConversationOperations */
 /** @typedef {ReturnType<typeof import("./sessionAgentProviderCalls.js").createSessionAgentProviderCalls>} SessionAgentProviderCalls */
 
 /**

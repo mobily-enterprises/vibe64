@@ -7,9 +7,9 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { assistantUser, sessionAssistantSelection } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionAgentBindings.js").createSessionAgentBindings>} SessionAgentBindings */
-/** @typedef {ReturnType<typeof import("./sessionAgentAccess.js").createSessionAgentAccess>} SessionAgentAccess */
-/** @typedef {ReturnType<typeof import("./sessionAgentConversationOperations.js").createSessionAgentConversationOperations>} SessionAgentConversationOperations */
+/** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
+/** @typedef {import("../types.js").SessionAgentConversationOperations} SessionAgentConversationOperations */
 
 const CANONICAL_GOAL_ENGINE_IDS = new Set(["claude", "codex"]);
 

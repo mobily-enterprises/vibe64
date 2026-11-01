@@ -8,7 +8,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { assistantUser, providerBindingConflictError, sessionAssistantSelection } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionAgentBindings.js").createSessionAgentBindings>} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 
 /**
  * Whether the session's actor may use its assistant: access reads and

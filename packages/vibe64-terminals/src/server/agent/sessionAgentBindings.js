@@ -2,7 +2,7 @@ import { normalizeText } from "@local/vibe64-core/server/core";
 import { VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE } from "@local/vibe64-runtime/shared";
 import { bindingKey, providerBindingConflictError, sessionAgentProviderId, sessionAssistantSelection } from "./sessionAgentRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionAgentManagerState.js").createSessionAgentManagerState>} SessionAgentManagerState */
+/** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 
 function providerNotImplementedError(providerId = "") {
   const id = normalizeText(providerId);
