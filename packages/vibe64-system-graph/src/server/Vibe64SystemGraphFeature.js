@@ -4,6 +4,7 @@ import { registerRoutes } from "./registerRoutes.js";
 import { createSystemGraph } from "./systemGraphRuntime.js";
 import { createSystemGraphActions } from "./systemGraphActions.js";
 import { registerUsageRoutes } from "./usageRoutes.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -41,8 +42,9 @@ const Vibe64SystemGraphFeature = defineFeature({
       logger,
       project
     });
-    registerRoutes(http);
-    registerUsageRoutes(http);
+    const projectContext = getStudioProjectContext();
+    registerRoutes(http, { projectContext });
+    registerUsageRoutes(http, { projectContext });
     return { systemGraph };
   },
   /**

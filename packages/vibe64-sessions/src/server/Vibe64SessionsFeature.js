@@ -9,7 +9,7 @@ import { createProjectWatchActions, createSessionActions } from "./sessionAction
 import { registerProjectWatch } from "./projectWatch.js";
 import { createRepositoryUpdateProbe } from "./repositoryUpdateProbe.js";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
-import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
+import { getStudioProjectContext, registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
 import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
@@ -118,7 +118,7 @@ const Vibe64SessionsFeature = defineFeature({
     slotReleases.set(sessions, registerApprovalCountReader(countWaitingMainChatApprovals));
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
-    registerRoutes(http);
+    registerRoutes(http, { projectContext: getStudioProjectContext() });
     return { sessions };
   },
   actions({ sessions }) {

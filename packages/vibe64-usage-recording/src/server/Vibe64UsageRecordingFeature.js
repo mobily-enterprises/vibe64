@@ -8,6 +8,7 @@ import {
 import { registerRoutes } from "./registerRoutes.js";
 import { createUsageRecordingActions } from "./usageRecordingActions.js";
 import { createUsageRecording } from "./usageRecordingRuntime.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -59,7 +60,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
       project,
       terminals
     });
-    registerRoutes(http);
+    registerRoutes(http, { projectContext: getStudioProjectContext() });
     return { usageRecording };
   },
   /**

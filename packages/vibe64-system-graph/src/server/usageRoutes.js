@@ -46,12 +46,10 @@ function usageJoinInput(request) {
 
 /**
  * @param {RuntimeHttp} http
- * @param {object} [options]
- * @param {StudioProjectContext} [options.projectContext]
+ * @param {object} options
+ * @param {StudioProjectContext} options.projectContext
  */
-function registerUsageRoutes(http, {
-  projectContext
-} = {}) {
+function registerUsageRoutes(http, { projectContext }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

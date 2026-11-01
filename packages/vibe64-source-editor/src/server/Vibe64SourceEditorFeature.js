@@ -3,6 +3,7 @@ import { createSessionChangedPublisher } from "@local/vibe64-core/server/session
 import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createSourceEditorActions } from "./sourceEditorActions.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -46,6 +47,7 @@ const Vibe64SourceEditorFeature = defineFeature({
       terminals
     });
     registerRoutes(http, {
+      projectContext: getStudioProjectContext(),
       sourceEditor
     });
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals

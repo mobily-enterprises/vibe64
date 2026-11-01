@@ -55,7 +55,7 @@ const FILE_AREA_BODY_LIMIT = 2 * 1024 * 1024;
  * destinations; project file-area routes reach only the project's areas.
  * @param {RuntimeHttp} http
  * @param {object} options
- * @param {StudioProjectContext} [options.projectContext]
+ * @param {StudioProjectContext} options.projectContext
  * @param {SourceEditorService} options.sourceEditor
  */
 function registerRoutes(http, {

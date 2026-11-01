@@ -223,21 +223,24 @@ test("Vibe64 route scopes can register global routes without project params", as
   });
 });
 
-test("a Vibe64 route's project scope must match its path", () => {
-  const app = testRouteApp();
-  const global = createActionRouteScope(vibe64RouteHttp(app.http), {
-    relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler()
+test("a Vibe64 route's project scope must match its path", async () => {
+  await withRouteProject(async ({ projectContext }) => {
+    const app = testRouteApp();
+    assert.throws(() => vibe64RouteHandler(), /requires the project context its feature resolved/u);
+    const global = createActionRouteScope(vibe64RouteHttp(app.http), {
+      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ projectContext })
+    });
+    assert.throws(() => global.actionRoute("GET", "/status", { actionId: "unit.status.read" }),
+      /GET \/api\/vibe64\/status is project-scoped, so it must be under \/api\/app\/:slug/u);
+    const project = createActionRouteScope(vibe64RouteHttp(app.http), {
+      routeBase: VIBE64_PROJECT_ROUTE_BASE, relativePath: "vibe64", surface: "app",
+      wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    });
+    assert.throws(() => project.serviceRoute("GET", "/status", {}, () => ({ ok: true })),
+      /\/api\/app\/:slug\/vibe64\/status is not project-scoped, so it must not be under \/api\/app\/:slug/u);
+    assert.equal(app.registeredRoutes.length, 0);
+    assert.equal(Object.isFrozen(vibe64RouteHttp(app.http).router), true);
   });
-  assert.throws(() => global.actionRoute("GET", "/status", { actionId: "unit.status.read" }),
-    /GET \/api\/vibe64\/status is project-scoped, so it must be under \/api\/app\/:slug/u);
-  const project = createActionRouteScope(vibe64RouteHttp(app.http), {
-    routeBase: VIBE64_PROJECT_ROUTE_BASE, relativePath: "vibe64", surface: "app",
-    wrapHandler: vibe64RouteHandler({ projectScoped: false })
-  });
-  assert.throws(() => project.serviceRoute("GET", "/status", {}, () => ({ ok: true })),
-    /\/api\/app\/:slug\/vibe64\/status is not project-scoped, so it must not be under \/api\/app\/:slug/u);
-  assert.equal(app.registeredRoutes.length, 0);
-  assert.equal(Object.isFrozen(vibe64RouteHttp(app.http).router), true);
 });
 
 test("Vibe64 routes refuse requests that are not from this computer before running anything", async () => {

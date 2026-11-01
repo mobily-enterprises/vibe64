@@ -18,6 +18,7 @@ import { registerRoutes as registerTerminalRoutes } from "../../packages/vibe64-
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { registerTrainingVisualResourceRoutes } from "../../packages/vibe64-training/src/server/visualResourceRoutes.js";
 import { registerRoutes as registerUsageRecordingRoutes } from "../../packages/vibe64-usage-recording/src/server/registerRoutes.js";
+import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 // Every Vibe64 route as the kernel router records it: method, path, auth,
 // surface, body limit and the action it runs. Recorded from the route
@@ -340,32 +341,34 @@ PUT /api/app/:slug/vibe64/settings/engineering public app - vibe64.project.engin
 PUT /api/app/:slug/vibe64/settings/prompt-hints public app - vibe64.project.prompt-hints.save
 `.trim().split("\n");
 
-function routeTable() {
+function routeTable(projectContext) {
   const http = createCapabilityHttpRuntime({ fastify: { route() {} }, actions: { registerContextContributor() {} } });
   const fastify = { get() {} };
   registerStudioHealthRoutes(http);
-  registerCurrentAppRoutes(http);
-  registerAccountRoutes(http, { projectContext: {} });
+  registerCurrentAppRoutes(http, { projectContext });
+  registerAccountRoutes(http, { projectContext });
   registerColleagueRoutes(http);
-  registerDatabaseRoutes(http);
-  registerProjectRoutes(http);
-  registerPublishingRoutes(http, { publishing: {} });
-  registerSessionRoutes(http);
-  registerSourceEditorRoutes(http, { sourceEditor: { readTree() {} } });
-  registerSystemGraphRoutes(http);
-  registerUsageRoutes(http);
-  registerTerminalRoutes(http, { fastify, terminals: {}, uploads: { readSingleMultipartFile() {} } });
+  registerDatabaseRoutes(http, { projectContext });
+  registerProjectRoutes(http, { projectContext });
+  registerPublishingRoutes(http, { projectContext, publishing: {} });
+  registerSessionRoutes(http, { projectContext });
+  registerSourceEditorRoutes(http, { projectContext, sourceEditor: { readTree() {} } });
+  registerSystemGraphRoutes(http, { projectContext });
+  registerUsageRoutes(http, { projectContext });
+  registerTerminalRoutes(http, { fastify, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
   registerTrainingRoutes(http);
   registerTrainingVisualResourceRoutes(http);
-  registerUsageRecordingRoutes(http);
+  registerUsageRecordingRoutes(http, { projectContext });
   return http.router.list().map((route) => [
     route.method, route.path, route.auth, route.surface, route.bodyLimit ?? "-", route.actionId || "-"
   ].join(" ")).sort();
 }
 
-test("Vibe64's route table is the recorded one, with the action each route runs", () => {
-  const actual = routeTable();
-  assert.deepEqual(actual.filter((line) => !EXPECTED_ROUTE_TABLE.includes(line)), [], "routes not in the recorded table");
-  assert.deepEqual(EXPECTED_ROUTE_TABLE.filter((line) => !actual.includes(line)), [], "recorded routes no longer registered");
-  assert.deepEqual(actual, EXPECTED_ROUTE_TABLE);
+test("Vibe64's route table is the recorded one, with the action each route runs", async () => {
+  await withRouteProject(async ({ projectContext }) => {
+    const actual = routeTable(projectContext);
+    assert.deepEqual(actual.filter((line) => !EXPECTED_ROUTE_TABLE.includes(line)), [], "routes not in the recorded table");
+    assert.deepEqual(EXPECTED_ROUTE_TABLE.filter((line) => !actual.includes(line)), [], "recorded routes no longer registered");
+    assert.deepEqual(actual, EXPECTED_ROUTE_TABLE);
+  });
 });

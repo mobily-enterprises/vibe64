@@ -64,7 +64,7 @@ const Vibe64ProjectFeature = defineFeature({
       resourceEnvironmentProvider: resourceEnvironmentProvider ?? LOCAL_PROJECT_RESOURCES,
       savedEnvValues: savedEnvValues ?? NO_SAVED_ENV_VALUES
     });
-    registerRoutes(http);
+    registerRoutes(http, { projectContext: getStudioProjectContext() });
     return { project };
   },
   actions({ project }) {

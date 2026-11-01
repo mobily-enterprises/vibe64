@@ -9,7 +9,7 @@ import { registerRoutes as registerDatabaseRoutes } from "../../packages/vibe64-
 import { createSystemGraphActions } from "../../packages/vibe64-system-graph/src/server/systemGraphActions.js";
 import { registerRoutes as registerSystemGraphRoutes } from "../../packages/vibe64-system-graph/src/server/registerRoutes.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
-import { testRouteApp } from "./vibe64RouteTestHelpers.js";
+import { testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 // Learning v2: a lesson's practice project is an ordinary project in the
 // learning space, so its Dashboard (Files, Database, Architecture, Env,
@@ -24,11 +24,13 @@ test("practice Dashboard and session actions have no lesson access", () => {
   assert.deepEqual(dashboard.filter(action => action.extensions.vibe64.learningAccess).map(action => action.id), []);
 });
 
-test("ordinary Dashboard routes register no lesson URLs", () => {
-  const app = testRouteApp();
-  registerProjectRoutes(app.http, { routeSurface: "app" });
-  registerDatabaseRoutes(app.http, { routeSurface: "app" });
-  registerSystemGraphRoutes(app.http, { routeSurface: "app" });
-  assert.ok(app.registeredRoutes.length > 0);
-  assert.equal(app.registeredRoutes.some(route => route.path.startsWith("/api/learning/")), false);
+test("ordinary Dashboard routes register no lesson URLs", async () => {
+  await withRouteProject(async ({ projectContext }) => {
+    const app = testRouteApp();
+    registerProjectRoutes(app.http, { projectContext });
+    registerDatabaseRoutes(app.http, { projectContext });
+    registerSystemGraphRoutes(app.http, { projectContext });
+    assert.ok(app.registeredRoutes.length > 0);
+    assert.equal(app.registeredRoutes.some(route => route.path.startsWith("/api/learning/")), false);
+  });
 });

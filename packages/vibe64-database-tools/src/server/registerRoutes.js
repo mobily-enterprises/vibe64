@@ -93,12 +93,10 @@ function databaseStatusCode(response) {
 
 /**
  * @param {RuntimeHttp} http
- * @param {object} [options]
- * @param {StudioProjectContext} [options.projectContext]
+ * @param {object} options
+ * @param {StudioProjectContext} options.projectContext
  */
-function registerRoutes(http, {
-  projectContext
-} = {}) {
+function registerRoutes(http, { projectContext }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-database-tools"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

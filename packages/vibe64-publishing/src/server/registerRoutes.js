@@ -12,6 +12,7 @@ import { PUBLISHING_ACTIONS } from "./publishingActions.js";
 
 /** @typedef {import("./types.js").PublishingService} PublishingService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 const PUBLISHING_BODY_LIMIT = 64 * 1024;
 const CONFLICT_CODES = new Set([
@@ -68,15 +69,17 @@ function accountInput(request) {
 /**
  * @param {RuntimeHttp} http
  * @param {object} capabilities
+ * @param {StudioProjectContext} capabilities.projectContext
  * @param {PublishingService} capabilities.publishing
  */
-function registerRoutes(http, { publishing }) {
+function registerRoutes(http, { projectContext, publishing }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-publishing"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
-      localRequestMessage: "Vibe64 publishing routes only accept requests from this computer."
+      localRequestMessage: "Vibe64 publishing routes only accept requests from this computer.",
+      projectContext
     })
   });
   routes.actionRoute("GET", "/publishing", {

@@ -81,6 +81,9 @@ function vibe64RouteHandler({
   projectContext,
   projectScoped = true
 } = {}) {
+  if (projectScoped && !projectContext) {
+    throw new TypeError("A project-scoped Vibe64 route scope requires the project context its feature resolved.");
+  }
   return function wrapVibe64Route(handler, { method, path, options = {} }) {
     // A project route without its project context would skip that admission.
     if (projectScoped !== isProjectRoutePath(path)) {

@@ -109,7 +109,7 @@ const GLOBAL_TERMINAL_ROUTES = Object.freeze({
  * @param {RuntimeHttp} http
  * @param {object} options
  * @param {RuntimeFastify} options.fastify
- * @param {StudioProjectContext} [options.projectContext]
+ * @param {StudioProjectContext} options.projectContext
  * @param {TerminalsService} options.terminals
  */
 function registerRoutes(http, { fastify, projectContext, terminals }) {

@@ -3,6 +3,7 @@ import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { createCurrentAppActions } from "./currentAppActions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -35,7 +36,7 @@ const CurrentAppFeature = defineFeature({
       env,
       project
     });
-    registerRoutes(http);
+    registerRoutes(http, { projectContext: getStudioProjectContext() });
     return { currentApp };
   },
   /**

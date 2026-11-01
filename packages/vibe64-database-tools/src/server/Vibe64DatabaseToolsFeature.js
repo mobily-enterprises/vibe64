@@ -10,6 +10,7 @@ import {
 import {
   createService
 } from "./service.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -57,7 +58,7 @@ const Vibe64DatabaseToolsFeature = defineFeature({
       sourceEditor,
       terminals
     });
-    registerRoutes(http);
+    registerRoutes(http, { projectContext: getStudioProjectContext() });
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };
