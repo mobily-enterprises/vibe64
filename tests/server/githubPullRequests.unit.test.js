@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, sessionConnectedContribution, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
@@ -411,7 +411,7 @@ test("PR mutation routes bind the action, project, number and identity to the au
   await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
     let received;
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project: {
       async githubPullRequests(input) { received = input; return { ok: true }; }
     } }).map((action) => ({ channels: ["api"], surfaces: ["app"], ...action })) });

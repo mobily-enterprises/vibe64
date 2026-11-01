@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
@@ -53,7 +53,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
       diff: "private-diff", files: Array.from({ length: 150 }, (_, index) => ({ path: `src/${index}.js`, status: "M", added: 1, deleted: 0 })) }; },
     async createSession(input) { calls.push(input); return { ok: true, sessionId: "created-session", workspaceSetup: { status: "running" }, sourcePath: "/private/source" }; }
   };
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "conversation-tools", domain: "vibe64", actions: [
     ...createSessionActions({ sessions }), ...createTerminalActions({ terminals })
   ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
@@ -223,7 +223,7 @@ test("session lifecycle tools preserve canonical execution, bounded results and 
       calls.push({ sessionId, input });
       return { ok: true, sessionId, ...result, metadata: { credential: "private" }, sourcePath: "/private/repository", log: "x".repeat(20000) };
     }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "sessions", domain: "vibe64", actions: createSessionActions({ sessions }).map((action) => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });

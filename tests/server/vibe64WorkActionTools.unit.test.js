@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
@@ -36,7 +36,7 @@ test("work tools retain exact review identities and project authority through HT
       calls.push({ args: args.filter(arg => !arg?.requestMeta), actor: context.vibe64User, project: context.slug });
       return native;
     }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "work", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });
@@ -109,7 +109,7 @@ test("Incoming actions share receiving authority, preserve exact reviews and kee
         fileCount: 1, review, files: ["private-source.js"], diff: { content: "private-source" } }], credential: "private-credential" };
     const sessions = Object.fromEntries(["inspectIncomingContributions", "changeIncomingContribution"].map(name => [name,
       async (...args) => { calls.push({ name, args, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug }); return native; }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "incoming", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });

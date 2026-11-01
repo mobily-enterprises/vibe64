@@ -8,7 +8,7 @@ import test from "node:test";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { BACKUP_RETENTION_MS, maintainProjectBackups, withProjectBackupsLock, withProjectDropZoneLock } from "@local/vibe64-runtime/server/projectBackups";
@@ -379,7 +379,7 @@ test("HTTP project routes, transfers and inline image previews keep trusted iden
       return { project: { path: path.join(root, slug) } };
     }
   };
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions({ sourceEditor: service }).map((action) => ({
     channels: ["api"], surfaces: ["app"], ...action
   })) });

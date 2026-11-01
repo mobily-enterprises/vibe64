@@ -10,7 +10,7 @@ import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
@@ -74,7 +74,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   if (!systemRoot) resources.roots.push(root);
   const nativeCommands = native === true ? await createControlledColleagueNativeCommands(root, responses) : native || null;
   if (nativeCommands && native !== true) await nativeCommands.enqueue(responses);
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const observations = { starts: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
     helperCalls: [], sent: [], conversations: {}, deniedProjects: new Set(), projectChecks: [],
     target: { ok: true, status: "inProgress", runId: "work-1", messages: [{ id: "question", role: "user", text: "What happened?" }] },
@@ -240,12 +240,13 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     async initializeModelRouting(input) { observations.routingInitialized.push(input.vibe64User.username); return { ok: true, initialized: [] }; }
   };
   const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
-  const operation = withVibe64ActionContext({
+  const operation = Object.freeze({
+    extensions: { vibe64: WORKSPACE_OPERATION },
     id: "vibe64.test.operate", kind: "command", idempotency: "none",
     input: { schema: createSchema({ value: { type: "string", required: true } }), mode: "create" },
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
     async execute(input, context) { observations.mutations.push(input.value); await observations.onOperation?.(input, context); if (observations.failure) throw observations.failure; return { ok: true }; }
-  }, { projectScoped: false });
+  });
   const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
   if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => ["vibe64.terminals.temporary-conversation.read", "vibe64.terminals.outputs.read"].includes(id) ||
     (assigning && ["vibe64.terminals.temporary-conversation.create", "vibe64.terminals.temporary-conversation.turn.start"].includes(id))), ...createSessionActions({ sessions: {
@@ -1180,10 +1181,10 @@ function registerWorkspaceConversation(f) {
   f.context.requestMeta.request.vibe64User.role = "owner";
   f.actions.register({ contributorId: "workspace-observer", domain: "workspace", actions: [{
     channels: ["api", "automation"], surfaces: ["app"],
-    ...withVibe64ActionContext({ id: "vibe64.test.workspace-conversation.read", kind: "query", idempotency: "none",
+    ...Object.freeze({ extensions: { vibe64: WORKSPACE_OWNER_OPERATION }, id: "vibe64.test.workspace-conversation.read", kind: "query", idempotency: "none",
       input: { schema: createSchema({ conversationId: { type: "string", required: true } }), mode: "create" }, output: null,
       async execute() { f.observations.reads += 1; return structuredClone(f.observations.target); }
-    }, { projectScoped: false, ownerRequired: true })
+    })
   }] });
   f.service.registerConversationSource("workspace-repair", (watch, context) => f.actions.execute({
     actionId: "vibe64.test.workspace-conversation.read", input: { conversationId: watch.conversationId }, context
@@ -5549,10 +5550,10 @@ test("each lesson attempt keeps its own teacher thread across mode switches, Lea
 });
 
 test("Develop hides teaching tools and Learn hides delegation but keeps watches; neither has Main's goal controls", async t => {
-  const action = (id, kind = "query") => withVibe64ActionContext({ id, kind, idempotency: "none",
+  const action = (id, kind = "query") => Object.freeze({ id, kind, idempotency: "none",
     input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true }),
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
-    extensions: { assistant: { description: `Test ${id}.` } } }, { projectScoped: false });
+    extensions: { assistant: { description: `Test ${id}.` }, vibe64: WORKSPACE_OPERATION } });
   const training = name => action(`vibe64.training.${name}`);
   const mainGoal = ["pause", "block"].map(name => action(`vibe64.terminals.main-goal.${name}`, "command"));
   const f = await fixture(t, [reply("Develop"), reply("Learn")], { extraActions: [training("lesson.read"), training("learning-mode.set"), ...mainGoal] });
@@ -5734,13 +5735,13 @@ function registerDeploymentSource(f) {
   f.observations.deploymentReads = [];
   f.actions.register({ contributorId: "deployment-observer", domain: "test", actions: [{
     channels: ["api", "automation", "internal"], surfaces: ["app"],
-    ...withVibe64ActionContext({ id: "vibe64.test.deployment.read", kind: "query", idempotency: "none",
+    ...Object.freeze({ extensions: { vibe64: PROJECT_OPERATION }, id: "vibe64.test.deployment.read", kind: "query", idempotency: "none",
       input: { schema: createSchema({}), mode: "create" }, output: null,
       async execute(_input, context) {
         f.observations.deploymentReads.push(context.projectSlug);
         return { ok: true, ...structuredClone(f.observations.deployment) };
       }
-    }, { projectScoped: true })
+    })
   }] });
   f.service.registerWatchSource({ id: "deployment", label: "Deployment", description: "A project's deployed app.",
     input: { projectSlug: "The exact project slug." }, entity: "deployment",

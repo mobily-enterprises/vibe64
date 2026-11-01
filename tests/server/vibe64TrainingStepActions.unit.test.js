@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
@@ -77,7 +77,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     async deleteArchive(value) { practiceCalls.push(["deleteArchive", value]); return { ok: true, ...value, removed: true }; },
     ...(typeof practice === "object" ? practice : {}) } : null;
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const definitions = createTrainingStepActions({ learners, content, steps, exercises, learningSpace, publishLearnerChanged });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
@@ -286,7 +286,7 @@ test("a practice presence check that fails keeps that project listed without fai
   const learningSpace = { async exists() { throw Object.assign(new Error("Practice storage must contain only real directories."), { code: "vibe64_practice_path_unsafe" }); } };
   const f = await fixture(t, { practice: learningSpace });
   const attempt = await f.start();
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
     publishLearnerChanged: async () => {},
     catalogue: { async readCatalogue() { throw new Error("not read by learning.read"); } }, learners: f.learners, learningSpace
@@ -406,7 +406,7 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
     sessions: { async createSession(_input, { sessionId }) { session = { sessionId, status: "open", workspaceSetup: { status: "succeeded" } }; return session; } },
     terminals: { async workspaceSetupIsPrepared() { return true; } }
   });
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
     learners: f.learners, exercises, publishLearnerChanged: async () => {}
@@ -498,7 +498,7 @@ test("the plain visual route reads a diagram of any retained attempt, including 
   const { revision } = await f.learners.readState({ actor: f.auth.user });
   await f.learners.endAttempt({ actor: f.auth.user, attemptId: attempt.attemptId, requestId: "leave-one", expectedRevision: revision, reason: "deleted" });
   assert.ok((await f.learners.readState({ actor: f.auth.user })).progress.attempts[0].ended);
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "visuals", domain: "training", actions: createTrainingVisualResourceActions({
     learners: f.learners, content: f.content }) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,

@@ -9,6 +9,7 @@ import websocket from "@fastify/websocket";
 import { WebSocket, WebSocketServer } from "ws";
 import { createVoiceAccessToken } from "@jskit-ai/assistant-voice/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   Vibe64VoiceProvider,
@@ -37,7 +38,7 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
   const sockets = [];
   let realtime;
   t.after(async () => { for (const socket of [...sockets, ...upstreams]) socket.terminate(); for (const socket of fastify.websocketServer.clients) socket.terminate(); await fastify.close(); realtime?.close(); await new Promise(resolve => upstream.close(resolve)); await rm(root, { recursive: true, force: true }); });
-  const actionCatalogue = createActionCatalogue();
+  const actionCatalogue = createActionCatalogue({ policy: vibe64ActionPolicy });
   actionCatalogue.register({ contributorId: "fixture-colleague", domain: "vibe64-colleague", actions: [{
     id: "vibe64.colleague.state.read", kind: "query", input: { schema: createSchema({}) },
     channels: ["api"], surfaces: ["app"],

@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
@@ -82,7 +82,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     }
   };
   function register(host = null, replacements = {}) {
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const definitions = createTrainingActions({ catalogue, learners, exercises: host, publishLearnerChanged: async () => {}, ...replacements });
     actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
@@ -406,7 +406,7 @@ test("history tool projections preserve original provenance without leaking iden
 test("standalone Training Feature uses actual OS-owner authority only for trusted learning transports", async t => {
   const f = await fixture(t);
   const [{ Vibe64TrainingProvider }, { configureStudioProjectContext }, { currentOsUser },
-    { withVibe64ActionContext }, { createSchema }, { default: Fastify }] = await Promise.all([
+    { WORKSPACE_OPERATION }, { createSchema }, { default: Fastify }] = await Promise.all([
     import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js"),
     import("@local/vibe64-core/server/studioProjectContext"), import("@local/vibe64-core/server/osUserIdentity"),
     import("@local/vibe64-core/server/actionContext"), import("@jskit-ai/kernel/shared/validators"), import("fastify")
@@ -414,7 +414,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   configureStudioProjectContext({ explicitSystemRoot: f.systemRoot, explicitTargetRoot: f.root,
     explicitManagedSourceRoot: path.join(f.systemRoot, "managed-source") });
   t.after(() => configureStudioProjectContext());
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const server = Fastify();
   t.after(() => server.close());
   server.decorateRequest("executeAction", function ({ actionId, input }) {
@@ -445,10 +445,10 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   const observed = [];
   actions.register({ contributorId: "original-local-scopes", domain: "test", actions: ["vibe64.working.fixture", "vibe64.colleague.fixture"].map(id =>
-    withVibe64ActionContext({ id, kind: "query", channels: ["api"], surfaces: ["app"],
+    Object.freeze({ extensions: { vibe64: WORKSPACE_OPERATION }, id, kind: "query", channels: ["api"], surfaces: ["app"],
       input: { mode: "create", schema: createSchema({}) }, execute(input, context) {
         observed.push({ input, context }); return { ok: true };
-      } }, { projectScoped: false })) });
+      } })) });
   const courses = await server.inject({ method: "GET", url: "/api/vibe64/training/courses" });
   assert.equal(courses.statusCode, 200, courses.body);
   assert.equal(courses.json().courses[0].lessons[0].code, f.input.lessonCode);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createDatabaseActions } from "../../packages/vibe64-database-tools/src/server/databaseActions.js";
 import { registerRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
@@ -33,7 +33,7 @@ test("all ordinary database HTTP operations execute their authorized action and 
       calls.push({ method, input, project: currentProjectRequestContext().slug });
       return result;
     }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "database", domain: "database", actions: createDatabaseActions({ databaseTools })
       .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,

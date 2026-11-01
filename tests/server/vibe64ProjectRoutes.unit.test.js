@@ -13,7 +13,7 @@ import {
   ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES
 } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import {
@@ -27,7 +27,7 @@ import {
 
 function registerRoutes(http, options) {
   if (!options.project) return registerProjectRoutes(http, options);
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "project", domain: "project", actions: createProjectActions(options).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { projectContext: options.projectContext,
     resolveUser: async ({ request }) => request.vibe64User,

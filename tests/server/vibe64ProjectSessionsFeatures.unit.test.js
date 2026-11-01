@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -23,7 +23,7 @@ test("session discovery pages every archived/open identity through canonical too
     status: "archived", archivedAt: "2026-09-29T00:00:00Z", private: "secret-session" }));
   const result = { ok: true, sessions, unavailableSessions: [{ sessionId: "unavailable", path: "secret-path" }] };
   let calls = 0, allowed = true;
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
     resolveUser: async () => ({ uid: 42, role: "member" }),
@@ -163,7 +163,7 @@ test("project and sessions register routes and captured actions during setup", a
   const sessionRoutes = [];
   const configurationReads = [];
   const templateObservers = [];
-  const sessionCatalogue = createActionCatalogue();
+  const sessionCatalogue = createActionCatalogue({ policy: vibe64ActionPolicy });
   const sessionOutputs = await Vibe64SessionsProvider.setup({
     actionCatalogue: {
       ...sessionCatalogue,

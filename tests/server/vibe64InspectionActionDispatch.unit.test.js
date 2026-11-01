@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createCurrentAppActions } from "../../packages/current-app/src/server/currentAppActions.js";
 import { createStudioHealthActions } from "../../packages/studio-health/src/server/studioHealthActions.js";
@@ -13,7 +13,7 @@ import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withL
 test("current-app and Studio Health inspections resolve current actor and their different project scopes", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     let user = { uid: 42, username: "member", role: "member" };
     let allowed = true;
     let projectChecks = 0;

@@ -41,7 +41,7 @@ action-contributor authority; a missing hosted grant cannot become local access.
 Goal Set/Resume resolves that same fresh context grant and retains its actor
 identity for subsequent native Pause/Block tools. Standalone's local actor does
 not require a hosted runtime user. The structured controls validate their exact
-selected project through the original action wrapper in both modes.
+selected project through the Vibe64 action policy in both modes.
 
 All three native engines use JSKIT's common delivery timing observer, separating
 preparation, provider readiness, dispatch, native acknowledgement, saved receipt,

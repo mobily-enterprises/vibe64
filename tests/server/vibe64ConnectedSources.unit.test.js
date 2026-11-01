@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -102,7 +102,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       async runProjectSessionPolicyExclusive(operation) { calls.push("receiving capacity admission"); return operation(); },
       async developmentDatabasePolicy() { return { creation: { canCreate: true }, limits: {} }; }
     };
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
       workspaceSetupRunner: { start: async () => { setupStarts++; return { completion: null }; } },
       terminals: {

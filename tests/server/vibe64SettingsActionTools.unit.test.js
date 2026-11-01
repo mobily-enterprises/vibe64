@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
@@ -38,7 +38,7 @@ async function withSettingsTools(run) {
     const calls = [];
     const events = [];
     const record = (operation, input) => calls.push({ operation, input, context: currentProjectRequestContext() });
-    const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "settings", domain: "project", actions: createProjectActions({ project: {
       async readEnv(input) { record("env.read", input); return state.failure || { ok: true, env: state.env }; },
       async saveEnvUserValues(input) { record("env.user-values.save", input); return state.failure || { ok: true, env: state.env }; },

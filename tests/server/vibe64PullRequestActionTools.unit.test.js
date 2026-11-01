@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -36,7 +36,7 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
         baseRepository: review.repository }, worktreePath: "/private/worktree" }
     };
     const record = (input) => calls.push({ input, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug });
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "pull-requests", domain: "project", actions: [
       ...createProjectActions({ project: { async githubPullRequests(input) {
         record(input);

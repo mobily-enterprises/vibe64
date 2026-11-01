@@ -3,7 +3,7 @@ import test from "node:test";
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { assertSessionRenewalDraftVersion, assertSessionRenewalOperation, createSessionRenewalDraft } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
@@ -78,7 +78,7 @@ test("native renewal tools retain complete reviewed text and guards without leak
       if (["draft.update", "cancel", "confirm"].includes(suffix)) assertSessionRenewalDraftVersion(state, input);
       return { ok: true, available: true, renewal: state, viewerScope: "private-viewer" };
     }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "renewal", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });

@@ -10,8 +10,9 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService as createTerminalsService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { ActionProvider } from "@jskit-ai/kernel/server/actions";
+import { Vibe64ActionPolicyProvider } from "@local/vibe64-core/server/Vibe64ActionPolicyProvider";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
   createCapabilityRuntime,
@@ -279,6 +280,7 @@ async function startAccountsFeature({
   const runtime = createCapabilityRuntime({
     providers: [
       ActionProvider,
+      Vibe64ActionPolicyProvider,
       Vibe64AccountsFeature,
       observer
     ],
@@ -2786,7 +2788,7 @@ test("Colleague routing tools inspect, search, preview and save through native o
     const f = await routingAccountsFixture(root);
     await f.store.write({ owner: f.assignments, nonOwner: { colleague: f.pickle, fix: { follows: "colleague" } } }, 0);
     let actor = f.owner;
-    const actions = createActionCatalogue({ events: { async publish() {} } });
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish() {} } });
     actions.register({ contributorId: "accounts", domain: "accounts", actions: createAccountsActions({ accounts: f.service })
       .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => actor,

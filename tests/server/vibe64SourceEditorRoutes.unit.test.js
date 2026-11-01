@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { registerRoutes as registerSourceRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
@@ -24,7 +24,7 @@ import {
 const localUser = { username: "local", role: "owner" };
 
 function registerRoutes(http, options, authorizeProject = async () => {}) {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions(options).map((action) => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...action
   })) });

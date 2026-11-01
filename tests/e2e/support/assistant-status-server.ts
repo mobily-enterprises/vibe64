@@ -16,7 +16,7 @@ import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
 import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
 import { createConversationRuntime, createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
 import { normalizeConversationTurn } from "@jskit-ai/assistant-core/shared/conversation";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { requestBody, requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
 import { createSessionChangedPublisher, vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { PROJECT_WATCH } from "@local/vibe64-sessions/shared/project-watch";
@@ -99,7 +99,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const applicationEvents = new EventEmitter();
   const sockets = new Set<Socket>();
   const app = Fastify({ routerOptions: { maxParamLength: 1024 } });
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const http = createCapabilityHttpRuntime({ fastify: app, actions });
   const owner = { uid: 42, username: "owner", email: "owner@example.com", role: "owner" };
   const id = mainConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId });

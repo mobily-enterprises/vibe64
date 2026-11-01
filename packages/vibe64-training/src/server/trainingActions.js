@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { boundedTrainingResult } from "./errors.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
 
@@ -142,6 +142,35 @@ const prepared = result => {
 };
 
 /**
+ * Runs one Training action for the signed-in learner, with its result bounded.
+ * A refusal the person can act on reports its owner's own message; any other
+ * failure reports the attempt-preserving operation error.
+ * @param {string} name the action's name after "vibe64.training."
+ * @param {(input: object, actor: object, context: object) => Promise<object>} operation
+ * @param {object} input
+ * @param {object} context
+ */
+async function runTrainingOperation(name, operation, input, context) {
+  const actor = authenticatedVibe64User(context);
+  if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
+  try {
+    return boundedResult(await operation(input, actor, context));
+  } catch (cause) {
+    if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
+    // Course creation reports the catalogue owner's own corrective message.
+    if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
+    // Lesson refusals (a preview course, another lesson in progress with
+    // its details, an incomplete lesson, the archive limit or a pinned
+    // session) report their own message; nothing was changed.
+    if (/^lesson\./u.test(name) && cause.statusCode < 500 &&
+        /^(VIBE64_TRAINING_(COURSE_PREVIEW|LESSON_|PRACTICE_|ATTEMPT_MISSING|STATE_REVISION)|vibe64_project_pinned)/u.test(cause.code || "")) throw cause;
+    // Catalogue reads and installs report their owner's corrective message.
+    if (["available.list", "course.install"].includes(name)) throw installError(cause);
+    throw operationError(cause);
+  }
+}
+
+/**
  * What each Training action does for the signed-in learner: course reads and
  * installs, the learner's state and Learn mode, and starting, resuming,
  * restarting or finishing a lesson. An absent optional collaborator answers
@@ -185,20 +214,20 @@ function createTrainingOperations({ catalogue, learners, content, exercises, cou
   // readable-check: allow method-probe - optional operation: a learner store without Learn mode answers that it is unavailable
   const modeAvailable = typeof learners.readLearningMode === "function";
   const learningModeView = mode => mode ? pick(mode, ["on", "currentAttemptId", "lessonCode", "lessonTitle", "lessonStage", "practiceSlug"]) : { on: false };
-  const notifyLearner = async (actor, attemptId, reason = "lesson") => {
-    await publishLearnerChanged({ actor, attemptId, reason });
+  const notifyLearner = async (actor, lessonAttemptId, reason = "lesson") => {
+    await publishLearnerChanged({ actor, attemptId: lessonAttemptId, reason });
   };
   // Starting, restarting, resuming or finishing a lesson changes the current
   // lesson. A failure may already have changed it (the mode set, the old
   // attempt archived), so every tab rereads either way.
-  const announced = async (actor, operation, attemptId = "") => {
+  const announced = async (actor, operation, lessonAttemptId = "") => {
     let result;
     try { result = await operation(); }
     catch (error) {
-      await notifyLearner(actor, attemptId).catch(() => {});
+      await notifyLearner(actor, lessonAttemptId).catch(() => {});
       throw error;
     }
-    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || attemptId);
+    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || lessonAttemptId);
     return result;
   };
 
@@ -341,12 +370,12 @@ function createTrainingOperations({ catalogue, learners, content, exercises, cou
     return { ok: true, available: true, changed: result.closed === true };
   }
 
-  return {
+  return Object.freeze({
     listCourses, listAvailableCourses, installCourse, readLearning, readLearningMode,
     // readable-check: allow setter-seam - not a slot: setLearningMode switches one learner's Learn mode
     setLearningMode,
     createCourse, startLesson, resumeLesson, restartLesson, finishLesson
-  };
+  });
 }
 
 /**
@@ -363,67 +392,104 @@ function createTrainingOperations({ catalogue, learners, content, exercises, cou
 function createTrainingActions({ catalogue, learners, content, exercises, courseInstaller, learningSpace, publishLearnerChanged }) {
   const operations = createTrainingOperations({ catalogue, learners, content, exercises, courseInstaller, learningSpace, publishLearnerChanged });
 
-  const definition = (name, fields, description, execute) => withVibe64ActionContext({
-    id: `vibe64.training.${name}`, version: 1,
-    kind: name.endsWith("read") || name.endsWith("list") ? "query" : "command",
-    input: { mode: "create", schema: createSchema(fields) }, output: null,
-    idempotency: ["lesson.start", "lesson.resume", "lesson.restart", "lesson.finish", "learning-mode.set", "course.install"].includes(name) ? "domain_native" : "none",
-    extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput,
-      ...(name === "learning.read" ? { transformResult(result) {
+  return Object.freeze([
+    Object.freeze({
+      id: "vibe64.training.courses.list", version: 1, kind: "query",
+      input: { mode: "create", schema: createSchema({}) }, output: null, idempotency: "none",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course. orientation, when set, is the course's studio lesson that Take the tour starts. Lessons this person cannot take here (they need screens this installation does not have, or not for them) are left out, as is a topic left without lessons. unusableLessons names installed lessons this version of Vibe64 cannot teach (a newer course release or Vibe64 fixes them); they cannot be started." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("courses.list", operations.listCourses, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.available.list", version: 1, kind: "query",
+      input: { mode: "create", schema: createSchema({}) }, output: null, idempotency: "none",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Read the official course catalogue this server can install from: its topics (catalogue domains) and their courses, each with release, status, lesson count and whether it is installed and enabled here. When updateFrom is set, this listed release is a newer release of a course installed here at that release; course.install of it is the Update. This is read-only and installs nothing. A course that is not installed cannot be started until it is installed." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("available.list", operations.listAvailableCourses, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.course.install", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({
+        courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
+        release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Install and enable one exact course release from the official catalogue only after the person's direct request or accepted offer. Read available.list first and use its exact courseId and release. The server downloads each pinned topic at its exact commit, verifies it byte for byte against the catalogue lock and enables the course; it runs no course code and starts no lesson. Repeating it for an installed, enabled course changes nothing. A release disabled on this server (available.list installed: disabled) is refused for everyone, the owner included: installing never enables it again, and only the server's operator can. When available.list shows updateFrom, this same action is the course Update: the newer release is installed and enabled and the older releases of that course, listed in retired, are removed from the installed courses, freeing their places; saved lessons keep their pinned lesson content and can still be resumed, and lesson content and progress are not deleted. The server keeps at most 16 installed course releases; only the server's operator can remove one to free a place. Courses from other sources remain an owner operation outside Vibe64." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("course.install", operations.installCourse, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.learning.read", version: 1, kind: "query",
+      input: { mode: "create", schema: createSchema({}) }, output: null, idempotency: "none",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Read this signed-in learner's saved lessons and verified progress: the active attempt, ended attempts in history, every retained attempt in attempts (with practiceSlug when it has a practice project) and per-lesson completion in lessonProgress. This is read-only: no reservation, practice project or repair is performed. A saved preparation phase is an earlier checkpoint, not proof that setup is still running or that Preview is ready; use lesson.resume with the same attemptId to recheck an exercise lesson's setup. Read lesson.read for the active lesson's steps and step results before teaching it.", transformResult(result) {
         // Own identity binds the browser's lesson requests (L), never the model's tool result.
         const visible = { ...result };
         delete visible.learnerId;
         return visible;
-      } } : {})
-    } },
-    async execute(input, context) {
-      const actor = authenticatedVibe64User(context);
-      if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
-      try {
-        return boundedResult(await execute(input, actor, context));
-      } catch (cause) {
-        if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
-        // Course creation reports the catalogue owner's own corrective message.
-        if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
-        // Lesson refusals (a preview course, another lesson in progress with
-        // its details, an incomplete lesson, the archive limit or a pinned
-        // session) report their own message; nothing was changed.
-        if (/^lesson\./u.test(name) && cause.statusCode < 500 &&
-            /^(VIBE64_TRAINING_(COURSE_PREVIEW|LESSON_|PRACTICE_|ATTEMPT_MISSING|STATE_REVISION)|vibe64_project_pinned)/u.test(cause.code || "")) throw cause;
-        // Catalogue reads and installs report their owner's corrective message.
-        if (["available.list", "course.install"].includes(name)) throw installError(cause);
-        throw operationError(cause);
-      }
-    }
-  }, { projectScoped: false, ...(name === "courses.create" ? { ownerRequired: true } : {}) });
-
-  return Object.freeze([
-    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course. orientation, when set, is the course's studio lesson that Take the tour starts. Lessons this person cannot take here (they need screens this installation does not have, or not for them) are left out, as is a topic left without lessons. unusableLessons names installed lessons this version of Vibe64 cannot teach (a newer course release or Vibe64 fixes them); they cannot be started.", (_input, actor) => operations.listCourses(_input, actor)),
-    definition("available.list", {}, "Read the official course catalogue this server can install from: its topics (catalogue domains) and their courses, each with release, status, lesson count and whether it is installed and enabled here. When updateFrom is set, this listed release is a newer release of a course installed here at that release; course.install of it is the Update. This is read-only and installs nothing. A course that is not installed cannot be started until it is installed.", () => operations.listAvailableCourses()),
-    definition("course.install", {
-      courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
-      release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
-    }, "Install and enable one exact course release from the official catalogue only after the person's direct request or accepted offer. Read available.list first and use its exact courseId and release. The server downloads each pinned topic at its exact commit, verifies it byte for byte against the catalogue lock and enables the course; it runs no course code and starts no lesson. Repeating it for an installed, enabled course changes nothing. A release disabled on this server (available.list installed: disabled) is refused for everyone, the owner included: installing never enables it again, and only the server's operator can. When available.list shows updateFrom, this same action is the course Update: the newer release is installed and enabled and the older releases of that course, listed in retired, are removed from the installed courses, freeing their places; saved lessons keep their pinned lesson content and can still be resumed, and lesson content and progress are not deleted. The server keeps at most 16 installed course releases; only the server's operator can remove one to free a place. Courses from other sources remain an owner operation outside Vibe64.", (input) => operations.installCourse(input)),
-    definition("learning.read", {}, "Read this signed-in learner's saved lessons and verified progress: the active attempt, ended attempts in history, every retained attempt in attempts (with practiceSlug when it has a practice project) and per-lesson completion in lessonProgress. This is read-only: no reservation, practice project or repair is performed. A saved preparation phase is an earlier checkpoint, not proof that setup is still running or that Preview is ready; use lesson.resume with the same attemptId to recheck an exercise lesson's setup. Read lesson.read for the active lesson's steps and step results before teaching it.", (_input, actor) => operations.readLearning(_input, actor)),
-    definition("learning-mode.read", {}, "Read whether this signed-in person is in Learn mode or Develop mode. Vibe64 has two modes with the same screens: Develop works on the person's real projects; Learn works only on their practice projects, with Colleague as the teacher. on is true in Learn mode; currentAttemptId, lessonCode and lessonTitle name the lesson in progress (empty when there is none, which is normal in Learn mode), lessonStage where it runs (studio: the screens outside any project; project: its practice project) and practiceSlug its practice project (empty while it is being prepared or when the lesson has none). Switching mode never ends or changes a lesson. This is read-only.", (_input, actor) => operations.readLearningMode(_input, actor)),
-    definition("learning-mode.set", { on: { type: "boolean", required: true } }, "Switch this signed-in person between Learn mode (on: true) and Develop mode (on: false), only after the person's direct request or accepted offer; pressing L does the same. Nothing is ended or archived: the lesson in progress stays paused with its practice project and its teacher conversation, and comes back when they return to Learn. Setting the mode it already has changes nothing.", (input, actor) => operations.setLearningMode(input, actor)),
-    definition("courses.create", {
-      title: { ...text, noTrim: false, maxLength: 120 },
-      topics: { type: "array", required: true, maxLength: 32, items: { type: "object", required: true, schema: createSchema({
-        topicId: { ...text, maxLength: 64 }, release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
-      }) } },
-      expectedRevision: revision
-    }, "Create a custom course only after the workspace owner's direct request or accepted offer. Read courses.list first and use its revision; choose whole topics, in learning order, from enabled released courses. The course is pinned to those exact installed topic releases and enabled through the original catalogue owner. It never changes lesson content, starts a lesson or grades anything; saved lesson progress counts in every course containing the lesson. Only the workspace owner may create one.", (input) => operations.createCourse(input)),
-    definition("lesson.start", {
-      courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
-      release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-      lessonCode: id, requestId, expectedRevision: revision,
-      archiveCurrent: { type: "boolean", required: false }
-    }, "Start a lesson only after the person's direct request or accepted offer. First read courses.list for an enabled exact release/lesson and learning.read for the current revision; do not use a course result from an earlier turn. Keep the same request ID on an uncertain retry, without changing its selected release. Only one lesson can be in progress: when another lesson is in progress the start is refused with VIBE64_TRAINING_LESSON_IN_PROGRESS and that lesson's title; tell the person, and only after they confirm archiving it repeat with archiveCurrent: true (its project and conversation are archived, its results kept). Starting the lesson already in progress returns it. A start switches the person to Learn mode. The host reserves the exact actor-owned attempt and prepares a practice project only when the lesson declares an exercise; preparation does not mean Preview is running or that any step passed. If the saved preparation is preparing, the host records ready by itself when that Workspace setup run succeeds; use same-attempt lesson.resume to recheck it. After success, read lesson.read for the returned attempt. An ended request replay returns its original retained attempt without preparing or reactivating it. An unavailable host is not a successful start.", (input, actor) => operations.startLesson(input, actor)),
-    definition("lesson.resume", { attemptId }, "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise has no practice project, session or preparation phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass.", (input, actor) => operations.resumeLesson(input, actor)),
-    definition("lesson.restart", { attemptId, requestId, expectedRevision: revision,
-      confirmed: { type: "boolean", required: false } }, "Restart the lesson in progress only after the person asked for it and then confirmed restarting this exact lesson in the conversation; pass confirmed: true only then, or the restart is refused with VIBE64_TRAINING_LESSON_UNCONFIRMED and nothing changes. Name the lesson and say what is kept. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing.", (input, actor, context) => operations.restartLesson(input, actor, context)),
-    definition("lesson.finish", { attemptId, expectedRevision: revision }, "Finish the lesson in progress only after the person asked for it, and only once every required step has passed (lesson.read completion); otherwise it is refused and nothing changes. Use its exact attemptId and the current revision from learning.read; a retry of the same attempt resumes it. The lesson counts as completed for good, and the attempt is archived as one bundle: its record, its practice project (if the lesson has one) and its teacher conversation. A pinned session or a full archive (20 lessons) refuses and changes nothing.", (input, actor) => operations.finishLesson(input, actor))
+      } }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("learning.read", operations.readLearning, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.learning-mode.read", version: 1, kind: "query",
+      input: { mode: "create", schema: createSchema({}) }, output: null, idempotency: "none",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Read whether this signed-in person is in Learn mode or Develop mode. Vibe64 has two modes with the same screens: Develop works on the person's real projects; Learn works only on their practice projects, with Colleague as the teacher. on is true in Learn mode; currentAttemptId, lessonCode and lessonTitle name the lesson in progress (empty when there is none, which is normal in Learn mode), lessonStage where it runs (studio: the screens outside any project; project: its practice project) and practiceSlug its practice project (empty while it is being prepared or when the lesson has none). Switching mode never ends or changes a lesson. This is read-only." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("learning-mode.read", operations.readLearningMode, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.learning-mode.set", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({ on: { type: "boolean", required: true } }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Switch this signed-in person between Learn mode (on: true) and Develop mode (on: false), only after the person's direct request or accepted offer; pressing L does the same. Nothing is ended or archived: the lesson in progress stays paused with its practice project and its teacher conversation, and comes back when they return to Learn. Setting the mode it already has changes nothing." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("learning-mode.set", operations.setLearningMode, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.courses.create", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({
+        title: { ...text, noTrim: false, maxLength: 120 },
+        topics: { type: "array", required: true, maxLength: 32, items: { type: "object", required: true, schema: createSchema({
+          topicId: { ...text, maxLength: 64 }, release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        }) } },
+        expectedRevision: revision
+      }) }, output: null, idempotency: "none",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Create a custom course only after the workspace owner's direct request or accepted offer. Read courses.list first and use its revision; choose whole topics, in learning order, from enabled released courses. The course is pinned to those exact installed topic releases and enabled through the original catalogue owner. It never changes lesson content, starts a lesson or grades anything; saved lesson progress counts in every course containing the lesson. Only the workspace owner may create one." }, vibe64: WORKSPACE_OWNER_OPERATION },
+      execute: (input, context) => runTrainingOperation("courses.create", operations.createCourse, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.lesson.start", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({
+        courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
+        release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        lessonCode: id, requestId, expectedRevision: revision,
+        archiveCurrent: { type: "boolean", required: false }
+      }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Start a lesson only after the person's direct request or accepted offer. First read courses.list for an enabled exact release/lesson and learning.read for the current revision; do not use a course result from an earlier turn. Keep the same request ID on an uncertain retry, without changing its selected release. Only one lesson can be in progress: when another lesson is in progress the start is refused with VIBE64_TRAINING_LESSON_IN_PROGRESS and that lesson's title; tell the person, and only after they confirm archiving it repeat with archiveCurrent: true (its project and conversation are archived, its results kept). Starting the lesson already in progress returns it. A start switches the person to Learn mode. The host reserves the exact actor-owned attempt and prepares a practice project only when the lesson declares an exercise; preparation does not mean Preview is running or that any step passed. If the saved preparation is preparing, the host records ready by itself when that Workspace setup run succeeds; use same-attempt lesson.resume to recheck it. After success, read lesson.read for the returned attempt. An ended request replay returns its original retained attempt without preparing or reactivating it. An unavailable host is not a successful start." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("lesson.start", operations.startLesson, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.lesson.resume", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({ attemptId }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise has no practice project, session or preparation phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("lesson.resume", operations.resumeLesson, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.lesson.restart", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({ attemptId, requestId, expectedRevision: revision,
+        confirmed: { type: "boolean", required: false } }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Restart the lesson in progress only after the person asked for it and then confirmed restarting this exact lesson in the conversation; pass confirmed: true only then, or the restart is refused with VIBE64_TRAINING_LESSON_UNCONFIRMED and nothing changes. Name the lesson and say what is kept. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("lesson.restart", operations.restartLesson, input, context)
+    }),
+    Object.freeze({
+      id: "vibe64.training.lesson.finish", version: 1, kind: "command",
+      input: { mode: "create", schema: createSchema({ attemptId, expectedRevision: revision }) }, output: null, idempotency: "domain_native",
+      extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
+        description: "Finish the lesson in progress only after the person asked for it, and only once every required step has passed (lesson.read completion); otherwise it is refused and nothing changes. Use its exact attemptId and the current revision from learning.read; a retry of the same attempt resumes it. The lesson counts as completed for good, and the attempt is archived as one bundle: its record, its practice project (if the lesson has one) and its teacher conversation. A pinned session or a full archive (20 lessons) refuses and changes nothing." }, vibe64: WORKSPACE_OPERATION },
+      execute: (input, context) => runTrainingOperation("lesson.finish", operations.finishLesson, input, context)
+    })
   ]);
 }
 

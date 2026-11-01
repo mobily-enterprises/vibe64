@@ -1,5 +1,5 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
-import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { isTrustedStudioWebSocketRequest, requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
 import { conversationTransportSchema } from "./conversationTransportSchema.js";
@@ -48,7 +48,8 @@ const Vibe64ConversationsProvider = defineFeature({
         },
         wrapAction(definition) {
           const { permission, execute, ...action } = definition;
-          return withVibe64ActionContext({ ...action,
+          return Object.freeze({ ...action,
+            extensions: { ...action.extensions, vibe64: WORKSPACE_OPERATION },
             execute(input, context, deps) {
               if (definition.id === subscribeActionId) {
                 const request = context.requestMeta?.request;
@@ -58,7 +59,7 @@ const Vibe64ConversationsProvider = defineFeature({
               }
               return execute(input, context, deps);
             }
-          }, { projectScoped: false });
+          });
         }
       }
     };

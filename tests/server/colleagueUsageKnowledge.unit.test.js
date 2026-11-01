@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { createColleagueUsageKnowledge, maxGuideCharacters } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 
@@ -102,7 +102,7 @@ test("an oversized, untitled or unreadable guide is listed as unavailable withou
 test("usage actions share native authentication, require no project and validate all inputs", async t => {
   const { directory, usage } = await fixture(t);
   await writeFile(path.join(directory, "preview.md"), "# Preview\n\nChoose Run.\n");
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   let user = { uid: "member-1", username: "member", role: "member" };
   registerVibe64ActionContext(actions, { resolveUser: async () => user,
     authorizeProject: () => { assert.fail("Usage lookup must not open or authorize a project."); } });

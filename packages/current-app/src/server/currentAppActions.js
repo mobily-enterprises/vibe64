@@ -1,4 +1,4 @@
-import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import {
   currentAppQueryInputValidator
 } from "./inputSchemas.js";
@@ -12,13 +12,13 @@ const ACTION_READ_CURRENT_APP = "vibe64.current-app.read";
  * @param {CurrentAppService} dependencies.currentApp
  */
 function createCurrentAppActions({ currentApp }) {
-  return Object.freeze([withVibe64ActionContext({
+  return Object.freeze([Object.freeze({
     id: ACTION_READ_CURRENT_APP,
     version: 1,
     kind: "query",
     input: currentAppQueryInputValidator,
     output: null,
-    extensions: { assistant: { exclude: true } },
+    extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
     idempotency: "none",
     execute: (input) => currentApp.inspectCurrentApp(input)
   })]);

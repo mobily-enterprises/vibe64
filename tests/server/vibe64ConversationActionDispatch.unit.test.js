@@ -7,7 +7,7 @@ import { createMainBrowserConversations } from "../../packages/vibe64-sessions/s
 import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
 import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -27,7 +27,7 @@ test("standalone Main and temporary conversations use the selected local project
     });
     configure(false);
     const app = Fastify();
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const sends = [];
     actions.register({ contributorId: "local-goals", domain: "terminals", actions:
       createTerminalActions({ terminals: { requestMainGoalControl } }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
@@ -102,7 +102,7 @@ test("standalone Main and temporary conversations use the selected local project
 });
 
 test("the existing assistant catalogue is actor-authorized without a project or session", async () => {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const user = { username: "member", role: "member" };
   const calls = [];
   let signedIn = true;
@@ -128,7 +128,7 @@ test("the existing assistant catalogue is actor-authorized without a project or 
 test("conversation HTTP handlers and automation execute the same authorized actions", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const user = { username: "member", role: "member" };
     let allowed = true;
     const calls = [];
@@ -233,7 +233,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
 test("conversation facades and subscription checks preserve real Fastify request headers", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
     const app = Fastify();
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const user = { username: "cookie-owner", uid: 42, role: "owner" };
     const cookie = "fixture-session=owner-session";
     let signedIn = true;
@@ -302,7 +302,7 @@ test("conversation facades and subscription checks preserve real Fastify request
 
 test("browser conversation methods retain fresh project context through delayed handle operations", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ projectContext, slug }) => {
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     let user = { username: "owner", uid: 42, role: "owner" };
     let allowed = true;
     const calls = [];

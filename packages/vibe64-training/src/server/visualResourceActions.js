@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { pinnedLessonKey } from "./installedContent.js";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
@@ -55,7 +55,7 @@ async function readLessonVisual({ learners, content }, context, { attemptId, vis
  * @param {TrainingService["content"]} dependencies.content
  */
 function createTrainingVisualResourceActions({ learners, content }) {
-  return Object.freeze([withVibe64ActionContext({
+  return Object.freeze([Object.freeze({
     id: TRAINING_VISUAL_RESOURCE_ACTION, version: 1, kind: "query", idempotency: "none",
     channels: ["api"], surfaces: ["app"],
     input: { mode: "create", schema: createSchema({
@@ -64,9 +64,9 @@ function createTrainingVisualResourceActions({ learners, content }) {
       visualId: { type: "string", required: true, noTrim: true, maxLength: 64,
         pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" }
     }) }, output: null,
-    extensions: { assistant: { exclude: true } },
+    extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
     execute: (input, context) => readLessonVisual({ learners, content }, context, input)
-  }, { projectScoped: false })]);
+  })]);
 }
 
 export { TRAINING_VISUAL_RESOURCE_ACTION, createTrainingVisualResourceActions };

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -14,7 +14,7 @@ test("branch tools bound discovery, preserve exact source reviews and reject cal
     const calls = [];
     const actor = { username: "owner", role: "owner" };
     const branches = Array.from({ length: 23 }, (_, i) => ({ name: `branch-${i}`, commit: "a".repeat(40), private: "private-branch" }));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "branches", domain: "project", actions: [
       ...createProjectActions({ project: { async repositoryBranches(input) {
         calls.push({ input, context: currentProjectRequestContext() });

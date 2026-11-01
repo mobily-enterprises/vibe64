@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ActionProvider } from "@jskit-ai/kernel/server/actions";
+import { Vibe64ActionPolicyProvider } from "@local/vibe64-core/server/Vibe64ActionPolicyProvider";
 import {
   createCapabilityRuntime,
   defineProvider
@@ -56,6 +57,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
   const runtime = createCapabilityRuntime({
     providers: [
       ActionProvider,
+      Vibe64ActionPolicyProvider,
       actionObserver,
       CurrentAppProvider,
       StudioHealthProvider,

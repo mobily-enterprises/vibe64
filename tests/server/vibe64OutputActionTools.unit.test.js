@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
@@ -38,7 +38,7 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
       if (method === "outputTargetStatus" && args[1].outputTargetId) return { ...status, outputTargets: [target], requestedOutputTargetId: "app" };
       return result;
     }]));
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "outputs", domain: "terminals", actions: createTerminalActions({ terminals }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });

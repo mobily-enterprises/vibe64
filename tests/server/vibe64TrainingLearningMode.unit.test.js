@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
@@ -50,7 +50,7 @@ async function fixture(t) {
 function actionsFixture(f, { exercises = null } = {}) {
   const published = [];
   const auth = { user: ALICE };
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const definitions = createTrainingActions({ catalogue: { readCatalogue() { throw new Error("unused"); } }, learners: f.learners, exercises,
     publishLearnerChanged: createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event.realtime.payload); } }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({

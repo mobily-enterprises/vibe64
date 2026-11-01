@@ -1,4 +1,4 @@
-import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
 import { publishingTool } from "./assistantContracts.js";
 import {
@@ -61,20 +61,9 @@ const ACTIONS = Object.freeze({
 // live here.
 const PERSON_ONLY = Object.freeze(["api"]);
 
-function action({ id, input, execute, kind = "command", assistant = null, channels = null }) {
-  return withVibe64ActionContext({
-    events: [],
-    execute,
-    extensions: assistant ? { assistant } : {},
-    id,
-    idempotency: kind === "query" ? "none" : "optional",
-    input,
-    kind,
-    output: null,
-    version: 1,
-    ...(channels ? { channels } : {})
-  });
-}
+// Every publication operation runs in its project.
+const PUBLISHING_QUERY = Object.freeze({ version: 1, kind: "query", output: null, idempotency: "none", events: [] });
+const PUBLISHING_COMMAND = Object.freeze({ version: 1, kind: "command", output: null, idempotency: "optional", events: [] });
 
 /**
  * @param {object} dependencies
@@ -82,37 +71,241 @@ function action({ id, input, execute, kind = "command", assistant = null, channe
  */
 function createPublishingActions({ publishing }) {
   return Object.freeze([
-    action({ id: ACTIONS.STATE_READ, input: publishingStateInput, kind: "query", execute: () => publishing.readState(), assistant: publishingTool("state.read") }),
-    action({ id: ACTIONS.RELEASE_SUGGEST, input: publishingStateInput, kind: "query", execute: () => publishing.suggestRelease() }),
-    action({ id: ACTIONS.RELEASE_PREPARE, input: publishingPrepareInput, execute: (input) => publishing.prepareRelease(input), assistant: publishingTool("release.prepare") }),
-    action({ id: ACTIONS.TARGET_ADD, input: publishingTargetAddInput, execute: (input) => publishing.addTarget(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.TARGET_UPDATE, input: publishingTargetUpdateInput, execute: (input) => publishing.updateTarget(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.TARGET_REMOVE, input: publishingTargetInput, execute: (input) => publishing.removeTarget(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.PLAN_READ, input: publishingPlanInput, kind: "query", execute: (input) => publishing.plan(input), assistant: publishingTool("plan.read") }),
-    action({ id: ACTIONS.CHECKS_RUN, input: publishingStateInput, execute: () => publishing.runChecks() }),
-    action({ id: ACTIONS.BASELINE_PUSH, input: publishingStateInput, execute: () => publishing.pushSavedWork(), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.DRYRUN_RUN, input: publishingPlanHashInput, execute: (input) => publishing.dryRun(input), assistant: publishingTool("dryrun.run") }),
-    action({ id: ACTIONS.PUBLISH_RUN, input: publishingPlanHashInput, execute: (input) => publishing.requestPublish(input), assistant: publishingTool("publish.run") }),
-    action({ id: ACTIONS.CONFIRMATION_DISMISS, input: publishingStateInput, execute: () => publishing.dismissRequest(), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.CONFIRMATION_OPEN, input: publishingPlanHashInput, execute: (input, context) => publishing.openConfirmation(input, context), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.RELEASE_CONFIRM, input: publishingConfirmInput, execute: (input, context) => publishing.confirmRelease(input, context), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.HISTORY_LIST, input: publishingHistoryInput, kind: "query", execute: (input) => publishing.listHistory(input), assistant: publishingTool("history.list") }),
-    action({ id: ACTIONS.RELEASE_READ, input: publishingReleaseInput, kind: "query", execute: (input) => publishing.readRelease(input) }),
-    action({ id: ACTIONS.LOGS_READ, input: publishingReleaseInput, kind: "query", execute: (input) => publishing.readLogs(input), assistant: publishingTool("logs.read") }),
-    action({ id: ACTIONS.KEYS_CREATE, input: publishingPassphraseInput, execute: (input) => publishing.createKeys(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.KEYS_UNLOCK, input: publishingPassphraseInput, execute: (input) => publishing.unlockKeys(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.KEYS_LOCK, input: publishingStateInput, execute: () => publishing.lockKeys() }),
-    action({ id: ACTIONS.ACCOUNT_ADD, input: publishingAccountAddInput, execute: (input) => publishing.addAccount(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.ACCOUNT_REMOVE, input: publishingAccountInput, execute: (input) => publishing.removeAccount(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.RECOVERY_KIT_CREATE, input: publishingPassphraseInput, execute: (input) => publishing.recoveryKit(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.RECOVERY_KIT_RESTORE, input: publishingRecoveryRestoreInput, execute: (input) => publishing.restoreRecoveryKit(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.INSTALL_KEY_CREATE, input: publishingTargetInput, execute: (input) => publishing.createInstallKey(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.LICENCE_READ, input: publishingStateInput, kind: "query", execute: () => publishing.toolchainLicence() }),
-    action({ id: ACTIONS.LICENCE_ACCEPT, input: publishingLicenceAcceptInput, execute: (input) => publishing.acceptToolchainLicence(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.ANDROID_INSTALL, input: publishingStateInput, execute: () => publishing.installAndroidToolchain(), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.PYTHON_INSTALL, input: publishingStateInput, execute: () => publishing.installPythonTools(), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.SHARE_START, input: publishingShareInput, execute: (input) => publishing.shareInstall(input), channels: PERSON_ONLY }),
-    action({ id: ACTIONS.SHARE_STOP, input: publishingStateInput, execute: () => publishing.stopShare() })
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.STATE_READ,
+      input: publishingStateInput,
+      extensions: { assistant: publishingTool("state.read"), vibe64: PROJECT_OPERATION },
+      execute: () => publishing.readState()
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.RELEASE_SUGGEST,
+      input: publishingStateInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.suggestRelease()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.RELEASE_PREPARE,
+      input: publishingPrepareInput,
+      extensions: { assistant: publishingTool("release.prepare"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.prepareRelease(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.TARGET_ADD,
+      input: publishingTargetAddInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.addTarget(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.TARGET_UPDATE,
+      input: publishingTargetUpdateInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.updateTarget(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.TARGET_REMOVE,
+      input: publishingTargetInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.removeTarget(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.PLAN_READ,
+      input: publishingPlanInput,
+      extensions: { assistant: publishingTool("plan.read"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.plan(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.CHECKS_RUN,
+      input: publishingStateInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.runChecks()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.BASELINE_PUSH,
+      input: publishingStateInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.pushSavedWork()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.DRYRUN_RUN,
+      input: publishingPlanHashInput,
+      extensions: { assistant: publishingTool("dryrun.run"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.dryRun(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.PUBLISH_RUN,
+      input: publishingPlanHashInput,
+      extensions: { assistant: publishingTool("publish.run"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.requestPublish(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.CONFIRMATION_DISMISS,
+      input: publishingStateInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.dismissRequest()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.CONFIRMATION_OPEN,
+      input: publishingPlanHashInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input, context) => publishing.openConfirmation(input, context)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.RELEASE_CONFIRM,
+      input: publishingConfirmInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input, context) => publishing.confirmRelease(input, context)
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.HISTORY_LIST,
+      input: publishingHistoryInput,
+      extensions: { assistant: publishingTool("history.list"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.listHistory(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.RELEASE_READ,
+      input: publishingReleaseInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.readRelease(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.LOGS_READ,
+      input: publishingReleaseInput,
+      extensions: { assistant: publishingTool("logs.read"), vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.readLogs(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.KEYS_CREATE,
+      input: publishingPassphraseInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.createKeys(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.KEYS_UNLOCK,
+      input: publishingPassphraseInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.unlockKeys(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.KEYS_LOCK,
+      input: publishingStateInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.lockKeys()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.ACCOUNT_ADD,
+      input: publishingAccountAddInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.addAccount(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.ACCOUNT_REMOVE,
+      input: publishingAccountInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.removeAccount(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.RECOVERY_KIT_CREATE,
+      input: publishingPassphraseInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.recoveryKit(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.RECOVERY_KIT_RESTORE,
+      input: publishingRecoveryRestoreInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.restoreRecoveryKit(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.INSTALL_KEY_CREATE,
+      input: publishingTargetInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.createInstallKey(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_QUERY,
+      id: ACTIONS.LICENCE_READ,
+      input: publishingStateInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.toolchainLicence()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.LICENCE_ACCEPT,
+      input: publishingLicenceAcceptInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.acceptToolchainLicence(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.ANDROID_INSTALL,
+      input: publishingStateInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.installAndroidToolchain()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.PYTHON_INSTALL,
+      input: publishingStateInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.installPythonTools()
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.SHARE_START,
+      input: publishingShareInput,
+      channels: PERSON_ONLY,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: (input) => publishing.shareInstall(input)
+    }),
+    Object.freeze({
+      ...PUBLISHING_COMMAND,
+      id: ACTIONS.SHARE_STOP,
+      input: publishingStateInput,
+      extensions: { vibe64: PROJECT_OPERATION },
+      execute: () => publishing.stopShare()
+    })
   ]);
 }
 

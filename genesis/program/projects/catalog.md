@@ -43,6 +43,8 @@ workspace.
 - `packages/vibe64-core/src/server/projectRequestContext.js`
 - `packages/vibe64-core/src/server/practiceContext.js`
 - `packages/vibe64-core/src/server/actionContext.js`
+- `packages/vibe64-core/src/server/Vibe64ActionPolicyProvider.js`
+- `tests/server/vibe64ActionPolicy.unit.test.js`
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-core/src/server/teamAiGate.js`
 - `packages/vibe64-accounts/src/server/teamAiReadiness.js`
@@ -342,10 +344,21 @@ request, is `vibe64_practice_project_deleted` (404). Work without a person
 (agent turns after the browser closes, maintenance, archive) is admitted as the
 marker's learner. Admission reads the marker, not an attempt. A local host
 supplies the person of its local transport through `registerPracticeRequestActor`.
-An action that resolves its own project (`withVibe64ActionContext` without a
-host-resolved project) keeps the person's original request, so a local
-browser action is admitted only for that person's own practice project; only an
-action with no request runs as the marker's learner.
+Each Vibe64 action declares its scope as data, `extensions.vibe64`
+(`PROJECT_OPERATION`, `PROJECT_OWNER_OPERATION`, `WORKSPACE_OPERATION` or
+`WORKSPACE_OWNER_OPERATION` from core `actionContext.js`), and core
+`Vibe64ActionPolicyProvider` supplies the one rule that applies it to JSKIT's
+action catalogue as `runtime.actions.policy`. At registration the rule removes
+`vibe64User` from the input and gives a project action an optional
+`projectSlug`; at each execution, after JSKIT's checks, it refuses a non-owner
+an owner operation (`vibe64_owner_required`, except a standalone local owner),
+replaces any transport user with the authenticated one, resolves and checks the
+project slug (`vibe64_action_project_mismatch`), applies the Colleague mode and
+team AI gates, and runs the action inside the project request context.
+An action that resolves its own project (the policy without a host-resolved
+project) keeps the person's original request, so a local browser action is
+admitted only for that person's own practice project; only an action with no
+request runs as the marker's learner.
 When the learning space has no such project, only a pre-existing project of that
 name (the explicit local project or `<projectsRoot>/<slug>`) opens.
 

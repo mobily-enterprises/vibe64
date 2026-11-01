@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { normalizeRepositoryUpdateCheck } from "@local/vibe64-core/shared";
 import { runCaptureCommand } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { createProjectWatchActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -296,7 +296,7 @@ test("a failed probe is shown once, retried every 60 s, and cleared by a recheck
 
 test("a browser watch is authorized as an action and released with its connection", async () => {
   let allowed = true;
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
     resolveUser: async () => ({ uid: 42, role: "member" }),
@@ -368,7 +368,7 @@ test("a starting agent turn wakes its project's probe", async () => {
   const listeners = [];
   const probes = [];
   const { repositoryUpdates } = await Vibe64RepositoryUpdatesProvider.setup({
-    actionCatalogue: createActionCatalogue(),
+    actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }),
     events: { register: (listener) => listeners.push(listener) },
     realtime: { onConnection() { return () => {}; } },
     sessions: { async probeRepositoryUpdates(slug, { watched }) { probes.push([slug, watched]); return { failed: false, inUse: false }; } }

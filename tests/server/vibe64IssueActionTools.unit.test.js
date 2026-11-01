@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
@@ -32,7 +32,7 @@ test("issue tools preserve exact requested writes, bounded reads and fresh proje
       "create-label": { ok: true, label: labels[0] }, "set-labels": { ok: true, issue: { number: 7 } },
       mentions: { ok: true, users: Array.from({ length: 23 }, (_, i) => ({ login: `person-${i}`, name: `Person ${i}`, email: "private-email" })), warning: "Some collaborators could not load." }
     };
-    const actions = createActionCatalogue();
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     actions.register({ contributorId: "issues", domain: "project", actions: createProjectActions({ project: {
       async githubIssues(input) {
         calls.push({ input, actor: currentProjectRequestContext().vibe64User, slug: currentProjectRequestContext().slug });

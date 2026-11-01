@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { createSystemGraphActions } from "../../packages/vibe64-system-graph/src/server/systemGraphActions.js";
@@ -33,7 +33,7 @@ test("usage queries are System Graph read actions on session routes with Archite
         return { ok: true };
       }]));
       const app = testRouteApp();
-      const actions = createActionCatalogue();
+      const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
       actions.register({ contributorId: "graph", domain: "graph", actions: createSystemGraphActions({ systemGraph: service }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
       registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
         async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }

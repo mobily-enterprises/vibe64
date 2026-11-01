@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
 
 /** @typedef {import("./types.js").UsageRecordingService} UsageRecordingService */
@@ -18,36 +18,136 @@ const page = { cursor: optionalText(16), limit: { type: "integer", minimum: 1, m
  */
 function createUsageRecordingActions({ usageRecording }) {
   return Object.freeze([
-    ["targets.read", "query", (input) => usageRecording.readTargets(input), {}],
-    ["start", "command", (input) => usageRecording.start(input), {
-      targetId: text(200),
-      parameters: { type: "object", additionalProperties: true, required: false }
-    }],
-    ["current.read", "query", (input) => usageRecording.readCurrent(input), {}],
-    ["stop", "command", (input) => usageRecording.stop(input), { recordingId }],
-    ["dismiss", "command", (input) => usageRecording.dismiss(input), { recordingId }],
-    ["list", "query", (input) => usageRecording.list(input), {}],
-    ["requests.read", "query", (input) => usageRecording.readRequests(input), {
-      recordingId, ...page, q: optionalText(200), includeEmpty: { type: "boolean", required: false },
-      order: { type: "string", enum: ["oldest", "newest"], required: false }, requestId: optionalText(64)
-    }],
-    ["request-functions.read", "query", (input) => usageRecording.readRequestFunctions(input), { recordingId, requestId: text(64), ...page }],
-    ["interaction.record", "command", (input) => usageRecording.recordInteraction(input), {
-      recordingId,
-      id: text(8, { pattern: "^i_[0-9]{4,6}$" }),
-      at: text(40),
-      label: text(80),
-      kind: { type: "string", enum: [...USAGE_INTERACTION_KINDS], required: false },
-      componentFile: { type: "string", maxLength: 512, nullable: true, required: false }
-    }],
-    ["delete", "command", (input) => usageRecording.delete(input), { recordingId }]
-  ].map(([operation, kind, execute, fields]) => withVibe64ActionContext({
-    id: `vibe64.usage-recording.${operation}`, version: 1, kind,
-    input: { schema: createSchema({ sessionId, ...fields }), mode: "create" },
-    output: null, idempotency: kind === "command" ? "optional" : "none",
-    extensions: { assistant: { exclude: true } },
-    execute
-  })));
+    Object.freeze({
+      id: "vibe64.usage-recording.targets.read",
+      version: 1,
+      kind: "query",
+      input: { schema: createSchema({ sessionId }), mode: "create" },
+      output: null,
+      idempotency: "none",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.readTargets(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.start",
+      version: 1,
+      kind: "command",
+      input: {
+        schema: createSchema({
+          sessionId,
+          targetId: text(200),
+          parameters: { type: "object", additionalProperties: true, required: false }
+        }),
+        mode: "create"
+      },
+      output: null,
+      idempotency: "optional",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.start(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.current.read",
+      version: 1,
+      kind: "query",
+      input: { schema: createSchema({ sessionId }), mode: "create" },
+      output: null,
+      idempotency: "none",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.readCurrent(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.stop",
+      version: 1,
+      kind: "command",
+      input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
+      output: null,
+      idempotency: "optional",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.stop(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.dismiss",
+      version: 1,
+      kind: "command",
+      input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
+      output: null,
+      idempotency: "optional",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.dismiss(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.list",
+      version: 1,
+      kind: "query",
+      input: { schema: createSchema({ sessionId }), mode: "create" },
+      output: null,
+      idempotency: "none",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.list(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.requests.read",
+      version: 1,
+      kind: "query",
+      input: {
+        schema: createSchema({
+          sessionId,
+          recordingId,
+          ...page,
+          q: optionalText(200),
+          includeEmpty: { type: "boolean", required: false },
+          order: { type: "string", enum: ["oldest", "newest"], required: false },
+          requestId: optionalText(64)
+        }),
+        mode: "create"
+      },
+      output: null,
+      idempotency: "none",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.readRequests(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.request-functions.read",
+      version: 1,
+      kind: "query",
+      input: { schema: createSchema({ sessionId, recordingId, requestId: text(64), ...page }), mode: "create" },
+      output: null,
+      idempotency: "none",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.readRequestFunctions(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.interaction.record",
+      version: 1,
+      kind: "command",
+      input: {
+        schema: createSchema({
+          sessionId,
+          recordingId,
+          id: text(8, { pattern: "^i_[0-9]{4,6}$" }),
+          at: text(40),
+          label: text(80),
+          kind: { type: "string", enum: [...USAGE_INTERACTION_KINDS], required: false },
+          componentFile: { type: "string", maxLength: 512, nullable: true, required: false }
+        }),
+        mode: "create"
+      },
+      output: null,
+      idempotency: "optional",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.recordInteraction(input)
+    }),
+    Object.freeze({
+      id: "vibe64.usage-recording.delete",
+      version: 1,
+      kind: "command",
+      input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
+      output: null,
+      idempotency: "optional",
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.delete(input)
+    })
+  ]);
 }
 
 export { createUsageRecordingActions };

@@ -1,6 +1,10 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import {
+  authenticatedVibe64User,
+  PROJECT_OPERATION,
+  PROJECT_OWNER_OPERATION
+} from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { assertLearningModeAllowsProject, learningModeProjectError, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
@@ -169,19 +173,9 @@ function createVibe64ProjectChangedPublisher({ events }) {
   };
 }
 
-function action({ assistant, events = [], execute, id, input, kind, ownerRequired = false }) {
-  return withVibe64ActionContext({
-    id,
-    version: 1,
-    kind,
-    input,
-    output: null,
-    extensions: { assistant: assistant ?? { exclude: true } },
-    idempotency: kind === "query" ? "none" : "optional",
-    events,
-    execute
-  }, { ownerRequired });
-}
+// A project operation: a query reads, a command changes the project.
+const PROJECT_QUERY = Object.freeze({ version: 1, kind: "query", output: null, idempotency: "none", events: [] });
+const PROJECT_COMMAND = Object.freeze({ version: 1, kind: "command", output: null, idempotency: "optional", events: [] });
 
 /**
  * Learn mode has only the learner's practice projects; new projects belong to Develop.
@@ -213,10 +207,18 @@ async function selectProjectInMode(project, input, context) {
  */
 function createProjectActions({ project }) {
   return Object.freeze([
-    action({ id: "vibe64.project.repository.remote.read", kind: "query", input: emptyProjectInputValidator,
-      execute: () => project.repositoryRemote() }),
-    action({ id: "vibe64.project.repository.branches.read", kind: "query", input: projectRepositoryBranchesInputValidator,
-      assistant: {
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.repository.remote.read",
+      input: emptyProjectInputValidator,
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      execute: () => project.repositoryRemote()
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.repository.branches.read",
+      input: projectRepositoryBranchesInputValidator,
+      extensions: { assistant: {
         description: "Read current saved branch names and exact commits for a GitHub or Vibe64 Git project. Returns at most ten branches: use nextOffset to continue, or name for an exact branch lookup. These are saved repository branches, not another session's unsaved files or conversation. Pass a freshly read commit unchanged as repositoryBranch.expectedCommit when creating a session. Opening an existing branch uses name; creating a new branch also supplies fromBranch. Local-source projects use their existing local Git controls through a coding conversation.",
         output: { mode: "replace", schema: createSchema({
           ok: { type: "boolean", required: true }, error: { type: "string", maxLength: 512, required: false },
@@ -236,156 +238,271 @@ function createProjectActions({ project }) {
             ...(result.defaultBranch ? { defaultBranch: result.defaultBranch } : {}),
             ...(result.error || result.errors?.[0]?.message ? { error: String(result.error || result.errors[0].message).slice(0, 512) } : {}) };
         }
-      },
-      execute: (input) => project.repositoryBranches(input) }),
-    action({ id: "vibe64.project.repository.workflow.save", kind: "command", input: projectRepositoryWorkflowInputValidator,
-      assistant: settingsTool("repository.workflow.save"),
-      ownerRequired: true, execute: (input) => project.saveRepositoryWorkflow(input) }),
-    action({ id: "vibe64.project.env.secret.reveal", kind: "query", input: projectEnvSecretRevealInputValidator,
-      ownerRequired: true, execute: (input) => project.revealEnvSecret(input) }),
-    action({ id: "vibe64.project.env.download", kind: "query", input: projectEnvDownloadInputValidator,
-      ownerRequired: true, execute: (input) => project.downloadEnv(input) }),
-    ...Object.entries(projectIssueInputValidators).map(([operation, input]) => action({
-      id: `vibe64.project.issues.${operation}`, input,
-      assistant: issueTool(operation),
-      kind: ["list", "read", "labels", "mentions"].includes(operation) ? "query" : "command",
-      execute: (input) => project.githubIssues({ ...input, operation })
-    })),
-    ...Object.entries(projectPullRequestInputValidators).map(([operation, input]) => action({
-      id: `vibe64.project.pull-requests.${operation}`, input,
-      assistant: pullRequestTool(operation),
-      kind: ["list", "read"].includes(operation) ? "query" : "command",
-      execute: (input) => project.githubPullRequests({ ...input, operation })
-    })),
-    action({
+      }, vibe64: PROJECT_OPERATION },
+      execute: (input) => project.repositoryBranches(input)
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.repository.workflow.save",
+      input: projectRepositoryWorkflowInputValidator,
+      extensions: { assistant: settingsTool("repository.workflow.save"), vibe64: PROJECT_OWNER_OPERATION },
+      execute: (input) => project.saveRepositoryWorkflow(input)
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.env.secret.reveal",
+      input: projectEnvSecretRevealInputValidator,
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
+      execute: (input) => project.revealEnvSecret(input)
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.env.download",
+      input: projectEnvDownloadInputValidator,
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
+      execute: (input) => project.downloadEnv(input)
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.issues.list",
+      input: projectIssueInputValidators.list,
+      extensions: { assistant: issueTool("list"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "list" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.issues.read",
+      input: projectIssueInputValidators.read,
+      extensions: { assistant: issueTool("read"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "read" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.create",
+      input: projectIssueInputValidators.create,
+      extensions: { assistant: issueTool("create"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "create" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.edit",
+      input: projectIssueInputValidators.edit,
+      extensions: { assistant: issueTool("edit"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "edit" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.comment",
+      input: projectIssueInputValidators.comment,
+      extensions: { assistant: issueTool("comment"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "comment" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.edit-comment",
+      input: projectIssueInputValidators["edit-comment"],
+      extensions: { assistant: issueTool("edit-comment"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "edit-comment" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.state",
+      input: projectIssueInputValidators.state,
+      extensions: { assistant: issueTool("state"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "state" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.issues.labels",
+      input: projectIssueInputValidators.labels,
+      extensions: { assistant: issueTool("labels"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "labels" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.create-label",
+      input: projectIssueInputValidators["create-label"],
+      extensions: { assistant: issueTool("create-label"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "create-label" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.issues.set-labels",
+      input: projectIssueInputValidators["set-labels"],
+      extensions: { assistant: issueTool("set-labels"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "set-labels" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.issues.mentions",
+      input: projectIssueInputValidators.mentions,
+      extensions: { assistant: issueTool("mentions"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubIssues({ ...input, operation: "mentions" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.pull-requests.list",
+      input: projectPullRequestInputValidators.list,
+      extensions: { assistant: pullRequestTool("list"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubPullRequests({ ...input, operation: "list" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
+      id: "vibe64.project.pull-requests.read",
+      input: projectPullRequestInputValidators.read,
+      extensions: { assistant: pullRequestTool("read"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubPullRequests({ ...input, operation: "read" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.pull-requests.ready",
+      input: projectPullRequestInputValidators.ready,
+      extensions: { assistant: pullRequestTool("ready"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubPullRequests({ ...input, operation: "ready" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.pull-requests.update-branch",
+      input: projectPullRequestInputValidators["update-branch"],
+      extensions: { assistant: pullRequestTool("update-branch"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubPullRequests({ ...input, operation: "update-branch" })
+    }),
+    Object.freeze({
+      ...PROJECT_COMMAND,
+      id: "vibe64.project.pull-requests.merge",
+      input: projectPullRequestInputValidators.merge,
+      extensions: { assistant: pullRequestTool("merge"), vibe64: PROJECT_OPERATION },
+      execute: (input) => project.githubPullRequests({ ...input, operation: "merge" })
+    }),
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_READ_ONBOARDING,
-      assistant: onboardingReadTool,
-      kind: "query",
       input: projectOnboardingInputValidator,
+      extensions: { assistant: onboardingReadTool, vibe64: PROJECT_OPERATION },
       execute: (input) => project.readOnboarding(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_APPLY_TEMPLATE,
-      assistant: onboardingTemplateTool,
-      kind: "command",
       input: projectTemplateInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: onboardingTemplateTool, vibe64: PROJECT_OPERATION },
       execute: (input) => project.applyTemplate(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_REPOSITORY_REMOTE,
-      kind: "command",
       input: projectRemoteInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
       execute: (input) => project.repositoryRemote(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_LIST_PROJECTS,
-      kind: "query",
       input: projectsReadInputValidator,
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
       execute: (_input, context) => project.listProjects({ actor: authenticatedVibe64User(context) })
     }),
-    action({
-      id: ACTION_CREATE_PROJECT,
-      kind: "command",
+    Object.freeze({
       // Members create practice projects only through lessons.
-      ownerRequired: true,
+      ...PROJECT_COMMAND,
+      id: ACTION_CREATE_PROJECT,
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
       execute: (input, context) => createDevelopProject(project, input, context)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SELECT_PROJECT,
-      kind: "command",
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
       execute: (input, context) => selectProjectInMode(project, input, context)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_READ_ENV,
-      assistant: settingsTool("env.read"),
-      kind: "query",
       input: projectEnvReadInputValidator,
+      extensions: { assistant: settingsTool("env.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.readEnv(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_ENV_USER_VALUES,
-      assistant: settingsTool("env.user-values.save"),
-      kind: "command",
       input: projectEnvUserValuesInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("env.user-values.save"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.saveEnvUserValues(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_READ_PROJECT_SETTINGS,
-      assistant: settingsTool("settings.read"),
-      kind: "query",
       input: projectSettingsReadInputValidator,
+      extensions: { assistant: settingsTool("settings.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.readSettings(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: "vibe64.project.connections.save",
-      assistant: settingsTool("connections.save"),
-      ownerRequired: true,
-      kind: "command",
       input: projectConnectedProjectsInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("connections.save"), vibe64: PROJECT_OWNER_OPERATION },
       execute: (input) => project.saveConnectedProjects(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_READ_ENGINEERING_SETTINGS,
-      assistant: settingsTool("engineering.read"),
-      kind: "query",
       input: projectEngineeringSettingsReadInputValidator,
+      extensions: { assistant: settingsTool("engineering.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.readEngineeringSettings(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_COLLABORATION_SETTINGS,
-      assistant: settingsTool("collaboration.save"),
-      ownerRequired: true,
-      kind: "command",
       input: projectCollaborationInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("collaboration.save"), vibe64: PROJECT_OWNER_OPERATION },
       execute: (input) => project.saveCollaborationSettings(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_PROJECT_PROMPT_HINTS,
-      assistant: settingsTool("prompt-hints.save"),
-      ownerRequired: true,
-      kind: "command",
       input: projectPromptHintsInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("prompt-hints.save"), vibe64: PROJECT_OWNER_OPERATION },
       execute: (input) => project.savePromptHints(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_ENGINEERING_PROFILE,
-      assistant: settingsTool("engineering.profile.save"),
-      kind: "command",
       input: projectEngineeringProfileInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("engineering.profile.save"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.saveEngineeringProfile(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE,
-      assistant: settingsTool("development-database.scope.save"),
-      kind: "command",
       input: projectDevelopmentDatabaseScopeInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("development-database.scope.save"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.saveDevelopmentDatabaseScope(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_QUERY,
       id: ACTION_READ_PREVIEW_APPLICATION_IDENTITIES,
-      assistant: settingsTool("preview-identities.read"),
-      kind: "query",
       input: previewApplicationIdentitiesReadInputValidator,
+      extensions: { assistant: settingsTool("preview-identities.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.readPreviewApplicationIdentities(input)
     }),
-    action({
+    Object.freeze({
+      ...PROJECT_COMMAND,
       id: ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
-      assistant: settingsTool("preview-identities.save"),
-      kind: "command",
       input: previewApplicationIdentitiesInputValidator,
       events: [projectChangedEvent()],
+      extensions: { assistant: settingsTool("preview-identities.save"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.savePreviewApplicationIdentities(input)
     })
   ]);

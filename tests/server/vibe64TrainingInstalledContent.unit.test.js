@@ -730,7 +730,7 @@ import { createTrainingActions } from "../../packages/vibe64-training/src/server
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 
 async function titleCatalogue(f, extra = {}) {
   const course = { schemaVersion: 1, courseId: "readable-course", release: "0.1.0", title: "Readable lessons", status: "preview",
@@ -741,7 +741,7 @@ async function titleCatalogue(f, extra = {}) {
   return { catalogue, course, lock };
 }
 function titleActions(f, catalogue, content = null) {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue, content,
     learners: createTrainingLearnerState({ systemRoot: f.systemRoot })
   }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });

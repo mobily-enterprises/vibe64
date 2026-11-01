@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { studioHealthQueryInputValidator, studioToolsQueryInputValidator } from "./inputSchemas.js";
 
 /** @typedef {import("./types.js").StudioHealthService} StudioHealthService */
@@ -12,7 +12,7 @@ const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
  * @param {StudioHealthService} dependencies.studioHealth
  */
 function createStudioHealthActions({ studioHealth }) {
-  return Object.freeze([withVibe64ActionContext({
+  return Object.freeze([Object.freeze({
     id: ACTION_READ_STUDIO_HEALTH,
     version: 1,
     kind: "query",
@@ -44,10 +44,10 @@ function createStudioHealthActions({ studioHealth }) {
           expected: String(check.expected || "").slice(0, 300), observed: String(check.observed || "").slice(0, 300)
         }))
       }
-    } },
+    }, vibe64: WORKSPACE_OPERATION },
     idempotency: "none",
     execute: (input) => studioHealth.inspect(input)
-  }, { projectScoped: false }), withVibe64ActionContext({
+  }), Object.freeze({
     id: ACTION_CHECK_STUDIO_TOOLS,
     version: 1,
     kind: "query",
@@ -55,10 +55,10 @@ function createStudioHealthActions({ studioHealth }) {
     output: null,
     extensions: { assistant: {
       description: "Check now whether named tools run on the person's own computer, for example ids \"ruby,cpp\" (Stack runtime ids such as python, ruby, java, php, go, rust, cpp, or node, git, gh, ripgrep, claude, codex, opencode). A tool counts only when it starts and reports its version through the same PATH projects use. Each result says ready, missing or broken, the version and folder found, and for a missing tool the one install command for this computer with any password note. Use it when the person asks whether something is installed, or after they ran an install command, instead of guessing. It only reads: never run the install command for them, and never use sudo. A host that supplies its own tools answers managed with no rows."
-    } },
+    }, vibe64: WORKSPACE_OPERATION },
     idempotency: "none",
     execute: (input) => studioHealth.checkTools(input)
-  }, { projectScoped: false })]);
+  })]);
 }
 
 export {

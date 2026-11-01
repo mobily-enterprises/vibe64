@@ -10,11 +10,11 @@ import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-a
 import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestHelpers.js";
 
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 
 function registerRoutes(http, options) {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions(options).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action
   })) });

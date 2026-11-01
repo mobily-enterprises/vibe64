@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { createUsageRecordingActions } from "../../packages/vibe64-usage-recording/src/server/usageRecordingActions.js";
@@ -50,7 +50,7 @@ test("usage recording routes run their actions with session authority; reads nee
         return { ok: true };
       }]));
       const app = testRouteApp();
-      const actions = createActionCatalogue();
+      const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
       actions.register({ contributorId: "usage", domain: "usage", actions: createUsageRecordingActions({ usageRecording })
         .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
       registerVibe64ActionContext(actions, {

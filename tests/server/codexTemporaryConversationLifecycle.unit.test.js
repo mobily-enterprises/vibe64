@@ -18,7 +18,7 @@ import { once } from "node:events";
 import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { registerVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
@@ -12058,7 +12058,7 @@ test("temporary Codex steers its exact active native conversation without starti
 });
 
 test("Main browser facade uses the original native owner and action authority without Colleague", { timeout: 30_000 }, async () => {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     registerVibe64ActionContext(actions, {
@@ -12430,7 +12430,7 @@ test("Main browser delivery inspection preserves original receipts while native 
 });
 
 test("Main Codex canonical goals preserve original result policy, pinned targets and passive availability", { timeout: 15_000 }, async t => {
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
@@ -13504,7 +13504,7 @@ test("Main browser fresh authorization for a local practice project opened as an
   const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
     assertProjectEffectAdmission, registerPracticeRequestActor, resolveProjectRequestContext,
     captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
   const slug = "training-839fb16d3aed40c88b26cb4ec8fe1229";
   const access = { allowed: true }, reads = [], denied = [], events = [];

@@ -17,7 +17,7 @@ import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { VIBE64_PROJECT_ROUTE_BASE, vibe64RouteHandler, vibe64RouteHttp } from "../../packages/vibe64-core/src/server/featureRoutes.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { registerVibe64ActionContext, withVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const OWNER = Object.freeze({ uid: 1, username: "tony", role: "owner" });
@@ -208,8 +208,9 @@ test("a host action contributor gates a team member's own operations, not intern
   const ready = { value: false };
   const { context } = await withWorkspace(t, ready);
   let actor = MEMBER;
-  const actions = createActionCatalogue();
-  actions.register({ contributorId: "unit", domain: "unit", actions: [withVibe64ActionContext({
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  actions.register({ contributorId: "unit", domain: "unit", actions: [Object.freeze({
+    extensions: { vibe64: PROJECT_OPERATION },
     id: "unit.project.read", kind: "query", channels: ["api", "automation", "internal"], surfaces: ["app"],
     permission: { require: "authenticated" }, idempotency: "none",
     input: { schema: createSchema({}) }, output: null,

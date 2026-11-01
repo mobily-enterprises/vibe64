@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
@@ -242,7 +242,7 @@ test("a concurrent catalogue change is retried once against a fresh revision", a
 test("catalogue actions require a signed-in user and report install results", async (t) => {
   const f = await fixture(t);
   const auth = { user: null };
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const missing = { readCatalogue: f.catalogue.readCatalogue };
   const definitions = createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
     courseInstaller: f.make() });
@@ -261,7 +261,7 @@ test("catalogue actions require a signed-in user and report install results", as
   assert.deepEqual({ ...installed, catalogueCommit: undefined }, { ok: true, available: true, changed: true, catalogueCommit: undefined, retired: [], revision: 1,
     course: { courseId: "first-course", release: "0.1.0", title: "First course", status: "released", enabled: true } });
   await assert.rejects(execute("course.install", { courseId: "first-course", release: "9.9.9" }), { code: "VIBE64_TRAINING_COURSE_NOT_AVAILABLE" });
-  const unavailable = createActionCatalogue();
+  const unavailable = createActionCatalogue({ policy: vibe64ActionPolicy });
   unavailable.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: missing,
     learners: { readState() {} } }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(unavailable, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });

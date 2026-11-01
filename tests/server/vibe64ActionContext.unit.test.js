@@ -8,7 +8,13 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import {
+  PROJECT_OPERATION,
+  PROJECT_OWNER_OPERATION,
+  registerVibe64ActionContext,
+  vibe64ActionPolicy,
+  WORKSPACE_OPERATION
+} from "@local/vibe64-core/server/actionContext";
 import {
   captureProjectRequestContext,
   currentProjectActionRequestMeta,
@@ -16,6 +22,14 @@ import {
   registerPracticeRequestActor,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
+
+// Runs a definition under the action policy without a catalogue, as a direct
+// caller of the operation does.
+function runUnderPolicy(definition, input, context = {}) {
+  return vibe64ActionPolicy.execute({
+    definition, input, context, run: (policyInput, policyContext) => definition.execute(policyInput, policyContext)
+  });
+}
 
 test("project owner actions admit the standalone local owner but not foreign requests or missing hosted authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
@@ -27,12 +41,13 @@ test("project owner actions admit the standalone local owner but not foreign req
     });
     configure(false);
     let writes = 0;
-    const actions = createActionCatalogue();
-    actions.register({ contributorId: "local-owner", domain: "test", actions: [withVibe64ActionContext({
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    actions.register({ contributorId: "local-owner", domain: "test", actions: [{
       id: "vibe64.test.owner", kind: "command", channels: ["api", "automation"], surfaces: ["app"],
       input: { schema: createSchema({}), mode: "create" },
+      extensions: { vibe64: PROJECT_OWNER_OPERATION },
       execute() { writes += 1; return { project: currentProjectRequestContext().slug }; }
-    }, { ownerRequired: true })] });
+    }] });
     const app = Fastify();
     app.post("/write", (request) => actions.execute({ actionId: "vibe64.test.owner",
       input: { projectSlug: request.query.project || slug },
@@ -60,10 +75,11 @@ test("project owner actions admit the standalone local owner but not foreign req
 function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = false } = {}) {
   const calls = [];
   const state = { user: { username: "member", uid: 42, role: "member" }, allowed: true, deleting: false };
-  const actions = createActionCatalogue();
-  const definition = withVibe64ActionContext({
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const definition = {
     id: "vibe64.test.read", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
     input: { schema: createSchema({ text: { type: "string", required: true }, vibe64User: { type: "object" } }), mode: "create" },
+    extensions: { vibe64: { projectScoped, ownerRequired, allowDeleting } },
     async execute(input, context) {
       const project = currentProjectRequestContext();
       await Promise.resolve();
@@ -71,7 +87,7 @@ function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = 
       calls.push({ input, project, requestMeta: context.requestMeta });
       return { ok: true, projectSlug: project?.slug, username: input.vibe64User?.username };
     }
-  }, { ownerRequired, projectScoped, allowDeleting });
+  };
   actions.register({ contributorId: "test", domain: "vibe64-test", actions: [definition] });
   registerVibe64ActionContext(actions, {
     projectContext: {
@@ -94,8 +110,8 @@ function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = 
 }
 
 test("HTTP and automation establish the same project and trusted actor", async () => {
-  const { calls, definition, execute } = fixture();
-  assert.equal(Object.hasOwn(definition.input.schema.getFieldDefinitions(), "vibe64User"), false);
+  const { actions, calls, definition, execute } = fixture();
+  assert.equal(Object.hasOwn(actions.getDefinition(definition.id).input.schema.getFieldDefinitions(), "vibe64User"), false);
   const api = await execute({ text: "hello" }, {
     channel: "api", requestMeta: { request: { params: { slug: "alpha" } } }
   });
@@ -153,7 +169,7 @@ test("requestless actions cannot inherit a working action request", async () => 
   const admittedRequestMeta = f.calls[0].requestMeta;
   assert.equal(admittedRequestMeta.request, requestMeta.request);
   await runWithProjectRequestContext(admitted, async () => {
-    await f.definition.execute({ text: "requestless nested action", projectSlug: "alpha" });
+    await runUnderPolicy(f.definition, { text: "requestless nested action", projectSlug: "alpha" });
     await runWithProjectRequestContext(f.calls.at(-1).project, () => {
       assert.equal(currentProjectActionRequestMeta(), null);
     });
@@ -262,10 +278,11 @@ test("learning-only authority leaves ordinary Working and Colleague contribution
   }
   assert.deepEqual(f.calls, []);
   const { authenticatedVibe64User } = await import("@local/vibe64-core/server/actionContext");
-  const colleague = withVibe64ActionContext({ id: "vibe64.colleague.state.read",
-    input: { schema: createSchema({}), mode: "create" }, execute(_input, context) { return authenticatedVibe64User(context); }
-  }, { projectScoped: false });
-  assert.equal(await colleague.execute({}, {}), null);
+  const colleague = { id: "vibe64.colleague.state.read",
+    input: { schema: createSchema({}), mode: "create" }, extensions: { vibe64: WORKSPACE_OPERATION },
+    execute(_input, context) { return authenticatedVibe64User(context); }
+  };
+  assert.equal(await runUnderPolicy(colleague, {}, {}), null);
   assert.deepEqual(await f.contribute(cases[0][0], cases[0][1], { vibe64Action: { existingHostMarker: true } }), {});
   assert.deepEqual(f.calls, []);
 });
@@ -353,12 +370,12 @@ test("a practice project action admits only its own learner, through the host co
     const practice = await projectContext.runWithPracticeProjectScope({ actor: learner, training, access: "create" },
       async () => (await projectContext.createWorkspaceProjectRecord({ slug, training })).project);
     const state = { user: learner };
-    const actions = createActionCatalogue();
-    const definition = withVibe64ActionContext({
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const definition = {
       id: "vibe64.test.practice", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
-      input: { schema: createSchema({}), mode: "create" },
+      input: { schema: createSchema({}), mode: "create" }, extensions: { vibe64: PROJECT_OPERATION },
       execute() { return { targetRoot: currentProjectRequestContext().targetRoot }; }
-    });
+    };
     actions.register({ contributorId: "practice-test", domain: "test", actions: [definition] });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.user, authorizeProject() {} });
     const execute = () => actions.execute({ actionId: definition.id, input: { projectSlug: slug },
@@ -367,12 +384,12 @@ test("a practice project action admits only its own learner, through the host co
     state.user = other;
     await assert.rejects(execute(), deleted, "another learner, even the workspace owner, does not find it");
     // Without a host contributor the action resolves the same rule with its actor (a request without headers).
-    const direct = (vibe64User) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { vibe64User } } });
+    const direct = (vibe64User) => runUnderPolicy(definition, { projectSlug: slug }, { requestMeta: { request: { vibe64User } } });
     assert.deepEqual(await direct(learner), { targetRoot: practice.projectRoot });
     await assert.rejects(direct(other), deleted);
     // A local person's action carries no vibe64User: it stays that person's
     // request, so the host-supplied actor is compared with the learner.
-    const local = (headers) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { headers } } });
+    const local = (headers) => runUnderPolicy(definition, { projectSlug: slug }, { requestMeta: { request: { headers } } });
     await assert.rejects(local({ host: "localhost" }), deleted, "a person without an actor is not admitted as the marker's learner");
     const unregisterActor = registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
     try {
@@ -381,7 +398,7 @@ test("a practice project action admits only its own learner, through the host co
     } finally {
       unregisterActor();
     }
-    assert.deepEqual(await definition.execute({ projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
+    assert.deepEqual(await runUnderPolicy(definition, { projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
       "requestless internal work runs as the marker's learner");
   } finally {
     configureStudioProjectContext();
@@ -402,11 +419,11 @@ test("Colleague acting for a learner opens only the projects of their mode and r
   });
   const practiceSlug = "training-12345678123442348234123456789abc";
   const user = { uid: 42, username: "learner", role: "member" };
-  const definition = withVibe64ActionContext({
+  const definition = {
     id: "vibe64.test.colleague-open", kind: "query", channels: ["automation"], surfaces: ["app"],
-    input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true })
-  });
-  const open = projectSlug => definition.execute({ projectSlug }, { colleague: {}, requestMeta: { request: { vibe64User: user } } });
+    input: { schema: createSchema({}), mode: "create" }, extensions: { vibe64: PROJECT_OPERATION }, execute: () => ({ ok: true })
+  };
+  const open = projectSlug => runUnderPolicy(definition, { projectSlug }, { colleague: {}, requestMeta: { request: { vibe64User: user } } });
   const reads = [];
   let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug };
   registerLearningModeReader(({ actor }) => { reads.push(actor); return mode; });
@@ -418,7 +435,7 @@ test("Colleague acting for a learner opens only the projects of their mode and r
   // Learn lets the practice project through to admission (here: no such project).
   await assert.rejects(open(practiceSlug), { code: "vibe64_practice_project_deleted" });
   // A turn keeps its thread's mode after a switch with L, so the switch never interrupts it.
-  const inThread = (thread, projectSlug) => definition.execute({ projectSlug },
+  const inThread = (thread, projectSlug) => runUnderPolicy(definition, { projectSlug },
     { colleague: { thread }, requestMeta: { request: { vibe64User: user } } });
   await assert.rejects(inThread("develop", practiceSlug), { message: PRACTICE_PROJECT_MODE_MESSAGE });
   await assert.rejects(inThread("develop", "alpha"), error => error.code !== "vibe64_learning_mode_project");

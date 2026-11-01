@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAccountsActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
@@ -51,7 +51,7 @@ test("all account operations use project-independent canonical contracts and aut
     const record = (method) => async (input) => { calls.push({ method, input }); return { ok: true }; };
     const accounts = { ...Object.fromEntries(cases.filter((entry) => !entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])])), subscribeAuthTerminal() {} };
     const aiConnectionService = Object.fromEntries(cases.filter((entry) => entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])]));
-    const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "accounts", domain: "accounts", actions: [
       ...createAccountsActions({ accounts }), ...createAiConnectionActions({ aiConnectionService, requireAiManagement })
     ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
@@ -143,7 +143,7 @@ test("Colleague reads every saved provider's readiness through the original owne
   let actor = owner;
   let managementAllowed = true;
   let reads = 0;
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
     aiConnectionService: { async list() { reads++; return service.list(); } },
     requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" && managementAllowed ? null
@@ -195,7 +195,7 @@ test("Colleague reads every saved provider's readiness through the original owne
 
   const localActors = [];
   const requireLocalManagement = ({ vibe64User }) => { localActors.push(vibe64User); return null; };
-  const localActions = createActionCatalogue();
+  const localActions = createActionCatalogue({ policy: vibe64ActionPolicy });
   localActions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
     aiConnectionService: service, requireAiManagement: requireLocalManagement
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
@@ -246,7 +246,7 @@ test("Colleague saves the person's own stated Git name and email and returns onl
       gitIdentity: { name: input.gitUserName, email: input.gitUserEmail } } };
   } };
   const member = { username: "member", role: "member" };
-  const actions = createActionCatalogue({ events: { async publish() {} } });
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish() {} } });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAccountsActions({ accounts })
     .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => member,

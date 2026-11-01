@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 
 import {
   VIBE64_SERVICE_DATA_ROOT_ENV
@@ -48,7 +49,7 @@ async function failingCodexAuthPreflight() {
 
 function featureDependencies({ env = {}, project, published = [], hooks = [] } = {}) {
   return {
-    actionCatalogue: createActionCatalogue(),
+    actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }),
     env,
     events: {
       async publish(event) {

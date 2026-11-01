@@ -24,7 +24,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
@@ -2375,7 +2375,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     deliveryDiagnostics.push(record);
     if (record.event === "vibe64.agent_message.delivery_timing" && record.stage === "first-response") firstResponseTiming.resolve();
   };
-  const actions = createActionCatalogue();
+  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const actor = { username: "service-owner", uid: 73, role: "owner" };
   let recoveredActorReads = 0;
   const createService = () => {

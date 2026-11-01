@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
@@ -61,7 +61,7 @@ test("all project HTTP operations share canonical actions and current authority 
       if (["createProject", "selectProject"].includes(method)) return { ok: true, project: { slug: args[0].slug } };
       return { ok: true };
     }]));
-    const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
+    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
