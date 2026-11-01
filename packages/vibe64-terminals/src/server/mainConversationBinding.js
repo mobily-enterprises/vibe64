@@ -21,7 +21,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
-export const MAIN_CONVERSATION_PRESENTATION = Object.freeze({
+const MAIN_CONVERSATION_PRESENTATION = Object.freeze({
   label: "Vibe64 conversation changeover",
   applicationName: "Vibe64",
   contextName: "Vibe64 session",
@@ -31,7 +31,7 @@ export const MAIN_CONVERSATION_PRESENTATION = Object.freeze({
   unconfirmedMessage: "The AI may have received this message, but delivery could not be confirmed. Retry this same message to check its receipt without sending it twice. You can still choose another AI."
 });
 
-export function requireCompletedConversationRewind(session) {
+function requireCompletedConversationRewind(session) {
   requireCompletedNativeConversationReplacement(session);
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.rewind && !state.rewind.completed) {
@@ -47,7 +47,7 @@ export function requireCompletedConversationRewind(session) {
  * @param {string} sessionId
  * @param {object} current
  */
-export async function requireMainConversationAdmission(runtime, sessionId, current) {
+async function requireMainConversationAdmission(runtime, sessionId, current) {
   requireCompletedConversationRewind(current.session || await runtime.getSession(sessionId, { inspectSource: false }));
 }
 
@@ -63,7 +63,7 @@ function synchronousConversationHost(provider, sessionId, context, purpose, labe
  * Project cleanup has no conversation identity. This returns configured native
  * facilities synchronously; the shared owner retains its original preparation.
  */
-export function prepareProjectConversationCleanup(provider, context, input) {
+function prepareProjectConversationCleanup(provider, context, input) {
   const host = synchronousConversationHost(provider, undefined, context, "projectCleanup", "Project cleanup");
   return { engine: provider.id, native: host.native, context, input };
 }
@@ -71,7 +71,7 @@ export function prepareProjectConversationCleanup(provider, context, input) {
 /**
  * Account cleanup preserves the native owner's synchronous closing fence.
  */
-export function prepareConversationRuntimeInvalidation(provider, context, input) {
+function prepareConversationRuntimeInvalidation(provider, context, input) {
   const host = synchronousConversationHost(provider, undefined, context, "invalidation", "Runtime invalidation");
   return { engine: provider.id, native: host.native, context, input };
 }
@@ -79,12 +79,12 @@ export function prepareConversationRuntimeInvalidation(provider, context, input)
 /**
  * Startup uses the same configured native owner without creating a Main binding.
  */
-export function prepareConversationReconciliation(provider, context, sessions, options) {
+function prepareConversationReconciliation(provider, context, sessions, options) {
   const host = synchronousConversationHost(provider, undefined, context, "reconciliation", "Reconciliation");
   return { engine: provider.id, native: host.native, context, sessions, options };
 }
 
-export function prepareConversationSubscriptionReset(provider, context, sessions) {
+function prepareConversationSubscriptionReset(provider, context, sessions) {
   const host = synchronousConversationHost(provider, undefined, context, "unsubscription", "Subscription reset");
   return { engine: provider.id, native: host.native, context, sessions };
 }
@@ -93,13 +93,13 @@ export function prepareConversationSubscriptionReset(provider, context, sessions
  * Explicit readiness prepares the selected host facilities without opening a
  * retained binding. Native readiness decisions belong to the common driver.
  */
-export async function prepareSessionConversationReadiness(provider, sessionId, context) {
+async function prepareSessionConversationReadiness(provider, sessionId, context) {
   const request = provider.prepareConversationRequest("ensureSession", context);
   const host = await provider.prepareConversationHost(sessionId, context, "readiness");
   return { sessionId, engine: provider.id, native: host.native, context: request.context };
 }
 
-export async function prepareSessionConversationSettings(provider, sessionId, context) {
+async function prepareSessionConversationSettings(provider, sessionId, context) {
   const host = await provider.prepareConversationHost(sessionId, context, "settings");
   return { sessionId, engine: provider.id, native: host.native, context };
 }
@@ -108,7 +108,7 @@ export async function prepareSessionConversationSettings(provider, sessionId, co
  * Creation has no retained native identity. The same admitted application owner
  * prepares its input and native facilities without constructing a Main binding.
  */
-export async function prepareSessionConversationCreation(provider, sessionId, context, input) {
+async function prepareSessionConversationCreation(provider, sessionId, context, input) {
   const request = provider.prepareConversationRequest("createConversation", context, input);
   const host = await provider.prepareConversationHost(sessionId, context, "create");
   return { sessionId, engine: provider.id, native: host.native, input: request.input, context: request.context };
@@ -117,7 +117,7 @@ export async function prepareSessionConversationCreation(provider, sessionId, co
 /**
  * Activity reads the selected inventory without opening a retained conversation.
  */
-export async function prepareSessionConversationActivity(provider, sessionId, context) {
+async function prepareSessionConversationActivity(provider, sessionId, context) {
   const host = await provider.prepareConversationHost(sessionId, context, "activity");
   return {
     sessionId,
@@ -131,7 +131,7 @@ export async function prepareSessionConversationActivity(provider, sessionId, co
  * Renewal proof cleanup uses its original trusted lifecycle authority. Facilities
  * are synchronous; native owners retain the close/release order and lazy reads.
  */
-export function prepareSessionConversationRenewalProof(provider, sessionId, context, input, method) {
+function prepareSessionConversationRenewalProof(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
   const host = synchronousConversationHost(provider, sessionId, context, "renewalProof", "Renewal proof release");
   return {
@@ -146,7 +146,7 @@ export function prepareSessionConversationRenewalProof(provider, sessionId, cont
 /**
  * Renewal supplies the original native owner without reading or opening a Main binding.
  */
-export async function prepareSessionConversationRenewal(provider, sessionId, context, input) {
+async function prepareSessionConversationRenewal(provider, sessionId, context, input) {
   const host = await provider.prepareConversationHost(sessionId, context, "renewal");
   return { sessionId, engine: provider.id, native: host.native, context, input };
 }
@@ -154,7 +154,7 @@ export async function prepareSessionConversationRenewal(provider, sessionId, con
 /**
  * Uncached cleanup prepares resource ownership without opening a Main record.
  */
-export async function prepareSessionConversationDisposal(provider, sessionId, context, options) {
+async function prepareSessionConversationDisposal(provider, sessionId, context, options) {
   const host = await provider.prepareConversationHost(sessionId, context, "dispose");
   return {
     sessionId,
@@ -170,7 +170,7 @@ export async function prepareSessionConversationDisposal(provider, sessionId, co
  * Historical source records retain native IDs without the later scoped identity.
  * Keep the original provider request codec; no retained binding is constructed.
  */
-export async function prepareSessionDetachedConversationCleanup(provider, sessionId, context, input, method) {
+async function prepareSessionDetachedConversationCleanup(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
   const host = await provider.prepareConversationHost(sessionId, context, "detachedCleanup");
   return { sessionId, engine: provider.id, native: host.native, input: request.input, context: request.context };
@@ -180,7 +180,7 @@ export async function prepareSessionDetachedConversationCleanup(provider, sessio
  * Detached execution retains admitted context separately from the original
  * provider-specific native options, without opening a Main binding.
  */
-export async function prepareSessionDetachedConversationRun(provider, sessionId, context, input, options) {
+async function prepareSessionDetachedConversationRun(provider, sessionId, context, input, options) {
   const host = await provider.prepareConversationHost(sessionId, context, "detached", input);
   return { sessionId, engine: provider.id, native: host.native, context, input, options };
 }
@@ -189,7 +189,7 @@ export async function prepareSessionDetachedConversationRun(provider, sessionId,
  * Storage authority and engine selection come from the saved binding, independently
  * of the current assistant. The caller retains preservation and writer exclusion.
  */
-export async function prepareSessionConversationStorage(provider, sessionId, context, binding) {
+async function prepareSessionConversationStorage(provider, sessionId, context, binding) {
   const host = await provider.prepareConversationHost(sessionId, context, "storage");
   return { sessionId, engine: provider.id, native: host.native, binding, context };
 }
@@ -198,7 +198,7 @@ export async function prepareSessionConversationStorage(provider, sessionId, con
  * The provider contributes its existing native owner and historical state projection.
  * Application binding, admission and transcript ownership are assembled only here.
  */
-export async function createSessionConversationBinding(provider, sessionId, options = {}) {
+async function createSessionConversationBinding(provider, sessionId, options = {}) {
   const { prepareInput, ...openingContext } = options;
   const engine = provider.id;
   const selection = engine === "codex" ? openingContext.selection : undefined;
@@ -313,9 +313,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
 }
 
 // Claude message preparation marks these stages on JSKIT's delivery observer.
-export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
+const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
 
-export function requireScopedConversationContext(sessionId, context, conversationId,
+function requireScopedConversationContext(sessionId, context, conversationId,
   message = "A scoped conversation requires its original scope and native identity.") {
   if (!conversationId || (context.assistantScope
     ? context.assistantScope.id !== sessionId
@@ -324,7 +324,7 @@ export function requireScopedConversationContext(sessionId, context, conversatio
   }
 }
 
-export async function openMainConversation(conversationRuntime, context, prepareInput, representation = "native") {
+async function openMainConversation(conversationRuntime, context, prepareInput, representation = "native") {
   if (!conversationRuntime || context.assistantScope) return null;
   return conversationRuntime.open({
     id: context.sessionId,
@@ -333,7 +333,7 @@ export async function openMainConversation(conversationRuntime, context, prepare
   });
 }
 
-export async function publishMainConversationEvent(
+async function publishMainConversationEvent(
   namespaceForSession,
   publishApplicationSessionChanged,
   publishConversation,
@@ -352,7 +352,7 @@ export async function publishMainConversationEvent(
  * @param {string} sessionId
  * @param {object} context
  */
-export function createMainConversationBinding(store, sessionId, context) {
+function createMainConversationBinding(store, sessionId, context) {
   const binding = {
     state: {
       async read() {
@@ -484,7 +484,7 @@ function turnConversationKey(turn) {
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  */
-export async function readMainConversationHistory(store, sessionId) {
+async function readMainConversationHistory(store, sessionId) {
   const turns = await store.readConversationLog(sessionId);
   return turns.flatMap((turn) => (turn.messages || []).filter((message) => (
     message.role !== "thinking"
@@ -504,6 +504,32 @@ export async function readMainConversationHistory(store, sessionId) {
   }));
 }
 
+export {
+  MAIN_CONVERSATION_PRESENTATION,
+  requireCompletedConversationRewind,
+  requireMainConversationAdmission,
+  prepareProjectConversationCleanup,
+  prepareConversationRuntimeInvalidation,
+  prepareConversationReconciliation,
+  prepareConversationSubscriptionReset,
+  prepareSessionConversationReadiness,
+  prepareSessionConversationSettings,
+  prepareSessionConversationCreation,
+  prepareSessionConversationActivity,
+  prepareSessionConversationRenewalProof,
+  prepareSessionConversationRenewal,
+  prepareSessionConversationDisposal,
+  prepareSessionDetachedConversationCleanup,
+  prepareSessionDetachedConversationRun,
+  prepareSessionConversationStorage,
+  createSessionConversationBinding,
+  CLAUDE_PREPARATION_DELIVERY_STAGES,
+  requireScopedConversationContext,
+  openMainConversation,
+  publishMainConversationEvent,
+  createMainConversationBinding,
+  readMainConversationHistory
+};
 export {
   learningSessionExecutionRoot,
   readClaudeConversationOwnerContext,

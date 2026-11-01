@@ -1,7 +1,7 @@
 
-export const NATIVE_CONVERSATION_BINDING_KEY = /^(codex(?:_([a-z0-9_-]+))?|claude|opencode)_conversation_id$/u;
+const NATIVE_CONVERSATION_BINDING_KEY = /^(codex(?:_([a-z0-9_-]+))?|claude|opencode)_conversation_id$/u;
 
-export function isNativeConversationBindingKey(name) {
+function isNativeConversationBindingKey(name) {
   return NATIVE_CONVERSATION_BINDING_KEY.test(name);
 }
 
@@ -9,7 +9,7 @@ export function isNativeConversationBindingKey(name) {
  * Only saved main bindings and acknowledged replacements are eligible here.
  * Temporary conversations retain their existing explicit-close lifecycle.
  */
-export function nativeConversationBindings(session, options = {}) {
+function nativeConversationBindings(session, options = {}) {
   const { retiredOnly = false } = options;
   const metadata = session.metadata || {};
   const state = JSON.parse(metadata.assistant_changeover || "null");
@@ -38,7 +38,7 @@ export function nativeConversationBindings(session, options = {}) {
   return bindings;
 }
 
-export async function prepareCodexModelRouting(sessionId, _selection, { runtime, session }) {
+async function prepareCodexModelRouting(sessionId, _selection, { runtime, session }) {
   if (session.metadata?.codex_routing_home_provider === "openai") return;
   const boundProvider = session.metadata?.codex_routing_home_provider ||
     (session.metadata?.agent_identity_provider === "codex" && session.metadata?.agent_identity_conversation_id
@@ -56,3 +56,10 @@ export async function prepareCodexModelRouting(sessionId, _selection, { runtime,
   await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");
   session.metadata.codex_routing_home_provider = "openai";
 }
+
+export {
+  NATIVE_CONVERSATION_BINDING_KEY,
+  isNativeConversationBindingKey,
+  nativeConversationBindings,
+  prepareCodexModelRouting
+};

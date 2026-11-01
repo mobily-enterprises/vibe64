@@ -6,7 +6,7 @@ import { genesisCommandShimDirectory, vibe64HostContextResolverPath } from "@loc
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";

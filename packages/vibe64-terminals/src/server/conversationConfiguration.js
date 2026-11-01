@@ -1,5 +1,5 @@
 /** Pure mapping; the calling application owner must authorize the selection. */
-export function conversationConfiguration(assistantSelection, systemPrompt) {
+function conversationConfiguration(assistantSelection, systemPrompt) {
   const { engineId, modelProviderId, modelId, variantId } = assistantSelection;
   const nativeAccount = engineId === "codex" && modelProviderId === "openai" ||
     engineId === "claude" && modelProviderId === "anthropic";
@@ -13,3 +13,7 @@ export function conversationConfiguration(assistantSelection, systemPrompt) {
     }
   };
 }
+
+export {
+  conversationConfiguration
+};

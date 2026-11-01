@@ -88,7 +88,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
  */
-export function createOpenCodeScopedPreparation({
+function createOpenCodeScopedPreparation({
   project,
   contextFor,
   hostPreparation,
@@ -297,3 +297,7 @@ export function createOpenCodeScopedPreparation({
     prepareExistingDetachedTarget
   });
 }
+
+export {
+  createOpenCodeScopedPreparation
+};

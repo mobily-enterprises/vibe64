@@ -80,7 +80,7 @@ function sessionCommand(command = "", selected = null) {
   ].join(" ");
 }
 
-export const Vibe64SessionEnvironment = async ({ client } = {}) => {
+const Vibe64SessionEnvironment = async ({ client } = {}) => {
   const common = await createOpenCodeConversationPlugin({ client,
     registryPath: text(process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY),
     resolveHostInstructions: async (id) => {
@@ -241,4 +241,8 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
       args.command = sessionCommand(args.command, selected);
     }
   };
+};
+
+export {
+  Vibe64SessionEnvironment
 };

@@ -1,7 +1,5 @@
-import {
-  createOpenCodeMainMessagePreparation,
-  publishMainConversationEvent
-} from "./mainConversationBinding.js";
+import { publishMainConversationEvent } from "./mainConversationBinding.js";
+import { createOpenCodeMainMessagePreparation } from "./mainConversationMessages.js";
 import {
   createOpenCodeSessionAgentProvider
 } from "./agent/providers/opencodeSessionAgentProvider.js";

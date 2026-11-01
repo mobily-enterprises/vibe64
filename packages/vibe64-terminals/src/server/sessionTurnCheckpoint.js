@@ -2,7 +2,7 @@ import { createGitTurnCheckpointAsOneJob } from "@local/vibe64-execution/server"
 import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 

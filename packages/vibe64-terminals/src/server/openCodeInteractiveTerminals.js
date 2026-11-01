@@ -23,7 +23,7 @@ const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
  */
-export function createOpenCodeInteractiveTerminals({
+function createOpenCodeInteractiveTerminals({
   sharedRuntime,
   contextFor,
   hostPreparation,
@@ -125,3 +125,7 @@ export function createOpenCodeInteractiveTerminals({
     terminalHost
   });
 }
+
+export {
+  createOpenCodeInteractiveTerminals
+};
