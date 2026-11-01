@@ -201,10 +201,12 @@ function issueSummary(issue) {
   if (issue.comments) {
     result.comments = { ...(Number.isSafeInteger(issue.comments.totalCount) ? { totalCount: issue.comments.totalCount } : {}) };
     if (issue.comments.nodes) result.comments.nodes = issue.comments.nodes.map(issueComment);
-    if (issue.comments.pageInfo) result.comments.pageInfo = {
-      hasPreviousPage: issue.comments.pageInfo.hasPreviousPage,
-      startCursor: issue.comments.pageInfo.startCursor ?? null
-    };
+    if (issue.comments.pageInfo) {
+      result.comments.pageInfo = {
+        hasPreviousPage: issue.comments.pageInfo.hasPreviousPage,
+        startCursor: issue.comments.pageInfo.startCursor ?? null
+      };
+    }
   }
   return result;
 }

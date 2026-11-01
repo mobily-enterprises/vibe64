@@ -80,10 +80,12 @@ function createProjectRepositories({
       const fullName = githubRepositoryFullName(connection.repository);
       const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
         projectGithubFullName(candidate).toLowerCase() === fullName);
-      if (matches.length !== 1) throw vibe64Error(
-        `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
-        "vibe64_connected_project_registration_required"
-      );
+      if (matches.length !== 1) {
+        throw vibe64Error(
+          `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
+          "vibe64_connected_project_registration_required"
+        );
+      }
       return { ...connection, fullName, projectSlug: matches[0].slug };
     });
   }

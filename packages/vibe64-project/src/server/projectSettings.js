@@ -44,12 +44,14 @@ function createProjectSettings({
   async function connectedProjectsState(input = {}) {
     const source = await selection.genesisSettingsSourceForInput(input);
     const scope = { rootKind: source.rootKind, sessionId: source.sessionId };
-    if (!source.sourceRoot) return {
-      available: false,
-      canEdit: false,
-      source: scope,
-      unavailableReason: "Create or select a session to configure connected projects."
-    };
+    if (!source.sourceRoot) {
+      return {
+        available: false,
+        canEdit: false,
+        source: scope,
+        unavailableReason: "Create or select a session to configure connected projects."
+      };
+    }
     await assertProjectDirectoryUsable(source.sourceRoot);
     try {
       return {

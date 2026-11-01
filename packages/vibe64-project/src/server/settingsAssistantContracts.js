@@ -254,11 +254,13 @@ export function settingsTool(operation) {
       }
       if (result.promptHints) output.promptHints = { canEdit: result.promptHints.canEdit, enabled: result.promptHints.enabled };
       const workflow = operation === "repository.workflow.save" ? result.workflow : result.repositoryWorkflow;
-      if (workflow) output.repositoryWorkflow = {
-        ...(typeof workflow.available === "boolean" ? { available: workflow.available } : {}),
-        ...(typeof workflow.canEdit === "boolean" ? { canEdit: workflow.canEdit } : {}),
-        requirePullRequest: workflow.requirePullRequest
-      };
+      if (workflow) {
+        output.repositoryWorkflow = {
+          ...(typeof workflow.available === "boolean" ? { available: workflow.available } : {}),
+          ...(typeof workflow.canEdit === "boolean" ? { canEdit: workflow.canEdit } : {}),
+          requirePullRequest: workflow.requirePullRequest
+        };
+      }
       const database = operation === "development-database.scope.save" && result.ok === true ? result : result.developmentDatabase;
       if (database) {
         const value = database;

@@ -159,8 +159,10 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
     };
     try {
       if (state.upstream) checked.upstreamCommit = await observe(state.upstream);
-      if (state.push) checked.pushCommit = JSON.stringify(state.push) === JSON.stringify(state.upstream)
-        ? checked.upstreamCommit : await observe(state.push, { allowMissing: true });
+      if (state.push) {
+        checked.pushCommit = JSON.stringify(state.push) === JSON.stringify(state.upstream)
+          ? checked.upstreamCommit : await observe(state.push, { allowMissing: true });
+      }
       checked.checkedAt = new Date().toISOString();
     } catch (error) {
       checked.error = error.message;
@@ -295,8 +297,9 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
         }
       } else {
         assertReview(state);
-        if (action === "configure") await configureRemotes(state);
-        else if (action === "switch" || action === "create") {
+        if (action === "configure") {
+          await configureRemotes(state);
+        } else if (action === "switch" || action === "create") {
           await assertClean(state);
           const branch = input.branch;
           if (typeof branch !== "string" || !branch || branch.startsWith("-") ||
