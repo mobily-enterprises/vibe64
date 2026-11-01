@@ -261,10 +261,10 @@ function createOpenCodeConversationEvents({
   /**
    * The observation of a Main conversation turn, which also publishes its progress.
    * @param {object} context
-   * @param {(event: object) => unknown} [onEvent]
+   * @param {((event: object) => unknown) | null} [onEvent] null or absent when the turn's caller gave no event stream
    */
-  function observationProjection(context, onEvent = doNothing) {
-    return projectObservation(context, onEvent, true);
+  function observationProjection(context, onEvent) {
+    return projectObservation(context, onEvent ?? doNothing, true);
   }
 
   /**

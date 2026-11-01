@@ -194,7 +194,8 @@ function createOpenCodeScopedPreparation({
   async function prepareDetachedChatTurn(sessionId = "", input = {}, options = {}, {
     waitForCompletion = true
   } = {}) {
-    const { onEvent = doNothing } = options;
+    // The provider call passes onEvent: null when its caller gave no event stream.
+    const onEvent = options.onEvent ?? doNothing;
     const { onPromptSending = doNothing } = input;
     const prompt = openCodeDetachedPrompt(input);
     if (!prompt) {

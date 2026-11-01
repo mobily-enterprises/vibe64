@@ -113,7 +113,8 @@ function createTemporaryConversationTurns({
     else temporarySaves.delete(sessionId);
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
-    const { onEvent = doNothing } = ctx;
+    // A turn without an event stream may carry onEvent: null (the provider call context sets it so).
+    const onEvent = ctx.onEvent ?? doNothing;
     return {
       ...ctx,
       onEvent(event) {
