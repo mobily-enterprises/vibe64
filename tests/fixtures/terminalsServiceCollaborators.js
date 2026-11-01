@@ -44,11 +44,12 @@ function completedProjectDouble(project) {
 function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServices = null, ...dependencies }) {
   completedProjectDouble(dependencies.project);
   return {
-    actions: NO_ACTIONS,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     ...dependencies,
+    // A test helper that has no catalogue of its own passes null.
+    actions: dependencies.actions || NO_ACTIONS,
     projectServices: projectServices ?? createProjectServices(),
     publishSessionChanged: {
       agentTerminal: publishNothing,
