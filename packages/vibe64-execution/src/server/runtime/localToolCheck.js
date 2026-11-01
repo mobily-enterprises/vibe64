@@ -39,7 +39,7 @@ function versionText(output = "") {
   return /\d+\.\d+(?:\.\d+)?/u.exec(text)?.[0] || "";
 }
 
-async function probe(commands = [], { cwd, runCommand, runtimes, skipStubs, version = "--version" }) {
+async function probe(commands, { cwd, runCommand, runtimes, skipStubs, version = "--version" }) {
   const result = await runCommand({
     actor: "app",
     args: ["-c", PROBE_SCRIPT, "probe", skipStubs ? "1" : "", version, ...commands],
