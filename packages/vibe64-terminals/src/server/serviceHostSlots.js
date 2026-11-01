@@ -7,7 +7,11 @@
  * @param {ServiceState} dependencies.state
  */
 function createServiceHostSlots({ state }) {
-  function configureAssistantRuntime(input = {}) {
+  /**
+   * Replaces the named assistant runtime functions a composing host supplies; the rest keep their defaults.
+   * @param {object} input
+   */
+  function configureAssistantRuntime(input) {
     for (const name of [
       "claudeConnectionStatus",
       "codexConnectionStatus",
@@ -30,25 +34,40 @@ function createServiceHostSlots({ state }) {
     return { configured: true, ok: true };
   }
 
-  function setSourceEditorProvider(provider = null) {
+  /**
+   * Fills or, at its owner's shutdown, clears the source editor provider.
+   * @param {object | null} provider
+   */
+  function setSourceEditorProvider(provider) {
     state.slots.sourceEditorProvider = provider;
   }
 
+  /**
+   * Fills or, at its owner's shutdown, clears connected workspace preparation.
+   * @param {Function | null} prepare
+   */
   function setConnectedPreparation(prepare) {
-    if (typeof prepare !== "function") throw new TypeError("Connected preparation requires its Sessions owner.");
     state.slots.connectedPreparation = prepare;
   }
 
+  /**
+   * Fills or, at its owner's shutdown, clears what follows a completed plan.
+   * @param {Function | null} handler
+   */
   function setPlanCompleted(handler) {
-    if (typeof handler !== "function") throw new TypeError("Plan completion requires its Sessions owner.");
     state.slots.planCompleted = handler;
   }
 
-  function setDatabaseToolsProvider(provider = null) {
+  /**
+   * Fills or, at its owner's shutdown, clears the database tools provider.
+   * @param {object | null} provider
+   */
+  function setDatabaseToolsProvider(provider) {
     state.slots.databaseToolsProvider = provider;
   }
 
   return Object.freeze({
+    // readable-check: allow setter-seam - filled by vibe64.accounts and a composing host's auth setup; convert with its supplier
     configureAssistantRuntime,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setConnectedPreparation,
