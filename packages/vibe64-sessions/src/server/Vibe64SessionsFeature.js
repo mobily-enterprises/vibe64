@@ -139,13 +139,26 @@ const Vibe64SessionsFeature = defineFeature({
     }
   },
   /**
-   * Setup always registers the approval count reader, so shutdown always releases it.
-   * @param {{ terminals: TerminalsService }} capabilities
+   * Setup always fills the same slots, so shutdown always clears them: the approval count reader and the
+   * template observer first, then the sessions' work stops, and then the terminals' plan completion and
+   * connected preparation, which that work may still use while it stops.
+   * @param {object} capabilities
+   * @param {ProjectService} capabilities.project
+   * @param {TerminalsService} capabilities.terminals
    * @param {{ outputs: { sessions: SessionsService } }} context
    */
-  async shutdown({ terminals }, { outputs }) {
+  async shutdown({ project, terminals }, { outputs }) {
     slotReleases.get(outputs.sessions)();
-    await stopSessionWork({ sessions: outputs.sessions, terminals });
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
+    project.setTemplateApplicationObserver(null);
+    try {
+      await stopSessionWork({ sessions: outputs.sessions, terminals });
+    } finally {
+      // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+      terminals.setPlanCompleted(null);
+      // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+      terminals.setConnectedPreparation(null);
+    }
   }
 });
 

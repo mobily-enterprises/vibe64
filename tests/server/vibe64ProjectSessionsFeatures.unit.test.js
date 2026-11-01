@@ -289,12 +289,19 @@ test("project and sessions register routes and captured actions during setup", a
   assert.equal(resumed.ok, true, JSON.stringify(resumed));
   assert.deepEqual(configurationReads, [{ sessionId: "session-1" }]);
 
-  // Shutdown releases the approval count reader setup registered, then stops the sessions' work.
+  // Shutdown releases the approval count reader setup registered, stops the sessions' work and clears every slot setup filled.
   const invalidations = [];
+  const cleared = [];
   await Vibe64SessionsFeature.shutdown({
-    terminals: { async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; } }
+    project: { setTemplateApplicationObserver(observer) { cleared.push(["templateApplicationObserver", observer]); } },
+    terminals: {
+      async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; },
+      setConnectedPreparation(prepare) { cleared.push(["connectedPreparation", prepare]); },
+      setPlanCompleted(handler) { cleared.push(["planCompleted", handler]); }
+    }
   }, { outputs: sessionOutputs });
   assert.deepEqual(invalidations, [{ reason: "server-shutdown" }]);
+  assert.deepEqual(cleared, [["templateApplicationObserver", null], ["planCompleted", null], ["connectedPreparation", null]]);
 });
 
 test("sessions start standalone renewal recovery without blocking Feature boot", async () => {

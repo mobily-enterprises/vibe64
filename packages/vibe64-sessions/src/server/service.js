@@ -296,6 +296,7 @@ function createService({
     inspectRepositoryVersionFiles: repositoryReads.inspectRepositoryVersionFiles,
     reviewIncomingContribution: repositoryReads.reviewIncomingContribution
   });
+  // The sessions feature's shutdown clears both.
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
   terminals.setPlanCompleted(saveAfterCompletedPlan);
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals

@@ -65,6 +65,7 @@
         "runtime.logger",
         "vibe64.project",
         "vibe64.sessions",
+        "vibe64.source-editor",
         "vibe64.terminals"
       ]
     },

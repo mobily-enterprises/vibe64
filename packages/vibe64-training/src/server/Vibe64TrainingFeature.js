@@ -46,13 +46,13 @@ const Vibe64TrainingFeature = defineFeature({
     http: "runtime.http",
     project: "vibe64.project",
     sessions: "vibe64.sessions",
+    sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals"
   },
   optional: {
     colleague: "vibe64.colleague",
     learningFacts: "vibe64.training.learning-facts",
-    trainingHost: "vibe64.training.host",
-    sourceEditor: "vibe64.source-editor"
+    trainingHost: "vibe64.training.host"
   },
   provides: {
     training: "vibe64.training"
@@ -65,11 +65,11 @@ const Vibe64TrainingFeature = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {ProjectService} capabilities.project
    * @param {SessionsService} capabilities.sessions
+   * @param {SourceEditorService} capabilities.sourceEditor
    * @param {TerminalsService} capabilities.terminals
    * @param {ColleagueService | null} capabilities.colleague releases a closed lesson's teacher thread
    * @param {ReadonlyArray<LearningFact> | null} capabilities.learningFacts a host's own fact readers
    * @param {TrainingService | null} capabilities.trainingHost
-   * @param {SourceEditorService | null} capabilities.sourceEditor
    * @param {FeatureSetupContext} context
    */
   setup({
@@ -79,11 +79,11 @@ const Vibe64TrainingFeature = defineFeature({
     http,
     project,
     sessions,
+    sourceEditor,
     terminals,
     colleague,
     learningFacts,
-    trainingHost,
-    sourceEditor
+    trainingHost
   }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingVisualResourceRoutes(http);
@@ -123,7 +123,7 @@ const Vibe64TrainingFeature = defineFeature({
     // The learner's ordinary Files editor saves in a practice project record
     // their code authorship in the learner's code ledger.
     // readable-check: allow setter-seam - cycle: vibe64.training requires vibe64.source-editor
-    sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: training.codeAuthorship }));
+    sourceEditor.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: training.codeAuthorship }));
     slotReleases.set(training, [releasePracticeActor, releaseLearningMode]);
     return { training };
   },
@@ -144,13 +144,16 @@ const Vibe64TrainingFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {SourceEditorService} capabilities.sourceEditor
    * @param {TrainingService | null} capabilities.trainingHost
    * @param {{ outputs: { training: TrainingService } }} context
    */
-  shutdown({ trainingHost }, { outputs }) {
-    // A host's training is the host's own: setup registered no core slots for it, so there is nothing to release.
+  shutdown({ sourceEditor, trainingHost }, { outputs }) {
+    // A host's training is the host's own: setup filled no slots for it, so there is nothing to clear.
     if (trainingHost) return;
     for (const release of slotReleases.get(outputs.training)) release();
+    // readable-check: allow setter-seam - cycle: vibe64.training requires vibe64.source-editor
+    sourceEditor.setFileSaveOwner(null);
   }
 });
 

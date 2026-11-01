@@ -414,20 +414,25 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
     server.route({ method, url, config: { surface: options.surface }, handler });
   } } };
   const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
+  const fileSaveOwners = [];
+  const sourceEditor = { setFileSaveOwner(owner) { fileSaveOwners.push(owner); } };
   const { training } = await Vibe64TrainingFeature.setup({ actionCatalogue: actions, http,
     env: {},
     events: { async publish() {} },
     logger: { warn() {} },
     project: { createRuntime: unexpected, createRuntimeWithoutSource: unexpected, runInProjectContext: unexpected },
-    sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
+    sessions: { createSession: unexpected, inspectSession: unexpected },
+    sourceEditor,
+    terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
+  assert.deepEqual(fileSaveOwners.map(owner => typeof owner), ["function"], "the learner's Files saves record their code authorship");
   // Learner-scoped realtime notices go through the runtime events.
   assert.deepEqual(Vibe64TrainingFeature.optional, {
     colleague: "vibe64.colleague",
     learningFacts: "vibe64.training.learning-facts",
-    trainingHost: "vibe64.training.host",
-    sourceEditor: "vibe64.source-editor"
+    trainingHost: "vibe64.training.host"
   });
   assert.equal(Vibe64TrainingFeature.requires.events, "runtime.events");
+  assert.equal(Vibe64TrainingFeature.requires.sourceEditor, "vibe64.source-editor");
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises",
@@ -500,6 +505,9 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
     assert.equal(result.input.vibe64User, undefined);
     assert.equal(result.context.vibe64Action, undefined, "Working/Colleague do not acquire OS-owner authority");
   }
+  // Shutdown releases the core readers setup registered and clears the save owner it filled.
+  Vibe64TrainingFeature.shutdown({ sourceEditor, trainingHost: null }, { outputs: { training } });
+  assert.deepEqual(fileSaveOwners.slice(1), [null]);
 });
 
 test("a host's Training Feature shuts down without releasing core slots it never registered", async t => {
