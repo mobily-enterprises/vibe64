@@ -120,5 +120,6 @@
 /** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
 /** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {ServiceGoals["continueGoalAfterAccountChange"]} ContinueGoalAfterAccountChange */
 
 export {};

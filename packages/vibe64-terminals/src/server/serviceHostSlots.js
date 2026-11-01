@@ -9,6 +9,8 @@
 function createServiceHostSlots({ state }) {
   /**
    * Replaces the named assistant runtime functions a composing host supplies; the rest keep their defaults.
+   * Slot filled by a composing host (vibe64.accounts signInStatusRuntime.js and aiConnectionRuntime.js):
+   * convert with its supplier.
    * @param {object} input
    */
   function configureAssistantRuntime(input) {

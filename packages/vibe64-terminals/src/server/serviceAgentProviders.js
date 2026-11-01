@@ -19,7 +19,7 @@ import { createSessionAttachments } from "./sessionAttachments.js";
 /** @typedef {import("./types.js").ReadClaudeAccountStatus} ReadClaudeAccountStatus */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
 /** @typedef {import("./types.js").ServiceCommandServices} ServiceCommandServices */
-/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
+/** @typedef {import("./types.js").ContinueGoalAfterAccountChange} ContinueGoalAfterAccountChange */
 /** @typedef {import("./types.js").ServiceMainConversationHost} ServiceMainConversationHost */
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 
@@ -41,7 +41,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  * @param {object} dependencies.codexTerminalController a host's Codex terminal settings
  * @param {ServiceCommandServices} dependencies.commands
- * @param {ServiceGoals["continueGoalAfterAccountChange"]} dependencies.continueGoalAfterAccountChange
+ * @param {ContinueGoalAfterAccountChange} dependencies.continueGoalAfterAccountChange
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} dependencies.opencodeTerminalController a host's OpenCode terminal settings

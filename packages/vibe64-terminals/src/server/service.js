@@ -538,7 +538,6 @@ function createService({
     runDetachedAgentChatTurn: agentConversations.runDetachedAgentChatTurn,
     streamDetachedAgentChatTurn: agentConversations.streamDetachedAgentChatTurn,
     deleteDetachedAgentChatThread: agentConversations.deleteDetachedAgentChatThread,
-    describeAgentProvider: assistant.describeAgentProvider,
     inspectAssistantAccess: assistant.inspectAssistantAccess,
     requireAssistantAccess: assistant.requireAssistantAccess,
     requireAssistantSelectionAccess: assistant.requireAssistantSelectionAccess,

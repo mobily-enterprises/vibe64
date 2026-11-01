@@ -117,10 +117,6 @@ function createServiceAssistant({
     }
   }
 
-  function describeAgentProvider(options = {}) {
-    return sessionAgent.describeProvider(options);
-  }
-
   async function inspectAssistantAccess(sessionId, options = {}) {
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
     const preferences = assistantRoutingFromMetadata(context.session.metadata);
@@ -641,7 +637,6 @@ function createServiceAssistant({
     cancelAssistantRoutingForSelection,
     cancelSessionPromptHints,
     createConversationHost,
-    describeAgentProvider,
     ensureAgentSession,
     generateSessionPromptHints,
     inspectAssistantAccess,

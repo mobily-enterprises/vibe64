@@ -37,7 +37,7 @@ function attachmentMultipartError(message) {
 
 function normalizeMultipartFilePart(part = {}) {
   const fieldName = String(part.fieldname || "").trim();
-  // readable-check: allow method-probe - input validation: only a file part carries a readable file stream
+  // readable-check: allow method-probe - platform object: an upload stream is a Node readable stream
   if (part.type !== "file" || !part.file || typeof part.file.pipe !== "function") {
     throw attachmentMultipartError("Attachment upload accepts exactly one file and no other fields.");
   }
