@@ -124,11 +124,13 @@ async function readBack({ target, version, artifacts, credentials }) {
     if (ours.has(asset.name)) assets.push({ name: asset.name, sha256: await assetDigest(asset, token), size: asset.size });
   }
   const differing = assets.some((asset) => ours.get(asset.name) !== asset.sha256);
-  if (!differing && assets.length < files.length) return {
-    published: false,
-    release: release.id,
-    partial: assets.map(({ name }) => name).sort()
-  };
+  if (!differing && assets.length < files.length) {
+    return {
+      published: false,
+      release: release.id,
+      partial: assets.map(({ name }) => name).sort()
+    };
+  }
   return {
     published: true,
     checksum: namedFilesChecksum(assets),

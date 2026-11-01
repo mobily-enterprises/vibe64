@@ -80,12 +80,14 @@ function checkCommandRunner({ projectSlug = "", runCommand = runVibe64Command } 
       operationId: "publish-check",
       timeout: timeoutMs
     }));
-    if (result?.ok === true) return {
-      status: 0,
-      signal: null,
-      stdout: Buffer.from(result.stdout || ""),
-      stderr: Buffer.from(result.stderr || "")
-    };
+    if (result?.ok === true) {
+      return {
+        status: 0,
+        signal: null,
+        stdout: Buffer.from(result.stdout || ""),
+        stderr: Buffer.from(result.stderr || "")
+      };
+    }
     const reason = result?.timedOut
       ? "timed out"
       : result?.exitCode == null ? String(result?.error || "could not start") : `exited with status ${result.exitCode}`;

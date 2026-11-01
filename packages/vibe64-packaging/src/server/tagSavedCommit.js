@@ -68,12 +68,16 @@ async function tagSavedCommit({
     for (const tag of tags) {
       await git(["check-ref-format", `refs/tags/${tag}`]);
       const current = await git(["rev-parse", "--verify", "--quiet", "--end-of-options", `refs/tags/${tag}^{commit}`], { optional: true });
-      if (!current) created.push(tag);
-      else if (current === expectedCommit) existing.push(tag);
-      else refuse("VIBE64_PUBLISH_TAG_CONFLICT", `Tag ${tag} already points at another commit. Choose a new version.`, {
-        tag,
-        commit: current
-      });
+      if (!current) {
+        created.push(tag);
+      } else if (current === expectedCommit) {
+        existing.push(tag);
+      } else {
+        refuse("VIBE64_PUBLISH_TAG_CONFLICT", `Tag ${tag} already points at another commit. Choose a new version.`, {
+          tag,
+          commit: current
+        });
+      }
     }
     if (created.length) {
       // One transaction: the baseline must still be the expected commit and no tag may exist.

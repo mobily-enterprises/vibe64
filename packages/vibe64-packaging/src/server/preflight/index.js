@@ -85,10 +85,12 @@ const baselineSavedAndPushed = definePreflightCheck({
   run: ({ baseline = {}, plan = {} }) => {
     if (!baseline.saved) return { ok: false, message: "Save your changes before releasing." };
     if (!baseline.pushed) return { ok: false, message: "Push the saved baseline before releasing." };
-    if (baseline.commit !== plan.savedCommit) return {
-      ok: false,
-      message: "The plan does not use the saved baseline. Review the plan again."
-    };
+    if (baseline.commit !== plan.savedCommit) {
+      return {
+        ok: false,
+        message: "The plan does not use the saved baseline. Review the plan again."
+      };
+    }
     return { ok: true, message: `Releasing saved commit ${baseline.commit.slice(0, 7)}.` };
   }
 });
