@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { currentCodexLoginGeneration, writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/codexAuthState.js";
-import { codexAppServerRuntimeDir } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { codexAppServerRuntimeDir } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { createCodexRuntimeHost, createCodexSessionRuntimeHost } from "../../packages/vibe64-terminals/src/server/codexRuntimeHost.js";
 
 // A running Codex app-server keeps the credentials it started with. Each

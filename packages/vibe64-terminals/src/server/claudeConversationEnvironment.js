@@ -1,7 +1,7 @@
 import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { claudeModelConfiguration } from "@jskit-ai/assistant-core/server/claude-process";
-import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   vibe64ConversationInstructions,

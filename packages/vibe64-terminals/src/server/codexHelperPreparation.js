@@ -1,4 +1,4 @@
-import { CODEX_APP_SERVER_EXECUTION_MODES } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { CODEX_APP_SERVER_EXECUTION_MODES } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";

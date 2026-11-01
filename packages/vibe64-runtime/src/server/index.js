@@ -1,6 +1,6 @@
 export {
   codexAppServerRuntimeBaseDir
-} from "./codexAppServerProvider.js";
+} from "./codexAppServerAgent.js";
 export {
   VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_STATUS,

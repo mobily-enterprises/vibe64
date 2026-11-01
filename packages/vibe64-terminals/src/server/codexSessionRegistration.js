@@ -99,7 +99,7 @@ import {
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   assertCodexAuthPreflightReady,
   createCodexAppServerAgentProvider
-} from "@local/vibe64-runtime/server/codexAppServerProvider";
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import {
   createCodexProviderConnectionStore
 } from "@local/vibe64-core/server/codexProviderConnections";

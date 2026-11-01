@@ -10,7 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 
-import { CodexAppServerAgentProvider, startCodexAppServerProcess } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { CodexAppServerAgentProvider, startCodexAppServerProcess } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 

@@ -194,7 +194,7 @@ Changing the composer selection never rewrites historical attribution.
 
 - `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
 
-- `packages/vibe64-runtime/src/server/codexAppServerProvider.js`
+- `packages/vibe64-runtime/src/server/codexAppServerAgent.js`
 - `packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`

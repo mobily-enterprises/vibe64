@@ -10,7 +10,7 @@ import { __testables, readWorkPlan, readWorkPlanPage, manageWorkPlan } from "../
 
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 
-import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerAgent";
 
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";

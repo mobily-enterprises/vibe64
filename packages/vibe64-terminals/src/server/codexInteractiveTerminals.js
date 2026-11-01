@@ -16,7 +16,7 @@ import {
   nonRetryableTerminalFailure,
   vibe64Result
 } from "./terminalShared.js";
-import { codexAppServerEndpointForTarget } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { codexAppServerEndpointForTarget } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { codexSessionWorktreeIsUnavailable } from "./codexSessionEnvironment.js";
 import { codexConversationIdForWorkdir, codexThreadIdForWorkdir, withCodexState } from "./codexConversationStorage.js";

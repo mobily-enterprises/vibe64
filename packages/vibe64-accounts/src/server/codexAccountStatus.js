@@ -1,4 +1,4 @@
-import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";

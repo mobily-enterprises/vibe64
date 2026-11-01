@@ -11,7 +11,7 @@ import {
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost
-} from "@local/vibe64-runtime/server/codexAppServerProvider";
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import {
   assistantRoutingFromMetadata,
   assistantRoutingRequestFromMetadata

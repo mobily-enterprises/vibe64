@@ -25,7 +25,7 @@ import {
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import {
   CODEX_APP_SERVER_PROVIDER_ID
-} from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+} from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV

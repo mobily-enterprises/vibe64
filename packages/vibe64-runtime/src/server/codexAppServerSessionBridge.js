@@ -12,7 +12,7 @@ import {
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
   codexCliResumeCommand
-} from "./codexAppServerProvider.js";
+} from "./codexAppServerAgent.js";
 import { vibe64SessionDebugLog } from "./sessionDebugLog.js";
 
 import {
