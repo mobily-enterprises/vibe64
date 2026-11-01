@@ -11,7 +11,8 @@ import test from "node:test";
 
 import { vibe64PackagingInspection } from "../../packages/vibe64-genesis/src/server/packaging.js";
 import { createConfirmationService } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
-import { changelogSection, createReleaseOrchestrator, outputExcerpt } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
+import { createReleaseOrchestrator } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
+import { changelogSection, outputExcerpt } from "../../packages/vibe64-publishing/src/server/releaseRecords.js";
 import { createReleaseHistoryStore } from "../../packages/vibe64-publishing/src/server/state/releaseHistoryStore.js";
 import { createTargetsStore } from "../../packages/vibe64-publishing/src/server/state/targetsStore.js";
 
