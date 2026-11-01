@@ -49,37 +49,7 @@ function mysqlOrigin(field = {}, maps = {}) {
   return table && column ? { column, table } : null;
 }
 
-const DATABASE_DIALECT_FUNCTIONS = Object.freeze([
-  "commandResult",
-  "connectionOptions",
-  "databaseType",
-  "fieldOrigin",
-  "inspectSchema",
-  "lookupSearch",
-  "resultSet",
-  "sanitizeConnectionUrl",
-  "singleQuoteBackslashEscapes"
-]);
-
-function defineDatabaseDialect(definition = {}) {
-  if (
-    !toText(definition.client) ||
-    !toText(definition.engine) ||
-    !toText(definition.label) ||
-    !toText(definition.readOnlyBeginSql) ||
-    !Array.isArray(definition.urlProtocols) ||
-    definition.urlProtocols.length < 1 ||
-    !definition.queryOptions ||
-    typeof definition.queryOptions !== "object" ||
-    // readable-check: allow method-probe - input validation: a database dialect definition implements every adapter function
-    DATABASE_DIALECT_FUNCTIONS.some((name) => typeof definition[name] !== "function")
-  ) {
-    throw new TypeError("A database dialect must implement the complete server adapter contract.");
-  }
-  return Object.freeze(definition);
-}
-
-const POSTGRESQL_DIALECT = defineDatabaseDialect({
+const POSTGRESQL_DIALECT = Object.freeze({
   client: "pg",
   commandResult(raw) {
     return {
@@ -117,7 +87,7 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
   urlProtocols: Object.freeze(["postgres", "postgresql"])
 });
 
-const MYSQL_DIALECT = defineDatabaseDialect({
+const MYSQL_DIALECT = Object.freeze({
   client: "mysql2",
   commandResult(raw = {}, jsonSafeValue = (value) => value) {
     const response = Array.isArray(raw) ? raw[0] || {} : {};
@@ -170,7 +140,7 @@ const MYSQL_DIALECT = defineDatabaseDialect({
 });
 
 const DATABASE_DIALECTS = Object.freeze({
-  sqlite: defineDatabaseDialect({
+  sqlite: Object.freeze({
     client: "sqlite3",
     commandResult: (raw = {}, jsonSafeValue = (value) => value) => ({
       affectedRows: Number(raw.changes || 0),
@@ -224,19 +194,15 @@ function databaseDialect(kind = "") {
 }
 
 async function inspectDatabaseSchema({
-  connection = {},
+  connection,
   knex
-} = {}) {
-  if (!knex) {
-    throw new TypeError("inspectDatabaseSchema requires Knex.");
-  }
+}) {
   return databaseDialect(connection.engine).inspectSchema({ connection, knex });
 }
 
 export {
   DATABASE_DIALECTS,
   databaseDialect,
-  defineDatabaseDialect,
   driverText,
   inspectDatabaseSchema
 };

@@ -51,7 +51,6 @@ import {
 import {
   DATABASE_DIALECTS,
   databaseDialect,
-  defineDatabaseDialect,
   inspectDatabaseSchema
 } from "../../packages/vibe64-database-tools/src/server/databaseDialect.js";
 import {
@@ -225,10 +224,27 @@ test("database dialect registry is the single PostgreSQL and MySQL capability se
     () => databaseDialect("unsupported"),
     { code: "vibe64_session_database_client_unsupported" }
   );
-  assert.throws(
-    () => defineDatabaseDialect({ engine: "incomplete" }),
-    /complete server adapter contract/u
-  );
+  for (const dialect of Object.values(DATABASE_DIALECTS)) {
+    for (const name of ["client", "engine", "label", "readOnlyBeginSql"]) {
+      assert.ok(dialect[name], `${dialect.engine} ${name}`);
+    }
+    assert.ok(dialect.urlProtocols.length > 0, dialect.engine);
+    assert.equal(typeof dialect.queryOptions, "object", dialect.engine);
+    for (const name of [
+      "commandResult",
+      "connectionOptions",
+      "databaseType",
+      "fieldOrigin",
+      "inspectSchema",
+      "lookupSearch",
+      "resultSet",
+      "sanitizeConnectionUrl",
+      "singleQuoteBackslashEscapes"
+    ]) {
+      assert.equal(typeof dialect[name], "function", `${dialect.engine} ${name}`);
+    }
+    assert.equal(Object.isFrozen(dialect), true, dialect.engine);
+  }
 });
 
 test("database assistant structured schema stays inside the verified helper output bound", async () => {
