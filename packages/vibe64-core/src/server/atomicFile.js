@@ -31,6 +31,7 @@ async function writeJsonFileAtomic(filePath, value, options = {}) {
  * pending (a Map the caller owns), whether or not they failed.
  */
 async function serializeByKey(pending, key, operation) {
+  // The earlier operation's failure reached its own caller; this one only waits for it.
   const current = (pending.get(key) || Promise.resolve()).catch(() => {}).then(operation);
   pending.set(key, current);
   try {

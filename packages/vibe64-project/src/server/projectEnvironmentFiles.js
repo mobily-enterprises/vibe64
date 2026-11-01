@@ -205,6 +205,7 @@ async function writeGeneratedDotenv({
     await writeFileAtomic(filePath, expected, sharedFileModes());
   } catch (error) {
     if (preservedPath) {
+      // Best-effort restore of the preserved file; the write's own error is the one thrown.
       await rm(filePath, {
         force: true
       }).catch(() => null);

@@ -135,6 +135,7 @@ function createService({
   });
   const sessionEnvironment = createProjectSessionEnvironment({
     environment,
+    logger,
     resourceEnvironmentProvider,
     selection,
     sessionWork

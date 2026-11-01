@@ -7,6 +7,7 @@
 import path from "node:path";
 
 import { isPlainObject } from "./core.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 const LEARNING_SPACE_DIR = ".learning";
 const PRACTICE_SLUG_PATTERN = /^training-[a-f0-9]{32}$/u;
@@ -18,10 +19,7 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
 const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
 
 function practiceProjectDeletedError() {
-  return Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
-    code: PRACTICE_PROJECT_DELETED_CODE,
-    statusCode: 404
-  });
+  return new AppError(404, "This practice project was deleted. Its lesson is still in Learning.", { code: PRACTICE_PROJECT_DELETED_CODE });
 }
 
 function practiceIdFromSlug(slug = "") {

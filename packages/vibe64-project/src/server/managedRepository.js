@@ -6,6 +6,7 @@ import { pathExists, pathInside } from "@local/vibe64-core/server/core";
 import { normalizeProjectSlug, resolveProjectContextRoot, projectSlugFromName } from "@local/vibe64-core/server/studioProjectContext";
 import { assertProjectEffectAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { initializeManagedProject as initializePublicManagedProject, verifyManagedProjectSource } from "./managedProject.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("./types.js").ProjectService} ProjectService */
@@ -174,10 +175,7 @@ function assertProjectSessionAuthority(project = null, options = {}) {
 }
 
 function repositoryServiceError(code = "", message = "", statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message, { code });
 }
 
 export { createManagedProjectRepositoryService, readProjectForService, assertProjectRepositoryMode,

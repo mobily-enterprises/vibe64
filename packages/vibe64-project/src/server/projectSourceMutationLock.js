@@ -44,6 +44,7 @@ async function lockOwner(lockPath) {
 async function removeStaleLock(lockPath) {
   const [owner, details] = await Promise.all([
     lockOwner(lockPath),
+    // A lock file that is already gone has no details: nothing to remove.
     stat(lockPath).catch(() => null)
   ]);
   if (!details) {
@@ -100,6 +101,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
         token
       };
     } catch (error) {
+      // Closing the half-opened handle is cleanup; the open's error decides what happens next.
       await handle?.close().catch(() => null);
       if (error?.code !== "EEXIST") {
         throw error;

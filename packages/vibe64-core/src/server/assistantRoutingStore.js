@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
 import { isPlainObject } from "./isPlainObject.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 const writes = new Map();
 const setupRoles = Object.freeze({
@@ -66,13 +67,7 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
     try {
       const value = JSON.parse(await readFile(filePath, "utf8"));
       if (value.schemaVersion !== 5) {
-        throw Object.assign(new Error(
-          "Vibe64's saved AI settings need an upgrade. The workspace administrator must stop Vibe64, run this version's upgrade-state command, and restart it."
-        ),
-          {
-          code: "vibe64_assistant_routing_upgrade_required",
-          statusCode: 409
-        });
+        throw new AppError(409, "Vibe64's saved AI settings need an upgrade. The workspace administrator must stop Vibe64, run this version's upgrade-state command, and restart it.", { code: "vibe64_assistant_routing_upgrade_required" });
       }
       return validateAssistantRoutingConfiguration(value);
     } catch (error) {
@@ -86,13 +81,7 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
   async function write({ owner, nonOwner }, expectedRevision) {
     return serializeByKey(writes, filePath, async () => {
       const current = await read();
-      if (current.revision !== expectedRevision) throw Object.assign(new Error(
-        "Models changed in another tab. Reload and review the current choices."
-      ),
-        {
-        code: "vibe64_assistant_routing_stale",
-        statusCode: 409
-      });
+      if (current.revision !== expectedRevision) throw new AppError(409, "Models changed in another tab. Reload and review the current choices.", { code: "vibe64_assistant_routing_stale" });
       const next = validateAssistantRoutingConfiguration({ schemaVersion: 5, revision: current.revision + 1, owner, nonOwner });
       await writeFileAtomic(filePath, `${JSON.stringify(next)}\n`, { directoryMode: 0o700, fileMode: 0o600 });
       return next;

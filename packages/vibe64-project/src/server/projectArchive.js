@@ -38,6 +38,7 @@ import {
   writeArchiveLifecycle,
   writeJsonAtomic
 } from "./projectArchiveBundle.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
@@ -257,10 +258,7 @@ function createProjectArchiveService({
       });
       const pinnedSessionId = await readPinnedSessionId({ projectContextRoot, projectRuntimeRoot, slug });
       if (pinnedSessionId) {
-        throw Object.assign(new Error(`Unpin session ${pinnedSessionId} before deleting this project.`), {
-          code: "vibe64_project_pinned",
-          statusCode: 409
-        });
+        throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this project.`, { code: "vibe64_project_pinned" });
       }
       // A fresh archive may first ask the host for storage headroom; a resumed
       // one continues, because finishing it is what frees the space.
@@ -471,10 +469,7 @@ function createProjectArchiveService({
     });
     const pinnedSessionId = await readPinnedSessionId({ projectContextRoot, projectRuntimeRoot, slug });
     if (pinnedSessionId) {
-      throw Object.assign(new Error(`Unpin session ${pinnedSessionId} before deleting this practice project.`), {
-        code: "vibe64_project_pinned",
-        statusCode: 409
-      });
+      throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this practice project.`, { code: "vibe64_project_pinned" });
     }
     return { slug, namespace, existingState, projectRuntimeRoot };
   }
@@ -572,17 +567,11 @@ function createProjectArchiveService({
 }
 
 function notPractice() {
-  return Object.assign(new Error("Only practice projects can be deleted without an archive. Use Delete project instead."), {
-    code: "vibe64_project_not_practice",
-    statusCode: 409
-  });
+  return new AppError(409, "Only practice projects can be deleted without an archive. Use Delete project instead.", { code: "vibe64_project_not_practice" });
 }
 
 function practiceScopeRequired(slug = "") {
-  return Object.assign(new Error(`Practice project ${slug} can be archived or deleted only from its learner's Practice list.`), {
-    code: "vibe64_practice_scope_required",
-    statusCode: 409
-  });
+  return new AppError(409, `Practice project ${slug} can be archived or deleted only from its learner's Practice list.`, { code: "vibe64_practice_scope_required" });
 }
 
 async function withProjectDeletionLock(key, operation) {

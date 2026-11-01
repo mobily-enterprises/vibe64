@@ -16,6 +16,7 @@ import { envScope } from "./projectEnvironment.js";
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 /** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 function projectEnvironmentResult(resolved, input, userRecords) {
   if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
@@ -49,12 +50,14 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * releasing a session's managed resources.
  * @param {object} dependencies
  * @param {ProjectEnvironment} dependencies.environment
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
  */
 function createProjectSessionEnvironment({
   environment,
+  logger,
   resourceEnvironmentProvider,
   selection,
   sessionWork
@@ -65,7 +68,10 @@ function createProjectSessionEnvironment({
         // A failed read is not evidence of readiness. The ordinary preparation
         // path below remains responsible for provisioning and its diagnostics.
         const records = await environment.userEnvRecords();
-        const resolved = await environment.resolvedProjectEnvironment(input, records).catch(() => null);
+        const resolved = await environment.resolvedProjectEnvironment(input, records).catch((error) => {
+          logger.warn({ error }, "Reading the prepared project environment failed; it is prepared again.");
+          return null;
+        });
         if (resolved?.resourcesPrepared && await projectEnvironmentFilesAreCurrent({
           environment: resolved.projectEnvironment,
           files: resolved.environmentFiles,

@@ -90,6 +90,7 @@ function createPersonalAiProfileStore({
 
   async function write(profile = {}) {
     const normalized = normalizePersonalAiProfile(profile);
+    // The earlier write's failure reached its own caller; this write only waits for it.
     const operation = pendingWrite.catch(() => {}).then(async () => {
       await writeJsonFileAtomic(filePath, normalized, { directoryMode: 0o700, fileMode: 0o600 });
       return normalized;

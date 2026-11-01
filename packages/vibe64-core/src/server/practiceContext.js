@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 // The request-scoped project context and its private practice grant. This is
 // the lowest layer of project access: the Studio project context and the
@@ -91,10 +92,7 @@ function retainPracticeContext(access) {
 function assertProjectEffectAdmission() {
   const scope = currentProjectRequestContext()?.[practiceScopeKey]?.scope;
   if (scope && !["create", "write"].includes(scope.access)) {
-    throw Object.assign(new Error("Read this saved lesson's current authority before starting new practice work."), {
-      code: "vibe64_practice_effect_admission_required",
-      statusCode: 409
-    });
+    throw new AppError(409, "Read this saved lesson's current authority before starting new practice work.", { code: "vibe64_practice_effect_admission_required" });
   }
 }
 

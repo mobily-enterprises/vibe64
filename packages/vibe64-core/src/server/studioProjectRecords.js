@@ -31,6 +31,7 @@ import {
   resolveProjectRuntimeConfigRoot
 } from "./projectState.js";
 import { VIBE64_PROJECTS_ROOT_ENV, resolveDefaultProjectsRoot } from "./studioRoots.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 // Project records and their saved metadata: slugs, context and runtime
 // roots, metadata files and the GitHub repository read from Git remotes.
@@ -58,9 +59,7 @@ function projectCatalogUnavailableError() {
 }
 
 function projectSlugExistsError() {
-  const error = new Error("Project name already has local source or runtime state. Choose a different project name.");
-  error.code = "vibe64_project_slug_exists";
-  error.statusCode = 409;
+  const error = new AppError(409, "Project name already has local source or runtime state. Choose a different project name.", { code: "vibe64_project_slug_exists" });
   return error;
 }
 
@@ -69,18 +68,12 @@ function projectSlugExistsError() {
  */
 function assertCatalogueSlugAllowed(slug = "") {
   if (PRACTICE_SLUG_PATTERN.test(slug)) {
-    throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."),
-      {
-      code: "vibe64_project_slug_reserved",
-      statusCode: 409
-    });
+    throw new AppError(409, "Project names like training-<id> are reserved for practice projects. Choose a different project name.", { code: "vibe64_project_slug_reserved" });
   }
 }
 
 function projectDeletingError() {
-  const error = new Error("Project deletion is in progress. Retry deletion before using this project.");
-  error.code = "vibe64_project_deleting";
-  error.statusCode = 409;
+  const error = new AppError(409, "Project deletion is in progress. Retry deletion before using this project.", { code: "vibe64_project_deleting" });
   return error;
 }
 
@@ -94,11 +87,7 @@ function assertCatalogueRepositoryMetadata(metadata = {}) {
   if (projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     return metadata;
   }
-  const error = new Error(
-    "Catalogue projects cannot use a project namespace as local source. Correct this project record explicitly before opening it."
-  );
-  error.code = "vibe64_hosted_local_source_unsupported";
-  error.statusCode = 409;
+  const error = new AppError(409, "Catalogue projects cannot use a project namespace as local source. Correct this project record explicitly before opening it.", { code: "vibe64_hosted_local_source_unsupported" });
   throw error;
 }
 

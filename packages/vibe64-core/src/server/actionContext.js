@@ -9,6 +9,7 @@ import { isLocalStudioRequest } from "./localStudioRequest.js";
 import { logOperationalEvent } from "./logging.js";
 import { assertLearningModeAllowsProject } from "./learningMode.js";
 import { assertTeamAiAllowsProject } from "./teamAiGate.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionDefinition} ActionDefinition */
@@ -19,7 +20,7 @@ import { assertTeamAiAllowsProject } from "./teamAiGate.js";
 /** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
 
 function actionContextError(code, message, statusCode = 403) {
-  return Object.assign(new Error(message), { code, statusCode });
+  return new AppError(statusCode, message, { code });
 }
 
 function actionProjectSlug(input, context) {
