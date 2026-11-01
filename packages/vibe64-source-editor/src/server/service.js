@@ -356,8 +356,14 @@ function createService({
     return fileSaveOwner ? runSourceEditorOperation(() => fileSaveOwner({ input, save })) : save();
   }
 
-  function setFileSaveOwner(owner = null) {
-    if (owner !== null && typeof owner !== "function") throw new TypeError("A source file save owner must be a function.");
+  /**
+   * Fills or, at its owner's shutdown, clears the owner that wraps each file save.
+   * @param {Function | null} owner
+   */
+  function setFileSaveOwner(owner) {
+    if (owner !== null && typeof owner !== "function") {
+      throw new TypeError("A source file save owner must be a function or null.");
+    }
     fileSaveOwner = owner;
   }
 

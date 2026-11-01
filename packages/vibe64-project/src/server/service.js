@@ -95,7 +95,8 @@ function createService({
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
-  // Sessions sets the observer of an applied starter through setTemplateApplicationObserver after construction.
+  // Sessions sets the observer of an applied starter through setTemplateApplicationObserver after construction
+  // and clears it at its shutdown.
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
   let templateApplicationObserver = null;
   const selection = createProjectSelection({ logger, projectContext });
@@ -155,9 +156,10 @@ function createService({
     const result = await projectResult(() => onboarding.applyProjectTemplateState(input));
     // The starter changed the Stack after the source locks were released; the
     // session owner prepares its workspace (dependencies, managed resources).
-    if (result?.ok === true && templateApplicationObserver) {
+    const observer = templateApplicationObserver;
+    if (result?.ok === true && observer) {
       void Promise.resolve()
-        .then(() => templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
+        .then(() => observer({ sessionId: String(input.sessionId || "").trim() }))
         .catch((error) => logger.warn({ error: error?.message }, "Workspace preparation after a starter could not start."));
     }
     return result;
@@ -345,9 +347,13 @@ function createService({
     );
   }
 
+  /**
+   * Fills or, at its owner's shutdown, clears the observer of an applied starter.
+   * @param {Function | null} observer
+   */
   function setTemplateApplicationObserver(observer) {
-    if (typeof observer !== "function") {
-      throw new TypeError("Vibe64 template application observer must be a function.");
+    if (observer !== null && typeof observer !== "function") {
+      throw new TypeError("Vibe64 template application observer must be a function or null.");
     }
     templateApplicationObserver = observer;
   }

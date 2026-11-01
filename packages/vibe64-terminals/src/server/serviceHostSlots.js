@@ -1,16 +1,16 @@
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 
 /**
- * What a composing host fills after construction: the source editor, connected preparation, plan
+ * What other owners fill after construction: the source editor, connected preparation, plan
  * completion and database tools providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  */
 function createServiceHostSlots({ state }) {
   /**
-   * Replaces the named assistant runtime functions a composing host supplies; the rest keep their defaults.
-   * Slot filled by a composing host (vibe64.accounts signInStatusRuntime.js and aiConnectionRuntime.js):
-   * convert with its supplier.
+   * Replaces the named assistant runtime functions an owner supplies; the rest keep their defaults.
+   * vibe64.accounts fills them (signInStatusRuntime.js and aiConnectionRuntime.js), and so does a
+   * composing host's auth setup.
    * @param {object} input
    */
   function configureAssistantRuntime(input) {
@@ -41,6 +41,9 @@ function createServiceHostSlots({ state }) {
    * @param {object | null} provider
    */
   function setSourceEditorProvider(provider) {
+    if (provider !== null && typeof provider !== "object") {
+      throw new TypeError("The source editor provider must be an object or null.");
+    }
     state.slots.sourceEditorProvider = provider;
   }
 
@@ -49,6 +52,9 @@ function createServiceHostSlots({ state }) {
    * @param {Function | null} prepare
    */
   function setConnectedPreparation(prepare) {
+    if (prepare !== null && typeof prepare !== "function") {
+      throw new TypeError("Connected workspace preparation must be a function or null.");
+    }
     state.slots.connectedPreparation = prepare;
   }
 
@@ -57,6 +63,9 @@ function createServiceHostSlots({ state }) {
    * @param {Function | null} handler
    */
   function setPlanCompleted(handler) {
+    if (handler !== null && typeof handler !== "function") {
+      throw new TypeError("The completed plan handler must be a function or null.");
+    }
     state.slots.planCompleted = handler;
   }
 
@@ -65,11 +74,14 @@ function createServiceHostSlots({ state }) {
    * @param {object | null} provider
    */
   function setDatabaseToolsProvider(provider) {
+    if (provider !== null && typeof provider !== "object") {
+      throw new TypeError("The database tools provider must be an object or null.");
+    }
     state.slots.databaseToolsProvider = provider;
   }
 
   return Object.freeze({
-    // readable-check: allow setter-seam - filled by vibe64.accounts and a composing host's auth setup; convert with its supplier
+    // readable-check: allow setter-seam - cycle: vibe64.accounts requires vibe64.terminals, and a composing host's auth setup fills it too
     configureAssistantRuntime,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setConnectedPreparation,

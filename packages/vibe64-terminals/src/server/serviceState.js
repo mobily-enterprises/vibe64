@@ -6,7 +6,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 /**
  * What the service's parts share: the turn completions in flight, the shutdown signal, and the assistant
  * runtime a host configures. What changes after construction has one place each: shutdown progress and
- * the running goal recovery in `lifecycle`, and the providers a composing host fills in `slots`.
+ * the running goal recovery in `lifecycle`, and in `slots` the providers other owners fill and clear at their shutdown.
  * @param {object} dependencies
  * @param {ReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
  */
