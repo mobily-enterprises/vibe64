@@ -255,7 +255,7 @@ function createServiceGoals({
         return { sessionId, alreadyActive: true };
       }
     }
-    const observed = await readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
+    const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
     if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
     const result = await updateAgentGoal(sessionId, {
       action: "resume",
@@ -528,15 +528,15 @@ function createServiceGoals({
         sessionIsClosing(context.session)) return { sessionId, skipped: true };
     try {
       const actor = await state.assistantRuntime.authorizeProjectMessage(intent.actor, sessionAccess.projectRuntimeContext().projectSlug);
-      const observed = await readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
+      const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
       if (observed.goal?.status !== "paused") return { sessionId, skipped: true };
-      const result = await updateAgentGoal(sessionId, {
+      const result = await updateCanonicalAgentGoal(sessionId, {
         action: "resume",
         vibe64User: actor,
         expectedSegmentId: observed.target.segmentId,
         expectedGoalId: observed.goal.id,
         messageId: `goal-account-change-${randomUUID()}`
-      }, { canonical: true });
+      });
       if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
       return { sessionId, resumed: true };
     } catch (error) {
@@ -625,16 +625,36 @@ function createServiceGoals({
     return result;
   }
 
+  /**
+   * Reads the goal of the session's canonical Main conversation, with the target its update must name.
+   * @param {string} sessionId
+   * @param {object} [options]
+   */
+  function readCanonicalAgentGoal(sessionId, options) {
+    return readAgentGoal(sessionId, options, { canonical: true });
+  }
+
+  /**
+   * Updates the goal of the session's canonical Main conversation at the target its read observed.
+   * @param {string} sessionId
+   * @param {object} input
+   */
+  function updateCanonicalAgentGoal(sessionId, input) {
+    return updateAgentGoal(sessionId, input, { canonical: true });
+  }
+
   return Object.freeze({
     applyGoalSelection,
     cancelGoalIfMainAiChanged,
     continueGoalAfterAccountChange,
     readAgentGoal,
+    readCanonicalAgentGoal,
     readGoalIntent,
     recoverActiveGoals,
     requestGoalStop,
     stopGoalIntent,
-    updateAgentGoal
+    updateAgentGoal,
+    updateCanonicalAgentGoal
   });
 }
 

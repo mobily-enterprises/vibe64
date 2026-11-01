@@ -227,7 +227,7 @@ function createTerminalActions({ terminals }) {
       input: sessionInputValidator,
       channels: ["internal"],
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => terminals.readAgentGoal(input.sessionId, input, { canonical: true })
+      execute: (input) => terminals.readCanonicalAgentGoal(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -236,7 +236,7 @@ function createTerminalActions({ terminals }) {
       idempotency: "none",
       channels: ["internal"],
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => terminals.updateAgentGoal(input.sessionId, input, { canonical: true })
+      execute: (input) => terminals.updateCanonicalAgentGoal(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
