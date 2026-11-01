@@ -4,6 +4,7 @@ import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessi
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -70,12 +71,8 @@ async function checkpointSessionTurn({
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
 function createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged }) {
-  function normalizeText(value) {
-    return String(value || "").trim();
-  }
-
   function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
-    const normalizedTurnOutcome = normalizeText(turnOutcome);
+    const normalizedTurnOutcome = trimmedText(turnOutcome);
     if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
       return "cancelled";
     }
@@ -85,7 +82,7 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE) {
       return "failed";
     }
-    const normalizedStatus = normalizeText(status);
+    const normalizedStatus = trimmedText(status);
     if (normalizedStatus === "interrupted") {
       return "interrupted";
     }
@@ -111,15 +108,15 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
         conversationId: threadId, temporaryRun: { active: false, state: status, providerTurnId: turnId }
       } });
     }
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = trimmedText(sessionId);
     const runtime = await projectService.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
-    const outerTurnId = normalizeText(turn.outerTurnId);
+    const outerTurnId = trimmedText(turn.outerTurnId);
     return checkpointSessionTurn({
       projectService, runtime, session, sessionId: normalizedSessionId, outerTurnId,
       outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
-      timestamp: normalizeText(turn.completedAt || turn.updatedAt), publishSessionChanged
+      timestamp: trimmedText(turn.completedAt || turn.updatedAt), publishSessionChanged
     });
   }
 

@@ -22,9 +22,9 @@ import {
   rememberCanonicalCommit,
   repositoryContext,
   saveError,
-  saveRef,
-  text
+  saveRef
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 
 // Returns the canonical commit with the authority evidence it was read from.
 // For a connected contribution, `contribution` records the published head and
@@ -174,7 +174,7 @@ async function assertLocalAuthority(runCommand, context, options) {
 // changes no checkout, so it needs no source lock; a moved head is then read
 // by the ordinary update check.
 async function readAuthorityBranchHeads(runCommand, context, branches, options, readRemoteHeads = null) {
-  const refs = [...new Set(branches.map(text).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
+  const refs = [...new Set(branches.map(trimmedText).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
   const listing = typeof readRemoteHeads === "function" && githubHttpsRemote(context.remoteUrl)
     ? await readRemoteHeads(context.remoteUrl, refs, { timeoutMs: options?.commandOptions?.timeout })
     : (await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ...refs], options))
@@ -304,14 +304,14 @@ function connectedWorkSnapshots(value = []) {
     const contribution = sessionConnectedContribution({ metadata: {
       connected_contribution: JSON.stringify(snapshot?.contribution)
     } });
-    if (!contribution || typeof snapshot.sessionId !== "string" || !text(snapshot.sessionId) ||
-        !path.isAbsolute(text(snapshot.worktreePath)) ||
+    if (!contribution || typeof snapshot.sessionId !== "string" || !trimmedText(snapshot.sessionId) ||
+        !path.isAbsolute(trimmedText(snapshot.worktreePath)) ||
         [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
-          .some(commit => !isGitObjectId(text(commit)))) {
+          .some(commit => !isGitObjectId(trimmedText(commit)))) {
       throw saveError("The connected source could not be captured. Inspect connected work before saving.",
         "vibe64_connected_source_unavailable");
     }
-    return { contribution, sessionId: snapshot.sessionId, worktreePath: text(snapshot.worktreePath),
+    return { contribution, sessionId: snapshot.sessionId, worktreePath: trimmedText(snapshot.worktreePath),
       baseCommit: snapshot.baseCommit, canonicalCommit: snapshot.canonicalCommit,
       sessionHead: snapshot.sessionHead, worktreeTree: snapshot.worktreeTree };
   });

@@ -22,7 +22,7 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { effectiveVibe64AgentSettings as codexEffectiveAgentSettings } from "@local/vibe64-runtime/shared";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { isRecord } from "./isRecord.js";
 import { record } from "./record.js";
 
@@ -31,25 +31,25 @@ import { record } from "./record.js";
 // Original application renewal receipt, error and completion policy. This module
 // consumes the existing session store and native result; it never invokes a provider.
 function errorMessage(value, fallback = "Codex could not be prepared.") {
-  return normalizeText(value?.error || value?.message || value) || fallback;
+  return trimmedText(value?.error || value?.message || value) || fallback;
 }
 
 function sessionRenewalErrorWithIdentity(error, identity = {}) {
   const source = error instanceof Error ? error : new Error(errorMessage(error));
-  if (!normalizeText(source.code)) {
+  if (!trimmedText(source.code)) {
     source.code = "vibe64_session_renewal_turn_failed";
     source.retryable = true;
   }
   source.details = {
     ...(isRecord(source.details) ? source.details : {}),
-    clientMessageId: normalizeText(identity.clientMessageId),
+    clientMessageId: trimmedText(identity.clientMessageId),
     ...(identity.handoverPromptAccepted === true
       ? { handoverPromptAccepted: true }
       : {}),
-    operationId: normalizeText(identity.operationId),
+    operationId: trimmedText(identity.operationId),
     retryable: source.retryable === true,
-    threadId: normalizeText(identity.threadId),
-    turnId: normalizeText(identity.turnId)
+    threadId: trimmedText(identity.threadId),
+    turnId: trimmedText(identity.turnId)
   };
   return source;
 }
@@ -65,7 +65,7 @@ async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {},
   renewalInternal = false
 } = {}) {
   const entries = Object.entries(isRecord(values) ? values : {})
-    .map(([name, value]) => [normalizeText(name), normalizeText(value)])
+    .map(([name, value]) => [trimmedText(name), trimmedText(value)])
     .filter(([name]) => name.startsWith("agent_renewal_"));
   if (!entries.length) {
     return;
@@ -159,9 +159,9 @@ function sessionRenewalSeedAcknowledgementMetadata({ acknowledgedAt, handoverHas
 
 function sessionRenewalHandoverTurnId(input, session, operationId) {
   const metadata = session.metadata || {};
-  const sameOperation = normalizeText(metadata.agent_renewal_handover_operation_id) === operationId;
-  const expectedTurnId = normalizeText(input.expectedTurnId) || (
-    sameOperation ? normalizeText(metadata.agent_renewal_handover_turn_id) : ""
+  const sameOperation = trimmedText(metadata.agent_renewal_handover_operation_id) === operationId;
+  const expectedTurnId = trimmedText(input.expectedTurnId) || (
+    sameOperation ? trimmedText(metadata.agent_renewal_handover_turn_id) : ""
   );
   return expectedTurnId;
 }
@@ -169,10 +169,10 @@ function sessionRenewalHandoverTurnId(input, session, operationId) {
 function sessionRenewalSeedTurnId(input, session, operationId, threadId) {
   const metadata = session.metadata || {};
   // A stored seed turn belongs to one operation on one successor thread.
-  const sameSeed = normalizeText(metadata.agent_renewal_seed_operation_id) === operationId &&
-    normalizeText(metadata.agent_renewal_seed_thread_id) === normalizeText(threadId);
-  return normalizeText(input.expectedTurnId) || (
-    sameSeed ? normalizeText(metadata.agent_renewal_seed_turn_id) : ""
+  const sameSeed = trimmedText(metadata.agent_renewal_seed_operation_id) === operationId &&
+    trimmedText(metadata.agent_renewal_seed_thread_id) === trimmedText(threadId);
+  return trimmedText(input.expectedTurnId) || (
+    sameSeed ? trimmedText(metadata.agent_renewal_seed_turn_id) : ""
   );
 }
 
@@ -210,7 +210,7 @@ async function completeSessionRenewalHandover({
   } catch (error) {
     error.details = {
       ...(isRecord(error.details) ? error.details : {}),
-      rawOutput: normalizeText(result.text)
+      rawOutput: trimmedText(result.text)
     };
     throw sessionRenewalErrorWithIdentity(error, {
       clientMessageId,
@@ -232,7 +232,7 @@ async function completeSessionRenewalHandover({
     reconciled,
     source,
     threadId,
-    turnId: normalizeText(result.turnId || turnId),
+    turnId: trimmedText(result.turnId || turnId),
     usage: result.usage || null
   };
 }
@@ -250,7 +250,7 @@ async function completeSessionRenewalSeed({
   } catch (error) {
     error.details = {
       ...(isRecord(error.details) ? error.details : {}),
-      rawOutput: normalizeText(result.text)
+      rawOutput: trimmedText(result.text)
     };
     throw sessionRenewalErrorWithIdentity(error, {
       clientMessageId,
@@ -293,7 +293,7 @@ async function completeSessionRenewalSeed({
     source: approved.source,
     subscriptionDeferred: true,
     threadId,
-    turnId: normalizeText(result.turnId || turnId),
+    turnId: trimmedText(result.turnId || turnId),
     usage: result.usage || null
   };
 }
@@ -401,7 +401,7 @@ function createOpenCodeSessionRenewalSeedReceipt({ operationId, approved, client
     };
   }
 
-  return { acknowledge, complete };
+  return Object.freeze({ acknowledge, complete });
 }
 
 const CODEX_SESSION_RENEWAL_TURN_TIMEOUT_MS = 10 * 60_000;
@@ -600,7 +600,7 @@ function createCodexSessionRenewalPreparation({ runtimeHost, sessionRuntimeHost,
     };
   }
 
-  return { prepareCodexRenewalHandover, prepareCodexRenewalSeed, prepareRenewalProcessExitProof };
+  return Object.freeze({ prepareCodexRenewalHandover, prepareCodexRenewalSeed, prepareRenewalProcessExitProof });
 }
 
 function createOpenCodeSessionRenewalPreparation({ mainMessagePreparation, hostPreparation, lifecyclePreparation }) {
@@ -687,7 +687,7 @@ function createOpenCodeSessionRenewalPreparation({ mainMessagePreparation, hostP
     };
   }
 
-  return { prepareRenewalHandover, prepareRenewalSeed };
+  return Object.freeze({ prepareRenewalHandover, prepareRenewalSeed });
 }
 
 export {

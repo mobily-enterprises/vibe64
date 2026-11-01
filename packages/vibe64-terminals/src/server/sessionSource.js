@@ -65,7 +65,7 @@ async function ensureLocalProjectBaseline(standaloneSourceRoot = "", commandOpti
 }
 
 function canonicalProjectSource(project = {}, standaloneSourceRoot = "") {
-  const repository = project?.repository && typeof project.repository === "object"
+  const repository = project.repository && typeof project.repository === "object"
     ? project.repository
     : {};
   const mode = normalizeRepositoryMode(project.repositoryMode || repository.mode);

@@ -70,8 +70,8 @@ async function runSessionRenewalOperation(
 
 function openProjectRuntimeRecords(listed = {}) {
   const entries = [
-    ...(Array.isArray(listed?.projects) ? listed.projects : []),
-    listed?.currentProject
+    ...(Array.isArray(listed.projects) ? listed.projects : []),
+    listed.currentProject
   ].filter((project) => project?.runtime?.open === true);
   const seenSlugs = new Set();
   return entries.filter((project) => {

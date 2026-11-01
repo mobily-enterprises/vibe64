@@ -3,21 +3,19 @@
 // controls that lead out of it. The editor, the session's assistant and
 // Colleague read it here, so each explains the same reason.
 
+import { trimmedText } from "./trimmedText.js";
+
 const SAVE_UPDATE_REQUIRED_CODE = "vibe64_session_save_update_required";
 const SESSION_WORK_PROBLEM_LABEL = "Repository needs help";
 
-function text(value = "") {
-  return String(value || "").trim();
-}
-
 function failed(record) {
-  return Boolean(record && typeof record === "object" && text(record.status).toLowerCase() === "failed");
+  return Boolean(record && typeof record === "object" && trimmedText(record.status).toLowerCase() === "failed");
 }
 
 function nextStep(operation, record) {
   const notice = operation === "update" ? "Update notice" : "Save notice";
-  const code = text(record.code);
-  if (code === "vibe64_session_update_conflict" && text(record.conflictRecovery?.reviewId)) {
+  const code = trimmedText(record.code);
+  if (code === "vibe64_session_update_conflict" && trimmedText(record.conflictRecovery?.reviewId)) {
     return `Resolve the listed files yourself, in Main chat or with Fix it with AI, then choose Review resolved conflicts on the ${notice}.`;
   }
   if (code === "vibe64_session_save_history_diverged" || code === "vibe64_session_update_history_diverged") {
@@ -33,20 +31,20 @@ function nextStep(operation, record) {
 // records, as session work inspection returns them. When both failed, the
 // later failure is the one shown.
 function sessionWorkProblem({ operation = null, updateOperation = null } = {}) {
-  const save = failed(operation) && text(operation.code) !== SAVE_UPDATE_REQUIRED_CODE ? operation : null;
+  const save = failed(operation) && trimmedText(operation.code) !== SAVE_UPDATE_REQUIRED_CODE ? operation : null;
   const update = failed(updateOperation) ? updateOperation : null;
   const record = save && update
-    ? (text(update.updatedAt) > text(save.updatedAt) ? update : save)
+    ? (trimmedText(update.updatedAt) > trimmedText(save.updatedAt) ? update : save)
     : save || update;
   if (!record) {
     return null;
   }
   const kind = record === update ? "update" : "save";
   return {
-    code: text(record.code),
-    failedAt: text(record.finishedAt || record.updatedAt),
+    code: trimmedText(record.code),
+    failedAt: trimmedText(record.finishedAt || record.updatedAt),
     label: SESSION_WORK_PROBLEM_LABEL,
-    message: text(record.error || record.message) ||
+    message: trimmedText(record.error || record.message) ||
       `${kind === "update" ? "Update" : "Save"} failed without a recorded reason.`,
     nextStep: nextStep(kind, record),
     operation: kind,

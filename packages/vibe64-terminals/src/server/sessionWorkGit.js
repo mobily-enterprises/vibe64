@@ -15,7 +15,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { checkpointRefs, vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import { parseGitNameStatusZ } from "./gitRecords.js";
-import { trimmedText as text } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   commandProject,
   git,
@@ -48,13 +48,13 @@ function boundedReviewDiff(content = "") {
 
 function normalizedDerivedArtifactPaths(paths = []) {
   return [...new Set((Array.isArray(paths) ? paths : [])
-    .map(text)
+    .map(trimmedText)
     .filter(Boolean))]
     .sort((left, right) => left.localeCompare(right));
 }
 
 function metadata(session = {}) {
-  return session?.metadata && typeof session.metadata === "object"
+  return session.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
 }
@@ -63,20 +63,20 @@ function repositoryContext(session = {}, project = {}) {
   project = sessionRepositoryProject(project, session);
   const sessionMetadata = metadata(session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  const branch = text(project.repository?.defaultBranch);
+  const branch = trimmedText(project.repository?.defaultBranch);
   if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE && sessionMetadata.local_source_branch &&
-      text(sessionMetadata.local_source_branch) !== branch) {
+      trimmedText(sessionMetadata.local_source_branch) !== branch) {
     throw saveError(
-      `This session belongs to ${text(sessionMetadata.local_source_branch)}. Switch the project folder back to that branch before saving or updating it.`,
+      `This session belongs to ${trimmedText(sessionMetadata.local_source_branch)}. Switch the project folder back to that branch before saving or updating it.`,
       "vibe64_session_local_branch_changed"
     );
   }
-  const worktreePath = text(session.sourcePath || sessionMetadata.source_path);
-  const sessionId = text(session.sessionId || session.id);
-  const baseCommit = text(sessionMetadata.base_commit);
-  const lastCanonicalCommit = text(sessionMetadata.canonical_commit) || baseCommit;
+  const worktreePath = trimmedText(session.sourcePath || sessionMetadata.source_path);
+  const sessionId = trimmedText(session.sessionId);
+  const baseCommit = trimmedText(sessionMetadata.base_commit);
+  const lastCanonicalCommit = trimmedText(sessionMetadata.canonical_commit) || baseCommit;
   const standaloneSourceRoot = mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-    ? text(project.sourceRoot)
+    ? trimmedText(project.sourceRoot)
     : "";
   if (
     !mode ||
@@ -92,9 +92,9 @@ function repositoryContext(session = {}, project = {}) {
     );
   }
   const remoteUrl = mode === PROJECT_REPOSITORY_MODE_GITHUB
-    ? text(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl)
+    ? trimmedText(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl)
     : mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
-      ? text(project.canonicalRepositoryPath)
+      ? trimmedText(project.canonicalRepositoryPath)
       : standaloneSourceRoot;
   if (!remoteUrl) {
     throw saveError(
@@ -109,8 +109,8 @@ function repositoryContext(session = {}, project = {}) {
     connectedSubmissions: sessionConnectedSubmissions(session),
     lastCanonicalCommit,
     mode,
-    githubMirrorPath: text(project.githubMirrorPath),
-    repositoryFullName: text(project.githubRepository?.fullName || project.repository?.github?.fullName),
+    githubMirrorPath: trimmedText(project.githubMirrorPath),
+    repositoryFullName: trimmedText(project.githubRepository?.fullName || project.repository?.github?.fullName),
     githubMirrorOptional: Boolean(sessionMetadata.github_pull_request) || project.githubMirrorOptional === true,
     remoteUrl,
     sessionId,
@@ -120,7 +120,7 @@ function repositoryContext(session = {}, project = {}) {
 }
 
 function sessionWorkOperationProject(context, project = {}) {
-  const projectSlug = text(project.slug || project.projectSlug);
+  const projectSlug = trimmedText(project.slug || project.projectSlug);
   return {
     ...(context.mode === PROJECT_REPOSITORY_MODE_GITHUB
       ? {
@@ -135,7 +135,7 @@ function sessionWorkOperationProject(context, project = {}) {
     ...(context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
       ? { sourceRoot: context.standaloneSourceRoot }
       : {}),
-    ownerUserKey: text(project.ownerUserKey || project.githubRepository?.owner),
+    ownerUserKey: trimmedText(project.ownerUserKey || project.githubRepository?.owner),
     projectSlug,
     repository: {
       defaultBranch: context.contribution?.integrationBranch || context.branch,
@@ -231,8 +231,8 @@ async function runSessionWorkOperation({
     );
   }
   throw saveError(
-    text(result?.stderr || result?.error || result?.output) || "Session repository inspection failed.",
-    text(result?.code) || "vibe64_session_work_operation_failed"
+    trimmedText(result?.stderr || result?.error || result?.output) || "Session repository inspection failed.",
+    trimmedText(result?.code) || "vibe64_session_work_operation_failed"
   );
 }
 
@@ -408,7 +408,7 @@ function canonicalRef(context) {
 }
 
 async function deleteOperationRef(runCommand, context, ref, options = {}) {
-  if (!text(ref)) {
+  if (!trimmedText(ref)) {
     return;
   }
   await git(runCommand, context, ["update-ref", "-d", ref], {
@@ -462,7 +462,7 @@ async function mergeTrees(runCommand, context, {
     required: false
   });
   const tokens = String(merged?.stdout || merged?.output || "").split("\0");
-  const mergedTree = text(tokens.shift());
+  const mergedTree = trimmedText(tokens.shift());
   if (!isGitObjectId(mergedTree)) {
     throw saveError(
       merged?.ok === true
@@ -525,7 +525,7 @@ async function createVirtualCommit(runCommand, context, {
     baseCommit
   ], {
     commandOptions,
-    input: `${text(message) || "Vibe64 virtual commit"}\n`,
+    input: `${trimmedText(message) || "Vibe64 virtual commit"}\n`,
     project
   });
 }
@@ -694,6 +694,5 @@ export {
   saveRef,
   scopedSessionWorkCommand,
   sessionWorkComparison,
-  text,
   treeWithDerivedArtifactsFromCommit
 };

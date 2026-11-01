@@ -20,9 +20,9 @@ import {
   saveError,
   scopedSessionWorkCommand,
   sessionWorkComparison,
-  text,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   assertConnectedSubmissionsIntegrated,
   assertConnectedWorkSnapshotsUnchanged,
@@ -147,15 +147,15 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
   operationId,
   project = {}
 } = {}) {
-  const checkpointCommit = text(checkpoint?.checkpointCommit);
-  const checkpointTree = text(checkpoint?.checkpointTree);
+  const checkpointCommit = trimmedText(checkpoint?.checkpointCommit);
+  const checkpointTree = trimmedText(checkpoint?.checkpointTree);
   if (
     !checkpointCommit ||
     !checkpointTree ||
-    text(checkpoint?.operationId) !== text(operationId) ||
-    text(checkpoint?.baseCommit) !== context.baseCommit ||
-    text(checkpoint?.branch) !== context.branch ||
-    text(checkpoint?.mode) !== context.mode
+    trimmedText(checkpoint?.operationId) !== trimmedText(operationId) ||
+    trimmedText(checkpoint?.baseCommit) !== context.baseCommit ||
+    trimmedText(checkpoint?.branch) !== context.branch ||
+    trimmedText(checkpoint?.mode) !== context.mode
   ) {
     throw saveError(
       "Save cannot verify the captured worktree. Capture and name the work again.",
@@ -172,7 +172,7 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
       "vibe64_session_save_checkpoint_invalid"
     );
   }
-  const checkpointSessionHead = text(checkpoint?.sessionHead);
+  const checkpointSessionHead = trimmedText(checkpoint?.sessionHead);
   const currentSessionHead = checkpointSessionHead
     ? await gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD^{commit}"], {
         commandOptions,
@@ -198,7 +198,7 @@ async function prepareSessionWorkSave(runCommand, context, {
   project = {},
   refreshDerivedArtifacts = null
 } = {}) {
-  const checkpointTree = text(checkpoint.checkpointTree);
+  const checkpointTree = trimmedText(checkpoint.checkpointTree);
   const [canonical, sessionHead] = await Promise.all([
     readCanonical(runCommand, context, operationId, { commandOptions, project }),
     gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD^{commit}"], {
@@ -304,9 +304,9 @@ async function publishPreparedSessionWorkSave(runCommand, context, {
     runCommand,
     context,
     {
-      canonicalCommit: text(prepared.canonicalCommit),
+      canonicalCommit: trimmedText(prepared.canonicalCommit),
       contributionAuthority: prepared.contributionAuthority,
-      saveCommit: text(prepared.saveCommit)
+      saveCommit: trimmedText(prepared.saveCommit)
     },
     { commandOptions, connectedWorkSnapshots, onPublicationAttempt, project }
   );
@@ -356,7 +356,7 @@ function deferredCacheMaintenance(context, verifiedCommit) {
 
 function failedCacheMaintenance(context, verifiedCommit, error) {
   return retryableMirrorMaintenance(context, verifiedCommit,
-    text(error?.code) || "vibe64_session_save_github_mirror_refresh_failed", "refresh_interrupted", false);
+    trimmedText(error?.code) || "vibe64_session_save_github_mirror_refresh_failed", "refresh_interrupted", false);
 }
 
 async function refreshSessionWorkSaveCacheDirect({
@@ -375,13 +375,13 @@ async function refreshSessionWorkSaveCacheDirect({
   return refreshVerifiedGithubMirror(
     runCommand,
     context,
-    text(verifiedCommit),
+    trimmedText(verifiedCommit),
     { commandOptions, project }
   );
 }
 
 async function deletePreparedSaveRef(runCommand, context, operationId, options = {}) {
-  if (text(operationId)) {
+  if (trimmedText(operationId)) {
     await deleteOperationRef(
       runCommand,
       context,
@@ -405,7 +405,7 @@ async function retireSessionWorkSave({
   const context = repositoryContext(session, project);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Retiring a recorded Save",
-    operationId: text(operationId) || crypto.randomUUID()
+    operationId: trimmedText(operationId) || crypto.randomUUID()
   });
   await deletePreparedSaveRef(runCommand, context, operationId, { commandOptions, project });
 }
@@ -609,12 +609,12 @@ async function saveSessionWork({
   const context = repositoryContext(session, project);
   const saved = await runProjectSourceExclusive(async () => {
     await onProgress({
-      checkpointCommit: text(checkpoint.checkpointCommit),
-      checkpointTree: text(checkpoint.checkpointTree),
+      checkpointCommit: trimmedText(checkpoint.checkpointCommit),
+      checkpointTree: trimmedText(checkpoint.checkpointTree),
       kind: "publish",
       message: "Sending your changes.",
       operationId,
-      sessionHead: text(checkpoint.sessionHead),
+      sessionHead: trimmedText(checkpoint.sessionHead),
       stage: "publishing"
     });
     const snapshots = connectedWorkSnapshots(await readConnectedWorkSnapshots());

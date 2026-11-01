@@ -25,9 +25,9 @@ import {
   runSessionWorkOperation,
   saveError,
   scopedSessionWorkCommand,
-  sessionWorkComparison,
-  text
+  sessionWorkComparison
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 import { readContributionHead } from "./sessionWorkAuthority.js";
 
 async function sessionChangeFiles(runCommand, context, canonicalCommit, worktreeTree, options = {}) {
@@ -181,7 +181,7 @@ async function inspectSessionWorkDirect({
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Inspecting session work"
   });
-  const tree = text(worktreeTree) || await writeGitWorktreeTree({
+  const tree = trimmedText(worktreeTree) || await writeGitWorktreeTree({
     baseCommit: "HEAD",
     project: commandProject(context, project),
     runCommand,
@@ -239,7 +239,7 @@ async function inspectSessionWorkDirect({
     }, { commandOptions, project })
   ]);
   const derivedPathSet = new Set((Array.isArray(derivedArtifactPaths) ? derivedArtifactPaths : [])
-    .map(text)
+    .map(trimmedText)
     .filter(Boolean));
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   const relationship = repositoryUpdateRelationship(ahead, behind);

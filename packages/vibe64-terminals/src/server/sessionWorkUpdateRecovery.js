@@ -10,9 +10,9 @@ import {
   repositoryContext,
   runSessionWorkOperation,
   saveError,
-  scopedSessionWorkCommand,
-  text
+  scopedSessionWorkCommand
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 
 async function inspectSessionUpdateFailure({
   commandOptions = {},
@@ -44,7 +44,7 @@ async function recoverSessionWorkUpdate({
   const context = repositoryContext(session, project);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Recovering session update",
-    operationId: text(recovery.operationId) || crypto.randomUUID()
+    operationId: trimmedText(recovery.operationId) || crypto.randomUUID()
   });
   const required = [
     "canonicalCommit",
@@ -55,7 +55,7 @@ async function recoverSessionWorkUpdate({
     "oldHead",
     "oldIndexTree"
   ];
-  if (required.some((key) => !text(recovery[key]))) {
+  if (required.some((key) => !trimmedText(recovery[key]))) {
     throw saveError(
       "The interrupted session update stopped before mutation and can be retried.",
       "vibe64_session_update_interrupted_retryable",

@@ -35,9 +35,9 @@ import {
   saveError,
   scopedSessionWorkCommand,
   sessionWorkComparison,
-  text,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   readAuthorityBranchHeads,
   readCanonical
@@ -77,14 +77,14 @@ function normalizedConflictRecovery(value = {}) {
       .sort((left, right) => left.localeCompare(right))
     : [];
   const recovery = {
-    baseCommit: text(value.baseCommit),
-    canonicalCommit: text(value.canonicalCommit),
-    checkpointTree: text(value.checkpointTree),
+    baseCommit: trimmedText(value.baseCommit),
+    canonicalCommit: trimmedText(value.canonicalCommit),
+    checkpointTree: trimmedText(value.checkpointTree),
     conflictPaths,
-    conflictTree: text(value.conflictTree),
-    reviewId: text(value.reviewId),
-    oldHead: text(value.oldHead),
-    oldIndexTree: text(value.oldIndexTree)
+    conflictTree: trimmedText(value.conflictTree),
+    reviewId: trimmedText(value.reviewId),
+    oldHead: trimmedText(value.oldHead),
+    oldIndexTree: trimmedText(value.oldIndexTree)
   };
   return Object.values(recovery).some((entry) => Array.isArray(entry) ? entry.length === 0 : !entry)
     ? null
@@ -280,7 +280,7 @@ async function readSessionAuthorityHeads({
     try {
       context = repositoryContext(session, project);
     } catch (error) {
-      results.set(text(session.sessionId), { code: text(error?.code), error: text(error?.message) });
+      results.set(trimmedText(session.sessionId), { code: trimmedText(error?.code), error: trimmedText(error?.message) });
       continue;
     }
     const members = authorities.get(context.remoteUrl) || [];
@@ -300,7 +300,7 @@ async function readSessionAuthorityHeads({
       }
       if (candidate.code !== "vibe64_session_git_command_actor_missing") refusal ||= candidate;
     }
-    let failure = refusal && { code: text(refusal.code), error: text(refusal.error) };
+    let failure = refusal && { code: trimmedText(refusal.code), error: trimmedText(refusal.error) };
     if (execution) {
       try {
         const heads = await readAuthorityBranchHeads(
@@ -329,8 +329,8 @@ async function readSessionAuthorityHeads({
         continue;
       } catch (error) {
         failure = {
-          code: text(error?.code) || "vibe64_session_update_check_failed",
-          error: text(error?.message) || "The project's repository could not be checked for updates."
+          code: trimmedText(error?.code) || "vibe64_session_update_check_failed",
+          error: trimmedText(error?.message) || "The project's repository could not be checked for updates."
         };
       }
     }
@@ -682,7 +682,7 @@ async function inspectSessionUpdateFailureDirect({
     ], options),
     gitOutput(runCommand, context, ["ls-files", "--unmerged", "-z"], options)
   ]);
-  const target = text(targetCommit);
+  const target = trimmedText(targetCommit);
   const [canonicalInSession, historyRewritten, targetInHead] = await Promise.all([
     commitIsAncestor(runCommand, context, canonicalCommit, sessionHead, options),
     savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, options),

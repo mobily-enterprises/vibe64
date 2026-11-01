@@ -19,9 +19,9 @@ import {
   saveError,
   saveRef,
   scopedSessionWorkCommand,
-  text,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   captureSessionWorkUpdateCheckpointDirect
 } from "./sessionWorkUpdate.js";
@@ -130,7 +130,7 @@ async function inspectIncomingContributions({ project = {}, session = {}, offset
     input: { offset, limit, id, state, includeDiff }, label: "Reading incoming contributions", operation: "incoming" });
 }
 
-async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null,
+async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review, repairReview = null,
   derivedArtifactPaths = [], refreshDerivedArtifacts, commandOptions = {},
   operationId = crypto.randomUUID(), runCommand = runVibe64Command } = {}) {
   if (!["merge", "discard", "review-repair"].includes(action) || !id) {
@@ -247,7 +247,7 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
   const atomic = await git(runCommand, context, ["push", "--atomic", activeLease, discardedLease,
     context.remoteUrl, createDiscarded, deleteActive], { ...options, required: false });
   if (!atomic.ok) {
-    const reason = text(atomic.stderr || atomic.output || atomic.error);
+    const reason = trimmedText(atomic.stderr || atomic.output || atomic.error);
     if (!/does not support --atomic push/iu.test(reason)) {
       throw saveError(reason || "Discard was not confirmed. Refresh Incoming changes before retrying.", "vibe64_incoming_discard_unconfirmed");
     }

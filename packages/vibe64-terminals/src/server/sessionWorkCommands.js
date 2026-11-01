@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
-import { trimmedText as text } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const SAVE_TIMEOUT_MS = 120_000;
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
@@ -20,7 +20,7 @@ function saveError(message, code = "vibe64_session_save_failed", details = {}) {
 
 function commandProject(context = {}, project = {}) {
   return {
-    ownerUserKey: text(project.ownerUserKey || project.githubRepository?.owner),
+    ownerUserKey: trimmedText(project.ownerUserKey || project.githubRepository?.owner),
     projectRoot: context.worktreePath,
     repositoryMode: context.mode,
     sessionId: context.sessionId
@@ -34,7 +34,7 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, {
   if (runCommand?.[SESSION_WORK_COMMAND_SCOPE]) {
     return runCommand;
   }
-  const projectSlug = text(project.slug || project.projectSlug);
+  const projectSlug = trimmedText(project.slug || project.projectSlug);
   let commandTail = Promise.resolve();
   const scoped = (request = {}) => {
     const command = commandTail.then(() => runCommand({
@@ -44,7 +44,7 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, {
         kind: "job",
         label,
         lifecycle: "finite",
-        operationId: text(operationId),
+        operationId: trimmedText(operationId),
         ownerId: context.sessionId,
         projectSlug,
         sessionId: context.sessionId
@@ -81,7 +81,7 @@ async function saveCommand(runCommand, context, command, args, {
       : []),
     ...(path.isAbsolute(context.remoteUrl) ? [context.remoteUrl, path.dirname(context.remoteUrl)] : []),
     ...additionalAllowedRoots.flatMap((root) => {
-      const normalized = text(root);
+      const normalized = trimmedText(root);
       return normalized ? [normalized, path.dirname(normalized)] : [];
     })
   ];
@@ -111,8 +111,8 @@ async function git(runCommand, context, args, {
   const result = await saveCommand(runCommand, context, "git", args, options);
   if (required && result?.ok !== true) {
     throw saveError(
-      text(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",
-      text(result?.code) || "vibe64_session_save_git_failed",
+      trimmedText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",
+      trimmedText(result?.code) || "vibe64_session_save_git_failed",
       { gitArgs: args }
     );
   }
@@ -120,7 +120,7 @@ async function git(runCommand, context, args, {
 }
 
 function output(result = {}) {
-  return text(result.stdout || result.output);
+  return trimmedText(result.stdout || result.output);
 }
 
 async function gitOutput(runCommand, context, args, options = {}) {

@@ -6,7 +6,7 @@ import {
 
 import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 import { SESSION_SAVE_TASK_ID } from "./sessionWorkTasks.js";
-import { trimmedText as text } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
 const MAX_PROMPT_FILES = 40;
@@ -36,14 +36,14 @@ function commitMessageError(message, code, suffix = "failed") {
 }
 
 function boundedPath(value = "") {
-  const path = text(value);
+  const path = trimmedText(value);
   return path.length <= MAX_PROMPT_PATH_LENGTH
     ? path
     : `…${path.slice(-(MAX_PROMPT_PATH_LENGTH - 1))}`;
 }
 
 function changeDescription(file = {}) {
-  const status = text(file.status || file.changeType || "Changed").slice(0, MAX_PROMPT_STATUS_LENGTH);
+  const status = trimmedText(file.status || file.changeType || "Changed").slice(0, MAX_PROMPT_STATUS_LENGTH);
   const path = boundedPath(file.path || file.newPath || file.oldPath);
   const added = Number.isFinite(Number(file.added)) ? Number(file.added) : 0;
   const deleted = Number.isFinite(Number(file.deleted)) ? Number(file.deleted) : 0;
@@ -95,7 +95,7 @@ function parseSessionSaveCommitMessage(value = "") {
 }
 
 function normalizeSessionSaveCommitMessage(value = "") {
-  const subject = text(value);
+  const subject = trimmedText(value);
   const hasControlCharacters = [...subject].some((character) => {
     const codePoint = character.codePointAt(0);
     return codePoint <= 31 || codePoint === 127;

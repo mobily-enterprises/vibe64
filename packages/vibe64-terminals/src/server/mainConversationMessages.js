@@ -11,7 +11,7 @@ import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { claudeConversationError, openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
 import { codexAppServerTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeMessageText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { learningSessionExecutionRoot, readSessionConversationContext } from "./mainConversationContext.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -26,136 +26,140 @@ import { learningSessionExecutionRoot, readSessionConversationContext } from "./
 // completion phases. Native context/startup and failure health remain host
 // facilities; this binding owns actor admission, Genesis rendering and receipts.
 function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
-  return {
+  async function prepareMessage(input, prepared, { starting, selected }) {
+    const { runtime, executionRoot, workdir, messageId, actorContext: vibe64User } = prepared;
+    const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
+    if (learningRoot && (executionRoot !== learningRoot || workdir !== learningRoot)) {
+      throw new Error("Learning message preparation belongs to a different native execution root.");
+    }
+    if (!starting) {
+      const { turnOwnership } = prepared;
+      const { session: currentSession, threadId, turnId } = selected;
+      const ownershipMatchesTurn = Boolean(
+        turnOwnership &&
+        trimmedText(turnOwnership.threadId) === threadId &&
+        trimmedText(turnOwnership.turnId) === turnId
+      );
+      if (ownershipMatchesTurn && turnOwnership.reusable !== true) {
+        return { value: {
+          code: "vibe64_agent_turn_owner_conflict",
+          delivered: false,
+          error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
+          ok: false,
+          operationOutcome: "active_turn_owned_by_another_user",
+          refreshRecommended: true,
+          retryable: true,
+          threadId,
+          turnId
+        }, session: currentSession };
+      }
+      if (learningRoot) return null;
+      let actorMetadata = ownershipMatchesTurn && turnOwnership.reusable === true
+        ? sessionGitCommandActorFromMetadata(currentSession)
+        : null;
+      if (actorMetadata?.ok !== true) {
+        actorMetadata = await recordSessionGitCommandActor({
+          env,
+          reason: "agent-message",
+          runtime,
+          session: currentSession,
+          sourceRoot: executionRoot,
+          threadId,
+          vibe64User,
+          workdir
+        });
+      } else {
+        vibe64SessionDebugLog("server.codexTerminal.appServerMessage.turnOwnershipReused", {
+          messageId,
+          sessionId,
+          threadId,
+          turnId
+        });
+      }
+      if (actorMetadata?.ok === false) {
+        return { value: {
+          code: actorMetadata.code || "vibe64_codex_turn_steer_failed",
+          error: actorMetadata.error || "GitHub identity is not available for the user who authorized this assistant message.",
+          ok: false,
+          operationOutcome: "steer_git_actor_unavailable",
+          refreshRecommended: true,
+          threadId,
+          turnId
+        } };
+      }
+      return null;
+    }
+    const { agentSettings, preparedSession, thread, userRequest } = prepared;
+    let stageStartedAt = Date.now();
+    const actorResult = learningRoot ? null : await recordSessionGitCommandActor({
+      env,
+      overwrite: true,
+      reason: "codex-prompt",
+      runtime,
+      session: preparedSession,
+      sourceRoot: executionRoot,
+      threadId: thread.threadId,
+      vibe64User,
+      workdir
+    });
+    vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.stage", {
+      durationMs: Date.now() - stageStartedAt,
+      messageId,
+      sessionId,
+      stage: "git-actor"
+    });
+    if (actorResult?.ok === false) {
+      throw new Error(actorResult.error || "GitHub identity is not available for the user who authorized this Codex prompt.");
+    }
+    const refreshMetadata = preparedSession.metadata || {};
+    const providerContextRefreshPending = codexContextRefreshPending(preparedSession);
+    stageStartedAt = Date.now();
+    const genesisTask = trimmedText(input.genesisTask);
+    const needsOpeningPrompt = sessionNeedsOpeningPrompt(preparedSession);
+    const rendered = genesisTask || needsOpeningPrompt
+      ? await runtime.renderPrompt(sessionId, {
+          input,
+          request: userRequest,
+          task: genesisTask || "start"
+        })
+      : { prompt: userRequest };
+    vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.stage", {
+      durationMs: Date.now() - stageStartedAt,
+      messageId,
+      sessionId,
+      stage: "prompt-render"
+    });
+    const renderedPrompt = trimmedText(rendered?.prompt);
+    if (!renderedPrompt) {
+      throw new Error("The assistant prompt is empty.");
+    }
+    vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.prepared", {
+      messageCount: 1,
+      messageId,
+      sessionId,
+      threadId: thread.threadId
+    });
+    prepared.refreshMetadata = refreshMetadata;
+    prepared.providerContextRefreshPending = providerContextRefreshPending;
+    return {
+      renderedPrompt,
+      get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
+    };
+  }
+
+  function finishMessage(input, prepared, outcome) {
+    if (Object.hasOwn(outcome, "error")) {
+      return nativePreparation.finishMessage(input, prepared, outcome);
+    }
+    return recordCodexMainMessageDelivery(sessionId, prepared);
+  }
+
+  return Object.freeze({
     readContext: nativePreparation.readContext,
     threadPreparation: nativePreparation.threadPreparation,
-    async prepareMessage(input, prepared, { starting, selected }) {
-      const { runtime, executionRoot, workdir, messageId, actorContext: vibe64User } = prepared;
-      const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
-      if (learningRoot && (executionRoot !== learningRoot || workdir !== learningRoot)) {
-        throw new Error("Learning message preparation belongs to a different native execution root.");
-      }
-      if (!starting) {
-        const { turnOwnership } = prepared;
-        const { session: currentSession, threadId, turnId } = selected;
-        const ownershipMatchesTurn = Boolean(
-          turnOwnership &&
-          normalizeMessageText(turnOwnership.threadId) === threadId &&
-          normalizeMessageText(turnOwnership.turnId) === turnId
-        );
-        if (ownershipMatchesTurn && turnOwnership.reusable !== true) {
-          return { value: {
-            code: "vibe64_agent_turn_owner_conflict",
-            delivered: false,
-            error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
-            ok: false,
-            operationOutcome: "active_turn_owned_by_another_user",
-            refreshRecommended: true,
-            retryable: true,
-            threadId,
-            turnId
-          }, session: currentSession };
-        }
-        if (learningRoot) return null;
-        let actorMetadata = ownershipMatchesTurn && turnOwnership.reusable === true
-          ? sessionGitCommandActorFromMetadata(currentSession)
-          : null;
-        if (actorMetadata?.ok !== true) {
-          actorMetadata = await recordSessionGitCommandActor({
-            env,
-            reason: "agent-message",
-            runtime,
-            session: currentSession,
-            sourceRoot: executionRoot,
-            threadId,
-            vibe64User,
-            workdir
-          });
-        } else {
-          vibe64SessionDebugLog("server.codexTerminal.appServerMessage.turnOwnershipReused", {
-            messageId,
-            sessionId,
-            threadId,
-            turnId
-          });
-        }
-        if (actorMetadata?.ok === false) {
-          return { value: {
-            code: actorMetadata.code || "vibe64_codex_turn_steer_failed",
-            error: actorMetadata.error || "GitHub identity is not available for the user who authorized this assistant message.",
-            ok: false,
-            operationOutcome: "steer_git_actor_unavailable",
-            refreshRecommended: true,
-            threadId,
-            turnId
-          } };
-        }
-        return null;
-      }
-      const { agentSettings, preparedSession, thread, userRequest } = prepared;
-      let stageStartedAt = Date.now();
-      const actorResult = learningRoot ? null : await recordSessionGitCommandActor({
-        env,
-        overwrite: true,
-        reason: "codex-prompt",
-        runtime,
-        session: preparedSession,
-        sourceRoot: executionRoot,
-        threadId: thread.threadId,
-        vibe64User,
-        workdir
-      });
-      vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.stage", {
-        durationMs: Date.now() - stageStartedAt,
-        messageId,
-        sessionId,
-        stage: "git-actor"
-      });
-      if (actorResult?.ok === false) {
-        throw new Error(actorResult.error || "GitHub identity is not available for the user who authorized this Codex prompt.");
-      }
-      const refreshMetadata = preparedSession.metadata || {};
-      const providerContextRefreshPending = codexContextRefreshPending(preparedSession);
-      stageStartedAt = Date.now();
-      const genesisTask = normalizeMessageText(input.genesisTask);
-      const needsOpeningPrompt = sessionNeedsOpeningPrompt(preparedSession);
-      const rendered = genesisTask || needsOpeningPrompt
-        ? await runtime.renderPrompt(sessionId, {
-            input,
-            request: userRequest,
-            task: genesisTask || "start"
-          })
-        : { prompt: userRequest };
-      vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.stage", {
-        durationMs: Date.now() - stageStartedAt,
-        messageId,
-        sessionId,
-        stage: "prompt-render"
-      });
-      const renderedPrompt = normalizeMessageText(rendered?.prompt);
-      if (!renderedPrompt) {
-        throw new Error("The assistant prompt is empty.");
-      }
-      vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.prepared", {
-        messageCount: 1,
-        messageId,
-        sessionId,
-        threadId: thread.threadId
-      });
-      prepared.refreshMetadata = refreshMetadata;
-      prepared.providerContextRefreshPending = providerContextRefreshPending;
-      return {
-        renderedPrompt,
-        get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
-      };
-    },
-    finishMessage(input, prepared, outcome) {
-      if (Object.hasOwn(outcome, "error")) {
-        return nativePreparation.finishMessage(input, prepared, outcome);
-      }
-      return recordCodexMainMessageDelivery(sessionId, prepared);
-    }
-  };
+    prepareMessage,
+    finishMessage
+  });
 }
 
 async function recordCodexMainMessageDelivery(sessionId, prepared) {
@@ -186,18 +190,18 @@ async function recordCodexMainMessageDelivery(sessionId, prepared) {
 }
 
 function sessionBriefingIsDelivered(session = {}) {
-  return normalizeMessageText(session.metadata?.agent_briefing_delivered) === "yes";
+  return trimmedText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
 // A session opens with its briefing until it was delivered, unless a renewal
 // handover already started the conversation. Engines add their own conditions.
 function sessionNeedsOpeningPrompt(session = {}) {
   return !sessionBriefingIsDelivered(session) &&
-    !normalizeMessageText(session.metadata?.renewal_handover_delivered_at);
+    !trimmedText(session.metadata?.renewal_handover_delivered_at);
 }
 
 function codexContextRefreshPending(session = {}) {
-  return normalizeMessageText(session.metadata?.codex_context_refresh_pending) === "yes";
+  return trimmedText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
 
 /**
@@ -245,29 +249,31 @@ function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSes
     return prompt;
   }
 
-  return {
-    skipAdmission(entry, event) { return !entry.main || event.renewal; },
-    check(entry, ctx) {
-      if (entry.turn?.active && ctx.turnOwnership?.reusable === false) throw error("This turn belongs to another user.", "vibe64_agent_turn_owner_conflict");
-    },
-    prepareMessage,
-    async messageMetadata(_entry, event) {
-      const { input, context: ctx } = event;
-      return { ...input.turnMetadata, ...await conversationActorMetadata({ vibe64User: ctx.vibe64User }),
-        ...conversationReviewActorMetadata(input.turnMetadata) };
-    },
-    async admitMessage(_entry, event) {
-      const { input, context: ctx, message, messageId, uuid, actorMetadata } = event;
-      const conversationTurn = await ctx.runtime.store.writeConversationUserMessage(ctx.sessionId, {
-        messageId, text: text(input.displayMessage) || message, attachments: input.displayAttachments,
-        turnMetadata: { ...actorMetadata, assistantSelection: ctx.selection, engineId: ENGINE, upstreamMessageId: uuid }
-      });
-      await publishSessionChanged(ctx.sessionId, { reason: "claude-stream-message-delivered", payload: {
-        conversationLogPatch: { type: "upsert-turn", turn: conversationTurn }
-      } });
-      return conversationTurn;
-    }
-  };
+  function skipAdmission(entry, event) { return !entry.main || event.renewal; }
+
+  function check(entry, ctx) {
+    if (entry.turn?.active && ctx.turnOwnership?.reusable === false) throw error("This turn belongs to another user.", "vibe64_agent_turn_owner_conflict");
+  }
+
+  async function messageMetadata(_entry, event) {
+    const { input, context: ctx } = event;
+    return { ...input.turnMetadata, ...await conversationActorMetadata({ vibe64User: ctx.vibe64User }),
+      ...conversationReviewActorMetadata(input.turnMetadata) };
+  }
+
+  async function admitMessage(_entry, event) {
+    const { input, context: ctx, message, messageId, uuid, actorMetadata } = event;
+    const conversationTurn = await ctx.runtime.store.writeConversationUserMessage(ctx.sessionId, {
+      messageId, text: text(input.displayMessage) || message, attachments: input.displayAttachments,
+      turnMetadata: { ...actorMetadata, assistantSelection: ctx.selection, engineId: ENGINE, upstreamMessageId: uuid }
+    });
+    await publishSessionChanged(ctx.sessionId, { reason: "claude-stream-message-delivered", payload: {
+      conversationLogPatch: { type: "upsert-turn", turn: conversationTurn }
+    } });
+    return conversationTurn;
+  }
+
+  return Object.freeze({ skipAdmission, check, prepareMessage, messageMetadata, admitMessage });
 }
 
 /**
@@ -385,104 +391,106 @@ function createOpenCodeMainMessagePreparation({ projectService, env, recordGitAc
     };
   }
 
-  return {
+  async function prepareDeliveredMessage(sessionId = "", input = {}, options = {}) {
+    const prepared = await prepareMessage(sessionId, input, options);
+    if (Object.hasOwn(prepared, "value")) return prepared;
+    const { context, message, messageId } = prepared;
+    const duplicate = await context.runtime.store.conversationMessageIdExists(context.sessionId, messageId);
+    let actorFailure = null;
+    let actorMetadata = null;
+    prepared.input.duplicate = duplicate;
+    return { key: prepared.key, input: prepared.input, application: {
+      writeRun: prepared.application.writeRun,
+      monitor: prepared.application.monitor,
+      async prepare({ overwrite, threadId }) {
+        const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
+        const actor = learningRoot ? null : await recordGitActor({
+          env,
+          overwrite,
+          reason: "agent-message",
+          runtime: context.runtime,
+          session: context.session,
+          sourceRoot: sessionSourcePath(context.session),
+          threadId,
+          vibe64User: options.vibe64User || null,
+          workdir: context.workdir
+        });
+        if (actor?.ok === false) {
+          actorFailure = {
+            code: actor.code || "vibe64_opencode_git_actor_unavailable",
+            delivered: false,
+            error: actor.error || "GitHub identity is not available for this OpenCode message.",
+            ok: false,
+            refreshRecommended: true,
+            retryable: true
+          };
+          throw new Error(actorFailure.error);
+        }
+        return prepared.application.prepare();
+      },
+      async prompt() {
+        actorMetadata = { ...input.turnMetadata, ...await conversationActorMetadata({
+          vibe64User: options.vibe64User || null
+        }), ...conversationReviewActorMetadata(input.turnMetadata) };
+        const genesisTask = text(input.genesisTask);
+        const conversation = genesisTask
+          ? null
+          : await context.runtime.store.readConversationLogPage(context.sessionId, { limit: 1 });
+        const needsOpeningPrompt = Boolean(
+          genesisTask || (
+            !conversation?.pagination?.totalTurnCount &&
+            sessionNeedsOpeningPrompt(context.session)
+          )
+        );
+        const rendered = needsOpeningPrompt
+          ? await context.runtime.renderPrompt(context.sessionId, {
+              input,
+              request: message,
+              task: genesisTask || "start"
+            })
+          : { prompt: message };
+        const renderedPrompt = text(rendered?.prompt) || message;
+        return {
+          get agent() { return context.selection.agentId; },
+          get model() { return openCodeModel(context.selection); },
+          get prompt() { return { text: renderedPrompt }; },
+          get attachments() { return input.attachments; },
+          // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
+          beforeDispatch: threadId => input.onPromptSending?.({
+            threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
+          })
+        };
+      },
+      async commit(admitted) {
+        const conversationTurn = await context.runtime.store.writeConversationUserMessage(
+          context.sessionId,
+          {
+            attachments: input.displayAttachments,
+            messageId,
+            text: text(input.displayMessage) || message,
+            turnMetadata: {
+              ...input.turnMetadata,
+              assistantSelection: context.selection,
+              ...actorMetadata,
+              engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
+              upstreamMessageId: text(admitted?.id)
+            }
+          }
+        );
+        await prepared.application.commit(conversationTurn);
+        return conversationTurn;
+      }
+    }, project(result) {
+      return prepared.project(result, actorFailure);
+    } };
+  }
+
+  return Object.freeze({
     inspection: prepareMessageInspection,
     contextFor,
     prepareMessageInput,
-    async message(sessionId = "", input = {}, options = {}) {
-      const prepared = await prepareMessage(sessionId, input, options);
-      if (Object.hasOwn(prepared, "value")) return prepared;
-      const { context, message, messageId } = prepared;
-      const duplicate = await context.runtime.store.conversationMessageIdExists(context.sessionId, messageId);
-      let actorFailure = null;
-      let actorMetadata = null;
-      prepared.input.duplicate = duplicate;
-      return { key: prepared.key, input: prepared.input, application: {
-        writeRun: prepared.application.writeRun,
-        monitor: prepared.application.monitor,
-        async prepare({ overwrite, threadId }) {
-          const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
-          const actor = learningRoot ? null : await recordGitActor({
-            env,
-            overwrite,
-            reason: "agent-message",
-            runtime: context.runtime,
-            session: context.session,
-            sourceRoot: sessionSourcePath(context.session),
-            threadId,
-            vibe64User: options.vibe64User || null,
-            workdir: context.workdir
-          });
-          if (actor?.ok === false) {
-            actorFailure = {
-              code: actor.code || "vibe64_opencode_git_actor_unavailable",
-              delivered: false,
-              error: actor.error || "GitHub identity is not available for this OpenCode message.",
-              ok: false,
-              refreshRecommended: true,
-              retryable: true
-            };
-            throw new Error(actorFailure.error);
-          }
-          return prepared.application.prepare();
-        },
-        async prompt() {
-          actorMetadata = { ...input.turnMetadata, ...await conversationActorMetadata({
-            vibe64User: options.vibe64User || null
-          }), ...conversationReviewActorMetadata(input.turnMetadata) };
-          const genesisTask = text(input.genesisTask);
-          const conversation = genesisTask
-            ? null
-            : await context.runtime.store.readConversationLogPage(context.sessionId, { limit: 1 });
-          const needsOpeningPrompt = Boolean(
-            genesisTask || (
-              !conversation?.pagination?.totalTurnCount &&
-              sessionNeedsOpeningPrompt(context.session)
-            )
-          );
-          const rendered = needsOpeningPrompt
-            ? await context.runtime.renderPrompt(context.sessionId, {
-                input,
-                request: message,
-                task: genesisTask || "start"
-              })
-            : { prompt: message };
-          const renderedPrompt = text(rendered?.prompt) || message;
-          return {
-            get agent() { return context.selection.agentId; },
-            get model() { return openCodeModel(context.selection); },
-            get prompt() { return { text: renderedPrompt }; },
-            get attachments() { return input.attachments; },
-            // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
-            beforeDispatch: threadId => input.onPromptSending?.({
-              threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
-            })
-          };
-        },
-        async commit(admitted) {
-          const conversationTurn = await context.runtime.store.writeConversationUserMessage(
-            context.sessionId,
-            {
-              attachments: input.displayAttachments,
-              messageId,
-              text: text(input.displayMessage) || message,
-              turnMetadata: {
-                ...input.turnMetadata,
-                assistantSelection: context.selection,
-                ...actorMetadata,
-                engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-                upstreamMessageId: text(admitted?.id)
-              }
-            }
-          );
-          await prepared.application.commit(conversationTurn);
-          return conversationTurn;
-        }
-      }, project(result) {
-        return prepared.project(result, actorFailure);
-      } };
-    }
-  };
+    message: prepareDeliveredMessage
+  });
 }
 
 export {

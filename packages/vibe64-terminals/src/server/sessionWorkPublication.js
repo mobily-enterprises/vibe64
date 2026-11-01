@@ -12,9 +12,9 @@ import {
   output,
   rememberCanonicalCommit,
   saveCommand,
-  saveError,
-  text
+  saveError
 } from "./sessionWorkGit.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   assertConnectedSubmissionsIntegrated,
   assertConnectedWorkSnapshotsUnchanged,
@@ -29,7 +29,7 @@ async function createSaveCommit(runCommand, context, {
   message,
   project
 }) {
-  const subject = text(message);
+  const subject = trimmedText(message);
   if (!subject) {
     throw saveError(
       "Save requires an assistant-generated commit subject.",
@@ -118,7 +118,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   } catch (error) {
     if (["vibe64_contribution_discarded", "vibe64_contribution_discard_incomplete"].includes(error.code)) throw error;
     throw saveError(
-      `Save publication could not be confirmed. Inspect work to recover the prepared commit before retrying. ${text(error.message)}`,
+      `Save publication could not be confirmed. Inspect work to recover the prepared commit before retrying. ${trimmedText(error.message)}`,
       "vibe64_session_save_publication_unknown"
     );
   }
@@ -140,7 +140,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
         }
       );
     }
-    const reason = text(pushed?.stderr || pushed?.stdout || pushed?.output || pushed?.error) || "Git Save publication failed.";
+    const reason = trimmedText(pushed?.stderr || pushed?.stdout || pushed?.output || pushed?.error) || "Git Save publication failed.";
     if (context.mode === PROJECT_REPOSITORY_MODE_GITHUB && /changes must be made through a pull request/iu.test(reason)) {
       throw saveError(
         `GitHub requires a pull request to update ${context.branch}. Your work remains in this session.\n\n${reason}`,
@@ -149,7 +149,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     }
     throw saveError(
       reason,
-      text(pushed?.code) || "vibe64_session_save_git_failed"
+      trimmedText(pushed?.code) || "vibe64_session_save_git_failed"
     );
   }
   throw saveError(
@@ -211,7 +211,7 @@ async function refreshVerifiedGithubMirror(
     });
     if (refresh?.ok !== true) {
       return retryable(
-        text(refresh?.code) || "vibe64_session_save_github_mirror_refresh_failed",
+        trimmedText(refresh?.code) || "vibe64_session_save_github_mirror_refresh_failed",
         "refresh_failed"
       );
     }
@@ -342,7 +342,7 @@ async function reconcileSession(runCommand, context, {
     });
     return {
       currentTree,
-      error: text(error?.message || error),
+      error: trimmedText(error?.message || error),
       reconciled: false,
       status: "published_needs_reconcile"
     };
