@@ -6,7 +6,7 @@ import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -89,9 +89,9 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
     const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
       expectedConnectionIdentity: helper.connectionIdentity, signal,
       async onEvent(event) {
-        if (event.type === "thread") helper.conversationId = text(event.threadId);
-        else if (event.type === "turn") helper.runId = text(event.turnId);
-        else if (event.type === "helper-execution") helper.executionId = text(event.executionId);
+        if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
+        else if (event.type === "turn") helper.runId = normalizeText(event.turnId);
+        else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
         else return;
         await retain();
       } };
@@ -113,7 +113,7 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
     try { await cleanupReasoningSummary(context); }
     catch (error) { if (failure && error !== failure) error.cause = failure; failure = error; }
     if (failure) throw failure;
-    return text(result.text);
+    return normalizeText(result.text);
   }
 
   async function cleanupReasoningSummary(context) {
@@ -253,7 +253,7 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
       state.completion = state.completion.then(async () => {
         if (state.closed || entry.written) return;
         let headline = "";
-        if (text(entry.value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
+        if (normalizeText(entry.value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
           try {
             headline = openCodeReasoningHeadline(await requestReasoningSummary(state, entry.value));
           } catch (error) {
@@ -275,8 +275,8 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
     }
   }
 
-  return { cleanupReasoningSummary, disposeReasoningSummary, publishOpenCodeProgress,
-    dropOpenCodeProgress, projectReasoning, publishConversationTurn };
+  return Object.freeze({ cleanupReasoningSummary, disposeReasoningSummary, publishOpenCodeProgress,
+    dropOpenCodeProgress, projectReasoning, publishConversationTurn });
 }
 
 export { createOpenCodeConversationPresentation, conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID };

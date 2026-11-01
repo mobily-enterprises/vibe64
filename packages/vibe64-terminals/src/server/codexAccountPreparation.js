@@ -8,7 +8,7 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
@@ -53,7 +53,7 @@ function createCodexAccountPreparation({
     reason = "codex-terminal",
     toolHomeSource = ""
   } = {}) {
-    const systemRoot = normalizeText(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions.systemRoot);
+    const systemRoot = trimmedText(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions.systemRoot);
     if (!systemRoot) {
       return;
     }
@@ -85,7 +85,7 @@ function createCodexAccountPreparation({
   }
 
   async function codexToolHomeResult(session = {}) {
-    const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
+    const selection = vibe64AssistantSelectionFromMetadata(session.metadata || {}, { required: false });
     const providerId = codexSelectedModelProviderId(session);
     if (curatedCodexProvider(providerId)) {
       const options = await providerConnections.runtimeOptions(providerId);
@@ -161,10 +161,10 @@ function createCodexAccountPreparation({
       systemRoot: codexAppServerProviderOptions.systemRoot });
   }
 
-  return {
+  return Object.freeze({
     assistantAccess: codexAppServerAssistantAccess,
     codexToolHomeResult, codexReconnectTerminalFailureForError, codexAuthPreflightFailure
-  };
+  });
 }
 
 export { createCodexAccountPreparation };

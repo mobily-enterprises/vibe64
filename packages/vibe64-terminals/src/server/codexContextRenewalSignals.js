@@ -30,7 +30,7 @@ function nonNegativeInteger(value) {
   return Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
-export function sessionContextUsageFromMetadata(metadata = {}, {
+export function sessionContextUsageFromMetadata(metadata, {
   expectedThreadId = ""
 } = {}) {
   const providerId = normalizeText(metadata?.agent_context_usage_provider);

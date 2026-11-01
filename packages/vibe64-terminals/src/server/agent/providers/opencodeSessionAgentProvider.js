@@ -205,118 +205,144 @@ function createOpenCodeSessionAgentProvider({
     return executionProfile ? { ...result, executionProfile } : result;
   }
 
+  function prepareConversationRequest(method, context, input = {}) {
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
+      input, context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+    };
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
+      input: { conversationId: input.threadId || input.conversationId },
+      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+    };
+    if (method === "ensureSession") return {
+      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+    };
+    if (method === "createConversation") return {
+      input,
+      context: { assistantScope: context.assistantScope, assistantSelection: context.assistantSelection,
+        runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+    };
+    if (method === "closeSession") return {
+      namespace: opencodeTerminalNamespace(context.sessionId), sessionId: context.sessionId,
+      context, options: context
+    };
+    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
+      return { scopedConversationId: String(input.conversationId || "").trim() ? input.conversationId : undefined, input };
+    }
+    if (method === "sessionState") return {};
+    if (method !== "sendMessage") return { input };
+    const request = message => ({ input: message, prepareInput(prepared) {
+      const current = { ...message, ...prepared };
+      return context.prepareMessage ? context.prepareMessage(current) : current;
+    } });
+    if (String(input.message || "").trim()) {
+      return request({ ...input, messageId: String(input.messageId || "").trim() || randomUUID() });
+    }
+    // The original native preparation distinguishes false/0 from empty text
+    // and resolves its application context before allocating a message id.
+    return prepareMessageInput(context.sessionId, input, {
+      onEvent: context.onEvent,
+      runtime: context.runtime,
+      session: context.session,
+      turnOwnership: context.turnOwnership,
+      vibe64User: context.vibe64User
+    }).then(prepared => Object.hasOwn(prepared, "value") ? prepared
+      : request({ ...input, message: prepared.message, messageId: prepared.messageId }));
+  }
+
+  async function projectConversationResult(method, perform) {
+    if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
+    return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
+  }
+
+  async function capabilities(context, input = {}) {
+    return accounts.capabilities(input, context);
+  }
+
+  async function closeTerminal(context, input = {}) {
+    return terminals.closeTerminal(context.sessionId, input.terminalSessionId);
+  }
+
+  async function describeProvider(context) {
+    return accounts.describeProvider(context.sessionId, {
+      runtime: context.runtime,
+      session: context.session,
+      vibe64User: context.vibe64User
+    });
+  }
+
+  async function readTerminal(context, input = {}) {
+    return terminals.readTerminal(context.sessionId, input.terminalSessionId);
+  }
+
+  async function releaseRenewalPredecessorAttachments() {
+    return { ok: true, released: 0 };
+  }
+
+  async function resizeTerminal(context, input = {}) {
+    return terminals.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
+  }
+
+  function resolveExecutionProfile(context, input = {}) {
+    return resolveOpenCodeHelperExecutionProfile(context, input);
+  }
+
+  async function startTerminal(context, input = {}) {
+    return terminals.startTerminal(context.sessionId, input, {
+      runtime: context.runtime,
+      session: context.session,
+      vibe64User: context.vibe64User
+    });
+  }
+
+  async function subscribeTerminal(context, input = {}) {
+    return terminals.subscribeTerminal(
+      context.sessionId,
+      input.terminalSessionId,
+      input.subscriber
+    );
+  }
+
+  async function unsubscribeSessions() {
+    return { ok: true };
+  }
+
+  async function writeTerminal(context, input = {}) {
+    return terminals.writeTerminal(
+      context.sessionId,
+      input.terminalSessionId,
+      input.data,
+      input.input,
+      {
+        runtime: context.runtime,
+        session: context.session,
+        vibe64User: context.vibe64User
+      }
+    );
+  }
+
   return Object.freeze({
     prepareConversationHost,
     conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
     runDetachedChatTurn,
     streamDetachedChatTurn: runDetachedChatTurn,
-    prepareConversationRequest(method, context, input = {}) {
-      if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-        input, context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      };
-      if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
-        input: { conversationId: input.threadId || input.conversationId },
-        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      };
-      if (method === "ensureSession") return {
-        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      };
-      if (method === "createConversation") return {
-        input,
-        context: { assistantScope: context.assistantScope, assistantSelection: context.assistantSelection,
-          runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      };
-      if (method === "closeSession") return {
-        namespace: opencodeTerminalNamespace(context.sessionId), sessionId: context.sessionId,
-        context, options: context
-      };
-      if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
-        return { scopedConversationId: String(input.conversationId || "").trim() ? input.conversationId : undefined, input };
-      }
-      if (method === "sessionState") return {};
-      if (method !== "sendMessage") return { input };
-      const request = message => ({ input: message, prepareInput(prepared) {
-        const current = { ...message, ...prepared };
-        return context.prepareMessage ? context.prepareMessage(current) : current;
-      } });
-      if (String(input.message || "").trim()) {
-        return request({ ...input, messageId: String(input.messageId || "").trim() || randomUUID() });
-      }
-      // The original native preparation distinguishes false/0 from empty text
-      // and resolves its application context before allocating a message id.
-      return prepareMessageInput(context.sessionId, input, {
-        onEvent: context.onEvent,
-        runtime: context.runtime,
-        session: context.session,
-        turnOwnership: context.turnOwnership,
-        vibe64User: context.vibe64User
-      }).then(prepared => Object.hasOwn(prepared, "value") ? prepared
-        : request({ ...input, message: prepared.message, messageId: prepared.messageId }));
-    },
-    async projectConversationResult(method, perform) {
-      if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
-      return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
-    },
+    prepareConversationRequest,
+    projectConversationResult,
     executionProfiles: Object.freeze([
       VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
     id: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
     transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER,
-    async capabilities(context, input = {}) {
-      return accounts.capabilities(input, context);
-    },
-    async closeTerminal(context, input = {}) {
-      return terminals.closeTerminal(context.sessionId, input.terminalSessionId);
-    },
-    async describeProvider(context) {
-      return accounts.describeProvider(context.sessionId, {
-        runtime: context.runtime,
-        session: context.session,
-        vibe64User: context.vibe64User
-      });
-    },
-    async readTerminal(context, input = {}) {
-      return terminals.readTerminal(context.sessionId, input.terminalSessionId);
-    },
-    async releaseRenewalPredecessorAttachments() {
-      return { ok: true, released: 0 };
-    },
-    async resizeTerminal(context, input = {}) {
-      return terminals.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
-    },
-    resolveExecutionProfile(context, input = {}) {
-      return resolveOpenCodeHelperExecutionProfile(context, input);
-    },
-    async startTerminal(context, input = {}) {
-      return terminals.startTerminal(context.sessionId, input, {
-        runtime: context.runtime,
-        session: context.session,
-        vibe64User: context.vibe64User
-      });
-    },
-    async subscribeTerminal(context, input = {}) {
-      return terminals.subscribeTerminal(
-        context.sessionId,
-        input.terminalSessionId,
-        input.subscriber
-      );
-    },
-    async unsubscribeSessions() {
-      return { ok: true };
-    },
-    async writeTerminal(context, input = {}) {
-      return terminals.writeTerminal(
-        context.sessionId,
-        input.terminalSessionId,
-        input.data,
-        input.input,
-        {
-          runtime: context.runtime,
-          session: context.session,
-          vibe64User: context.vibe64User
-        }
-      );
-    }
+    capabilities,
+    closeTerminal,
+    describeProvider,
+    readTerminal,
+    releaseRenewalPredecessorAttachments,
+    resizeTerminal,
+    resolveExecutionProfile,
+    startTerminal,
+    subscribeTerminal,
+    unsubscribeSessions,
+    writeTerminal
   });
 }
 

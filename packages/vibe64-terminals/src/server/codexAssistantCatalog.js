@@ -1,6 +1,6 @@
 import { CODEX_APP_SERVER_PROVIDER_ID } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexTerminalNamespace } from "./terminalShared.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS = 180_000;
 const CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS = 30_000;
@@ -88,7 +88,7 @@ function createCodexAssistantCatalog({
       ? await codexAppServerRunOwner.readExecutionProfileModelCatalog(sessionId, { assistantScope, agentSettings, signal })
       : await codexConversationPreparation.context(sessionId, { runtime: resolvedRuntime, session: resolvedSession });
     if (context.ok === false) {
-      const error = new Error(normalizeText(context.error) || "Codex session is unavailable.");
+      const error = new Error(trimmedText(context.error) || "Codex session is unavailable.");
       Object.assign(error, context);
       throw error;
     }
@@ -127,7 +127,7 @@ function createCodexAssistantCatalog({
       session: resolvedSession
     });
     if (context.ok === false) {
-      const error = new Error(normalizeText(context.error) || "Codex session is unavailable.");
+      const error = new Error(trimmedText(context.error) || "Codex session is unavailable.");
       Object.assign(error, context);
       throw error;
     }
@@ -158,44 +158,47 @@ function createCodexAssistantCatalog({
     });
   }
 
-  return {
+  function executionProfileModelCatalog(sessionId, options = {}) {
+    return withCodexAppServerModelCatalogDeadline(
+      (signal) => codexAppServerExecutionProfileModelCatalog(sessionId, {
+        assistantScope: options.assistantScope,
+        agentSettings: options.agentSettings,
+        runtime: options.runtime,
+        session: options.session,
+        signal
+      }),
+      options
+    );
+  }
+
+  async function readPlanUsage(sessionId) {
+    return codexAppServerProviderOwner.readPlanUsage(codexTerminalNamespace(sessionId));
+  }
+
+  function modelCatalog(options = {}) {
+    return withCodexAppServerModelCatalogDeadline((signal) => (
+      codexAppServerProviderOwner.readModelCatalog({
+        cacheMs: CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS,
+        async prepareProviderOptions() {
+          const toolHome = await codexToolHomeResult();
+          if (toolHome.ok === false) throw new Error(toolHome.error);
+          return codexAppServerRuntimeOptions({
+            toolHomeSource: toolHome.toolHomeSource
+          });
+        },
+        providerFactory: codexAppServerProviderFactory,
+        resources: codexAppServerProviderResources(),
+        signal
+      })
+    ), options);
+  }
+
+  return Object.freeze({
     describeProvider: describeCodexAppServerProvider,
-
-    executionProfileModelCatalog(sessionId, options = {}) {
-      return withCodexAppServerModelCatalogDeadline(
-        (signal) => codexAppServerExecutionProfileModelCatalog(sessionId, {
-          assistantScope: options.assistantScope,
-          agentSettings: options.agentSettings,
-          runtime: options.runtime,
-          session: options.session,
-          signal
-        }),
-        options
-      );
-    },
-
-    async readPlanUsage(sessionId) {
-      return codexAppServerProviderOwner.readPlanUsage(codexTerminalNamespace(sessionId));
-    },
-
-    modelCatalog(options = {}) {
-      return withCodexAppServerModelCatalogDeadline((signal) => (
-        codexAppServerProviderOwner.readModelCatalog({
-          cacheMs: CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS,
-          async prepareProviderOptions() {
-            const toolHome = await codexToolHomeResult();
-            if (toolHome.ok === false) throw new Error(toolHome.error);
-            return codexAppServerRuntimeOptions({
-              toolHomeSource: toolHome.toolHomeSource
-            });
-          },
-          providerFactory: codexAppServerProviderFactory,
-          resources: codexAppServerProviderResources(),
-          signal
-        })
-      ), options);
-    }
-  };
+    executionProfileModelCatalog,
+    readPlanUsage,
+    modelCatalog
+  });
 }
 
 export { createCodexAssistantCatalog, withCodexAppServerModelCatalogDeadline };

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const CODEX_TURN_OUTCOME = Object.freeze({
   PROVIDER_FAILURE: "provider_failure",
@@ -33,7 +33,7 @@ const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
 function codexAppServerResultDeliveryFailureMessage({
   error = ""
 } = {}) {
-  const normalizedError = normalizeText(error);
+  const normalizedError = trimmedText(error);
   if (!normalizedError) {
     return CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE;
   }
@@ -44,10 +44,10 @@ function codexAppServerResultDeliveryFailureMessage({
 function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", {
   usageLimitExceeded = false
 } = {}) {
-  const normalizedOutcome = normalizeText(outcome);
+  const normalizedOutcome = trimmedText(outcome);
   const message = CODEX_TURN_OUTCOME_MESSAGES[normalizedOutcome] ||
     "Codex could not finish. Saved file changes remain; send a message to continue.";
-  const normalizedDetail = normalizeText(detail);
+  const normalizedDetail = trimmedText(detail);
   let notice = message;
   if (normalizedDetail) {
     notice = !normalizedOutcome || normalizedOutcome === CODEX_TURN_OUTCOME.PROVIDER_FAILURE
@@ -60,8 +60,8 @@ function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", {
 }
 
 function codexTurnOutcomeNoticeMessageId(threadId = "", turnId = "") {
-  const normalizedThreadId = normalizeText(threadId);
-  const normalizedTurnId = normalizeText(turnId);
+  const normalizedThreadId = trimmedText(threadId);
+  const normalizedTurnId = trimmedText(turnId);
   if (!normalizedThreadId || !normalizedTurnId) {
     return "";
   }
@@ -81,7 +81,7 @@ async function writeCodexTurnOutcomeNotice({
   turnId = "",
   usageLimitExceeded = false
 } = {}) {
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = trimmedText(sessionId);
   const messageId = codexTurnOutcomeNoticeMessageId(threadId, turnId);
   if (
     !normalizedSessionId ||

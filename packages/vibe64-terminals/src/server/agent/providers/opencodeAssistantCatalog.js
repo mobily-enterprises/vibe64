@@ -5,7 +5,7 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS
 } from "@local/vibe64-runtime/shared";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { record } from "../../record.js";
 
 const OPENCODE_CAPABILITY_PAGE_LIMIT = 25;
@@ -27,7 +27,7 @@ function pageLimit(value) {
 }
 
 function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
-  const cursor = text(value);
+  const cursor = normalizeText(value);
   if (!cursor) {
     return 0;
   }
@@ -35,7 +35,7 @@ function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
     const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
     if (
       decoded?.kind !== kind ||
-      text(decoded?.modelProviderId) !== text(modelProviderId) ||
+      normalizeText(decoded?.modelProviderId) !== normalizeText(modelProviderId) ||
       !Number.isSafeInteger(decoded?.offset) ||
       decoded.offset < 0
     ) {
@@ -53,7 +53,7 @@ function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
 function encodedCursor(offset = 0, kind = "providers", modelProviderId = "") {
   return Buffer.from(JSON.stringify({
     kind,
-    modelProviderId: text(modelProviderId),
+    modelProviderId: normalizeText(modelProviderId),
     offset
   })).toString("base64url");
 }
@@ -68,23 +68,23 @@ function normalizedConnections(value = null) {
           connected: true,
           defaultModelId: "",
           fingerprint: "",
-          id: text(connection),
-          label: text(connection),
+          id: normalizeText(connection),
+          label: normalizeText(connection),
           modelAccess: null,
           preferred: false,
           providerRevision: ""
         }
       : {
-          accessLabel: text(connection?.accessLabel),
-          billingLabel: text(connection?.billingLabel),
+          accessLabel: normalizeText(connection?.accessLabel),
+          billingLabel: normalizeText(connection?.billingLabel),
           connected: connection?.connected !== false,
-          defaultModelId: text(connection?.defaultModelId),
-          fingerprint: text(connection?.fingerprint),
-          id: text(connection?.modelProviderId || connection?.providerId || connection?.id),
-          label: text(connection?.productLabel || connection?.label),
+          defaultModelId: normalizeText(connection?.defaultModelId),
+          fingerprint: normalizeText(connection?.fingerprint),
+          id: normalizeText(connection?.modelProviderId || connection?.providerId || connection?.id),
+          label: normalizeText(connection?.productLabel || connection?.label),
           modelAccess: record(connection?.modelAccess),
           preferred: connection?.preferred === true,
-          providerRevision: text(connection?.providerRevision)
+          providerRevision: normalizeText(connection?.providerRevision)
         })
     .filter((connection) => connection.id);
 }
@@ -179,8 +179,8 @@ function modelVariants(model = {}) {
 }
 
 function normalizedModel(model = {}) {
-  const id = text(model.id);
-  const status = text(model.status);
+  const id = normalizeText(model.id);
+  const status = normalizeText(model.status);
   return {
     capabilities: {
       attachment: model.capabilities?.attachment === true,
@@ -191,9 +191,9 @@ function normalizedModel(model = {}) {
       reasoning: model.capabilities?.reasoning === true,
       toolcall: model.capabilities?.toolcall === true
     },
-    description: [text(model.family), text(model.release_date)].filter(Boolean).join(" · "),
+    description: [normalizeText(model.family), normalizeText(model.release_date)].filter(Boolean).join(" · "),
     id,
-    label: text(model.name) || id,
+    label: normalizeText(model.name) || id,
     status: status === "deprecated" ? "unavailable" : "available",
     variants: modelVariants(model)
   };
@@ -205,14 +205,14 @@ function normalizedProvider(
   defaultModelId = "",
   currentModelIds = null
 ) {
-  const id = text(provider.id);
+  const id = normalizeText(provider.id);
   const connection = connectionById.get(id);
   const modelAccess = record(connection?.modelAccess);
-  const recommendedModelId = text(modelAccess.recommendedModelId);
-  const accessRestricted = ["recommended", "verified"].includes(text(modelAccess.mode));
+  const recommendedModelId = normalizeText(modelAccess.recommendedModelId);
+  const accessRestricted = ["recommended", "verified"].includes(normalizeText(modelAccess.mode));
   const enabledModelIds = new Set((Array.isArray(modelAccess.enabledModelIds)
     ? modelAccess.enabledModelIds
-    : []).map(text).filter(Boolean));
+    : []).map(normalizeText).filter(Boolean));
   if (recommendedModelId) {
     enabledModelIds.add(recommendedModelId);
   }
@@ -234,13 +234,13 @@ function normalizedProvider(
     accessRestricted && !enabledModelIds.has(model.id) && model.status === "available"
       ? {
         ...model,
-        lockMessage: text(modelAccess.warning) || "This model needs additional provider access.",
+        lockMessage: normalizeText(modelAccess.warning) || "This model needs additional provider access.",
         status: "locked"
       }
       : model
   ));
-  const upstreamDefaultModelId = text(defaultModelId);
-  const configuredDefaultModelId = text(connection?.defaultModelId);
+  const upstreamDefaultModelId = normalizeText(defaultModelId);
+  const configuredDefaultModelId = normalizeText(connection?.defaultModelId);
   const requestedDefaultModelId = accessRestricted
     ? recommendedModelId
     : configuredDefaultModelId || upstreamDefaultModelId;
@@ -277,7 +277,7 @@ function normalizedProvider(
     definitionRevision,
     description: "OpenCode provider",
     id,
-    label: text(provider.name) || id,
+    label: normalizeText(provider.name) || id,
     modelAccess,
     models,
     preferred: connection?.preferred === true
@@ -285,18 +285,18 @@ function normalizedProvider(
 }
 
 function normalizedAgent(agent = {}) {
-  const mode = text(agent.mode);
+  const mode = normalizeText(agent.mode);
   if (agent.hidden === true || !["all", "primary"].includes(mode)) {
     return null;
   }
   return {
-    description: text(agent.description),
-    id: text(agent.name),
-    label: text(agent.name).replaceAll("-", " ").replace(/^./u, (character) => character.toUpperCase()),
+    description: normalizeText(agent.description),
+    id: normalizeText(agent.name),
+    label: normalizeText(agent.name).replaceAll("-", " ").replace(/^./u, (character) => character.toUpperCase()),
     mode,
-    modelId: text(agent.model?.modelID),
-    modelProviderId: text(agent.model?.providerID),
-    variantId: text(agent.variant)
+    modelId: normalizeText(agent.model?.modelID),
+    modelProviderId: normalizeText(agent.model?.providerID),
+    variantId: normalizeText(agent.variant)
   };
 }
 
@@ -308,20 +308,20 @@ function openCodeAssistantCapabilities({
   agents: agentRows = [],
   connections = [],
   input = {},
-  providers: providerResult = {},
+  providers: providerResult,
   zenModelIds = null
 } = {}) {
   const normalizedConnectionRows = normalizedConnections(connections);
   const connectionById = new Map(normalizedConnectionRows.map((connection) => [connection.id, connection]));
   const currentZenModelIds = Array.isArray(zenModelIds)
-    ? new Set(zenModelIds.map(text).filter(Boolean))
+    ? new Set(zenModelIds.map(normalizeText).filter(Boolean))
     : null;
   const providers = (Array.isArray(providerResult?.all) ? providerResult.all : [])
     .map((provider) => normalizedProvider(
       provider,
       connectionById,
-      providerResult?.default?.[text(provider?.id)],
-      text(provider?.id) === "opencode" ? currentZenModelIds : null
+      providerResult?.default?.[normalizeText(provider?.id)],
+      normalizeText(provider?.id) === "opencode" ? currentZenModelIds : null
     ))
     .filter((provider) => provider.id)
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
@@ -329,15 +329,15 @@ function openCodeAssistantCapabilities({
     .map(normalizedAgent)
     .filter(Boolean)
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
-  const requestedProviderId = text(input.modelProviderId);
-  const connectedOnly = text(input.connectedOnly).toLowerCase() === "true";
-  const search = text(input.search).toLocaleLowerCase();
+  const requestedProviderId = normalizeText(input.modelProviderId);
+  const connectedOnly = normalizeText(input.connectedOnly).toLowerCase() === "true";
+  const search = normalizeText(input.search).toLocaleLowerCase();
   const kind = requestedProviderId ? "models" : "providers";
   const limit = pageLimit(input.limit);
   const offset = decodedCursor(input.cursor, kind, requestedProviderId);
   const defaultProvider = providers.find((provider) => provider.connected && provider.preferred) ||
     providers.find((provider) => provider.connected) || null;
-  const upstreamDefaultModelId = text(defaultProvider?.defaultModelId);
+  const upstreamDefaultModelId = normalizeText(defaultProvider?.defaultModelId);
   const defaultModel = defaultProvider?.models.find((model) => (
     model.id === upstreamDefaultModelId && model.status === "available"
   )) || defaultProvider?.models.find((model) => model.status === "available") || null;
@@ -354,7 +354,7 @@ function openCodeAssistantCapabilities({
   let total;
   if (requestedProviderId) {
     const provider = selectableProviders.find((candidate) => candidate.id === requestedProviderId);
-    const requestedModelId = text(input.modelId);
+    const requestedModelId = normalizeText(input.modelId);
     const filteredModels = (provider?.models || []).filter((model) => (
       (!requestedModelId || model.id === requestedModelId) &&
       searchable(`${model.label}\n${model.id}\n${model.description}`, search)
@@ -426,12 +426,12 @@ function openCodeAssistantCapabilities({
     label: "OpenCode",
     modelProviders: pageProviders,
     page: {
-      cursor: text(input.cursor),
+      cursor: normalizeText(input.cursor),
       hasMore,
       kind,
       limit,
       nextCursor: hasMore ? encodedCursor(nextOffset, kind, requestedProviderId) : "",
-      search: text(input.search),
+      search: normalizeText(input.search),
       total
     },
     revision,

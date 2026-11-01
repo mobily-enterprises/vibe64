@@ -73,7 +73,7 @@ function waitForAttachmentLock() {
 }
 
 function attachmentLockWaitMs(options = {}, fallback = 0) {
-  const configured = Number(options?.lockWaitMs);
+  const configured = Number(options.lockWaitMs);
   return Number.isFinite(configured) && configured >= 0 ? configured : fallback;
 }
 

@@ -92,59 +92,73 @@ function createClaudeConversationStorage({ createError: error }) {
     await saving;
   }
 
-  return {
+  const projectContextRoot = entry => entry.context.runtime.projectContextRoot || entry.context.workdir;
+
+  const modelProviderId = entry => entry.context.selection.modelProviderId;
+
+  function readSessionConversations(ctx) {
+    const records = session => ({
+      get context() { return { ...ctx, session }; },
+      ids: Object.entries(session?.metadata || {})
+        .filter(([key, value]) => key.startsWith("claude_conversation_") && key !== "claude_conversation_id" && value)
+        .map(([key]) => key.slice("claude_conversation_".length))
+    });
+    // A deleted conversation must not be restored from a captured old snapshot.
+    if (ctx.assistantScope) return records(null);
+    // Renewal cleanup rereads its exact hidden session through the renewal reader.
+    if (!renewalCleanupContext(ctx.sessionId, ctx)) {
+      return Promise.resolve(ctx.runtime.getSession(ctx.sessionId, { inspectSource: false })).then(records);
+    }
+    return ctx.runtime.getSessionForRenewal(ctx.sessionId, { inspectSource: false }).then(session => {
+      renewalCleanupContext(ctx.sessionId, { ...ctx, session });
+      return records(session);
+    });
+  }
+
+  function select(ctx, id) {
+    // Restoring a retained entry is not a main-chat changeover. Only a main
+    // operation selects Claude, including when restoration already cached it.
+    const identity = { claude_conversation_id: id, agent_identity_conversation_id: id,
+      agent_identity_provider: ENGINE, agent_identity_resume_strategy: "provider-native",
+      agent_identity_status: "ready", agent_identity_workdir: ctx.workdir,
+      agent_transport_id: TRANSPORT, agent_transport_kind: "stream-json" };
+    if (Object.entries(identity).some(([name, value]) => ctx.session?.metadata?.[name] !== value)) {
+      return metadata(ctx, identity);
+    }
+  }
+
+  function read(ctx, id) {
+    if (!ctx.assistantScope) return ctx.session?.metadata?.[`claude_conversation_${id}`];
+    return (async () => {
+      try {
+        const saved = await readFile(scopedConversationPath(ctx, id), "utf8");
+        if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.");
+        return saved;
+      } catch (failure) { if (failure.code !== "ENOENT") throw failure; }
+    })();
+  }
+
+  async function remove(entry) {
+    await metadata(entry.context, { [`claude_conversation_${entry.id}`]: null });
+    if (entry.context.assistantScope) {
+      await entry.saving;
+      await rm(scopedConversationPath(entry.context, entry.id), { force: true });
+    }
+  }
+
+  const hasMessage = (ctx, messageId) => ctx.runtime.store.conversationMessageIdExists(ctx.sessionId, messageId);
+
+  return Object.freeze({
     metadata,
-    projectContextRoot: entry => entry.context.runtime.projectContextRoot || entry.context.workdir,
-    modelProviderId: entry => entry.context.selection.modelProviderId,
-    readSessionConversations(ctx) {
-      const records = session => ({
-        get context() { return { ...ctx, session }; },
-        ids: Object.entries(session?.metadata || {})
-          .filter(([key, value]) => key.startsWith("claude_conversation_") && key !== "claude_conversation_id" && value)
-          .map(([key]) => key.slice("claude_conversation_".length))
-      });
-      // A deleted conversation must not be restored from a captured old snapshot.
-      if (ctx.assistantScope) return records(null);
-      // Renewal cleanup rereads its exact hidden session through the renewal reader.
-      if (!renewalCleanupContext(ctx.sessionId, ctx)) {
-        return Promise.resolve(ctx.runtime.getSession(ctx.sessionId, { inspectSource: false })).then(records);
-      }
-      return ctx.runtime.getSessionForRenewal(ctx.sessionId, { inspectSource: false }).then(session => {
-        renewalCleanupContext(ctx.sessionId, { ...ctx, session });
-        return records(session);
-      });
-    },
-    select(ctx, id) {
-      // Restoring a retained entry is not a main-chat changeover. Only a main
-      // operation selects Claude, including when restoration already cached it.
-      const identity = { claude_conversation_id: id, agent_identity_conversation_id: id,
-        agent_identity_provider: ENGINE, agent_identity_resume_strategy: "provider-native",
-        agent_identity_status: "ready", agent_identity_workdir: ctx.workdir,
-        agent_transport_id: TRANSPORT, agent_transport_kind: "stream-json" };
-      if (Object.entries(identity).some(([name, value]) => ctx.session?.metadata?.[name] !== value)) {
-        return metadata(ctx, identity);
-      }
-    },
-    read(ctx, id) {
-      if (!ctx.assistantScope) return ctx.session?.metadata?.[`claude_conversation_${id}`];
-      return (async () => {
-        try {
-          const saved = await readFile(scopedConversationPath(ctx, id), "utf8");
-          if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.");
-          return saved;
-        } catch (failure) { if (failure.code !== "ENOENT") throw failure; }
-      })();
-    },
+    projectContextRoot,
+    modelProviderId,
+    readSessionConversations,
+    select,
+    read,
     save,
-    async remove(entry) {
-      await metadata(entry.context, { [`claude_conversation_${entry.id}`]: null });
-      if (entry.context.assistantScope) {
-        await entry.saving;
-        await rm(scopedConversationPath(entry.context, entry.id), { force: true });
-      }
-    },
-    hasMessage: (ctx, messageId) => ctx.runtime.store.conversationMessageIdExists(ctx.sessionId, messageId)
-  };
+    remove,
+    hasMessage
+  });
 }
 
 export { createClaudeConversationStorage };

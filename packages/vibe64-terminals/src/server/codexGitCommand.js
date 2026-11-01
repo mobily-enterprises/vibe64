@@ -604,11 +604,11 @@ function createCodexGitCommandService({
     });
   }
 
-  return {
+  return Object.freeze({
     logger,
     run,
     sessionWorkSaveContext
-  };
+  });
 }
 
 async function prepareCodexGitCommand({

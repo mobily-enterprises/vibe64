@@ -25,7 +25,7 @@ import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecu
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -48,11 +48,11 @@ const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
  * @param {Vibe64SessionRuntime} [runtime]
  */
 async function globalCodexRuntimeRoot(projectService, runtime = null) {
-  const serviceRoot = normalizeText(projectService.currentProjectRuntimeRoot());
+  const serviceRoot = trimmedText(projectService.currentProjectRuntimeRoot());
   if (serviceRoot) {
     return serviceRoot;
   }
-  return normalizeText(runtime?.stateRoot);
+  return trimmedText(runtime?.stateRoot);
 }
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
@@ -60,7 +60,7 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
     return "";
   }
   const metadata = session.metadata || {};
-  const endpoint = normalizeText(metadata.agent_transport_endpoint);
+  const endpoint = trimmedText(metadata.agent_transport_endpoint);
   return endpoint ? codexAppServerEndpointForTarget(endpoint) : "";
 }
 
@@ -109,7 +109,7 @@ function createCodexInteractiveTerminals({
   const startCodexGatewayTerminal = createCodexGatewayTerminal(runCommand);
 
   async function codexAppServerRuntimeForVisibleTerminal(sessionId = "", threadId = "", options = {}) {
-    if (!normalizeText(threadId)) {
+    if (!trimmedText(threadId)) {
       return null;
     }
     const runtime = options.runtime || await createRuntimeForSession();
@@ -385,8 +385,8 @@ function createCodexInteractiveTerminals({
     };
   }
 
-  async function recordCodexTerminalInputGitActor(sessionId = "", data = "", input = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+  async function recordCodexTerminalInputGitActor(sessionId = "", data = "", input) {
+    const normalizedSessionId = trimmedText(sessionId);
     if (!input?.trackGitActor || !normalizedSessionId || String(data ?? "").length === 0) {
       return {
         ok: true
@@ -429,112 +429,136 @@ function createCodexInteractiveTerminals({
     };
   }
 
+  function closeGlobalTerminal(terminalSessionId) {
+    return closeTerminalSession(terminalSessionId, {
+      namespace: globalCodexTerminalNamespace()
+    });
+  }
+
+  async function closeTerminal(sessionId, terminalSessionId) {
+    return closeTerminalSession(terminalSessionId, {
+      namespace: codexTerminalNamespace(sessionId)
+    });
+  }
+
+  function readGlobalTerminal(terminalSessionId) {
+    return vibe64Result(async () => {
+      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const snapshot = readTerminalSession(terminalSessionId, {
+        namespace: globalCodexTerminalNamespace()
+      });
+      const codexTerminal = activeGlobalCodexTerminal(executionRoot);
+      return {
+        ...snapshot,
+        codexTerminal,
+        globalCodexTerminal: codexTerminal
+      };
+    });
+  }
+
+  function readTerminal(sessionId, terminalSessionId) {
+    return vibe64Result(async () => {
+      const runtime = await createRuntimeForSession();
+      const session = await runtime.getSession(sessionId);
+      return withCodexState(readTerminalSession(terminalSessionId, {
+        namespace: codexTerminalNamespace(sessionId),
+        outputLimit: CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
+      }), session);
+    });
+  }
+
+  async function startGlobalTerminal() {
+    return vibe64Result(async () => {
+      return startGlobalCodexTerminalSession();
+    });
+  }
+
+  async function globalTerminalState() {
+    return vibe64Result(async () => {
+      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const codexTerminal = activeGlobalCodexTerminal(executionRoot);
+      return {
+        codexTerminal,
+        globalCodexTerminal: codexTerminal,
+        ok: true
+      };
+    });
+  }
+
+  function subscribeGlobalTerminal(terminalSessionId, subscriber) {
+    return vibe64Result(async () => {
+      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const subscribed = subscribeTerminalSession(terminalSessionId, subscriber, {
+        namespace: globalCodexTerminalNamespace()
+      });
+      const codexTerminal = activeGlobalCodexTerminal(executionRoot);
+      return {
+        ...subscribed,
+        codexTerminal,
+        globalCodexTerminal: codexTerminal
+      };
+    });
+  }
+
+  function subscribeTerminal(sessionId, terminalSessionId, subscriber) {
+    return vibe64Result(async () => {
+      const runtime = await createRuntimeForSession();
+      const session = await runtime.getSession(sessionId);
+      return withCodexState(subscribeTerminalSession(terminalSessionId, subscriber, {
+        namespace: codexTerminalNamespace(sessionId),
+        outputLimit: CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
+      }), session);
+    });
+  }
+
+  async function writeTerminal(sessionId, terminalSessionId, data, input = {}) {
+    const admissionFailure = terminalNamespaceAdmissionFailure(
+      codexTerminalNamespace(sessionId)
+    );
+    if (admissionFailure) {
+      return admissionFailure;
+    }
+    const actorResult = await recordCodexTerminalInputGitActor(sessionId, data, input);
+    if (actorResult?.ok === false) {
+      return actorResult;
+    }
+    return writeTerminalSessionText(terminalSessionId, data, {
+      namespace: codexTerminalNamespace(sessionId)
+    });
+  }
+
+  function writeGlobalTerminal(terminalSessionId, data) {
+    return writeTerminalSessionText(terminalSessionId, data, {
+      namespace: globalCodexTerminalNamespace()
+    });
+  }
+
+  function resizeTerminal(sessionId, terminalSessionId, size) {
+    return resizeTerminalSession(terminalSessionId, size, {
+      namespace: codexTerminalNamespace(sessionId)
+    });
+  }
+
+  function resizeGlobalTerminal(terminalSessionId, size) {
+    return resizeTerminalSession(terminalSessionId, size, {
+      namespace: globalCodexTerminalNamespace()
+    });
+  }
+
   return Object.freeze({
     startTerminal: startCodexAppServerTerminal,
-    closeGlobalTerminal(terminalSessionId) {
-      return closeTerminalSession(terminalSessionId, {
-        namespace: globalCodexTerminalNamespace()
-      });
-    },
-    async closeTerminal(sessionId, terminalSessionId) {
-      return closeTerminalSession(terminalSessionId, {
-        namespace: codexTerminalNamespace(sessionId)
-      });
-    },
-    readGlobalTerminal(terminalSessionId) {
-      return vibe64Result(async () => {
-        const executionRoot = await globalCodexRuntimeRoot(projectService);
-        const snapshot = readTerminalSession(terminalSessionId, {
-          namespace: globalCodexTerminalNamespace()
-        });
-        const codexTerminal = activeGlobalCodexTerminal(executionRoot);
-        return {
-          ...snapshot,
-          codexTerminal,
-          globalCodexTerminal: codexTerminal
-        };
-      });
-    },
-    readTerminal(sessionId, terminalSessionId) {
-      return vibe64Result(async () => {
-        const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId);
-        return withCodexState(readTerminalSession(terminalSessionId, {
-          namespace: codexTerminalNamespace(sessionId),
-          outputLimit: CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
-        }), session);
-      });
-    },
-    async startGlobalTerminal() {
-      return vibe64Result(async () => {
-        return startGlobalCodexTerminalSession();
-      });
-    },
-    async globalTerminalState() {
-      return vibe64Result(async () => {
-        const executionRoot = await globalCodexRuntimeRoot(projectService);
-        const codexTerminal = activeGlobalCodexTerminal(executionRoot);
-        return {
-          codexTerminal,
-          globalCodexTerminal: codexTerminal,
-          ok: true
-        };
-      });
-    },
-    subscribeGlobalTerminal(terminalSessionId, subscriber) {
-      return vibe64Result(async () => {
-        const executionRoot = await globalCodexRuntimeRoot(projectService);
-        const subscribed = subscribeTerminalSession(terminalSessionId, subscriber, {
-          namespace: globalCodexTerminalNamespace()
-        });
-        const codexTerminal = activeGlobalCodexTerminal(executionRoot);
-        return {
-          ...subscribed,
-          codexTerminal,
-          globalCodexTerminal: codexTerminal
-        };
-      });
-    },
-    subscribeTerminal(sessionId, terminalSessionId, subscriber) {
-      return vibe64Result(async () => {
-        const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId);
-        return withCodexState(subscribeTerminalSession(terminalSessionId, subscriber, {
-          namespace: codexTerminalNamespace(sessionId),
-          outputLimit: CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH
-        }), session);
-      });
-    },
-    async writeTerminal(sessionId, terminalSessionId, data, input = {}) {
-      const admissionFailure = terminalNamespaceAdmissionFailure(
-        codexTerminalNamespace(sessionId)
-      );
-      if (admissionFailure) {
-        return admissionFailure;
-      }
-      const actorResult = await recordCodexTerminalInputGitActor(sessionId, data, input);
-      if (actorResult?.ok === false) {
-        return actorResult;
-      }
-      return writeTerminalSessionText(terminalSessionId, data, {
-        namespace: codexTerminalNamespace(sessionId)
-      });
-    },
-    writeGlobalTerminal(terminalSessionId, data) {
-      return writeTerminalSessionText(terminalSessionId, data, {
-        namespace: globalCodexTerminalNamespace()
-      });
-    },
-    resizeTerminal(sessionId, terminalSessionId, size) {
-      return resizeTerminalSession(terminalSessionId, size, {
-        namespace: codexTerminalNamespace(sessionId)
-      });
-    },
-    resizeGlobalTerminal(terminalSessionId, size) {
-      return resizeTerminalSession(terminalSessionId, size, {
-        namespace: globalCodexTerminalNamespace()
-      });
-    },
+    closeGlobalTerminal,
+    closeTerminal,
+    readGlobalTerminal,
+    readTerminal,
+    startGlobalTerminal,
+    globalTerminalState,
+    subscribeGlobalTerminal,
+    subscribeTerminal,
+    writeTerminal,
+    writeGlobalTerminal,
+    resizeTerminal,
+    resizeGlobalTerminal
   });
 }
 

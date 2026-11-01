@@ -9,7 +9,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
 import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -33,7 +33,7 @@ function openCodeMessageError(message = {}) {
       ].filter(Boolean).join(", ");
       return [
         `Project guidance could not load: the Genesis ${scope} hook ${reason} after ${seconds}s${detail ? ` (${detail})` : ""}.`,
-        text(diagnostic.stderr).slice(0, 1500) || "The command returned no diagnostic output.",
+        normalizeText(diagnostic.stderr).slice(0, 1500) || "The command returned no diagnostic output.",
         "The assistant stopped before it could continue. Check the project's Genesis hook and installed runtime, then send your message again."
       ].join("\n\n");
     } catch {
@@ -51,18 +51,18 @@ function openCodeCredentialFailureNoticeMessage() {
 }
 
 function openCodeProviderApiFailureNoticeMessage(failure = "") {
-  return `OpenCode could not finish: ${text(failure)} Saved project changes remain. [Go to AI Accounts](/app/manage/accounts)`;
+  return `OpenCode could not finish: ${normalizeText(failure)} Saved project changes remain. [Go to AI Accounts](/app/manage/accounts)`;
 }
 
 function openCodeFailureNoticeMessage(failure = "") {
-  const detail = text(failure);
+  const detail = normalizeText(failure);
   return detail
     ? `OpenCode could not finish.\n\n${detail}\n\nSaved project changes remain.`
     : "OpenCode could not finish. Saved project changes remain.";
 }
 
 function openCodeRunRealtimePayload(run = {}) {
-  const state = text(run.state);
+  const state = normalizeText(run.state);
   const active = run.active === true || vibe64AgentRunStateIsActive(state);
   const turnState = state === VIBE64_AGENT_RUN_STATE.STARTING
     ? "starting"
@@ -71,9 +71,9 @@ function openCodeRunRealtimePayload(run = {}) {
       : active
         ? "active"
         : "idle";
-  const threadId = text(run.threadId);
-  const turnId = text(run.turnId);
-  const updatedAt = text(run.updatedAt);
+  const threadId = normalizeText(run.threadId);
+  const turnId = normalizeText(run.turnId);
+  const updatedAt = normalizeText(run.updatedAt);
   return {
     agentRun: {
       active,
@@ -94,12 +94,12 @@ function openCodeRunRealtimePayload(run = {}) {
       transportId: OPENCODE_AGENT_RUN_ID,
       turn: {
         active,
-        completedAt: text(run.finishedAt),
-        error: text(run.error),
+        completedAt: normalizeText(run.finishedAt),
+        error: normalizeText(run.error),
         id: turnId,
-        phase: active && !run.observationError ? text(run.phase) : "",
+        phase: active && !run.observationError ? normalizeText(run.phase) : "",
         runState: state,
-        startedAt: text(run.startedAt),
+        startedAt: normalizeText(run.startedAt),
         state: turnState,
         status: run.observationError ? "observation_lost" : state,
         updatedAt
@@ -174,17 +174,17 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
           ...(Object.hasOwn(turn, "submittedBy") ? { submittedBy: turn.submittedBy } : {}),
           error,
-          observationError: text(turn.observationError),
-          phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? text(turn.phase) : "",
+          observationError: normalizeText(turn.observationError),
+          phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? normalizeText(turn.phase) : "",
           model: context.selection.modelId,
           modelProviderId: context.selection.modelProviderId,
           ...(vibe64AgentRunStateIsActive(state)
-            ? { finishedAt: "", startedAt: text(turn.startedAt) }
-            : { finishedAt: text(turn.updatedAt) }),
+            ? { finishedAt: "", startedAt: normalizeText(turn.startedAt) }
+            : { finishedAt: normalizeText(turn.updatedAt) }),
           state,
-          threadId: text(turn.threadId),
-          turnId: text(turn.id),
-          updatedAt: text(turn.updatedAt)
+          threadId: normalizeText(turn.threadId),
+          turnId: normalizeText(turn.id),
+          updatedAt: normalizeText(turn.updatedAt)
         }
       }
     ).then((run) => {
@@ -205,8 +205,8 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
           error,
           id: OPENCODE_AGENT_RUN_ID,
           state,
-          threadId: text(turn.threadId),
-          turnId: text(turn.id),
+          threadId: normalizeText(turn.threadId),
+          turnId: normalizeText(turn.id),
           updatedAt: new Date().toISOString()
         })
       },
@@ -331,7 +331,7 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
     };
   }
 
-  return { writeRun, observationProjection, messageMonitorProjection };
+  return Object.freeze({ writeRun, observationProjection, messageMonitorProjection });
 }
 
 export { createOpenCodeConversationEvents, openCodeMessageError };

@@ -12,7 +12,7 @@ import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecu
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { isRecord } from "./isRecord.js";
 
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
@@ -43,25 +43,25 @@ function codexAgentSettingsFromSession(session = {}) {
     };
   }
   return {
-    model: normalizeText(metadata.agent_settings_model),
-    providerId: normalizeText(metadata.agent_settings_provider),
-    thinking: normalizeText(metadata.agent_settings_thinking)
+    model: trimmedText(metadata.agent_settings_model),
+    providerId: trimmedText(metadata.agent_settings_provider),
+    thinking: trimmedText(metadata.agent_settings_thinking)
   };
 }
 
 // The session's selection names its model provider. Model ids are not unique
 // across providers (both Z.AI connections offer GLM 5.3), so the model id alone
 // chooses one only for settings saved without a provider.
-function codexSelectedModelProviderId(session = {}) {
+function codexSelectedModelProviderId(session) {
   const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
-  return normalizeText(session?.metadata?.codex_routing_home_provider) || normalizeText(selection?.modelProviderId) ||
-    normalizeText(session?.agentSettings?.modelProviderId) ||
+  return trimmedText(session?.metadata?.codex_routing_home_provider) || trimmedText(selection?.modelProviderId) ||
+    trimmedText(session?.agentSettings?.modelProviderId) ||
     curatedCodexModel(session?.agentSettings?.model)?.modelProviderId || "";
 }
 
 // A thread starts on the provider its parameters or its runtime's routing name.
 function codexThreadModelProvider(params = {}, routingModelProviderId = "") {
-  return normalizeText(params.modelProvider) || normalizeText(routingModelProviderId) ||
+  return trimmedText(params.modelProvider) || trimmedText(routingModelProviderId) ||
     curatedCodexModel(params.model)?.modelProviderId || "openai";
 }
 
@@ -71,14 +71,14 @@ function createCodexRuntimeHost({
   codexToolHomeSource
 }) {
   function resolvedCodexToolHomeSource() {
-    return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
+    return trimmedText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
   }
 
   function codexRuntimeForTerminalEnv({
     terminalEnv = {},
     toolHomeSource = ""
   } = {}) {
-    const selectedHome = normalizeText(toolHomeSource) || resolvedCodexToolHomeSource();
+    const selectedHome = trimmedText(toolHomeSource) || resolvedCodexToolHomeSource();
     const curated = CURATED_CODEX_PROVIDERS.find(({ id }) => codexAppServerProviderOptions.systemRoot &&
       codexProviderPaths(codexAppServerProviderOptions.systemRoot, id).toolHomeSource === selectedHome);
     // The OpenAI home's runtime belongs to one sign-in (its login generation).
@@ -107,23 +107,23 @@ function createCodexRuntimeHost({
   }
 
   function codexAppServerProviderKey(sessionId = "", options = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = trimmedText(sessionId);
     if (!normalizedSessionId) {
       throw new Error("Vibe64 session ID is required.");
     }
     const runtimeIdsHash = stableHash(JSON.stringify(Array.isArray(options.runtimes) ? options.runtimes : []));
     return [
       normalizedSessionId,
-      normalizeText(options.threadExecutionRoot || options.executionRoot),
-      normalizeText(options.runtimeInstanceId),
+      trimmedText(options.threadExecutionRoot || options.executionRoot),
+      trimmedText(options.runtimeInstanceId),
       runtimeIdsHash,
       executionEnvFingerprint(codexAppServerProviderIdentityEnv(
         options.threadEnv || options.terminalEnv
       )),
-      normalizeText(options.toolHomeSource),
-      normalizeText(options.threadWorkdir || options.workdir),
-      normalizeText(options.executionMode),
-      normalizeText(options.codexLoginGeneration)
+      trimmedText(options.toolHomeSource),
+      trimmedText(options.threadWorkdir || options.workdir),
+      trimmedText(options.executionMode),
+      trimmedText(options.codexLoginGeneration)
     ].join(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
   }
 
@@ -138,17 +138,17 @@ function createCodexRuntimeHost({
       workdir = "",
       executionMode = "",
       loginGeneration = ""
-    ] = normalizeText(providerKey).split(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
+    ] = trimmedText(providerKey).split(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
     return {
-      envHash: normalizeText(envHash),
-      executionMode: normalizeText(executionMode),
-      loginGeneration: normalizeText(loginGeneration),
-      runtimeInstanceId: normalizeText(runtimeInstanceId),
-      runtimesHash: normalizeText(runtimesHash),
-      sessionId: normalizeText(sessionId),
-      executionRoot: normalizeText(executionRoot),
-      toolHomeSource: normalizeText(toolHomeSource),
-      workdir: normalizeText(workdir)
+      envHash: trimmedText(envHash),
+      executionMode: trimmedText(executionMode),
+      loginGeneration: trimmedText(loginGeneration),
+      runtimeInstanceId: trimmedText(runtimeInstanceId),
+      runtimesHash: trimmedText(runtimesHash),
+      sessionId: trimmedText(sessionId),
+      executionRoot: trimmedText(executionRoot),
+      toolHomeSource: trimmedText(toolHomeSource),
+      workdir: trimmedText(workdir)
     };
   }
 
@@ -162,7 +162,7 @@ function createCodexRuntimeHost({
 
   function codexAppServerRuntimeOptions({
     runtimeDir = "",
-    session = {},
+    session,
     executionRoot = "",
     terminalEnv = {},
     toolHomeSource = "",
@@ -172,15 +172,15 @@ function createCodexRuntimeHost({
       terminalEnv,
       toolHomeSource
     });
-    const sharedRuntimeDir = normalizeText(runtimeDir) ||
+    const sharedRuntimeDir = trimmedText(runtimeDir) ||
       codexAppServerRuntimeDir(runtimeContext.providerOptions);
-    const sessionId = normalizeText(session?.sessionId || session?.id);
+    const sessionId = trimmedText(session?.sessionId || session?.id);
     return {
       ...runtimeContext.providerOptions,
       helperWorkdir: path.join(
         sharedRuntimeDir,
         "helper-workspaces",
-        stableHash(sessionId || normalizeText(workdir) || "unattributed")
+        stableHash(sessionId || trimmedText(workdir) || "unattributed")
       ),
       executionMode: "",
       executionRoot: "",
@@ -190,24 +190,24 @@ function createCodexRuntimeHost({
       session: {},
       terminalEnv: {},
       threadEnv: runtimeContext.terminalProcessEnv,
-      threadExecutionRoot: normalizeText(executionRoot),
-      threadWorkdir: normalizeText(workdir),
+      threadExecutionRoot: trimmedText(executionRoot),
+      threadWorkdir: trimmedText(workdir),
       toolHomeSource: runtimeContext.toolHomeSource,
       userKey: "",
       workdir: ""
     };
   }
 
-  function codexAppServerRuntimeOptionsFromSessionMetadata(session = {}, fallbackOptions = {}) {
+  function codexAppServerRuntimeOptionsFromSessionMetadata(session, fallbackOptions = {}) {
     const metadata = session?.metadata || {};
-    const runtimeDir = normalizeText(metadata.agent_transport_runtime_dir);
+    const runtimeDir = trimmedText(metadata.agent_transport_runtime_dir);
     if (!runtimeDir) {
       return null;
     }
-    const metadataSourcePath = normalizeText(metadata.source_path);
-    const metadataWorkdir = normalizeText(metadata.agent_identity_workdir) || metadataSourcePath ||
-      normalizeText(fallbackOptions.workdir);
-    const metadataExecutionRoot = normalizeText(fallbackOptions.executionRoot) ||
+    const metadataSourcePath = trimmedText(metadata.source_path);
+    const metadataWorkdir = trimmedText(metadata.agent_identity_workdir) || metadataSourcePath ||
+      trimmedText(fallbackOptions.workdir);
+    const metadataExecutionRoot = trimmedText(fallbackOptions.executionRoot) ||
       sessionSourcePath(session) ||
       metadataSourcePath;
     const providerId = codexSelectedModelProviderId(session);
@@ -239,7 +239,7 @@ function createCodexRuntimeHost({
     };
   }
 
-  return {
+  return Object.freeze({
     resolvedCodexToolHomeSource,
     codexRuntimeForTerminalEnv,
     codexAppServerProviderKey,
@@ -247,7 +247,7 @@ function createCodexRuntimeHost({
     codexAppServerRuntimeOptions,
     codexAppServerRuntimeOptionsFromSessionMetadata,
     codexAppServerPersistedRuntimeHost
-  };
+  });
 }
 
 /**
@@ -292,8 +292,8 @@ function createCodexSessionRuntimeHost({
     workdir = ""
   } = {}) {
     return {
-      get executionRoot() { return normalizeText(executionRoot) || sessionSourcePath(session); },
-      get workdir() { return normalizeText(workdir) || sessionSourcePath(session); }
+      get executionRoot() { return trimmedText(executionRoot) || sessionSourcePath(session); },
+      get workdir() { return trimmedText(workdir) || sessionSourcePath(session); }
     };
   }
 
@@ -307,16 +307,16 @@ function createCodexSessionRuntimeHost({
   } = {}, nativeContext = "execution") {
     const metadata = session.metadata || {};
     const effectiveRuntime = runtime || await createRuntimeForSession();
-    const sessionId = normalizeText(session.sessionId || session.id);
+    const sessionId = trimmedText(session.sessionId || session.id);
     const learningRoot = effectiveRuntime.learningScope && nativeContext === "storage"
       ? (await effectiveRuntime.store.readSessionNativeDescriptor(sessionId)).nativeExecutionRoot
       : await learningSessionExecutionRoot(effectiveRuntime, sessionId, { allowClosing: nativeContext === "control" });
-    if (learningRoot && (normalizeText(executionRoot) && path.resolve(executionRoot) !== learningRoot ||
-        normalizeText(workdir) && path.resolve(workdir) !== learningRoot)) {
+    if (learningRoot && (trimmedText(executionRoot) && path.resolve(executionRoot) !== learningRoot ||
+        trimmedText(workdir) && path.resolve(workdir) !== learningRoot)) {
       throw new Error("Learning native execution must use its exact private session root.");
     }
-    const effectiveExecutionRoot = learningRoot || normalizeText(executionRoot) || sessionSourcePath(session);
-    const effectiveWorkdir = learningRoot || normalizeText(workdir) || sessionSourcePath(session);
+    const effectiveExecutionRoot = learningRoot || trimmedText(executionRoot) || sessionSourcePath(session);
+    const effectiveWorkdir = learningRoot || trimmedText(workdir) || sessionSourcePath(session);
     const suppliedTerminalEnv = isRecord(terminalEnv);
     const baseTerminalEnv = suppliedTerminalEnv
       ? terminalEnv
@@ -334,20 +334,20 @@ function createCodexSessionRuntimeHost({
         ...await codexManagedCommandEnv({
           runtime: effectiveRuntime,
           session,
-          sessionId: normalizeText(session.sessionId || session.id)
+          sessionId: trimmedText(session.sessionId || session.id)
         })
       };
     const selectedHome = await codexToolHomeResult(session);
     if (selectedHome.ok === false) throw new Error(selectedHome.error);
     toolHomeSource = selectedHome.toolHomeSource;
     const expectedRuntimeDir = codexAppServerRuntimeDir(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions);
-    const metadataRuntimeDir = normalizeText(metadata.agent_transport_runtime_dir);
+    const metadataRuntimeDir = trimmedText(metadata.agent_transport_runtime_dir);
     const reusableMetadataRuntimeDir = metadataRuntimeDir && expectedRuntimeDir &&
       path.resolve(metadataRuntimeDir) === path.resolve(expectedRuntimeDir)
       ? metadataRuntimeDir
       : "";
     return { ...codexAppServerRuntimeOptions({
-      runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
+      runtimeDir: trimmedText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
       session,
       executionRoot: effectiveExecutionRoot,
       terminalEnv: effectiveTerminalEnv,
@@ -355,8 +355,8 @@ function createCodexSessionRuntimeHost({
       workdir: effectiveWorkdir
     }), ...(effectiveRuntime.learningScope ? { learningRuntime: effectiveRuntime } : {}),
       routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
-      ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && normalizeText(metadata.renewal_id)
-        ? { renewalId: normalizeText(metadata.renewal_id) } : {}) };
+      ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && trimmedText(metadata.renewal_id)
+        ? { renewalId: trimmedText(metadata.renewal_id) } : {}) };
   }
 
   function codexAppServerRuntimeOptionsForSession(session, options) {
@@ -381,9 +381,9 @@ function createCodexSessionRuntimeHost({
   function sessionHasCodexAppServerRuntime(session = {}) {
     const metadata = session.metadata || {};
     return Boolean(
-      normalizeText(metadata.agent_transport_endpoint) ||
-      normalizeText(metadata.agent_transport_runtime_dir) ||
-      normalizeText(metadata.agent_transport_socket_path)
+      trimmedText(metadata.agent_transport_endpoint) ||
+      trimmedText(metadata.agent_transport_runtime_dir) ||
+      trimmedText(metadata.agent_transport_socket_path)
     );
   }
 
@@ -404,7 +404,7 @@ function createCodexSessionRuntimeHost({
     return prepared();
   }
 
-  return {
+  return Object.freeze({
     createRuntimeForSession,
     createStoreForSession,
     codexAppServerManagedThreadIdentity,
@@ -414,7 +414,7 @@ function createCodexSessionRuntimeHost({
     codexAppServerHelperRuntimeOptionsForSession,
     sessionHasCodexAppServerRuntime,
     codexAppServerOutputContext
-  };
+  });
 }
 
 export { createCodexRuntimeHost, createCodexSessionRuntimeHost, codexAgentSettingsFromSession, codexSelectedModelProviderId,

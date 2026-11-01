@@ -10,7 +10,7 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
 import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
@@ -20,7 +20,7 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
 
 function openCodeExecutionProfile(input = {}) {
-  if (!input?.executionProfile) {
+  if (!input.executionProfile) {
     return null;
   }
   const profile = vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile);
@@ -35,7 +35,7 @@ function openCodeExecutionProfile(input = {}) {
 
 function openCodeAgent(selection = {}, executionProfile = null, assistantScope = null) {
   if (executionProfile) return OPENCODE_HELPER_AGENT_ID;
-  return assistantScope ? OPENCODE_EPHEMERAL_AGENT_ID : text(selection.agentId);
+  return assistantScope ? OPENCODE_EPHEMERAL_AGENT_ID : normalizeText(selection.agentId);
 }
 
 function boundedOpenCodeExecutionInput(prompt = "", executionProfile = null) {
@@ -123,7 +123,7 @@ export function createOpenCodeScopedPreparation({
         context.selection = options.assistantSelection || context.selection;
         const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
         return {
-          conversationId: text(input.conversationId || input.threadId), scoped: Boolean(context.assistantScope), createIfMissing,
+          conversationId: normalizeText(input.conversationId || input.threadId), scoped: Boolean(context.assistantScope), createIfMissing,
           profileChanged: () => openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409),
           identityRequired: () => openCodeError("vibe64_opencode_conversation_id_required", "OpenCode conversation id is required.", {}, 400),
           input: { agent, get model() { return openCodeModel(context.selection, executionProfile); } },
@@ -139,7 +139,7 @@ export function createOpenCodeScopedPreparation({
 
   async function prepareExistingDetachedTarget(sessionId = "", input = {}, options = {}) {
     const context = await contextFor(sessionId, options);
-    const conversationId = text(input.conversationId || input.threadId);
+    const conversationId = normalizeText(input.conversationId || input.threadId);
     if (!conversationId) {
       throw openCodeError(
         "vibe64_opencode_conversation_id_required",
@@ -258,5 +258,5 @@ export function createOpenCodeScopedPreparation({
     return prepared;
   }
 
-  return { prepareConversationCreation, prepareDetachedChatTurn, prepareExistingDetachedTarget };
+  return Object.freeze({ prepareConversationCreation, prepareDetachedChatTurn, prepareExistingDetachedTarget });
 }

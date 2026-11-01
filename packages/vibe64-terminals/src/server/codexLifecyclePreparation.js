@@ -9,7 +9,7 @@ import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sess
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
@@ -76,7 +76,7 @@ function createCodexLifecyclePreparation({
       } : {})
     });
     providerOptions.routingModelProviderId = binding.modelProviderId;
-    return { providerContext: codexAppServerSessionProviderContext(normalizeText(sessionId), providerOptions),
+    return { providerContext: codexAppServerSessionProviderContext(trimmedText(sessionId), providerOptions),
       get toolHomeSource() { return providerOptions.toolHomeSource; } };
   }
 
@@ -151,7 +151,7 @@ function createCodexLifecyclePreparation({
   }
 
   function prepareCodexSessionCleanup(sessionId, options = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = trimmedText(sessionId);
     const sessionKey = codexTerminalNamespace(normalizedSessionId);
     const renewalCleanup = renewalCleanupContext(normalizedSessionId, options);
     const preserveProcessExitProof = Boolean(
@@ -243,27 +243,28 @@ function createCodexLifecyclePreparation({
     };
   }
 
-  return {
+  async function releaseRenewalPredecessorAttachments(sessionId, options = {}) {
+    const context = renewalArchivedPredecessorContext(sessionId, options);
+    const executionRoot = sessionSourcePath(context.session);
+    if (!executionRoot) {
+      throw new TypeError(
+        "Renewal attachment release requires the archived predecessor source identity."
+      );
+    }
+    return releaseCodexSessionAttachments(executionRoot, sessionId, {
+      env: codexAttachmentEnv()
+    });
+  }
+
+  return Object.freeze({
     prepareNativeStorageProvider,
     prepareCodexAppServerThreadUnsubscription,
     codexAppServerReconciliationPreparation,
     prepareCodexAppServerSessionReconciliation,
     prepareCodexSessionCleanup,
     prepareCodexProjectCleanup,
-    async releaseRenewalPredecessorAttachments(sessionId, options = {}) {
-      const context = renewalArchivedPredecessorContext(sessionId, options);
-      const executionRoot = sessionSourcePath(context.session);
-      if (!executionRoot) {
-        throw new TypeError(
-          "Renewal attachment release requires the archived predecessor source identity."
-        );
-      }
-      return releaseCodexSessionAttachments(executionRoot, sessionId, {
-        env: codexAttachmentEnv()
-      });
-    },
-
-  };
+    releaseRenewalPredecessorAttachments
+  });
 }
 
 export { createCodexLifecyclePreparation };

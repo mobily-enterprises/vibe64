@@ -3,7 +3,7 @@ import {
   subscribeTerminalSession, terminalNamespaceAdmissionFailure, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -28,7 +28,7 @@ export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, 
   const { prepareProcess, upstreamSessionOptions, storedUpstreamSessionId } = hostPreparation;
 
   function terminalSnapshot(sessionId = "", terminalSessionId = "") {
-    const id = text(terminalSessionId);
+    const id = normalizeText(terminalSessionId);
     return id
       ? readTerminalSession(id, {
           namespace: opencodeTerminalNamespace(sessionId),
@@ -88,7 +88,7 @@ export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, 
     if (input.attachments?.length) {
       await sharedRuntime.allowTerminalAttachments(sessionId, terminalSessionId, input);
     }
-    if (input?.trackGitActor) {
+    if (input.trackGitActor) {
       const context = await contextFor(sessionId, options);
       const target = processes.get(context.key);
       const actor = await recordGitActor({
@@ -109,5 +109,5 @@ export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, 
     return writeTerminalSessionText(terminalSessionId, data, { namespace });
   }
 
-  return { startTerminal, readTerminal, closeTerminal, subscribeTerminal, resizeTerminal, writeTerminal, terminalHost };
+  return Object.freeze({ startTerminal, readTerminal, closeTerminal, subscribeTerminal, resizeTerminal, writeTerminal, terminalHost });
 }

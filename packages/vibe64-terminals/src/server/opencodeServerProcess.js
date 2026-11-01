@@ -30,7 +30,7 @@ import {
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { createOpenCodeHostPreparation, requireOpenCodeConnection } from "./openCodeHostPreparation.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -123,7 +123,7 @@ async function readOpenCodeZenModelIds(options = {}) {
 }
 
 function canonicalProviderUrl(value = "") {
-  const source = text(value);
+  const source = normalizeText(value);
   if (!source) {
     return "";
   }
@@ -149,8 +149,8 @@ function canonicalProviderUrl(value = "") {
 function openCodeHelperSubagents(providerConnections = []) {
   const agents = {};
   for (const connection of Array.isArray(providerConnections) ? providerConnections : []) {
-    const providerId = text(connection?.modelProviderId);
-    const helperModelId = text(connection?.defaultModelId);
+    const providerId = normalizeText(connection?.modelProviderId);
+    const helperModelId = normalizeText(connection?.defaultModelId);
     if (providerId && helperModelId) {
       agents[`${OPENCODE_HELPER_SUBAGENT_PREFIX}${providerId}`] = {
         description: `Vibe64 low-cost helper on the ${providerId} connection for delegating simple, inexpensive work.`,
@@ -169,12 +169,12 @@ function openCodeInlineConfig({
   sessionEnvironmentRegistry = ""
 } = {}) {
   const routes = new Map();
-  if (text(canonicalUrl)) {
-    routes.set(text(modelProviderId), canonicalProviderUrl(canonicalUrl));
+  if (normalizeText(canonicalUrl)) {
+    routes.set(normalizeText(modelProviderId), canonicalProviderUrl(canonicalUrl));
   }
   for (const connection of Array.isArray(providerConnections) ? providerConnections : []) {
-    if (text(connection?.canonicalUrl)) {
-      routes.set(text(connection?.modelProviderId), canonicalProviderUrl(connection.canonicalUrl));
+    if (normalizeText(connection?.canonicalUrl)) {
+      routes.set(normalizeText(connection?.modelProviderId), canonicalProviderUrl(connection.canonicalUrl));
     }
   }
   if ([...routes].some(([providerId]) => !providerId)) {
@@ -186,7 +186,7 @@ function openCodeInlineConfig({
   // global denials: the plugin's application tools would be offered and refused, and
   // the repeated-call check would wait for an approval nobody can give.
   const guardedAgentPermission = { "*": "ask", ...applicationToolDenials, doom_loop: "deny" };
-  const conversationAgents = text(sessionEnvironmentRegistry) ? openCodeConversationAgents({ sessionEnvironmentRegistry }) : {};
+  const conversationAgents = normalizeText(sessionEnvironmentRegistry) ? openCodeConversationAgents({ sessionEnvironmentRegistry }) : {};
   for (const agent of Object.values(conversationAgents)) {
     if (agent.permission.read === "allow") {
       agent.permission.read = { "*": "allow", ...OPENCODE_INLINE_CONFIG_BASE.permission.read };
@@ -198,7 +198,7 @@ function openCodeInlineConfig({
       ...conversationAgents,
       ...OPENCODE_INLINE_CONFIG_BASE.agent,
       ...helperSubagents,
-      ...(text(sessionEnvironmentRegistry) ? {
+      ...(normalizeText(sessionEnvironmentRegistry) ? {
         // Preserve OpenCode's native tool definitions. The session plugin rejects
         // unauthorized calls before execution; "deny" removes the tools
         // from the provider request and Zen rejects that request on its free tier.
@@ -214,9 +214,9 @@ function openCodeInlineConfig({
     },
     permission: {
       ...OPENCODE_INLINE_CONFIG_BASE.permission,
-      ...(text(sessionEnvironmentRegistry) ? applicationToolDenials : {})
+      ...(normalizeText(sessionEnvironmentRegistry) ? applicationToolDenials : {})
     },
-    ...(text(sessionEnvironmentRegistry)
+    ...(normalizeText(sessionEnvironmentRegistry)
       ? { plugin: [OPENCODE_SESSION_ENVIRONMENT_PLUGIN_URL] }
       : {}),
     ...(routes.size > 0
@@ -237,7 +237,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
   canonicalUrl = "",
   dbPath = "",
   hostContextResolver = "",
-  managedEnv = {},
+  managedEnv,
   modelProviderId = "",
   outputTokenMax = 0,
   packageInstalls = true,
@@ -274,9 +274,9 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
         packageInstalls,
         password
       }),
-      ...(text(sessionEnvironmentRegistry)
+      ...(normalizeText(sessionEnvironmentRegistry)
         ? {
-            ...(text(hostContextResolver)
+            ...(normalizeText(hostContextResolver)
               ? {
                   GENESIS_HOST_CONTEXT_RESOLVER: path.resolve(hostContextResolver),
                   GENESIS_TURN_CONTEXT_ENABLED: "0",
@@ -353,22 +353,22 @@ async function createOpenCodeServerProcess({
   workdir = ""
 }) {
   const startupScript = seededPrivateRoot ? OPENCODE_SEEDED_STARTUP_SCRIPT : OPENCODE_MANAGED_STARTUP_SCRIPT;
-  const normalizedDbPath = path.resolve(text(dbPath));
-  const normalizedPrivateRoot = path.resolve(text(privateRoot));
-  const normalizedWorkdir = path.resolve(text(workdir));
-  if (!text(dbPath) || !text(privateRoot) || !text(workdir)) {
+  const normalizedDbPath = path.resolve(normalizeText(dbPath));
+  const normalizedPrivateRoot = path.resolve(normalizeText(privateRoot));
+  const normalizedWorkdir = path.resolve(normalizeText(workdir));
+  if (!normalizeText(dbPath) || !normalizeText(privateRoot) || !normalizeText(workdir)) {
     throw new TypeError("OpenCode server processes require database, private, and working roots.");
   }
   await Promise.all([
     mkdir(path.dirname(normalizedDbPath), { mode: 0o700, recursive: true }),
-    ...(text(cacheRoot) ? [mkdir(path.resolve(text(cacheRoot)), { mode: 0o700, recursive: true })] : []),
+    ...(normalizeText(cacheRoot) ? [mkdir(path.resolve(normalizeText(cacheRoot)), { mode: 0o700, recursive: true })] : []),
     mkdir(normalizedPrivateRoot, { mode: 0o700, recursive: true }),
     mkdir(normalizedWorkdir, { recursive: true })
   ]);
   const logPath = path.join(normalizedPrivateRoot, "opencode-server.log");
-  const executable = text(command) || operatorCliCommand("opencode", { env });
+  const executable = normalizeText(command) || operatorCliCommand("opencode", { env });
   const credentialHome = Object.freeze({
-    cacheRoot: text(cacheRoot) ? path.resolve(text(cacheRoot)) : path.join(normalizedPrivateRoot, "cache"),
+    cacheRoot: normalizeText(cacheRoot) ? path.resolve(normalizeText(cacheRoot)) : path.join(normalizedPrivateRoot, "cache"),
     configRoot: path.join(normalizedPrivateRoot, "config"),
     dataRoot: path.join(normalizedPrivateRoot, "data"),
     home: path.join(normalizedPrivateRoot, "home"),
@@ -380,25 +380,25 @@ async function createOpenCodeServerProcess({
     env: safeOpenCodeEnvironment(env, { cacheRoot, canonicalUrl, dbPath: normalizedDbPath,
       hostContextResolver, managedEnv, modelProviderId, packageInstalls, privateRoot: normalizedPrivateRoot,
       providerConnections, sessionEnvironmentRegistry, shimDirs }),
-    connections: [...(text(modelProviderId) || String(apiKey) ? [{ apiKey, modelProviderId }] : []),
-      ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({ providerId: text(connection?.modelProviderId), apiKey: String(connection?.apiKey || "") })),
+    connections: [...(normalizeText(modelProviderId) || String(apiKey) ? [{ apiKey, modelProviderId }] : []),
+      ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({ providerId: normalizeText(connection?.modelProviderId), apiKey: String(connection?.apiKey || "") })),
     execution: createVibe64ConversationExecution({
       commandRunner: request => commandRunner({ ...request, command: "/bin/sh", runtimes: VIBE64_INTERACTIVE_RUNTIME_PACKS,
         args: ["-c", startupScript, "vibe64-opencode-server", logPath, request.command, ...request.args] }),
       stopExecution, inspectExecution, credentialHome, logPath, shimDirs,
-      label: text(execution.label) || "OpenCode assistant",
-      operationId: text(execution.operationId) || "opencode-server",
+      label: normalizeText(execution.label) || "OpenCode assistant",
+      operationId: normalizeText(execution.operationId) || "opencode-server",
       execution: {
         ...execution,
         resourceProfile: {
-          key: text(execution.operationId) === "opencode-catalog" ? "opencode-catalog-service" : "opencode-server",
+          key: normalizeText(execution.operationId) === "opencode-catalog" ? "opencode-catalog-service" : "opencode-server",
           environment: "development",
           compatibilityKey: createHash("sha256").update(JSON.stringify({
             command: executable, version: OPENCODE_EXPECTED_VERSION,
             platform: process.platform, architecture: process.arch, startup: startupScript
           })).digest("hex")
         },
-        ownerId: text(execution.ownerId) || stableHash(`${normalizedDbPath}\0${normalizedWorkdir}`)
+        ownerId: normalizeText(execution.ownerId) || stableHash(`${normalizedDbPath}\0${normalizedWorkdir}`)
       }
     })
   }).catch((error) => {
@@ -414,12 +414,61 @@ async function createOpenCodeServerProcess({
     return { ...proof, exited: proof.scopeEmpty === true };
   }
 
+  async function startAttachedTerminal({
+    metadata = {},
+    namespace = "",
+    session = {},
+    upstreamSessionId = "",
+    workdir: terminalWorkdir = ""
+  } = {}) {
+    const directory = path.resolve(normalizeText(terminalWorkdir));
+    const attachedSessionId = normalizeText(upstreamSessionId);
+    if (!normalizeText(terminalWorkdir) || !attachedSessionId || !normalizeText(namespace)) {
+      throw new TypeError("OpenCode attached terminals require a directory, session, and namespace.");
+    }
+    return commandRunner({
+      actor: "app",
+      allowedRoots: [directory, normalizedWorkdir],
+      args: native.attachArguments({ conversationId: attachedSessionId, directory }),
+      baseEnv: processEnv,
+      command: executable,
+      credentialHome,
+      cwd: directory,
+      envPolicy: "auth",
+      execution: {
+        kind: "terminal",
+        label: "OpenCode terminal",
+        lifecycle: "interactive",
+        operationId: "opencode-terminal",
+        ownerId: normalizeText(session.sessionId || session.id),
+        sessionId: normalizeText(session.sessionId || session.id)
+      },
+      inheritProcessEnv: false,
+      mode: "pty",
+      project: {
+        sourceRoot: directory
+      },
+      purpose: "assistant",
+      session,
+      terminal: {
+        commandPreview: "opencode attach",
+        maxRunning: 1,
+        metadata: {
+          ...metadata,
+          upstreamSessionId: attachedSessionId
+        },
+        namespace,
+        reuseRunning: true
+      }
+    });
+  }
+
   return Object.freeze({
     canonicalUrl: canonicalProviderUrl(canonicalUrl),
     client,
     dbPath: normalizedDbPath,
     health: native.health,
-    modelProviderId: text(modelProviderId),
+    modelProviderId: normalizeText(modelProviderId),
     modelProviderIds: native.modelProviderIds,
     executionId: native.executionId,
     pid: native.pid,
@@ -428,54 +477,7 @@ async function createOpenCodeServerProcess({
     readLogs: native.readLogs,
     // The shared runtime stops a server that exits without being stopped.
     unexpectedExit: native.unexpectedExit,
-    async startAttachedTerminal({
-      metadata = {},
-      namespace = "",
-      session = {},
-      upstreamSessionId = "",
-      workdir: terminalWorkdir = ""
-    } = {}) {
-      const directory = path.resolve(text(terminalWorkdir));
-      const attachedSessionId = text(upstreamSessionId);
-      if (!text(terminalWorkdir) || !attachedSessionId || !text(namespace)) {
-        throw new TypeError("OpenCode attached terminals require a directory, session, and namespace.");
-      }
-      return commandRunner({
-        actor: "app",
-        allowedRoots: [directory, normalizedWorkdir],
-        args: native.attachArguments({ conversationId: attachedSessionId, directory }),
-        baseEnv: processEnv,
-        command: executable,
-        credentialHome,
-        cwd: directory,
-        envPolicy: "auth",
-        execution: {
-          kind: "terminal",
-          label: "OpenCode terminal",
-          lifecycle: "interactive",
-          operationId: "opencode-terminal",
-          ownerId: text(session?.sessionId || session?.id),
-          sessionId: text(session?.sessionId || session?.id)
-        },
-        inheritProcessEnv: false,
-        mode: "pty",
-        project: {
-          sourceRoot: directory
-        },
-        purpose: "assistant",
-        session,
-        terminal: {
-          commandPreview: "opencode attach",
-          maxRunning: 1,
-          metadata: {
-            ...metadata,
-            upstreamSessionId: attachedSessionId
-          },
-          namespace,
-          reuseRunning: true
-        }
-      });
-    },
+    startAttachedTerminal,
     stop,
     workdir: normalizedWorkdir
   });
@@ -557,7 +559,7 @@ async function verifyOpenCodeApiKey({
           outputTokenMax,
           privateRoot: normalizedPrivateRoot
         });
-        const executable = text(command) || operatorCliCommand("opencode", { env });
+        const executable = normalizeText(command) || operatorCliCommand("opencode", { env });
         return (native) => commandRunner({
           actor: "app",
           allowedRoots: [normalizedWorkdir],
@@ -565,7 +567,7 @@ async function verifyOpenCodeApiKey({
           baseEnv: processEnv,
           command: executable,
           credentialHome: {
-            cacheRoot: text(cacheRoot)
+            cacheRoot: normalizeText(cacheRoot)
               ? path.resolve(cacheRoot)
               : path.join(normalizedPrivateRoot, "cache"),
             configRoot: path.join(normalizedPrivateRoot, "config"),

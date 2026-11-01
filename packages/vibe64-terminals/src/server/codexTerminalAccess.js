@@ -12,7 +12,7 @@ import { VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV } from "./codexGitCommand.js";
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { codexTerminalNamespace, globalCodexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const MAX_OPEN_CODEX_TERMINALS = 3;
 
@@ -38,10 +38,10 @@ function codexGitCommandWrapperSetupLines() {
   ];
 }
 
-function codexGitCommandShimDirs(codexRuntime = {}) {
+function codexGitCommandShimDirs(codexRuntime) {
   const terminalProcessEnv = codexRuntime?.terminalProcessEnv || {};
   const terminalEnv = codexRuntime?.terminalEnv || {};
-  const wrapperDir = normalizeText(
+  const wrapperDir = trimmedText(
     terminalProcessEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV] ||
     terminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]
   );
@@ -55,7 +55,7 @@ function codexStartupScript(codexThreadId = "", {
   remoteEndpoint = ""
 } = {}) {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
-  const normalizedRemoteEndpoint = normalizeText(remoteEndpoint);
+  const normalizedRemoteEndpoint = trimmedText(remoteEndpoint);
   const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);
   const codexCommand = codexInteractiveArguments({
     command: operatorCliCommand("codex"),

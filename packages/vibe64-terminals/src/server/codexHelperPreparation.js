@@ -4,7 +4,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, accountPreparation, providerHost, runOwner }) {
   const { codexAppServerProviderKey, codexAppServerProviderKeyFields } = runtimeHost;
@@ -22,12 +22,12 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     runtime = null,
     session = null
   } = {}) {
-    const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
+    const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
     if (
       !projectRuntimeRoot ||
       record.projectRuntimeRoot !== projectRuntimeRoot ||
-      normalizeText(session?.sessionId || session?.id) !== record.sessionId ||
-      normalizeText(runtime?.projectContextRoot) !== record.projectContextRoot ||
+      trimmedText(session?.sessionId || session?.id) !== record.sessionId ||
+      trimmedText(runtime?.projectContextRoot) !== record.projectContextRoot ||
       sessionSourcePath(session) !== record.workdir
     ) {
       throw codexAppServerHelperOwnershipError(
@@ -85,7 +85,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     sessionId = ""
   } = {}) {
     const effectiveRuntime = runtime || await createRuntimeForSession();
-    const projectRuntimeRoot = normalizeText(effectiveRuntime?.stateRoot);
+    const projectRuntimeRoot = trimmedText(effectiveRuntime?.stateRoot);
     if (!projectRuntimeRoot) {
       throw codexAppServerHelperOwnershipError(
         "Vibe64 project runtime state is unavailable for Codex helper ownership."
@@ -94,7 +94,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     return { projectRuntimeRoot, context: {
       get sessionId() { return sessionId || session?.sessionId || session?.id; },
       async prepareRecord(record, ledger) {
-        const currentSession = normalizeText(session?.sessionId || session?.id) === record.sessionId
+        const currentSession = trimmedText(session?.sessionId || session?.id) === record.sessionId
           ? session
           : await effectiveRuntime.getSession(record.sessionId, { inspectSource: false });
         return prepareCodexAppServerHelperThreadRestore(record, {
@@ -148,9 +148,9 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
         }
         if (refused.length) {
           const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
-            .map(({ error: reason, sessionId }) => `session ${sessionId} (${normalizeText(reason?.message || reason)})`)
+            .map(({ error: reason, sessionId }) => `session ${sessionId} (${trimmedText(reason?.message || reason)})`)
             .join("; ")}.`);
-          error.code = normalizeText(refused[0].error?.code);
+          error.code = trimmedText(refused[0].error?.code);
           error.retryable = true;
           throw error;
         }
@@ -162,8 +162,8 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     runtime = null,
     session = null
   } = {}) {
-    const sessionId = normalizeText(session?.sessionId || session?.id);
-    const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
+    const sessionId = trimmedText(session?.sessionId || session?.id);
+    const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
     if (!sessionId || !projectRuntimeRoot) {
       throw codexAppServerHelperOwnershipError(
         "Vibe64 cannot inventory helper threads without project/session ownership."
@@ -195,11 +195,11 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     };
   }
 
-  return {
+  return Object.freeze({
     restoration: prepareCodexAppServerHelperRestoration,
     inventory: prepareCodexAppServerHelperInventory,
     ownershipError: codexAppServerHelperOwnershipError
-  };
+  });
 }
 
 export { createCodexHelperPreparation };

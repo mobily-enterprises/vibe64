@@ -174,7 +174,7 @@ function createOpenCodeLifecyclePreparation({
     };
   }
 
-  return { processRelease, prepareSessionCleanup, prepareInterruption, prepareSessionReadiness, prepareSessionReconciliation };
+  return Object.freeze({ processRelease, prepareSessionCleanup, prepareInterruption, prepareSessionReadiness, prepareSessionReconciliation });
 }
 
 export { createOpenCodeLifecyclePreparation };

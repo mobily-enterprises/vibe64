@@ -116,12 +116,12 @@ function commandOutputTail(value = "", limit = 1000) {
 const GITHUB_AUTHENTICATION_REJECTED = /Authentication failed|Invalid username or (?:password|token)|returned error: 401|HTTP 401|Bad credentials/iu;
 
 function githubAuthenticationRejected(result = {}) {
-  if (result?.ok === true) return false;
+  if (result.ok === true) return false;
   const decode = (value) => value
     ? Buffer.from(value, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
     : "";
   return GITHUB_AUTHENTICATION_REJECTED.test(
-    [decode(result?.stderr), decode(result?.stdout), result?.error, result?.output].filter(Boolean).join("\n")
+    [decode(result.stderr), decode(result.stdout), result.error, result.output].filter(Boolean).join("\n")
   );
 }
 
@@ -138,23 +138,25 @@ const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
  */
 function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
   const entries = new Map();
-  return Object.freeze({
-    // load() returns { cacheable, value }; only a settled answer is kept.
-    async read(actorKey, load) {
-      const at = now();
-      for (const [key, entry] of entries) {
-        if (entry.expiresAt <= at) entries.delete(key);
-      }
-      const cached = entries.get(actorKey);
-      if (cached) return cached.value;
-      const { cacheable, value } = await load();
-      if (cacheable) entries.set(actorKey, { expiresAt: now() + ttlMs, value });
-      return value;
-    },
-    drop(actorKey) {
-      entries.delete(actorKey);
+
+  // load() returns { cacheable, value }; only a settled answer is kept.
+  async function read(actorKey, load) {
+    const at = now();
+    for (const [key, entry] of entries) {
+      if (entry.expiresAt <= at) entries.delete(key);
     }
-  });
+    const cached = entries.get(actorKey);
+    if (cached) return cached.value;
+    const { cacheable, value } = await load();
+    if (cacheable) entries.set(actorKey, { expiresAt: now() + ttlMs, value });
+    return value;
+  }
+
+  function drop(actorKey) {
+    entries.delete(actorKey);
+  }
+
+  return Object.freeze({ read, drop });
 }
 
 function actorCredentialKey(session = {}, actor = {}, toolHome = {}) {
@@ -359,13 +361,13 @@ async function commitAuthorOptions({
 }
 
 function logGitCommandResult(logger, result = {}, fields = {}) {
-  const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
+  const ok = result.ok !== false && Number(result.exitCode || 0) === 0;
   const args = Array.isArray(fields.args) ? fields.args : [];
   const stdoutTail = ok ? "" : commandOutputTail(commandOutput({ stdout: result.stdout, outputEncoding: result.outputEncoding }));
   const stderrTail = ok ? "" : commandOutputTail(commandOutput({ stderr: result.stderr, outputEncoding: result.outputEncoding }));
   const outputTail = ok ? "" : commandOutputTail(commandOutput(result));
   return logOperationalEvent(logger, ok ? "info" : "warn", {
-    code: result?.code || "",
+    code: result.code || "",
     command: normalizeText(fields.command),
     commandKind: normalizeText(fields.command),
     commandSummary: commandSummary(fields.command, args),
@@ -373,21 +375,21 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
     cwd: normalizeText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
     ...(fields.phaseElapsedMs ? { phaseElapsedMs: fields.phaseElapsedMs } : {}),
-    errorCode: normalizeText(result?.errorCode || result?.code),
-    executionId: normalizeText(result?.executionId),
+    errorCode: normalizeText(result.errorCode || result.code),
+    executionId: normalizeText(result.executionId),
     event: "vibe64.codex_git_command.finished",
-    exitCode: Number(result?.exitCode ?? (ok ? 0 : 1)),
+    exitCode: Number(result.exitCode ?? (ok ? 0 : 1)),
     outputTail,
     purpose: gitCommandPurpose(fields.command, args, fields.purpose),
     ok,
     sessionId: normalizeText(fields.sessionId),
-    signal: normalizeText(result?.signal),
+    signal: normalizeText(result.signal),
     source: normalizeText(fields.actorSource),
     sourceRoot: normalizeText(fields.workdir || fields.cwd),
     stage: normalizeText(fields.stage),
     stderrTail,
     stdoutTail,
-    timedOut: result?.timedOut === true,
+    timedOut: result.timedOut === true,
     userKey: normalizeText(fields.actorUserKey)
   }, "Vibe64 Codex git command finished.");
 }

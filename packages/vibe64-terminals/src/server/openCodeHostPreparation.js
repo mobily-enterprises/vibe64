@@ -11,7 +11,7 @@ import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironm
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { normalizePlainObject as record } from "@local/vibe64-core/server/serverResponses";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -27,7 +27,7 @@ import { normalizePlainObject as record } from "@local/vibe64-core/server/server
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 function connectionIdentity(connection = {}, apiKey = "") {
-  const value = text(connection.fingerprint);
+  const value = normalizeText(connection.fingerprint);
   return /^sha256:[a-f0-9]{64}$/u.test(value)
     ? value
     : `sha256:${openCodeFingerprint(apiKey)}`;
@@ -36,18 +36,18 @@ function connectionIdentity(connection = {}, apiKey = "") {
 function requireOpenCodeConnection(value = null, modelProviderId = "") {
   const connection = record(value);
   const apiKey = String(connection.apiKey || connection.key || "");
-  const actualProviderId = text(
+  const actualProviderId = normalizeText(
     connection.modelProviderId || connection.providerId || connection.id || modelProviderId
   );
-  if (!apiKey || actualProviderId !== text(modelProviderId)) {
+  if (!apiKey || actualProviderId !== normalizeText(modelProviderId)) {
     throw openCodeError(
       "vibe64_assistant_connection_required",
-      `Connect ${text(modelProviderId) || "this provider"} with an API key before using OpenCode.`,
-      { modelProviderId: text(modelProviderId) }
+      `Connect ${normalizeText(modelProviderId) || "this provider"} with an API key before using OpenCode.`,
+      { modelProviderId: normalizeText(modelProviderId) }
     );
   }
-  const canonicalUrl = text(connection.canonicalUrl);
-  const endpointCode = text(connection.endpointCode);
+  const canonicalUrl = normalizeText(connection.canonicalUrl);
+  const endpointCode = normalizeText(connection.endpointCode);
   if (
     endpointCode &&
     !/^[a-z0-9][a-z0-9._-]{0,127}$/u.test(endpointCode)
@@ -61,7 +61,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
   return {
     apiKey,
     canonicalUrl,
-    defaultModelId: text(connection.defaultModelId),
+    defaultModelId: normalizeText(connection.defaultModelId),
     endpointCode,
     fingerprint: connectionIdentity(connection, apiKey),
     modelProviderId: actualProviderId
@@ -115,13 +115,13 @@ function createOpenCodeHostPreparation({
   }
 
   function storedUpstreamSessionId(context) {
-    return text(context.session?.metadata?.opencode_conversation_id) ||
-      text(processes.get(context.key)?.upstreamSessionId);
+    return normalizeText(context.session?.metadata?.opencode_conversation_id) ||
+      normalizeText(processes.get(context.key)?.upstreamSessionId);
   }
 
   function sharedRoots() {
     const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
-    const serviceDataRoot = text(projectService.currentServiceDataRoot());
+    const serviceDataRoot = normalizeText(projectService.currentServiceDataRoot());
     if (!serviceDataRoot) {
       throw new TypeError("OpenCode requires a persistent service data root.");
     }
@@ -137,7 +137,7 @@ function createOpenCodeHostPreparation({
   async function writeSessionEnvironmentRegistry() {
     const { registryPath } = sharedRoots();
     const temporaryEnvironments = [...temporaryConversations.values()]
-      .filter((entry) => entry.promptContext && text(entry.conversationId))
+      .filter((entry) => entry.promptContext && normalizeText(entry.conversationId))
       .map((entry) => {
         const environment = sessionEnvironments.get(entry.target?.key);
         return environment
@@ -161,7 +161,7 @@ function createOpenCodeHostPreparation({
       vibe64User: options.vibe64User || null
     });
     const providerIds = new Set((Array.isArray(listed) ? listed : [])
-      .map((connection) => text(connection?.modelProviderId || connection?.id))
+      .map((connection) => normalizeText(connection?.modelProviderId || connection?.id))
       .filter(Boolean));
     if (selected?.modelProviderId) {
       providerIds.add(selected.modelProviderId);
@@ -298,11 +298,11 @@ function createOpenCodeHostPreparation({
     };
   }
 
-  return {
+  return Object.freeze({
     configuredConnections, conversationHost, prepareProcess, prepareSharedProcess, promptContext,
     sessionEnvironments, sharedRoots, storedUpstreamSessionId,
     upstreamSessionOptions, writeSessionEnvironmentRegistry
-  };
+  });
 }
 
 export {

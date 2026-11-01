@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 /** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
@@ -9,7 +9,7 @@ import { trimmedText as normalizeText } from "./trimmedText.js";
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
 export function errorMessage(value, fallback = "Codex could not be prepared.") {
-  return normalizeText(value?.error || value?.message || value) || fallback;
+  return trimmedText(value?.error || value?.message || value) || fallback;
 }
 
 function createCodexAppServerHealthAttempt() {
@@ -44,17 +44,17 @@ export function createCodexStartupHealth(publishSessionChanged) {
     status = "running",
     terminalSessionId = ""
   } = {}) {
-    const normalizedStatus = normalizeText(status) || "running";
-    const healthAttemptId = normalizeText(healthAttempt?.id);
-    const healthAttemptStartedAt = normalizeText(healthAttempt?.startedAt);
+    const normalizedStatus = trimmedText(status) || "running";
+    const healthAttemptId = trimmedText(healthAttempt?.id);
+    const healthAttemptStartedAt = trimmedText(healthAttempt?.startedAt);
     const patch = {
-      error: normalizeText(error),
+      error: trimmedText(error),
       kind: "codex_app_server",
       label: "Codex app-server",
-      message: normalizeText(message),
+      message: trimmedText(message),
       retryable: normalizedStatus === "failed" && retryable !== false,
       status: normalizedStatus,
-      terminalSessionId: normalizeText(terminalSessionId)
+      terminalSessionId: trimmedText(terminalSessionId)
     };
     if (healthAttemptId) {
       patch.healthAttemptId = healthAttemptId;
@@ -64,10 +64,10 @@ export function createCodexStartupHealth(publishSessionChanged) {
     }
     const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_APP_SERVER_TASK_ID, {
       event: {
-        error: normalizeText(error),
+        error: trimmedText(error),
         healthAttemptId,
-        kind: normalizeText(kind || normalizedStatus),
-        message: normalizeText(message),
+        kind: trimmedText(kind || normalizedStatus),
+        message: trimmedText(message),
         status: normalizedStatus
       },
       patch,
@@ -75,13 +75,13 @@ export function createCodexStartupHealth(publishSessionChanged) {
         if (normalizedStatus === "running" || !healthAttemptId) {
           return true;
         }
-        return normalizeText(previous.healthAttemptId) === healthAttemptId &&
-          normalizeText(previous.status) === "running";
+        return trimmedText(previous.healthAttemptId) === healthAttemptId &&
+          trimmedText(previous.status) === "running";
       }
     });
-    const publishedStatus = normalizeText(task?.status) || normalizedStatus;
+    const publishedStatus = trimmedText(task?.status) || normalizedStatus;
     await publishSessionChanged(sessionId, {
-      reason: normalizeText(publishReason) || `codex-app-server-${publishedStatus}`
+      reason: trimmedText(publishReason) || `codex-app-server-${publishedStatus}`
     });
     return task;
   }
@@ -123,9 +123,9 @@ export function createCodexStartupHealth(publishSessionChanged) {
         .find((task) => String(task?.id || "").trim() === CODEX_APP_SERVER_TASK_ID) || null;
       if (
         currentTask?.status === "ready" &&
-        normalizeText(currentTask?.message) === "Codex is ready." &&
-        !normalizeText(currentTask?.error) &&
-        normalizeText(currentTask?.terminalSessionId) === normalizeText(terminalSessionId)
+        trimmedText(currentTask?.message) === "Codex is ready." &&
+        !trimmedText(currentTask?.error) &&
+        trimmedText(currentTask?.terminalSessionId) === trimmedText(terminalSessionId)
       ) {
         return currentTask;
       }
@@ -171,8 +171,8 @@ export function createCodexStartupHealth(publishSessionChanged) {
     return result;
   }
 
-  return { running: writeCodexAppServerRunning, ready: writeCodexAppServerReady,
-    failure: writeCodexAppServerFailure, blocked: writeCodexAppServerBlocked };
+  return Object.freeze({ running: writeCodexAppServerRunning, ready: writeCodexAppServerReady,
+    failure: writeCodexAppServerFailure, blocked: writeCodexAppServerBlocked });
 }
 
 /**
@@ -214,7 +214,7 @@ export function createCodexUnavailableWorktreeHandler({ runOwner, sessionRuntime
 }
 
 function dateValueMs(value = "") {
-  const parsed = Date.parse(normalizeText(value));
+  const parsed = Date.parse(trimmedText(value));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -222,14 +222,14 @@ function codexAppServerBackgroundTasks(session = {}) {
   return Array.isArray(session.backgroundTasks) ? session.backgroundTasks : [];
 }
 
-export function codexAppServerTaskFinishedAfterRun(session = {}, run = {}) {
+export function codexAppServerTaskFinishedAfterRun(session = {}, run) {
   const runUpdatedMs = dateValueMs(run?.updatedAt || run?.startedAt || run?.at);
   if (!runUpdatedMs) {
     return false;
   }
   return codexAppServerBackgroundTasks(session).some((task) => (
-    normalizeText(task?.id) === CODEX_APP_SERVER_TASK_ID &&
-    ["failed", "ready"].includes(normalizeText(task?.status)) &&
+    trimmedText(task?.id) === CODEX_APP_SERVER_TASK_ID &&
+    ["failed", "ready"].includes(trimmedText(task?.status)) &&
     dateValueMs(task?.updatedAt || task?.finishedAt || task?.at) > runUpdatedMs
   ));
 }

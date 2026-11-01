@@ -4,7 +4,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { isoNow } from "./isoNow.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./claudeConversationStorage.js").createClaudeConversationStorage>} ClaudeConversationStorage */
@@ -66,7 +66,7 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
   async function publishMessage(entry, message) {
     if (!entry.main || entry.renewal) return;
     const { runtime, sessionId } = entry.context;
-    const outputId = text(message.outputId) || message.id;
+    const outputId = normalizeText(message.outputId) || message.id;
     if (!message.complete) {
       if (message.role !== "assistant") return;
       const conversationStream = runtime.store.updateConversationStream(sessionId, {
@@ -75,7 +75,7 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       await publishSessionChanged(sessionId, { reason: "assistant-stream", payload: { conversationStream } });
       return;
     }
-    if (!text(message.text)) return;
+    if (!normalizeText(message.text)) return;
     const writer = message.role === "thinking" ? "writeConversationThinkingMessage"
       : message.role === "commentary" ? "writeConversationCommentaryMessage" : "writeConversationAssistantMessage";
     const turn = await runtime.store[writer](sessionId, { messageId: message.id, outputId, text: message.text,

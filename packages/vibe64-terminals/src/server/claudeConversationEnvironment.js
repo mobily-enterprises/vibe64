@@ -194,39 +194,51 @@ function createClaudeConversationEnvironment({
   }
 
   function createTerminalAccess(conversations, recordGitActor) {
+    async function startTerminal(context, input = {}) {
+      const entry = await conversations.acquire(context);
+      await conversations.stopForTerminal(entry, {
+        get sessionClosing() { return sessionIsClosing(entry.context.session); }
+      });
+      const ctx = entry.context;
+      let prepared = { env: {}, shimDirs: [] };
+      if (codexGitCommand) {
+        prepared = await prepareSessionEnvironment(ctx);
+      }
+      const actor = await recordGitActor({ env, overwrite: true, reason: "agent-terminal", runtime: ctx.runtime,
+        session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
+      if (actor?.ok === false) throw error(actor.error, actor.code);
+      const terminal = await conversations.prepareTerminal(entry, ctx);
+      await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
+      return commandRunner({ actor: "app", command: command(),
+        args: terminal.args,
+        baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
+        allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
+        shimDirs: withGenesisCommandShim(prepared.shimDirs), runtimes: ["operator-clis", "node26"], session: ctx.session,
+        terminal: { namespace: claudeTerminalNamespace(ctx.sessionId), maxRunning: 1, reuseRunning: true,
+          commandPreview: "claude", metadata: { engineId: ENGINE, sessionId: ctx.sessionId }, ...input.size } });
+    }
+
+    function readTerminal(context, input) { return readTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+
+    function closeTerminal(context, input) { return closeTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+
+    function resizeTerminal(context, input) { return resizeTerminalSession(input.terminalSessionId, input.size, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+
+    function subscribeTerminal(context, input) { return subscribeTerminalSession(input.terminalSessionId, input.subscriber, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+
+    function writeTerminal(context, input) { return writeTerminalSessionText(input.terminalSessionId, input.data, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+
     return Object.freeze({
-      async startTerminal(context, input = {}) {
-        const entry = await conversations.acquire(context);
-        await conversations.stopForTerminal(entry, {
-          get sessionClosing() { return sessionIsClosing(entry.context.session); }
-        });
-        const ctx = entry.context;
-        let prepared = { env: {}, shimDirs: [] };
-        if (codexGitCommand) {
-          prepared = await prepareSessionEnvironment(ctx);
-        }
-        const actor = await recordGitActor({ env, overwrite: true, reason: "agent-terminal", runtime: ctx.runtime,
-          session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
-        if (actor?.ok === false) throw error(actor.error, actor.code);
-        const terminal = await conversations.prepareTerminal(entry, ctx);
-        await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
-        return commandRunner({ actor: "app", command: command(),
-          args: terminal.args,
-          baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
-          allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
-          shimDirs: withGenesisCommandShim(prepared.shimDirs), runtimes: ["operator-clis", "node26"], session: ctx.session,
-          terminal: { namespace: claudeTerminalNamespace(ctx.sessionId), maxRunning: 1, reuseRunning: true,
-            commandPreview: "claude", metadata: { engineId: ENGINE, sessionId: ctx.sessionId }, ...input.size } });
-      },
-      readTerminal(context, input) { return readTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); },
-      closeTerminal(context, input) { return closeTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); },
-      resizeTerminal(context, input) { return resizeTerminalSession(input.terminalSessionId, input.size, { namespace: claudeTerminalNamespace(context.sessionId) }); },
-      subscribeTerminal(context, input) { return subscribeTerminalSession(input.terminalSessionId, input.subscriber, { namespace: claudeTerminalNamespace(context.sessionId) }); },
-      writeTerminal(context, input) { return writeTerminalSessionText(input.terminalSessionId, input.data, { namespace: claudeTerminalNamespace(context.sessionId) }); },
+      startTerminal,
+      readTerminal,
+      closeTerminal,
+      resizeTerminal,
+      subscribeTerminal,
+      writeTerminal
     });
   }
 
-  return { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess };
+  return Object.freeze({ prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess });
 }
 
 export { createClaudeConversationEnvironment };

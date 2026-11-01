@@ -9,7 +9,7 @@ const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000,
 const acceptedAttachmentRenewalTimers = new WeakMap();
 
 function codexAttachmentIds(input = {}) {
-  return Array.isArray(input?.attachmentIds)
+  return Array.isArray(input.attachmentIds)
     ? input.attachmentIds.map(normalizeText).filter(Boolean)
     : [];
 }

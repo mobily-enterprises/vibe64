@@ -8,7 +8,7 @@ import {
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { record } from "./record.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -84,8 +84,8 @@ function createOpenCodeConversationAccounts({
     });
     // The live catalogue starts a temporary `opencode serve`; a connected-only
     // read has nothing to offer without a connection, so it never starts one.
-    if (text(input.configuredOnly).toLowerCase() === "true" ||
-        text(input.connectedOnly).toLowerCase() === "true" && !openCodeHasConnection(await listed)) {
+    if (normalizeText(input.configuredOnly).toLowerCase() === "true" ||
+        normalizeText(input.connectedOnly).toLowerCase() === "true" && !openCodeHasConnection(await listed)) {
       return openCodeConfiguredAssistantCapabilities({ connections: await listed });
     }
     const [catalog, connections] = await Promise.all([readCatalog(), listed]);
@@ -99,19 +99,19 @@ function createOpenCodeConversationAccounts({
   }
 
   async function verifyConnection(input = {}) {
-    if (text(input.engineId) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE) {
+    if (normalizeText(input.engineId) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE) {
       throw openCodeError(
         "vibe64_assistant_engine_invalid",
         "OpenCode connection verification requires the OpenCode engine.",
-        { engineId: text(input.engineId) },
+        { engineId: normalizeText(input.engineId) },
         400
       );
     }
-    const modelProviderId = text(input.modelProviderId);
-    const modelId = text(input.modelId);
+    const modelProviderId = normalizeText(input.modelProviderId);
+    const modelId = normalizeText(input.modelId);
     const catalog = await readCatalog();
     const provider = (Array.isArray(catalog.providers?.all) ? catalog.providers.all : [])
-      .find((candidate) => text(candidate?.id) === modelProviderId);
+      .find((candidate) => normalizeText(candidate?.id) === modelProviderId);
     const providerModels = record(provider?.models);
     const model = Object.hasOwn(providerModels, modelId) ? providerModels[modelId] : null;
     const currentZenModelIds = new Set(Array.isArray(catalog.zenModelIds)
@@ -122,7 +122,7 @@ function createOpenCodeConversationAccounts({
       !provider ||
       (modelProviderId === "opencode"
         ? !currentZenModel
-        : !model || text(model.status) === "deprecated")
+        : !model || normalizeText(model.status) === "deprecated")
     ) {
       throw openCodeError(
         "vibe64_assistant_catalog_stale",
@@ -159,7 +159,7 @@ function createOpenCodeConversationAccounts({
     };
   }
 
-  return { capabilities, describeProvider, verifyConnection };
+  return Object.freeze({ capabilities, describeProvider, verifyConnection });
 }
 
 export { createOpenCodeConversationAccounts, OPENCODE_CATALOG_CACHE_MS };

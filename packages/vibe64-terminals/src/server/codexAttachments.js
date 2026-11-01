@@ -206,9 +206,9 @@ async function storeCodexAttachment({
   sessionId = "",
   executionRoot = ""
 } = {}) {
-  const fileName = sanitizeAttachmentFileName(input?.fileName);
+  const fileName = sanitizeAttachmentFileName(input.fileName);
   // readable-check: allow method-probe - input validation: an upload carries a readable file stream
-  if (!input?.stream || typeof input.stream.pipe !== "function") {
+  if (!input.stream || typeof input.stream.pipe !== "function") {
     return {
       ok: false,
       code: "vibe64_agent_attachment_stream_required",
@@ -319,7 +319,7 @@ async function storeCodexAttachment({
     ok: true,
     attachmentId,
     path: hostPath,
-    contentType: String(input?.contentType || ""),
+    contentType: String(input.contentType || ""),
     expiresInMs: ATTACHMENT_TTL_MS,
     fileName,
     size: counter.size

@@ -47,12 +47,12 @@ import { codexAttachmentLimitResult, renewAcceptedCodexAttachments, validateCode
 
 const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
 function codexAssistantSettings(context = {}, input = {}) {
-  const requested = input?.agentSettings && typeof input.agentSettings === "object"
+  const requested = input.agentSettings && typeof input.agentSettings === "object"
     ? input.agentSettings
-    : context?.agentSettings && typeof context.agentSettings === "object"
+    : context.agentSettings && typeof context.agentSettings === "object"
       ? context.agentSettings
       : {};
-  const selection = context?.assistantSelection;
+  const selection = context.assistantSelection;
   return selection?.engineId === VIBE64_ASSISTANT_ENGINE_IDS.CODEX
     ? {
         ...requested,
@@ -173,7 +173,7 @@ function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelI
   });
 }
 
-function normalizeCodexTurn(result = {}) {
+function normalizeCodexTurn(result) {
   const turn = result?.codexAgentTurn || {};
   const id = normalizeText(turn?.turnId || result?.turnId);
   const active = Boolean(id) && (turn?.active === true || result?.active === true);
@@ -278,6 +278,322 @@ function createCodexSessionAgentProvider({
     return executionProfile ? { ...result, executionProfile } : result;
   }
 
+  function prepareConversationHost(sessionId, context = {}, mode = "main") {
+    if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
+    if (mode === "renewalProof") return {
+      native: { providerOwner: codexAppServerProviderOwner, preparation: {
+        predecessor(options) {
+          const context = renewalArchivedPredecessorContext(sessionId, options);
+          return prepareRenewalProcessExitProof(context.session);
+        },
+        successor(options) {
+          const context = renewalSuccessorProcessExitProofReleaseContext(sessionId, options);
+          return prepareRenewalProcessExitProof(context.session);
+        }
+      } }
+    };
+    if (mode === "renewal") return {
+      native: { runOwner: codexAppServerRunOwner, preparation: {
+        handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
+        seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
+      } }
+    };
+    if (mode === "reconciliation") return {
+      native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
+    };
+    if (mode === "unsubscription") return {
+      native: { runOwner: codexAppServerRunOwner, preparation: {
+        enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
+        session: prepareCodexAppServerThreadUnsubscription,
+        failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
+        cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
+      } }
+    };
+    if (mode === "invalidation") return {
+      native: { runOwner: codexAppServerRunOwner, preparation: {
+        enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
+      } }
+    };
+    if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
+    if (mode === "storage") return {
+      native: { providerOwner: codexAppServerProviderOwner, errorPrefix: "vibe64_",
+        preparation: { storage: prepareNativeStorageProvider } }
+    };
+    if (mode === "projectCleanup") return {
+      native: { runOwner: codexAppServerRunOwner, preparation: { projectCleanup: prepareCodexProjectCleanup } }
+    };
+    return (async () => {
+      if (mode === "readiness") return {
+        native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
+      };
+      if (mode === "scoped" || mode === "create" || mode === "dispose") return {
+        ...(mode === "dispose" ? { cleanupOptions: {
+          ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
+          changeover: context.changeover === true,
+          preserveProcessExitProof: context.preserveProcessExitProof === true,
+          renewalCleanup: context.renewalCleanup,
+          runtime: context.runtime,
+          session: context.session
+        } } : {}),
+        namespace: codexTerminalNamespace(sessionId),
+        native: { runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
+          namespace: codexTerminalNamespace(sessionId),
+          preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) } }
+      };
+      const { runtime } = context;
+      const session = context.session || await codexConversationStorage.readSession(sessionId);
+      const messagePreparation = codexConversationPreparation.message(sessionId);
+      return {
+        context: { runtime, session }, namespace: codexTerminalNamespace(sessionId),
+        messageEnvironment: env,
+        publish: publishSessionChanged, checkpoint: checkpointCodexAppServerTurn,
+        state: codexConversationStorage.state(sessionId),
+        async readContextUsage({ input, signal }) {
+          signal?.throwIfAborted();
+          const ready = await codexConversationPreparation.threadReadiness(sessionId,
+            { agentSettings: input.agentSettings, recordBriefing: false }, codexAppServerRunOwner.ensureThreadReady);
+          if (ready.ok === false) throw new Error(ready.error || "Codex context could not be prepared.");
+          signal?.throwIfAborted();
+          const current = await codexAppServerRunOwner.conversationContext(sessionId, input, {});
+          if (current.ok === false) throw new Error(current.error || "Codex context is unavailable.");
+          const target = codexConversationPreparation.goalContext(sessionId, current);
+          const model = input.agentSettings?.model || target.resumeOptions.model;
+          const limit = await readCodexModelContextWindow({ runtimeDir: (await current.provider.currentRuntimeInfo()).runtimeDir, model });
+          const usage = sessionContextUsageFromMetadata(current.session.metadata, { expectedThreadId: target.threadId });
+          if (usage?.providerId === "codex") {
+            return { model, usedTokens: usage.usedTokens,
+              windowTokens: Math.min(limit.effectiveWindowTokens, usage.windowTokens) };
+          }
+          // Missing usage is zero only for a natively verified empty thread.
+          // An existing thread without its receipt must never get a full budget.
+          const turns = await current.provider.listThreadTurns(target.threadId,
+            { limit: 1, sortDirection: "desc", itemsView: "summary" });
+          signal?.throwIfAborted();
+          if (!Array.isArray(turns.data) || turns.data.length || turns.nextCursor) {
+            throw new Error("Codex's current context usage is unavailable. Restore its usage before transferring more history.");
+          }
+          return { model, usedTokens: 0, windowTokens: limit.effectiveWindowTokens };
+        },
+        native: {
+          runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
+          admission: () => beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId)),
+          messagePreparation,
+          controlPreparation: (options, input) => codexConversationPreparation.control(sessionId, options, input),
+          readGoalContext: options => codexConversationPreparation.readGoal(sessionId, options),
+          goalPreparation: {
+            readiness: operation => codexConversationPreparation.threadReadiness(sessionId, {}, operation),
+            project: (context, options) => codexConversationPreparation.goalContext(sessionId, context, options)
+          },
+          inspectionPreparation: (input, options) => codexConversationPreparation.inspection(sessionId, input, options),
+          namespace: codexTerminalNamespace(sessionId),
+          preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, { ...options, runtime }) }
+        }
+      };
+    })();
+  }
+
+  function prepareConversationRequest(method, context, input = {}) {
+    if (method === "releaseRenewalPredecessorProcessExitProof") return { context: {
+      renewalId: input.renewalId,
+      runtime: context.runtime,
+      session: context.session
+    } };
+    if (method === "releaseRenewalSuccessorProcessExitProof") return { context: {
+      authorization: input.authorization,
+      renewalId: input.renewalId,
+      runtime: context.runtime,
+      session: context.session
+    } };
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
+      input: { ...input, agentSettings: codexAssistantSettings(context, input),
+        vibe64User: input.vibe64User || context.vibe64User || null },
+      context: { runtime: context.runtime, session: context.session }
+    };
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
+      input, context: { runtime: context.runtime, session: context.session }
+    };
+    if (method === "ensureSession") return { context: {} };
+    if (method === "createConversation") return {
+      input: { ...input, agentSettings: codexAssistantSettings(context, input) },
+      context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }
+    };
+    if (method === "closeSession") return {
+      namespace: codexTerminalNamespace(context.sessionId), sessionId: context.sessionId, context,
+      options: {
+        changeover: context.changeover === true,
+        forgetConversationBinding: context.forgetConversationBinding === true,
+        preserveProcessExitProof: context.preserveProcessExitProof === true,
+        renewalCleanup: context.renewalCleanup,
+        session: context.session
+      }
+    };
+    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
+      const message = method === "startConversationTurn" ? {
+        ...input,
+        agentSettings: codexAssistantSettings(context, input),
+        vibe64User: input.vibe64User || context.vibe64User || null
+      } : null;
+      return {
+        scopedConversationId: normalizeText(input.conversationId) ? input.conversationId : undefined,
+        get input() { return message || { ...input, agentSettings: codexAssistantSettings(context, input) }; }
+      };
+    }
+    if (method === "sessionState" || method === "readGoal") return {};
+    if (method !== "sendMessage") return { input };
+    const message = input && typeof input === "object" && !Array.isArray(input)
+      ? {
+          ...input,
+          agentSettings: codexAssistantSettings(context, input),
+          vibe64User: input.vibe64User || context.vibe64User || null
+        }
+      : {
+          agentSettings: codexAssistantSettings(context),
+          message: input,
+          vibe64User: context.vibe64User || null
+        };
+    return { input: message, async prepareInput(input) {
+      const prepared = { ...message, ...input };
+      return context.prepareMessage ? context.prepareMessage(prepared) : prepared;
+    } };
+  }
+
+  async function projectConversationResult(method, perform) {
+    if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
+    if (method === "invalidateRuntimes") {
+      const operation = perform();
+      return vibe64Result(() => operation);
+    }
+    if (method === "readGoal" || method === "updateGoal") return perform();
+    if (["inspectMessageAdmission", "closeProject", "reconcileSessions", "unsubscribeSessions",
+      "generateSessionRenewalHandover", "seedSessionRenewalHandover"].includes(method)) return vibe64Result(perform);
+    return normalizeCodexSessionResult(await vibe64Result(async () => {
+      const result = await perform();
+      return method === "sendMessage" || method === "interruptTurn" ? nativeSessionResult(result) : result;
+    }));
+  }
+
+  function runDetachedChatTurn(context, input = {}) {
+    // readable-check: allow method-probe - input validation: a caller's optional event stream
+    return runDetachedTurn(context, input, typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {});
+  }
+
+  function streamDetachedChatTurn(context, input = {}) {
+    return runDetachedTurn(context, input, { onEvent: context.onEvent });
+  }
+
+  async function capabilities(context = {}, input = {}) {
+    const connected = (await connectionStatus(context)) !== false;
+    const configuredOnly = normalizeText(input.configuredOnly).toLowerCase() === "true";
+    // A provider filter must not change the catalogue revision used by Apply.
+    const catalog = connected && !configuredOnly
+      ? await codexAssistantCatalog.modelCatalog({ signal: context.signal })
+      : codexConfiguredModelCatalog(
+          connected, VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING
+        );
+    return codexAssistantCapabilities(connected, catalog, await listConnections());
+  }
+
+  async function releaseRenewalPredecessorAttachments(context, input = {}) {
+    return codexLifecyclePreparation.releaseRenewalPredecessorAttachments(context.sessionId, {
+      renewalId: input.renewalId,
+      runtime: context.runtime,
+      session: context.session
+    });
+  }
+
+  async function closeTerminal(context, input = {}) {
+    return terminals.closeTerminal(context.sessionId, input.terminalSessionId);
+  }
+
+  async function describeProvider(context) {
+    return codexAssistantCatalog.describeProvider(context.sessionId, {
+      runtime: context.runtime,
+      session: context.session
+    });
+  }
+
+  function readPlanUsage(context) {
+    return codexAssistantCatalog.readPlanUsage(context.sessionId, { runtime: context.runtime, session: context.session });
+  }
+
+  async function resolveExecutionProfile(context, input = {}) {
+    // readable-check: allow method-probe - optional operation: a catalogue without helper model discovery cannot enforce an execution profile
+    if (typeof codexAssistantCatalog.executionProfileModelCatalog !== "function") {
+      throw codexExecutionProfileError(
+        VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
+        "Codex helper model discovery is unavailable."
+      );
+    }
+    const {
+      executionProfile,
+      limits
+    } = vibe64HelperExecutionProfileRequest(input, "Codex");
+    const helperModelId = context.assistantSelection?.modelId;
+    return resolveCodexHelperExecutionProfile(
+      executionProfile,
+      await codexAssistantCatalog.executionProfileModelCatalog(context.sessionId, {
+        ...(context.assistantScope ? { assistantScope: context.assistantScope,
+          agentSettings: codexAssistantSettings(context) } : {}),
+        runtime: context.runtime,
+        session: context.session,
+        signal: context.signal,
+        timeoutMs: limits.timeoutMs
+      }),
+      helperModelId,
+      context.assistantSelection?.variantId || ""
+    );
+  }
+
+  async function readTerminal(context, input = {}) {
+    return terminals.readTerminal(context.sessionId, input.terminalSessionId);
+  }
+
+  async function resizeTerminal(context, input = {}) {
+    return terminals.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
+  }
+
+  async function startTerminal(context, input = {}) {
+    return vibe64Result(async () => {
+      return terminals.startTerminal(context.sessionId, input);
+    });
+  }
+
+  async function subscribeTerminal(context, input = {}) {
+    return terminals.subscribeTerminal(context.sessionId, input.terminalSessionId, input.subscriber);
+  }
+
+  async function writeTerminal(context, input = {}) {
+    const terminalInput = {
+      ...input.input,
+      vibe64User: input.input?.vibe64User || context.vibe64User || null
+    };
+    const attachmentLimit = codexAttachmentLimitResult(terminalInput);
+    if (attachmentLimit) {
+      return attachmentLimit;
+    }
+    const attachmentValidation = await validateCodexAttachmentsBeforeDelivery(
+      attachments,
+      context.sessionId,
+      terminalInput
+    );
+    if (attachmentValidation) {
+      return attachmentValidation;
+    }
+    const result = await terminals.writeTerminal(
+      context.sessionId,
+      input.terminalSessionId,
+      input.data,
+      terminalInput
+    );
+    await renewAcceptedCodexAttachments(
+      attachments,
+      context.sessionId,
+      terminalInput,
+      result?.ok === true
+    );
+    return result;
+  }
+
   return Object.freeze({
     executionProfiles: Object.freeze([
       VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
@@ -285,307 +601,23 @@ function createCodexSessionAgentProvider({
     id: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.CODEX_APP_SERVER,
     prepareSelection: prepareCodexModelRouting,
-    prepareConversationHost(sessionId, context = {}, mode = "main") {
-      if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
-      if (mode === "renewalProof") return {
-        native: { providerOwner: codexAppServerProviderOwner, preparation: {
-          predecessor(options) {
-            const context = renewalArchivedPredecessorContext(sessionId, options);
-            return prepareRenewalProcessExitProof(context.session);
-          },
-          successor(options) {
-            const context = renewalSuccessorProcessExitProofReleaseContext(sessionId, options);
-            return prepareRenewalProcessExitProof(context.session);
-          }
-        } }
-      };
-      if (mode === "renewal") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: {
-          handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
-          seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
-        } }
-      };
-      if (mode === "reconciliation") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
-      };
-      if (mode === "unsubscription") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: {
-          enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
-          session: prepareCodexAppServerThreadUnsubscription,
-          failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
-          cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
-        } }
-      };
-      if (mode === "invalidation") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: {
-          enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
-        } }
-      };
-      if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
-      if (mode === "storage") return {
-        native: { providerOwner: codexAppServerProviderOwner, errorPrefix: "vibe64_",
-          preparation: { storage: prepareNativeStorageProvider } }
-      };
-      if (mode === "projectCleanup") return {
-        native: { runOwner: codexAppServerRunOwner, preparation: { projectCleanup: prepareCodexProjectCleanup } }
-      };
-      return (async () => {
-        if (mode === "readiness") return {
-          native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
-        };
-        if (mode === "scoped" || mode === "create" || mode === "dispose") return {
-          ...(mode === "dispose" ? { cleanupOptions: {
-            ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
-            changeover: context.changeover === true,
-            preserveProcessExitProof: context.preserveProcessExitProof === true,
-            renewalCleanup: context.renewalCleanup,
-            runtime: context.runtime,
-            session: context.session
-          } } : {}),
-          namespace: codexTerminalNamespace(sessionId),
-          native: { runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
-            namespace: codexTerminalNamespace(sessionId),
-            preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) } }
-        };
-        const { runtime } = context;
-        const session = context.session || await codexConversationStorage.readSession(sessionId);
-        const messagePreparation = codexConversationPreparation.message(sessionId);
-        return {
-          context: { runtime, session }, namespace: codexTerminalNamespace(sessionId),
-          messageEnvironment: env,
-          publish: publishSessionChanged, checkpoint: checkpointCodexAppServerTurn,
-          state: codexConversationStorage.state(sessionId),
-          async readContextUsage({ input, signal }) {
-            signal?.throwIfAborted();
-            const ready = await codexConversationPreparation.threadReadiness(sessionId,
-              { agentSettings: input.agentSettings, recordBriefing: false }, codexAppServerRunOwner.ensureThreadReady);
-            if (ready.ok === false) throw new Error(ready.error || "Codex context could not be prepared.");
-            signal?.throwIfAborted();
-            const current = await codexAppServerRunOwner.conversationContext(sessionId, input, {});
-            if (current.ok === false) throw new Error(current.error || "Codex context is unavailable.");
-            const target = codexConversationPreparation.goalContext(sessionId, current);
-            const model = input.agentSettings?.model || target.resumeOptions.model;
-            const limit = await readCodexModelContextWindow({ runtimeDir: (await current.provider.currentRuntimeInfo()).runtimeDir, model });
-            const usage = sessionContextUsageFromMetadata(current.session.metadata, { expectedThreadId: target.threadId });
-            if (usage?.providerId === "codex") {
-              return { model, usedTokens: usage.usedTokens,
-                windowTokens: Math.min(limit.effectiveWindowTokens, usage.windowTokens) };
-            }
-            // Missing usage is zero only for a natively verified empty thread.
-            // An existing thread without its receipt must never get a full budget.
-            const turns = await current.provider.listThreadTurns(target.threadId,
-              { limit: 1, sortDirection: "desc", itemsView: "summary" });
-            signal?.throwIfAborted();
-            if (!Array.isArray(turns.data) || turns.data.length || turns.nextCursor) {
-              throw new Error("Codex's current context usage is unavailable. Restore its usage before transferring more history.");
-            }
-            return { model, usedTokens: 0, windowTokens: limit.effectiveWindowTokens };
-          },
-          native: {
-            runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
-            admission: () => beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId)),
-            messagePreparation,
-            controlPreparation: (options, input) => codexConversationPreparation.control(sessionId, options, input),
-            readGoalContext: options => codexConversationPreparation.readGoal(sessionId, options),
-            goalPreparation: {
-              readiness: operation => codexConversationPreparation.threadReadiness(sessionId, {}, operation),
-              project: (context, options) => codexConversationPreparation.goalContext(sessionId, context, options)
-            },
-            inspectionPreparation: (input, options) => codexConversationPreparation.inspection(sessionId, input, options),
-            namespace: codexTerminalNamespace(sessionId),
-            preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, { ...options, runtime }) }
-          }
-        };
-      })();
-    },
+    prepareConversationHost,
     conversationOperations: Object.freeze(["createConversation", "ensureSession", "updateSessionSettings", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "unsubscribeSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
-    prepareConversationRequest(method, context, input = {}) {
-      if (method === "releaseRenewalPredecessorProcessExitProof") return { context: {
-        renewalId: input.renewalId,
-        runtime: context.runtime,
-        session: context.session
-      } };
-      if (method === "releaseRenewalSuccessorProcessExitProof") return { context: {
-        authorization: input.authorization,
-        renewalId: input.renewalId,
-        runtime: context.runtime,
-        session: context.session
-      } };
-      if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-        input: { ...input, agentSettings: codexAssistantSettings(context, input),
-          vibe64User: input.vibe64User || context.vibe64User || null },
-        context: { runtime: context.runtime, session: context.session }
-      };
-      if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
-        input, context: { runtime: context.runtime, session: context.session }
-      };
-      if (method === "ensureSession") return { context: {} };
-      if (method === "createConversation") return {
-        input: { ...input, agentSettings: codexAssistantSettings(context, input) },
-        context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }
-      };
-      if (method === "closeSession") return {
-        namespace: codexTerminalNamespace(context.sessionId), sessionId: context.sessionId, context,
-        options: {
-          changeover: context.changeover === true,
-          forgetConversationBinding: context.forgetConversationBinding === true,
-          preserveProcessExitProof: context.preserveProcessExitProof === true,
-          renewalCleanup: context.renewalCleanup,
-          session: context.session
-        }
-      };
-      if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
-        const message = method === "startConversationTurn" ? {
-          ...input,
-          agentSettings: codexAssistantSettings(context, input),
-          vibe64User: input.vibe64User || context.vibe64User || null
-        } : null;
-        return {
-          scopedConversationId: normalizeText(input.conversationId) ? input.conversationId : undefined,
-          get input() { return message || { ...input, agentSettings: codexAssistantSettings(context, input) }; }
-        };
-      }
-      if (method === "sessionState" || method === "readGoal") return {};
-      if (method !== "sendMessage") return { input };
-      const message = input && typeof input === "object" && !Array.isArray(input)
-        ? {
-            ...input,
-            agentSettings: codexAssistantSettings(context, input),
-            vibe64User: input.vibe64User || context.vibe64User || null
-          }
-        : {
-            agentSettings: codexAssistantSettings(context),
-            message: input,
-            vibe64User: context.vibe64User || null
-          };
-      return { input: message, async prepareInput(input) {
-        const prepared = { ...message, ...input };
-        return context.prepareMessage ? context.prepareMessage(prepared) : prepared;
-      } };
-    },
-    async projectConversationResult(method, perform) {
-      if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
-      if (method === "invalidateRuntimes") {
-        const operation = perform();
-        return vibe64Result(() => operation);
-      }
-      if (method === "readGoal" || method === "updateGoal") return perform();
-      if (["inspectMessageAdmission", "closeProject", "reconcileSessions", "unsubscribeSessions",
-        "generateSessionRenewalHandover", "seedSessionRenewalHandover"].includes(method)) return vibe64Result(perform);
-      return normalizeCodexSessionResult(await vibe64Result(async () => {
-        const result = await perform();
-        return method === "sendMessage" || method === "interruptTurn" ? nativeSessionResult(result) : result;
-      }));
-    },
-    runDetachedChatTurn(context, input = {}) {
-      // readable-check: allow method-probe - input validation: a caller's optional event stream
-      return runDetachedTurn(context, input, typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {});
-    },
-    streamDetachedChatTurn(context, input = {}) {
-      return runDetachedTurn(context, input, { onEvent: context.onEvent });
-    },
-    async capabilities(context = {}, input = {}) {
-      const connected = (await connectionStatus(context)) !== false;
-      const configuredOnly = normalizeText(input.configuredOnly).toLowerCase() === "true";
-      // A provider filter must not change the catalogue revision used by Apply.
-      const catalog = connected && !configuredOnly
-        ? await codexAssistantCatalog.modelCatalog({ signal: context.signal })
-        : codexConfiguredModelCatalog(
-            connected, VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING
-          );
-      return codexAssistantCapabilities(connected, catalog, await listConnections());
-    },
-    async releaseRenewalPredecessorAttachments(context, input = {}) {
-      return codexLifecyclePreparation.releaseRenewalPredecessorAttachments(context.sessionId, {
-        renewalId: input.renewalId,
-        runtime: context.runtime,
-        session: context.session
-      });
-    },
-    async closeTerminal(context, input = {}) {
-      return terminals.closeTerminal(context.sessionId, input.terminalSessionId);
-    },
-    async describeProvider(context) {
-      return codexAssistantCatalog.describeProvider(context.sessionId, {
-        runtime: context.runtime,
-        session: context.session
-      });
-    },
-    readPlanUsage(context) {
-      return codexAssistantCatalog.readPlanUsage(context.sessionId, { runtime: context.runtime, session: context.session });
-    },
-    async resolveExecutionProfile(context, input = {}) {
-      // readable-check: allow method-probe - optional operation: a catalogue without helper model discovery cannot enforce an execution profile
-      if (typeof codexAssistantCatalog.executionProfileModelCatalog !== "function") {
-        throw codexExecutionProfileError(
-          VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
-          "Codex helper model discovery is unavailable."
-        );
-      }
-      const {
-        executionProfile,
-        limits
-      } = vibe64HelperExecutionProfileRequest(input, "Codex");
-      const helperModelId = context.assistantSelection?.modelId;
-      return resolveCodexHelperExecutionProfile(
-        executionProfile,
-        await codexAssistantCatalog.executionProfileModelCatalog(context.sessionId, {
-          ...(context.assistantScope ? { assistantScope: context.assistantScope,
-            agentSettings: codexAssistantSettings(context) } : {}),
-          runtime: context.runtime,
-          session: context.session,
-          signal: context.signal,
-          timeoutMs: limits.timeoutMs
-        }),
-        helperModelId,
-        context.assistantSelection?.variantId || ""
-      );
-    },
-    async readTerminal(context, input = {}) {
-      return terminals.readTerminal(context.sessionId, input.terminalSessionId);
-    },
-    async resizeTerminal(context, input = {}) {
-      return terminals.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
-    },
-    async startTerminal(context, input = {}) {
-      return vibe64Result(async () => {
-        return terminals.startTerminal(context.sessionId, input);
-      });
-    },
-    async subscribeTerminal(context, input = {}) {
-      return terminals.subscribeTerminal(context.sessionId, input.terminalSessionId, input.subscriber);
-    },
-    async writeTerminal(context, input = {}) {
-      const terminalInput = {
-        ...input.input,
-        vibe64User: input.input?.vibe64User || context.vibe64User || null
-      };
-      const attachmentLimit = codexAttachmentLimitResult(terminalInput);
-      if (attachmentLimit) {
-        return attachmentLimit;
-      }
-      const attachmentValidation = await validateCodexAttachmentsBeforeDelivery(
-        attachments,
-        context.sessionId,
-        terminalInput
-      );
-      if (attachmentValidation) {
-        return attachmentValidation;
-      }
-      const result = await terminals.writeTerminal(
-        context.sessionId,
-        input.terminalSessionId,
-        input.data,
-        terminalInput
-      );
-      await renewAcceptedCodexAttachments(
-        attachments,
-        context.sessionId,
-        terminalInput,
-        result?.ok === true
-      );
-      return result;
-    }
+    prepareConversationRequest,
+    projectConversationResult,
+    runDetachedChatTurn,
+    streamDetachedChatTurn,
+    capabilities,
+    releaseRenewalPredecessorAttachments,
+    closeTerminal,
+    describeProvider,
+    readPlanUsage,
+    resolveExecutionProfile,
+    readTerminal,
+    resizeTerminal,
+    startTerminal,
+    subscribeTerminal,
+    writeTerminal
   });
 }
 

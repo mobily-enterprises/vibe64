@@ -93,40 +93,42 @@ function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
     account.usage = { ...usage, checkedAt: Date.now(), providerLabel: curatedCodexProvider(selection.modelProviderId)?.shortLabel, managementUrl: provider.managementUrl };
   }
 
-  return {
-    async read(selection) {
-      if (!Object.hasOwn(PROVIDERS, selection?.modelProviderId)) return null;
-      try {
-        const connection = await resolveConnection(selection);
-        const cached = accounts.get(accountKey(selection));
-        const usage = connection?.apiKey && cached?.apiKey === connection.apiKey
-          ? cached.usage : { status: "unavailable", windows: [] };
-        return { ...usage, engineId: selection.engineId, modelProviderId: selection.modelProviderId };
-      } catch { return { status: "unavailable", windows: [] }; }
-    },
-    observe(scope, sessionId, event, onUpdated) {
-      try {
-        const run = event.payload?.agentRun;
-        const selection = event.session
-          ? vibe64AssistantSelectionFromMetadata(event.session.metadata, { required: false })
-          : { engineId: run?.engineId, modelProviderId: run?.modelProviderId };
-        if (
-          !Object.hasOwn(PROVIDERS, selection?.modelProviderId) ||
-          !["codex", "claude", "opencode"].includes(selection.engineId) || typeof run?.active !== "boolean"
-        ) return;
-        const turnId = run.outerTurnId || run.providerTurnId;
-        if (!turnId) return;
-        const key = `${scope}:${sessionId}`;
-        const stage = `${selection.engineId}:${selection.modelProviderId}:${turnId}:${run.active}`;
-        if (turns.get(key) === stage) return;
-        turns.set(key, stage);
-        void refresh(selection).then(onUpdated).catch(() => {});
-      } catch { /* Optional observation must not interrupt lifecycle publication. */ }
-    },
-    forget(scope, sessionId) {
-      turns.delete(`${scope}:${sessionId}`);
-    }
-  };
+  async function read(selection) {
+    if (!Object.hasOwn(PROVIDERS, selection?.modelProviderId)) return null;
+    try {
+      const connection = await resolveConnection(selection);
+      const cached = accounts.get(accountKey(selection));
+      const usage = connection?.apiKey && cached?.apiKey === connection.apiKey
+        ? cached.usage : { status: "unavailable", windows: [] };
+      return { ...usage, engineId: selection.engineId, modelProviderId: selection.modelProviderId };
+    } catch { return { status: "unavailable", windows: [] }; }
+  }
+
+  function observe(scope, sessionId, event, onUpdated) {
+    try {
+      const run = event.payload?.agentRun;
+      const selection = event.session
+        ? vibe64AssistantSelectionFromMetadata(event.session.metadata, { required: false })
+        : { engineId: run?.engineId, modelProviderId: run?.modelProviderId };
+      if (
+        !Object.hasOwn(PROVIDERS, selection?.modelProviderId) ||
+        !["codex", "claude", "opencode"].includes(selection.engineId) || typeof run?.active !== "boolean"
+      ) return;
+      const turnId = run.outerTurnId || run.providerTurnId;
+      if (!turnId) return;
+      const key = `${scope}:${sessionId}`;
+      const stage = `${selection.engineId}:${selection.modelProviderId}:${turnId}:${run.active}`;
+      if (turns.get(key) === stage) return;
+      turns.set(key, stage);
+      void refresh(selection).then(onUpdated).catch(() => {});
+    } catch { /* Optional observation must not interrupt lifecycle publication. */ }
+  }
+
+  function forget(scope, sessionId) {
+    turns.delete(`${scope}:${sessionId}`);
+  }
+
+  return Object.freeze({ read, observe, forget });
 }
 
 export { createProviderUsage };

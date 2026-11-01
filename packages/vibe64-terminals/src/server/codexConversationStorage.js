@@ -7,7 +7,7 @@ import { codexAppServerThreadIdForSession, codexAppServerToolSchemaIdentityForSe
 import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./agentTerminalIdentity.js";
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
@@ -104,7 +104,7 @@ function withCodexState(response = {}, session = {}) {
 function createCodexConversationStorage({ projectService, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
   async function readCodexStateSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = trimmedText(sessionId);
     const store = await projectService.createSessionStore({ sessionId: normalizedSessionId });
     const [
       sourceDescriptor,
@@ -152,7 +152,7 @@ function createCodexConversationStorage({ projectService, runOwner }) {
     };
   }
 
-  return { readSession: readCodexStateSession, state };
+  return Object.freeze({ readSession: readCodexStateSession, state });
 }
 
 export {

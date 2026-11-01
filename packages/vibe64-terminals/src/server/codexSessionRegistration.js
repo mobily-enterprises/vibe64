@@ -127,7 +127,7 @@ import {
 import {
   normalizeVibe64AgentRunState
 } from "@local/vibe64-runtime/server/sessionStore";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
@@ -214,8 +214,8 @@ function createCodexSessionRegistration({
   } = codexRuntimeHost;
   const studioRuntimeProfile = getStudioProjectContext().runtimeProfile || {};
   const localRuntime = studioRuntimeProfile.local === true ||
-    ["local", "local-editor"].includes(normalizeText(studioRuntimeProfile.mode).toLowerCase());
-  const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
+    ["local", "local-editor"].includes(trimmedText(studioRuntimeProfile.mode).toLowerCase());
+  const personalProfileStore = localRuntime && trimmedText(codexAppServerProviderOptions.systemRoot)
     ? createPersonalAiProfileStore({
         systemRoot: codexAppServerProviderOptions.systemRoot
       })
