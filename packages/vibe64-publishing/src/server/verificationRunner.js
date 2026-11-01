@@ -1,7 +1,3 @@
-// "Checks on the saved commit": the project's own `## Verification` commands, run
-// in a fresh checkout of exactly the commit being released, with no publishing
-// credentials in their environment. Results are kept per commit in
-// `<project runtime>/publishing/verification.json`.
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -32,6 +28,10 @@ function checkEnvironment(home, base = process.env) {
 }
 
 /**
+ * "Checks on the saved commit": the project's own `## Verification` commands, run
+ * in a fresh checkout of exactly the commit being released, with no publishing
+ * credentials in their environment. Results are kept per commit in
+ * `<project runtime>/publishing/verification.json`.
  * @param {object} dependencies
  * @param {string} dependencies.runtimeRoot
  * @param {ProjectRepository} dependencies.repository

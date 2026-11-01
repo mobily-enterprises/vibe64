@@ -1,8 +1,3 @@
-// Android build tools on this computer: the person reads and accepts Google's
-// Android SDK licence in Vibe64 (never accepted on their behalf), the
-// acceptance is recorded in their own publishing folder, and only then are the
-// pinned JDK and SDK downloaded into the toolchains folder (a user cache folder,
-// never a system location).
 import path from "node:path";
 
 import {
@@ -22,6 +17,11 @@ function licenceError(message, code = "vibe64_publishing_licence_invalid") {
 }
 
 /**
+ * Android build tools on this computer: the person reads and accepts Google's
+ * Android SDK licence in Vibe64 (never accepted on their behalf), the
+ * acceptance is recorded in their own publishing folder, and only then are the
+ * pinned JDK and SDK downloaded into the toolchains folder (a user cache folder,
+ * never a system location).
  * @param {object} dependencies
  * @param {string} dependencies.personalRoot
  * @param {string} dependencies.toolchainsRoot

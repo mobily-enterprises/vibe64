@@ -12,12 +12,11 @@ import { createPublishingService } from "./service.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 
-// The local publishing experience: release orchestration, targets, history,
-// keys and confirmation on this computer, built from @local/vibe64-packaging.
+/**
+ * The local publishing experience: release orchestration, targets, history,
+ * keys and confirmation on this computer, built from @local/vibe64-packaging.
+ */
 const Vibe64PublishingFeature = defineFeature({
-  actions({ publishing }) {
-    return createPublishingActions({ publishing });
-  },
   id: "vibe64.publishing",
   domain: "vibe64-publishing",
   requires: {
@@ -45,14 +44,21 @@ const Vibe64PublishingFeature = defineFeature({
   }, { actionCatalogue }) {
     const publishing = createPublishingService({ project, sourceEditor });
     registerRoutes(http, { publishing });
-    colleague.registerWatchSource(publicationWatchSource({ actions: actionCatalogue }));
+    colleague.registerWatchSource(publicationWatchSource({ actionCatalogue }));
     return { publishing };
+  },
+  /**
+   * @param {object} capabilities
+   * @param {PublishingService} capabilities.publishing
+   */
+  actions({ publishing }) {
+    return createPublishingActions({ publishing });
   },
   /**
    * @param {object} _dependencies
    * @param {{ outputs: { publishing: PublishingService } }} context
    */
-  shutdown(_dependencies, { outputs }) {
+  shutdown(_capabilities, { outputs }) {
     outputs.publishing.keys.lock();
     return outputs.publishing.lanShare.stop();
   }

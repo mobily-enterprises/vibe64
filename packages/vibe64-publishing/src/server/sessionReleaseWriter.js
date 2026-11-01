@@ -1,7 +1,3 @@
-// Writes a prepared release (version bump + CHANGELOG entry) into a session's
-// source through the source editor, like any edit the person makes there: the
-// session's write lock, conflict hashes and change notifications all apply.
-// The person then reviews and Saves it.
 import { prepareReleaseChange } from "@local/vibe64-packaging/server/release";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
@@ -13,6 +9,10 @@ function writerError(message, code = "vibe64_publishing_prepare_failed") {
 }
 
 /**
+ * Writes a prepared release (version bump + CHANGELOG entry) into a session's
+ * source through the source editor, like any edit the person makes there: the
+ * session's write lock, conflict hashes and change notifications all apply.
+ * The person then reviews and Saves it.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {SourceEditorService} dependencies.sourceEditor
@@ -50,7 +50,7 @@ function createSessionReleaseWriter({
   async function baseHashes({ sessionId, files, user }) {
     const hashes = new Map();
     for (const file of files) {
-      const current = await sourceEditor.readFile({ sessionId, path: file.path, vibe64User: user || undefined });
+      const current = await sourceEditor.readFile({ sessionId, path: file.path, vibe64User: user });
       if (file.before === null) {
         if (current?.ok !== false) throw stale(file);
         continue;
@@ -68,13 +68,13 @@ function createSessionReleaseWriter({
         sessionId,
         path: file.path,
         text: file.after,
-        vibe64User: user || undefined
+        vibe64User: user
       })
-      : await sourceEditor.saveFile({ sessionId, path: file.path, text: file.after, baseHash, vibe64User: user || undefined });
+      : await sourceEditor.saveFile({ sessionId, path: file.path, text: file.after, baseHash, vibe64User: user });
     if (result?.ok === false) throw writerError(result.error || `Could not ${file.before === null ? "create" : "change"} ${file.path}.`);
   }
 
-  async function prepareAndWrite({ sessionId, entry, version, notes, user = null }) {
+  async function prepareAndWrite({ sessionId, entry, version, notes, user }) {
     const projectRoot = await sessionRoot(sessionId);
     const change = await prepareReleaseChange({ projectRoot, entry, version, notes, date: today() });
     const hashes = await baseHashes({ sessionId, files: change.files, user });

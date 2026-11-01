@@ -35,8 +35,6 @@ function githubRepositoryOf(url = "") {
  * @param {ProjectService["readCurrentProject"]} dependencies.readProject
  */
 function createProjectRepository({ readProject }) {
-  if (typeof readProject !== "function") throw new TypeError("The release repository needs readProject().");
-
   async function baseline() {
     const project = await readProject();
     const mode = project?.repositoryMode || project?.repository?.mode || "";

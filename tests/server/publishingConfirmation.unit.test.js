@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { createConfirmationService, confirmingActor } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
 import { PERSON_ONLY, PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/publishingActions.js";
+import { VIBE64_COMMAND } from "../../packages/vibe64-core/src/shared/actionFields.js";
 
 const PLAN = `sha256:${"a".repeat(64)}`;
 const OTHER_PLAN = `sha256:${"b".repeat(64)}`;
@@ -36,7 +37,7 @@ test("confirmation actions accept only the person's own page requests", () => {
     assert.equal(byId.get(id).extensions.assistant, undefined, `${id} is no assistant tool`);
   }
   assert.ok(byId.get(PUBLISHING_ACTIONS.PUBLISH_RUN).extensions.assistant, "the assistant may ask for the confirmation");
-  assert.equal(byId.get(PUBLISHING_ACTIONS.PUBLISH_RUN).channels, undefined);
+  assert.deepEqual(byId.get(PUBLISHING_ACTIONS.PUBLISH_RUN).channels, VIBE64_COMMAND.channels, "the assistant asks through every channel");
 });
 
 test("an assistant request only waits for the person; it confirms nothing", async (t) => {

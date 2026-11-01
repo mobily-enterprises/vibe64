@@ -196,7 +196,7 @@ function createReleaseOrchestrator({
    * Writes the version bump and changelog into the session as an ordinary
    * change. Nothing is saved, tagged or published.
    */
-  async function prepareRelease({ sessionId, versions = {}, notes, user = null }) {
+  async function prepareRelease({ sessionId, versions, notes, user }) {
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
     if (!release || release.packaging.status !== "ready") {

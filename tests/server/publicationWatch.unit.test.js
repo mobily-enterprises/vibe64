@@ -28,7 +28,7 @@ const partial = { ok: true, releases: [release("1.0.2", "partial")] };
 test("the publication watch source registers with Colleague and reports live once the release is live", async () => {
   const actions = stateActions([none, running, live, live]);
   const registry = createWatchSources();
-  registry.register(publicationWatchSource({ actions }));
+  registry.register(publicationWatchSource({ actionCatalogue: actions }));
   const [listed] = registry.list();
   assert.equal(listed.source, "publication");
   assert.equal(listed.scope, "project");
@@ -50,7 +50,7 @@ test("the publication watch source registers with Colleague and reports live onc
 });
 
 test("failed reports a failed or partial release and changed reports every change", async () => {
-  const source = publicationWatchSource({ actions: stateActions([live, failed, partial]) });
+  const source = publicationWatchSource({ actionCatalogue: stateActions([live, failed, partial]) });
   const update = (condition, cursor, value) => stateWatchUpdate({ condition, cursor }, stateObservation(source, value));
   const first = await source.read({ projectSlug: "books" }, {});
   const second = await source.read({ projectSlug: "books" }, {});
@@ -67,7 +67,7 @@ test("failed reports a failed or partial release and changed reports every chang
 });
 
 test("a refused reading surfaces its reason instead of a guess", async () => {
-  const source = publicationWatchSource({ actions: { async execute() { return { ok: false, error: "Open a project to publish it." }; } } });
+  const source = publicationWatchSource({ actionCatalogue: { async execute() { return { ok: false, error: "Open a project to publish it." }; } } });
   const refused = await source.read({ projectSlug: "books" }, {});
   assert.throws(() => stateObservation(source, refused), { message: "Open a project to publish it.", statusCode: 409 });
 });
