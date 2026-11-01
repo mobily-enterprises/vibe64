@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { USAGE_RECORDING_LIMITS, USAGE_RECORDING_RETENTION } from "@local/vibe64-usage-recording/shared/contract";
+import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
 import {
   createTraceReader,
@@ -42,6 +43,7 @@ async function temporary(t) {
 function fixtureService(sessionRoot, nowIso) {
   const session = { sessionId: "session-fixture", status: "active", sessionRoot, metadata: {} };
   const service = createService({
+    admission: admitUsageRecording,
     now: () => Date.parse(nowIso),
     project: { createRuntime: async () => ({ getSession: async () => session }) },
     terminals: {}

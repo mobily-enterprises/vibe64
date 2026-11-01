@@ -12,12 +12,12 @@ import {
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { GENESIS_MACHINE_CITY_PATH, resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 import { registerActiveUsageRecording, activeUsageRecording } from "./activeRecordings.js";
-import { admitUsageRecording } from "./admission.js";
 import { recordingError } from "./recordingError.js";
 import { usageRecordingPath, usageRecordingsPath } from "./recordingFiles.js";
-import { createRecordingRecords, isoNow, publicRecording } from "./recordingRecords.js";
+import { createRecordingRecords, isoTime, publicRecording } from "./recordingRecords.js";
 import { createRecordingTargets } from "./recordingTargets.js";
 import {
   appendJsonLine,
@@ -48,11 +48,11 @@ import {
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("./admission.js").UsageRecordingAdmission} UsageRecordingAdmission */
 
 const ACTIVE_STATES = new Set(["starting", "recording", "stopping"]);
 const CURRENT_WINDOW_MS = 10 * 60 * 1000;
 const NOT_LOADED_REASON = "The application did not load the recorder. This Output target may not run a supported runtime directly.";
-// What a tracer that never became ready said about itself.
 const DEFAULT_TIMING = Object.freeze({
   durationMs: USAGE_RECORDING_LIMITS.durationMs,
   eventMs: 2000,
@@ -174,7 +174,7 @@ async function directorySize(directory) {
  * @param {TerminalsService} dependencies.terminals
  * @param {RuntimeEvents} dependencies.events
  * @param {RuntimeLogger} dependencies.logger
- * @param {typeof admitUsageRecording} [dependencies.admission]
+ * @param {UsageRecordingAdmission} dependencies.admission
  * @param {() => number} [dependencies.now]
  * @param {object} [dependencies.timing]
  */
@@ -183,7 +183,7 @@ function createService({
   terminals,
   events,
   logger,
-  admission = admitUsageRecording,
+  admission,
   now = () => Date.now(),
   timing = {}
 }) {
@@ -202,7 +202,7 @@ function createService({
   const finishedReaders = new Map();
 
   async function sessionContext(sessionId = "") {
-    const id = String(sessionId || "").trim();
+    const id = normalizeText(sessionId);
     if (!id) throw recordingError(400, "A session id is required.", "vibe64_invalid_session_id");
     const runtime = await project.createRuntime({ sessionId: id });
     const session = await runtime.getSession(id);
@@ -287,7 +287,7 @@ function createService({
       entry.unregister();
       clearTimers(entry);
       await writeJsonFile(path.join(entry.directory, "control.json"), { state: "stopping" });
-      await records.changeState(entry, "stopping", { stopReason: reason, stoppedAt: isoNow(now) });
+      await records.changeState(entry, "stopping", { stopReason: reason, stoppedAt: isoTime(now()) });
       entry.finished = finish(entry, reason);
     }
     return entry.record;
@@ -307,7 +307,7 @@ function createService({
     entry.record.tracers = state === "failed"
       ? entry.record.tracers.map((tracer) => ({ ...tracer, state: tracer.state === "unavailable" ? tracer.state : "failed", reason }))
       : records.unreadyTracers(entry, reason);
-    await records.changeState(entry, state, { stoppedAt: isoNow(now) });
+    await records.changeState(entry, state, { stoppedAt: isoTime(now()) });
     live.delete(entry.record.id);
     entry.finished = Promise.resolve();
   }
@@ -486,7 +486,7 @@ function createService({
       // A recording left running by an earlier server process ends here.
       if (ACTIVE_STATES.has(record.state) && !live.has(id)) {
         await writeJsonFile(path.join(context.directory, id, "control.json"), { state: "stopping" });
-        Object.assign(record, { state: "stopped", stopReason: "error", stoppedAt: record.stoppedAt || isoNow(now) });
+        Object.assign(record, { state: "stopped", stopReason: "error", stoppedAt: record.stoppedAt || isoTime(now()) });
         await writeJsonFile(path.join(context.directory, id, "recording.json"), record);
       }
       recordings.push(record);
@@ -598,7 +598,7 @@ function createService({
         target: { id: target.id, kind: target.kind, label: target.label },
         runtimes: target.runtimes,
         tracers: tracerRecords,
-        startedAt: isoNow(now),
+        startedAt: isoTime(now()),
         stoppedAt: null,
         stopReason: null,
         counts: { requests: 0, functions: 0 },
@@ -650,7 +650,7 @@ function createService({
     const recordings = await storedRecordings(context);
     const current = recordings.find((record) => ACTIVE_STATES.has(record.state)) ||
       recordings.find((record) => !record.dismissedAt && record.stoppedAt && now() - Date.parse(record.stoppedAt) <= CURRENT_WINDOW_MS);
-    return { recording: current ? publicRecording(current) : null, serverTime: isoNow(now) };
+    return { recording: current ? publicRecording(current) : null, serverTime: isoTime(now()) };
   }
 
   async function stop({ sessionId, recordingId }) {
@@ -664,7 +664,7 @@ function createService({
   async function dismiss({ sessionId, recordingId }) {
     const context = await sessionContext(sessionId);
     const { directory, entry, record } = await recordingFor(context, recordingId);
-    record.dismissedAt ||= isoNow(now);
+    record.dismissedAt ||= isoTime(now());
     if (entry) await records.writeRecord(entry);
     else await writeJsonFile(path.join(directory, "recording.json"), record);
     return { recording: publicRecording(record) };

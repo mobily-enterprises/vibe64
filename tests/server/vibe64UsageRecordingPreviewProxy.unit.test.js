@@ -13,6 +13,7 @@ import {
   USAGE_RECORDING_INTERACTION_HEADER,
   USAGE_RECORDING_REQUEST_HEADER
 } from "@local/vibe64-usage-recording/shared/contract";
+import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
 import {
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
@@ -77,6 +78,7 @@ test("the Preview proxy numbers recorded requests and no request content reaches
     metadata: { source_kind: "session_clone", source_path: sourceRoot, source_path_authority: "managed_session_source" }
   };
   const service = createService({
+    admission: admitUsageRecording,
     events: { publish: async () => {} },
     project: { createRuntime: async () => ({ getSession: async () => session }) },
     terminals: {

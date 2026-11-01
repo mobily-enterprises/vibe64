@@ -10,6 +10,7 @@ import { activeUsageRecording, stopActiveUsageRecording } from "@local/vibe64-us
 import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tracers";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
 import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
+import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
 import { routeTemplateFor } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
 
@@ -50,7 +51,7 @@ async function recorder(t, { status = "active", startResult = null, admission, t
   const starts = [];
   const published = [];
   const service = createService({
-    admission,
+    admission: admission ?? admitUsageRecording,
     events: { publish: async (event) => published.push(event) },
     logger: { warn() {} },
     project: { createRuntime: async () => ({ getSession: async () => session }) },
