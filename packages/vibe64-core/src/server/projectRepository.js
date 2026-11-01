@@ -224,7 +224,7 @@ function projectRepositoryMetadataError(code = "", message = "") {
   return error;
 }
 
-function sessionConnectedContribution(session = {}) {
+function sessionConnectedContribution(session) {
   const serialized = session?.metadata?.connected_contribution;
   if (serialized === undefined) return null;
   let value;
@@ -302,7 +302,7 @@ function serializeSessionConnectedSources(sources) {
   return serialized;
 }
 
-function sessionRepositoryProject(project = {}, session = {}, { sourcePreparation = false } = {}) {
+function sessionRepositoryProject(project = {}, session, { sourcePreparation = false } = {}) {
   const contribution = sessionConnectedContribution(session);
   if (contribution) {
     const repository = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();
@@ -373,10 +373,10 @@ function sessionRepositoryDestination(project = {}, session = {}) {
     repository = resolved.githubRepository?.fullName || resolved.repository?.github?.fullName;
   } else if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     repository = resolved.sourceRoot;
-    branch = session?.metadata?.local_source_branch || branch;
+    branch = session.metadata?.local_source_branch || branch;
   }
   return {
-    sessionId: normalizeText(session.sessionId || session.id),
+    sessionId: normalizeText(session.sessionId),
     mode,
     repository: normalizeText(repository),
     branch: normalizeText(branch)

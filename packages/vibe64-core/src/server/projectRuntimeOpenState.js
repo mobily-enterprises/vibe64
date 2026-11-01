@@ -79,7 +79,7 @@ async function clearProjectRuntimeOpenState({
   return publicProjectRuntimeOpenState(closedProjectRuntimeOpenState(filePath));
 }
 
-function publicProjectRuntimeOpenState(state = {}) {
+function publicProjectRuntimeOpenState(state) {
   const open = state?.open === true;
   return {
     open,

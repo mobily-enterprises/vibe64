@@ -104,11 +104,11 @@ async function observeSessionLockOwner(pid, identity = {}) {
 }
 
 async function sessionLockOwnerProcessStatus(owner = {}) {
-  const pid = Number(owner?.pid);
+  const pid = Number(owner.pid);
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     return "ambiguous";
   }
-  const identity = isPlainObject(owner?.processIdentity)
+  const identity = isPlainObject(owner.processIdentity)
     ? owner.processIdentity
     : {};
   const observed = await observeSessionLockOwner(pid, identity);
@@ -116,7 +116,7 @@ async function sessionLockOwnerProcessStatus(owner = {}) {
     return "absent";
   }
   if (
-    Number(owner?.schemaVersion) !== SESSION_LOCK_OWNER_SCHEMA_VERSION ||
+    Number(owner.schemaVersion) !== SESSION_LOCK_OWNER_SCHEMA_VERSION ||
     normalizeText(identity.platform) !== processStartIdentityPlatform() ||
     !/^\d+$/u.test(normalizeText(identity.startTimeTicks)) ||
     observed.status !== "exact" ||

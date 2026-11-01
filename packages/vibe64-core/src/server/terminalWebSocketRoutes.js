@@ -16,7 +16,7 @@ function sendSocketJson(socket, payload) {
   socket.send(JSON.stringify(payload));
 }
 
-function publicTerminalSnapshot(session = {}) {
+function publicTerminalSnapshot(session) {
   const {
     unsubscribe,
     ...publicSession

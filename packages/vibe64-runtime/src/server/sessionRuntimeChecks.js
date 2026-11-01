@@ -19,7 +19,7 @@ const GENESIS_SESSION_KIND = "genesis";
 const SESSION_RENEWAL_HANDOVER_HASH_PATTERN = /^[a-f0-9]{64}$/u;
 
 function unsupportedSessionError(session = {}) {
-  const sessionId = normalizeText(session.sessionId || session.id) || "(unknown)";
+  const sessionId = normalizeText(session.sessionId) || "(unknown)";
   return vibe64Error(
     `Session ${sessionId} uses an unsupported runtime format and cannot be opened.`,
     "vibe64_session_runtime_unsupported"
@@ -50,7 +50,7 @@ function assertUsableSession(session = {}) {
 function requireSessionSourceRoot(session = {}) {
   const sourceRoot = sessionSourcePath(session);
   if (!sourceRoot) {
-    const sessionId = normalizeText(session.sessionId || session.id) || "(unknown)";
+    const sessionId = normalizeText(session.sessionId) || "(unknown)";
     throw vibe64Error(
       `Session ${sessionId} has no usable source checkout. Create or select a session with source before using this operation.`,
       "vibe64_session_source_required"
@@ -120,16 +120,16 @@ function archivedSessionStatus(status = "") {
   return normalizeText(status) === VIBE64_SESSION_STATUS.ARCHIVED;
 }
 
-function sessionSourceCreationFailed(session = {}) {
+function sessionSourceCreationFailed(session) {
   return normalizeText(session?.metadata?.source_creation_failed).toLowerCase() === "yes";
 }
 
-function sessionSourceRecoveryWasSaved(session = {}) {
+function sessionSourceRecoveryWasSaved(session) {
   return normalizeText(session?.metadata?.source_recovery_saved).toLowerCase() === "yes";
 }
 
 function sessionHasRenewalHandover(session = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object"
+  const metadata = session.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
   const acknowledged = normalizeText(metadata.agent_briefing_delivered).toLowerCase() === "yes" &&

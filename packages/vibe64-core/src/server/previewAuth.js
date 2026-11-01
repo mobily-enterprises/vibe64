@@ -355,7 +355,7 @@ function verifyPreviewIdentityGrant(grant = "", previewAuth = {}, {
   };
 }
 
-function samePreviewIdentityGrantScope(left = {}, right = {}) {
+function samePreviewIdentityGrantScope(left, right) {
   return PREVIEW_IDENTITY_GRANT_SCOPE_KEYS.every(
     (key) => String(left?.[key] || "") === String(right?.[key] || "")
   );

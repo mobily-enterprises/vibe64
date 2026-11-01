@@ -63,14 +63,14 @@ async function resolveProjectRequestContext({
     projectContext.projectsRoot ||
     (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
-  const vibe64User = request?.vibe64User || null;
+  const vibe64User = request.vibe64User || null;
   // A person's own page or session request (HTTP or WebSocket, which carry
   // headers) opens only the projects of their mode, once admission has said
   // whether the slug is one of their practice projects: Learn opens only
   // those, Develop refuses them. A team member also needs the team AI setup.
   // Internal work is never limited.
   const assertMode = async isPractice => {
-    if (!request?.headers) return;
+    if (!request.headers) return;
     await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
     await assertTeamAiAllowsProject({ actor: vibe64User });
   };
@@ -180,11 +180,11 @@ async function admitPracticeRequest({ projectContext, request, slug, vibe64User 
  * @param {string} [projectsRoot]
  */
 function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", projectsRoot = "") {
-  const selectedProject = projectContext?.selectedProject || null;
-  const targetRoot = String(projectContext?.targetRoot || "").trim();
+  const selectedProject = projectContext.selectedProject || null;
+  const targetRoot = String(projectContext.targetRoot || "").trim();
   if (
     !targetRoot ||
-    projectContext?.selectionSource !== "explicit" ||
+    projectContext.selectionSource !== "explicit" ||
     selectedProject?.slug !== slug
   ) {
     return null;
@@ -217,7 +217,7 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
     slug,
     sourceConfigRoot,
     sourceRoot,
-    systemRoot: String(projectContext?.systemRoot || "").trim(),
+    systemRoot: String(projectContext.systemRoot || "").trim(),
     targetRoot
   });
 }
@@ -307,7 +307,7 @@ const PROJECT_REQUEST_ERROR_STATUS = Object.freeze({
   vibe64_project_path_symlink: 409
 });
 
-function isProjectRequestError(error = {}) {
+function isProjectRequestError(error) {
   return Object.hasOwn(PROJECT_REQUEST_ERROR_STATUS, String(error?.code));
 }
 

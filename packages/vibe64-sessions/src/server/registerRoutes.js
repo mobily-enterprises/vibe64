@@ -470,7 +470,7 @@ function firstValue(value) {
   return Array.isArray(value) ? value[0] || "" : value || "";
 }
 
-function withoutVibe64User(input = {}) {
+function withoutVibe64User(input) {
   const {
     vibe64User: _ignored,
     ...safeInput

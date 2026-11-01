@@ -8,16 +8,16 @@ const VIBE64_SESSION_DEBUG_ENV = "VIBE64_SESSION_DEBUG";
 const VIBE64_SESSION_DEBUG_QUERY_PARAM = "vibe64_session_debug";
 const VIBE64_SESSION_DEBUG_STORAGE_KEY = "vibe64:session-debug";
 
-function normalizeErrorStatus(error = {}) {
+function normalizeErrorStatus(error) {
   const status = Number(error?.status ?? error?.statusCode);
   return Number.isInteger(status) ? status : null;
 }
 
 function normalizeErrorStack(error = {}) {
-  return typeof error?.stack === "string" ? error.stack : "";
+  return typeof error.stack === "string" ? error.stack : "";
 }
 
-function normalizeErrorCause(error = {}) {
+function normalizeErrorCause(error) {
   const cause = error?.cause;
   if (!cause) {
     return null;
@@ -33,9 +33,9 @@ function normalizeErrorCause(error = {}) {
 
 function vibe64SessionDebugError(error = {}) {
   return {
-    code: String(error?.code || ""),
-    message: String(error?.message || error || ""),
-    name: String(error?.name || ""),
+    code: String(error.code || ""),
+    message: String(error.message || error || ""),
+    name: String(error.name || ""),
     status: normalizeErrorStatus(error),
     stack: normalizeErrorStack(error),
     cause: normalizeErrorCause(error)
@@ -91,7 +91,7 @@ function vibe64SessionDebugLog(event = "", details = {}, options = {}) {
   return entry;
 }
 
-function vibe64SessionDebugSummary(session = {}) {
+function vibe64SessionDebugSummary(session) {
   return {
     revision: Number(session?.revision) || 0,
     sessionId: String(session?.sessionId || ""),

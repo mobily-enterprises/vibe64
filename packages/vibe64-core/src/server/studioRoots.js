@@ -17,7 +17,7 @@ function normalizeRoot(value, fallbackRoot) {
   return path.resolve(root || fallbackRoot || process.cwd());
 }
 
-function runtimeProfileIsLocal(runtimeProfile = {}) {
+function runtimeProfileIsLocal(runtimeProfile) {
   const mode = String(runtimeProfile?.mode || "").trim().toLowerCase();
   return runtimeProfile?.local === true || mode === "local" || mode === "local-editor";
 }

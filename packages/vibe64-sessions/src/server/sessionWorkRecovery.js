@@ -150,10 +150,10 @@ function createSessionWorkRecovery({ terminals, workOperations, workspaceSetup }
   /**
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId
-   * @param {object} [saveResult]
+   * @param {object | null} [saveResult]
    * @param {object} [options]
    */
-  async function resolveSupersededUpdateFailure(runtime, sessionId, saveResult = {}, options = {}) {
+  async function resolveSupersededUpdateFailure(runtime, sessionId, saveResult, options = {}) {
     if (saveResult?.reconciled !== true) {
       return null;
     }

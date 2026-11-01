@@ -56,7 +56,7 @@ function emptyEnvUserValuesState() {
 
 function normalizeEnvUserValuesState(state = {}) {
   const environments = {};
-  const inputEnvironments = isPlainObject(state?.environments) ? state.environments : {};
+  const inputEnvironments = isPlainObject(state.environments) ? state.environments : {};
   for (const [environment, values] of Object.entries(inputEnvironments)) {
     const normalizedEnvironment = normalizeRuntimeConfigScope(environment);
     if (!isPlainObject(values)) {

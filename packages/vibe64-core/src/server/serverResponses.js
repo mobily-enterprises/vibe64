@@ -24,7 +24,7 @@ function vibe64ErrorResponse(error, {
   };
 }
 
-function vibe64ErrorDetails(error = {}, code = "") {
+function vibe64ErrorDetails(error, code = "") {
   const details = error?.details && typeof error.details === "object" && !Array.isArray(error.details)
     ? {
         ...error.details

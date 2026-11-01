@@ -510,7 +510,7 @@ class Vibe64SessionRuntime {
   } = {}) {
     const sessionId = normalizeText(typeof sessionOrId === "string"
       ? sessionOrId
-      : sessionOrId.sessionId || sessionOrId.id);
+      : sessionOrId.sessionId);
     return this.store.mutateSession(sessionId, async () => {
       const session = assertSupportedSession(await this.store.readSession(sessionId));
       if (!sessionSourceRecoveryWasSaved(session)) {

@@ -21,14 +21,14 @@ function managedSessionSourcePath(managedSessionSourceRoot = "", sessionId = "")
 }
 
 function explicitPathIsManagedSessionSource(session = {}, explicitPath = "") {
-  if (normalizeText(session?.metadata?.source_path_authority) !== SESSION_SOURCE_PATH_AUTHORITY_MANAGED) {
+  if (normalizeText(session.metadata?.source_path_authority) !== SESSION_SOURCE_PATH_AUTHORITY_MANAGED) {
     return false;
   }
-  if (normalizeText(session?.metadata?.source_kind) !== "session_clone") {
+  if (normalizeText(session.metadata?.source_kind) !== "session_clone") {
     return false;
   }
   const normalizedPath = normalizedSessionPath(explicitPath);
-  const sessionId = normalizeText(session.sessionId || session.id);
+  const sessionId = normalizeText(session.sessionId);
   if (!normalizedPath || !sessionId) {
     return false;
   }
@@ -43,7 +43,7 @@ function explicitPathIsManagedSessionSource(session = {}, explicitPath = "") {
 }
 
 function explicitSessionSourcePath(session = {}) {
-  if (normalizeText(session?.metadata?.source_removed).toLowerCase() === "yes") {
+  if (normalizeText(session.metadata?.source_removed).toLowerCase() === "yes") {
     return "";
   }
   const explicitPath = normalizedSessionPath(

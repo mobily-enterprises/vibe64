@@ -114,8 +114,8 @@ function createStudioProjectContext({
     if (selectionSource !== "explicit" || !selectedTargetRoot) {
       return false;
     }
-    const contextTargetRoot = String(context?.targetRoot || "").trim();
-    const contextSlug = String(context?.slug || "").trim();
+    const contextTargetRoot = String(context.targetRoot || "").trim();
+    const contextSlug = String(context.slug || "").trim();
     const selected = selectedProject();
     return Boolean(
       selected?.slug &&
@@ -194,7 +194,7 @@ function createStudioProjectContext({
     };
   }
 
-  async function selectWorkspaceProject(input = {}) {
+  async function selectWorkspaceProject(input) {
     if (!projectCatalogEnabled) {
       throw projectCatalogUnavailableError();
     }

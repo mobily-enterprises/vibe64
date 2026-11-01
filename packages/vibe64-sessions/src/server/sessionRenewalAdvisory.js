@@ -39,7 +39,7 @@ function contextUsageSignal(value = null) {
 }
 
 
-function sessionAgeDays(session = {}, now = new Date()) {
+function sessionAgeDays(session, now = new Date()) {
   const createdAt = Date.parse(String(session?.manifest?.createdAt || ""));
   const current = now instanceof Date ? now.getTime() : Date.parse(String(now || ""));
   if (!Number.isFinite(createdAt) || !Number.isFinite(current) || current < createdAt) {
@@ -56,7 +56,7 @@ function sessionRenewalAdvisory({
 } = {}) {
   const ageDays = sessionAgeDays(session, now);
   const compactionCount = finiteNonNegativeInteger(
-    session?.metadata?.agent_context_compaction_count
+    session.metadata?.agent_context_compaction_count
   );
   const turnCount = finiteNonNegativeInteger(conversationTurnCount);
   const usage = contextUsageSignal(contextUsage);

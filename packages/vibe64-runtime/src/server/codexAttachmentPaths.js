@@ -7,7 +7,7 @@ import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/s
 const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
 
 function configuredRoot(env = {}) {
-  return String(env?.[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] || "").trim();
+  return String(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] || "").trim();
 }
 
 // Live session state: each session's agent command helpers, their runs and

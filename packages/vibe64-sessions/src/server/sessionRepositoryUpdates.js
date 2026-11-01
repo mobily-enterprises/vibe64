@@ -17,13 +17,13 @@ import { text } from "./trimmedText.js";
 const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
 
-function repositoryUpdateCheckIsFresh(value = {}, now = Date.now()) {
+function repositoryUpdateCheckIsFresh(value, now = Date.now()) {
   const checkedAt = Date.parse(text(value?.checkedAt));
   return Number.isFinite(checkedAt) && now - checkedAt >= 0 &&
     now - checkedAt < REPOSITORY_UPDATE_CHECK_CACHE_MS;
 }
 
-function cachedRepositoryUpdateCheck(session = {}) {
+function cachedRepositoryUpdateCheck(session) {
   const raw = text(session?.metadata?.[REPOSITORY_UPDATE_CHECK_METADATA]);
   if (!raw) {
     return null;
@@ -38,7 +38,7 @@ function cachedRepositoryUpdateCheck(session = {}) {
       !REPOSITORY_UPDATE_RELATIONSHIPS.has(relationship) ||
       (Number(parsed.behind || 0) > 0 && !Array.isArray(parsed.incomingVersions)) ||
       (
-        text(session?.metadata?.canonical_commit) &&
+        text(session.metadata?.canonical_commit) &&
         text(parsed.canonicalCommit) !== text(session.metadata.canonical_commit)
       )
     ) {

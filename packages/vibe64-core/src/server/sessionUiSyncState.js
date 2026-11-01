@@ -9,7 +9,7 @@ function cloneSessionUiSyncRecord(record = null) {
     : null;
 }
 
-function sessionUiSyncStateKey(input = {}) {
+function sessionUiSyncStateKey(input) {
   const projectSlug = trimmedText(input?.projectSlug);
   const sessionId = trimmedText(input?.sessionId);
   return projectSlug && sessionId ? `${projectSlug}\u0000${sessionId}` : "";
@@ -45,7 +45,7 @@ function writeSessionUiSyncPatch(input = {}, patch = {}) {
   return cloneSessionUiSyncRecord(next);
 }
 
-function writeSessionUiSyncPreviewState(previewState = {}) {
+function writeSessionUiSyncPreviewState(previewState) {
   const state = {
     originId: trimmedText(previewState?.originId),
     projectSlug: trimmedText(previewState?.projectSlug),

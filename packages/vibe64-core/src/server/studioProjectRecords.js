@@ -91,7 +91,7 @@ function projectSlugFromName(value = "") {
     .replace(/^-+|-+$/gu, "");
 }
 
-function projectSlugFromInput(input = {}) {
+function projectSlugFromInput(input) {
   const explicitSlug = String(input?.slug || input?.projectSlug || "").trim();
   if (explicitSlug) {
     return normalizeProjectSlug(explicitSlug);
@@ -347,7 +347,7 @@ function projectMetadataFromInput(input = {}, {
           )
         }
       : {}),
-    ...(input?.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {})
+    ...(input.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {})
   };
 }
 

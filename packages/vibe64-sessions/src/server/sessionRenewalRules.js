@@ -79,7 +79,7 @@ function operationId(renewalId = "", kind = "operation") {
 }
 
 function conversationFingerprint(page = {}) {
-  const pagination = page?.pagination && typeof page.pagination === "object"
+  const pagination = page.pagination && typeof page.pagination === "object"
     ? page.pagination
     : {};
   return {
@@ -95,7 +95,7 @@ function fingerprintsMatch(left = {}, right = {}) {
     Number(left.totalTurnCount || 0) === Number(right.totalTurnCount || 0);
 }
 
-function sourceEnvelopesMatch(left = {}, right = {}) {
+function sourceEnvelopesMatch(left, right) {
   return ["authority", "commit", "ref", "repository"]
     .every((name) => normalizeText(left?.[name]) === normalizeText(right?.[name]));
 }
@@ -307,13 +307,13 @@ function publicRenewalResult(state = null, extra = {}, vibe64User = null) {
 }
 
 function assertRenewalAgentWriteAcquired(exclusive = {}) {
-  if (exclusive?.acquired) {
+  if (exclusive.acquired) {
     return exclusive.value;
   }
   throw renewalError(
-    normalizeText(exclusive?.value?.error) ||
+    normalizeText(exclusive.value?.error) ||
       "Another assistant operation is starting. Try again in a moment.",
-    normalizeText(exclusive?.value?.code) || "vibe64_session_renewal_agent_busy",
+    normalizeText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
     { retryable: true }
   );
 }

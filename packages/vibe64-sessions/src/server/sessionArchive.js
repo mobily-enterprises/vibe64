@@ -14,7 +14,7 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 // one coded error so recovery never guesses at what was already removed.
 const SESSION_ARCHIVE_STATUSES = new Set(["running", "failed"]);
 const SESSION_ARCHIVE_PHASES = new Set(["stopping", "resources", "source"]);
-function readSessionArchiveOperation(metadata = {}) {
+function readSessionArchiveOperation(metadata) {
   const stored = text(metadata?.session_archive_operation);
   if (!stored) return null;
   let operation = null;

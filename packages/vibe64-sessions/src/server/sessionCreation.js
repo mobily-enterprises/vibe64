@@ -27,7 +27,7 @@ function sessionRuntimeOptions(terminals) {
   return { createSessionSource: (context) => terminals.createSessionSource(context) };
 }
 
-function sessionCreationLimitError(policy = {}) {
+function sessionCreationLimitError(policy) {
   const error = new Error(
     text(policy?.creation?.disabledReason) || "No more sessions can be created for this project."
   );

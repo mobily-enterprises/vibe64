@@ -94,7 +94,7 @@ function assistantRoutingFromMetadata(metadata = {}) {
 
 // The pinned goal and the latest routed request a session's metadata records.
 // A pin that is not a record is refused with one coded error, wherever it is read.
-function assistantRoutingGoalFromMetadata(metadata = {}) {
+function assistantRoutingGoalFromMetadata(metadata) {
   const raw = metadata?.assistant_routing_goal;
   if (!raw) return null;
   let goal;
@@ -106,7 +106,7 @@ function assistantRoutingGoalFromMetadata(metadata = {}) {
   }
   return goal;
 }
-const assistantRoutingRequestFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_request || "null");
+const assistantRoutingRequestFromMetadata = (metadata) => JSON.parse(metadata?.assistant_routing_request || "null");
 // Views and summaries show an unreadable saved request as none; guards use the
 // strict reader above and refuse to act on it.
 function assistantRoutingRequestForDisplay(metadata = {}) {

@@ -12,7 +12,7 @@ function vibe64AssistantSelectionLabel(selection, { includeThinking = true } = {
 // How a selection's model provider is shown. Curated key providers report their
 // own key usage and, through Codex or Claude Code, send their reasoning as
 // commentary, so commentary is shown as thinking.
-function vibe64ProviderPresentation(selection = {}) {
+function vibe64ProviderPresentation(selection) {
   const provider = curatedCodexProvider(selection?.modelProviderId);
   return Object.freeze({
     label: provider?.shortLabel || findVibe64AgentProvider(selection?.engineId)?.label || "",

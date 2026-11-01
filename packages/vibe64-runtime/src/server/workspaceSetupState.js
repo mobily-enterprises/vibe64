@@ -67,7 +67,7 @@ function workspaceSetupState(value = {}) {
   };
 }
 
-function workspaceSetupStateFromMetadata(metadata = {}) {
+function workspaceSetupStateFromMetadata(metadata) {
   const serialized = normalizeText(metadata?.[WORKSPACE_SETUP_METADATA_NAME]);
   if (!serialized) {
     return workspaceSetupState();

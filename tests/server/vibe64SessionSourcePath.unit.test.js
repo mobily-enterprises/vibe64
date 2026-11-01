@@ -111,7 +111,7 @@ test("session source path accepts marked managed session source metadata outside
   const sourcePath = "/srv/vibe64/user/projects/app-test/sessions/active/session-1/source";
   const session = {
     completedSteps: ["session_created", "source_created"],
-    id: "session-1",
+    sessionId: "session-1",
     metadata: {
       source_path: sourcePath,
       source_kind: "session_clone",
@@ -132,7 +132,7 @@ test("session source path rejects unmarked managed-looking source metadata outsi
   const sourcePath = "/srv/vibe64/user/projects/app-test/sessions/active/session-1/source";
   const session = {
     completedSteps: ["session_created", "source_created"],
-    id: "session-1",
+    sessionId: "session-1",
     metadata: {
       source_path: sourcePath
     },
