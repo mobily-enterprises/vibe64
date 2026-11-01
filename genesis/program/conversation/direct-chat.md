@@ -1384,6 +1384,12 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/sessionPromptHints.js`
+- `packages/vibe64-terminals/src/server/promptHintRequests.js`
+- `packages/vibe64-terminals/src/server/promptHintJobs.js`
+- `packages/vibe64-terminals/src/server/promptHintContext.js`
+- `packages/vibe64-terminals/src/server/promptHintState.js`
+- `packages/vibe64-terminals/src/server/promptHintRules.js`
+- `packages/vibe64-terminals/src/server/promptHintGenesisFiles.js`
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/composables/useVibe64AutopilotView.js`
