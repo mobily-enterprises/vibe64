@@ -25,6 +25,7 @@ import { text } from "./trimmedText.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
 /** @typedef {(actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>} RenewalActorResolver */
 
@@ -189,8 +190,14 @@ function createService({
     const saved = await service.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: submittedBy });
     return saved?.ok === false ? skipped(text(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
   });
-  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
-  terminals.setConnectedPreparation(async ({ mode, runtime, session, onProgress = null }) => {
+  /**
+   * @param {object} preparation
+   * @param {"inspect" | "prepare"} preparation.mode
+   * @param {Vibe64SessionRuntime} preparation.runtime
+   * @param {{ sessionId: string }} preparation.session
+   * @param {((label: string) => Promise<void>) | null} [preparation.onProgress]
+   */
+  const prepareConnected = async ({ mode, runtime, session, onProgress = null }) => {
     const requestContext = { requestMeta: currentProjectActionRequestMeta() };
     // Each progress label is saved by workspace setup, then published so the
     // open session shows which connected projects are still being prepared.
@@ -204,7 +211,9 @@ function createService({
     return mode === "prepare"
       ? connected.prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext, { onProgress: progress })
       : service.inspectConnectedDevelopmentInputs(session.sessionId, {}, requestContext);
-  });
+  };
+  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+  terminals.setConnectedPreparation(prepareConnected);
   return service;
 }
 
