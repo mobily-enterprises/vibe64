@@ -1327,18 +1327,18 @@ test("the owner downloads every Env record with its real value as one .env file"
       environmentAlternatives: [{ preferred: true, bindings: { endpoint: "SERVICE_ENDPOINT", token: "SERVICE_TOKEN" } }] } };
     const service = projectService(targetRoot, {
       inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "APP_MODE", value: "demo" }],
-        files: [], resources: [resource], status: "ready" })
+        files: [], resources: [resource], status: "ready" }),
+      savedEnvValueProvider: { label: "Test vault", async list() { return { entries: [] }; },
+        async link() { return { ok: true }; }, async unlink() { return { ok: true }; },
+        async valuesForProject() {
+          return { contract: "vibe64.saved-env-values.v1", values: [{ key: "PAYMENTS_KEY", value: "sk_test_linked", secret: true }] };
+        } }
     });
     const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
       resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" },
         values: { endpoint: "https://managed.example.test/a b", token: "managed-$ecret" } }] });
     service.setResourceEnvironmentProvider({ managedDevelopmentDatabase: true,
       environmentForProvisionedResources: provided, environmentForResources: provided });
-    service.setSavedEnvValueProvider({ label: "Test vault", async list() { return { entries: [] }; },
-      async link() { return { ok: true }; }, async unlink() { return { ok: true }; },
-      async valuesForProject() {
-        return { contract: "vibe64.saved-env-values.v1", values: [{ key: "PAYMENTS_KEY", value: "sk_test_linked", secret: true }] };
-      } });
     const runtime = await service.createRuntime({ inspectSource: false });
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
     assert.equal((await service.saveEnvUserValues({ environment: "dev", sessionId, values: {

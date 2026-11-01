@@ -13,11 +13,12 @@ import { readEnvUserValues, saveEnvUserValues } from "@local/vibe64-core/server/
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { materializeProjectEnvironmentFiles } from "./projectEnvironmentFiles.js";
 import { normalizeResourceEnvironment, requiredAlternative, resourceSemanticIsSecret } from "./resourceEnvironment.js";
-import { SAVED_ENV_VALUE_SOURCE, savedEnvValueRecords } from "./savedEnvValues.js";
+import { SAVED_ENV_VALUE_SOURCE, offersSavedValues, savedEnvValueRecords } from "./savedEnvValues.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
+/** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
 
 function envScope(input = {}) {
   return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
@@ -99,9 +100,10 @@ function genesisEnvironmentIsUnconfigured(error) {
  * @param {RuntimeEnv} dependencies.env
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEnvironment} dependencies.inspectEnvironment
  * @param {ProjectSelection} dependencies.selection
+ * @param {SavedEnvValueProvider} dependencies.savedEnvValueProvider
  * @param {ProjectServiceSlots} dependencies.slots
  */
-function createProjectEnvironment({ env, inspectEnvironment, selection, slots }) {
+function createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvider, selection, slots }) {
   async function userEnvRecords() {
     return (await readEnvUserValues({
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot()
@@ -113,8 +115,8 @@ function createProjectEnvironment({ env, inspectEnvironment, selection, slots })
   // silently dropping values.
   async function savedEnvRecords(input = {}) {
     const scope = envScope(input);
-    if (!slots.savedEnvValueProvider || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
-    return savedEnvValueRecords(slots.savedEnvValueProvider, {
+    if (!offersSavedValues(savedEnvValueProvider) || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
+    return savedEnvValueRecords(savedEnvValueProvider, {
       projectContextRoot: selection.selectedTargetRoot(),
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
       projectSlug: selection.currentProjectSlug()

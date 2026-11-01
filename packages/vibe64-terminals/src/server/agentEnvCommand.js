@@ -10,7 +10,7 @@ import {
 import {
   currentProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
-import { assertSavedEnvValueProvider } from "@local/vibe64-project/server/savedEnvValues";
+import { offersSavedValues } from "@local/vibe64-project/server/savedEnvValues";
 import {
   normalizeRuntimeConfigKey,
   runtimeConfigKeyLooksSecret
@@ -49,6 +49,7 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
+/** @typedef {import("@local/vibe64-project/server/types").SavedEnvValueProvider} SavedEnvValueProvider */
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
@@ -93,11 +94,13 @@ const commandServers = createSessionCommandServers({
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env values
+ * @param {SavedEnvValueProvider} dependencies.savedEnvValueProvider a host's saved values
  */
 function createAgentEnvCommandService({
   logger,
   projectService,
-  productionEnvironmentProvider
+  productionEnvironmentProvider,
+  savedEnvValueProvider
 }) {
   // The person whose request prepared this agent; a host's saved values
   // apply that person's permissions.
@@ -107,13 +110,6 @@ function createAgentEnvCommandService({
     unbound: ["Vibe64 Env command is not bound to this session project.", "vibe64_agent_env_command_project_binding_missing"],
     changed: ["Vibe64 Env command session project no longer matches its bound project.", "vibe64_agent_env_command_project_binding_changed"]
   }, { capture: () => ({ actor: currentProjectRequestContext()?.vibe64User || null }) });
-  let savedValueProvider = null;
-
-  // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-  function setSavedEnvValueProvider(provider = null) {
-    savedValueProvider = assertSavedEnvValueProvider(provider);
-  }
-
   async function bindSession(sessionId = "") {
     const binding = await projectBinding.bind(sessionId);
     return {
@@ -315,8 +311,9 @@ function createAgentEnvCommandService({
   }
 
   async function savedResult(parsed = {}, sessionId = "", binding = {}) {
-    const result = savedValueProvider ? assertOperationResult(
-      await savedValueProvider.list(savedValueRequest(binding, sessionId)),
+    const offered = offersSavedValues(savedEnvValueProvider);
+    const result = offered ? assertOperationResult(
+      await savedEnvValueProvider.list(savedValueRequest(binding, sessionId)),
       "Saved values could not be read."
     ) : null;
     const entries = (Array.isArray(result?.entries) ? result.entries : []).map((entry) => ({
@@ -330,11 +327,11 @@ function createAgentEnvCommandService({
       id: normalizeText(entry?.id),
       label: normalizeText(entry?.label)
     })).filter((entry) => entry.id);
-    const payload = { entries, ok: true, ...(savedValueProvider ? { provider: savedValueProvider.label } : {}) };
-    const lines = !savedValueProvider
+    const payload = { entries, ok: true, ...(offered ? { provider: savedEnvValueProvider.label } : {}) };
+    const lines = !offered
       ? ["This workspace offers no saved values."]
       : entries.length === 0
-        ? [`${savedValueProvider.label} has nothing you can use here yet.`]
+        ? [`${savedEnvValueProvider.label} has nothing you can use here yet.`]
         : entries.map((entry) => `${entry.id} ${entry.label}${entry.description ? ` — ${entry.description}` : ""}` +
             ` (fields: ${entry.fields.map((field) => `${field.id}${field.secret ? "*" : ""}`).join(", ")})`);
     return {
@@ -346,15 +343,15 @@ function createAgentEnvCommandService({
 
   async function linkResult(parsed = {}, sessionId = "", binding = {}) {
     const key = normalizeRuntimeConfigKey(parsed.key);
-    if (!savedValueProvider) {
+    if (!offersSavedValues(savedEnvValueProvider)) {
       return responseError("This workspace offers no saved values.", "vibe64_saved_env_values_unavailable");
     }
     const request = { ...savedValueRequest(binding, sessionId), environment: parsed.scope, key };
     const linking = parsed.command === "link";
     assertOperationResult(
       linking
-        ? await savedValueProvider.link({ ...request, entryId: parsed.entryId, fieldId: parsed.fieldId })
-        : await savedValueProvider.unlink(request),
+        ? await savedEnvValueProvider.link({ ...request, entryId: parsed.entryId, fieldId: parsed.fieldId })
+        : await savedEnvValueProvider.unlink(request),
       `${key} could not be ${linking ? "linked" : "unlinked"}.`
     );
     const label = parsed.scope === ENV_SCOPE_PRODUCTION ? "production" : "development";
@@ -438,9 +435,7 @@ function createAgentEnvCommandService({
     logger,
     bindSession,
     closeAllForSession,
-    run,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setSavedEnvValueProvider
+    run
   });
 }
 

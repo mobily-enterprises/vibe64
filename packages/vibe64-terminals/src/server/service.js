@@ -17,6 +17,7 @@ import { createSessionAgentManager } from "./agent/sessionAgentManager.js";
 import process from "node:process";
 import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { NO_PRODUCTION_ENVIRONMENT } from "./productionEnvironment.js";
+import { NO_SAVED_ENV_VALUES } from "@local/vibe64-project/server/savedEnvValues";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
@@ -68,6 +69,7 @@ import { createServiceHostSlots } from "./serviceHostSlots.js";
 /** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
+/** @typedef {import("@local/vibe64-project/server/types").SavedEnvValueProvider} SavedEnvValueProvider */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 
@@ -110,6 +112,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {ProjectRuntimeChangedPublisher} [dependencies.publishProjectRuntimeChanged]
  * @param {TerminalSessionChangedPublishers} [dependencies.publishSessionChanged]
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
+ * @param {SavedEnvValueProvider} [dependencies.savedEnvValueProvider] a host's saved values
  */
 function createService({
   // readable-check: allow dependency-default - optional operation: without an action catalogue the assistant has no Vibe64 tools
@@ -129,7 +132,8 @@ function createService({
   publishProjectRuntimeChanged = async () => null,
   // readable-check: allow dependency-default - optional operation: without session publishers session changes are not announced
   publishSessionChanged = {},
-  runCodexGitGatewayCommand
+  runCodexGitGatewayCommand,
+  savedEnvValueProvider = NO_SAVED_ENV_VALUES
 }) {
   if (!projectService) {
     throw new TypeError("createService requires vibe64.project.");
@@ -249,7 +253,8 @@ function createService({
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
     productionEnvironmentProvider,
-    projectService
+    projectService,
+    savedEnvValueProvider
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
     logger,
@@ -505,7 +510,7 @@ function createService({
     state, assistantRouting, mainConversations, outputTarget, projectServices, sessionAgent,
     sessionConversations, sessionNaming
   });
-  const hostSlots = createServiceHostSlots({ state, agentEnvCommand });
+  const hostSlots = createServiceHostSlots({ state });
 
   const terminalControls = createTerminalControls({
     readAgentScreen: (sessionId, terminalSessionId, options) => terminals.readAgentTerminal(sessionId, terminalSessionId, options),
@@ -542,8 +547,6 @@ function createService({
     setPlanCompleted: hostSlots.setPlanCompleted,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setSavedEnvValueProvider: hostSlots.setSavedEnvValueProvider,
     prepareWorkspaceSetup: workspacePreparation.prepareWorkspaceSetup,
     prepareRenewalWorkspaceSetup: workspacePreparation.prepareRenewalWorkspaceSetup,
     workspaceSetupIsRunning: workspacePreparation.workspaceSetupIsRunning,

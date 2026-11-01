@@ -11,11 +11,17 @@ before.
 
 ## Provider
 
-The host passes one provider object to two setters:
+The host provides one provider object as the optional `vibe64.env.saved-values`
+capability (`SAVED_ENV_VALUES_TOKEN` from `@local/vibe64-project/server/savedEnvValues`).
+Both the project (`vibe64.project`) and the helper (`vibe64.terminals`) receive it,
+so the providing feature must require neither of them:
 
 ```js
-projectService.setSavedEnvValueProvider(provider);   // @local/vibe64-project
-terminalService.setSavedEnvValueProvider(provider);  // @local/vibe64-terminals (the helper)
+defineFeature({
+  id: "host.saved-env-values",
+  provides: { savedEnvValueProvider: SAVED_ENV_VALUES_TOKEN },
+  setup: () => ({ savedEnvValueProvider: provider })
+});
 ```
 
 ```js
@@ -35,7 +41,8 @@ terminalService.setSavedEnvValueProvider(provider);  // @local/vibe64-terminals 
 }
 ```
 
-Each setter validates the shape and accepts `null`. `actor` is the signed-in
+Both features validate the shape when they are set up; without the capability
+they use `NO_SAVED_ENV_VALUES`, the workspace that offers none. `actor` is the signed-in
 person whose request prepared the coding agent (`null` when unknown); the host
 applies that person's permissions. `list`, `link` and `unlink` may answer
 `{ ok: false, code, error }` with a sentence for the person.

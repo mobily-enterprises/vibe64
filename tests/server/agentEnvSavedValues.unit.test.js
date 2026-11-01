@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createAgentEnvCommandService } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
+import { NO_SAVED_ENV_VALUES } from "../../packages/vibe64-project/src/server/savedEnvValues.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
@@ -43,9 +44,9 @@ function testVault() {
   };
 }
 
-async function boundCommand(records = [], actor = { username: "teammate", role: "member" }) {
+async function boundCommand(records = [], actor = { username: "teammate", role: "member" }, savedEnvValueProvider = NO_SAVED_ENV_VALUES) {
   const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
-    projectService: projectService(records) });
+    projectService: projectService(records), savedEnvValueProvider });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
 }
@@ -63,9 +64,8 @@ test("without a saved-value host the helper says so and exits cleanly", async ()
 });
 
 test("saved lists names, descriptions and fields, never values, for the bound person", async () => {
-  const command = await boundCommand();
   const vault = testVault();
-  command.setSavedEnvValueProvider(vault);
+  const command = await boundCommand([], undefined, vault);
   const saved = await run(command, ["saved"]);
   assert.equal(saved.stdout, "saved_1 Payments — main — Live payments for the shop (fields: apiKey*, region)\n");
   const json = JSON.parse((await run(command, ["saved", "--json"])).stdout);
@@ -76,9 +76,8 @@ test("saved lists names, descriptions and fields, never values, for the bound pe
 });
 
 test("link and unlink go to the host with the bound person; its refusal is reported", async () => {
-  const command = await boundCommand();
   const vault = testVault();
-  command.setSavedEnvValueProvider(vault);
+  const command = await boundCommand([], undefined, vault);
   const linked = await run(command, ["link", "development", "PAYMENTS_KEY", "saved_1", "apiKey"]);
   assert.equal(linked.exitCode, 0);
   assert.equal(linked.stdout, "Linked development Env PAYMENTS_KEY to saved_1 (apiKey).\nThe value was not printed.\n");
@@ -94,8 +93,7 @@ test("link and unlink go to the host with the bound person; its refusal is repor
 });
 
 test("status shows a linked row with its provenance and set refuses it", async () => {
-  const command = await boundCommand([linkedRecord]);
-  command.setSavedEnvValueProvider(testVault());
+  const command = await boundCommand([linkedRecord], undefined, testVault());
   const status = await run(command, ["status", "development"]);
   assert.equal(status.stdout, "Development Env:\n  PAYMENTS_KEY — linked — From Test vault: Payments — main\n");
   const json = JSON.parse((await run(command, ["status", "development", "--json"])).stdout);

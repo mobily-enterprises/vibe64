@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
+import { NO_SAVED_ENV_VALUES, assertSavedEnvValueProvider } from "../../packages/vibe64-project/src/server/savedEnvValues.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { runtimeConfigViewRecord } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -38,6 +39,20 @@ function testVault(values = [], { fail = null } = {}) {
   };
 }
 
+// The host's saved values for one service, which a test replaces as the host's
+// values change.
+function hostVault(initial = NO_SAVED_ENV_VALUES) {
+  let current = initial;
+  return {
+    use(next) { current = next; },
+    get label() { return current.label; },
+    valuesForProject: (input) => current.valuesForProject(input),
+    list: (request) => current.list(request),
+    link: (request) => current.link(request),
+    unlink: (request) => current.unlink(request)
+  };
+}
+
 const declaration = (resources = []) => () => ({
   components: [],
   environmentDefaults: [{ name: "PAYMENTS_MODE", value: "test" }],
@@ -56,16 +71,17 @@ test("without a provider Env is unchanged and a provider must have the full shap
     const state = await service.readEnv({ environment: "dev" });
     assert.equal(state.ok, true);
     assert.equal(state.env.records.some((candidate) => candidate.source === "vibe64-host:saved-value"), false);
-    assert.throws(() => service.setSavedEnvValueProvider({ label: "Test vault", valuesForProject() {} }), TypeError);
-    assert.throws(() => service.setSavedEnvValueProvider({ ...testVault(), label: "" }), TypeError);
-    service.setSavedEnvValueProvider(testVault());
-    service.setSavedEnvValueProvider(null);
+    assert.throws(() => assertSavedEnvValueProvider({ label: "Test vault", valuesForProject() {} }), TypeError);
+    assert.throws(() => assertSavedEnvValueProvider({ ...testVault(), label: "" }), TypeError);
+    assertSavedEnvValueProvider(testVault());
+    assertSavedEnvValueProvider(null);
   });
 });
 
 test("linked values become non-editable rows with the host's label, beat Stack defaults and stale user values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, { inspectEnvironment: declaration() });
+    const host = hostVault();
+    const service = projectService(targetRoot, { inspectEnvironment: declaration(), savedEnvValueProvider: host });
     const saved = await service.saveEnvUserValues({ environment: "dev", values: { PAYMENTS_KEY: { value: "typed-before-linking" } } });
     assert.equal(saved.ok, true, JSON.stringify(saved));
     const vault = testVault([
@@ -75,7 +91,7 @@ test("linked values become non-editable rows with the host's label, beat Stack d
       { key: "VIBE64_PRIVATE", value: "never" },
       { key: "NODE_OPTIONS", value: "--require evil" }
     ]);
-    service.setSavedEnvValueProvider(vault);
+    host.use(vault);
 
     const { env } = await service.readEnv({ environment: "dev" });
     assert.deepEqual(record(env, "PAYMENTS_KEY"), {
@@ -107,14 +123,14 @@ test("linked values become non-editable rows with the host's label, beat Stack d
 
 test("secret linked values stay out of the resource configuration fingerprint values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, { inspectEnvironment: declaration() });
-    service.setSavedEnvValueProvider(testVault([{ key: "API_TOKEN", value: "first", secret: true }]));
+    const host = hostVault(testVault([{ key: "API_TOKEN", value: "first", secret: true }]));
+    const service = projectService(targetRoot, { inspectEnvironment: declaration(), savedEnvValueProvider: host });
     const first = await service.projectInspectionEnvironment({ includeResourceConfiguration: true });
-    service.setSavedEnvValueProvider(testVault([{ key: "API_TOKEN", value: "rotated", secret: true }]));
+    host.use(testVault([{ key: "API_TOKEN", value: "rotated", secret: true }]));
     const second = await service.projectInspectionEnvironment({ includeResourceConfiguration: true });
     assert.equal(second.environment.API_TOKEN, "rotated");
     assert.equal(first.resourceConfigurationFingerprint, second.resourceConfigurationFingerprint);
-    service.setSavedEnvValueProvider(testVault([{ key: "API_TOKEN", value: "first", secret: false }]));
+    host.use(testVault([{ key: "API_TOKEN", value: "first", secret: false }]));
     assert.notEqual((await service.projectInspectionEnvironment({ includeResourceConfiguration: true })).resourceConfigurationFingerprint,
       first.resourceConfigurationFingerprint);
   });
@@ -126,12 +142,12 @@ test("a managed resource binding wins over a linked value of the same name", asy
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     const resource = { component: "example", resource: { id: "service", kind: "example",
       environmentAlternatives: [{ preferred: true, bindings: { endpoint: "SERVICE_ENDPOINT" } }] } };
-    const service = projectService(targetRoot, { inspectEnvironment: declaration([resource]) });
+    const service = projectService(targetRoot, { inspectEnvironment: declaration([resource]),
+      savedEnvValueProvider: testVault([{ key: "SERVICE_ENDPOINT", value: "https://linked.example.test", secret: false }]) });
     const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
       resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" }, values: { endpoint: "https://managed.example.test" } }] });
     service.setResourceEnvironmentProvider({ managedDevelopmentDatabase: true,
       environmentForProvisionedResources: provided, environmentForResources: provided });
-    service.setSavedEnvValueProvider(testVault([{ key: "SERVICE_ENDPOINT", value: "https://linked.example.test", secret: false }]));
     const runtime = await service.createRuntime({ inspectSource: false });
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
 
@@ -144,18 +160,18 @@ test("a managed resource binding wins over a linked value of the same name", asy
 
 test("a failing or malformed provider fails the read instead of dropping values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, { inspectEnvironment: declaration() });
-    service.setSavedEnvValueProvider(testVault([], { fail: new Error("The vault is locked.") }));
+    const host = hostVault(testVault([], { fail: new Error("The vault is locked.") }));
+    const service = projectService(targetRoot, { inspectEnvironment: declaration(), savedEnvValueProvider: host });
     const failed = await service.readEnv({ environment: "dev" });
     assert.equal(failed.ok, false);
     assert.equal(failed.code, "vibe64_saved_env_values_unavailable");
     assert.equal(failed.error, "The vault is locked.");
     await assert.rejects(() => service.projectInspectionEnvironment({}), { code: "vibe64_saved_env_values_unavailable" });
     for (const values of [[{ key: "1BAD", value: "x" }], [{ key: "A", value: 3 }], [{ key: "A", value: "x" }, { key: "A", value: "y" }]]) {
-      service.setSavedEnvValueProvider(testVault(values));
+      host.use(testVault(values));
       assert.equal((await service.readEnv({ environment: "dev" })).code, "vibe64_saved_env_values_unavailable");
     }
-    service.setSavedEnvValueProvider({ ...testVault(), valuesForProject: async () => ({ contract: "other", values: [] }) });
+    host.use({ ...testVault(), valuesForProject: async () => ({ contract: "other", values: [] }) });
     assert.equal((await service.readEnv({ environment: "dev" })).code, "vibe64_saved_env_values_unavailable");
   });
 });

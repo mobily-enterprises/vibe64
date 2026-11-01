@@ -7,5 +7,14 @@
 /** @typedef {ReturnType<typeof import("./projectServiceSlots.js").createProjectServiceSlots>} ProjectServiceSlots */
 /** @typedef {ReturnType<typeof import("./projectEnvironment.js").createProjectEnvironment>} ProjectEnvironment */
 /** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/**
+ * A host's saved values (vibe64.saved-env-values.v1), shown by its own label.
+ * @typedef {object} SavedEnvValueProvider
+ * @property {string} label
+ * @property {(input: { projectContextRoot: string, projectRuntimeRoot: string, projectSlug: string }) => Promise<object>} valuesForProject
+ * @property {(request: object) => Promise<object>} list
+ * @property {(request: object) => Promise<object>} link
+ * @property {(request: object) => Promise<object>} unlink
+ */
 
 export {};

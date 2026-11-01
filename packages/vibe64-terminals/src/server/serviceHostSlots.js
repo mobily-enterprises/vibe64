@@ -1,15 +1,12 @@
 /** @typedef {import("./types.js").ServiceState} ServiceState */
-/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
 /**
  * What a composing host fills after construction: the source editor, connected preparation, plan
- * completion and database tools providers, the agent environment's providers, and the assistant
- * runtime's functions.
+ * completion and database tools providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
- * @param {AgentEnvCommandService} dependencies.agentEnvCommand
  */
-function createServiceHostSlots({ state, agentEnvCommand }) {
+function createServiceHostSlots({ state }) {
   function configureAssistantRuntime(input = {}) {
     for (const name of [
       "claudeConnectionStatus",
@@ -51,11 +48,6 @@ function createServiceHostSlots({ state, agentEnvCommand }) {
     state.slots.databaseToolsProvider = provider;
   }
 
-  function setSavedEnvValueProvider(provider = null) {
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    agentEnvCommand.setSavedEnvValueProvider(provider);
-  }
-
   return Object.freeze({
     configureAssistantRuntime,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
@@ -64,8 +56,6 @@ function createServiceHostSlots({ state, agentEnvCommand }) {
     setDatabaseToolsProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setSavedEnvValueProvider,
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     setSourceEditorProvider
   });

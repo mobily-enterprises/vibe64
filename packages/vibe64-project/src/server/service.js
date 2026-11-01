@@ -18,7 +18,7 @@ import {
 import {
   savePreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
-import { assertSavedEnvValueProvider } from "./savedEnvValues.js";
+import { NO_SAVED_ENV_VALUES } from "./savedEnvValues.js";
 import {
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
@@ -39,6 +39,7 @@ import { createProjectSettings } from "./projectSettings.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("./types.js").PublishProjectChanged} PublishProjectChanged */
+/** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
 
 function catalogUnavailable() {
   return {
@@ -64,6 +65,7 @@ function catalogUnavailable() {
  * @param {typeof applyGenesisTemplate} [dependencies.applyTemplate]
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ * @param {SavedEnvValueProvider} [dependencies.savedEnvValueProvider] a host's saved values
  * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
  * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
  */
@@ -84,12 +86,13 @@ function createService({
   applyTemplate = applyGenesisTemplate,
   projectContext,
   publishProjectChanged = announceNoProjectChange,
+  savedEnvValueProvider = NO_SAVED_ENV_VALUES,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
   const slots = createProjectServiceSlots();
   const selection = createProjectSelection({ logger, projectContext });
-  const environment = createProjectEnvironment({ env, inspectEnvironment, selection, slots });
+  const environment = createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvider, selection, slots });
   const sessionWork = createProjectSessionWork({ environment, selection });
   const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, selection, sessionWork, slots });
   const projectSettings = createProjectSettings({
@@ -282,12 +285,6 @@ function createService({
     slots.templateApplicationObserver = observer;
   }
 
-  // vibe64.saved-env-values.v1: a host may fill Development Env variables
-  // the person explicitly linked to one of its saved values.
-  function setSavedEnvValueProvider(provider = null) {
-    slots.savedEnvValueProvider = assertSavedEnvValueProvider(provider);
-  }
-
   function setResourceEnvironmentProvider(provider = null) {
     if (
       provider !== null &&
@@ -414,8 +411,6 @@ function createService({
     runProjectSessionPolicyExclusive: runSelectedProjectSessionPolicyExclusive,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     setTemplateApplicationObserver,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setSavedEnvValueProvider,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setResourceEnvironmentProvider,
     saveEnvUserValues,
