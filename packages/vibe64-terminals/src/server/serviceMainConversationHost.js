@@ -41,7 +41,7 @@ function realtimeDebugEnabled(env = {}) {
  * @param {ServiceAssistantContext} dependencies.assistantContext
  * @param {ServiceGoals} dependencies.goals
  * @param {ServiceAssistant} dependencies.assistant
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -63,7 +63,7 @@ function createServiceMainConversationHost({
     if (context?.sessionId !== conversationId) return false;
     const authority = context.browserAuthority;
     if (!authority) return true; // Existing, already-authorized manager callers.
-    if (!actions || authority.sessionId !== conversationId) return false;
+    if (authority.sessionId !== conversationId) return false;
     /**
      * Delayed publications retain CONTROL identity, never a cached access grant.
      */

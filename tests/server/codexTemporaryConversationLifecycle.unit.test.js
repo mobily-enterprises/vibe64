@@ -1942,6 +1942,15 @@ function createRestartedController({
   });
 }
 
+// Grants the conversation context read that a signed-in browser request makes.
+const CONVERSATION_CONTEXT_ACTIONS = Object.freeze({
+  listDefinitions: () => [],
+  async execute({ actionId }) {
+    assert.equal(actionId, ACTION_READ_CONVERSATION_CONTEXT);
+    return { actor: { id: "owner" } };
+  }
+});
+
 async function withAgentMessageController(operation, {
   actions = null,
   projectServices = null,
@@ -2449,10 +2458,7 @@ test("archive retires the session's open temporary chats while an ordinary sessi
       assert.equal((await terminals.closeSessionTerminals(sessionId, { forgetConversationBinding: true })).ok, true);
       await assert.rejects(handle.subscribe(() => {}), { code: "conversation_closed" });
     });
-  }, { actions: { listDefinitions: () => [], async execute({ actionId }) {
-    assert.equal(actionId, ACTION_READ_CONVERSATION_CONTEXT);
-    return { actor: { id: "owner" } };
-  } }, throughTerminalService: true });
+  }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
 
 test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {
@@ -13722,7 +13728,7 @@ test("Main Codex active goal continues once after service restart and explicit P
     configure(pausedService);
     assert.equal((await pausedService.recoverActiveGoals()).ok, true);
     assert.deepEqual(writes.map(([action]) => action), ["set", "active", "paused"]);
-  }, { throughTerminalService: true });
+  }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
 
 
@@ -13796,7 +13802,7 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
       "the recorded goal pause to be saved under the settings lock");
     assert.equal(JSON.parse((await metadata()).assistant_goal_intent).active, false);
     assert.equal(JSON.parse((await metadata()).assistant_goal_intent).id, intent.id);
-  }, { throughTerminalService: true });
+  }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
 
 
@@ -13838,7 +13844,7 @@ test("a Codex goal paused by an account change resumes on the current account on
     const intent = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
     assert.equal(intent.active, true);
     assert.equal(intent.native.threadId, threadId);
-  }, { throughTerminalService: true });
+  }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
 
 test("a goal that cannot continue after restart is logged with its project and the person who set it", { timeout: 30_000 }, async () => {
@@ -13878,7 +13884,7 @@ test("a goal that cannot continue after restart is logged with its project and t
       delete project.listProjects;
       await resumedService.close();
     }
-  }, { throughTerminalService: true });
+  }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
 
 

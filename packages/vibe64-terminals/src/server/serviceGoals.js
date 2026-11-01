@@ -58,7 +58,7 @@ const goalStopRequestFor = session => {
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceAssistantContext} dependencies.assistantContext
  * @param {ServiceAssistantPreparation} dependencies.assistantPreparation
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  * @param {AssistantRouting} dependencies.assistantRouting
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -434,7 +434,7 @@ function createServiceGoals({
             // Set/Resume are admitted user requests too. Retain only CONTROL
             // identity, so each later goal tool rechecks current project access.
             const requestMeta = currentProjectActionRequestMeta();
-            if (actions && (actor || requestMeta) && !prepared.context.browserAuthority) {
+            if ((actor || requestMeta) && !prepared.context.browserAuthority) {
               const projectSlug = sessionAccess.projectRuntimeContext().projectSlug;
               const requestContext = requestMeta ? { surface: "app", channel: "internal", requestMeta }
                 : await state.assistantRuntime.createActionContext(actor);
