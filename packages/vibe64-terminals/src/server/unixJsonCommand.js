@@ -312,7 +312,7 @@ function createSessionCommandServers({
 
 function requestUnixJsonCommand({
   body = {},
-  path = "/",
+  path: requestPath = "/",
   socketPath = "",
   timeoutMs = 2000
 } = {}) {
@@ -324,7 +324,7 @@ function requestUnixJsonCommand({
         "Content-Type": "application/json"
       },
       method: "POST",
-      path,
+      path: requestPath,
       socketPath,
       timeout: timeoutMs
     }, (response) => {

@@ -213,7 +213,7 @@ function createAgentSessionCommandService({
 
   async function runInSessionProject(sessionId = "", operation) {
     const normalizedSessionId = normalizeText(sessionId);
-    const run = () => projectBinding.run(normalizedSessionId, async (binding, project) => {
+    const runBound = () => projectBinding.run(normalizedSessionId, async (binding, project) => {
       const store = await projectService.createSessionStore({
         sessionId: normalizedSessionId
       });
@@ -237,7 +237,7 @@ function createAgentSessionCommandService({
         sourceRoot: path.resolve(sourceRoot)
       });
     });
-    return runWithProjectRequestContext(projectBinding.get(normalizedSessionId)?.projectContext || {}, run);
+    return runWithProjectRequestContext(projectBinding.get(normalizedSessionId)?.projectContext || {}, runBound);
   }
 
   /**

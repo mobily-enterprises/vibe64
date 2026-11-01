@@ -70,7 +70,7 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
         });
         if (turn) await publish(input.sourceSession, {
           reason: "project-message-changed", payload: { conversationLogPatch: { type: "upsert-turn", turn } }
-        }).catch(error => reportFailure(error, receipt));
+        }).catch(publishError => reportFailure(publishError, receipt));
       }, { vibe64User: actor });
     }
     await writeReceipt("accepted");

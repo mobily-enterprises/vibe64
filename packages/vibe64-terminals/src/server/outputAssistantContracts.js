@@ -101,7 +101,7 @@ export function outputStatusTool() {
       };
       if (result.previewIdentity) output.previewIdentity = { available: result.previewIdentity.available === true,
         disabledReason: String(result.previewIdentity.disabledReason || "").slice(0, 512),
-        names: (result.previewIdentity.identities || []).slice(0, 40).map(identity => identity.name),
+        names: (result.previewIdentity.identities || []).slice(0, 40).map(entry => entry.name),
         truncated: (result.previewIdentity.identities || []).length > 40 };
       if (result.outputTargets) {
         const targets = result.outputTargets.slice(0, 10);
@@ -130,8 +130,8 @@ export function outputStatusTool() {
         output.nextRunOffset = output.runOffset + runs.length < output.outputRunCount ? output.runOffset + runs.length : null;
         output.outputRuns = runs.map(run => ({ id: run.id, outputTargetId: run.outputTargetId, terminalSessionId: run.terminalSessionId,
           createdAt: String(run.createdAt || "").slice(0, 512), resultCount: (run.results || []).length, resultsTruncated: (run.results || []).length > 20,
-          results: (run.results || []).slice(0, 20).map(result => ({ id: result.id, downloadId: result.downloadId,
-            name: String(result.name || "").slice(0, 512), mediaType: String(result.mediaType || "").slice(0, 512), size: result.size })) }));
+          results: (run.results || []).slice(0, 20).map(runResult => ({ id: runResult.id, downloadId: runResult.downloadId,
+            name: String(runResult.name || "").slice(0, 512), mediaType: String(runResult.mediaType || "").slice(0, 512), size: runResult.size })) }));
       }
       return output;
     }

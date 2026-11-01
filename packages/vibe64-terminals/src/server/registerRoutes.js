@@ -111,8 +111,12 @@ async function drainMultipartFileStream(stream) {
       }
       resolve();
     };
-    const onEnd = () => finish();
-    const onError = (error) => finish(error);
+    function onEnd() {
+      finish();
+    }
+    function onError(error) {
+      finish(error);
+    }
     stream.once("end", onEnd);
     stream.once("close", onEnd);
     stream.once("error", onError);

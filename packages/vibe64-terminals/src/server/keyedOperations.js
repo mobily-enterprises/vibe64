@@ -63,13 +63,13 @@ function createSharedOperations() {
     if (existing) {
       return /** @type {Promise<Awaited<T>>} */ (existing);
     }
-    const pending = Promise.resolve().then(() => operation()).finally(() => {
-      if (inFlight.get(key) === pending) {
+    const started = Promise.resolve().then(() => operation()).finally(() => {
+      if (inFlight.get(key) === started) {
         inFlight.delete(key);
       }
     });
-    inFlight.set(key, pending);
-    return pending;
+    inFlight.set(key, started);
+    return started;
   }
 
   /**

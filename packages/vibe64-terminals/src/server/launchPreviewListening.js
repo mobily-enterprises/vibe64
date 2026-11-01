@@ -170,10 +170,10 @@ function tryListenOnPreviewSocket(server, socketPath = "") {
       }
       reject(error);
     };
-    const onListening = () => {
+    function onListening() {
       server.off("error", onError);
       resolve(true);
-    };
+    }
     server.once("error", onError);
     server.once("listening", onListening);
     server.listen(socketPath);
@@ -276,10 +276,10 @@ function tryListen(server, port, host) {
       }
       reject(error);
     };
-    const onListening = () => {
+    function onListening() {
       server.off("error", onError);
       resolve(true);
-    };
+    }
     server.once("error", onError);
     server.once("listening", onListening);
     server.listen(port, host);
