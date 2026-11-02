@@ -15,7 +15,7 @@ function normalizePreferredName(value = "") {
     .normalize("NFC")
     .replace(/\s+/gu, " ")
     .trim();
-  // 422 is the status Online's account routes answer these with; the Accounts envelope answers by code.
+  // 422 is the status for a route that answers by status; the Accounts envelope answers by code.
   if (/\p{Cc}/u.test(preferredName)) {
     throw vibe64Error("Preferred name cannot contain control characters.", "vibe64_preferred_name_invalid", { status: 422 });
   }
