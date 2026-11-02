@@ -18,31 +18,50 @@ function resolveCallback(callback, fallback) {
 }
 
 /**
- * The one terminal runtime: a session's state, presentation, policies and
- * matchers, composed with its live stream (useVibe64TerminalConnection), its
- * screen (useVibe64TerminalDisplay) and its lifecycle (useVibe64TerminalLifecycle).
+ * A terminal's own state and the operations on it: its session, visibility
+ * and matchers, with its live stream (useVibe64TerminalConnection) and its
+ * screen (useVibe64TerminalDisplay). Every event it emits goes to
+ * `handleEvent`; the `notify*` callbacks hear its output, matches, session and
+ * status updates and typed input.
+ * @param {{
+ *   driver: { openConnection: Function, reconnectOnDisconnect?: boolean },
+ *   fitOnResize: boolean | null | import("vue").Ref<boolean> | (() => boolean),
+ *   handleEvent: (event: { sessionId: string, type: string }) => void,
+ *   initiallyExpanded: boolean,
+ *   initiallyVisible: boolean,
+ *   liveResize: boolean | import("vue").Ref<boolean> | (() => boolean),
+ *   matchers: object[] | (() => object[]),
+ *   notifyMatch: (payload: object) => void,
+ *   notifyOutput: (outputEvent: object) => void,
+ *   notifySessionUpdate: (session: object) => void,
+ *   notifyStatusUpdate: (status: object) => void,
+ *   notifyUserData: (input: string) => void,
+ *   presentation: string,
+ *   readOnly: boolean | import("vue").Ref<boolean> | (() => boolean),
+ *   reconnectDelay: number,
+ *   reconnectMaxDelay: number,
+ *   resizeReportDelayMs: number | import("vue").Ref<number> | (() => number)
+ * }} options
  */
-function useVibe64Terminal({
+function createVibe64TerminalState({
   driver,
-  fitOnResize = null,
-  initiallyExpanded = false,
-  initiallyVisible = true,
-  liveResize = true,
-  matchers = [],
-  onEvent = null,
-  onMatch = null,
-  onOutput = null,
-  onSessionUpdate = null,
-  onStatusUpdate = null,
-  onUserData = null,
-  policies = [],
-  presentation = "inline",
-  readOnly = false,
-  reconnectDelayMs = TERMINAL_RECONNECT_DELAY_MS,
-  reconnectMaxDelayMs = TERMINAL_RECONNECT_MAX_DELAY_MS,
-  resizeReportDelayMs = 0
-} = {}) {
-  const terminalDriver = validateTerminalDriver(driver);
+  fitOnResize,
+  handleEvent,
+  initiallyExpanded,
+  initiallyVisible,
+  liveResize,
+  matchers,
+  notifyMatch,
+  notifyOutput,
+  notifySessionUpdate,
+  notifyStatusUpdate,
+  notifyUserData,
+  presentation,
+  readOnly,
+  reconnectDelay,
+  reconnectMaxDelay,
+  resizeReportDelayMs
+}) {
   const terminalHost = ref(null);
   const terminalSessionId = ref("");
   const terminalStatus = ref("");
@@ -57,22 +76,10 @@ function useVibe64Terminal({
   const terminalOwnership = ref("none");
   const terminalPresentation = ref(String(presentation || "inline"));
   const terminalVisible = ref(Boolean(initiallyVisible));
-
-  const notifyOutput = resolveCallback(onOutput, () => null);
-  const notifyEvent = resolveCallback(onEvent, () => null);
-  const notifyMatch = resolveCallback(onMatch, () => null);
-  const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
-  const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
-  const notifyUserData = resolveCallback(onUserData, () => null);
   const terminalExited = computed(() => terminalStatus.value === "exited");
-  const terminalReconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
-  const terminalReconnectMaxDelay = Math.max(
-    terminalReconnectDelay,
-    Number(reconnectMaxDelayMs) || 0
-  );
 
   const connection = useVibe64TerminalConnection({
-    driver: terminalDriver,
+    driver,
     terminalSessionId,
     terminalStatus,
     terminalError,
@@ -83,8 +90,8 @@ function useVibe64Terminal({
     readTerminalSize: () => display.terminalCurrentSize(),
     liveResize: terminalLiveResize,
     resizeReportDelay: terminalResizeReportDelay,
-    reconnectDelay: terminalReconnectDelay,
-    reconnectMaxDelay: terminalReconnectMaxDelay
+    reconnectDelay,
+    reconnectMaxDelay
   });
   const display = useVibe64TerminalDisplay({
     connection,
@@ -97,27 +104,6 @@ function useVibe64Terminal({
   const { terminalOutput } = display;
   const terminalPlainOutput = computed(() => stripTerminalControlSequences(terminalOutput.value));
   const terminalSummaryLine = computed(() => terminalLastMeaningfulLine(terminalOutput.value));
-  const lifecycle = useVibe64TerminalLifecycle({
-    driver: terminalDriver,
-    terminal: {
-      terminalAttention,
-      terminalError,
-      terminalExitCode,
-      terminalOwnership,
-      terminalSessionId,
-      terminalStarting,
-      terminalStatus,
-      applyTerminalSession,
-      emitTerminalEvent,
-      expandTerminal,
-      inspectTerminalMatchers,
-      resetTerminalSessionState,
-      showTerminal,
-      terminalSnapshot
-    },
-    connection,
-    display
-  });
 
   function currentSessionId() {
     return String(terminalSessionId.value || "");
@@ -129,8 +115,7 @@ function useVibe64Terminal({
       sessionId: String(payload.sessionId || currentSessionId()),
       type: String(type || payload.type || "")
     };
-    notifyEvent(event);
-    terminalPolicyEngine.handle(event);
+    handleEvent(event);
     return event;
   }
 
@@ -190,32 +175,6 @@ function useVibe64Terminal({
     return true;
   }
 
-  const terminalPolicyEngine = createTerminalPolicyEngine({
-    actions: {
-      collapse: collapseTerminal,
-      close: lifecycle.closeTerminal,
-      detach: lifecycle.detachTerminal,
-      emit(action) {
-        return emitTerminalEvent(action.eventType || action.name || "policy-event", {
-          policyEvent: action.event
-        });
-      },
-      expand: expandTerminal,
-      focus: display.focusTerminal,
-      hide: hideTerminal,
-      interrupt: interruptTerminal,
-      minimize: minimizeTerminal,
-      send(action) {
-        return connection.sendTerminalData(action.data, {
-          source: "policy"
-        });
-      },
-      show: showTerminal
-    },
-    currentSessionId,
-    policies
-  });
-
   const terminalMatcherEngine = createTerminalMatcherEngine({
     matchers,
     onMatch(payload) {
@@ -248,10 +207,6 @@ function useVibe64Terminal({
     inspectTerminalMatchers(outputEvent.source);
   }
 
-  function setTerminalHost(element) {
-    terminalHost.value = element || null;
-  }
-
   function terminalReadOnly() {
     return Boolean(typeof readOnly === "function" ? readOnly() : unref(readOnly));
   }
@@ -272,11 +227,6 @@ function useVibe64Terminal({
       ? resizeReportDelayMs()
       : unref(resizeReportDelayMs));
     return Number.isFinite(delay) && delay > 0 ? delay : 0;
-  }
-
-  function disposeTerminalUi() {
-    connection.closeTerminalSocket();
-    display.disposeTerminalDisplay();
   }
 
   function resetTerminalSessionState() {
@@ -303,10 +253,6 @@ function useVibe64Terminal({
       output: terminalOutput.value,
       status: terminalStatus.value
     };
-  }
-
-  function setTerminalOutput(output, options = {}) {
-    return display.writeTerminalOutput(output, options);
   }
 
   function applyTerminalSession(session = {}, {
@@ -406,6 +352,178 @@ function useVibe64Terminal({
         status: terminalStatus.value
       });
     }
+  }
+
+  return {
+    applyTerminalSession,
+    collapseTerminal,
+    connection,
+    currentSessionId,
+    display,
+    emitTerminalEvent,
+    expandTerminal,
+    hideTerminal,
+    inspectTerminalMatchers,
+    minimizeTerminal,
+    resetTerminalSessionState,
+    showTerminal,
+    terminalAttention,
+    terminalCloseError,
+    terminalCommandPreview,
+    terminalError,
+    terminalExitCode,
+    terminalExited,
+    terminalExpanded,
+    terminalHost,
+    terminalMatcherEngine,
+    terminalMetadata,
+    terminalOutput,
+    terminalOwnership,
+    terminalPlainOutput,
+    terminalPresentation,
+    terminalSessionId,
+    terminalSnapshot,
+    terminalStarting,
+    terminalStatus,
+    terminalSummaryLine,
+    terminalVisible
+  };
+}
+
+/**
+ * The one terminal runtime: a session's state, presentation and matchers
+ * (createVibe64TerminalState), composed with its lifecycle
+ * (useVibe64TerminalLifecycle) and its policies.
+ */
+function useVibe64Terminal({
+  driver,
+  fitOnResize = null,
+  initiallyExpanded = false,
+  initiallyVisible = true,
+  liveResize = true,
+  matchers = [],
+  onEvent = null,
+  onMatch = null,
+  onOutput = null,
+  onSessionUpdate = null,
+  onStatusUpdate = null,
+  onUserData = null,
+  policies = [],
+  presentation = "inline",
+  readOnly = false,
+  reconnectDelayMs = TERMINAL_RECONNECT_DELAY_MS,
+  reconnectMaxDelayMs = TERMINAL_RECONNECT_MAX_DELAY_MS,
+  resizeReportDelayMs = 0
+} = {}) {
+  const terminalDriver = validateTerminalDriver(driver);
+  const notifyEvent = resolveCallback(onEvent, () => null);
+  const terminalReconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
+  const terminalReconnectMaxDelay = Math.max(
+    terminalReconnectDelay,
+    Number(reconnectMaxDelayMs) || 0
+  );
+
+  const terminal = createVibe64TerminalState({
+    driver: terminalDriver,
+    fitOnResize,
+    // The policies act on the lifecycle built on this state; they hear its
+    // events once both exist.
+    handleEvent(event) {
+      notifyEvent(event);
+      terminalPolicyEngine.handle(event);
+    },
+    initiallyExpanded,
+    initiallyVisible,
+    liveResize,
+    matchers,
+    notifyMatch: resolveCallback(onMatch, () => null),
+    notifyOutput: resolveCallback(onOutput, () => null),
+    notifySessionUpdate: resolveCallback(onSessionUpdate, () => null),
+    notifyStatusUpdate: resolveCallback(onStatusUpdate, () => null),
+    notifyUserData: resolveCallback(onUserData, () => null),
+    presentation,
+    readOnly,
+    reconnectDelay: terminalReconnectDelay,
+    reconnectMaxDelay: terminalReconnectMaxDelay,
+    resizeReportDelayMs
+  });
+  const {
+    applyTerminalSession,
+    collapseTerminal,
+    connection,
+    currentSessionId,
+    display,
+    emitTerminalEvent,
+    expandTerminal,
+    hideTerminal,
+    minimizeTerminal,
+    resetTerminalSessionState,
+    showTerminal,
+    terminalAttention,
+    terminalCloseError,
+    terminalCommandPreview,
+    terminalError,
+    terminalExitCode,
+    terminalExited,
+    terminalExpanded,
+    terminalHost,
+    terminalMatcherEngine,
+    terminalMetadata,
+    terminalOutput,
+    terminalOwnership,
+    terminalPlainOutput,
+    terminalPresentation,
+    terminalSessionId,
+    terminalSnapshot,
+    terminalStarting,
+    terminalStatus,
+    terminalSummaryLine,
+    terminalVisible
+  } = terminal;
+  const lifecycle = useVibe64TerminalLifecycle({
+    driver: terminalDriver,
+    terminal,
+    connection,
+    display
+  });
+
+  const terminalPolicyEngine = createTerminalPolicyEngine({
+    actions: {
+      collapse: collapseTerminal,
+      close: lifecycle.closeTerminal,
+      detach: lifecycle.detachTerminal,
+      emit(action) {
+        return emitTerminalEvent(action.eventType || action.name || "policy-event", {
+          policyEvent: action.event
+        });
+      },
+      expand: expandTerminal,
+      focus: display.focusTerminal,
+      hide: hideTerminal,
+      interrupt: interruptTerminal,
+      minimize: minimizeTerminal,
+      send(action) {
+        return connection.sendTerminalData(action.data, {
+          source: "policy"
+        });
+      },
+      show: showTerminal
+    },
+    currentSessionId,
+    policies
+  });
+
+  function setTerminalHost(element) {
+    terminalHost.value = element || null;
+  }
+
+  function disposeTerminalUi() {
+    connection.closeTerminalSocket();
+    display.disposeTerminalDisplay();
+  }
+
+  function setTerminalOutput(output, options = {}) {
+    return display.writeTerminalOutput(output, options);
   }
 
   function terminalKeyData(key) {
@@ -514,5 +632,6 @@ function useVibe64Terminal({
 }
 
 export {
+  createVibe64TerminalState,
   useVibe64Terminal
 };

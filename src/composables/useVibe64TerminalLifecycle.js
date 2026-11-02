@@ -8,22 +8,7 @@ import { watch } from "vue";
  * stream and `display` its screen.
  * @param {{
  *   driver: { startSession?: Function, closeSession?: Function },
- *   terminal: {
- *     terminalAttention: import("vue").Ref<object | null>,
- *     terminalError: import("vue").Ref<string>,
- *     terminalExitCode: import("vue").Ref<number | null>,
- *     terminalOwnership: import("vue").Ref<string>,
- *     terminalSessionId: import("vue").Ref<string>,
- *     terminalStarting: import("vue").Ref<boolean>,
- *     terminalStatus: import("vue").Ref<string>,
- *     applyTerminalSession: Function,
- *     emitTerminalEvent: (type: string, payload?: object) => object,
- *     expandTerminal: Function,
- *     inspectTerminalMatchers: (source: string) => void,
- *     resetTerminalSessionState: () => void,
- *     showTerminal: Function,
- *     terminalSnapshot: () => object
- *   },
+ *   terminal: ReturnType<typeof import("./useVibe64Terminal.js").createVibe64TerminalState>,
  *   connection: ReturnType<typeof import("./useVibe64TerminalConnection.js").useVibe64TerminalConnection>,
  *   display: ReturnType<typeof import("./useVibe64TerminalDisplay.js").useVibe64TerminalDisplay>
  * }} options
