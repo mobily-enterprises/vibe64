@@ -172,9 +172,6 @@ function createSessionCreation({
   }
 
   async function createSession(options = {}, initialize = keepCreatedSession) {
-    if (typeof initialize !== "function") {
-      throw new TypeError("Session initialization must be a function.");
-    }
     const status = assertVibe64SessionStatus(options.status);
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(status)) {
       throw vibe64Error(
