@@ -4,6 +4,14 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 /** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 
 /**
+ * The owner selection of a host with one learner store: every attempt is that store's.
+ * @param {TrainingCodeAuthorship} authorship
+ */
+function oneStoreOwners(authorship) {
+  return async () => ({ authorship });
+}
+
+/**
  * Practice projects are ordinary projects, so the learner edits their code in
  * the ordinary Files editor through the project-scoped
  * vibe64.source-editor.file.save. This owner, installed on the source editor,
@@ -20,7 +28,7 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
  * @param {TrainingCodeAuthorship} [dependencies.authorship] the authorship owner of a host with one learner store
  * @param {(request: { actor: object, attemptId: string }) => Promise<{ authorship: TrainingCodeAuthorship } | null>} [dependencies.selectOwners]
  */
-function createTrainingCodeSaveOwner({ authorship, selectOwners = async () => ({ authorship }) }) {
+function createTrainingCodeSaveOwner({ authorship, selectOwners = oneStoreOwners(authorship) }) {
   return async function saveCodeFile({ input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     const context = currentProjectRequestContext();

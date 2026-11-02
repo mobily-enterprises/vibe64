@@ -206,7 +206,6 @@ export {
   attemptSummary,
   boundedResult,
   completionProjection,
-  endedResult,
   pick,
   practiceSlug,
   preparedAttemptId,

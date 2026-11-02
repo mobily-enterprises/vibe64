@@ -5,6 +5,7 @@ import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { lessonHasSteps, validateContent, validateLesson } from "./contentSchemas.js";
 import { splitStepBeats } from "../shared/beats.js";
 import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
+import { acceptEvery } from "@local/vibe64-core/shared/acceptEvery";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
@@ -100,7 +101,7 @@ async function inventory(directory) {
 }
 
 const publishedLessonsOnly = status => status === "published";
-const publishedAndDraftLessons = () => true;
+const publishedAndDraftLessons = acceptEvery;
 
 /**
  * The installed teaching content of one system root. Ordinary learner readers teach only published lessons.

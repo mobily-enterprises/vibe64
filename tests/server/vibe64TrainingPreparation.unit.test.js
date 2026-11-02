@@ -5,8 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createTrainingService } from "@local/vibe64-training/server/preparation";
-import { NO_LEARNING_SPACE } from "@local/vibe64-training/server/learning-space";
+import { __testables as learningSpaceTestables } from "@local/vibe64-training/server/learning-space";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
+
+const { NO_LEARNING_SPACE } = learningSpaceTestables;
 
 const actor = { uid: 123, username: "learner" };
 const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

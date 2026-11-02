@@ -8,6 +8,7 @@ import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
+import { acceptEvery } from "@local/vibe64-core/shared/acceptEvery";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
@@ -172,7 +173,7 @@ function createTrainingStepChecks({
     return (await learners.readStepProgress({ actor, attemptId: attempt.attemptId })).entry;
   }
 
-  function replayed(result, stepId, same = () => true) {
+  function replayed(result, stepId, same = acceptEvery) {
     if (result.stepId !== stepId || !same(result)) {
       throw stepFailure("This request ID already recorded a different step result.", "VIBE64_TRAINING_REQUEST_CONFLICT");
     }

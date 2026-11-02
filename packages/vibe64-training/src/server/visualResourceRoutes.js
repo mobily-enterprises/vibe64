@@ -5,8 +5,6 @@ import { TRAINING_VISUAL_RESOURCE_ACTION } from "./visualResourceActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
-const TRAINING_VISUAL_RESOURCE_API_PATH = "/api/vibe64/training/attempts/:attemptId/visuals/:visualId";
-
 /** @param {RuntimeHttp} http */
 function registerTrainingVisualResourceRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http), {
@@ -35,4 +33,4 @@ function registerTrainingVisualResourceRoutes(http) {
   );
 }
 
-export { TRAINING_VISUAL_RESOURCE_API_PATH, registerTrainingVisualResourceRoutes };
+export { registerTrainingVisualResourceRoutes };

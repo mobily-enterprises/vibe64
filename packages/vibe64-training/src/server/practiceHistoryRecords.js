@@ -392,7 +392,6 @@ export {
   MAX_RECORD_BYTES,
   MAX_STEP_RECORD_BYTES,
   passedAssessmentIds,
-  revision,
   uuidPattern,
   validateLearning,
   validatePreparation,
