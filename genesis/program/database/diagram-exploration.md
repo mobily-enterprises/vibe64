@@ -12,6 +12,7 @@ requiring every table and field to be read at once.
 - Main: `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 - `packages/vibe64-database-tools/src/shared/erdModel.js`
 - `packages/vibe64-database-tools/src/shared/sqlQuoting.js`
 - `packages/vibe64-database-tools/src/shared/erdRelationships.js`

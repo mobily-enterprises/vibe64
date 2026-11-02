@@ -12,6 +12,7 @@ import {
   ssrContextKey
 } from "vue";
 import { describe, expect, it, vi } from "vitest";
+import { readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 vi.mock("vuetify/lib/components/VBtn/index.mjs", () => ({
   VBtn: defineComponent({ render: () => null })
@@ -23,9 +24,6 @@ vi.mock("vuetify/lib/components/VIcon/index.mjs", () => ({
 
 import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 
-const autopilotPath = path.resolve(
-  "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
-);
 const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
@@ -145,7 +143,7 @@ function mountPromptHints(input = {}) {
 
 describe("Vibe64 prompt hints UI", () => {
   it("shows a stable pending label without creating a transcript message", () => {
-    const autopilot = fs.readFileSync(autopilotPath, "utf8");
+    const autopilot = readAutopilotViewSource();
 
     expect(autopilot).toContain("<AssistantComposerSupport");
     expect(autopilot.indexOf("<AssistantComposerSupport")).toBeGreaterThan(
@@ -161,7 +159,7 @@ describe("Vibe64 prompt hints UI", () => {
   });
 
   it("keeps static starters available without granting dynamic hints", () => {
-    const autopilot = fs.readFileSync(autopilotPath, "utf8");
+    const autopilot = readAutopilotViewSource();
     const canRequestStart = autopilot.indexOf("const promptHintsCanRequest");
     const canRequestEnd = autopilot.indexOf(
       "const promptHintsConversationKey",
@@ -178,7 +176,7 @@ describe("Vibe64 prompt hints UI", () => {
   });
 
   it("reuses the support row for authenticated typing presence", () => {
-    const autopilot = fs.readFileSync(autopilotPath, "utf8");
+    const autopilot = readAutopilotViewSource();
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
 
     expect(autopilot).toContain("useVibe64SessionTypingPresence({");
@@ -213,7 +211,7 @@ describe("Vibe64 prompt hints UI", () => {
   });
 
   it("fills and refocuses the editable composer rather than sending", () => {
-    const autopilot = fs.readFileSync(autopilotPath, "utf8");
+    const autopilot = readAutopilotViewSource();
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
 
     expect(autopilot).toContain('@select="selectPromptHint"');
@@ -320,7 +318,7 @@ describe("Vibe64 prompt hints UI", () => {
     expect(sessionPanelComposable).toContain("projectSettingsQueryKey(");
     expect(sessionPanel).toContain(':prompt-hint-policy="promptHintPolicy"');
     expect(runtimeHost).toContain(':prompt-hint-policy="props.promptHintPolicy"');
-    expect(fs.readFileSync(autopilotPath, "utf8")).toContain(
+    expect(readAutopilotViewSource()).toContain(
       "sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))"
     );
   });

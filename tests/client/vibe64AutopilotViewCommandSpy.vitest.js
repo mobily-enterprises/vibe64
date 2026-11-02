@@ -15,7 +15,9 @@ import { thinkingMessagePresentation, usesCommentaryForThinking } from "../../sr
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
+import { readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
+// The view's own file; its whole source comes from readAutopilotViewSource().
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
 // The Autopilot view's composable and the composables it is built from.
 const composablePaths = [
@@ -196,7 +198,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
 
 describe("Vibe64 direct session view", () => {
   it("admits every repair on Fix it with AI and refuses it without Fix access or on an archived session", async () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const owner = component.match(/async function startTemporaryAiTask\(options = \{\}\) \{[\s\S]*?\n\}/u)?.[0];
     expect(owner).toBeTruthy();
     const allowed = new Set(["fix"]);
@@ -222,7 +224,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("sends implementation as new human work and uses the workflow action for stage continuation", async () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const owner = component.match(/async function sendRoutingAction\(action\) \{[\s\S]*?\n\}/u)?.[0];
     expect(owner).toBeTruthy();
     const routingRequest = vue.ref({ messageId: "planning-request", input: { message: "Make a plan" }, workPlan: { revision: "current-plan" } });
@@ -269,7 +271,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("blocks keyboard and button delivery while Main owns unsent speech without consuming the typed draft", async () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const owner = component.match(/async function sendComposerMessage\(\) \{[\s\S]*?\n\}/u)?.[0];
     expect(owner).toBeTruthy();
     const conversationView = vue.ref({ composerBlocked: true });
@@ -849,7 +851,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("uses one shared Fix it with AI control for every Temporary AI recovery launcher", () => {
-    const autopilot = fs.readFileSync(componentPath, "utf8");
+    const autopilot = readAutopilotViewSource();
     const outputControls = fs.readFileSync(
       path.resolve("src/components/studio/Vibe64OutputControls.vue"),
       "utf8"
@@ -871,7 +873,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("is chat-first and contains no workflow state-machine surface", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const retiredNames = [
       "AutopilotNavigation",
@@ -899,7 +901,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("renders connected Save with receiving destinations and no main publication or PR action", async () => {
-    const source = fs.readFileSync(componentPath, "utf8");
+    const source = readAutopilotViewSource();
     const template = source.match(/<v-dialog v-model="saveWorkConfirmOpen"[\s\S]*?<\/v-dialog>/u)?.[0];
     expect(template).toBeTruthy();
     const compiled = compileTemplate({ source: template, filename: componentPath, id: "connected-save-review" });
@@ -931,7 +933,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("offers native confirmed Save with temporary action output, not an AI prompt", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const saveWork = fs.readFileSync(saveWorkComposablePath, "utf8");
     const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
@@ -998,7 +1000,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("keeps temporary AI separate, restorable, multi-task, and attachment-owned", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const temporaryAiWorkspace = fs.readFileSync(temporaryAiPath, "utf8");
     const temporaryAi = temporaryAiViewPaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const temporaryAiComposable = temporaryAiComposablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
@@ -1067,7 +1069,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("keeps direct files, architecture, preview, terminal, and close controls", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
 
     expect(component).toContain("<Vibe64SessionToolbar");
     expect(component).toContain(":archive=\"props.sessionArchive\"");
@@ -1080,7 +1082,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("offers preview attachments as ordinary direct-chat controls", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
 
     expect(component).toContain("aria-label=\"Attach visible preview\"");
@@ -1096,7 +1098,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("labels active-turn messages as compact steering", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
     expect(component).toContain(':stop-visible="agentStopVisible"');
@@ -1120,7 +1122,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("requires complete compact structured answers while preserving free-form escape", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
     expect(component).toContain("<AssistantQuestionInputs")
@@ -1166,7 +1168,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("keeps workspace preparation status in chat while routing recovery to Temporary AI", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const workspaceSetup = fs.readFileSync(workspaceSetupComposablePath, "utf8");
     const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
@@ -1198,7 +1200,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("turns a rejected managed preview identity into a Temporary AI repair request", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
     const launchControls = fs.readFileSync(
       path.resolve("src/components/studio/Vibe64OutputControls.vue"),
@@ -1215,7 +1217,7 @@ describe("Vibe64 direct session view", () => {
   });
 
   it("uses multiline Enter and moves Tab directly from chat input to Send", () => {
-    const component = fs.readFileSync(componentPath, "utf8");
+    const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
 
@@ -1256,7 +1258,7 @@ it("opens native plan history from its system-message link without treating it a
 
 for (const state of ["failed", "reconciling", "disconnected", "account-unavailable"]) {
   it(`renders the compact ${state} connection row with recovery before the explanation`, async () => {
-    const source = fs.readFileSync(componentPath, "utf8");
+    const source = readAutopilotViewSource();
     const template = source.match(/<v-sheet\s+v-if="connectionRecoveryVisible"[\s\S]*?<\/v-sheet>/u)?.[0];
     expect(template).toBeTruthy();
     const compiled = compileTemplate({ source: template, filename: componentPath, id: "compact-connection" });

@@ -70,6 +70,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SourceEditor.js`
 - `src/composables/useVibe64SourceEditorFileSync.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue`

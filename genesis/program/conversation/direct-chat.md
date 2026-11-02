@@ -1422,6 +1422,9 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64AgentTerminalDisplay.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotChat.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue`
 - `src/components/studio/vibe64-session/Vibe64RoutingNotice.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`

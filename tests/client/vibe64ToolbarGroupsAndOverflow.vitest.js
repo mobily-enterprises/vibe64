@@ -36,7 +36,7 @@ describe("session header priority overflow", () => {
   });
 
   it("renders Save outside the overflowing actions and each action once per place", () => {
-    const view = read("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+    const view = read("src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue");
     const header = view.slice(view.indexOf('<header ref="sessionHeader"'), view.indexOf("</header>"));
     const menu = header.slice(header.indexOf("<v-menu"), header.indexOf("</v-menu>"));
     expect(header.indexOf('data-vibe64-guide="save"')).toBeLessThan(header.indexOf("studio-autopilot__header-actions"));
@@ -66,7 +66,7 @@ describe("session name strip room", () => {
   });
 
   it("measures the whole strip and leaves Save its state colour", () => {
-    const view = read("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+    const view = read("src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue");
     expect(view).toContain('vibe64SessionNameStripWidth(header.querySelector(".studio-ai-sessions__tabs")?.children');
     expect(view).not.toContain(".studio-autopilot__save-work {\n  border-radius: 8px;\n  color:");
     expect(view).toContain(".studio-autopilot__save-work:not(.text-error):not(.text-warning) {");

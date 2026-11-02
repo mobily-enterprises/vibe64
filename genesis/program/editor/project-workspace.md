@@ -6,6 +6,11 @@ conversation, application preview, files and engineering tools.
 ## Sources
 
 - Main: `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotChat.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
 - `src/components/studio/files/Vibe64ProjectFiles.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`

@@ -234,6 +234,10 @@ Changing the composer selection never rewrites historical attribution.
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotChat.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue`

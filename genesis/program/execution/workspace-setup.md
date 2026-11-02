@@ -27,6 +27,8 @@ contract transported by the project's Stack.
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64WorkspaceSetupActivity.js`
