@@ -65,7 +65,8 @@ function setupAccounts({
   project,
   terminals
 }) {
-  warnMissingOperatorClis(env);
+  // The runtime env carries no PATH or HOME; the tools are looked up where this process finds them.
+  warnMissingOperatorClis(process.env);
   const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
   const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
   const projectContext = getStudioProjectContext();
