@@ -141,7 +141,7 @@ function createVibe64TerminalsFeature({
      * @param {{ outputs: { terminals: TerminalsService } }} context
      */
     async boot({ env }, { outputs }) {
-      await prepareCodexAttachmentStorage({ env });
+      await prepareCodexAttachmentStorage({ env: terminalsProviderEnv(env, process.env) });
       await cleanupSchedules.get(outputs.terminals).runNow();
     },
     /**
