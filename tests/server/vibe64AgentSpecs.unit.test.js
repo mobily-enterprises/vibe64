@@ -139,7 +139,10 @@ test("the Deployment spec leaves production mode to the Serve step the project d
 });
 
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
-  const [request, ...responses] = fencedBlocks((await cli(["preview-identity-command"])).stdout, "json").map((block) => JSON.parse(block));
+  const spec = (await cli(["preview-identity-command"])).stdout;
+  assert.match(spec, /runManagedPreviewIdentityCommand\(\{ env: process\.env, protocol: "vibe64\.preview-identity\.command\.v1", localHostnames: \[/u,
+    "a JSKIT application passes its environment, since JSKIT reads none on its own");
+  const [request, ...responses] = fencedBlocks(spec, "json").map((block) => JSON.parse(block));
   assert.equal(responses.length, 2);
   assert.equal(request.subject.kind, "selector");
   const [accepted, rejected] = responses.map((response) => normalizePreviewIdentityCommandResponse(response, {
