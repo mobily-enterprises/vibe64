@@ -104,6 +104,8 @@ vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", 
 }));
 
 import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
+import Vibe64TemporaryAiTabs from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue";
+import Vibe64TemporaryAiRecoveryRow from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue";
 import Vibe64ComposerDelivery from "../../src/components/studio/vibe64-session/Vibe64ComposerDelivery.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
@@ -119,6 +121,8 @@ for (const [name, component] of [
   ...["AssistantConversationElement", "AssistantConversationStatus", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
   ["AssistantComposerSupport", AssistantComposerSupport],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
+  ["Vibe64TemporaryAiTabs", Vibe64TemporaryAiTabs],
+  ["Vibe64TemporaryAiRecoveryRow", Vibe64TemporaryAiRecoveryRow],
   ["Vibe64ComposerDelivery", Vibe64ComposerDelivery],
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
   ["Vibe64ConversationStatus", Vibe64ConversationStatus]
@@ -1157,10 +1161,8 @@ describe("Temporary AI recovery workspace accessibility", () => {
     expect(temporary.closeTask).not.toHaveBeenCalled();
     expect(temporary.tasks.value).toHaveLength(2);
     expect(temporary.activeTaskId.value).toBe("first");
-    const workspaceComponentSource = fs.readFileSync(
-      path.resolve("src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"),
-      "utf8"
-    );
+    const workspaceComponentSource = ["Vibe64TemporaryAiWorkspace", "Vibe64TemporaryAiTabs", "Vibe64TemporaryAiRecoveryRow"]
+      .map((name) => fs.readFileSync(path.resolve(`src/components/studio/vibe64-session/${name}.vue`), "utf8")).join("\n");
     expect(workspaceComponentSource).not.toContain("position: sticky");
     expect(mainChatButton.parent).not.toBe(currentTaskButton.parent.parent);
     app.unmount();
@@ -1171,6 +1173,7 @@ describe("temporary chat working indicator", () => {
   it("shows the assistant as working only from the server's turn report", () => {
     const component = fs.readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue", import.meta.url), "utf8");
     expect(component.match(/:working="[^"]*"/gu)).toEqual([':working="activeTask.nativeWorking"']);
-    expect(component).toContain('<span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />');
+    const tabs = fs.readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue", import.meta.url), "utf8");
+    expect(tabs).toContain('<span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />');
   });
 });

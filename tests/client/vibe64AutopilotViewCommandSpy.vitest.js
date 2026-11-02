@@ -28,6 +28,20 @@ const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe6
 const temporaryAiPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"
 );
+// The workspace view and the children and composables it is built from.
+const temporaryAiViewPaths = [
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue",
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue",
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue",
+  "src/composables/useVibe64TemporaryAiColleagueView.js",
+  "src/composables/useVibe64TemporaryAiNewTask.js",
+  "src/composables/useVibe64TemporaryAiRename.js",
+  "src/composables/useVibe64TemporaryAiStopAndClose.js",
+  "src/composables/useVibe64TemporaryAiTaskElements.js"
+].map((file) => path.resolve(file));
+const temporaryAiRecoveryRowPath = path.resolve(
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue"
+);
 const temporaryAiComposablePaths = [
   "src/composables/useVibe64TemporaryAi.js",
   "src/composables/useVibe64TemporaryAiMessages.js",
@@ -978,7 +992,8 @@ describe("Vibe64 direct session view", () => {
 
   it("keeps temporary AI separate, restorable, multi-task, and attachment-owned", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const temporaryAi = fs.readFileSync(temporaryAiPath, "utf8");
+    const temporaryAiWorkspace = fs.readFileSync(temporaryAiPath, "utf8");
+    const temporaryAi = temporaryAiViewPaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const temporaryAiComposable = temporaryAiComposablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const temporaryAiFixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
     const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
@@ -989,8 +1004,9 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain("<Vibe64TemporaryAiWorkspace");
     expect(temporaryAi).toContain("grid-row: 3 / -1");
     expect(temporaryAi).not.toContain("position: sticky");
-    expect(temporaryAi.indexOf("data-temporary-ai-check-update")).toBeLessThan(
-      temporaryAi.indexOf("<Vibe64EphemeralConversationMessages")
+    expect(fs.readFileSync(temporaryAiRecoveryRowPath, "utf8")).toContain("data-temporary-ai-check-update");
+    expect(temporaryAiWorkspace.indexOf("<Vibe64TemporaryAiRecoveryRow")).toBeLessThan(
+      temporaryAiWorkspace.indexOf("<Vibe64EphemeralConversationMessages")
     );
     expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
     // Switching sessions retains the temporary workspace; Main chat closes it.
