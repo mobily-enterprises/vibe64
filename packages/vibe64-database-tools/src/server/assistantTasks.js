@@ -89,7 +89,13 @@ function createDatabaseAssistantTasks({
     } catch {
       throw databaseError(
         `The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`,
-        "vibe64_database_assistant_receipt_invalid"
+        "vibe64_database_assistant_receipt_unreadable",
+        {},
+        {
+          params: {
+            artifact
+          }
+        }
       );
     }
     if (!helper) return;
@@ -98,7 +104,13 @@ function createDatabaseAssistantTasks({
         helper.scope.runtimeRoot !== path.join(root, "runtime")) {
       throw databaseError(
         `The saved database copilot receipt ${artifact} has invalid cleanup paths; it was left unchanged.`,
-        "vibe64_database_assistant_receipt_invalid"
+        "vibe64_database_assistant_receipt_invalid",
+        {},
+        {
+          params: {
+            artifact
+          }
+        }
       );
     }
     const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {

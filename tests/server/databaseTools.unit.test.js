@@ -1876,7 +1876,7 @@ test("session close tries every database copilot receipt and names each one that
     sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") } });
   await assert.rejects(service.closeAssistantsForSession("copilot-session"), (error) => {
     assert.equal(error.code, "vibe64_database_assistant_cleanup_failed");
-    assert.deepEqual(error.errors.map(({ code }) => code).sort(), ["vibe64_database_assistant_cleanup_failed", "vibe64_database_assistant_receipt_invalid"]);
+    assert.deepEqual(error.errors.map(({ code }) => code).sort(), ["vibe64_database_assistant_cleanup_failed", "vibe64_database_assistant_receipt_unreadable"]);
     assert.match(error.message, /The saved database copilot receipt database\/assistant-tasks\/a{20}\.json is unreadable; it was left unchanged\./u);
     assert.match(error.message, /The database copilot helper could not be closed: Connect Codex - DeepSeek in AI Accounts first\. Retry before asking again\./u);
     return true;

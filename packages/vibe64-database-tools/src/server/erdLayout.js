@@ -83,7 +83,7 @@ export function moveErdLayoutTables(schema, layout, input = {}) {
     ) {
       throw vibe64Error(
         "Each move needs a distinct, positioned table from the current schema and finite x/y coordinates. Open the ERD first if it has no saved positions.",
-        "vibe64_database_erd_moves_invalid"
+        "vibe64_database_erd_move_entry_invalid"
       );
     }
     if (current.pinned && move.pinned !== false && (current.x !== move.x || current.y !== move.y)) {

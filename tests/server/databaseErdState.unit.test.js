@@ -40,7 +40,7 @@ test("ERD normalization bounds stored fields and uses keys mode for an empty wor
   assert.equal(saved.columnMode, "keys");
   const longGroup = `erd-auto:${"schema_name.".repeat(10)}table`;
   assert.equal((await saveErdLayout(store, "session", { activeGroup: longGroup })).activeGroup, longGroup);
-  await assert.rejects(saveErdLayout(store, "session", { nodes: Array.from({ length: 2001 }, () => ({ table: "t" })) }), { code: "vibe64_database_erd_layout_too_large" });
+  await assert.rejects(saveErdLayout(store, "session", { nodes: Array.from({ length: 2001 }, () => ({ table: "t" })) }), { code: "vibe64_database_erd_layout_too_many_nodes" });
 });
 
 test("reading the ERD layout only reads the shared artifact and never writes", async () => {
@@ -123,7 +123,7 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   const invalid = await service.moveErdTables({ sessionId: "session", changes: {
     revision: moved.revision, moves: [{ table: "public.addresses", x: 100, y: 100 }, { table: "other.missing", x: 0, y: 0 }]
   } });
-  assert.equal(invalid.code, "vibe64_database_erd_moves_invalid");
+  assert.equal(invalid.code, "vibe64_database_erd_move_entry_invalid");
   assert.deepEqual(await readErdLayout(store, "session"), current);
   assert.deepEqual((await service.readErd({ sessionId: "session", vibe64User: { role: "member" } })).connections, moved.connections);
   const undo = await service.moveErdTables({ sessionId: "session", changes: { revision: moved.revision, moves: moved.previousMoves } });
