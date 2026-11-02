@@ -51,6 +51,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {ReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {ServiceState} dependencies.state
  */
 function createServiceAgentProviders({
@@ -70,6 +71,7 @@ function createServiceAgentProviders({
   providerUsage,
   publishAgentSessionChanged,
   readClaudeAccountStatus,
+  runtimeProfile,
   state
 }) {
   const {
@@ -125,7 +127,8 @@ function createServiceAgentProviders({
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation,
     continueGoalAfterAccountChange,
-    runNativeDetachedConversation
+    runNativeDetachedConversation,
+    runtimeProfile
   });
   // OpenCode's registration reaches the session agent manager that routes to it.
   let sessionAgent;

@@ -84,6 +84,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env,
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
  */
 function createService({
@@ -102,6 +103,7 @@ function createService({
   publishProjectRuntimeChanged,
   publishSessionChanged,
   runCodexGitGatewayCommand,
+  runtimeProfile,
   savedEnvValueLinks
 }) {
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
@@ -217,6 +219,7 @@ function createService({
     providerUsage,
     publishAgentSessionChanged,
     readClaudeAccountStatus,
+    runtimeProfile,
     state
   });
   const sessionPromptHints = createSessionPromptHintsService({

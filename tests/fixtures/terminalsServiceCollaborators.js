@@ -49,6 +49,7 @@ function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServ
     hostEnv: process.env,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
+    runtimeProfile: null,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     ...dependencies,
     // A test helper that has no catalogue of its own passes null.

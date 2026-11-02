@@ -84,6 +84,7 @@ const Vibe64TerminalsFeature = defineFeature({
     assertSavedEnvValueLinks(savedEnvValueLinks);
     // Session debug logging, which the sessions and their agent work share, follows the server's env.
     configureVibe64SessionDebugLog(env);
+    const projectContext = getStudioProjectContext();
     const terminals = createService({
       actions: actionCatalogue,
       env: terminalsProviderEnv(env, process.env),
@@ -94,11 +95,12 @@ const Vibe64TerminalsFeature = defineFeature({
       project,
       publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
       publishSessionChanged: createTerminalSessionChangedPublishers(events),
+      runtimeProfile: projectContext.runtimeProfile,
       savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS
     });
     registerRoutes(http, {
       fastify,
-      projectContext: getStudioProjectContext(),
+      projectContext,
       terminals
     });
     // The idle-project sweep's timer runs from setup, so shutdown stops it even when boot never ran.

@@ -22,9 +22,6 @@ import {
   createCodexHelperThreadLedger,
   codexHelperThreadLedgerOwner
 } from "./codexHelperThreadLedger.js";
-import {
-  getStudioProjectContext
-} from "@local/vibe64-core/server/studioProjectContext";
 import { runtimeProfileIsLocal } from "@local/vibe64-core/server/studioRoots";
 import {
   createPersonalAiProfileStore
@@ -177,6 +174,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {ConversationRuntime["runNativeDetachedConversation"]} dependencies.runNativeDetachedConversation
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  */
 function createCodexSessionRegistration({
   connectionStatus,
@@ -202,7 +200,8 @@ function createCodexSessionRegistration({
   continueGoalAfterAccountChange,
   runNativeDetachedConversation,
   publishSessionChanged,
-  runCommand = runVibe64Command
+  runCommand = runVibe64Command,
+  runtimeProfile
 }) {
   const initialCodexRuntime = codexRuntimeContext({
     env,
@@ -222,7 +221,7 @@ function createCodexSessionRegistration({
   const {
     codexAppServerProviderKeyFields
   } = codexRuntimeHost;
-  const localRuntime = runtimeProfileIsLocal(getStudioProjectContext().runtimeProfile);
+  const localRuntime = runtimeProfileIsLocal(runtimeProfile);
   // Only a local run with a system root has a standalone profile.
   const actorProfile = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
     ? {
