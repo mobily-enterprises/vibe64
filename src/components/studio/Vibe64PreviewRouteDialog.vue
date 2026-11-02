@@ -63,10 +63,11 @@
 const props = defineProps({
   surface: {
     required: true,
-    type: /** @type {import("vue").PropType<ReturnType<typeof import("@/composables/useVibe64OutputControlsSurface.js").useVibe64OutputControlsSurface>>} */ (Object)
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64OutputControlsSurface.js").Vibe64OutputControlsSurface>} */ (Object)
   }
 });
 
+/** @type {import("@/composables/useVibe64OutputControlsSurface.js").Vibe64OutputControlsSurface} */
 const {
   previewRouteDialogError,
   previewRouteDialogParams,

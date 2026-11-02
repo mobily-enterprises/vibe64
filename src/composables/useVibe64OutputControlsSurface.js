@@ -297,6 +297,11 @@ function useVibe64OutputControlsSurface(props, {
   };
 }
 
+/**
+ * What each part of the output controls receives as `surface`.
+ * @typedef {ReturnType<typeof useVibe64OutputControlsSurface>} Vibe64OutputControlsSurface
+ */
+
 export {
   useVibe64OutputControlsSurface
 };
