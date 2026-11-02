@@ -12,6 +12,7 @@ import {
 import { registerRoutes } from "./registerRoutes.js";
 import { terminalsProviderEnv } from "./terminalsEnv.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   NO_PRODUCTION_ENVIRONMENT,
   TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
@@ -81,6 +82,8 @@ const Vibe64TerminalsFeature = defineFeature({
   }, { actionCatalogue }) {
     assertProductionEnvironmentProvider(productionEnvironmentProvider);
     assertSavedEnvValueLinks(savedEnvValueLinks);
+    // Session debug logging, which the sessions and their agent work share, follows the server's env.
+    configureVibe64SessionDebugLog(env);
     const terminals = createService({
       actions: actionCatalogue,
       env: terminalsProviderEnv(env, process.env),
