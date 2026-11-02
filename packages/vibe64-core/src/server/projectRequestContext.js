@@ -78,8 +78,7 @@ async function resolveProjectRequestContext({
     await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
     await assertTeamAiAllowsProject({ actor: vibe64User });
   };
-  // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
-  const practice = projectContext.currentPracticeProjectScope?.();
+  const practice = projectContext.currentPracticeProjectScope();
   if (practice) {
     if (slug !== practice.slug) {
       throw Object.assign(new Error("Practice access belongs to the exact saved project."), { code: "vibe64_practice_scope_mismatch" });

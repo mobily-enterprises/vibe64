@@ -113,8 +113,7 @@ function createProjectArchiveService({
    */
   async function projectNamespace(slug, options = {}) {
     const { archiveRoot = defaultArchiveRoot } = options;
-    // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
-    const scope = projectContext.currentPracticeProjectScope?.() || null;
+    const scope = projectContext.currentPracticeProjectScope();
     if (scope?.slug === slug) {
       const learningSpaceRoot = projectContext.learningSpaceRoot ? path.resolve(projectContext.learningSpaceRoot) : "";
       const projectContextRoot = path.resolve(scope.targetRoot);

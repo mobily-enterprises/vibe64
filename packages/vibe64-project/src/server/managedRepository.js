@@ -34,8 +34,7 @@ function createManagedProjectRepositoryService({
     const { initializeProject } = options;
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(input?.name || "New Project"));
-    // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
-    const scope = projectContext.currentPracticeProjectScope?.();
+    const scope = projectContext.currentPracticeProjectScope();
     const projectContextRoot = scope
       ? (await projectContext.readWorkspaceProjectState({ slug })).projectContextRoot
       : resolveProjectContextRoot({
