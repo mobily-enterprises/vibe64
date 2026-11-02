@@ -63,6 +63,13 @@ async function source(relativePath) {
   return readFile(new URL(relativePath, ROOT), "utf8");
 }
 
+async function repositoryComposableSource() {
+  return (await Promise.all([
+    source("src/composables/useVibe64RepositoryWorkspace.js"),
+    source("src/composables/useVibe64RepositoryHistory.js")
+  ])).join("\n");
+}
+
 function passthroughComponent(element) {
   return Vue.defineComponent({
     inheritAttrs: false,
@@ -643,7 +650,7 @@ describe("Vibe64 Repository workspace", () => {
   it("uses Fix it with AI for merge repair without restricting native Save and Update", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("dashboard.value.assistantFixAllowed === false");
@@ -670,7 +677,7 @@ describe("Vibe64 Repository workspace", () => {
   it("states the exact saved update count instead of relying on an enabled action", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("repositoryUpdateTitle");
@@ -698,7 +705,7 @@ describe("Vibe64 Repository workspace", () => {
   it("renders saved versions as an accessible Git log and opens details in a full-screen dialog", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("Saved versions");
@@ -734,7 +741,7 @@ describe("Vibe64 Repository workspace", () => {
   it("uses one file-browser implementation for current and historical changes", async () => {
     const [repositoryWorkspace, repositoryComposable, fileBrowser] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js"),
+      repositoryComposableSource(),
       source("src/components/studio/repository/Vibe64RepositoryFileBrowser.vue")
     ]);
 
@@ -747,7 +754,7 @@ describe("Vibe64 Repository workspace", () => {
   it("does not describe a clean but outdated session as matching the saved project", async () => {
     const [repositoryWorkspace, repositoryComposable, autopilotView, runtimeHost] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js"),
+      repositoryComposableSource(),
       source("src/composables/useVibe64SessionToolPane.js"),
       source("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue")
     ]);
