@@ -616,6 +616,13 @@ function useVibe64AutopilotView(props, emit, {
   };
 }
 
+/**
+ * The `view` each part of Vibe64AutopilotView.vue receives: this composable's
+ * state and actions, with the chat-wide members the component adds where it
+ * builds the bag (its template refs, assistant access and own actions).
+ * @typedef {ReturnType<typeof useVibe64AutopilotView> & Record<string, any>} Vibe64AutopilotViewParts
+ */
+
 export {
   emptyConversationWelcomeText,
   agentConnectionThinkingLabel,
