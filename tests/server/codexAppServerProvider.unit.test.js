@@ -933,6 +933,7 @@ test("separate Codex session providers await one startup beyond the runtime lock
     const runCommand = codexAppServerCommandRunner(runtimeDir, calls);
     const options = {
       authStateSignature: "test-auth-state-signature",
+      env: process.env,
       async commandRunner(request) {
         entered.resolve();
         await release.promise;
@@ -972,6 +973,7 @@ test("shared startup waiters still validate their own runtime configuration", as
     const runCommand = codexAppServerCommandRunner(runtimeDir, calls);
     const options = {
       authStateSignature: "test-auth-state-signature",
+      env: process.env,
       async commandRunner(request) {
         entered.resolve();
         await release.promise;
@@ -1630,6 +1632,7 @@ for (const replaced of [false, true]) {
       }
       const stops = [];
       const provider = createCodexAppServerAgentProvider({
+        env: process.env,
         runtimeDir,
         async stopExecution(executionId) {
           stops.push(executionId);
@@ -1661,6 +1664,7 @@ for (const replaced of [false, true]) {
 test("Codex missing runtime metadata is not exit proof without retained process ownership", async () => {
   await withTemporaryDirectory(async (baseDir) => {
     const provider = createCodexAppServerAgentProvider({
+      env: process.env,
       runtimeDir: path.join(baseDir, "codex-app-server-unknown"),
       async stopExecution() {
         assert.fail("Missing process ownership must not signal an execution.");
@@ -2354,6 +2358,7 @@ test("codex provider includes namespace and runtime identity in the runtime dire
 test("codex provider starts distinct app-server processes for distinct runtime instances", async () => {
   await withTemporaryDirectory(async (runtimeRoot) => {
     const env = {
+      [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(runtimeRoot, "attachments"),
       VIBE64_AGENT_RUNTIME_DIR: runtimeRoot
     };
     const targetRoot = path.join(runtimeRoot, "target");
@@ -2502,6 +2507,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
     });
     const commandCalls = [];
     const provider = createCodexAppServerAgentProvider({
+      env: process.env,
       runtimeDir,
       commandRunner(request) {
         commandCalls.push(request);
@@ -2582,6 +2588,7 @@ test("codex helper provider starts from a private empty home and strips project 
     const runtime = await ensureCodexAppServerRuntime({
       authStateSignature: "helper-auth-state",
       env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(runtimeDir, "attachments"),
         DB_PASSWORD: "host-db-secret",
         LANG: "en_AU.UTF-8",
         OPENAI_API_KEY: "host-api-secret",
@@ -2987,6 +2994,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
     });
     const commandCalls = [];
     const provider = createCodexAppServerAgentProvider({
+      env: process.env,
       readyTimeoutMs: 2000,
       requestTimeoutMs: 1000,
       runtimeDir,
@@ -3696,6 +3704,7 @@ test("codex helper provider authoritatively inventories active and archived thre
     nextCursor: null
   }];
   const provider = createCodexAppServerAgentProvider({
+    env: process.env,
     accountIdentitySignature,
     executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
@@ -3846,6 +3855,7 @@ test("codex helper thread inventory fails closed on a repeated cursor or an unus
   const runtimeDir = "/tmp/vibe64-helper-thread-inventory-invalid";
   const accountIdentitySignature = `sha256:${"c".repeat(64)}`;
   const provider = createCodexAppServerAgentProvider({
+    env: process.env,
     accountIdentitySignature,
     executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
@@ -4153,6 +4163,7 @@ test("codex helper provider retires its runtime when in-memory account activatio
         toolHomeSource
       });
       const provider = createCodexAppServerAgentProvider({
+        env: process.env,
         authStateSignature: "test-auth-state",
         executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         requestTimeoutMs: 1000,
@@ -4305,6 +4316,7 @@ test("codex helper provider injects API-key auth without persisting or exposing 
       toolHomeSource
     });
     const provider = createCodexAppServerAgentProvider({
+      env: process.env,
       authStateSignature: "test-auth-state",
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       requestTimeoutMs: 1000,

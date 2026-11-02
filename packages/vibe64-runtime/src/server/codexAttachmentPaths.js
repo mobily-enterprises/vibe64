@@ -1,6 +1,5 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
 
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 
@@ -16,15 +15,14 @@ function configuredRoot(env = {}) {
  * Live session state: each session's agent command helpers, their runs and
  * pending uploads. Agents keep these paths for their whole lifetime, so the
  * root is daemon state, never temporary space that a host may age out. The
- * server sets it below its system root at startup; a caller's environment may
- * name another root, and a process without a server uses the local state root.
+ * server names it below its system root at startup and passes it in every
+ * caller's env; an env that names none uses the local state root.
  * @param {object} options
- * @param {RuntimeEnv} options.env the caller's env, read before this process's own
+ * @param {RuntimeEnv} options.env the env that names the attachment root
  */
 function codexAttachmentHostRoot({ env }) {
   return path.resolve(
     configuredRoot(env) ||
-    configuredRoot(process.env) ||
     path.join(resolveDefaultLocalEditorSystemRoot(), "attachments")
   );
 }
@@ -43,7 +41,7 @@ function configureCodexAttachmentHostRoot(systemRoot, env) {
 
 /**
  * @param {object} options
- * @param {RuntimeEnv} options.env the caller's env, read before this process's own
+ * @param {RuntimeEnv} options.env the env that names the attachment root
  */
 async function prepareCodexAttachmentRoot({ env }) {
   await mkdir(codexAttachmentHostRoot({ env }), {

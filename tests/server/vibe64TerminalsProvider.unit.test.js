@@ -109,6 +109,7 @@ test("terminals provider overlays only declared live host values", () => {
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
     VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
     VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
+    VIBE64_CODEX_ATTACHMENTS_ROOT: "/srv/state/vibe64/attachments",
     SECRET_VALUE: "live-secret"
   }), {
     [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
@@ -118,6 +119,7 @@ test("terminals provider overlays only declared live host values", () => {
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
     VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
     VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
+    VIBE64_CODEX_ATTACHMENTS_ROOT: "/srv/state/vibe64/attachments",
     KEEP_ME: "runtime",
     SECRET_VALUE: "runtime-secret"
   });

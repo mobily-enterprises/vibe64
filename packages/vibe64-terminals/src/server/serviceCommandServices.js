@@ -31,6 +31,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * terminal the Preview command launches.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
+ * @param {NodeJS.ProcessEnv} dependencies.hostEnv this process's live env, under the configured env
  * @param {ServiceAssistant["inspectAssistantAccess"]} dependencies.inspectAssistantAccess
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider
@@ -49,6 +50,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  */
 function createServiceCommandServices({
   env,
+  hostEnv,
   inspectAssistantAccess,
   logger,
   productionEnvironmentProvider,
@@ -76,6 +78,7 @@ function createServiceCommandServices({
   const outputTarget = createOutputTargetTerminalController({
     ensureProjectServices: projectServices.ensure,
     env,
+    hostEnv,
     ensureWorkspacePrepared: async (sessionId, context = {}) => {
       if (await workspaceSetup.isPrepared(context)) {
         return { completion: null, state: context.session.workspaceSetup };

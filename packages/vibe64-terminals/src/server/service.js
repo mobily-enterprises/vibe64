@@ -167,6 +167,7 @@ function createService({
   });
   const commands = createServiceCommandServices({
     env,
+    hostEnv,
     inspectAssistantAccess: (sessionId, options) => assistant.inspectAssistantAccess(sessionId, options),
     logger,
     productionEnvironmentProvider,

@@ -9,11 +9,12 @@ import { createSharedOperations } from "@local/vibe64-core/server/keyedOperation
  * owns each session's Preview.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
+ * @param {NodeJS.ProcessEnv} dependencies.hostEnv this process's live env, under the configured env
  */
-function createOutputTargetTerminalState({ env }) {
+function createOutputTargetTerminalState({ env, hostEnv }) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry({
     env,
-    hostEnv: process.env
+    hostEnv
   });
   const launchReadyWrites = createSharedOperations();
   const previewTestRuns = new Map();

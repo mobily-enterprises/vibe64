@@ -23,13 +23,21 @@ import {
   prepareCodexAppServerHelperTurn
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
+/**
+ * A test's runtime runs in this process's env unless it names its own, as the server's runtimes run in the server's;
+ * the test guard names the attachment root there.
+ */
+function inTestProcessEnv(options) {
+  return { env: process.env, ...options };
+}
+
 async function ensureCodexAppServerRuntime(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
+  const { runtime, parameters } = codexAppServerRuntimeHost(inTestProcessEnv(options));
   return runtime.ensure({ ...parameters, runtimeDir: options.runtimeDir || codexAppServerRuntimeDir(options) });
 }
 
 async function startCodexAppServerProcess(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
+  const { runtime, parameters } = codexAppServerRuntimeHost(inTestProcessEnv(options));
   return runtime.start({
     ...parameters,
     runtimeDir: options.runtimeDir === undefined ? codexAppServerRuntimeDir({
@@ -42,12 +50,12 @@ async function startCodexAppServerProcess(options = {}) {
 }
 
 async function stopCodexAppServerRuntime(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
+  const { runtime, parameters } = codexAppServerRuntimeHost(inTestProcessEnv(options));
   return runtime.stop(parameters);
 }
 
 async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
+  const { runtime, parameters } = codexAppServerRuntimeHost(inTestProcessEnv(options));
   return runtime.isLive(metadata, parameters);
 }
 

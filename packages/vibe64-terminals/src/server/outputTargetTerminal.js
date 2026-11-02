@@ -26,6 +26,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
  * @param {RuntimeEnv} dependencies.env
+ * @param {NodeJS.ProcessEnv} dependencies.hostEnv this process's live env, under the configured env
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -40,6 +41,7 @@ function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
   ensureProjectServices,
   env,
+  hostEnv,
   project,
   publishSessionChanged,
   runCommand = runVibe64Command,
@@ -50,7 +52,7 @@ function createOutputTargetTerminalController({
   setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure
 }) {
-  const state = createOutputTargetTerminalState({ env });
+  const state = createOutputTargetTerminalState({ env, hostEnv });
   const launchCoordination = createOutputTargetLaunchCoordination({
     state,
     env,
