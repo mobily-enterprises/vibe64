@@ -330,6 +330,8 @@
 </template>
 
 <script setup>
+// Project settings: connected projects, the engineering approach, the development database, AI behaviour,
+// prompt suggestions and the Git workflow, each saved on its own.
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -345,21 +347,16 @@ import {
 import {
   sessionListRealtimeShouldRefresh
 } from "@/composables/useVibe64SessionData.js";
+import { useVibe64CollaborationSettings } from "@/composables/useVibe64CollaborationSettings.js";
+import { useVibe64DevelopmentDatabaseSettings } from "@/composables/useVibe64DevelopmentDatabaseSettings.js";
+import { useVibe64EngineeringSettings } from "@/composables/useVibe64EngineeringSettings.js";
 import {
   requestVibe64AccountConnectionsDialog
 } from "@/lib/vibe64AccountConnectionsDialog.js";
 import {
-  COLLABORATION_ENDPOINT,
-  DEVELOPMENT_DATABASE_ENDPOINT,
-  ENGINEERING_ENDPOINT,
   PROMPT_HINTS_SETTINGS_ENDPOINT,
   PROJECT_SETTINGS_ENDPOINT,
-  VIBE64_COLLABORATION_API_SUFFIX,
-  VIBE64_DEVELOPMENT_DATABASE_API_SUFFIX,
-  VIBE64_ENGINEERING_API_SUFFIX,
   VIBE64_PROMPT_HINTS_SETTINGS_API_SUFFIX,
-  VIBE64_PROJECT_CHANGED_EVENT,
-  engineeringSettingsQueryKey,
   projectSettingsQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -372,15 +369,9 @@ import {
 const projectSlug = useVibe64ProjectSlug();
 const route = useRoute();
 const router = useRouter();
-const scopeDraft = ref("session");
-const sharedSessionsDraft = ref(false);
-const collaborationDraft = ref(normalizeCollaborationDraft());
-const savedCollaboration = ref(normalizeCollaborationDraft());
 const promptHintsDraft = ref(true);
 const savedPromptHints = ref(true);
 const requirePullRequest = ref(false);
-const engineeringProfileDraft = ref("");
-const savedEngineeringProfile = ref("");
 const routeSessionId = computed(() => String(route.query.sessionId || "").trim());
 
 const resource = useEndpointResource({
@@ -399,69 +390,35 @@ const resource = useEndpointResource({
   requestRecoveryLabel: "Project settings"
 });
 
-const engineeringResource = useEndpointResource({
-  fallbackLoadError: "Engineering approach could not load.",
-  path: computed(() => scopedDevelopmentApiUrl(ENGINEERING_ENDPOINT, projectSlug.value)),
-  queryKey: computed(() => engineeringSettingsQueryKey(
-    VIBE64_SURFACE_ID,
-    ROUTE_VISIBILITY_PUBLIC,
-    projectSlug.value,
-    routeSessionId.value
-  )),
-  readQuery: computed(() => (
-    routeSessionId.value ? { sessionId: routeSessionId.value } : {}
-  )),
-  realtime: {
-    event: VIBE64_PROJECT_CHANGED_EVENT,
-    matches: () => !engineeringSaveCommand.isRunning
-  },
-  refreshOnPull: true,
-  requestRecoveryLabel: "Engineering approach"
-});
+const {
+  databaseChanged,
+  databaseSaveAllowed,
+  databaseSaving,
+  disabledReason,
+  managed,
+  projectScopeAvailable,
+  projectScopeReason,
+  saveDatabase,
+  scopeDraft,
+  sessionScopeAvailable,
+  sessionScopeReason,
+  sharedSessionsDraft
+} = useVibe64DevelopmentDatabaseSettings({ resource });
 
-const databaseSaveCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_DEVELOPMENT_DATABASE_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "PUT",
-    path: DEVELOPMENT_DATABASE_ENDPOINT
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    scope: context.scope,
-    allowSharedDatabaseSessions: context.allowSharedDatabaseSessions
-  }),
-  fallbackRunError: "Development database choice could not be saved.",
-  messages: {
-    error: "Development database choice could not be saved.",
-    success: "Development database choice saved."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.development-database.scope.save",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PUT"
-});
-
-const collaborationSaveCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_COLLABORATION_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "PUT",
-    path: COLLABORATION_ENDPOINT
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    ...context.collaboration,
-    ...(context.sessionId ? { sessionId: context.sessionId } : {})
-  }),
-  fallbackRunError: "Collaboration guidance could not be saved.",
-  messages: {
-    error: "Collaboration guidance could not be saved.",
-    success: "Collaboration guidance saved."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.collaboration.save",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PUT"
-});
+const {
+  collaborationAvailable,
+  collaborationCanEdit,
+  collaborationChanged,
+  collaborationDraft,
+  collaborationSaving,
+  collaborationSourceLabel,
+  collaborationUnavailableReason,
+  experienceOptions,
+  explanationStyleOptions,
+  responseLengthOptions,
+  saveCollaboration,
+  toneOptions
+} = useVibe64CollaborationSettings({ projectSlug, resource, routeSessionId });
 
 const promptHintsSaveCommand = useCommand({
   access: "never",
@@ -512,80 +469,22 @@ async function saveRepositoryWorkflow() {
   await resource.reload();
 }
 
-const engineeringSaveCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_ENGINEERING_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "PUT",
-    path: ENGINEERING_ENDPOINT
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    profile: context.profile,
-    ...(context.sessionId ? { sessionId: context.sessionId } : {})
-  }),
-  fallbackRunError: "Engineering approach could not be saved.",
-  messages: {
-    error: "Engineering approach could not be saved.",
-    success: "Engineering approach saved."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.engineering.profile.save",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PUT"
-});
+const {
+  engineeringAvailable,
+  engineeringChanged,
+  engineeringProfileDraft,
+  engineeringProfiles,
+  engineeringResource,
+  engineeringSaving,
+  engineeringSourceLabel,
+  engineeringStatusText,
+  engineeringUnavailableReason,
+  saveEngineeringProfile,
+  selectedEngineeringDescription
+} = useVibe64EngineeringSettings({ projectSlug, route, router, routeSessionId });
 
-const developmentDatabase = computed(() => resource.data.value?.developmentDatabase || {});
-const managed = computed(() => developmentDatabase.value.managed === true);
-const canChange = computed(() => developmentDatabase.value.canChange === true);
-const disabledReason = computed(() => String(developmentDatabase.value.disabledReason || ""));
-const sessionScopeOption = computed(() => developmentDatabase.value.options?.session || {});
-const projectScopeOption = computed(() => developmentDatabase.value.options?.project || {});
-const sessionScopeAvailable = computed(() => sessionScopeOption.value.available === true);
-const projectScopeAvailable = computed(() => projectScopeOption.value.available === true);
-const sessionScopeReason = computed(() => String(sessionScopeOption.value.disabledReason || ""));
-const projectScopeReason = computed(() => String(projectScopeOption.value.disabledReason || ""));
-const scopeDraftAvailable = computed(() => (
-  scopeDraft.value === "project" ? projectScopeAvailable.value : sessionScopeAvailable.value
-));
-const collaboration = computed(() => resource.data.value?.collaboration || {});
-const collaborationAvailable = computed(() => collaboration.value.available === true);
-const collaborationCanEdit = computed(() => collaboration.value.canEdit === true);
-const collaborationSourceLabel = computed(() => (
-  collaboration.value.source?.rootKind === "session-source"
-    ? "This session's project source"
-    : "This project source"
-));
-const collaborationUnavailableReason = computed(() => String(
-  collaboration.value.unavailableReason ||
-  "Collaboration guidance is not available for this source."
-));
-const toneOptions = computed(() => collaborationOptions("tone"));
-const responseLengthOptions = computed(() => collaborationOptions("responseLength"));
-const experienceOptions = computed(() => collaborationOptions("experience"));
-const explanationStyleOptions = computed(() => collaborationOptions("explanationStyle"));
 const promptHints = computed(() => resource.data.value?.promptHints || {});
 const promptHintsCanEdit = computed(() => promptHints.value.canEdit === true);
-const engineering = computed(() => engineeringResource.data.value?.engineering || {});
-const engineeringAvailable = computed(() => engineering.value.available === true);
-const engineeringProfiles = computed(() => (
-  Array.isArray(engineering.value.profiles) ? engineering.value.profiles : []
-));
-const engineeringSourceLabel = computed(() => (
-  engineering.value.source?.rootKind === "session-source"
-    ? "This session's project source"
-    : "This project source"
-));
-const engineeringUnavailableReason = computed(() => String(
-  engineering.value.unavailableReason || "An engineering profile is not available for this source."
-));
-const selectedEngineeringDescription = computed(() => String(
-  engineeringProfiles.value.find((profile) => profile.id === engineeringProfileDraft.value)?.description || ""
-));
-const engineeringStatusText = computed(() => (
-  engineering.value.status === "defaulted"
-    ? "The focused default is active. Saving records the choice in genesis/engineering.md."
-    : "This choice is stored in genesis/engineering.md and follows the source."
-));
 const loading = computed(() => (
   resource.isLoading.value === true || engineeringResource.isLoading.value === true
 ));
@@ -595,53 +494,8 @@ const initialLoading = computed(() => loading.value && (
 const loadError = computed(() => String(
   resource.loadError.value || engineeringResource.loadError.value || ""
 ));
-const databaseSaving = computed(() => databaseSaveCommand.isRunning === true);
-const collaborationSaving = ref(false);
 const promptHintsSaving = computed(() => promptHintsSaveCommand.isRunning === true);
-const engineeringSaving = ref(false);
-const databaseChanged = computed(() => (
-  managed.value && (scopeDraft.value !== developmentDatabase.value.scope ||
-    sharedSessionsDraft.value !== (developmentDatabase.value.allowSharedDatabaseSessions === true))
-));
-const databaseSaveAllowed = computed(() => scopeDraft.value === developmentDatabase.value.scope ||
-  canChange.value && scopeDraftAvailable.value);
-const collaborationChanged = computed(() => (
-  JSON.stringify(collaborationDraft.value) !== JSON.stringify(savedCollaboration.value)
-));
 const promptHintsChanged = computed(() => promptHintsDraft.value !== savedPromptHints.value);
-const engineeringChanged = computed(() => (
-  engineeringAvailable.value &&
-  Boolean(engineeringProfileDraft.value) &&
-  engineeringProfileDraft.value !== savedEngineeringProfile.value
-));
-watch(() => developmentDatabase.value.allowSharedDatabaseSessions, value => {
-  sharedSessionsDraft.value = value === true;
-}, { immediate: true });
-watch(() => developmentDatabase.value.scope, (scope) => {
-  if (["project", "session"].includes(scope)) {
-    scopeDraft.value = scope;
-  }
-}, {
-  immediate: true
-});
-
-let collaborationSource = null;
-watch([projectSlug, collaboration], ([slug, value]) => {
-  // A query-key transition can temporarily clear the same source's result.
-  if (!value.source) return;
-  const sourceChanged = !collaborationSource ||
-    collaborationSource.projectSlug !== slug ||
-    collaborationSource.rootKind !== value.source.rootKind ||
-    collaborationSource.sessionId !== value.source.sessionId;
-  const next = normalizeCollaborationDraft(value);
-  if (sourceChanged || !collaborationChanged.value) {
-    collaborationDraft.value = next;
-  }
-  savedCollaboration.value = { ...next };
-  collaborationSource = { projectSlug: slug, ...value.source };
-}, {
-  immediate: true
-});
 
 watch(() => promptHints.value.enabled, (value) => {
   const enabled = value !== false;
@@ -649,33 +503,6 @@ watch(() => promptHints.value.enabled, (value) => {
     promptHintsDraft.value = enabled;
   }
   savedPromptHints.value = enabled;
-}, {
-  immediate: true
-});
-
-let engineeringSource = null;
-watch([projectSlug, engineering], ([slug, value]) => {
-  // A query-key transition can temporarily clear the same source's result.
-  if (!value.source) return;
-  const sourceChanged = !engineeringSource ||
-    engineeringSource.projectSlug !== slug ||
-    engineeringSource.rootKind !== value.source.rootKind ||
-    engineeringSource.sessionId !== value.source.sessionId;
-  const profile = String(value.profile?.id || "").trim();
-  if (sourceChanged || engineeringProfileDraft.value === savedEngineeringProfile.value) {
-    engineeringProfileDraft.value = profile;
-  }
-  savedEngineeringProfile.value = profile;
-  engineeringSource = { projectSlug: slug, ...value.source };
-  const sourceSessionId = String(value.source?.sessionId || "").trim();
-  if (!routeSessionId.value && sourceSessionId) {
-    void router.replace({
-      query: {
-        ...route.query,
-        sessionId: sourceSessionId
-      }
-    });
-  }
 }, {
   immediate: true
 });
@@ -696,66 +523,6 @@ async function refresh() {
   ]);
 }
 
-function collaborationOptions(field = "") {
-  const choices = collaboration.value.choices?.[field];
-  return (Array.isArray(choices) ? choices : []).flatMap((choice) => {
-    const value = String(choice?.id || "").trim();
-    const label = String(choice?.name || "").trim();
-    return value && label ? [{ label, value }] : [];
-  });
-}
-
-function normalizeCollaborationDraft(value = {}) {
-  return {
-    tone: String(value?.tone || ""),
-    responseLength: String(value?.responseLength || ""),
-    experience: String(value?.experience || ""),
-    explanationStyle: String(value?.explanationStyle || ""),
-    requirements: String(value?.requirements || "")
-  };
-}
-
-async function saveDatabase() {
-  if (
-    !databaseChanged.value ||
-    !databaseSaveAllowed.value ||
-    databaseSaving.value
-  ) {
-    return;
-  }
-  await databaseSaveCommand.run({
-    scope: scopeDraft.value,
-    allowSharedDatabaseSessions: sharedSessionsDraft.value
-  });
-  await resource.reload();
-}
-
-async function saveCollaboration() {
-  if (
-    !collaborationChanged.value ||
-    !collaborationAvailable.value ||
-    !collaborationCanEdit.value ||
-    collaborationSaving.value
-  ) {
-    return;
-  }
-  collaborationSaving.value = true;
-  try {
-    try {
-      await collaborationSaveCommand.run({
-        collaboration: normalizeCollaborationDraft(collaborationDraft.value),
-        sessionId: routeSessionId.value || String(collaboration.value.source?.sessionId || "").trim()
-      });
-    } catch {
-      // The command already presents the failure through shared action feedback.
-      return;
-    }
-    await resource.reload();
-  } finally {
-    collaborationSaving.value = false;
-  }
-}
-
 async function savePromptHints() {
   if (!promptHintsChanged.value || !promptHintsCanEdit.value || promptHintsSaving.value) {
     return;
@@ -764,27 +531,6 @@ async function savePromptHints() {
     promptHints: promptHintsDraft.value
   });
   await resource.reload();
-}
-
-async function saveEngineeringProfile() {
-  if (!engineeringChanged.value || engineeringSaving.value) {
-    return;
-  }
-  engineeringSaving.value = true;
-  try {
-    await engineeringSaveCommand.run({
-      profile: engineeringProfileDraft.value,
-      sessionId: routeSessionId.value || String(engineering.value.source?.sessionId || "").trim()
-    });
-  } catch {
-    // The command already presents the failure through shared action feedback.
-  } finally {
-    try {
-      await engineeringResource.reload();
-    } finally {
-      engineeringSaving.value = false;
-    }
-  }
 }
 
 function openPersonalSettings() {

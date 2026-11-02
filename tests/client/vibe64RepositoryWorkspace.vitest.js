@@ -31,6 +31,8 @@ vi.mock("vuetify/components/VProgressLinear", () => ({ VProgressLinear: passthro
 
 import Vibe64RepositoryWorkspace from "../../src/components/studio/repository/Vibe64RepositoryWorkspace.vue";
 import Vibe64RepositoryFileBrowser from "../../src/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
+import Vibe64RepositoryHistoryList from "../../src/components/studio/repository/Vibe64RepositoryHistoryList.vue";
+import Vibe64RepositoryVersionDialog from "../../src/components/studio/repository/Vibe64RepositoryVersionDialog.vue";
 import Vibe64RepositoryDiff from "../../src/components/studio/repository/Vibe64RepositoryDiff.vue";
 import StudioErrorNotice from "../../src/components/studio/StudioErrorNotice.vue";
 import Vibe64DashboardPageHeader from "../../src/components/studio/Vibe64DashboardPageHeader.vue";
@@ -43,6 +45,8 @@ const ROOT = new URL("../../", import.meta.url);
 for (const [component, file] of [
   [Vibe64RepositoryWorkspace, "src/components/studio/repository/Vibe64RepositoryWorkspace.vue"],
   [Vibe64RepositoryFileBrowser, "src/components/studio/repository/Vibe64RepositoryFileBrowser.vue"],
+  [Vibe64RepositoryHistoryList, "src/components/studio/repository/Vibe64RepositoryHistoryList.vue"],
+  [Vibe64RepositoryVersionDialog, "src/components/studio/repository/Vibe64RepositoryVersionDialog.vue"],
   [Vibe64RepositoryDiff, "src/components/studio/repository/Vibe64RepositoryDiff.vue"],
   [StudioErrorNotice, "src/components/studio/StudioErrorNotice.vue"],
   [Vibe64DashboardPageHeader, "src/components/studio/Vibe64DashboardPageHeader.vue"],
@@ -61,6 +65,21 @@ for (const [component, file] of [
 
 async function source(relativePath) {
   return readFile(new URL(relativePath, ROOT), "utf8");
+}
+
+async function repositoryWorkspaceSource() {
+  return (await Promise.all([
+    source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
+    source("src/components/studio/repository/Vibe64RepositoryHistoryList.vue"),
+    source("src/components/studio/repository/Vibe64RepositoryVersionDialog.vue")
+  ])).join("\n");
+}
+
+async function repositoryComposableSource() {
+  return (await Promise.all([
+    source("src/composables/useVibe64RepositoryWorkspace.js"),
+    source("src/composables/useVibe64RepositoryHistory.js")
+  ])).join("\n");
 }
 
 function passthroughComponent(element) {
@@ -627,7 +646,7 @@ describe("Vibe64 Repository workspace", () => {
 
   it("exposes repository conflict recovery only through the existing Temporary AI workspace", async () => {
     const [repositoryWorkspace, autopilotView] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
+      repositoryWorkspaceSource(),
       source("src/components/studio/vibe64-session/Vibe64AutopilotView.vue")
     ]);
 
@@ -642,8 +661,8 @@ describe("Vibe64 Repository workspace", () => {
 
   it("uses Fix it with AI for merge repair without restricting native Save and Update", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryWorkspaceSource(),
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("dashboard.value.assistantFixAllowed === false");
@@ -654,9 +673,7 @@ describe("Vibe64 Repository workspace", () => {
   });
 
   it("renders current changes and version history as separate session destinations", async () => {
-    const repositoryWorkspace = await source(
-      "src/components/studio/repository/Vibe64RepositoryWorkspace.vue"
-    );
+    const repositoryWorkspace = await repositoryWorkspaceSource();
 
     expect(repositoryWorkspace).toContain("view === 'changes'");
     expect(repositoryWorkspace).toContain("view === 'history'");
@@ -669,8 +686,8 @@ describe("Vibe64 Repository workspace", () => {
 
   it("states the exact saved update count instead of relying on an enabled action", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryWorkspaceSource(),
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("repositoryUpdateTitle");
@@ -697,8 +714,8 @@ describe("Vibe64 Repository workspace", () => {
 
   it("renders saved versions as an accessible Git log and opens details in a full-screen dialog", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js")
+      repositoryWorkspaceSource(),
+      repositoryComposableSource()
     ]);
 
     expect(repositoryWorkspace).toContain("Saved versions");
@@ -720,7 +737,7 @@ describe("Vibe64 Repository workspace", () => {
 
   it("uses the available width for file lists and their selected difference", async () => {
     const [repositoryWorkspace, fileBrowser] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
+      repositoryWorkspaceSource(),
       source("src/components/studio/repository/Vibe64RepositoryFileBrowser.vue")
     ]);
 
@@ -733,8 +750,8 @@ describe("Vibe64 Repository workspace", () => {
 
   it("uses one file-browser implementation for current and historical changes", async () => {
     const [repositoryWorkspace, repositoryComposable, fileBrowser] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js"),
+      repositoryWorkspaceSource(),
+      repositoryComposableSource(),
       source("src/components/studio/repository/Vibe64RepositoryFileBrowser.vue")
     ]);
 
@@ -746,8 +763,8 @@ describe("Vibe64 Repository workspace", () => {
 
   it("does not describe a clean but outdated session as matching the saved project", async () => {
     const [repositoryWorkspace, repositoryComposable, autopilotView, runtimeHost] = await Promise.all([
-      source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
-      source("src/composables/useVibe64RepositoryWorkspace.js"),
+      repositoryWorkspaceSource(),
+      repositoryComposableSource(),
       source("src/composables/useVibe64SessionToolPane.js"),
       source("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue")
     ]);

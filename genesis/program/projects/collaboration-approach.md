@@ -16,6 +16,7 @@ conveniences outside agent prompts.
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-core/src/server/projectPromptHints.js`
 - `src/components/studio/ProjectSettingsPanel.vue`
+- `src/composables/useVibe64CollaborationSettings.js`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/lib/studioGateApi.js`
 - `src/lib/studioUrls.js`

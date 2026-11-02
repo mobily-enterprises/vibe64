@@ -45,11 +45,11 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => renewalHarness.projectSlug
 }));
 
+import { useVibe64SessionRenewal } from "../../src/composables/useVibe64SessionRenewal.js";
 import {
   SESSION_RENEWAL_BACKGROUND_POLL_INTERVAL_MS,
-  SESSION_RENEWAL_RETRY_POLL_INTERVAL_MS,
-  useVibe64SessionRenewal
-} from "../../src/composables/useVibe64SessionRenewal.js";
+  SESSION_RENEWAL_RETRY_POLL_INTERVAL_MS
+} from "../../src/composables/useVibe64SessionRenewalPolling.js";
 
 const DRAFT_HASH = "a".repeat(64);
 const SAVED_HASH = "b".repeat(64);

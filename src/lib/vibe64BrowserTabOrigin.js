@@ -79,6 +79,7 @@ function vibe64RealtimePayloadFromCurrentTab(payload = {}, {
 export {
   VIBE64_BROWSER_TAB_ORIGIN_KEY,
   VIBE64_BROWSER_TAB_ORIGIN_STORAGE_KEY,
+  browserTabSessionStorage,
   normalizeOriginId,
   vibe64BrowserTabOriginId,
   vibe64RealtimeOriginPayload,

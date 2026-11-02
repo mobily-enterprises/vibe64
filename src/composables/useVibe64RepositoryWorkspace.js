@@ -1,11 +1,6 @@
 import { computed, onScopeDispose, reactive, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import {
-  vibe64RepositoryHistoryPath,
-  vibe64RepositoryVersionDiffPath,
-  vibe64RepositoryVersionFilesPath,
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   vibe64SessionChangeDiffPath,
@@ -18,40 +13,16 @@ import {
   repositoryStatusSessionId
 } from "@/lib/vibe64RepositoryRealtime.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-
-function message(error, fallback) {
-  return error instanceof Error ? error.message : String(error || fallback);
-}
-
-async function requestJson(path, options = {}) {
-  if (!path) {
-    throw new Error("Repository information is not available yet.");
-  }
-  const result = await getHttpWebClient().request(path, {
-    method: "GET",
-    ...options
-  });
-  if (result?.ok === false) {
-    throw vibe64ApiError(result, "Repository information could not be loaded.");
-  }
-  return result;
-}
+import {
+  repositoryErrorMessage,
+  requestRepositoryJson
+} from "@/lib/vibe64RepositoryRequest.js";
+import { useVibe64RepositoryHistory } from "@/composables/useVibe64RepositoryHistory.js";
 
 function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {}) {
   const selectedCurrentPath = ref("");
-  const selectedVersion = ref(null);
-  const selectedVersionPath = ref("");
   const changes = reactive({ error: "", loading: false, loadingMore: false, payload: null });
   const currentDiff = reactive({ error: "", loading: false, payload: null });
-  const history = reactive({
-    error: "",
-    loading: false,
-    nextCursor: "",
-    payload: null,
-    versions: []
-  });
-  const versionFiles = reactive({ error: "", loading: false, loadingMore: false, payload: null });
-  const versionDiff = reactive({ error: "", loading: false, payload: null });
   const updates = reactive({
     applying: false,
     canonicalChangePending: false,
@@ -79,6 +50,24 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
   const sourceOperationsSuspended = computed(() => (
     readRefOrGetterValue(context.value.sourceOperationsSuspended) === true
   ));
+  const {
+    history,
+    loadHistory,
+    loadMoreVersionFiles,
+    resetHistory,
+    selectVersion,
+    selectVersionFile,
+    selectedVersion,
+    selectedVersionPath,
+    versionDiff,
+    versionFiles
+  } = useVibe64RepositoryHistory({
+    beginRequest,
+    requestIsCurrent,
+    sessionId,
+    sessionsApiPath,
+    updates
+  });
   let updateAccessRevision = 0;
 
   function requestContextKey() {
@@ -125,17 +114,6 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     }
   }
 
-  function updateCheckIsNewer(candidate = {}, current = {}) {
-    const candidateCheck = candidate && typeof candidate === "object" ? candidate : {};
-    const currentCheck = current && typeof current === "object" ? current : {};
-    const candidateTime = Date.parse(String(candidateCheck.checkedAt || ""));
-    const currentTime = Date.parse(String(currentCheck.checkedAt || ""));
-    if (!Number.isFinite(candidateTime)) {
-      return !currentCheck.checkedAt;
-    }
-    return !Number.isFinite(currentTime) || candidateTime >= currentTime;
-  }
-
   async function selectCurrentFile(file) {
     const path = String(file?.path || "");
     selectedCurrentPath.value = path;
@@ -147,7 +125,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     const request = beginRequest("currentDiff");
     currentDiff.loading = true;
     try {
-      const result = await requestJson(vibe64SessionChangeDiffPath(
+      const result = await requestRepositoryJson(vibe64SessionChangeDiffPath(
         sessionsApiPath.value,
         sessionId.value,
         path
@@ -157,7 +135,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       }
     } catch (error) {
       if (requestIsCurrent(request)) {
-        currentDiff.error = message(error, "This file difference could not be loaded.");
+        currentDiff.error = repositoryErrorMessage(error, "This file difference could not be loaded.");
       }
     } finally {
       if (requestIsCurrent(request)) {
@@ -184,7 +162,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     changes.loadingMore = append;
     try {
       const previousFiles = append ? changes.payload?.files || [] : [];
-      const result = await requestJson(vibe64SessionChangesPath(
+      const result = await requestRepositoryJson(vibe64SessionChangesPath(
         sessionsApiPath.value,
         sessionId.value,
         { offset: previousFiles.length }
@@ -214,7 +192,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       }
     } catch (error) {
       if (requestIsCurrent(request)) {
-        changes.error = message(error, "Current changes could not be loaded.");
+        changes.error = repositoryErrorMessage(error, "Current changes could not be loaded.");
       }
     } finally {
       if (requestIsCurrent(request)) {
@@ -254,169 +232,6 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     return refresh.promise;
   }
 
-  async function selectVersion(version) {
-    const request = beginRequest("versionFiles");
-    beginRequest("versionDiff");
-    if (selectedVersion.value?.commit !== version?.commit) {
-      versionFiles.error = "";
-    }
-    selectedVersion.value = version || null;
-    selectedVersionPath.value = "";
-    versionFiles.loading = false;
-    versionFiles.loadingMore = false;
-    versionFiles.payload = null;
-    versionDiff.error = "";
-    versionDiff.loading = false;
-    versionDiff.payload = null;
-    if (!version?.commit || !history.payload?.historySnapshotCommit) {
-      return;
-    }
-    versionFiles.loading = true;
-    try {
-      const result = await requestJson(vibe64RepositoryVersionFilesPath(
-        sessionsApiPath.value,
-        version.commit,
-        {
-          historySnapshotCommit: history.payload.historySnapshotCommit,
-          sessionId: sessionId.value
-        }
-      ));
-      if (!requestIsCurrent(request) || selectedVersion.value?.commit !== version.commit) {
-        return;
-      }
-      versionFiles.payload = result;
-      versionFiles.error = "";
-      versionFiles.loading = false;
-      const first = versionFiles.payload?.files?.[0];
-      if (first) {
-        await selectVersionFile(first);
-      }
-    } catch (error) {
-      if (requestIsCurrent(request)) {
-        versionFiles.error = message(error, "This version could not be loaded.");
-      }
-    } finally {
-      if (requestIsCurrent(request)) {
-        versionFiles.loading = false;
-      }
-    }
-  }
-
-  async function loadMoreVersionFiles() {
-    if (
-      versionFiles.loading ||
-      versionFiles.loadingMore ||
-      !versionFiles.payload?.truncated ||
-      !selectedVersion.value?.commit ||
-      !history.payload?.historySnapshotCommit
-    ) {
-      return;
-    }
-    versionFiles.loadingMore = true;
-    versionFiles.error = "";
-    const request = beginRequest("versionFiles");
-    try {
-      const previousFiles = versionFiles.payload.files || [];
-      const result = await requestJson(vibe64RepositoryVersionFilesPath(
-        sessionsApiPath.value,
-        selectedVersion.value.commit,
-        {
-          historySnapshotCommit: history.payload.historySnapshotCommit,
-          offset: previousFiles.length,
-          sessionId: sessionId.value
-        }
-      ));
-      if (!requestIsCurrent(request)) {
-        return;
-      }
-      versionFiles.payload = {
-        ...result,
-        files: [...previousFiles, ...(result.files || [])]
-      };
-    } catch (error) {
-      if (requestIsCurrent(request)) {
-        versionFiles.error = message(error, "More files from this version could not be loaded.");
-      }
-    } finally {
-      if (requestIsCurrent(request)) {
-        versionFiles.loadingMore = false;
-      }
-    }
-  }
-
-  async function selectVersionFile(file) {
-    const path = String(file?.path || "");
-    selectedVersionPath.value = path;
-    versionDiff.error = "";
-    versionDiff.payload = null;
-    if (!path || !selectedVersion.value?.commit || !history.payload?.historySnapshotCommit) {
-      return;
-    }
-    const request = beginRequest("versionDiff");
-    const versionCommit = selectedVersion.value.commit;
-    versionDiff.loading = true;
-    try {
-      const result = await requestJson(vibe64RepositoryVersionDiffPath(
-        sessionsApiPath.value,
-        selectedVersion.value.commit,
-        path,
-        {
-          historySnapshotCommit: history.payload.historySnapshotCommit,
-          sessionId: sessionId.value
-        }
-      ));
-      if (
-        requestIsCurrent(request) &&
-        selectedVersion.value?.commit === versionCommit &&
-        selectedVersionPath.value === path
-      ) {
-        versionDiff.payload = result;
-      }
-    } catch (error) {
-      if (requestIsCurrent(request)) {
-        versionDiff.error = message(error, "This file difference could not be loaded.");
-      }
-    } finally {
-      if (requestIsCurrent(request)) {
-        versionDiff.loading = false;
-      }
-    }
-  }
-
-  async function loadHistory({ append = false } = {}) {
-    const request = beginRequest("history");
-    history.loading = true;
-    try {
-      const result = await requestJson(vibe64RepositoryHistoryPath(sessionsApiPath.value, {
-        cursor: append ? history.nextCursor : "",
-        sessionId: sessionId.value
-      }));
-      if (!requestIsCurrent(request)) {
-        return;
-      }
-      history.error = "";
-      history.payload = append && history.payload
-        ? { ...result, versions: [...history.versions, ...(result.versions || [])] }
-        : result;
-      history.versions = history.payload.versions || [];
-      history.nextCursor = result.nextCursor || "";
-      if (!append && result.updateCheck && updateCheckIsNewer(result.updateCheck, updates.payload)) {
-        updates.payload = {
-          ...result.updateCheck,
-          cached: true
-        };
-      }
-    } catch (error) {
-      if (requestIsCurrent(request)) {
-        history.error = message(error, "Version history could not be loaded.");
-      }
-    } finally {
-      if (requestIsCurrent(request)) {
-        history.loading = false;
-      }
-    }
-  }
-
   async function checkForUpdates({ force = true } = {}) {
     if (!sessionId.value || updates.applying || sourceOperationsSuspended.value) {
       return false;
@@ -438,7 +253,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     updates.errorCode = "";
     const promise = (async () => {
       try {
-        const result = await requestJson(vibe64SessionCheckUpdatesPath(
+        const result = await requestRepositoryJson(vibe64SessionCheckUpdatesPath(
         sessionsApiPath.value,
         sessionId.value
         ), {
@@ -475,7 +290,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
         return result;
       } catch (error) {
         if (updateRequestIsCurrent(request)) {
-          updates.error = message(error, "Updates could not be checked.");
+          updates.error = repositoryErrorMessage(error, "Updates could not be checked.");
           updates.errorCode = String(error?.code || "").trim();
           if (activeView.value === "changes" && !changes.payload) {
             await requestChangesRefresh();
@@ -533,7 +348,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       return result;
     } catch (error) {
       if (requestIsCurrent(request)) {
-        updates.error = message(error, "This session could not be updated.");
+        updates.error = repositoryErrorMessage(error, "This session could not be updated.");
         updates.errorCode = String(error?.code || "").trim();
       }
       return false;
@@ -603,21 +418,8 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       currentDiff.error = "";
       currentDiff.loading = false;
       currentDiff.payload = null;
-      history.error = "";
-      history.loading = false;
-      history.nextCursor = "";
-      history.payload = null;
-      history.versions = [];
+      resetHistory();
       selectedCurrentPath.value = "";
-      selectedVersion.value = null;
-      selectedVersionPath.value = "";
-      versionDiff.error = "";
-      versionDiff.loading = false;
-      versionDiff.payload = null;
-      versionFiles.error = "";
-      versionFiles.loading = false;
-      versionFiles.loadingMore = false;
-      versionFiles.payload = null;
       updates.applying = false;
       updates.checking = false;
       updates.error = "";

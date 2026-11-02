@@ -78,10 +78,12 @@ vi.mock("vuetify/components/VTextField", () => ({ VTextField: passthroughCompone
 
 import ProjectPage from "../../src/pages/app/project/[slug].vue";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
+import Vibe64ProjectPaneControls from "../../src/components/studio/Vibe64ProjectPaneControls.vue";
 
 for (const [component, file] of [
   [ProjectPage, "../../src/pages/app/project/[slug].vue"],
-  [ProjectSelectionGate, "../../src/components/studio/ProjectSelectionGate.vue"]
+  [ProjectSelectionGate, "../../src/components/studio/ProjectSelectionGate.vue"],
+  [Vibe64ProjectPaneControls, "../../src/components/studio/Vibe64ProjectPaneControls.vue"]
 ]) {
   const filename = new URL(file, import.meta.url).pathname;
   const { descriptor } = parse(readFileSync(filename, "utf8"), { filename });

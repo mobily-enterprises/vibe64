@@ -101,10 +101,15 @@ from saved project work, and inspect one exact file change at a time.
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationDocument.vue`
 - `src/lib/vibe64SourceExplanationDisplay.js`
 - `src/composables/useVibe64RepositoryWorkspace.js`
+- `src/composables/useVibe64RepositoryHistory.js`
+- `src/lib/vibe64RepositoryRequest.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionToolPane.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
+- `src/components/studio/repository/Vibe64RepositoryHistoryList.vue`
+- `src/components/studio/repository/Vibe64RepositoryVersionDialog.vue`
+- `src/lib/vibe64RepositoryVersionLabels.js`
 - `src/components/studio/repository/Vibe64RepositoryFileBrowser.vue`
 - `src/components/studio/repository/Vibe64RepositoryDiff.vue`
 - `src/components/SectionContainerShell.vue`

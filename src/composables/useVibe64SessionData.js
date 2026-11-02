@@ -1,13 +1,14 @@
-import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { computed, proxyRefs, ref, watch } from "vue";
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useRoute, useRouter } from "vue-router";
 import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
+import { useVibe64SessionCreation } from "@/composables/useVibe64SessionCreation.js";
+import { useVibe64SelectedSessionRenewal } from "@/composables/useVibe64SelectedSessionRenewal.js";
+import { useVibe64CurrentSessionPublication } from "@/composables/useVibe64CurrentSessionPublication.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { useQueryClient } from "@tanstack/vue-query";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import {
   useVibe64ProjectSlug
@@ -22,14 +23,9 @@ import {
   VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  vibe64SessionPath,
   vibe64SessionEventMatchesScope,
-  vibe64SessionQueryKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
-import {
-  createVibe64CurrentSessionPublisher
-} from "@/lib/vibe64CurrentSessionPublisher.js";
 import {
   enrichVibe64SessionForDisplay,
   shortVibe64SessionId as shortSessionId,
@@ -42,41 +38,18 @@ import {
 import { refetchEndpointResource } from "@/lib/vibe64EndpointResourceRefetch.js";
 import { sessionArchiveState } from "@/lib/vibe64SessionArchiveState.js";
 import {
+  renewedSuccessorSessionId,
+  sessionIdExistsInList
+} from "@/lib/vibe64SessionListLookup.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
-  vibe64SessionDebugLog,
-  vibe64SessionDebugSummary
+  vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
-import {
-  vibe64RealtimeOriginPayload
-} from "@/lib/vibe64BrowserTabOrigin.js";
-import {
-  mountedSessionRealtimeShouldRefresh
-} from "@/lib/vibe64MountedSessionState.js";
 import {
   agentTurnRealtimeOverlayFromPayload,
   latestAgentTurnRealtimeOverlay
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
-
-
-function sessionIdExistsInList(sessionId = "", nextSessions = []) {
-  const normalizedSessionId = String(sessionId || "").trim();
-  return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
-}
-
-function renewedSuccessorSessionId({
-  predecessorSessionId = "",
-  sessions = []
-} = {}) {
-  const predecessorId = String(predecessorSessionId || "").trim();
-  if (!predecessorId) {
-    return "";
-  }
-  const matches = sessions.filter((session) => (
-    String(session?.metadata?.renewed_from || "").trim() === predecessorId
-  ));
-  return matches.length === 1 ? String(matches[0]?.sessionId || "").trim() : "";
-}
 
 // A ?session= that is not one of this project's sessions (another project's,
 // or one that is gone) leaves the URL, with its chat, once the list has
@@ -103,38 +76,12 @@ function shouldPreserveSelectedSessionDuringRefresh({
   return Boolean(sessionListLoading || createSessionRunning);
 }
 
-function selectedSessionIdForCurrentAlias({
-  createSessionRunning = false,
-  selectedSessionId = "",
-  sessionListLoaded = true,
-  sessionListLoadError = "",
-  sessionListLoading = false,
-  sessions = []
-} = {}) {
-  if (
-    !sessionListLoaded ||
-    sessionListLoading ||
-    String(sessionListLoadError || "").trim()
-  ) {
-    return null;
-  }
-  const normalizedSessionId = String(selectedSessionId || "").trim();
-  if (sessionIdExistsInList(normalizedSessionId, sessions)) {
-    return normalizedSessionId;
-  }
-  if (sessions.length > 0 || createSessionRunning) {
-    return null;
-  }
-  return "";
-}
-
 function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "") {
   return vibe64SessionEventMatchesScope(payload, { projectSlug }) &&
     payload?.clientRefresh?.includeList !== false;
 }
 
 function useVibe64SessionData() {
-  const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
   const route = useRoute();
   const router = useRouter();
@@ -196,72 +143,16 @@ function useVibe64SessionData() {
   });
   const selectedSessionId = sessionSelection.selectedId;
   let emptySessionListObservedForProject = "";
-  const createSessionCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context?.apiPath }),
-    buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
-      assistantSelection: context?.assistantSelection || {},
-      ...(context?.repositoryBranch ? { repositoryBranch: context.repositoryBranch } : {}),
-      ...(context?.pullRequestNumber ? { pullRequestNumber: context.pullRequestNumber } : {})
-    }),
-    fallbackRunError: "Vibe64 session could not be created.",
-    messages: {
-      error: "Vibe64 session could not be created.",
-      success: "Vibe64 session created."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.create",
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
-  });
-  // useCommand's observable operation state is shared by placement source. It
-  // may still describe a creation in another project after project navigation,
-  // so it cannot own this page's local loading state.
-  const createSessionRunning = ref(false);
-  const updateCurrentSessionCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_CURRENT_SESSION_API_SUFFIX,
-    buildCommandOptions: (_model, { context }) => ({
-      method: "PUT",
-      path: String(context?.apiPath || "")
-    }),
-    buildRawPayload: (_model, { context }) => ({
-      sessionId: String(context?.sessionId || "").trim()
-    }),
-    fallbackRunError: "The current session shortcut could not be updated.",
-    messages: {
-      error: "The current session shortcut could not be updated."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.current.update",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "PUT"
-  });
-  const currentSessionPublisher = createVibe64CurrentSessionPublisher({
-    async publish({ apiPath, sessionId }) {
-      const response = await updateCurrentSessionCommand.run({
-        apiPath,
-        sessionId
-      });
-      if (!response || response.ok === false) {
-        throw new Error(
-          String(response?.error || "The current session shortcut could not be updated.")
-        );
-      }
-    },
-    onError(error, publication) {
-      vibe64SessionDebugLog("client.sessionData.currentSession.error", {
-        error: vibe64SessionDebugError(error),
-        sessionId: publication.sessionId
-      });
-    }
-  });
-  let sessionDataDisposed = false;
-  onScopeDispose(() => {
-    sessionDataDisposed = true;
-    currentSessionPublisher.stop();
+  const {
+    createSession,
+    createSessionCommand,
+    createSessionRunning
+  } = useVibe64SessionCreation({
+    projectSlug,
+    refreshSessionDataInBackground,
+    selectSessionId,
+    sessionListQueryKey,
+    sessionsApiPath
   });
   const archiveAttempts = ref({});
   const agentActivityBySessionId = ref({});
@@ -309,54 +200,20 @@ function useVibe64SessionData() {
     }
     return true;
   });
-  const selectionRenewalPredecessorId = computed(() => {
-    const selectedId = String(selectedSessionId.value || "").trim();
-    if (!selectedId || sessionList.pages.length < 1 || String(sessionList.loadError || "").trim()) {
-      return "";
-    }
-    if (sessionList.unavailableItems.some((session) => session.sessionId === selectedId)) {
-      return "";
-    }
-    if (selectedSessionMissing.value) {
-      return selectedId;
-    }
-    return String(selectedListSession.value?.metadata?.renewed_from || "").trim();
-  });
-  const selectionRenewalPath = computed(() => (
-    selectionRenewalPredecessorId.value
-      ? vibe64SessionPath(
-          sessionsApiPath.value,
-          selectionRenewalPredecessorId.value,
-          "/renewal"
-        )
-      : ""
-  ));
-  const selectionRenewalResource = useEndpointResource({
-    enabled: computed(() => Boolean(selectionRenewalPredecessorId.value)),
-    fallbackLoadError: "The selected session renewal could not be checked.",
-    path: selectionRenewalPath,
-    queryKey: computed(() => [
-      ...vibe64SessionQueryKey(
-        VIBE64_SURFACE_ID,
-        ROUTE_VISIBILITY_PUBLIC,
-        projectSlug.value
-      ),
-      selectionRenewalPredecessorId.value,
-      "renewal"
-    ]),
-    queryOptions: {
-      refetchOnMount: "always",
-      refetchOnWindowFocus: false
-    },
-    readMethod: "GET",
-    realtime: {
-      event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => mountedSessionRealtimeShouldRefresh(
-        { payload },
-        selectionRenewalPredecessorId.value
-      )
-    },
-    requestRecoveryLabel: "Selected session renewal"
+  const {
+    selectionRenewalPredecessorId,
+    selectionRenewalResource,
+    syncRenewalSuccessorUrl
+  } = useVibe64SelectedSessionRenewal({
+    availableSessions,
+    projectSlug,
+    route,
+    router,
+    selectedListSession,
+    selectedSessionId,
+    selectedSessionMissing,
+    sessionList,
+    sessionsApiPath
   });
   const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
   const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedListSession.value));
@@ -544,135 +401,9 @@ function useVibe64SessionData() {
     }
   }, { immediate: true });
 
-  let createSessionInFlight = null;
-
-  async function createSession(assistantSelection = {}, { pullRequestNumber, repositoryBranch } = {}) {
-    if (createSessionInFlight) {
-      return createSessionInFlight;
-    }
-    const startedAtMs = Date.now();
-    const creationProjectSlug = String(projectSlug.value || "").trim();
-    const creationApiPath = sessionsApiPath.value;
-    const creationQueryKey = [...sessionListQueryKey.value];
-    vibe64SessionDebugLog("client.sessionData.createSession.start");
-    createSessionRunning.value = true;
-    createSessionInFlight = (async () => {
-      try {
-        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, repositoryBranch, apiPath: creationApiPath });
-        if (
-          !sessionDataDisposed &&
-          creationProjectSlug === String(projectSlug.value || "").trim()
-        ) {
-          if (
-            response?.creation &&
-            response?.limits
-          ) {
-            queryClient.setQueryData(creationQueryKey, (currentPayload) => {
-              if (
-                !currentPayload ||
-                typeof currentPayload !== "object" ||
-                Array.isArray(currentPayload)
-              ) {
-                return currentPayload;
-              }
-              const currentSessions = Array.isArray(currentPayload.sessions)
-                ? currentPayload.sessions
-                : [];
-              const createdSession = response.sessionId
-                ? Object.fromEntries(Object.entries(response).filter(([key]) => ![
-                    "creation",
-                    "limits",
-                    "ok"
-                  ].includes(key)))
-                : null;
-              return {
-                ...currentPayload,
-                creation: response.creation,
-                limits: response.limits,
-                ...(createdSession && !currentSessions.some((item) => (
-                  item?.sessionId === createdSession.sessionId
-                ))
-                  ? {
-                      sessions: [...currentSessions, createdSession]
-                    }
-                  : {})
-              };
-            });
-          }
-          if (response?.sessionId) {
-            selectSessionId(response.sessionId);
-          }
-          refreshSessionDataInBackground({ reason: "create-session" });
-        }
-        vibe64SessionDebugLog("client.sessionData.createSession.done", {
-          ...vibe64SessionDebugSummary(response || {}),
-          code: String(response?.code || response?.errors?.[0]?.code || ""),
-          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          ok: response?.ok !== false
-        });
-        return response;
-      } catch (error) {
-        vibe64SessionDebugLog("client.sessionData.createSession.error", {
-          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          error: vibe64SessionDebugError(error)
-        });
-        throw error;
-      } finally {
-        createSessionRunning.value = false;
-        createSessionInFlight = null;
-      }
-    })();
-    return createSessionInFlight;
-  }
-
   function dropUnlistedRouteSession() {
     const query = routeQueryWithoutUnlistedSession({ route, projectSlug: projectSlug.value, sessions: sessions.value });
     if (query) void router.replace({ path: route.path, hash: route.hash, query }).catch(() => null);
-  }
-
-  let pendingRenewalNavigation = null;
-  function syncRenewalSuccessorUrl(predecessorId, successorId) {
-    if (selectedSessionIdFromRoute(route) !== predecessorId) return;
-    const capturedProject = String(projectSlug.value || "").trim();
-    const capturedApiPath = sessionsApiPath.value;
-    const predecessorUrl = route.fullPath;
-    if (pendingRenewalNavigation?.predecessorUrl === predecessorUrl &&
-      pendingRenewalNavigation?.successorId === successorId) return;
-    const sameRenewal = () => {
-      const renewal = selectionRenewalResource.data.value?.renewal;
-      return !sessionDataDisposed &&
-        String(projectSlug.value || "").trim() === capturedProject && sessionsApiPath.value === capturedApiPath &&
-        selectedSessionId.value === successorId &&
-        !selectionRenewalResource.loadError?.value && !selectionRenewalResource.isInitialLoading?.value &&
-        !selectionRenewalResource.isLoading?.value && renewal?.status === "completed" &&
-        String(renewal.sessionId || "").trim() === predecessorId &&
-        String(renewal.successor?.sessionId || "").trim() === successorId &&
-        renewedSuccessorSessionId({ predecessorSessionId: predecessorId, sessions: availableSessions.value }) === successorId;
-    };
-    if (!sameRenewal()) return;
-    const target = { path: route.path, hash: route.hash, query: { ...route.query, session: successorId } };
-    const targetUrl = router.resolve(target).fullPath;
-    const navigation = { predecessorUrl, successorId };
-    const removeGuard = router.beforeResolve((to) => {
-      if (to.fullPath === targetUrl && (!sameRenewal() || route.fullPath !== predecessorUrl)) return false;
-    });
-    pendingRenewalNavigation = navigation;
-    // Reconciliation has already selected the successor. The predecessor host
-    // may be inactive now, so the collection owner also owns its replacement URL.
-    void (async () => {
-      try {
-        await router.replace(target);
-      } catch (error) {
-        if (sameRenewal()) {
-          vibe64SessionDebugLog("client.sessionData.renewalNavigation.error", {
-            error: vibe64SessionDebugError(error), sessionId: successorId
-          });
-        }
-      } finally {
-        removeGuard();
-        if (pendingRenewalNavigation === navigation) pendingRenewalNavigation = null;
-      }
-    })();
   }
 
   const selectionReconciliationState = computed(() => {
@@ -787,26 +518,7 @@ function useVibe64SessionData() {
     immediate: true
   });
 
-  watch(selectionReconciliationState, (state) => {
-    const publicationSessionId = selectedSessionIdForCurrentAlias({
-      createSessionRunning: state.createSessionRunning,
-      selectedSessionId: state.selectedSessionId,
-      sessionListLoaded: state.sessionListLoaded,
-      sessionListLoadError: state.sessionListLoadError,
-      sessionListLoading: state.sessionListLoading,
-      sessions: state.nextSessions
-    });
-    if (publicationSessionId === null || !state.currentSessionApiPath) {
-      return;
-    }
-    void currentSessionPublisher.request({
-      apiPath: state.currentSessionApiPath,
-      sessionId: publicationSessionId
-    });
-  }, {
-    flush: "post",
-    immediate: true
-  });
+  useVibe64CurrentSessionPublication({ selectionReconciliationState });
 
   return {
     archive,
@@ -833,9 +545,6 @@ function useVibe64SessionData() {
 export {
   routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
-  renewedSuccessorSessionId,
-  selectedSessionIdForCurrentAlias,
-  sessionIdExistsInList,
   shouldPreserveSelectedSessionDuringRefresh,
   useVibe64SessionData
 };
