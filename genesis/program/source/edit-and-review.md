@@ -68,6 +68,13 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionWorkInspection.js`
 - `src/composables/useVibe64SourceEditor.js`
+- `src/composables/useVibe64SourceEditorTree.js`
+- `src/composables/useVibe64SourceEditorFile.js`
+- `src/composables/useVibe64SourceEditorDiscovery.js`
+- `src/composables/useVibe64SourceEditorExplanations.js`
+- `src/lib/vibe64SourceEditorTree.js`
+- `src/lib/vibe64SourceEditorExplanations.js`
+- `src/lib/vibe64SourceEditorRequest.js`
 - `src/composables/useVibe64SourceEditorFileSync.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
@@ -908,8 +915,17 @@ Interface/Code, whose presentation their host records.
 
 ## Implementation map
 
+- `useVibe64SourceEditor()` composes the session's source editor from four parts
+  and returns the members the editor view reads: `useVibe64SourceEditorTree()`
+  (directory pages and the selected file's revealed folders),
+  `useVibe64SourceEditorFile()` (opening, revalidating and saving the selected
+  file), `useVibe64SourceEditorDiscovery()` (Open file and Find in files) and
+  `useVibe64SourceEditorExplanations()`. It keeps the session lifecycle: the
+  refresh after the agent's work, the switch to another session and the final
+  save on unmount.
 - The source-editor service owns explanation cache lookup, temporary conversation
-  creation and cleanup. `useVibe64SourceEditor()` owns the selected explanation,
+  creation and cleanup. `useVibe64SourceEditorExplanations()`, which
+  `useVibe64SourceEditor()` composes, owns the selected explanation,
   request generation, streamed messages and acknowledged Close state;
   `Vibe64SourceExplanationPanel` presents the answer, follow-up, cancellation
   and recovery controls. An answered cache record does not need a thread id to
