@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -15,6 +15,7 @@ import {
 } from "@local/vibe64-core/server/studioRoots";
 import { shellQuote } from "@local/vibe64-execution/server";
 import { startServer } from "../server.js";
+import { isEntrypointExecution } from "./cliEntrypoint.js";
 import {
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
   VIBE64_RUNTIME_NAMESPACE_ENV
@@ -48,25 +49,8 @@ function shouldSuppressBrowserOpen(args = process.argv.slice(2)) {
   return openFlagGiven(args, false);
 }
 
-function realCliPath(filePath, realpath = realpathSync) {
-  const resolvedPath = path.resolve(String(filePath || ""));
-  try {
-    return realpath(resolvedPath);
-  } catch {
-    return resolvedPath;
-  }
-}
-
-function isDirectServerExecution({
-  argv = process.argv,
-  entrypointPath = SERVER_ENTRYPOINT,
-  realpath = realpathSync
-} = {}) {
-  const cliPath = argv[1];
-  if (!cliPath) {
-    return false;
-  }
-  return realCliPath(cliPath, realpath) === realCliPath(entrypointPath, realpath);
+function isDirectServerExecution({ entrypointPath = SERVER_ENTRYPOINT, ...options } = {}) {
+  return isEntrypointExecution({ entrypointPath, ...options });
 }
 
 function unsupportedStartupArg(arg = "") {

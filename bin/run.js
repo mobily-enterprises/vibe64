@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { release as osRelease } from "node:os";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isEntrypointExecution } from "./cliEntrypoint.js";
 const RUNNER_ENTRYPOINT = fileURLToPath(import.meta.url);
 const MODULE_DIR = path.dirname(RUNNER_ENTRYPOINT);
 const SERVER_ENTRYPOINT = path.join(MODULE_DIR, "server.js");
@@ -29,25 +30,8 @@ function windowsCommandLine(command = "", args = []) {
   ].join(" ");
 }
 
-function realCliPath(filePath, realpath = realpathSync) {
-  const resolvedPath = path.resolve(String(filePath || ""));
-  try {
-    return realpath(resolvedPath);
-  } catch {
-    return resolvedPath;
-  }
-}
-
-function isDirectCliExecution({
-  argv = process.argv,
-  entrypointPath = RUNNER_ENTRYPOINT,
-  realpath = realpathSync
-} = {}) {
-  const cliPath = argv[1];
-  if (!cliPath) {
-    return false;
-  }
-  return realCliPath(cliPath, realpath) === realCliPath(entrypointPath, realpath);
+function isDirectCliExecution({ entrypointPath = RUNNER_ENTRYPOINT, ...options } = {}) {
+  return isEntrypointExecution({ entrypointPath, ...options });
 }
 
 function targetNameFromCwd(cwd = process.cwd()) {
