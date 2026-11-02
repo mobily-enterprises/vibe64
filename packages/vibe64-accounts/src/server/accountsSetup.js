@@ -71,12 +71,14 @@ function setupAccounts({
   const projectContext = getStudioProjectContext();
   const localRuntime = runtimeProfileIsLocal(projectContext.runtimeProfile);
   const resolvedAccountRuntime = accountRuntime ?? createAccountsRuntime({
+    env: process.env,
     project,
     systemRoot,
     targetRoot
   });
   const accounts = createService({
     accountRuntime: resolvedAccountRuntime,
+    env: process.env,
     personalProfile: localRuntime && systemRoot
       ? createPersonalProfile({ store: createPersonalAiProfileStore({ systemRoot }) })
       : NO_PERSONAL_PROFILE,

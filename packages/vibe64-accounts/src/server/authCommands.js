@@ -3,7 +3,7 @@ import { STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG } from "@local/studio-terminal-co
 
 import { validateGitIdentityInputs } from "../shared/gitIdentityInput.js";
 import { cleanAuthOutput, deviceUserCode, OPENAI_API_KEY_REDACTION_PATTERN } from "../shared/authOutput.js";
-import { API_KEY_AUTH_MODE, authError, BROWSER_AUTH_MODE, DEVICE_AUTH_MODE } from "./accountsRuntime.js";
+import { API_KEY_AUTH_MODE, authError, DEVICE_AUTH_MODE } from "./accountsRuntime.js";
 import { commandArgv } from "./accountHostCommands.js";
 import { ACCOUNT_DEFINITIONS } from "./accountRecords.js";
 
@@ -86,7 +86,7 @@ function githubGitIdentityFromInput(input = {}) {
   });
 }
 
-function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE, env = process.env) {
+function codexLoginCommandArgs(mode, env) {
   const codex = operatorCliCommand("codex", { env });
   if (mode === API_KEY_AUTH_MODE) {
     return codexApiKeyLoginCommandArgs(codex);
@@ -112,14 +112,14 @@ function codexApiKeyLoginCommandArgs(codex) {
   ];
 }
 
-function logoutCommandArgs(accountId, env = process.env) {
+function logoutCommandArgs(accountId, env) {
   if (accountId === "claude") return [operatorCliCommand("claude", { env }), "auth", "logout"];
   return accountId === "github"
     ? ["gh", "auth", "logout", "--hostname", "github.com"]
     : [operatorCliCommand("codex", { env }), "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
 }
 
-function terminalArgsForAuth(accountId, mode, gitIdentity = {}, env = process.env) {
+function terminalArgsForAuth(accountId, mode, gitIdentity, env) {
   if (accountId === "claude") return commandArgv([operatorCliCommand("claude", { env }), "auth", "login", "--claudeai"]);
   if (accountId === "github") return commandArgv(ghLoginCommandArgs(gitIdentity));
   return commandArgv(codexLoginCommandArgs(mode, env));
@@ -133,7 +133,7 @@ function accountAuthWorkingDirectory(providerContext, fallback = process.cwd()) 
   return String(providerContext?.toolHomeSource || providerContext?.home || fallback || process.cwd());
 }
 
-function firstMatchingUrl(output = "", predicate = () => true) {
+function firstMatchingUrl(output, predicate) {
   const matches = cleanAuthOutput(output).match(/https:\/\/[^\s"'<>]+/gu) || [];
   for (const match of matches) {
     const url = match.replace(/[),.;]+$/u, "");
@@ -297,8 +297,6 @@ export {
   authTerminalRunningLimitFilter,
   canReuseAuthTerminal,
   CODEX_API_KEY_ENV,
-  codexApiKeyLoginCommandArgs,
-  GITHUB_DEVICE_AUTH_URL,
   githubGitIdentityFromInput,
   gitIdentitySaveCommandArgs,
   logoutCommandArgs,

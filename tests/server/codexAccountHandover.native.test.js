@@ -123,9 +123,10 @@ test("native account logout and credential restoration drain old processes and c
     }
   });
   const accounts = createAccountsService({
+    env: process.env,
     publishAccountChanged: async () => null,
     publishAuthSessionChanged: async () => null,
-    accountRuntime: createAccountsRuntime({ daemonHome: toolHome, systemRoot }),
+    accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: toolHome, systemRoot }),
     project,
     invalidateAgentRuntimes: (input) => controller.invalidateAppServerRuntimes(input),
     runHostToolCommand: async (args) => {

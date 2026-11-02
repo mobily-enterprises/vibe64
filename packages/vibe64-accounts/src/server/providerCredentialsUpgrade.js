@@ -26,7 +26,7 @@ export async function upgradeIndependentProviderCredentials({
   apply,
   backupRoot,
   report,
-  env = process.env,
+  env,
   home = os.homedir()
 }) {
   const storePath = path.join(systemRoot, "ai-connections", "connections.json");

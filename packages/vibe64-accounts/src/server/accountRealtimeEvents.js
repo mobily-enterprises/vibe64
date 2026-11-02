@@ -283,9 +283,6 @@ function resultStatusFromAccount(account = null) {
 }
 
 export {
-  VIBE64_ACCOUNTS_CHANGED_EVENT,
-  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
-  VIBE64_CONNECTIONS_CHANGED_EVENT,
   vibe64AccountAuthSessionChangedActionEvent,
   vibe64AccountsChangedActionEvent,
   vibe64ConnectionsChangedActionEvent,

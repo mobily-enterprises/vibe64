@@ -80,6 +80,7 @@ try {
     upgradeClaudeRejectedInput,
     upgradeClaudeCommandMessages,
     upgradeIndependentProviderCredentials,
+    env: process.env,
     removeUnusedCodexCaches,
     removeSessionClonedDefaultBranches,
     report

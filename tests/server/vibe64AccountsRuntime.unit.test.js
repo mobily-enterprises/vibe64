@@ -65,10 +65,12 @@ import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server
 import { ACCOUNT_AUTH_NAMESPACE } from "../../packages/vibe64-accounts/src/server/authCommands.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
-  createVibe64ConnectionsChangedPublisher,
-  VIBE64_CONNECTIONS_CHANGED_EVENT,
-  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
+  createVibe64ConnectionsChangedPublisher
 } from "../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js";
+import {
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+  VIBE64_CONNECTIONS_CHANGED_EVENT
+} from "../../packages/vibe64-accounts/src/shared/accountEvents.js";
 import {
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -99,6 +101,7 @@ async function withTempDir(callback) {
 // collaborators replace these.
 function createTestService(dependencies) {
   return createService({
+    env: process.env,
     inspectRoutingConfiguration: async () => {
       throw new Error("Model routing is not part of this accounts check.");
     },
@@ -175,6 +178,7 @@ test("standalone accounts service saves and exposes the installation personal pr
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -468,7 +472,7 @@ test("standalone registers connection actions once and host-owned account runtim
     try {
       for (const hostOwned of [false, true]) {
         const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
-          ...(hostOwned ? { accountRuntime: createAccountsRuntime({ systemRoot, requireExplicitRoots: true }) } : {}),
+          ...(hostOwned ? { accountRuntime: createAccountsRuntime({ env: process.env, systemRoot, requireExplicitRoots: true }) } : {}),
           terminals: ACCOUNTS_TERMINALS
         });
         try {
@@ -667,6 +671,7 @@ test("accounts status can read Codex-only readiness without a GitHub user", asyn
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -869,6 +874,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -960,6 +966,7 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -1051,6 +1058,7 @@ test("GitHub auth terminal uses a gateway real-user PTY request", async () => {
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -1132,6 +1140,7 @@ test("GitHub auth terminal finalization checks and publishes the same OS user co
     const service = createTestService({ logger: silentLogger,
       invalidateAgentRuntimes: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -1251,6 +1260,7 @@ test("GitHub auth terminal failure publishes useful terminal output", async () =
       invalidateAgentRuntimes: async () => null,
       publishAccountChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
@@ -1325,6 +1335,7 @@ test("accounts service delegates account host commands to runtime override", asy
       username: "ada"
     };
     const baseRuntime = createAccountsRuntime({
+      env: process.env,
       githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
       requireExplicitRoots: true,
       systemRoot
@@ -1424,6 +1435,7 @@ test("GitHub status retries transient host read failures before requiring reconn
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         previousGithub: (input = {}) => input.vibe64User?.github || null,
         requireExplicitRoots: true,
@@ -1507,6 +1519,7 @@ test("a GitHub card shows the person's current Git name and email", async () => 
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         previousGithub: (input = {}) => input.vibe64User?.github || null,
         requireExplicitRoots: true,
@@ -1551,6 +1564,7 @@ test("GitHub transient host read failures are not classified as reconnect-requir
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         previousGithub: (input = {}) => input.vibe64User?.github || null,
         requireExplicitRoots: true,
@@ -1651,6 +1665,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
         invalidateAgentRuntimes: async () => null,
         publishAuthSessionChanged: async () => null,
         accountRuntime: createAccountsRuntime({
+          env: process.env,
           githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
           previousGithub: (input = {}) => input.vibe64User?.github || null,
           requireExplicitRoots: true,
@@ -1796,7 +1811,7 @@ test("Codex status exposes the account email and access scope without rotating a
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome, requireExplicitRoots: true, systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome, requireExplicitRoots: true, systemRoot }),
       project: { currentTargetRoot: () => "" },
       invalidateAgentRuntimes: async (input) => { invalidations.push(input); return { ok: true }; },
       runHostToolCommand: async (args) => {
@@ -1865,6 +1880,7 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         daemonHome,
         requireExplicitRoots: true,
         systemRoot
@@ -1900,6 +1916,7 @@ test("accounts runtime resolves Codex credentials from explicit daemon OS identi
   await withTempDir(async (root) => {
     const daemonHome = path.join(root, "homes", "workspace-daemon");
     const runtime = createAccountsRuntime({
+      env: process.env,
       daemonGid: 2002,
       daemonHome,
       daemonUid: 2001,
@@ -1939,6 +1956,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         daemonHome,
         requireExplicitRoots: true,
         systemRoot
@@ -2008,6 +2026,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         daemonHome,
         requireExplicitRoots: true,
         systemRoot
@@ -2106,6 +2125,7 @@ test("Codex status retries unfinished auth turnover without another login", asyn
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({
+        env: process.env,
         daemonHome: path.join(root, "daemon"),
         requireExplicitRoots: true,
         systemRoot
@@ -2151,7 +2171,7 @@ test("ordinary Codex status reads never upgrade legacy login metadata", async ()
       logger: silentLogger,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome, systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome, systemRoot }),
       invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
       runHostToolCommand: async () => {
         probes += 1;
@@ -2188,7 +2208,7 @@ test("Codex creates a new local identity once per successful sign-in and preserv
     let statusProbes = 0;
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot }),
       project: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
       inspectRoutingConfiguration: async () => { throw new Error("Routing catalogue is temporarily unavailable."); },
@@ -2241,7 +2261,7 @@ test("a finished sign-in is forgotten once a later sign-in finishes or the accou
     const published = [];
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot }),
       project: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => ({ ok: true }),
       runHostToolCommand: async (args) => ({ ok: true, output: args.includes("logout") ? "Logged out" : "Logged in using ChatGPT" }),
@@ -2287,7 +2307,7 @@ for (const connected of [true, false]) {
       const service = createTestService({ logger: silentLogger,
         publishAccountChanged: async () => null,
         publishAuthSessionChanged: async () => null,
-        accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+        accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot }),
         invalidateAgentRuntimes: async () => {
           invalidations += 1;
           return { ok: true, providerCount: 0, stopped: 0 };
@@ -2324,7 +2344,7 @@ test("automatic Codex account recovery preserves an unverified transition and re
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot }),
       invalidateAgentRuntimes: async () => ({ ok: ++invalidations > 1 }),
       readClaudeAccountStatus: async () => ({ loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" }),
       runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
@@ -2359,7 +2379,7 @@ test("an account whose status read throws reports that read as its own row", asy
       invalidateAgentRuntimes: async () => null,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot }),
       readClaudeAccountStatus: async () => { throw Object.assign(new Error("Claude status read failed."), { code: "fixture_claude_status" }); },
       runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
     });
@@ -2411,7 +2431,7 @@ test("Claude authentication is owner-only and launches native login after runtim
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       invalidateAgentRuntimes: async (input) => {
         invalidations.push(input);
         return { ok: cleanupAllowed, code: cleanupAllowed ? "" : "cleanup_unconfirmed" };
@@ -2454,7 +2474,7 @@ test("a Claude account change goes through the terminals service without touchin
     const service = createTestService({ logger: silentLogger,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "home"), systemRoot }),
       invalidateAgentRuntimes: async (input) => refusal || terminals.invalidateAgentRuntimes(input),
       runAuthTerminalCommand: async (input) => {
         requests.push(input);
@@ -2483,7 +2503,7 @@ test("Claude login receives its browser link as JSON and accepts code input only
       invalidateAgentRuntimes: async () => null,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       runAuthTerminalCommand: async (input) => {
         launches += 1;
         request = input;
@@ -2540,7 +2560,7 @@ test("Claude login announces its browser link when it lands, after the CLI's las
     const service = createTestService({ logger: silentLogger,
       invalidateAgentRuntimes: async () => null,
       publishAccountChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       publishAuthSessionChanged: async (session) => { published.push(session); },
       // Like the real CLI: print the prompt, then run BROWSER, then wait silently.
       runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
@@ -2576,7 +2596,7 @@ test("curated Codex connection management uses the existing workspace owner auth
       invalidateAgentRuntimes: async () => null,
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
-      accountRuntime: createAccountsRuntime({ systemRoot: path.join(root, "system"),
+      accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: path.join(root, "system"),
         requireAiManagement(input) {
           checked.push(input.vibe64User?.role);
           return input.vibe64User?.role === "owner" ? null : denied;
@@ -2598,7 +2618,7 @@ test("curated Codex connection management uses the existing workspace owner auth
 
 test("one default AI management policy refuses a team member for every AI setting and allows the owner", async () => {
   await withTempDir(async (root) => {
-    const runtime = createAccountsRuntime({ systemRoot: path.join(root, "system") });
+    const runtime = createAccountsRuntime({ env: process.env, systemRoot: path.join(root, "system") });
     const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: runtime });
     const member = { role: "member", username: "member" };
     const owner = { role: "owner", username: "owner" };
@@ -2613,7 +2633,7 @@ test("one default AI management policy refuses a team member for every AI settin
     }
     assert.deepEqual(await service.initializeModelRouting({ vibe64User: member }), { ok: true, initialized: [] });
     assert.equal((await service.readCodexProviders({ vibe64User: owner })).ok, true);
-    const composed = createAccountsRuntime({ systemRoot: path.join(root, "system"),
+    const composed = createAccountsRuntime({ env: process.env, systemRoot: path.join(root, "system"),
       requireAiManagement: () => ({ ok: false, code: "host_refused", error: "Refused by the host." }) });
     assert.equal((await createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: composed }).startAuth({ accountId: "claude", vibe64User: owner })).code, "host_refused",
       "a host policy replaces the default for Claude too");
@@ -2646,7 +2666,7 @@ async function routingAccountsFixture(root) {
     })) });
   const events = [];
   const denied = { ok: false, code: "owner_only", error: "Only the owner can configure routing." };
-  const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ systemRoot: root,
+  const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: root,
     requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" ? null : denied }),
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options),
     publishAccountChanged: async (...args) => { events.push(args); } });
@@ -2708,7 +2728,7 @@ test("initializing a complete saved setup does not wait for live catalogues", as
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
-    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ systemRoot: root }),
+    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: root }),
       inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
     assert.deepEqual(await service.initializeModelRouting({ vibe64User: f.owner }), { ok: true, initialized: [] });
     assert.equal((await f.store.read()).owner.quickHelper.modelId, f.junior.modelId);
@@ -2723,7 +2743,7 @@ test("the session dialog's main selection reads a saved setup without waiting fo
     assert.deepEqual(unsaved, { ok: true, revision: full.revision, canConfigure: true,
       mainSelection: full.setups.owner.roles.senior.recommendation });
     await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
-    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ systemRoot: root }),
+    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: root }),
       inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
     const saved = await service.readModelRouting({ vibe64User: f.owner, view: "main" });
     assert.equal(saved.ok, true, saved.error);
@@ -2929,7 +2949,7 @@ test("routing choice pages preserve the ordinary full view and bound filtered mo
     const choices = Array.from({ length: 43 }, (_, index) => ({ engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: `model-${index}`, label: `Choice ${index}`, providerLabel: "Codex (OpenAI)" }));
     const view = { engines: [{ engineId: "codex", error: "" }], setups: { owner: { roles: { quickHelper: { choices } } }, nonOwner: { roles: {} } } };
-    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ systemRoot: root }),
+    const service = createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: root }),
       inspectRoutingConfiguration: async () => view });
     assert.equal((await service.readModelRouting({})).setups, view.setups);
     const scope = { setup: "owner", choiceRole: "quickHelper" };
