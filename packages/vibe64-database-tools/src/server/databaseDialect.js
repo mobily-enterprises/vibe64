@@ -189,7 +189,7 @@ function databaseDialect(kind = "") {
       : "The session has no canonical database-tool connection.",
     candidate
       ? "vibe64_session_database_client_unsupported"
-      : "vibe64_session_database_unavailable"
+      : "vibe64_session_database_kind_missing"
   );
 }
 
