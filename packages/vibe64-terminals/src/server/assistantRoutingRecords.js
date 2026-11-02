@@ -88,10 +88,10 @@ function createAssistantRoutingRecords({
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {}),
       cleanupExecutionId: helper.executionId || ""
     }, { assistantSelection: helper.selection, vibe64User: state.submittedBy });
-    if (result?.ok !== true) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+    if (result?.ok !== true) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.", "vibe64_assistant_routing_helper_close_failed");
     const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
     if (helper.scope.runtimeRoot !== path.join(root, "runtime") || helper.scope.workdir !== path.join(root, "workdir")) {
-      throw failure("The routing helper directory does not match its request.");
+      throw failure("The routing helper directory does not match its request.", "vibe64_assistant_routing_helper_directory_mismatch");
     }
     await rm(root, { recursive: true, force: true });
   }

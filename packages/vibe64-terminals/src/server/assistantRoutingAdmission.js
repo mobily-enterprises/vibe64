@@ -82,7 +82,7 @@ function createAssistantRoutingAdmission({
     let refusedBeforeAdmission = input.reviewAction !== "retry";
     await exclusive(sessionId, options, async (current) => {
       records.mark(input.messageId, "lock-acquired");
-      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
+      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       context = current;
       key = records.keyFor(sessionId, context);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
@@ -102,26 +102,26 @@ function createAssistantRoutingAdmission({
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
         (options.purpose || explicitDeslop ? { mode: options.purpose || "senior", review: false } : null);
       if (!routingState.allowAuto && preferences?.mode === "auto") {
-        throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
+        throw failure("Auto is available in Main chat only. Choose Senior or Junior.", "vibe64_assistant_routing_auto_main_chat_only");
       }
       if (input.reviewAction === "retry") {
-        if (routingState.running.has(key)) throw failure("Wait for request preparation to finish, or stop it.");
+        if (routingState.running.has(key)) throw failure("Wait for request preparation to finish, or stop it.", "vibe64_assistant_routing_preparation_running");
         state = await read(context.runtime.store, sessionId);
         if (!routingState.allowAuto && state?.mode === "auto") {
-          throw failure("Auto is available in Main chat only. Choose Senior or Junior and send a fresh request.");
+          throw failure("Auto is available in Main chat only. Choose Senior or Junior and send a fresh request.", "vibe64_assistant_routing_auto_retry_unavailable");
         }
         if (state?.messageId !== input.messageId || state.status !== "waiting" ||
             !state.followup &&
               state.delivery !== "uncertain" &&
               !(state.delivery === "accepted" && (state.workflow || state.stage === "planning"))) {
-          throw failure("There is no pending workflow to resume.");
+          throw failure("There is no pending workflow to resume.", "vibe64_assistant_routing_nothing_to_resume");
         }
-        if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.");
+        if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.", "vibe64_assistant_routing_answer_required");
         if (state.delivery !== "uncertain") {
           if (state.delivery === "accepted" || state.followup && !Array.isArray(state.followup.messages)) {
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
             if (usesWorkPlan(state) && plan?.revision !== (state.followup?.planRevision || state.workPlan?.revision)) {
-              throw failure("The retained plan changed. Inspect it and send a fresh request.");
+              throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
             }
             await records.prepareFollowup(context, state, state.stage);
           }
@@ -165,7 +165,7 @@ function createAssistantRoutingAdmission({
       if (state?.messageId === input.messageId &&
           (state.delivery === "uncertain" || state.delivery === "sending" && state.attemptedMessageId === input.messageId)) {
         if (state.input.message !== input.message) {
-          throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+          throw failure("A retry must keep the original message. Cancel it to send an edited request.", "vibe64_assistant_routing_retry_message_changed");
         }
         try {
           direct = await delivery.deliver(sessionId, context, state);
@@ -182,9 +182,9 @@ function createAssistantRoutingAdmission({
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
         if (explicitDeslop) {
-          throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
+          throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.", "vibe64_assistant_routing_deslop_turn_active");
         }
-        if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
+        if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.", "vibe64_assistant_routing_turn_started");
         // A steered message joins the running turn on that turn's mode and model,
         // even after the saved Chat mode (or Custom model) changed.
         if (state?.workflow === true) task.steeringRequestId = state.messageId;
@@ -199,7 +199,7 @@ function createAssistantRoutingAdmission({
         ), { delivery: "not-sent" });
       }
       if (routingState.running.has(key)) {
-        throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
+        throw failure("This conversation is preparing a request. Cancel it or wait before sending another.", "vibe64_assistant_routing_request_preparing");
       }
       if (state?.messageId !== input.messageId && assistantRoutingRequestCanBeReplaced(state)) {
         state.stopped = true;
@@ -210,22 +210,22 @@ function createAssistantRoutingAdmission({
       }
       if (assistantRoutingStatusIsPending(state) && state.messageId !== input.messageId &&
           !assistantRoutingRequestCanBeReplaced(state, vibe64AssistantSelectionFromMetadata(context.session.metadata))) {
-        throw failure("Resolve or cancel the pending request before sending another.");
+        throw failure("Resolve or cancel the pending request before sending another.", "vibe64_assistant_routing_request_unresolved");
       }
       if (state?.helper && state.messageId !== input.messageId) {
-        throw failure("Retry cleanup of the previous routing helper before sending another request.");
+        throw failure("Retry cleanup of the previous routing helper before sending another request.", "vibe64_assistant_routing_helper_cleanup_required");
       }
       if (state?.messageId !== input.messageId && state?.status === "working" && state.delivery === "accepted" && state.workflow === true) {
-        throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.");
+        throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.", "vibe64_assistant_routing_review_preparing");
       }
       if (state?.messageId === input.messageId) {
         if (!routingState.allowAuto && state.mode === "auto") {
-          throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.");
+          throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.", "vibe64_assistant_routing_auto_resend_unavailable");
         }
         if (state.input.message !== input.message) {
-          throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+          throw failure("A retry must keep the original message. Cancel it to send an edited request.", "vibe64_assistant_routing_retry_message_changed");
         }
-        if (state.stopped) throw failure("This request was cancelled. Send your draft as a new request.");
+        if (state.stopped) throw failure("This request was cancelled. Send your draft as a new request.", "vibe64_assistant_routing_request_stopped");
         await decisions.admitMigratedRequest(context, state);
         if (!state.attemptedMessageId) {
           state.status = "working";
@@ -239,23 +239,24 @@ function createAssistantRoutingAdmission({
         records.mark(input.messageId, "goal-read");
         if (explicitDeslop && assistantGoalIsActive(goal)) {
           throw failure(
-            "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again."
+            "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again.",
+            "vibe64_assistant_goal_deslop_blocked"
           );
         }
         if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) {
-          throw failure("Choose Senior or Junior before working on a goal.");
+          throw failure("Choose Senior or Junior before working on a goal.", "vibe64_assistant_goal_auto_unsupported");
         }
         const saved = await records.readRoutingSettings();
         const pinnedGoal = assistantGoalIsActive(goal) && savedGoal;
         if (options.purpose && assistantGoalIsActive(goal) && pinnedGoal?.mode !== options.purpose) {
-          throw failure("Finish or cancel the current goal before starting this Junior task.");
+          throw failure("Finish or cancel the current goal before starting this Junior task.", "vibe64_assistant_goal_junior_task_blocked");
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
         const hasPlanRevision = Boolean(input.planRevision);
         const plan = mode === "auto" ? await readWorkPlan(context) : null;
-        if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.");
+        if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.", "vibe64_assistant_routing_plan_requires_auto");
         if (hasPlanRevision && (!plan || plan.status !== "active" || plan.revision !== input.planRevision)) {
-          throw failure("The active plan changed. Read the current plan before sending your request.");
+          throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
@@ -320,13 +321,13 @@ function createAssistantRoutingAdmission({
         if (assistantGoalIsActive(goal) &&
             !pinnedGoal &&
             !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, selection)) {
-          throw failure("Finish or cancel the current goal before changing its AI.");
+          throw failure("Finish or cancel the current goal before changing its AI.", "vibe64_assistant_goal_ai_change_blocked");
         }
         // A goal pins its model, not a login that may have been replaced. This
         // new request captures current access; validateDecision still fences delivery.
         if (pinnedGoal?.selection &&
             !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
-          throw failure("The goal's pinned AI is no longer available. Choose its destination before resuming.");
+          throw failure("The goal's pinned AI is no longer available. Choose its destination before resuming.", "vibe64_assistant_goal_pinned_ai_unavailable");
         }
         state.assignments = Object.fromEntries(
           Object.entries(decisions.destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection])
@@ -334,12 +335,12 @@ function createAssistantRoutingAdmission({
         await records.save(context, state);
         records.mark(input.messageId, "route-saved");
       }
-      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
+      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       task.close = async () => {
         await cancellation.cancel(sessionId, options, { waitForCleanup: true });
         const persisted = await read(context.runtime.store, sessionId);
         if (persisted?.messageId === state.messageId && persisted.helper) {
-          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.", "vibe64_assistant_routing_helper_close_failed");
         }
       };
       task.messageId = state.messageId;
@@ -397,11 +398,11 @@ function createAssistantRoutingAdmission({
         state.review = state.workflow;
         if (decision.reason === "conversation") state.workPlan = null;
       }
-      if (task.cancelled) throw failure("Routing cancelled.");
+      if (task.cancelled) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       return await exclusive(sessionId, options, async (current) => {
         records.mark(state.messageId, "delivery-lock-acquired");
         const persisted = await read(current.runtime.store, sessionId);
-        if (task.cancelled || persisted?.stopped) throw failure("Routing cancelled.");
+        if (task.cancelled || persisted?.stopped) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
         return delivery.deliver(sessionId, current, state);
       });
     } catch (error) {

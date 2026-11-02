@@ -237,9 +237,9 @@ function createClaudeConversationHost({
       check(entry) {
         if (operation === "start" && context.assistantScope && JSON.stringify(entry.profile || null) !==
             JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
-          throw claudeConversationError("The scoped helper profile changed. Start a new helper.");
+          throw claudeConversationError("The scoped helper profile changed. Start a new helper.", "vibe64_claude_helper_profile_changed");
         }
-        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.");
+        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.", "vibe64_claude_main_conversation_delete_refused");
       }
     };
   }

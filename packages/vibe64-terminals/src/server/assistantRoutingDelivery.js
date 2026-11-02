@@ -51,7 +51,7 @@ function createAssistantRoutingDelivery({
 }) {
   async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
     if (!routingState.allowAuto && state.mode === "auto") {
-      throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.");
+      throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.", "vibe64_assistant_routing_auto_delivery_unavailable");
     }
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
@@ -113,9 +113,9 @@ function createAssistantRoutingDelivery({
     // It cannot continue into selection, preparation or native dispatch.
     if (inspectionOnly) return null;
     if (followup && state.mode !== "auto") {
-      throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
+      throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.", "vibe64_assistant_routing_followup_requires_auto");
     }
-    if (state.stopped) throw failure("This request was stopped. Send a new request to continue.");
+    if (state.stopped) throw failure("This request was stopped. Send a new request to continue.", "vibe64_assistant_routing_delivery_stopped");
     await decisions.validateDecision(context, state, followup);
     records.mark(state.messageId, "deliver-validated");
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
@@ -125,11 +125,11 @@ function createAssistantRoutingDelivery({
     if ((workflow && workflow !== state.workflowEngineId) ||
         !sameVibe64AssistantSelection(currentSelection, expected) &&
           !sameVibe64AssistantSelection(currentSelection, state.deliverySelection)) {
-      throw failure("The orchestrator changed while this request was being prepared. Cancel it and send a new request.");
+      throw failure("The orchestrator changed while this request was being prepared. Cancel it and send a new request.", "vibe64_assistant_routing_orchestrator_changed");
     }
-    if (state.helper) throw failure("The routing helper still needs cleanup before this request can be delivered.");
+    if (state.helper) throw failure("The routing helper still needs cleanup before this request can be delivered.", "vibe64_assistant_routing_delivery_cleanup_required");
     const native = await agent.sessionState(sessionId, context);
-    if (native?.turn?.active) throw failure("Wait for the current turn to finish before sending a new request.");
+    if (native?.turn?.active) throw failure("Wait for the current turn to finish before sending a new request.", "vibe64_assistant_routing_turn_active");
     // The goal read above is already inside this same exclusive section.
     if (followup && assistantGoalIsActive(goal)) {
       state.status = "waiting";
@@ -138,7 +138,7 @@ function createAssistantRoutingDelivery({
       return { ok: true, skipped: true };
     }
     if (followup && (native?.pendingRequests?.length || native?.turn?.waitingForInput)) {
-      throw failure("Answer the pending question or approval before continuing.");
+      throw failure("Answer the pending question or approval before continuing.", "vibe64_assistant_routing_question_pending");
     }
     if (followup) {
       const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
@@ -147,13 +147,13 @@ function createAssistantRoutingDelivery({
           JSON.stringify(messages) !== JSON.stringify(state.followup.messages) || usesWorkPlan(state) &&
             plan?.status !== "active" &&
             !(state.stage === "review" && plan?.status === "completed")) {
-        throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.");
+        throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.", "vibe64_assistant_routing_continuation_changed");
       }
     }
     if (!followup && state.mode === "auto" && state.input.planRevision) {
       const plan = await readWorkPlan(context);
       if (!plan || plan.status !== "active" || plan.revision !== state.input.planRevision) {
-        throw failure("The active plan changed before execution started. Read it and send your execution request again.");
+        throw failure("The active plan changed before execution started. Read it and send your execution request again.", "vibe64_assistant_routing_execution_plan_changed");
       }
     }
     const includePlanInstructions = state.task !== "deslop" && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
@@ -205,7 +205,7 @@ function createAssistantRoutingDelivery({
       }
     }, selectedContext);
     records.mark(state.messageId, "dispatched");
-    if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
+    if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code || "vibe64_assistant_routing_delivery_unconfirmed");
     // A Cancel that arrived during dispatch stops the turn this message started.
     if (records.isCancelling(sessionId, context, messageId)) {
       await interrupt(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {

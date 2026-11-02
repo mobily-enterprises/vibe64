@@ -131,7 +131,7 @@ function createClaudeConversationEnvironment({
       sessionId: context.sessionId,
       worktreePath: context.workdir
     });
-    if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.");
+    if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.", "vibe64_claude_operation_failed");
     return {
       ...prepared,
       env: {

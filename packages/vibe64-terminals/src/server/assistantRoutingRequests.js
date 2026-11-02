@@ -16,7 +16,7 @@ const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
-function failure(message, code = "vibe64_assistant_routing_unavailable") {
+function failure(message, code) {
   return new AppError(409, message, { code });
 }
 function parseRequest(value) {

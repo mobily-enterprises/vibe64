@@ -62,7 +62,7 @@ test("Junior updates verified checklist ticks without changing scope or completi
   const evidence = await f.change("progress-write", "junior", { text: "# Progress\nSupervisor check passed; access proof remains open.\n" });
   const partial = text.replace("[ ] Save", "[x] Save");
   await assert.rejects(manageWorkPlan(f.context, { operation: "write", text: partial,
-    expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }, "junior"), { code: "vibe64_work_plan_changed" });
+    expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }, "junior"), { code: "vibe64_work_plan_progress_changed" });
   const updated = await f.change("write", "junior", { text: partial });
   assert.equal(updated.checked, 1);
   assert.equal(updated.total, 4);
@@ -274,7 +274,7 @@ test("paired progress writes preserve scope and explicit Senior completion rejec
   assert.equal(updated.revision, first.revision);
   assert.notEqual(updated.progressRevision, first.progressRevision);
   await assert.rejects(manageWorkPlan(f.context, { operation: "complete", expectedRevision: first.revision,
-    expectedProgressRevision: first.progressRevision }, "review"), { code: "vibe64_work_plan_changed" });
+    expectedProgressRevision: first.progressRevision }, "review"), { code: "vibe64_work_plan_progress_changed" });
   assert.equal((await readWorkPlan(f.context)).status, "active");
   // This explicit command is the admitted Senior decision, not a server inference of a pass.
   const completed = await f.change("complete", "review");
@@ -321,7 +321,7 @@ test("paired pages preserve full Unicode and reject progress replacement without
   assert.equal(plan, expected.text); assert.equal(progress, expected.progressText);
   await f.change("progress-write", "junior", { text: "# Progress\nChanged evidence" });
   await assert.rejects(readWorkPlanPage(f.context, { offset: first.nextOffset, limit: 100,
-    expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }), { code: "vibe64_work_plan_changed" });
+    expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }), { code: "vibe64_work_plan_read_changed" });
 });
 
 test("full paired agent reads retain detailed implementation instructions beyond the first page", async t => {

@@ -81,7 +81,7 @@ test("working plan pages preserve full Unicode text and reject mixing revisions"
   await assert.rejects(readWorkPlanPage(f.context, { offset: page.totalCharacters + 1, expectedRevision: revision }),
     { code: "vibe64_work_plan_offset_invalid" });
   await publishPlanFixture(f.context, `${text}\nchanged`);
-  await assert.rejects(readWorkPlanPage(f.context, { offset: 16000, expectedRevision: revision }), { code: "vibe64_work_plan_changed" });
+  await assert.rejects(readWorkPlanPage(f.context, { offset: 16000, expectedRevision: revision }), { code: "vibe64_work_plan_read_changed" });
   assert.notEqual((await readWorkPlanPage(f.context)).revision, revision);
   assert.equal(f.sends.length, 0);
 });
@@ -1072,7 +1072,7 @@ test("a new message refused before admission is a definite not-sent rejection th
   f.agent.readGoal = async () => ({ status: "available", goal: { status: "paused" } });
   const metadata = structuredClone(f.metadata);
   await assert.rejects(f.service.send("session-1", { ...request, messageId: "deslop-during-goal", message: "deslop" }, f.context), {
-    code: "vibe64_assistant_routing_unavailable", statusCode: 409, delivery: "not-sent",
+    code: "vibe64_assistant_goal_deslop_blocked", statusCode: 409, delivery: "not-sent",
     message: "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again."
   });
   assert.deepEqual(f.metadata, metadata, "the refusal records no routing request");

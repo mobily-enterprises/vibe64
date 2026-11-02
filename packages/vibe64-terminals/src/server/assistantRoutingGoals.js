@@ -78,10 +78,10 @@ function createAssistantRoutingGoals({
     if (!preferences) return { input, context };
     const previous = assistantRoutingGoalFromMetadata(context.session.metadata);
     if (preferences.mode === "auto" && !(input.action === "resume" && previous)) {
-      throw failure("Choose Senior or Junior before starting a goal.");
+      throw failure("Choose Senior or Junior before starting a goal.", "vibe64_assistant_goal_role_required");
     }
     const rebind = input.action === "rebind";
-    if (rebind && !input.goal) throw failure("The native goal is unavailable. Read its status again before changing its model.");
+    if (rebind && !input.goal) throw failure("The native goal is unavailable. Read its status again before changing its model.", "vibe64_assistant_goal_unavailable");
     const saved = await records.readRoutingSettings();
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const resume = input.action === "resume" && previous;
@@ -110,11 +110,11 @@ function createAssistantRoutingGoals({
     const workflowEngineId = (retainGoalSettings && previous.workflowEngineId) || decision.engineId;
     if (resume && (previous.selection.engineId !== selection.engineId ||
         retainGoalSettings && !sameVibe64AssistantSelection(previous.selection, selection))) {
-      throw failure("The goal's pinned AI changed. Select the intended model again before resuming.");
+      throw failure("The goal's pinned AI changed. Select the intended model again before resuming.", "vibe64_assistant_goal_pinned_ai_changed");
     }
     if (rebind) {
       if (selection.engineId !== current.engineId || input.selection && !sameVibe64AssistantSelection(selection, input.selection)) {
-        throw failure("The goal's selected model changed. Choose its model again.");
+        throw failure("The goal's selected model changed. Choose its model again.", "vibe64_assistant_goal_model_changed");
       }
       return {
         pinned: {

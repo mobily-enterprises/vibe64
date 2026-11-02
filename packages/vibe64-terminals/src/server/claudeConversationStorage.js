@@ -155,7 +155,7 @@ function createClaudeConversationStorage({ createError: error }) {
     return (async () => {
       try {
         const saved = await readFile(scopedConversationPath(ctx, id), "utf8");
-        if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.");
+        if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.", "vibe64_claude_conversation_release_required");
         return saved;
       } catch (failure) {
         if (failure.code !== "ENOENT") throw failure;

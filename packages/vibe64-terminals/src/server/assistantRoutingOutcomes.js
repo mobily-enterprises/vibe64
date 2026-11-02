@@ -51,39 +51,35 @@ function createAssistantRoutingOutcomes({
       if (!state || state.mode !== "auto" || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
           input.turnId !== state.turnId || input.stage !== state.stage) {
-        throw failure(
-          "The workflow outcome does not match the active request and turn."
-        );
+        throw failure("The workflow outcome does not match the active request and turn.", "vibe64_assistant_workflow_outcome_mismatch");
       }
       await decisions.validateDecision(context, state, Boolean(state.followup));
       const native = await agent.sessionState(sessionId, context);
       if (!native?.turn?.active || native.turn.id && native.turn.id !== state.turnId) {
-        throw failure("Only the active workflow turn can report its outcome.");
+        throw failure("Only the active workflow turn can report its outcome.", "vibe64_assistant_workflow_turn_inactive");
       }
       if (!["continue", "handoff", "wait", "complete"].includes(input.decision) ||
           typeof input.explanation !== "string" || !input.explanation.trim() || input.explanation.length > 2000 || typeof input.progress !== "boolean") {
-        throw failure("Report continue, handoff, wait or complete with a concrete explanation and progress boolean.");
+        throw failure("Report continue, handoff, wait or complete with a concrete explanation and progress boolean.", "vibe64_assistant_workflow_outcome_invalid");
       }
       if (state.stage === "planning" && !["continue", "wait"].includes(input.decision)) {
-        throw failure("Planning alone does not authorise implementation or plan completion.");
+        throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
       }
       if (input.decision === "complete" && (state.stage !== "review" || assistantWorkflowRole(state) !== "senior")) {
-        throw failure("Only Senior can complete a verified review.");
+        throw failure("Only Senior can complete a verified review.", "vibe64_assistant_workflow_completion_senior_only");
       }
       const plan = await readWorkPlan(context);
       const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
           (input.expectedProgressRevision || null) !== plan.progressRevision)) {
-        throw failure(
-          "Read the complete current Plan and Progress before reporting this outcome."
-        );
+        throw failure("Read the complete current Plan and Progress before reporting this outcome.", "vibe64_assistant_workflow_plan_unread");
       }
       if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
           workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
-        throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.");
+        throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.", "vibe64_assistant_workflow_plan_incomplete");
       }
       if (involvesPlan && input.decision !== "complete" && plan.status !== "active") {
-        throw failure("The involved plan is no longer active.");
+        throw failure("The involved plan is no longer active.", "vibe64_assistant_workflow_plan_inactive");
       }
       state.planInvolved = involvesPlan;
       state.workPlan = involvesPlan ? plan : null;

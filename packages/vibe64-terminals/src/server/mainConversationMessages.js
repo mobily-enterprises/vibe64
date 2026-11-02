@@ -234,7 +234,7 @@ function createClaudeConversationMessagePolicy({
   const error = claudeConversationError;
   const ENGINE = "claude";
   async function prepareMessage(entry, input, { context: ctx, message, steering, renewal, deliveryTiming }) {
-    if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.");
+    if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.", "vibe64_claude_helper_input_too_large");
     // JSKIT's delivery observer records these declared marks when it supplies one.
     const started = performance.now();
     const stages = {};
@@ -281,7 +281,7 @@ function createClaudeConversationMessagePolicy({
     }
     // The attachment owner already added validated paths to the prompt.
     if (input.attachments?.length && (entry.profile || ctx.assistantScope)) {
-      throw error("These attachments cannot be passed to Claude.");
+      throw error("These attachments cannot be passed to Claude.", "vibe64_claude_attachments_unsupported");
     }
     return prompt;
   }
