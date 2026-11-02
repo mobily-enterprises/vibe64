@@ -130,7 +130,15 @@ test("strict definitions reject ambiguous membership, missing roots, oversized a
     (value) => { value.version = 2; },
     (value) => { value.actors[0].sql = "SELECT 1"; }
   ]) { const value = bookingOverview(); change(value); assert.throws(() => validateDataOverview(value), /Data overview:/u); }
-  assert.throws(() => validateDataOverview(null));
+  assert.throws(() => validateDataOverview(null), {
+    status: 400,
+    code: "vibe64_database_overview_object_required",
+    params: { label: "document" }
+  });
+  assert.throws(() => validateDataOverview({ version: 2, actors: [] }), {
+    status: 400,
+    code: "vibe64_database_overview_version_unsupported"
+  });
   assert.deepEqual(validateDataOverview({ version: 1, actors: [] }), { version: 1, actors: [] });
 });
 
@@ -369,7 +377,11 @@ test("PostgreSQL schema distinctions and constraint names remain exact across da
   }
   const mysql = { engine: "mysql", database: "session_one" };
   assert.equal(dataOverviewReference(mysql, "session_one.bookings:fk_session_one.contacts"), "bookings:fk_session_one.contacts");
-  assert.throws(() => dataOverviewReference(mysql, "session_one_other.bookings:fk"), /outside the selected database/);
+  assert.throws(() => dataOverviewReference(mysql, "session_one_other.bookings:fk"), {
+    code: "vibe64_database_overview_reference_outside",
+    message: /outside the selected database/,
+    params: { reference: "session_one_other.bookings:fk" }
+  });
 });
 
 test("database-qualified MySQL source is rejected as invalid without rewriting or losing authored choices", async (t) => {

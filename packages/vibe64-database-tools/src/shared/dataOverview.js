@@ -1,3 +1,5 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
+
 export const DATA_OVERVIEW_PATH = "data-overview.json";
 export const DATA_OVERVIEW_MAX_BYTES = 256 * 1024;
 export const DATA_OVERVIEW_ABSTRACTIONS = [
@@ -30,32 +32,41 @@ export const DATA_OVERVIEW_INSTRUCTIONS = [
 ].join("\n");
 
 export function validateDataOverview(value) {
-  const fail = (message) => {
-    throw new Error(`Data overview: ${message}`);
+  // Each sentence is a 400 refusal with its own code; params carry the values it names.
+  const fail = (message, code, params) => {
+    throw new AppError(400, `Data overview: ${message}`, { code, params });
   };
   const record = (item, fields, label) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) fail(`${label} must be an object.`);
-    if (Object.keys(item).some((key) => !fields.includes(key))) fail(`${label} contains unknown fields.`);
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      fail(`${label} must be an object.`, "vibe64_database_overview_object_required", { label });
+    }
+    if (Object.keys(item).some((key) => !fields.includes(key))) {
+      fail(`${label} contains unknown fields.`, "vibe64_database_overview_fields_unknown", { label });
+    }
   };
   const text = (item, label, limit) => {
     if (typeof item !== "string" || !item.trim() || item.length > limit) {
-      fail(`${label} must be non-empty text of at most ${limit} characters.`);
+      fail(`${label} must be non-empty text of at most ${limit} characters.`, "vibe64_database_overview_text_invalid", { label, limit });
     }
     return item.trim();
   };
   record(value, ["version", "actors", "abstraction", "reviewedTables", "rings", "mainRelationships", "positions"], "document");
-  if (value.version !== 1) fail("version must be 1.");
-  if (!Array.isArray(value.actors) || value.actors.length > 2000) fail("actors must be an array of at most 2000 items.");
+  if (value.version !== 1) fail("version must be 1.", "vibe64_database_overview_version_unsupported");
+  if (!Array.isArray(value.actors) || value.actors.length > 2000) {
+    fail("actors must be an array of at most 2000 items.", "vibe64_database_overview_actors_invalid");
+  }
   if (value.abstraction !== undefined && !DATA_OVERVIEW_ABSTRACTIONS.some((item) => item.value === value.abstraction)) {
-    fail("abstraction must be none, balanced or high.");
+    fail("abstraction must be none, balanced or high.", "vibe64_database_overview_abstraction_invalid");
   }
   let reviewedTables;
   if (value.reviewedTables !== undefined) {
     if (!Array.isArray(value.reviewedTables) || value.reviewedTables.length > 2000) {
-      fail("reviewedTables must be an array of at most 2000 table names.");
+      fail("reviewedTables must be an array of at most 2000 table names.", "vibe64_database_overview_reviewed_tables_invalid");
     }
     reviewedTables = value.reviewedTables.map((entry) => text(entry, "reviewed table name", 512));
-    if (new Set(reviewedTables).size !== reviewedTables.length) fail("reviewedTables must not repeat a table.");
+    if (new Set(reviewedTables).size !== reviewedTables.length) {
+      fail("reviewedTables must not repeat a table.", "vibe64_database_overview_reviewed_table_repeated");
+    }
   }
   const assigned = new Set();
   const actors = value.actors.map((actor) => {
@@ -63,44 +74,56 @@ export function validateDataOverview(value) {
     const table = text(actor.table, "actor table", 512);
     const name = text(actor.name, "actor name", 120);
     if (typeof actor.description !== "string" || actor.description.length > 600) {
-      fail("description must be text of at most 600 characters.");
+      fail("description must be text of at most 600 characters.", "vibe64_database_overview_description_invalid");
     }
     if (!Array.isArray(actor.tables) || !actor.tables.length || actor.tables.length > 2000) {
-      fail(`${name} must include between 1 and 2000 tables.`);
+      fail(`${name} must include between 1 and 2000 tables.`, "vibe64_database_overview_actor_tables_invalid", { name });
     }
     const tables = actor.tables.map((entry) => {
       const id = text(entry, "table name", 512);
-      if (assigned.has(id)) fail(`${id} belongs to more than one group or is repeated.`);
+      if (assigned.has(id)) {
+        fail(`${id} belongs to more than one group or is repeated.`, "vibe64_database_overview_table_repeated", { table: id });
+      }
       assigned.add(id);
       return id;
     });
-    if (!tables.includes(table)) fail(`${name} must include its main table ${table}.`);
+    if (!tables.includes(table)) {
+      fail(`${name} must include its main table ${table}.`, "vibe64_database_overview_main_table_excluded", { name, table });
+    }
     return { table, name, description: actor.description.trim(), tables };
   });
-  if (assigned.size > 2000) fail("at most 2000 tables may be classified.");
+  if (assigned.size > 2000) fail("at most 2000 tables may be classified.", "vibe64_database_overview_tables_too_many");
   let rings;
   if (value.rings !== undefined) {
-    if (!Array.isArray(value.rings) || value.rings.length > 2000) fail("rings must be an array of at most 2000 rings.");
+    if (!Array.isArray(value.rings) || value.rings.length > 2000) {
+      fail("rings must be an array of at most 2000 rings.", "vibe64_database_overview_rings_invalid");
+    }
     const mainTables = new Set(actors.map((actor) => actor.table));
     const placed = new Set();
     rings = value.rings.map((ring) => {
-      if (!Array.isArray(ring) || !ring.length || ring.length > 2000) fail("each ring must contain actor main tables.");
+      if (!Array.isArray(ring) || !ring.length || ring.length > 2000) {
+        fail("each ring must contain actor main tables.", "vibe64_database_overview_ring_invalid");
+      }
       return ring.map((entry) => {
         const table = text(entry, "ring actor", 512);
-        if (!mainTables.has(table) || placed.has(table)) fail("rings must contain each actor exactly once, using its main table.");
+        if (!mainTables.has(table) || placed.has(table)) {
+          fail("rings must contain each actor exactly once, using its main table.", "vibe64_database_overview_ring_actor_invalid");
+        }
         placed.add(table);
         return table;
       });
     });
-    if (placed.size !== actors.length) fail("rings must place every actor.");
+    if (placed.size !== actors.length) fail("rings must place every actor.", "vibe64_database_overview_ring_actor_unplaced");
   }
   let mainRelationships;
   if (value.mainRelationships !== undefined) {
     if (!Array.isArray(value.mainRelationships) || value.mainRelationships.length > 2000) {
-      fail("mainRelationships must be an array of at most 2000 relationship IDs.");
+      fail("mainRelationships must be an array of at most 2000 relationship IDs.", "vibe64_database_overview_main_relationships_invalid");
     }
     mainRelationships = value.mainRelationships.map((entry) => text(entry, "main relationship ID", 1024));
-    if (new Set(mainRelationships).size !== mainRelationships.length) fail("mainRelationships must not repeat an ID.");
+    if (new Set(mainRelationships).size !== mainRelationships.length) {
+      fail("mainRelationships must not repeat an ID.", "vibe64_database_overview_main_relationship_repeated");
+    }
   }
   let positions;
   if (value.positions !== undefined) {
@@ -109,7 +132,7 @@ export function validateDataOverview(value) {
     positions = Object.fromEntries(Object.entries(value.positions).map(([table, position]) => {
       record(position, ["x", "y"], "actor position");
       if (![position.x, position.y].every(n => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 1000000)) {
-        fail("actor coordinates must be finite numbers between -1000000 and 1000000.");
+        fail("actor coordinates must be finite numbers between -1000000 and 1000000.", "vibe64_database_overview_position_invalid");
       }
       return [table, { x: position.x, y: position.y }];
     }));
