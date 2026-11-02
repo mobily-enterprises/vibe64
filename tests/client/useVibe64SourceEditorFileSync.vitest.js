@@ -196,7 +196,7 @@ describe("useVibe64SourceEditorFileSync", () => {
 
   it("keeps the parent and Files active bindings as source contracts", () => {
     const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue",
       import.meta.url
     ), "utf8");
     const files = readFileSync(new URL(

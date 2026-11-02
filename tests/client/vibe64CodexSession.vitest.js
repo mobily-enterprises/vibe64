@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const componentPath = path.resolve("src/components/studio/Vibe64CodexSession.vue");
+const presentationPath = path.resolve("src/composables/useCodexTerminalPresentation.js");
 
 describe("Vibe64CodexSession", () => {
   it("composes Codex behavior around the canonical terminal element", () => {
@@ -34,7 +35,7 @@ describe("Vibe64CodexSession", () => {
       expect(file).toContain("useVibe64AgentTerminalDisplay(props,");
     }
     expect(source).not.toContain("terminalStartButtonIcon");
-    expect(source).toMatch(/terminalStartIcon = computed\(\(\) => \(\s*terminalReconnectRequired\.value \|\|/u);
+    expect(readFileSync(presentationPath, "utf8")).toMatch(/terminalStartIcon = computed\(\(\) => \(\s*terminalReconnectRequired\.value \|\|/u);
     expect(source).not.toContain("handleTerminalAttachmentDrag");
     expect(source).toContain('@dragenter.prevent="terminalAttachmentsEnabled && handleAttachmentDragEnter($event)"');
   });

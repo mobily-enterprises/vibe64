@@ -1404,6 +1404,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64AgentTurnState.js`
+- `src/composables/useVibe64AutopilotChatPane.js`
+- `src/composables/useVibe64MainChatDelivery.js`
+- `src/lib/vibe64AutopilotViewProps.js`
 - `src/composables/useVibe64ConversationLog.js`
 - `src/composables/useArchivedVibe64ConversationHistory.js`
 - `src/composables/useVibe64MountedSessionData.js`
@@ -1411,6 +1415,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64PromptHints.js`
 - `src/composables/useAgentTerminalAttachments.js`
 - `src/components/studio/Vibe64CodexSession.vue`
+- `src/composables/useCodexTerminalLifecycle.js`
+- `src/composables/useCodexTerminalPresentation.js`
 - `src/components/studio/Vibe64InteractiveTerminal.vue`
 - `src/components/studio/Vibe64NativeAgentSession.vue`
 - `src/components/studio/Vibe64AgentTerminalStartPanel.vue`
@@ -1422,6 +1428,9 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64TerminalLifecycle.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotChat.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue`
 - `src/components/studio/vibe64-session/Vibe64RoutingNotice.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
@@ -3770,7 +3779,7 @@ its user-authorized connection workflow remains separate from ordinary chat.
 | [codexAuthState.js](../../../packages/vibe64-core/src/server/codexAuthState.js): `readCodexAuthStatus`, `readCodexLoginId`, `codexAuthStateSignature`, marker/reconnect writers; [codexAuth.js](../../../packages/vibe64-core/src/shared/codexAuth.js) | Accounts, provider preparation and connection replacement use application connection-generation records and shared reconnect presentation. These are not a native credential parser or login implementation. |
 | [curatedCodexProviders.js](../../../packages/vibe64-core/src/shared/curatedCodexProviders.js): `CURATED_CODEX_PROVIDERS`, `curatedCodexProvider`, `curatedCodexModel` | Accounts, routing, settings and capability presentation select product labels, defaults and supported plans. Native provider routes/model capabilities come from JSKIT's `nativeAiProvider` / `nativeAiModel`. |
 | [useCodexProviderConnections.js](../../../packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js); [claude-auth-browser](../../../packages/vibe64-accounts/bin/claude-auth-browser) | Accounts settings use the supplied HTTP resource/command owners. The login browser handoff validates the CLI's authorized URL and writes the private remote-browser handoff; the unmodified CLI owns OAuth exchange and credential storage. |
-| [Vibe64CodexSession.vue](../../../src/components/studio/Vibe64CodexSession.vue), [useVibe64CodexCommands.js](../../../src/composables/useVibe64CodexCommands.js), [useCodexTerminalOutput.js](../../../src/composables/useCodexTerminalOutput.js) | `Vibe64SessionRuntimeHost` mounts the actual Codex terminal. Its command shorthand reuses common terminal/attachment commands; local output/activity timers affect terminal presentation, not chat admission, inference or completion. |
+| [Vibe64CodexSession.vue](../../../src/components/studio/Vibe64CodexSession.vue), [useVibe64CodexCommands.js](../../../src/composables/useVibe64CodexCommands.js), [useCodexTerminalOutput.js](../../../src/composables/useCodexTerminalOutput.js), [useCodexTerminalLifecycle.js](../../../src/composables/useCodexTerminalLifecycle.js), [useCodexTerminalPresentation.js](../../../src/composables/useCodexTerminalPresentation.js) | `Vibe64SessionRuntimeHost` mounts the actual Codex terminal. Its command shorthand reuses common terminal/attachment commands; the lifecycle composable starts, attaches, reconnects and closes the terminal, and the presentation composable words its start panel. Local output/activity timers affect terminal presentation, not chat admission, inference or completion. |
 | [codexOutput.js](../../../src/lib/codexOutput.js): `stripTerminalControlSequences`, `terminalLastMeaningfulLine`; [vibe64CodexTerminalAttention.js](../../../src/lib/vibe64CodexTerminalAttention.js): attention/reconnect predicates | Terminal surfaces and session presentation strip terminal control bytes, build bounded summaries and show saved-state attention/reconnect indicators. No native command or chat transport is created. |
 
 `src/assets/codex-device-code-authorize.png` and

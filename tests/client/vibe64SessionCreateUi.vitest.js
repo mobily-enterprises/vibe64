@@ -376,7 +376,7 @@ describe("session creation controls", () => {
       "src/components/studio/Vibe64SessionPanel.vue"
     ), "utf8");
     const autopilotSource = fs.readFileSync(path.resolve(
-      "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
+      "src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue"
     ), "utf8");
     const runtimeHostSource = fs.readFileSync(path.resolve(
       "src/composables/useVibe64SessionRuntimeHost.js"

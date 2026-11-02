@@ -140,6 +140,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/components/studio/Vibe64OutputOptionsDialog.vue`
 - `src/components/studio/Vibe64PreviewRouteDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/composables/useVibe64OutputControls.js`
 - `src/composables/useVibe64OutputStatus.js`

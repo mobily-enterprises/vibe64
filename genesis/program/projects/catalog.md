@@ -31,6 +31,7 @@ workspace.
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `docs/colleague-usage/starter-apps.md`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `server.js`
 - `packages/vibe64-core/src/server/logging.js`

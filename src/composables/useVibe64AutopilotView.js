@@ -1,16 +1,11 @@
-import { cancelOwnsMessage, chatTurnsWithRouting, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, ref, unref, watch } from "vue";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useRouter } from "vue-router";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import {
-  chatMessagePayload,
-  createChatMessageId
-} from "@/lib/vibe64ChatMessage.js";
-import { draftWithRestoredMessage, unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
@@ -27,24 +22,20 @@ import {
   defineVibe64AsyncComponent
 } from "@/lib/vibe64AsyncComponent.js";
 import {
-  readLocalStorageJson,
-  writeLocalStorageJson
-} from "@/lib/browserLocalStorage.js";
-import { vibe64RequestAccepted } from "@/lib/vibe64ApiResponses.js";
-import {
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
   VIBE64_WELCOME_NAME_KEY
 } from "@/lib/vibe64WelcomeName.js";
+import { useVibe64AgentTurnState } from "@/composables/useVibe64AgentTurnState.js";
+import { emptyConversationWelcomeText, useVibe64AutopilotChatPane } from "@/composables/useVibe64AutopilotChatPane.js";
+import { useVibe64MainChatDelivery } from "@/composables/useVibe64MainChatDelivery.js";
 import { useVibe64SessionSaveWork } from "@/composables/useVibe64SessionSaveWork.js";
 import { useVibe64SessionToolPane } from "@/composables/useVibe64SessionToolPane.js";
+import { useVibe64ShortActionDismissals } from "@/composables/useVibe64ShortActionDismissals.js";
 import { useVibe64TemporaryAiRepairs } from "@/composables/useVibe64TemporaryAiRepairs.js";
 import { useVibe64WorkspaceSetupActivity } from "@/composables/useVibe64WorkspaceSetupActivity.js";
 
-const EMPTY_CONVERSATION_WELCOME = "Hi! 👋 I’m excited to build something with you. Tell me what you have in mind—even a half-formed idea is perfect. We’ll shape it together.";
-const EXISTING_PROJECT_CONVERSATION_WELCOME = "Hi! 👋 This is an existing project. Tell me what you’d like to change, check, or improve, and we’ll work through it together.";
-const RENEWED_SESSION_CONVERSATION_WELCOME = "Hi! 👋 I’ve received the handover from the previous session and I’m ready to continue. Tell me what you’d like to do next.";
 const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";
 const NUMBERED_QUESTION_UNSURE_CHOICE = Object.freeze({
   label: NUMBERED_QUESTION_UNSURE_VALUE,
@@ -52,169 +43,6 @@ const NUMBERED_QUESTION_UNSURE_CHOICE = Object.freeze({
   selectLabel: NUMBERED_QUESTION_UNSURE_VALUE,
   value: NUMBERED_QUESTION_UNSURE_VALUE
 });
-const EXECUTION_CAPACITY_ERROR_CODES = new Set([
-  "vibe64_capacity_rejected"
-]);
-const EXECUTION_SAFETY_ERROR_CODES = new Set([
-  "vibe64_codex_app_server_cleanup_required",
-  "vibe64_codex_app_server_metadata_failed",
-  "vibe64_codex_app_server_process_identity_unverified",
-  "vibe64_codex_helper_runtime_cleanup_required",
-  "vibe64_codex_helper_runtime_metadata_failed",
-  "vibe64_execution_cleanup_required",
-  "vibe64_execution_drain_failed",
-  "vibe64_execution_ownership_unknown",
-  "vibe64_managed_execution_provider_unavailable"
-]);
-const SHORT_ACTION_DISMISSALS_STORAGE_PREFIX = "vibe64:short-action-dismissals:v1";
-const vibe64AutopilotViewEmits = [
-  "busy-change",
-  "chat-attention",
-  "execution-attention",
-  "project-attention"
-];
-const vibe64AutopilotViewProps = {
-  active: {
-    default: true,
-    type: Boolean
-  },
-  agentConnectionError: {
-    default: "",
-    type: String
-  },
-  agentConnectionStatus: {
-    default: "connected",
-    type: String
-  },
-  retryAgentConnection: {
-    default: () => {},
-    type: Function
-  },
-  chatCollapsed: {
-    default: false,
-    type: Boolean
-  },
-  cancelAgentMessage: {
-    default: async () => false,
-    type: Function
-  },
-  conversationRuntime: { required: true, type: Object },
-  conversationLog: {
-    default: () => ({}),
-    type: Object
-  },
-  githubActorTeleportTarget: {
-    default: "",
-    type: String
-  },
-  createSessionTeleportTarget: {
-    default: "",
-    type: String
-  },
-  interruptAgentTurn: {
-    default: async () => false,
-    type: Function
-  },
-  page: {
-    default: () => ({}),
-    type: Object
-  },
-  previewToolbarTeleportTarget: {
-    default: "",
-    type: String
-  },
-  usageRecordingTeleportTarget: {
-    default: "",
-    type: String
-  },
-  promptHintPolicy: {
-    default: () => ({
-      enabled: true,
-      ready: false,
-      revision: 0,
-      version: 0
-    }),
-    type: Object
-  },
-  projectContext: {
-    default: () => ({}),
-    type: Object
-  },
-  projectPane: {
-    default: "preview",
-    type: String
-  },
-  refreshSessionData: {
-    default: async () => null,
-    type: Function
-  },
-  refreshSessionWork: {
-    default: async () => null,
-    type: Function
-  },
-  retryWorkspaceSetup: {
-    default: async () => false,
-    type: Function
-  },
-  saveSessionWork: {
-    default: async () => false,
-    type: Function
-  },
-  updateSessionWork: {
-    default: async () => false,
-    type: Function
-  },
-  sendAgentMessage: {
-    default: async () => false,
-    type: Function
-  },
-  session: {
-    default: null,
-    type: Object
-  },
-  sessionArchive: {
-    default: () => ({}),
-    type: Object
-  },
-  sessionRenewal: {
-    default: () => ({}),
-    type: Object
-  },
-  sessionSelectionArchived: {
-    default: false,
-    type: Boolean
-  },
-  sessionsApiPath: {
-    default: "",
-    type: [String, Object, Function]
-  },
-  sessionToolbar: {
-    default: () => ({}),
-    type: Object
-  },
-  workState: {
-    default: () => ({}),
-    type: Object
-  }
-};
-
-function emptyConversationWelcomeText({
-  existingProject = false,
-  preferredName = "",
-  renewedSession = false
-} = {}) {
-  const message = renewedSession
-      ? RENEWED_SESSION_CONVERSATION_WELCOME
-      : existingProject
-        ? EXISTING_PROJECT_CONVERSATION_WELCOME
-        : EMPTY_CONVERSATION_WELCOME;
-  const name = normalizedAgentTurnText(preferredName);
-  return name ? message.replace("Hi!", `Hi ${name}!`) : message;
-}
-
-function normalizedAgentTurnText(value = "") {
-  return String(value || "").trim();
-}
 
 function agentConnectionThinkingLabel({
   active = false,
@@ -232,69 +60,6 @@ function agentConnectionThinkingLabel({
   return status === "reconciling"
     ? "Checking assistant status..."
     : "Assistant status could not be verified.";
-}
-
-// Per session, the Save/Update, workspace setup and checkpoint activities the
-// person dismissed, kept in browser storage.
-function useShortActionDismissals(projectSlug, sessionId) {
-  const state = ref({
-    saveWork: "",
-    workspaceSetup: "",
-    checkpoint: ""
-  });
-  const storageKey = computed(() => {
-    const slug = normalizedAgentTurnText(projectSlug.value);
-    const selectedSessionId = sessionId.value;
-    return slug && selectedSessionId
-      ? `${SHORT_ACTION_DISMISSALS_STORAGE_PREFIX}:${encodeURIComponent(slug)}:${encodeURIComponent(selectedSessionId)}`
-      : "";
-  });
-
-  watch(storageKey, (key) => {
-    const stored = readLocalStorageJson(key, {});
-    state.value = {
-      ...stored,
-      saveWork: normalizedAgentTurnText(stored?.saveWork),
-      workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup),
-      checkpoint: normalizedAgentTurnText(stored?.checkpoint)
-    };
-  }, { flush: "sync", immediate: true });
-
-  function dismiss(name, activityKey = "") {
-    const key = normalizedAgentTurnText(activityKey);
-    if (!key || !storageKey.value) {
-      return false;
-    }
-    state.value = {
-      ...readLocalStorageJson(storageKey.value, {}),
-      ...state.value,
-      // Save and Update can alternate; neither may forget a dismissed operation.
-      ...(name === "saveWork" ? { [key]: true } : { [name]: key })
-    };
-    writeLocalStorageJson(storageKey.value, state.value);
-    return true;
-  }
-
-  function clear(name) {
-    state.value = { ...state.value, [name]: "" };
-    if (storageKey.value) {
-      writeLocalStorageJson(storageKey.value, state.value);
-    }
-  }
-
-  // Shows one dismissed notice again, for the person who asks to see it.
-  function restore(name, activityKey = "") {
-    const key = normalizedAgentTurnText(activityKey);
-    if (!key || !storageKey.value) {
-      return false;
-    }
-    const { [key]: _dismissed, ...kept } = { ...readLocalStorageJson(storageKey.value, {}), ...state.value };
-    state.value = { ...kept, ...(kept[name] === key ? { [name]: "" } : {}) };
-    writeLocalStorageJson(storageKey.value, state.value);
-    return true;
-  }
-
-  return { clear, dismiss, restore, state };
 }
 
 function useVibe64AutopilotView(props, emit, {
@@ -322,7 +87,7 @@ function useVibe64AutopilotView(props, emit, {
     return computed(() => accounts.status.value?.personalProfile?.preferredName);
   }, true);
   const requestAgentSettings = computed(() => agentSettings.value?.requestSettings.value || null);
-  const sessionId = computed(() => normalizedAgentTurnText(props.session?.sessionId));
+  const sessionId = computed(() => normalizeText(props.session?.sessionId));
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   // What the person did here, for a lesson's do beats.
   const reportActivity = usePageActivity();
@@ -344,30 +109,19 @@ function useVibe64AutopilotView(props, emit, {
     String(props.githubActorTeleportTarget || "").trim()
   ));
   const sessionSourceRoot = computed(() => String(props.session?.sourcePath || ""));
-  const activeAgentTurn = computed(() => {
-    const turn = props.session?.agentSession?.turn;
-    return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};
-  });
-  const agentActive = computed(() => activeAgentTurn.value.active === true);
-  watch(agentActive, (active, was) => {
-    if (was && !active) reportActivity("agent-finished", { projectSlug: projectSlug.value, sessionId: sessionId.value });
-  });
-  const agentObservationLost = computed(() => activeAgentTurn.value.status === "observation_lost");
-  // The only source of the chat's working indicator: the server's live native
-  // turn. Routing, sending, uncertain delivery and connection states have their
-  // own labels and controls but can never show the assistant as working.
-  const agentWorking = computed(() => agentActive.value && !agentObservationLost.value);
-  const composerConnectionStatus = computed(() => !agentActive.value && unref(assistantCanRouteChat) === true &&
-    ["restricted", "unavailable", "failed"].includes(props.agentConnectionStatus)
-    ? "connected" : props.agentConnectionStatus);
-  const agentNativeTurnReady = computed(() => Boolean(
-    agentActive.value && !agentObservationLost.value &&
-    normalizedAgentTurnText(activeAgentTurn.value.id) &&
-    normalizedAgentTurnText(activeAgentTurn.value.state) === "active" &&
-    props.agentConnectionStatus === "connected"
-  ));
-  const agentSteerable = computed(() => agentNativeTurnReady.value &&
-    props.conversationRuntime?.steerable.value === true);
+  const {
+    activeAgentTurn,
+    agentActive,
+    agentNativeTurnReady,
+    agentObservationLost,
+    agentSteerable,
+    agentWorking,
+    assistantAccountMessage,
+    assistantAccountUnavailable,
+    assistantConnectionReady,
+    composerConnectionStatus,
+    reasoningActive
+  } = useVibe64AgentTurnState(props, { assistantCanRouteChat, projectSlug, reportActivity, sessionId });
   const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) && props.sessionToolbar.sessions.length
@@ -403,16 +157,7 @@ function useVibe64AutopilotView(props, emit, {
   const composerRoutingQueueing = computed(() => composerQueueing.value && composerSending.value &&
     Boolean(routingRequest.value?.messageId) &&
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
-  function restoreCancelledMessage(messageId) {
-    const message = messageDelivery.value?.find(messageId);
-    if (!message || cancelOwnsMessage(message) ||
-        !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
-    composerDraft.value = draftWithRestoredMessage(message.payload.draftSnapshot || message.text, composerDraft.value);
-    messageDelivery.value?.remove(messageId);
-  }
-  const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
-  const contextFullFailure = ref(null);
   const previewAttachmentState = ref({
     attachDiagnostics: null,
     capture: null,
@@ -421,9 +166,8 @@ function useVibe64AutopilotView(props, emit, {
     diagnosticsAvailable: false,
     diagnosticsBusy: false
   });
-  let messageSequence = 0;
 
-  const dismissals = useShortActionDismissals(projectSlug, sessionId);
+  const dismissals = useVibe64ShortActionDismissals(projectSlug, sessionId);
 
   const checkpointTask = computed(() => (props.session?.backgroundTasks || [])
     .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed"));
@@ -563,14 +307,6 @@ function useVibe64AutopilotView(props, emit, {
     !interrupting.value &&
     (!composerSending.value || routingBusy.value || !agentSteerable.value && composerQueueing.value)
   ));
-  const assistantConnectionReady = computed(() => composerConnectionStatus.value === "connected");
-  const reasoningActive = computed(() => assistantConnectionReady.value && agentActive.value &&
-    !agentObservationLost.value && activeAgentTurn.value.phase === "reasoning");
-  const assistantAccountUnavailable = computed(() => composerConnectionStatus.value === "unavailable");
-  // The server's access check names the account the selection needs, as AI
-  // Accounts names it; the generic text covers a refusal that carried no message.
-  const assistantAccountMessage = computed(() => props.agentConnectionError ||
-    "The selected AI account or model is unavailable. Check AI Accounts or choose another model.");
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
     ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(composerConnectionStatus.value)
@@ -672,176 +408,13 @@ function useVibe64AutopilotView(props, emit, {
   function attachPreviewDiagnostics() {
     return previewAttachmentState.value.attachDiagnostics?.() ?? false;
   }
-
-  function nextMessageId() {
-    messageSequence += 1;
-    return createChatMessageId({
-      sequence: messageSequence
-    });
-  }
-
-  function settleComposerRetry(retry = composerRetrySubmission.value) {
-    return props.conversationRuntime?.settleDraftRetry(retry) ?? false;
-  }
-
-  async function sendChatPayload(payload = {}, {
-    messageId: existingMessageId = "",
-    submissionKind = "send",
-    composer = false,
-    questionText = ""
-  } = {}) {
-    if (!props.conversationRuntime?.canSubmit.value || (composerSending.value && !composerQueueing.value) ||
-      !normalizedAgentTurnText(payload?.message)) {
-      return false;
-    }
-    const messageId = String(existingMessageId || "").trim() || nextMessageId();
-    const sendingSessionId = sessionId.value;
-    const sendingProjectSlug = projectSlug.value;
-    const sendingActorKey = actorKey.value;
-    composerSubmissionKind.value = submissionKind === "steer" ? "steer" : "send";
-    try {
-      const response = await props.conversationRuntime[composer ? "submitDraft" : "send"]({
-        ...payload,
-        agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
-      }, { messageId, submissionKind, ...(composer ? { questionText } : {}) });
-      if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
-        return false;
-      }
-      const accepted = vibe64RequestAccepted(response);
-      if (accepted) {
-        conversationFollowLatestKey.value += 1;
-        reportActivity("message-sent", { projectSlug: sendingProjectSlug, sessionId: sendingSessionId });
-      }
-      if (accepted && payload.attachmentIds?.length) {
-        onAttachmentsAccepted?.(payload.attachmentIds);
-      }
-      return accepted;
-    } catch (error) {
-      if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
-        return false;
-      }
-      if (error?.code === "vibe64_assistant_routing_cancelled") {
-        restoreCancelledMessage(messageId);
-        return false;
-      }
-      const message = normalizedAgentTurnText(error?.message || error) || "Message could not be sent.";
-      if (error?.code === "vibe64_assistant_context_full") {
-        contextFullFailure.value = { message, payload, options: { messageId, submissionKind, composer, questionText } };
-      }
-      const attention = executionAttentionForError(error, message);
-      if (attention) {
-        emit("execution-attention", attention);
-      }
-      return false;
-    } finally {
-      if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug && actorKey.value === sendingActorKey && !composerSending.value) {
-        composerSubmissionKind.value = "";
-      }
-    }
-  }
-
-  // A lesson beat's Do it for me: its quoted prompt, sent as the learner's
-  // next Main chat message and stored as sent by the lesson.
-  function sendLessonMessage(text) {
-    return sendChatPayload({ message: String(text || ""), messageSource: "lesson" });
-  }
-
-  function retryContextFull() {
-    const failure = contextFullFailure.value;
-    contextFullFailure.value = null;
-    return failure ? sendChatPayload(failure.payload, failure.options) : false;
-  }
-
-  async function submitComposerMessage() {
-    if (!composerCanSubmit.value) return false;
-    if (approvalMode.value) {
-      const message = composerDraft.value;
-      if (!await mainChatApprovals.send(message)) return false;
-      if (composerDraft.value === message) composerDraft.value = "";
-      return true;
-    }
-    const retry = composerRetryMatchesDraft.value ? composerRetrySubmission.value : null;
-    const draftSnapshot = retry?.draftSnapshot || composerDraft.value;
-    const { message, questionText } = questionState.capture(draftSnapshot);
-    const payload = retry?.payload || chatMessagePayload(message, composerAttachments.value);
-    if (!payload) return false;
-    const submissionKind = retry?.submissionKind || (agentSteerable.value ? "steer" : "send");
-    const questionTextSnapshot = retry?.questionTextSnapshot || questionText;
-    const messageId = retry?.messageId || nextMessageId();
-    questionState.markSubmitted(questionTextSnapshot);
-    return sendChatPayload(payload, { messageId, submissionKind, composer: true, questionText: questionTextSnapshot });
-  }
-
-  function optimisticMessageById(messageId = "") {
-    const request = routingRequest.value;
-    const local = messageDelivery.value?.find(messageId);
-    return (request?.messageId === messageId && routedChatMessage(request, local)) || local;
-  }
-
-  // Cancel means cancel, and the server decides: the message stays, shown as
-  // Cancelling…, until the server records the cancel, which also stops its
-  // route and any turn it started. When the server cannot be reached the
-  // message stays with Cancel again. Accepted history remains the transcript's.
-  async function cancelOptimisticMessage(messageId = "") {
-    const message = optimisticMessageById(messageId);
-    if (!message || message.status === "accepted") return false;
-    trackRoutedMessage(messageDelivery.value, message, props.conversationLog?.turns);
-    if (await props.cancelAgentMessage(messageId) !== true) return false;
-    if (composerRetrySubmission.value?.messageId === messageId) settleComposerRetry(composerRetrySubmission.value);
-    return true;
-  }
-
-  async function editOptimisticMessage(messageId = "") {
-    const message = optimisticMessageById(messageId);
-    if (!message || message.status !== "failed") {
-      return false;
-    }
-    if (!await cancelOptimisticMessage(messageId)) return false;
-    composerDraft.value = draftWithRestoredMessage(message.text, String(composerDraft.value || ""));
-    return true;
-  }
-
-  async function resendOptimisticMessage(messageId = "") {
-    const message = optimisticMessageById(messageId);
-    if (!message || message.checking || !["failed", "uncertain"].includes(message.status)) {
-      return false;
-    }
-    const retry = composerRetrySubmission.value?.messageId === messageId
-      ? composerRetrySubmission.value
-      : null;
-    if (message.status === "uncertain") {
-      const receipt = await props.conversationRuntime.inspectDelivery(messageId);
-      if (receipt?.status === "accepted") {
-        settleComposerRetry(retry);
-        return true;
-      }
-      // Only the server's proof that the message was never sent lets Retry send it again.
-      if (receipt?.status !== "not-sent" && routingRequest.value?.messageId === messageId &&
-          routingRequest.value?.delivery === "failed") return false;
-    }
-    // Retry through the original coordinator with the same identity and payload.
-    // A missing route is not a receipt: the coordinator owns duplicate detection
-    // and recovery of any native dispatch that was already attempted.
-    messageDelivery.value?.remove(messageId);
-    const accepted = await sendChatPayload(message.payload, {
-      messageId,
-      submissionKind: retry?.submissionKind || (agentSteerable.value ? "steer" : "send")
-    });
-    if (accepted) {
-      settleComposerRetry(retry);
-    } else if (!messageDelivery.value?.find(messageId)) {
-      messageDelivery.value?.state.messages.push(message);
-    }
-    return accepted;
-  }
-
   async function requestAgentInterrupt() {
     if (!agentStopEnabled.value) {
       return false;
     }
     const stoppingSessionId = sessionId.value;
     const stoppingProjectSlug = projectSlug.value;
-    const stoppingTurnId = normalizedAgentTurnText(activeAgentTurn.value.id);
+    const stoppingTurnId = normalizeText(activeAgentTurn.value.id);
     interrupting.value = true;
     let acknowledgeStop;
     const receipt = new Promise((resolve) => { acknowledgeStop = resolve; });
@@ -850,7 +423,7 @@ function useVibe64AutopilotView(props, emit, {
       ([currentSessionId, currentProjectSlug, turnId, active]) => {
         if (currentSessionId !== stoppingSessionId || currentProjectSlug !== stoppingProjectSlug) {
           acknowledgeStop(false);
-        } else if (stoppingTurnId && normalizedAgentTurnText(turnId) === stoppingTurnId && active === false) {
+        } else if (stoppingTurnId && normalizeText(turnId) === stoppingTurnId && active === false) {
           acknowledgeStop(true);
         }
       }
@@ -868,60 +441,14 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
 
-  const chatTurns = computed(() => {
-    // Hydrate history before appending a restored unsent request to its tail.
-    if (!messageDelivery.value || props.conversationLog?.initializing) return [];
-    return chatTurnsWithRouting(
-      messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
-      routingRequest.value,
-      composerSending.value
-    );
+  const chatPane = useVibe64AutopilotChatPane(props, {
+    composerSending,
+    messageDelivery,
+    preferredName,
+    routingRequest,
+    sessionId,
+    workspaceSetupStatus: workspaceSetupActivity.workspaceSetupStatus
   });
-  const emptyConversationWelcome = computed(() => (
-    sessionId.value &&
-    !props.conversationLog?.loading &&
-    !props.conversationLog?.error &&
-    !chatTurns.value.length
-      ? emptyConversationWelcomeText({
-          existingProject: workspaceSetupActivity.workspaceSetupStatus.value !== "unconfigured",
-          preferredName: preferredName.value,
-          renewedSession: Boolean(normalizedAgentTurnText(
-            props.session?.metadata?.renewed_from
-          ))
-        })
-      : ""
-  ));
-  const conversationLogVisible = computed(() => Boolean(props.active));
-  const conversationScrollKey = computed(() => sessionId.value);
-  const chatReloading = ref(false);
-  const chatReloadAvailable = computed(() => Boolean(
-    props.active && props.session && (
-      typeof props.refreshSessionData === "function" ||
-      typeof props.conversationLog?.reload === "function"
-    )
-  ));
-
-  async function reloadChatPane() {
-    if (!chatReloadAvailable.value || chatReloading.value) {
-      return false;
-    }
-    chatReloading.value = true;
-    try {
-      await Promise.allSettled([
-        props.refreshSessionData?.(),
-        props.conversationLog?.reload?.()
-      ]);
-      return true;
-    } finally {
-      chatReloading.value = false;
-    }
-  }
-
-  async function loadMoreChatTurns(request = {}) {
-    return typeof props.conversationLog?.loadMore === "function"
-      ? props.conversationLog.loadMore(request)
-      : false;
-  }
 
   const sessionToolPane = useVibe64SessionToolPane(props, emit, {
     actorKey,
@@ -962,7 +489,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
 
   function prefillComposer(text = "", { append = false } = {}) {
-    const prompt = normalizedAgentTurnText(text);
+    const prompt = normalizeText(text);
     if (!prompt || !assistantDraftAvailable.value) {
       return false;
     }
@@ -973,7 +500,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function askAssistantAboutFile(path = "") {
-    const normalizedPath = normalizedAgentTurnText(path);
+    const normalizedPath = normalizeText(path);
     return normalizedPath
       ? prefillComposer(`Please look at \`${normalizedPath}\` and help me with this file.`)
       : false;
@@ -985,11 +512,29 @@ function useVibe64AutopilotView(props, emit, {
     questionState.reset();
   });
 
-  watch([routingRequest, () => messageDelivery.value?.state.messages || []], ([request]) => {
-    if (request?.stopped && !request.cancelled && !request.helper && !request.attemptedMessageId) {
-      restoreCancelledMessage(request.messageId);
-    }
-  }, { immediate: true });
+  const delivery = useVibe64MainChatDelivery(props, emit, {
+    actorKey,
+    agentSteerable,
+    approvalMode,
+    composerAttachments,
+    composerCanSubmit,
+    composerDraft,
+    composerQueueing,
+    composerRetryMatchesDraft,
+    composerRetrySubmission,
+    composerSending,
+    composerSubmissionKind,
+    mainChatApprovals,
+    messageDelivery,
+    onAttachmentsAccepted,
+    projectSlug,
+    questionState,
+    reportActivity,
+    requestAgentSettings,
+    routingRequest,
+    sessionId
+  });
+
 
   watch(() => Boolean(
     agentActive.value ||
@@ -1005,8 +550,9 @@ function useVibe64AutopilotView(props, emit, {
     ...workspaceSetupActivity,
     ...temporaryAiRepairs,
     ...sessionToolPane,
+    ...chatPane,
+    ...delivery,
     Vibe64OutputControls,
-    sendLessonMessage,
     assistantDirectAllowed,
     assistantFixAllowed,
     agentActive,
@@ -1018,11 +564,8 @@ function useVibe64AutopilotView(props, emit, {
     prefillComposer,
     askAssistantAboutFile,
     attachPreviewDiagnostics,
-    cancelOptimisticMessage,
     captureVisiblePreview,
     chatCollapsed,
-    chatReloading,
-    chatTurns,
     checkpointFailure,
     checkpointFailureReason,
     checkpointFailureVisible,
@@ -1043,14 +586,8 @@ function useVibe64AutopilotView(props, emit, {
     composerSubmitAriaLabel,
     composerSubmitMode,
     composerSubmitTitle,
-    conversationLogVisible,
-    conversationFollowLatestKey,
-    conversationScrollKey,
     dismissNumberedQuestions,
-    editOptimisticMessage,
-    emptyConversationWelcome,
     interrupting,
-    loadMoreChatTurns,
     numberedQuestionSelectItems,
     numberedQuestions,
     openIntegrationRequest,
@@ -1058,12 +595,8 @@ function useVibe64AutopilotView(props, emit, {
     previewAttachmentState,
     projectSlug,
     questionAnswers,
-    reloadChatPane,
     repositoryOperationActive,
-    resendOptimisticMessage,
     requestAgentInterrupt,
-    contextFullFailure,
-    retryContextFull,
     sessionId,
     sessionGithubActor,
     sessionGithubActorHeaderVisible,
@@ -1072,7 +605,6 @@ function useVibe64AutopilotView(props, emit, {
     selectedAnswerChoice,
     assistantDraftAvailable,
     structuredQuestionActive,
-    submitComposerMessage,
     thinkingLabel,
     thinkingVisible,
     agentWorking,
@@ -1084,27 +616,8 @@ function useVibe64AutopilotView(props, emit, {
   };
 }
 
-function executionAttentionForError(error = null, message = "") {
-  const code = normalizedAgentTurnText(error?.code);
-  const category = EXECUTION_CAPACITY_ERROR_CODES.has(code)
-    ? "capacity"
-    : EXECUTION_SAFETY_ERROR_CODES.has(code)
-      ? "ownership"
-      : "";
-  if (!category) {
-    return null;
-  }
-  return Object.freeze({
-    category,
-    code,
-    message: normalizedAgentTurnText(message) || "This work could not start safely."
-  });
-}
-
 export {
   emptyConversationWelcomeText,
   agentConnectionThinkingLabel,
-  useVibe64AutopilotView,
-  vibe64AutopilotViewEmits,
-  vibe64AutopilotViewProps
+  useVibe64AutopilotView
 };

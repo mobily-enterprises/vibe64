@@ -109,7 +109,7 @@ describe("Architecture client resources", () => {
     { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 5 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue", import.meta.url
     ), "utf8");
     const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];

@@ -5,6 +5,7 @@ import { createVuetify } from "vuetify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { attachConversationRuntime } from "./helpers/conversationRuntimeFixture.js";
+import { readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 const mocks = vi.hoisted(() => ({
   feedback: { report: vi.fn() },
@@ -310,7 +311,7 @@ describe("member composer", () => {
   });
 
   it("puts the queue above the composer, the waiting chip in the chat header and the approval send button", () => {
-    const source = readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url), "utf8");
+    const source = readAutopilotViewSource();
     expect(source).toMatch(/v-if="mainChatApprovals.isOwner && mainChatApprovals.waitingCount"[\s\S]*?\{\{ mainChatApprovals.waitingCount \}\} waiting/u);
     expect(source).toMatch(/data-vibe64-guide="chat"[\s\S]*?<Vibe64MainChatApprovals/u);
     expect(source).toMatch(/v-if="approvalMode"[\s\S]*?Send for approval/u);

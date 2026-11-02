@@ -123,19 +123,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import {
-  mdiPaperclip,
-  mdiPlayCircleOutline,
-  mdiRestart
-} from "@mdi/js";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { mdiPaperclip, mdiRestart } from "@mdi/js";
 import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
-import {
-  VIBE64_ACCOUNTS_CHANGED_EVENT
-} from "@local/vibe64-accounts/client";
 import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerminal.vue";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import Vibe64AgentTerminalDropOverlay from "@/components/studio/Vibe64AgentTerminalDropOverlay.vue";
@@ -146,19 +138,14 @@ import {
   vibe64AgentTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
-import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
+import { useCodexTerminalLifecycle } from "@/composables/useCodexTerminalLifecycle.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
+import { useCodexTerminalPresentation } from "@/composables/useCodexTerminalPresentation.js";
 import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
-  requestVibe64AccountConnectionsDialog
-} from "@/lib/vibe64AccountConnectionsDialog.js";
-import {
-  codexReconnectRequiredResult,
   codexReconnectRequiredSignature
 } from "@/lib/vibe64CodexTerminalAttention.js";
 import {
-  terminalOwnerAccessDenied,
-  terminalSessionMissingError,
   vibe64TerminalErrorMessage
 } from "@/lib/vibe64TerminalErrors.js";
 
@@ -197,7 +184,6 @@ const copyStatus = ref("");
 const componentMounted = ref(false);
 const terminalAttachmentFileInput = ref(null);
 const staleTerminalSessionIds = ref(new Set());
-let terminalStartPromise = null;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const terminalAttachmentsEnabled = computed(() => Boolean(
@@ -282,55 +268,73 @@ const terminalController = useVibe64Terminal({
   resizeReportDelayMs: 120
 });
 const {
-  closeTerminalSocket,
-  connectTerminalSocket,
   disposeTerminalUi,
-  focusTerminal: focusTerminalUi,
-  resetTerminalDisplay,
-  resetTerminalSessionState,
-  sendTerminalData: sendTerminalBytes,
   terminalFocused,
   terminalCommandPreview,
-  terminalConnectionStatus,
   terminalError,
-  terminalExited,
   terminalSessionId,
   terminalStarting,
   terminalStatus
 } = terminalController;
-const terminalErrorTitle = computed(() => {
-  if (terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE) {
-    return "Reconnect Codex";
-  }
-  return String(terminalError.value || "").includes("app-server")
-    ? "Codex app-server is not available"
-    : "Codex terminal needs attention";
-});
-const terminalErrorActionText = computed(() => {
-  if (terminalStarting.value) {
-    return "Starting Codex…";
-  }
-  return terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE
-    ? "Reconnect Codex"
-    : "Restart Codex";
-});
-const terminalSubtitle = computed(() => {
-  if (terminalStarting.value) {
-    return "Starting Codex";
-  }
-  if (terminalExited.value) {
-    return "";
-  }
-  if (terminalConnectionStatus.value === "reconnecting") {
-    return "Reconnecting Codex";
-  }
-  if (terminalConnectionStatus.value === "connecting") {
-    return "Connecting Codex";
-  }
-  return "";
+
+const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
+const sessionSourcePending = computed(() => Boolean(
+  terminalDisplayActive.value &&
+  sessionId.value &&
+  !sessionSource.value &&
+  !hasTerminalSession.value
+));
+const terminalServerStale = computed(() => Boolean(serverCodexTerminal.value.stale || serverCodexTerminal.value.restartRequired));
+const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
+const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
+const {
+  showTerminalStartPanel,
+  terminalErrorActionText,
+  terminalErrorTitle,
+  terminalStartActionVisible,
+  terminalStartButtonText,
+  terminalStartIcon,
+  terminalStartPanelMessage,
+  terminalStartPanelTitle,
+  terminalSubtitle
+} = useCodexTerminalPresentation({
+  terminalController,
+  serverCodexTerminal,
+  sessionSourcePending,
+  terminalReconnectRequired,
+  terminalServerStale,
+  terminalDisplayActive,
+  canUseTerminal,
+  terminalCanStart,
+  componentMounted
 });
 const {
-  abandonAttachments: abandonTerminalAttachments,
+  attachments,
+  attachTerminalSession,
+  closeTerminal,
+  connectTerminalWhenReady,
+  detachTerminal,
+  emitTerminalSessionState,
+  focusWritableTerminalWhenShown,
+  restartTerminal,
+  sendEscape
+} = useCodexTerminalLifecycle({
+  props,
+  emit,
+  codexCommands,
+  terminalController,
+  resetTerminalOutput,
+  sessionId,
+  serverTerminalSession,
+  staleTerminalSessionIds,
+  canUseTerminal,
+  terminalCanStart,
+  hasTerminalSession,
+  terminalReconnectRequired,
+  terminalAttachmentsEnabled,
+  componentMounted
+});
+const {
   attachmentCanAddFiles,
   attachmentDragActive,
   attachmentQueueItems,
@@ -345,16 +349,7 @@ const {
   retryAttachment,
   resetAttachmentDragState,
   uploadAttachmentFiles
-} = useAgentTerminalAttachments({
-  canUpload: terminalAttachmentsEnabled,
-  deleteAttachment: codexCommands.deleteAttachment,
-  ensureTerminalReady,
-  focusTerminal,
-  sendAttachmentPath,
-  sessionId,
-  terminalSessionId,
-  uploadAttachment: codexCommands.uploadAttachment
-});
+} = attachments;
 const terminalAttachmentActionLabel = computed(() => (
   attachmentCanAddFiles.value
     ? "Attach files to Codex terminal"
@@ -385,72 +380,6 @@ function handleTerminalAttachmentFileSelection(event) {
   void uploadAttachmentFiles(files);
 }
 
-const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
-const sessionSourcePending = computed(() => Boolean(
-  terminalDisplayActive.value &&
-  sessionId.value &&
-  !sessionSource.value &&
-  !hasTerminalSession.value
-));
-const terminalStartActionVisible = computed(() => !sessionSourcePending.value);
-const terminalServerStale = computed(() => Boolean(serverCodexTerminal.value.stale || serverCodexTerminal.value.restartRequired));
-const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
-const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
-const terminalStartIcon = computed(() => (
-  terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value ? mdiRestart : mdiPlayCircleOutline
-));
-const terminalStartPanelTitle = computed(() => {
-  if (sessionSourcePending.value) {
-    return "Session source is being prepared";
-  }
-  if (terminalStarting.value) {
-    return "Starting Codex";
-  }
-  if (terminalReconnectRequired.value) {
-    return "Reconnect Codex";
-  }
-  if (terminalServerStale.value) {
-    return "Codex terminal needs restart";
-  }
-  return terminalExited.value ? "Codex terminal exited" : "Codex terminal is off";
-});
-const terminalStartPanelMessage = computed(() => {
-  if (sessionSourcePending.value) {
-    return "Codex will start from the session source after the clone has been created.";
-  }
-  if (terminalStarting.value) {
-    return "Preparing this session terminal.";
-  }
-  if (terminalReconnectRequired.value) {
-    return "Reconnect the Codex account before starting this session terminal.";
-  }
-  if (terminalServerStale.value) {
-    return serverCodexTerminal.value.message || "The previous Codex terminal is still running, but Vibe64 cannot attach to it. Restart it for this session.";
-  }
-  return terminalExited.value ? "Restart it for this session." : "Start it for this session.";
-});
-const terminalStartButtonText = computed(() => {
-  if (terminalStarting.value) {
-    return "Starting Codex…";
-  }
-  if (terminalReconnectRequired.value) {
-    return "Reconnect Codex";
-  }
-  return (terminalExited.value || terminalServerStale.value) ? "Restart Codex" : "Start Codex";
-});
-const showTerminalStartPanel = computed(() => (
-  componentMounted.value &&
-  (
-    sessionSourcePending.value ||
-    (terminalStarting.value && terminalDisplayActive.value) ||
-    (
-      canUseTerminal.value &&
-      terminalCanStart.value &&
-      (!terminalSessionId.value || terminalExited.value || terminalServerStale.value)
-    )
-  )
-));
-
 function handleTerminalCopy() {
   copyStatus.value = "Terminal text copied.";
 }
@@ -458,36 +387,6 @@ function handleTerminalCopy() {
 function handleTerminalInterrupt() {
   clearCodexBusy();
   clearCodexWorking();
-}
-
-function ensureTerminalReady() {
-  if (!canUseTerminal.value) {
-    if (terminalCanStart.value) {
-      terminalError.value = "Create the session clone before starting Codex.";
-    }
-    return Promise.resolve(false);
-  }
-  if (terminalStartPromise) {
-    return terminalStartPromise;
-  }
-  terminalStartPromise = startTerminalOnce();
-  return terminalStartPromise.finally(() => {
-    terminalStartPromise = null;
-  });
-}
-
-function emitTerminalSessionState(extra = {}) {
-  const currentTerminalId = String(extra.agentTerminalSessionId || terminalSessionId.value || "");
-  if (!sessionId.value || !currentTerminalId) {
-    return;
-  }
-  emit("session-update", {
-    agentTerminalCommandPreview: terminalCommandPreview.value,
-    agentTerminalSessionId: currentTerminalId,
-    agentTerminalStatus: terminalStatus.value,
-    sessionId: sessionId.value,
-    ...extra
-  });
 }
 
 function handleTerminalOutput({
@@ -534,286 +433,6 @@ async function closeCodexTerminalDriverSession(terminalId) {
     throw new Error(vibe64TerminalErrorMessage(result, "Codex terminal process could not be stopped."));
   }
   return result;
-}
-
-async function applyCodexTerminalSession(session = {}, {
-  fallbackStatus = "running",
-  ownership = "attached",
-  preserveOutput = true
-} = {}) {
-  const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
-  if (!nextTerminalSessionId) {
-    return {
-      applied: false,
-      hasTerminalSession: Boolean(terminalSessionId.value)
-    };
-  }
-
-  const previousTerminalSessionId = String(terminalSessionId.value || "");
-  const sameTerminalSession = previousTerminalSessionId === nextTerminalSessionId;
-  const terminalSessionChanged = Boolean(
-    previousTerminalSessionId &&
-    previousTerminalSessionId !== nextTerminalSessionId
-  );
-  if (terminalSessionChanged) {
-    resetTerminalOutput();
-  }
-
-  await terminalController.attachTerminal({
-    ...session,
-    id: nextTerminalSessionId
-  }, {
-    connect: false,
-    fallbackStatus,
-    ownership,
-    preserveOutput,
-    resize: !sameTerminalSession
-  });
-  return {
-    applied: true,
-    sameTerminalSession,
-    terminalSessionChanged,
-    terminalSessionId: nextTerminalSessionId
-  };
-}
-
-function openCodexReconnectDialog() {
-  requestVibe64AccountConnectionsDialog({
-    codexReconnectRequired: true,
-    providerId: "codex",
-    refresh: false
-  });
-}
-
-function codexAccountConnectedPayload(payload = {}) {
-  const accountId = String(payload?.accountId || payload?.connectionId || "").trim().toLowerCase();
-  const status = String(payload?.status || "").trim().toLowerCase();
-  return accountId === "codex" && payload?.connected === true && (!status || status === "connected");
-}
-
-async function recoverCodexTerminalAfterAccountReconnect() {
-  if (!terminalReconnectRequired.value) {
-    return;
-  }
-  terminalError.value = "";
-  closeTerminalSocket();
-  resetTerminalSessionState();
-  resetTerminalDisplay();
-  resetTerminalOutput();
-  await ensureTerminalReady();
-}
-
-useRealtimeEvent({
-  enabled: computed(() => Boolean(componentMounted.value && terminalReconnectRequired.value)),
-  event: VIBE64_ACCOUNTS_CHANGED_EVENT,
-  matches({ payload = {} } = {}) {
-    return codexAccountConnectedPayload(payload);
-  },
-  onEvent() {
-    void recoverCodexTerminalAfterAccountReconnect();
-  }
-});
-
-async function sendAttachmentPath(text, attachmentIds = [], target = {}) {
-  if (!sessionId.value || !terminalSessionId.value) {
-    throw new Error("Codex terminal is not ready for attachments.");
-  }
-  const response = await codexCommands.sendAgentTerminalText(
-    target.sessionId,
-    target.terminalSessionId,
-    text,
-    { attachmentIds }
-  );
-  if (response?.ok === false) {
-    throw new Error(response.error || "Attachment path could not be sent to Codex.");
-  }
-  return true;
-}
-
-async function sendEscape() {
-  try {
-    return await ensureTerminalReady() && await sendTerminalBytes("\u001b");
-  } catch (sendError) {
-    terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
-    return false;
-  }
-}
-
-async function focusTerminal() {
-  if (!hasTerminalSession.value) {
-    return false;
-  }
-  return focusTerminalUi();
-}
-
-async function focusWritableTerminalWhenShown(visible) {
-  if (!visible || props.readOnly || !hasTerminalSession.value) {
-    return;
-  }
-  await nextTick();
-  focusTerminal();
-}
-
-async function connectAttachedTerminal() {
-  if (!(await connectTerminalSocket())) {
-    const message = String(terminalError.value || "Terminal stream failed to connect.");
-    if (terminalSessionMissingError(message) || terminalOwnerAccessDenied(message)) {
-      markTerminalSessionStale(terminalSessionId.value || serverTerminalSession.value.id, message);
-      return false;
-    }
-    throw new Error(message);
-  }
-  return true;
-}
-
-async function startTerminalOnce() {
-  if (terminalReconnectRequired.value) {
-    openCodexReconnectDialog();
-    return false;
-  }
-  if (terminalExited.value && terminalCanStart.value) {
-    closeTerminalSocket();
-    resetTerminalSessionState();
-    resetTerminalDisplay();
-    resetTerminalOutput();
-  }
-  if (terminalSessionId.value) {
-    return await connectAttachedTerminal();
-  }
-  if (!terminalCanStart.value) {
-    return false;
-  }
-
-  terminalStarting.value = true;
-  terminalError.value = "";
-  try {
-    const session = await codexCommands.startAgentTerminal(sessionId.value);
-    if (session?.ok === false) {
-      if (codexReconnectRequiredResult(session)) {
-        terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
-        openCodexReconnectDialog();
-        return false;
-      }
-      if (terminalOwnerAccessDenied(session)) {
-        const message = vibe64TerminalErrorMessage(session, "Codex terminal failed to start.");
-        markTerminalSessionStale(serverTerminalSession.value.id, message);
-        terminalError.value = message;
-        return false;
-      }
-      throw new Error(vibe64TerminalErrorMessage(session, "Codex terminal failed to start."));
-    }
-    if (!session?.id) {
-      throw new Error("Codex terminal failed to start.");
-    }
-    await applyCodexTerminalSession(session, {
-      fallbackStatus: "running",
-      ownership: "owned"
-    });
-    emitTerminalSessionState();
-    return await connectAttachedTerminal();
-  } catch (startError) {
-    terminalError.value = terminalError.value || vibe64TerminalErrorMessage(startError, "Codex terminal failed to start.");
-    return false;
-  } finally {
-    terminalStarting.value = false;
-  }
-}
-
-function connectTerminalWhenReady() {
-  if (!canUseTerminal.value || !terminalSessionId.value) {
-    return;
-  }
-  void connectAttachedTerminal().catch((error) => {
-    terminalError.value = terminalError.value || String(error?.message || error || "Terminal stream failed to connect.");
-  });
-}
-
-async function attachTerminalSession(session = {}) {
-  const attached = await applyCodexTerminalSession(session, {
-    fallbackStatus: "running"
-  });
-  if (!attached.applied) {
-    return Boolean(terminalSessionId.value);
-  }
-  if (attached.sameTerminalSession) {
-    return true;
-  }
-  if (!canUseTerminal.value || !componentMounted.value) {
-    return true;
-  }
-  try {
-    return await connectAttachedTerminal();
-  } catch (attachError) {
-    const message = String(attachError?.message || attachError || "Terminal stream failed to connect.");
-    if (terminalOwnerAccessDenied(message)) {
-      markTerminalSessionStale(session.id || terminalSessionId.value || serverTerminalSession.value.id, message);
-      terminalError.value = message;
-      return false;
-    }
-    terminalError.value = terminalError.value || message;
-    return false;
-  }
-}
-
-function markTerminalSessionStale(terminalId = "", message = "") {
-  const normalizedTerminalId = String(terminalId || "").trim();
-  if (normalizedTerminalId) {
-    staleTerminalSessionIds.value = new Set([
-      ...staleTerminalSessionIds.value,
-      normalizedTerminalId
-    ]);
-  }
-  closeTerminalSocket();
-  resetTerminalSessionState();
-  resetTerminalDisplay();
-  resetTerminalOutput();
-  void abandonTerminalAttachments();
-  terminalError.value = String(message || "");
-  emitTerminalSessionState({
-    agentTerminalSessionId: normalizedTerminalId,
-    agentTerminalStatus: "stale"
-  });
-}
-
-function detachTerminal() {
-  terminalStartPromise = null;
-  void abandonTerminalAttachments();
-  closeTerminalSocket();
-  resetTerminalSessionState();
-  resetTerminalDisplay();
-  resetTerminalOutput();
-  clearAttachmentStatus();
-  resetAttachmentDragState();
-}
-
-async function closeTerminal() {
-  await abandonTerminalAttachments();
-  if (!terminalSessionId.value) {
-    detachTerminal();
-    return true;
-  }
-  if (!(await terminalController.closeTerminal({
-    deleteSession: true
-  }))) {
-    return false;
-  }
-  terminalStartPromise = null;
-  resetTerminalOutput();
-  clearAttachmentStatus();
-  resetAttachmentDragState();
-  return true;
-}
-
-async function restartTerminal() {
-  if (terminalReconnectRequired.value) {
-    openCodexReconnectDialog();
-    return;
-  }
-  terminalError.value = "";
-  if (!(await closeTerminal())) {
-    return;
-  }
-  await ensureTerminalReady();
 }
 
 watch(serverTerminalSession, (terminal) => {

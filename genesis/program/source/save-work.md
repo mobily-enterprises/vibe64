@@ -118,7 +118,11 @@ Git commands.
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/composables/useVibe64TerminalMobileTakeover.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64ShortActionDismissals.js`
 - `src/composables/useVibe64SessionSaveWork.js`
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64SessionPanel.js`

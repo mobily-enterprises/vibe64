@@ -6,6 +6,7 @@ import * as VueRuntime from "vue";
 import { createSSRApp, defineComponent, h } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 const renewalUiHarness = vi.hoisted(() => ({
   assistantReady: true,
@@ -101,9 +102,7 @@ const dialogSource = fs.readFileSync(dialogPath, "utf8");
 const progressSource = fs.readFileSync(path.resolve(
   "src/components/studio/vibe64-session/Vibe64SessionRenewalProgress.vue"
 ), "utf8");
-const autopilotSource = fs.readFileSync(path.resolve(
-  "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
-), "utf8");
+const autopilotSource = readAutopilotViewSource();
 const { descriptor } = parse(dialogSource, { filename: dialogPath });
 const componentScript = compileScript(descriptor, {
   id: "vibe64-session-renewal-ui-test"

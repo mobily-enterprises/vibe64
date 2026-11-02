@@ -70,7 +70,7 @@ for (const [component, relativePath] of [
   }).code)(Vue);
 }
 
-const autopilot = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue"), "utf8");
+const autopilot = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue"), "utf8");
 const onboardingTag = autopilot.match(/<Vibe64ProjectOnboarding\b[\s\S]*?>/u)?.[0];
 const activeBinding = onboardingTag?.match(/:active="([^"]+)"/u)?.[1];
 if (!activeBinding) throw new Error("The actual onboarding activity binding is required.");

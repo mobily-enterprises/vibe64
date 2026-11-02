@@ -8,6 +8,7 @@ import {
   vibe64ChatColumnBounds,
   vibe64ChatColumnWidthForKey
 } from "../../src/composables/useVibe64ChatColumnResize.js";
+import { AUTOPILOT_VIEW_FILES, readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 describe("useVibe64ChatColumnResize", () => {
   it("keeps both sides useful across practical desktop widths", () => {
@@ -120,16 +121,18 @@ describe("useVibe64ChatColumnResize", () => {
   });
 
   it("contains chat chrome and its icon-only Save action", () => {
-    const filename = "src/components/studio/vibe64-session/Vibe64AutopilotView.vue";
-    const source = readFileSync(filename, "utf8");
-    const descriptor = parse(source, { filename }).descriptor;
-    const style = descriptor.styles[0];
-    const result = compileStyle({
-      filename,
-      id: "data-v-chat-containment-test",
-      scoped: style.scoped,
-      source: style.content
+    const source = readAutopilotViewSource();
+    // Each part of the view styles its own markup.
+    const results = AUTOPILOT_VIEW_FILES.flatMap((filename) => {
+      const style = parse(readFileSync(filename, "utf8"), { filename }).descriptor.styles[0];
+      return style ? [compileStyle({
+        filename,
+        id: "data-v-chat-containment-test",
+        scoped: style.scoped,
+        source: style.content
+      })] : [];
     });
+    const result = { errors: results.flatMap((entry) => entry.errors), code: results.map((entry) => entry.code).join("\n") };
 
     expect(result.errors).toEqual([]);
     expect(result.code).toContain("container-name: studio-chat-pane");

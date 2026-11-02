@@ -96,6 +96,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/lib/vibe64SessionInfo.js`
 - `src/lib/vibe64SessionTooltip.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
 - `src/composables/useArchivedVibe64Sessions.js`
 - `src/composables/useArchivedVibe64ConversationHistory.js`
 - `src/composables/useVibe64SessionRenewal.js`

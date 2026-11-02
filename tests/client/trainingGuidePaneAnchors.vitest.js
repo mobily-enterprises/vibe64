@@ -66,8 +66,8 @@ describe("guide pane anchors", () => {
 
   it("anchors every lesson companion place on its real control", () => {
     const anchors = {
-      lesson: "src/components/learning/Vibe64LessonToggle.vue", chat: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
-      save: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "reload-preview": "src/components/studio/Vibe64PreviewAddressBar.vue",
+      lesson: "src/components/learning/Vibe64LessonToggle.vue", chat: "src/components/studio/vibe64-session/Vibe64AutopilotChat.vue",
+      save: "src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue", "reload-preview": "src/components/studio/Vibe64PreviewAddressBar.vue",
       colleague: "packages/vibe64-colleague/src/client/Vibe64Colleague.vue", courses: "src/components/learning/Vibe64LearningStepBar.vue",
       "lesson-bar": "src/components/learning/Vibe64LearningStepBar.vue"
     };
@@ -80,7 +80,7 @@ describe("guide pane anchors", () => {
   });
 
   it("marks each open project pane with its guide place", () => {
-    const file = "src/components/studio/vibe64-session/Vibe64AutopilotView.vue";
+    const file = "src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue";
     const source = readFileSync(file, "utf8");
     expect(parse(source, { filename: file }).errors).toEqual([]);
     expect(source).toContain('data-vibe64-guide-pane="preview"');

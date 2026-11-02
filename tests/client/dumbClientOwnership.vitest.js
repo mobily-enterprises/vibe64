@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { AUTOPILOT_VIEW_FILES, readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 const DIRECT_SESSION_FILES = Object.freeze([
-  "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
-  "src/composables/useVibe64AutopilotView.js"
+  ...AUTOPILOT_VIEW_FILES,
+  "src/composables/useVibe64AutopilotView.js",
+  "src/composables/useVibe64AgentTurnState.js",
+  "src/composables/useVibe64AutopilotChatPane.js",
+  "src/composables/useVibe64MainChatDelivery.js",
+  "src/composables/useVibe64ShortActionDismissals.js"
 ]);
 
 const RETIRED_WORKFLOW_WORDS = Object.freeze([
@@ -33,8 +38,8 @@ describe("direct session client ownership", () => {
   });
 
   it("keeps conversation history and input in one direct chat surface", () => {
-    const component = readFileSync(DIRECT_SESSION_FILES[0], "utf8");
-    const composable = readFileSync(DIRECT_SESSION_FILES[1], "utf8");
+    const component = readAutopilotViewSource();
+    const composable = readFileSync("src/composables/useVibe64AutopilotView.js", "utf8");
 
     expect(component).toContain("<Vibe64ConversationLog");
     expect(component).toContain("<Vibe64AutopilotPromptTextarea");

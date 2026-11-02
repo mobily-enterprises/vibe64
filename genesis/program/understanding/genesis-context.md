@@ -38,6 +38,7 @@ Genesis without creating another interpretation of the application.
 - `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 
 ## Public contract
 

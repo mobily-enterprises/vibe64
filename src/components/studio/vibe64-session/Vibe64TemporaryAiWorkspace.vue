@@ -7,94 +7,20 @@
     :aria-label="hostConversation?.selected ? hostConversation.label : 'Temporary AI workspace'"
     tabindex="-1"
   >
-    <nav
-      class="vibe64-temporary-ai__tabs"
-      aria-label="Main and temporary conversations"
-    >
-      <div class="vibe64-temporary-ai__tab vibe64-temporary-ai__tab--main">
-        <button
-          class="vibe64-temporary-ai__tab-select"
-          data-temporary-ai-main-chat
-          type="button"
-          @click="selectMainChat"
-        >
-          Main chat
-        </button>
-      </div>
-      <div class="vibe64-temporary-ai__task-tabs">
-        <v-btn
-          v-if="hostConversation?.selected" class="vibe64-temporary-ai__host-tab"
-          :color="hostConversation.color" variant="flat"
-          aria-current="page"
-          :prepend-icon="hostConversation.icon" rounded="pill" height="32" size="small" @click="hostConversation.open()"
-        >
-          {{ hostConversation.label }}
-        </v-btn>
-        <div
-          v-for="task in temporary.tasks.value"
-          :key="task.id"
-          class="vibe64-temporary-ai__tab"
-          :class="{ 'vibe64-temporary-ai__tab--active': !hostConversation?.selected && task.id === temporary.activeTaskId.value }"
-        >
-          <button
-            :ref="(element) => setTaskTabButton(task.id, element)"
-            :aria-current="!hostConversation?.selected && task.id === temporary.activeTaskId.value ? 'page' : undefined"
-            class="vibe64-temporary-ai__tab-select"
-            :data-temporary-ai-task-id="task.id"
-            :aria-label="task.unread ? `${task.label}: unread messages` : task.label"
-            :title="task.unread ? `${task.label}: unread messages` : task.label"
-            type="button"
-            @click="selectTask(task.id)"
-          >
-            <span>{{ task.label }}</span>
-            <span v-if="task.unread" class="vibe64-temporary-ai__unread" aria-hidden="true" />
-            <span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
-          </button>
-          <v-btn
-            v-if="!hostConversation?.selected && task.id === temporary.activeTaskId.value"
-            :aria-label="`Rename ${task.label}`"
-            class="vibe64-temporary-ai__tab-rename"
-            data-temporary-ai-rename
-            :disabled="task.state === 'closing'"
-            height="32"
-            :icon="mdiPencilOutline"
-            min-width="32"
-            size="x-small"
-            :title="`Rename ${task.label}`"
-            type="button"
-            variant="text"
-            @click="openRename(task)"
-          />
-          <v-btn
-            :aria-label="`Close ${task.label}`"
-            class="vibe64-temporary-ai__tab-close"
-            :disabled="props.repositoryBusy || task.recoveryOutcome === 'checking' || closingTask || stoppingTaskId === task.id"
-            height="32"
-            :icon="mdiClose"
-            min-width="32"
-            size="x-small"
-            :title="`Close ${task.label}`"
-            type="button"
-            variant="text"
-            @click="requestCloseTask(task)"
-          />
-        </div>
-        <v-btn
-          :disabled="!props.sessionId"
-          aria-label="New temporary AI task"
-          class="vibe64-temporary-ai__new-task"
-          height="32"
-          :icon="mdiPlus"
-          min-width="32"
-          size="x-small"
-          title="New temporary AI task"
-          type="button"
-          variant="text"
-          @click="openNewTask"
-        />
-      </div>
-      <span class="vibe64-temporary-ai__tabs-spacer" />
-    </nav>
+    <Vibe64TemporaryAiTabs
+      :tasks="temporary.tasks.value"
+      :active-task-id="temporary.activeTaskId.value"
+      :set-tab-button="setTaskTabButton"
+      :session-id="props.sessionId"
+      :repository-busy="props.repositoryBusy"
+      :closing-task="closingTask"
+      :stopping-task-id="stoppingTaskId"
+      @select-main-chat="selectMainChat"
+      @select-task="selectTask"
+      @rename="openRename"
+      @close="requestCloseTask"
+      @new-task="openNewTask"
+    />
 
     <v-dialog
       v-if="newTaskOpen" :model-value="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask"
@@ -118,50 +44,20 @@
       ref="hostComposer" class="vibe64-temporary-ai__host-content"
     />
     <template v-if="!hostConversation?.selected">
-      <div class="vibe64-temporary-ai__recovery-row">
-        <v-alert v-if="temporary.restoreError.value" type="error" variant="tonal" density="compact">
-          {{ temporary.restoreError.value }}
-          <v-btn color="error" variant="text" height="48" @click="temporary.restoreTasks()">Try again</v-btn>
-        </v-alert>
-        <div
-          v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
-          aria-live="polite"
-          class="vibe64-temporary-ai__recovery"
-          data-temporary-ai-recovery
-          role="status"
-        >
-          <div class="vibe64-temporary-ai__recovery-summary">
-            <strong>{{ activeTaskRecoveryTitle }}</strong>
-            <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
-              <summary>Details</summary>
-              <p>{{ activeTaskRecoveryStatus }}</p>
-            </details>
-          </div>
-          <v-btn
-            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
-            class="vibe64-temporary-ai__check-update"
-            data-temporary-ai-check-update
-            :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
-            :loading="activeTaskRecoveryChecking"
-            :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
-            size="small"
-            variant="tonal"
-            @click="emit('check-update', activeTask)"
-          >
-            Check Update
-          </v-btn>
-          <v-btn
-            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified && props.canReviewUpdate"
-            class="vibe64-temporary-ai__check-update"
-            data-temporary-ai-review-update
-            :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
-            size="small" variant="tonal"
-            @click="emit('review-update')"
-          >
-            Review resolved conflicts
-          </v-btn>
-        </div>
-      </div>
+      <Vibe64TemporaryAiRecoveryRow
+        :active-task="activeTask"
+        :restore-error="temporary.restoreError.value"
+        :recovery-verified="activeTaskRecoveryVerified"
+        :recovery-checking="activeTaskRecoveryChecking"
+        :input-disabled="Boolean(activeTask) && taskInputDisabled(activeTask)"
+        :connection-unavailable="props.connectionUnavailable"
+        :update-disabled="props.updateDisabled"
+        :update-disabled-reason="props.updateDisabledReason"
+        :can-review-update="props.canReviewUpdate"
+        @retry-restore="temporary.restoreTasks()"
+        @check-update="emit('check-update', $event)"
+        @review-update="emit('review-update')"
+      />
       <template v-if="activeTask">
         <Vibe64EphemeralConversationMessages
           :session-id="props.sessionId"
@@ -395,15 +291,14 @@
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
-import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch, watchEffect } from "vue";
+import Vibe64TemporaryAiRecoveryRow from "./Vibe64TemporaryAiRecoveryRow.vue";
+import Vibe64TemporaryAiTabs from "./Vibe64TemporaryAiTabs.vue";
+import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
   mdiCameraOutline,
-  mdiClose,
   mdiConsoleNetworkOutline,
   mdiPaperclip,
-  mdiPencilOutline,
-  mdiPlus,
 } from "@mdi/js";
 
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
@@ -413,11 +308,16 @@ import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conver
 import {
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";
+import { useVibe64TemporaryAiColleagueView } from "@/composables/useVibe64TemporaryAiColleagueView.js";
+import { useVibe64TemporaryAiNewTask } from "@/composables/useVibe64TemporaryAiNewTask.js";
+import { useVibe64TemporaryAiRename } from "@/composables/useVibe64TemporaryAiRename.js";
+import { useVibe64TemporaryAiStopAndClose } from "@/composables/useVibe64TemporaryAiStopAndClose.js";
+import { useVibe64TemporaryAiTaskElements } from "@/composables/useVibe64TemporaryAiTaskElements.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 
-import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update", "review-update"]);
 const props = defineProps({
@@ -469,86 +369,10 @@ function selectTask(id) {
   hostConversation?.value?.close();
   return temporary.selectTask(id);
 }
-const newTaskOpen = ref(false);
-const newTaskReturnsToMain = ref(false);
-const includeRecentChatContext = ref(false);
-const creatingTask = ref(false);
-const creatingTaskId = ref("");
-const createTaskError = ref("");
-watch(() => [props.projectSlug, props.sessionId], () => {
-  selectionRevision.value += 1;
-  newTaskOpen.value = false;
-  newTaskReturnsToMain.value = false;
-  creatingTask.value = false;
-  creatingTaskId.value = "";
-});
-watch(newTaskOpen, value => {
-  if (value) { includeRecentChatContext.value = false; createTaskError.value = ""; creatingTaskId.value = ""; }
-});
-async function openNewTask() {
-  newTaskReturnsToMain.value = !activeTask.value && !hostConversation?.value?.selected;
-  if (props.mainHasMessages) {
-    newTaskOpen.value = true;
-    return;
-  }
-  // Nothing to copy: create directly, and show the dialog only for a failure.
-  includeRecentChatContext.value = false;
-  createTaskError.value = "";
-  creatingTaskId.value = "";
-  await createTask();
-  if (!createTaskError.value) return;
-  const failure = { message: createTaskError.value, taskId: creatingTaskId.value };
-  newTaskOpen.value = true;
-  await nextTick();
-  createTaskError.value = failure.message;
-  creatingTaskId.value = failure.taskId;
-}
-function cancelNewTask() {
-  if (creatingTask.value) return;
-  newTaskOpen.value = false;
-  if (newTaskReturnsToMain.value) selectMainChat();
-}
-async function createTask() {
-  const revision = ++selectionRevision.value;
-  creatingTask.value = true;
-  createTaskError.value = "";
-  hostConversation?.value?.close();
-  try {
-    await temporary.createTask({ includeRecentChatContext: includeRecentChatContext.value, taskId: creatingTaskId.value });
-    if (revision === selectionRevision.value) newTaskOpen.value = false;
-  } catch (error) {
-    if (revision === selectionRevision.value) {
-      creatingTaskId.value = error.taskId || "";
-      createTaskError.value = error.message || "Temporary chat could not be created.";
-    }
-  } finally { if (revision === selectionRevision.value) creatingTask.value = false; }
-}
 function openTask(options) {
   selectionRevision.value += 1;
   hostConversation?.value?.close();
   return temporary.openTask(options);
-}
-const renamingTaskId = ref("");
-const renameValue = ref("");
-const renameError = ref("");
-const renamePending = ref(false);
-const renamingTask = computed(() => temporary.tasks.value.find(task => task.id === renamingTaskId.value) || null);
-function openRename(task) {
-  renameValue.value = task.title;
-  renameError.value = "";
-  renamingTaskId.value = task.id;
-}
-async function submitRename() {
-  renamePending.value = true;
-  renameError.value = "";
-  try {
-    await temporary.renameTask(renamingTaskId.value, renameValue.value);
-    renamingTaskId.value = "";
-  } catch (error) {
-    renameError.value = error.message || "The chat could not be renamed.";
-  } finally {
-    renamePending.value = false;
-  }
 }
 function closeWorkspace() {
   selectionRevision.value += 1;
@@ -558,9 +382,6 @@ function closeWorkspace() {
 const workspace = ref(null);
 const completionMessage = ref(null);
 const returnToMainButton = ref(null);
-const taskTabButtons = new Map();
-const taskPrompts = new Map();
-const taskSendButtons = new Map();
 const resolvedSessionsApiPath = computed(() => readRefOrGetterValue(props.sessionsApiPath));
 const temporaryAiFeedback = useUiFeedback({
   source: "vibe64.temporary-ai.feedback"
@@ -595,10 +416,37 @@ const temporary = useVibe64TemporaryAi({
   sessionId: computed(() => props.sessionId),
   sessionsApiPath: resolvedSessionsApiPath
 });
+const {
+  cancelNewTask,
+  createTask,
+  createTaskError,
+  creatingTask,
+  creatingTaskId,
+  includeRecentChatContext,
+  newTaskOpen,
+  openNewTask
+} = useVibe64TemporaryAiNewTask({ props, temporary, hostConversation, selectionRevision, selectMainChat });
+const {
+  openRename,
+  renameError,
+  renamePending,
+  renameValue,
+  renamingTask,
+  renamingTaskId,
+  submitRename
+} = useVibe64TemporaryAiRename(temporary);
 const customOpen = ref(false);
 const customTarget = ref(null);
 const activeTask = temporary.activeTask;
 watch(() => activeTask.value?.id, () => { customOpen.value = false; });
+const {
+  focusSendButton,
+  revealTaskTab,
+  setTaskPrompt,
+  setTaskSendButton,
+  setTaskTabButton,
+  taskPrompt
+} = useVibe64TemporaryAiTaskElements({ workspace, activeTask });
 const routingRequest = computed(() => assistantRoutingRequestForDisplay(activeTask.value?.routingMetadata));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
@@ -618,11 +466,16 @@ const activeTaskError = computed(() => {
 const updateRepairVisible = computed(() => temporary.open.value &&
   activeTask.value?.recoveryOperation === "update" && activeTask.value.recoveryOutcome !== "succeeded");
 const closeTitleId = useId();
-const closeTaskId = ref("");
-const closingTask = ref(false);
-const stoppingTaskId = ref("");
-const actionErrors = ref({});
-const taskToClose = computed(() => temporary.tasks.value.find((task) => task.id === closeTaskId.value));
+const {
+  actionErrors,
+  closeTask,
+  closeTaskId,
+  closingTask,
+  requestCloseTask,
+  stopTask,
+  stoppingTaskId,
+  taskToClose
+} = useVibe64TemporaryAiStopAndClose({ temporary, selectionRevision, emit });
 const activeTaskRecoveryChecking = computed(() => activeTask.value?.recoveryOutcome === "checking");
 const typingPresence = useVibe64SessionTypingPresence({
   active: computed(() => props.active && temporary.open.value && Boolean(activeTask.value?.conversationId) &&
@@ -661,110 +514,6 @@ const canReturnToMainChat = computed(() => activeTaskRecoveryVerified.value && !
   activeTask.value.recoveryOperation !== "update" ||
   ["succeeded", "unconfigured"].includes(props.workspaceSetupStatus)
 ));
-const activeTaskRecoveryTitle = computed(() => {
-  if (activeTaskRecoveryChecking.value) {
-    return "Checking Update…";
-  }
-  const status = String(activeTask.value?.status || "").trim();
-  if (["starting", "inProgress"].includes(status)) {
-    return "AI repair in progress";
-  }
-  if (activeTask.value?.recoveryOutcome === "failed") {
-    return "Update needs attention";
-  }
-  if (activeTask.value?.recoveryOutcome === "unconfirmed") {
-    return "Update result not confirmed";
-  }
-  if (activeTask.value?.recoveryOperation === "update") {
-    return "Update not yet verified";
-  }
-  if (activeTask.value?.outcomeKind === "continue") {
-    return "Waiting for your reply";
-  }
-  if (status === "completed") {
-    return "AI repair finished";
-  }
-  if (status === "failed") {
-    return "AI repair needs attention";
-  }
-  if (status === "interrupted") {
-    return "AI repair stopped";
-  }
-  return "AI repair";
-});
-const activeTaskRecoveryStatus = computed(() => {
-  const task = activeTask.value || {};
-  if (task.recoveryOutcome === "checking") {
-    return "";
-  }
-  if (task.recoveryOperation === "update" && props.updateDisabled && props.updateDisabledReason) {
-    return props.updateDisabledReason;
-  }
-  if (task.recoveryOutcome === "failed") {
-    return task.recoveryAutoPaused
-      ? "Automatic repair paused after repeated conflicts. Continue here or check Update again. Main chat has the latest Update diagnostic."
-      : "The Update check did not succeed. Continue this repair or check Update again. Main chat has the latest Update diagnostic.";
-  }
-  if (task.recoveryOutcome === "unconfirmed") {
-    return task.recoveryOutcomeMessage || "Vibe64 could not confirm this Update result. Check the current session before trying again.";
-  }
-  if (task.recoveryOperation === "update" && task.outcomeKind === "continue") {
-    return "Reply if a decision is needed, or use Check Update to verify the prepared edits.";
-  }
-  if (task.outcomeKind === "continue") {
-    return "";
-  }
-  const status = String(task.status || "").trim();
-  if (status === "completed") {
-    return task.completionMessage || "Temporary AI finished. Review its result below.";
-  }
-  if (status === "failed") {
-    return task.failureMessage || "Temporary AI stopped before it could confirm the repair. Review the error and progress below.";
-  }
-  if (status === "interrupted") {
-    return task.recoveryOperation === "update"
-      ? "You stopped this repair. Partial edits remain and Update still needs to succeed. You can continue the repair here."
-      : "You stopped this repair. You can continue in this temporary chat or return to Main chat.";
-  }
-  return task.nextStepMessage || "Follow progress here and reply below if Temporary AI needs a decision.";
-});
-
-function requestCloseTask(task) {
-  if (task.recoveryOperation === "update" && task.recoveryOutcome !== "succeeded" && (task.busy || task.messages.length)) {
-    closeTaskId.value = task.id;
-    return;
-  }
-  void closeTask(task.id);
-}
-
-async function closeTask(taskId, { returnToMainChat = false } = {}) {
-  selectionRevision.value += 1;
-  closingTask.value = true;
-  delete actionErrors.value[taskId];
-  try {
-    await temporary.closeTask(taskId);
-    closeTaskId.value = "";
-    if (returnToMainChat && !temporary.tasks.value.some((task) => task.id === taskId)) {
-      emit("select-main-chat");
-    }
-  } catch (error) {
-    actionErrors.value[taskId] = error?.message || "Temporary AI could not be closed. The chat is still open; try again.";
-  } finally {
-    closingTask.value = false;
-  }
-}
-
-async function stopTask(taskId) {
-  stoppingTaskId.value = taskId;
-  delete actionErrors.value[taskId];
-  try {
-    await temporary.stopTask(taskId);
-  } catch (error) {
-    actionErrors.value[taskId] = error?.message || "Temporary AI could not be stopped. Try again.";
-  } finally {
-    stoppingTaskId.value = "";
-  }
-}
 
 function taskAccessReason(task) {
   if (!task) return "";
@@ -777,34 +526,6 @@ function taskAccessReason(task) {
 
 function taskInputDisabled(task) {
   return props.repositoryBusy || task.state === "closing" || task.status === "closing" || task.recoveryOutcome === "checking" || Boolean(taskAccessReason(task));
-}
-
-function taskPrompt(taskId = "") {
-  return taskPrompts.get(String(taskId || "")) || null;
-}
-
-function setTaskPrompt(taskId = "", element = null) {
-  const normalizedTaskId = String(taskId || "");
-  if (!normalizedTaskId) {
-    return;
-  }
-  if (element) {
-    taskPrompts.set(normalizedTaskId, element);
-    return;
-  }
-  taskPrompts.delete(normalizedTaskId);
-}
-
-function setTaskSendButton(taskId = "", element = null) {
-  const normalizedTaskId = String(taskId || "");
-  if (!normalizedTaskId) {
-    return;
-  }
-  if (element) {
-    taskSendButtons.set(normalizedTaskId, element);
-    return;
-  }
-  taskSendButtons.delete(normalizedTaskId);
 }
 
 async function sendTask(taskId = "", options = {}) {
@@ -869,52 +590,6 @@ async function openFirstTask(revision) {
   else await openNewTask();
 }
 
-function setTaskTabButton(taskId = "", element = null) {
-  const normalizedTaskId = String(taskId || "");
-  if (!normalizedTaskId) {
-    return;
-  }
-  if (element) {
-    taskTabButtons.set(normalizedTaskId, element);
-    return;
-  }
-  taskTabButtons.delete(normalizedTaskId);
-}
-
-function afterBrowserPaint() {
-  if (typeof globalThis.requestAnimationFrame !== "function") {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    globalThis.requestAnimationFrame(() => resolve());
-  });
-}
-
-async function revealTaskTab(taskId = "", { focus = false } = {}) {
-  const normalizedTaskId = String(taskId || "");
-  if (!normalizedTaskId) {
-    return false;
-  }
-  await nextTick();
-  await afterBrowserPaint();
-  const button = taskTabButtons.get(normalizedTaskId);
-  button?.scrollIntoView?.({
-    block: "nearest",
-    inline: "nearest"
-  });
-  if (focus) {
-    const target = button || workspace.value;
-    target?.focus?.({ preventScroll: true });
-  }
-  return Boolean(button);
-}
-
-function focusSendButton() {
-  const sendButton = taskSendButtons.get(activeTask.value?.id);
-  sendButton?.focus?.();
-}
-
-
 function updateActiveAgentSetting(parameterId = "", value = "") {
   if (activeTask.value?.id) {
     temporary.updateAgentSetting(activeTask.value.id, parameterId, value);
@@ -932,54 +607,7 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
   target?.scrollIntoView?.({ block: "nearest" });
 }, { flush: "post" });
 
-const colleagueView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-const selectedView = {
-  get projectSlug() { return props.projectSlug; },
-  get sessionId() { return props.sessionId; },
-  get ready() { return props.assistantReady; },
-  get selectionRevision() { return selectionRevision.value; },
-  get hostConversationSelected() { return Boolean(hostConversation?.value?.selected); },
-  get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
-  get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
-  // A Learning "Show me" for a file opens it in the ordinary Working Files view.
-  openFile(path) { return typeof props.openFile === "function" && props.openFile(path) === true; },
-  // A lesson beat's Do it for me sends its prompt to this session's Main chat.
-  async sendLessonMessage(text) { return typeof props.sendLessonMessage === "function" && await props.sendLessonMessage(text) === true; },
-  async openConversation(conversationId, isCurrent = () => true) {
-    if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
-    if (!conversationId) {
-      hostConversation?.value?.close();
-      temporary.closeWorkspace();
-      emit("select-main-chat");
-      return;
-    }
-    const projectSlug = props.projectSlug;
-    const sessionId = props.sessionId;
-    const revision = selectionRevision.value;
-    const hostSelected = hostConversation?.value?.selected;
-    await temporary.restoreTasks();
-    if (!isCurrent() || !props.sessionSelected || !props.assistantReady || props.projectSlug !== projectSlug ||
-      props.sessionId !== sessionId || selectionRevision.value !== revision || hostConversation?.value?.selected !== hostSelected) {
-      throw new Error("The selected conversation changed before it opened.");
-    }
-    const task = temporary.tasks.value.find((entry) => entry.conversationId === conversationId);
-    if (!task) throw new Error(temporary.restoreError.value || "The temporary conversation could not be opened.");
-    hostConversation?.value?.close();
-    temporary.selectTask(task.id);
-    await nextTick();
-    if (!isCurrent() || !props.sessionSelected || props.sessionId !== sessionId || selectionRevision.value !== revision ||
-      temporary.activeTaskId.value !== task.id || !temporary.open.value) throw new Error("The selected conversation changed before it opened.");
-  }
-};
-watchEffect(() => {
-  if (!colleagueView) return;
-  if (props.sessionSelected) colleagueView.value = selectedView;
-  else if (colleagueView.value === selectedView) colleagueView.value = null;
-});
-onBeforeUnmount(() => {
-  selectionRevision.value += 1;
-  if (colleagueView?.value === selectedView) colleagueView.value = null;
-});
+useVibe64TemporaryAiColleagueView({ props, emit, temporary, hostConversation, selectionRevision });
 
 defineExpose({
   get visible() { return temporary.open.value || Boolean(hostConversation?.value?.selected); },
@@ -1013,22 +641,9 @@ defineExpose({
   border-color: rgba(var(--v-theme-secondary), 0.65);
   grid-template-rows: auto minmax(0, 1fr);
 }
-.vibe64-temporary-ai--host .vibe64-temporary-ai__tabs {
-  background: rgba(var(--v-theme-secondary), 0.12);
-}
-.vibe64-temporary-ai__host-tab {
-  flex: 0 0 auto;
-}
 .vibe64-temporary-ai__host-content {
   min-height: 0;
   min-width: 0;
-}
-
-.vibe64-temporary-ai__unread {
-  background: rgb(var(--v-theme-primary));
-  border-radius: 50%;
-  flex: 0 0 8px;
-  height: 8px;
 }
 
 .vibe64-temporary-ai {
@@ -1050,125 +665,9 @@ defineExpose({
   z-index: 12;
 }
 
-.vibe64-temporary-ai__tabs {
-  align-items: flex-start;
-  background: rgba(var(--v-theme-tertiary), 0.06);
-  border-bottom: 1px solid rgba(var(--v-theme-tertiary), 0.18);
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.25rem 0.35rem;
-}
-
-.vibe64-temporary-ai__task-tabs {
-  display: flex;
-  flex: 1 1 auto;
-  gap: 0.25rem;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.vibe64-temporary-ai__tab {
-  align-items: center;
-  background: rgba(var(--v-theme-on-surface), 0.05);
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: inherit;
-  display: inline-flex;
-  flex: 0 0 auto;
-  max-width: 100%;
-  min-height: 2rem;
-  padding-left: 0.15rem;
-}
-
-.vibe64-temporary-ai__tab-select {
-  align-items: center;
-  align-self: stretch;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 0.35rem;
-  min-width: 0;
-  padding: 0.2rem 0.35rem 0.2rem 0.55rem;
-}
-
-.vibe64-temporary-ai__tab-select > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-temporary-ai__tab-rename,
-.vibe64-temporary-ai__tab-close {
-  flex: 0 0 auto;
-}
-
-.vibe64-temporary-ai:focus-visible,
-.vibe64-temporary-ai__tab-select:focus-visible {
+.vibe64-temporary-ai:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
-}
-
-.vibe64-temporary-ai__tab--active {
-  background: rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-tertiary), 0.35);
-  font-weight: 650;
-}
-
-.vibe64-temporary-ai__tab--main {
-  background: rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-tertiary), 0.22);
-}
-
-.vibe64-temporary-ai__new-task {
-  flex: 0 0 auto;
-}
-
-.vibe64-temporary-ai__tabs-spacer {
-  flex: 1 1 auto;
-}
-
-.vibe64-temporary-ai__busy {
-  background: rgb(var(--v-theme-primary));
-  border-radius: 50%;
-  height: 0.45rem;
-  width: 0.45rem;
-}
-
-.vibe64-temporary-ai__recovery {
-  align-items: start;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.85rem;
-  gap: 0.5rem;
-  overflow-wrap: anywhere;
-  padding: 0.4rem;
-}
-
-.vibe64-temporary-ai__recovery-row:not(:empty) {
-  max-height: min(20dvh, 8rem);
-  overflow-y: auto;
-  padding: 0.35rem 0.55rem 0;
-}
-
-.vibe64-temporary-ai__recovery-summary {
-  flex: 1;
-  min-width: 0;
-}
-
-.vibe64-temporary-ai__recovery strong {
-  font-size: 0.95rem;
-  line-height: 1.4;
-}
-
-.vibe64-temporary-ai__recovery summary {
-  cursor: pointer;
-}
-
-.vibe64-temporary-ai__check-update {
-  flex: 0 0 auto;
 }
 
 .vibe64-temporary-ai__composer {
@@ -1179,14 +678,6 @@ defineExpose({
   justify-self: start;
   margin-top: 0.4rem;
   scroll-margin-block: 0.55rem;
-}
-
-.vibe64-temporary-ai__recovery p {
-  margin: 0;
-}
-
-.vibe64-temporary-ai__recovery p + p {
-  margin-top: 0.3rem;
 }
 
 .vibe64-temporary-ai__error {
@@ -1220,11 +711,6 @@ defineExpose({
 }
 
 @media (pointer: coarse) {
-  .vibe64-temporary-ai__tab-select,
-  .vibe64-temporary-ai__new-task,
-  .vibe64-temporary-ai__tab-rename,
-  .vibe64-temporary-ai__tab-close,
-  .vibe64-temporary-ai__check-update,
   .vibe64-temporary-ai__return {
     min-height: 3rem !important;
     min-width: 3rem !important;

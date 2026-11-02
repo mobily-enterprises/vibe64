@@ -167,7 +167,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     );
     const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
     const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue", import.meta.url
     ), "utf8");
     const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?/>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];
@@ -231,7 +231,7 @@ describe("useVibe64AutopilotView route hydration", () => {
 
   it.each(["preview-displayed", "toolbar-teleport-target"])("keeps the actual %s binding active independently of a retained tool", (attribute) => {
     const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue", import.meta.url
     ), "utf8");
     const tag = autopilot.match(/<Vibe64OutputControls\b[\s\S]*?\/>/u)?.[0];
     const binding = tag?.match(new RegExp(`:${attribute}="([^"]+)"`, "u"))?.[1];
@@ -300,7 +300,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(route.path).toBe("/app/project/chat-test/dashboard/files");
     expect(router.replace).not.toHaveBeenCalled();
     const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue", import.meta.url
     ), "utf8");
     const loadingTag = autopilot.match(/<Vibe64AsyncModuleState\b[\s\S]*?\/>/u)?.[0];
     expect(autopilot).toContain('import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue"');
