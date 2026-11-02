@@ -121,7 +121,7 @@ export function useVibe64LearningCourses({ active } = {}) {
     if (!admitted?.attemptId || (attemptId && admitted.attemptId !== attemptId)) {
       throw new Error("The lesson response did not confirm the requested attempt.");
     }
-    const handedOver = typeof onAdmitted === "function" && !admitted.ended && current(scope);
+    const handedOver = onAdmitted !== null && !admitted.ended && current(scope);
     const stillCurrent = handedOver
       ? () => scope.actor === actorKey.value && scope.learnerId === learnerId.value
       : () => current(scope);
