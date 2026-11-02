@@ -21,9 +21,9 @@ import {
 import {
   runVibe64Command
 } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
-import {
-  DAEMON_USERNAME_PREFIX, managedExecutionControllerLeaseName, managedExecutionRuntimeBase
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { managedExecutionRuntimeBase } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { managedExecutionControllerLeaseName } from "../../packages/vibe64-execution/src/host/managedExecution.js";
 
 const execFileAsync = promisify(execFile);
 const EXEC_HELPER = path.resolve("packages/vibe64-execution/src/host/execHelper.js");

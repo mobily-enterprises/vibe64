@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { managedExecutionTargetUser } from "../../packages/vibe64-execution/src/host/executionIdentity.js";
+import { ensureWorkspaceRuntimeBase } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
+import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
-  DAEMON_USERNAME_PREFIX,
   configureManagedExecutionWorkSlice,
-  ensureWorkspaceRuntimeBase,
-  managedExecutionSliceCgroup,
-  managedExecutionTargetUser
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+  managedExecutionSliceCgroup
+} from "../../packages/vibe64-execution/src/host/managedWorkflows.js";
+import { execHelperSource } from "../fixtures/execHelperSource.js";
 
 // v64-mercmobily's work slice on 2026-10-29: every execution's payload asked
 // for these limits, and the slice's cgroup already enforced them.
@@ -117,13 +118,13 @@ test("an execution run as the workspace daemon reuses the daemon already resolve
 });
 
 test("creating an execution's receipt keeps the daemon's runtime directory with no process", async () => {
-  const source = await readFile(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url), "utf8");
+  const source = await execHelperSource();
   const opening = source.slice(source.indexOf("function openWorkspaceExecutionReceipts"),
     source.indexOf("const NO_EXECUTION_RECEIPTS"));
   assert.doesNotMatch(opening, /runRootCommand|spawnSync|ensureGroup/u);
   // The managed execution start reads the shared group once and passes it on.
   const start = source.slice(source.indexOf("function handleManagedExecutionOperation"),
-    source.indexOf("function consumeManagedExecutionRequestPayload"));
+    source.indexOf("function runManagedExecutionPayload"));
   assert.equal(start.match(/ensureGroup\(VIBE64_GROUP\)/gu)?.length, 1);
   assert.match(start, /openWorkspaceExecutionReceipts\(owner, \{ create: true, gid: groupId \}\)/u);
 });

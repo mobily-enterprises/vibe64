@@ -6,9 +6,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
-  resolveAllowedUserHomePath, runUserCommand
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+  helperChildEnv,
+  resolveAllowedCwd,
+  resolveAllowedUserHomePath,
+  runUserCommand
+} from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { assertExpectedId } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { canonicalPath } from "../../packages/vibe64-execution/src/host/hostFiles.js";
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 
 test("expected execution identities fail closed for missing, malformed and mismatched ids", () => {

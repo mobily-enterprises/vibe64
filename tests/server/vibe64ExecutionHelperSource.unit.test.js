@@ -5,15 +5,33 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, INPUT_LIMIT_BYTES, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
-  ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
-  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
-  releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { helperChildEnv, parseEnvironmentFile } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { openManagedExecutionReceipts } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
+import {
+  managedExecutionOomBoundary,
+  managedExecutionState,
+  managedExecutionStopTimeoutMs,
+  managedExecutionTaskLimitCounters,
+  managedExecutionTaskLimitJournal,
+  releaseEndedManagedExecutions,
+  stopManagedExecution
+} from "../../packages/vibe64-execution/src/host/executionState.js";
+import { consumeManagedExecutionRequestPayload, INPUT_LIMIT_BYTES } from "../../packages/vibe64-execution/src/host/helperPayload.js";
+import {
+  APPLICATION_USERNAME_PREFIX,
+  assertEnabledForVibe64,
+  DAEMON_USERNAME_PREFIX
+} from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import {
+  ensureManagedServiceProcessOwnership,
+  stopManagedServiceUnit
+} from "../../packages/vibe64-execution/src/host/serviceOperations.js";
+import { deploymentServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
+import { execHelperSource as helperSource } from "../fixtures/execHelperSource.js";
 
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
 // The workspace daemon account the helper serves, as the helper names it.
@@ -133,10 +151,6 @@ test("long kernel OOM records require an adjacent same-boot continuation, not ti
   ]) assert.equal(managedExecutionOomBoundary(text({ ...second, ...change }), oomQuery), null);
 });
 
-async function helperSource() {
-  return readFile(HELPER_SOURCE_URL, "utf8");
-}
-
 test("execution helper waits for a delayed nonblocking stdin payload", async () => {
   const child = spawn(process.execPath, [
     new URL(HELPER_SOURCE_URL).pathname,
@@ -158,10 +172,11 @@ test("execution helper waits for a delayed nonblocking stdin payload", async () 
   assert.doesNotMatch(stderr, /EAGAIN|resource temporarily unavailable/u);
 });
 
-// Run as a script, the helper's main() starts while the module is still being
-// evaluated, so a constant declared below that call would not exist yet.
+// Run as a script, the helper's main() starts while its entry is still being
+// evaluated, so a constant the entry declares below that call would not exist
+// yet. The modules it imports are evaluated before it.
 test("execution helper starts only after every module declaration is initialized", async () => {
-  const source = await helperSource();
+  const source = await readFile(HELPER_SOURCE_URL, "utf8");
   const start = source.indexOf("if (import.meta.main)");
   const declarations = [...source.matchAll(/^(?:const|let|class) /gmu)].map((match) => match.index);
   assert.ok(start > 0 && declarations.length > 0);
@@ -191,7 +206,7 @@ test("execution helper preserves operation and command allowlists", async () => 
 
 test("execution Stop lets systemd run service cleanup before signalling the cgroup", async () => {
   const source = await helperSource();
-  const stop = source.slice(source.indexOf('function stopManagedExecution('), source.indexOf('function assertNormalizedPayload('));
+  const stop = source.slice(source.indexOf('function stopManagedExecution('), source.indexOf('function releaseEndedManagedExecutions('));
   const firstStop = stop.indexOf('["stop", "--no-block", unitName]');
   assert.ok(firstStop > 0);
   assert.doesNotMatch(stop.slice(0, firstStop), /SIGTERM|SIGKILL|kill-who/u);
@@ -712,9 +727,9 @@ async function plantedRoot(t) {
 
 // A read that waits on a FIFO would stall this whole test process, so those run
 // in a child process stopped after a bound.
-function helperInChild(expression, input) {
+function helperInChild(module, expression, input) {
   const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
-    const helper = await import(${JSON.stringify(HELPER_SOURCE_URL.href)});
+    const helper = await import(${JSON.stringify(new URL(module, HELPER_SOURCE_URL).href)});
     const input = JSON.parse(process.argv[1]);
     try { process.stdout.write(JSON.stringify({ value: await (${expression}) ?? null })); }
     catch (error) { process.stdout.write(JSON.stringify({ error: String(error?.message || error) })); }
@@ -770,7 +785,7 @@ test("a payload file is read only as the daemon's regular file in its workspace 
   assert.throws(() => consume(path.join(directory, "other.json"), { ...owner, uid: owner.uid + 1 }));
   assert.equal(existsSync(path.join(directory, "other.json")), true, "another user's file is left in place");
   execFileSync("mkfifo", [path.join(directory, "fifo.json")]);
-  assert.ok(helperInChild("helper.consumeManagedExecutionRequestPayload(input.file, input.owner, { managedRoot: input.root })",
+  assert.ok(helperInChild("helperPayload.js", "helper.consumeManagedExecutionRequestPayload(input.file, input.owner, { managedRoot: input.root })",
     { file: path.join(directory, "fifo.json"), owner, root }).error);
 
   // A link in place of the payload directory: the target's file of that name
@@ -818,7 +833,7 @@ test("a user's Vibe64 membership is read only as the daemon's regular file", asy
   }
   assert.throws(() => assertEnabledForVibe64({ ...owner, uid: owner.uid + 1 }, "alice"), /not enabled/u);
   execFileSync("mkfifo", [path.join(users, "gina.json")]);
-  assert.match(helperInChild("helper.assertEnabledForVibe64(input.owner, 'gina')", { owner }).error, /not enabled/u);
+  assert.match(helperInChild("hostAccounts.js", "helper.assertEnabledForVibe64(input.owner, 'gina')", { owner }).error, /not enabled/u);
 
   // A link in place of the membership directory.
   await writeFile(path.join(victim, "dave.json"), active("dave"));
@@ -845,7 +860,7 @@ test("a managed service PID file is read and removed only through its own direct
   assert.throws(() => ensure(path.join(run, "db.pid")));
   await rm(path.join(run, "db.pid"));
   execFileSync("mkfifo", [path.join(run, "db.pid")]);
-  assert.ok(helperInChild("helper.ensureManagedServiceProcessOwnership(input)",
+  assert.ok(helperInChild("serviceOperations.js", "helper.ensureManagedServiceProcessOwnership(input)",
     { owner, pidFile: path.join(run, "db.pid"), unitName: "vibe64-test-db.service", workspaceRoot }).error);
 
   // A link in place of the PID file's directory after its path was checked.
@@ -876,7 +891,7 @@ test("an execution's result is read only as its target user's regular file in it
   assert.deepEqual(receipts.result(large), {}, "an oversized result is not read");
   assert.deepEqual(receipts.result(executionIdOf("e")), {}, "a missing receipt has no result");
   execFileSync("mkfifo", [path.join(directory, fifo, "result.json")]);
-  assert.deepEqual(helperInChild(`(() => {
+  assert.deepEqual(helperInChild("executionReceipts.js", `(() => {
     const receipts = helper.openManagedExecutionReceipts(input.directory, input.ids);
     try { return receipts.result(input.fifo); } finally { receipts.close(); }
   })()`, { directory, fifo, ids }).value, {});

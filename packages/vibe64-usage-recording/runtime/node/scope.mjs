@@ -25,6 +25,13 @@ function requestPath(url = "") {
   return pathname.slice(0, PATH_LIMIT) || "/";
 }
 
+/**
+ * The process's scope and the request scopes its Node servers' requests run in.
+ * @param {object} [options]
+ * @param {number} [options.pid]
+ * @param {"web" | "terminal"} [options.targetKind]
+ * @param {() => string} [options.now]
+ */
 function createScopes({ pid = process.pid, targetKind = "web", now = () => new Date().toISOString() } = {}) {
   const storage = new AsyncLocalStorage();
   const processScope = targetKind === "terminal"
@@ -46,8 +53,15 @@ function createScopes({ pid = process.pid, targetKind = "web", now = () => new D
     processScope,
     current: () => storage.getStore() || processScope,
 
-    // Every request a Node http or https server emits runs in its own scope
-    // while recording; once idle, requests are emitted untouched.
+    /**
+     * Every request a Node http or https server emits runs in its own scope
+     * while recording; once idle, requests are emitted untouched. A server's
+     * request event carries its response; an emit without one leaves that
+     * request untouched.
+     * @param {object} dependencies
+     * @param {() => boolean} dependencies.isActive
+     * @param {(scope: object) => void} dependencies.onRequestEnd
+     */
     patchServers({ isActive, onRequestEnd }) {
       for (const Server of [http.Server, https.Server]) {
         const emit = Server.prototype.emit;
@@ -56,7 +70,7 @@ function createScopes({ pid = process.pid, targetKind = "web", now = () => new D
           let scope = null;
           try {
             scope = requestScope(request);
-            response?.once?.("close", () => onRequestEnd(scope));
+            response.once("close", () => onRequestEnd(scope));
           } catch {
             scope = null;
           }

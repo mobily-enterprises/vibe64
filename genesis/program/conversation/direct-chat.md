@@ -1302,6 +1302,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-runtime/src/server/agentSessionCommandHook.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
+- `packages/vibe64-execution/src/host/commandEnvironment.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/runVibe64Command.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`

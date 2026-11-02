@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { DAEMON_USERNAME_PREFIX, helperChildEnv, usageRecordingNodeOptions as helperNodeOptions } from "../../packages/vibe64-execution/src/host/execHelper.js";
+import {
+  helperChildEnv,
+  usageRecordingNodeOptions as helperNodeOptions
+} from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
 import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";

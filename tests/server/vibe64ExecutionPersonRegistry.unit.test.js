@@ -3,10 +3,18 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, wr
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
-  DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration,
-  registerPerson, upgradePersonRegistry
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+  assertActablePerson,
+  enablePerson,
+  loginUidRange,
+  personAccountProblem,
+  personSudoCommands,
+  readPersonRegistration,
+  registerPerson,
+  upgradePersonRegistry
+} from "../../packages/vibe64-execution/src/host/personRegistry.js";
+import { execHelperSource } from "../fixtures/execHelperSource.js";
 
 const UID = process.getuid();
 // The workspace daemon account the helper serves, as the helper names it.
@@ -355,7 +363,7 @@ test("a workspace without memberships still receives its empty registry", async 
 test("sudo lists each rule on one line, so a narrow command compares exactly", async () => {
   // Without a terminal, classic sudo wraps its listing at 80 columns; the
   // helper asks for a width no rule reaches.
-  const source = await readFile(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url), "utf8");
+  const source = await execHelperSource();
   assert.match(source, /spawnSync\("\/usr\/bin\/sudo", \["-n", "-l", "-U", username\], \{\n {4}encoding: "utf8",\n {4}env: \{ COLUMNS: "100000", LANG: "C", LC_ALL: "C", PATH: "[^"]+" \}\n {2}\}\);/u);
   // A rule sudo still wrapped is never taken for a narrow one.
   const wrapped = "User merc may run the following commands on host:\n    (root) NOPASSWD: /srv/tool/node\n        /srv/tool/cli.mjs --read\n";

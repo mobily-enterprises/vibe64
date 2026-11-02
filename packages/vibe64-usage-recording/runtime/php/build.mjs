@@ -91,6 +91,14 @@ function compile({ phpConfig, phpize, cacheRoot, env }) {
   }
 }
 
+/**
+ * Builds, or reuses, the PHP usage module for the PHP that php-config names,
+ * proves PHP loads it, and writes the scan directory's ini file for it.
+ * @param {object} [options]
+ * @param {string} [options.phpConfig] php-config's path; found on PATH when empty
+ * @param {boolean} [options.force] rebuild a cached module
+ * @param {NodeJS.ProcessEnv} [options.env]
+ */
 function buildPhpUsageModule({ phpConfig = "", force = false, env = process.env } = {}) {
   const childEnv = buildEnvironment(env);
   const config = phpConfig ? path.resolve(phpConfig) : findOnPath("php-config", env);

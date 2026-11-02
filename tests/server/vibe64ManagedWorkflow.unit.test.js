@@ -5,10 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  managedWorkflowCounters,
-  managedWorkflowIdentity
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { managedWorkflowCounters, managedWorkflowIdentity } from "../../packages/vibe64-execution/src/host/managedWorkflows.js";
 import {
   finishVibe64Workflow, installVibe64ManagedExecutionProvider,
   setVibe64WorkflowPhase, startVibe64Workflow

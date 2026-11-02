@@ -41,6 +41,19 @@ function controlSaysStopping(directory) {
   }
 }
 
+/**
+ * A trace writer for one process's hits file in the recording directory.
+ * @param {object} dependencies
+ * @param {string} dependencies.directory
+ * @param {string} [dependencies.runtime]
+ * @param {string} [dependencies.runtimeVersion]
+ * @param {number} [dependencies.pid]
+ * @param {() => string} [dependencies.now]
+ * @param {number} [dependencies.maxFileBytes]
+ * @param {number} [dependencies.flushEntries]
+ * @param {() => void} dependencies.onFlushNeeded asked to flush soon, once
+ *   enough text or new hit entries are waiting
+ */
 function createTraceWriter({
   directory,
   runtime = "nodejs",
@@ -49,8 +62,8 @@ function createTraceWriter({
   now = () => new Date().toISOString(),
   maxFileBytes = USAGE_RECORDING_LIMITS.hitsBytesPerProcess,
   flushEntries = USAGE_RECORDING_LIMITS.flushEntries,
-  onFlushNeeded = () => {}
-} = {}) {
+  onFlushNeeded
+}) {
   let descriptor = -1;
   let fileName = "";
   let bytesWritten = 0;

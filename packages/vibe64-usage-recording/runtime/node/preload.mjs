@@ -36,6 +36,7 @@ function recordingSetup(env = process.env) {
 
 function nodeSupported() {
   const [major, minor] = String(process.versions.node).split(".").map(Number);
+  // readable-check: allow method-probe - platform object: node:module has registerHooks from Node 22.15 and 23.5, not 23.0 to 23.4
   return typeof nodeModule.registerHooks === "function" &&
     (major > MINIMUM_NODE[0] || (major === MINIMUM_NODE[0] && minor >= MINIMUM_NODE[1]));
 }

@@ -362,7 +362,7 @@ describe("trace writer", () => {
     const directory = await temporaryRoot();
     writeFileSync(path.join(directory, "hits-nodejs-41.ndjson"), "existing\n");
     writeFileSync(path.join(directory, "hits-nodejs-41-2.ndjson"), "existing\n");
-    const writer = createTraceWriter({ directory, pid: 41 });
+    const writer = createTraceWriter({ directory, pid: 41, onFlushNeeded: () => {} });
     assert.ok(writer.start([{ type: "tracer", state: "ready" }]));
     assert.equal(writer.fileName, "hits-nodejs-41-3.ndjson");
     assert.equal(readFileSync(path.join(directory, "hits-nodejs-41.ndjson"), "utf8"), "existing\n");
@@ -370,7 +370,7 @@ describe("trace writer", () => {
 
   test("the size limit ends the file with a truncated line", async () => {
     const directory = await temporaryRoot();
-    const writer = createTraceWriter({ directory, pid: 42, maxFileBytes: 2048 });
+    const writer = createTraceWriter({ directory, pid: 42, maxFileBytes: 2048, onFlushNeeded: () => {} });
     writer.start();
     writer.declareFile(0, "a.mjs", `sha256:${"0".repeat(64)}`);
     const scope = { id: "run_42", kind: "run", label: "", startedAt: "2026-10-30T00:00:00.000Z", endedAt: "", counts: new Map(), lineWritten: false, endWritten: false };
