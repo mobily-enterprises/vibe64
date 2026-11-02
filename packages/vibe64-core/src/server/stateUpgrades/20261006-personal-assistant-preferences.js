@@ -1,4 +1,4 @@
-// The hosted assistant-settings owner writes personal profiles only on explicit
+// The assistant-settings owner writes personal profiles only on explicit
 // authenticated changes. Legacy shared settings remain untouched; absent profiles
 // use declared defaults without historical conversion or read-time writes.
 export default {
