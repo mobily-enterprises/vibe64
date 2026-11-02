@@ -165,7 +165,6 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {boolean} [dependencies.codexToolHomeRequired]
  * @param {string} [dependencies.codexToolHomeSource]
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -192,7 +191,6 @@ function createCodexSessionRegistration({
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
   env,
-  hostEnv,
   codexGitCommand,
   logger,
   project,
@@ -276,7 +274,6 @@ function createCodexSessionRegistration({
     sessionEnvironment: codexSessionEnvironment,
     providerConnections,
     env,
-    hostEnv,
     logger,
     /**
      * The native owner consumes these preparations only after construction.
@@ -292,7 +289,7 @@ function createCodexSessionRegistration({
   } = codexSessionProviderHost;
 
   const codexAppServerProviderOwner = createCodexAppServerProviderOwner({
-    runtimeRoot: codexAppServerRuntimeBaseDir({ env, hostEnv }),
+    runtimeRoot: codexAppServerRuntimeBaseDir({ env }),
     exitUnverifiedCode: "vibe64_codex_runtime_exit_unverified",
     requiredStopCode: "vibe64_session_renewal_process_exit_unverified",
     runtimeCloseError: "Vibe64 Codex app-server runtime close failed.",

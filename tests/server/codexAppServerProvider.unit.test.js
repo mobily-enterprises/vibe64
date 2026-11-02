@@ -742,14 +742,12 @@ test("codex provider runtime base uses explicit Vibe64 runtime directory", () =>
   );
 });
 
-test("codex provider runtime base uses host XDG runtime when provider env is curated", () => {
+test("codex provider runtime base uses the env's XDG runtime directory", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
-      env: {},
-      hostEnv: {
+      env: {
         XDG_RUNTIME_DIR: "/run/user/1000"
-      },
-      targetRoot: "/srv/host-data/merc/projects/ddd"
+      }
     }),
     "/run/user/1000/vibe64/agent-providers"
   );
@@ -857,11 +855,7 @@ test("codex provider fallback runtime base stays outside the target root when XD
     codexAppServerRuntimeBaseDir({
       env: {
         XDG_RUNTIME_DIR: ""
-      },
-      hostEnv: {
-        XDG_RUNTIME_DIR: "/run/user/1000"
-      },
-      targetRoot: "/home/workspace/vibe64/beepollen"
+      }
     }),
     path.join(os.homedir(), ".cache", "vibe64", "agent-providers")
   );

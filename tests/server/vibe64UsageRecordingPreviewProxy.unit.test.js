@@ -88,7 +88,7 @@ test("the Preview proxy numbers recorded requests and no request content reaches
     timing: { eventMs: 0, pollMs: 10, readyMs: 60_000, stopIdleMs: 50 }
   });
   const call = (method, input = {}) => inProject(() => service[method]({ sessionId: SESSION_ID, ...input }));
-  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
   t.after(async () => {
     await registry.closeAll();
     await stopActiveUsageRecording("project:demo", SESSION_ID);

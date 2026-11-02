@@ -10,7 +10,6 @@ import {
   createTerminalSessionChangedPublishers
 } from "./events.js";
 import { registerRoutes } from "./registerRoutes.js";
-import { terminalsProviderEnv } from "./terminalsEnv.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
@@ -87,8 +86,7 @@ const Vibe64TerminalsFeature = defineFeature({
     const projectContext = getStudioProjectContext();
     const terminals = createService({
       actions: actionCatalogue,
-      env: terminalsProviderEnv(env, process.env),
-      hostEnv: process.env,
+      env,
       logger,
       productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
       projectServices: createProjectServices(),
@@ -131,7 +129,7 @@ const Vibe64TerminalsFeature = defineFeature({
    * @param {{ outputs: { terminals: TerminalsService } }} context
    */
   async boot({ env }, { outputs }) {
-    await prepareCodexAttachmentStorage({ env: terminalsProviderEnv(env, process.env) });
+    await prepareCodexAttachmentStorage({ env });
     await cleanupSchedules.get(outputs.terminals).runNow();
   },
   /**

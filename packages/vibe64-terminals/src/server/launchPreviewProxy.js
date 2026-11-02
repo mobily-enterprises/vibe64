@@ -52,29 +52,23 @@ function normalizePreviewProxySocketIdleTimeoutMs(value, env) {
  * The Preview proxies of one controller, keyed by project, session and public origin.
  * @param {object} options
  * @param {RuntimeEnv} options.env the configured Preview env
- * @param {NodeJS.ProcessEnv} options.hostEnv this process's live env, under the configured env
  * @param {number} [options.socketIdleTimeoutMs]
  */
 function createLaunchPreviewProxyRegistry({
   env,
-  hostEnv,
   socketIdleTimeoutMs = undefined
 }) {
-  const runtimeEnv = {
-    ...hostEnv,
-    ...env
-  };
   const proxies = new Map();
   const pendingStarts = new Map();
   let publicSocketPreparation = null;
-  const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, runtimeEnv);
+  const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, env);
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
     if (publicOrigin) {
       if (!publicSocketPreparation) {
         publicSocketPreparation = pruneStalePreviewSockets({
-          env: runtimeEnv
+          env
         }).catch((error) => {
           publicSocketPreparation = null;
           throw error;
@@ -198,7 +192,7 @@ function createLaunchPreviewProxyRegistry({
         ...scope,
         targetHref: targetUrl.toString()
       }, {
-        env: runtimeEnv,
+        env,
         executePreviewIdentityCommand: input.executePreviewIdentityCommand,
         previewAuth,
         publicOrigin,

@@ -13,7 +13,6 @@ import {
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { prepareCodexGitCommand, removeCodexGitCommandSession } from "@local/vibe64-terminals/server/codexGitCommand";
 import { requestUnixJsonCommand } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
-import { terminalsProviderEnv } from "../../packages/vibe64-terminals/src/server/terminalsEnv.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function inside(child, parent) {
@@ -37,16 +36,16 @@ test("the server places live session state below its system root and keeps an ex
 
 // The incident: callers that pass a curated environment without the variable
 // (Claude and OpenCode sessions) wrote agent helpers below os.tmpdir(), where a
-// host's temporary-file aging deleted them under live agents. The terminals env
-// they all start from carries the root the server named at startup.
-test("agent command helpers prepared with the terminals env use the server's session state root", async () => {
+// host's temporary-file aging deleted them under live agents. The server's env,
+// which every terminals caller receives, carries the root it named at startup.
+test("agent command helpers prepared with the server's env use its session state root", async () => {
   await withTemporaryRoot(async (root) => {
     const stateRoot = path.join(root, "daemon-state", "attachments");
-    const serverEnv = {};
+    const serverEnv = { VIBE64_SYSTEM_ROOT: path.join(root, "daemon-state") };
     configureCodexAttachmentHostRoot(path.join(root, "daemon-state"), serverEnv);
     const prepared = await prepareCodexGitCommand({
       commandService: { logger: silentLogger, run: async () => ({ ok: true }) },
-      env: terminalsProviderEnv({ VIBE64_SYSTEM_ROOT: path.join(root, "daemon-state") }, serverEnv),
+      env: serverEnv,
       sessionId: "session-a",
       stateRoot: path.join(root, "project-runtime")
     });

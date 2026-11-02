@@ -9,13 +9,7 @@ import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import {
   VIBE64_SERVICE_DATA_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
-import {
-  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
-  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_USER_DOMAIN_ENV
-} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import { VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
   createProjectRuntimeChangedPublisher
 } from "../../packages/vibe64-terminals/src/server/events.js";
@@ -27,7 +21,6 @@ import {
 import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
-import { terminalsProviderEnv } from "../../packages/vibe64-terminals/src/server/terminalsEnv.js";
 import { codexAttachmentHostRoot } from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
@@ -46,12 +39,20 @@ async function withTemporaryRoot(callback) {
 const silentLogger = Object.freeze({ error() {}, info() {}, warn() {} });
 
 /**
+ * The env the server composes features with: the process env under the test's settings.
+ * @param {object} settings
+ */
+function serverEnv(settings) {
+  return { ...process.env, ...settings };
+}
+
+/**
  * A terminals service built as the feature builds it, with the test's own Codex terminal settings.
  * @param {object} dependencies
  */
 function terminalsService({ env, ...dependencies }) {
   return createService(terminalsServiceCollaborators({
-    env: terminalsProviderEnv(env, process.env),
+    env: serverEnv(env),
     logger: silentLogger,
     ...dependencies
   }));
@@ -64,7 +65,7 @@ async function failingCodexAuthPreflight() {
 function featureDependencies({ env = {}, project, published = [], hooks = [] } = {}) {
   return {
     actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }),
-    env,
+    env: serverEnv(env),
     events: {
       async publish(event) {
         published.push(event);
@@ -110,48 +111,16 @@ test("terminals feature declares only named AI-first capabilities", () => {
   assert.equal(Object.hasOwn(Vibe64TerminalsFeature, "register"), false);
 });
 
-test("terminals provider overlays only declared live host values", () => {
-  assert.deepEqual(terminalsProviderEnv({
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "stale.example.test",
-    KEEP_ME: "runtime",
-    SECRET_VALUE: "runtime-secret"
-  }, {
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
-    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
-    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
-    VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
-    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
-    VIBE64_CODEX_ATTACHMENTS_ROOT: "/srv/state/vibe64/attachments",
-    SECRET_VALUE: "live-secret"
-  }), {
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
-    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
-    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
-    VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
-    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
-    VIBE64_CODEX_ATTACHMENTS_ROOT: "/srv/state/vibe64/attachments",
-    KEEP_ME: "runtime",
-    SECRET_VALUE: "runtime-secret"
-  });
-});
-
-test("installed host guidance survives the runtime environment filter into agent context", () => {
+test("installed host guidance in the env reaches agent context", () => {
   const guidance = "Installed here: vibe64-local update; SSH recovery: sudo vibe64-local restore.";
-  const env = terminalsProviderEnv({ KEEP_ME: "runtime" }, { VIBE64_HOST_AGENT_GUIDANCE: guidance, UNRELATED_SECRET: "hidden" });
-  assert.equal(env.VIBE64_HOST_AGENT_GUIDANCE, guidance);
-  assert.equal(env.UNRELATED_SECRET, undefined);
-  const context = createCodexSessionEnvironment({ env }).vibe64SessionContextInput();
+  const context = createCodexSessionEnvironment({ env: { VIBE64_HOST_AGENT_GUIDANCE: guidance } }).vibe64SessionContextInput();
   assert.equal(context.hostGuidance, guidance);
-  assert.equal(Object.hasOwn(createCodexSessionEnvironment({ env: terminalsProviderEnv({}, {}) }).vibe64SessionContextInput(), "hostGuidance"), false);
+  assert.equal(Object.hasOwn(createCodexSessionEnvironment({ env: {} }).vibe64SessionContextInput(), "hostGuidance"), false);
 });
 
-test("live editor namespaces reach Preview routing through the runtime environment filter", () => {
+test("editor namespaces in the env reach Preview routing", () => {
   const origin = (namespace) => previewPublicOriginForLaunch({
-    env: terminalsProviderEnv({}, { [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: namespace }),
+    env: { [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: namespace },
     publicHost: "owner.users.example.test", sessionId: "same-cloned-session"
   });
   assert.notEqual(origin("first"), origin("second"));
@@ -488,7 +457,7 @@ test("terminals feature owns attachment and dormancy startup and shutdown", asyn
     });
     const outputs = await Vibe64TerminalsFeature.setup(dependencies, { profile: "test" });
     await Vibe64TerminalsFeature.boot(dependencies, { outputs, profile: "test" });
-    const attachmentRoot = codexAttachmentHostRoot({ env: terminalsProviderEnv(dependencies.env, process.env) });
+    const attachmentRoot = codexAttachmentHostRoot({ env: dependencies.env });
     assert.equal((await stat(attachmentRoot)).isDirectory(), true);
     await Vibe64TerminalsFeature.shutdown(dependencies, { outputs, profile: "test" });
   });

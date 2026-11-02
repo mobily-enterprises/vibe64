@@ -46,7 +46,6 @@ function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServ
   completedProjectDouble(dependencies.project);
   return {
     env: process.env,
-    hostEnv: process.env,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
     runtimeProfile: null,
