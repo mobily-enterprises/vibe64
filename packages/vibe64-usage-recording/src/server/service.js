@@ -441,7 +441,7 @@ function createService({
       throw recordingError(409, "Recording needs an active session.", "vibe64_usage_recording_session_inactive");
     }
     if (!context.directory || !context.sourceRoot) {
-      throw recordingError(409, "This session has no source to record.", "vibe64_usage_recording_session_inactive");
+      throw recordingError(409, "This session has no source to record.", "vibe64_usage_recording_session_source_missing");
     }
   }
 

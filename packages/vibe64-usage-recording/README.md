@@ -75,8 +75,8 @@ with `kind: "readiness"`, likewise without method, path or status. Neither
 counts as a request or towards plumbing. A function is `{ path, hash, name, start, end, count, plumbing }`; a
 file's top-level code is the function named `""` at 1:1.
 
-Refusals: 409 `vibe64_usage_recording_session_inactive` or
-`vibe64_usage_recording_active`; 422 for an unknown or unavailable target or
+Refusals: 409 `vibe64_usage_recording_session_inactive`,
+`vibe64_usage_recording_session_source_missing` or `vibe64_usage_recording_active`; 422 for an unknown or unavailable target or
 invalid parameters; 503 `vibe64_usage_recording_refused` with
 `details.reason` when the host's admission decision refuses.
 
