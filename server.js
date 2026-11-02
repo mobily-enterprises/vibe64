@@ -505,9 +505,7 @@ async function startServer(options = {}) {
     options,
     runtimeEnv
   });
-  assertSafeLocalModeListenTarget(runtimeProfile, listenTarget, {
-    env: runtimeEnv
-  });
+  assertSafeLocalModeListenTarget(runtimeProfile, listenTarget);
   const strictPort = options.strictPort ?? (
     listenTarget.transport === "tcp" &&
     (hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true)

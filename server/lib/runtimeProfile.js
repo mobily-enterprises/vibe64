@@ -1,9 +1,4 @@
-import { isTruthyEnvValue } from "./runtimeEnv.js";
-
-/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-
 const VIBE64_RUNTIME_MODE_LOCAL = "local";
-const VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV = "VIBE64_ALLOW_UNSAFE_LOCAL_MODE";
 
 /**
  * Public Vibe64 runs in one mode.
@@ -32,15 +27,13 @@ function createVibe64RuntimeProfile({
  * Refuses a local editor that would listen on a public TCP host.
  * @param {object} profile
  * @param {object} listenTarget
- * @param {object} options
- * @param {RuntimeEnv} options.env
  */
-function assertSafeLocalModeListenTarget(profile, listenTarget, { env }) {
+function assertSafeLocalModeListenTarget(profile, listenTarget) {
   if (profile.mode !== VIBE64_RUNTIME_MODE_LOCAL || listenTarget.transport !== "tcp") {
     return;
   }
   const host = String(listenTarget.host || "").trim().toLowerCase();
-  if (isLocalhostHost(host) || isTruthyEnvValue(env[VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV])) {
+  if (isLocalhostHost(host)) {
     return;
   }
   const error = new Error("Local editor mode must bind to localhost. Refusing public listen host.");

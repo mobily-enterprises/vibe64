@@ -53,6 +53,5 @@ function resolveRuntimeEnv() {
 }
 
 export {
-  isTruthyEnvValue,
   resolveRuntimeEnv
 };
