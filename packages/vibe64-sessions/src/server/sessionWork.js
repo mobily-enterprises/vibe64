@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionConnectedSubmissions } from "@local/vibe64-core/server/projectRepository";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
@@ -233,9 +234,10 @@ function createSessionWork({
       )) {
         const recovered = await recovery.recoverInterruptedSave(runtime, session, previous);
         if (recovered?.status === "failed" && recovered.code === "vibe64_session_save_publication_unknown") {
-          throw Object.assign(new Error(recovered.error || "Inspect the uncertain Save before saving again."), {
-            code: recovered.code
-          });
+          throw vibe64Error(
+            recovered.error || "Inspect the uncertain Save before saving again.",
+            "vibe64_session_save_publication_unknown"
+          );
         }
         session = await runtime.getSessionWithoutSource(sessionId);
       }

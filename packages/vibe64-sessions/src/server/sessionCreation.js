@@ -115,7 +115,9 @@ function createSessionCreation({
         number: input.pullRequestNumber,
         vibe64User
       });
-      if (pullRequest && input.repositoryBranch) throw new Error("Choose a branch or a pull request for this session.");
+      if (pullRequest && input.repositoryBranch) {
+        throw vibe64Error("Choose a branch or a pull request for this session.", "vibe64_session_source_choice_conflict");
+      }
       const { assistantSelection, assistantRouting } = await assistant.resolveSessionStart(input, {
         vibe64User,
         mode: learningRuntime ? "junior" : "senior"

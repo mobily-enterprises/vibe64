@@ -6,6 +6,7 @@ import {
   sessionConnectedSources,
   sessionConnectedSubmissions
 } from "@local/vibe64-core/server/projectRepository";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
   ACTION_ALLOCATE_CONNECTED_SOURCE,
@@ -62,9 +63,11 @@ function createConnectedContributions({
   function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
     const origin = currentProjectRequestContext();
     if (!origin?.slug || origin.learningScope || origin.slug === projectSlug || !requestContext.requestMeta?.request) {
-      throw Object.assign(new Error("Use the originating working project's authenticated session for connected work."), {
-        code: "vibe64_connected_source_authority_required"
-      });
+      throw vibe64Error(
+        "Use the originating working project's authenticated session for connected work.",
+        "vibe64_connected_source_authority_required",
+        { messageCode: "vibe64_connected_work_authority_required" }
+      );
     }
     return actions.execute({
       actionId,
@@ -158,26 +161,29 @@ function createConnectedContributions({
     const connected = await inspectConnectedWork(current, requestContext, sessionConnectedSources(current), true);
     const pending = connected.find(item => item.needsSave || !item.reconciled);
     if (pending) {
-      throw Object.assign(new Error(
-        pending.needsSave
-          ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
-          : `Reconcile the pushed work in ${pending.contribution.repository} before saving the main project.`
-      ), {
-        code: "vibe64_connected_save_required",
-        details: {
-          repository: pending.contribution.repository,
-          projectSlug: pending.projectSlug,
-          sessionId: pending.sessionId
-        }
+      const { repository } = pending.contribution;
+      const details = { repository, projectSlug: pending.projectSlug, sessionId: pending.sessionId };
+      if (pending.needsSave) {
+        throw vibe64Error(`Save connected work in ${repository} before saving the main project.`, "vibe64_connected_save_required", {
+          details,
+          messageCode: "vibe64_connected_work_unsaved",
+          messageParams: { repository }
+        });
+      }
+      throw vibe64Error(`Reconcile the pushed work in ${repository} before saving the main project.`, "vibe64_connected_save_required", {
+        details,
+        messageCode: "vibe64_connected_work_unreconciled",
+        messageParams: { repository }
       });
     }
     const behind = checks.find(({ check }) => check.behind > 0);
     if (behind) {
       const { binding, check } = behind;
-      throw Object.assign(new Error(`${binding.contribution.repository} is behind ${binding.contribution.integrationBranch} ` +
-        `by ${check.behind} commit${check.behind === 1 ? "" : "s"}. Choose Update connected repositories, check your work, then Save.`), {
-        code: "vibe64_connected_source_behind",
-        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, sessionId: check.sessionId }
+      const { repository, integrationBranch } = binding.contribution;
+      throw vibe64Error(`${repository} is behind ${integrationBranch} by ${check.behind} commit${check.behind === 1 ? "" : "s"}. ` +
+        "Choose Update connected repositories, check your work, then Save.", "vibe64_connected_source_behind", {
+        params: { repository, integrationBranch, behind: check.behind },
+        details: { repository, projectSlug: binding.projectSlug, sessionId: check.sessionId }
       });
     }
     return connected.map(item => item.snapshot);
@@ -196,9 +202,11 @@ function createConnectedContributions({
             return review?.projectSlug !== item.projectSlug ||
               Object.entries(item.destination).some(([key, value]) => review.destination?.[key] !== value);
           })) {
-        throw Object.assign(new Error("The connected Save destinations changed. Inspect work and review them again."), {
-          code: "vibe64_connected_save_review_changed"
-        });
+        throw vibe64Error(
+          "The connected Save destinations changed. Inspect work and review them again.",
+          "vibe64_connected_save_review_changed",
+          { messageCode: "vibe64_connected_save_review_mismatch" }
+        );
       }
       const submissions = sessionConnectedSubmissions(session);
       for (const reviewed of connected) {
@@ -207,9 +215,11 @@ function createConnectedContributions({
         // at its turn rather than skipping work from the initial review snapshot.
         const [item] = await inspectConnectedWork(await runtime.getSessionWithoutSource(sessionId), requestContext, [reviewed]);
         if (Object.entries(reviewed.destination).some(([key, value]) => item.destination?.[key] !== value)) {
-          throw Object.assign(new Error("The connected Save destination changed. Inspect work and review it again."), {
-            code: "vibe64_connected_save_review_changed"
-          });
+          throw vibe64Error(
+            "The connected Save destination changed. Inspect work and review it again.",
+            "vibe64_connected_save_review_changed",
+            { messageCode: "vibe64_connected_save_destination_changed" }
+          );
         }
         if (!item.needsSave) continue;
         const publication = item.unsaved
@@ -274,18 +284,18 @@ function createConnectedContributions({
       assertProjectEffectAdmission();
       const origin = currentProjectRequestContext();
       if (!origin?.slug || origin.learningScope || !requestContext.requestMeta?.request) {
-        throw Object.assign(new Error("Prepare connected sources from the originating working project's authenticated session."), {
-          code: "vibe64_connected_source_authority_required"
-        });
+        throw vibe64Error(
+          "Prepare connected sources from the originating working project's authenticated session.",
+          "vibe64_connected_source_authority_required",
+          { messageCode: "vibe64_connected_preparation_authority_required" }
+        );
       }
       const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
       const sources = sessionConnectedSources(session);
       const self = targets.find(target => target.projectSlug === origin.slug);
       if (self) {
         preparingRepository = self.repository;
-        throw Object.assign(new Error(
-          "A project cannot prepare itself as a connected contribution."
-        ), { code: "vibe64_connected_source_self_reference" });
+        throw vibe64Error("A project cannot prepare itself as a connected contribution.", "vibe64_connected_source_self_reference");
       }
       const names = targets.map(target => target.repository.split("/").pop());
       if (targets.length) report(`Preparing connected projects: ${names.join(", ")}`);
@@ -298,20 +308,21 @@ function createConnectedContributions({
         const repository = target.fullName;
         const source = await executeConnectedAction(target.projectSlug, ACTION_INSPECT_CONTRIBUTION_SOURCE, {}, requestContext);
         if (source.repository !== repository) {
-          throw Object.assign(new Error(
-            "The receiving project changed repositories. Review the connection before preparing it."
-          ), {
-            code: "vibe64_contribution_authority_changed"
-          });
+          throw vibe64Error(
+            "The receiving project changed repositories. Review the connection before preparing it.",
+            "vibe64_contribution_authority_changed",
+            { messageCode: "vibe64_connected_receiving_repository_changed" }
+          );
         }
         let binding = sources.find(item => item.contribution.repository === repository);
         if (binding &&
             (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
-          throw Object.assign(new Error(
-            "This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."
-          ), {
-            code: "vibe64_contribution_authority_changed"
-          });
+          throw vibe64Error(
+            "This connection already owns a different source binding. " +
+              "Preserve its work and reconcile that binding before changing its project or target.",
+            "vibe64_contribution_authority_changed",
+            { messageCode: "vibe64_connected_binding_conflict" }
+          );
         }
         if (!binding) {
           binding = {
@@ -406,16 +417,20 @@ function createConnectedContributions({
   async function inspectConnectedReplacement(session, input, requestContext) {
     const binding = sessionConnectedSources(session).find(item => item.contribution.repository === input.repository);
     if (!binding) {
-      throw Object.assign(new Error("This session no longer uses that connected source. Refresh its work before retrying."), {
-        code: "vibe64_connected_replacement_changed"
-      });
+      throw vibe64Error(
+        "This session no longer uses that connected source. Refresh its work before retrying.",
+        "vibe64_connected_replacement_changed",
+        { messageCode: "vibe64_connected_replacement_source_removed" }
+      );
     }
     const targets = await project.connectedProjectTargets({ sessionId: session.sessionId, vibe64User: trustedAssistantUser(input) });
     if (!targets.some(target => target.projectSlug === binding.projectSlug &&
         target.fullName === binding.contribution.repository)) {
-      throw Object.assign(new Error("Restore this repository's connection before replacing its contribution."), {
-        code: "vibe64_connected_replacement_changed"
-      });
+      throw vibe64Error(
+        "Restore this repository's connection before replacing its contribution.",
+        "vibe64_connected_replacement_changed",
+        { messageCode: "vibe64_connected_replacement_connection_required" }
+      );
     }
     const incoming = await executeConnectedAction(binding.projectSlug, ACTION_INSPECT_CONTRIBUTION_INCOMING, {
       contribution: binding.contribution
@@ -427,9 +442,11 @@ function createConnectedContributions({
     }
     const entry = incoming.contributions.find(item => item.id === binding.contribution.id);
     if (entry?.status !== "discarded" || entry.activeHead || !entry.discardedHead) {
-      throw Object.assign(new Error("Only a discarded, unmerged contribution can be replaced. Refresh its Incoming changes."), {
-        code: "vibe64_connected_replacement_changed"
-      });
+      throw vibe64Error(
+        "Only a discarded, unmerged contribution can be replaced. Refresh its Incoming changes.",
+        "vibe64_connected_replacement_changed",
+        { messageCode: "vibe64_connected_replacement_not_discarded" }
+      );
     }
     return { binding, incoming, entry };
   }
@@ -464,9 +481,11 @@ function createConnectedContributions({
           previous.contribution.repository !== input.review.repository) {
         const { binding, entry } = await inspectConnectedReplacement(session, input, requestContext);
         if (Object.entries(entry.review).some(([key, value]) => input.review[key] !== value)) {
-          throw Object.assign(new Error("The discarded contribution changed. Review its replacement again."), {
-            code: "vibe64_connected_replacement_changed"
-          });
+          throw vibe64Error(
+            "The discarded contribution changed. Review its replacement again.",
+            "vibe64_connected_replacement_changed",
+            { messageCode: "vibe64_connected_replacement_review_changed" }
+          );
         }
         const replacement = {
           ...binding,
@@ -497,11 +516,11 @@ function createConnectedContributions({
       for (const target of targets) {
         const binding = bindings.find(item => item.contribution.repository === target.fullName);
         if (!binding || binding.projectSlug !== target.projectSlug) {
-          throw Object.assign(new Error(
-            "The connected project list no longer matches this task. Prepare connected sources again."
-          ), {
-            code: "vibe64_connected_inputs_required"
-          });
+          throw vibe64Error(
+            "The connected project list no longer matches this task. Prepare connected sources again.",
+            "vibe64_connected_inputs_required",
+            { messageCode: "vibe64_connected_project_list_changed" }
+          );
         }
         const receiving = await executeConnectedAction(binding.projectSlug, ACTION_INSPECT_CONTRIBUTION_INPUTS, {
           contribution: binding.contribution

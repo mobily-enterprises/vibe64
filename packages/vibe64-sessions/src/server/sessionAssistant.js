@@ -212,7 +212,9 @@ function createSessionAssistant({
           } else {
             const requestedSelection = input.assistantRouting?.mode === "custom"
               ? input.assistantRouting.override : input.assistantSelection;
-            if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
+            if (!requestedSelection) {
+              throw vibe64Error("Choose an assistant or a chat mode.", "vibe64_assistant_selection_required");
+            }
             resolved = await resolveAssistantSelection({
               ...normalizeObject(requestedSelection),
               engineId: normalizeText(requestedSelection.engineId) || current.engineId
@@ -269,7 +271,10 @@ function createSessionAssistant({
           await terminals.cancelAssistantRoutingForSelection(sessionId, exclusive.value.cancelRouting, { runtime, vibe64User });
           exclusive = await update();
           if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
-            throw new Error("Another routing request started. Retry the assistant selection.");
+            throw vibe64Error(
+              "Another routing request started. Retry the assistant selection.",
+              "vibe64_assistant_selection_routing_restarted"
+            );
           }
         }
         if (!exclusive.acquired) {
@@ -292,7 +297,12 @@ function createSessionAssistant({
         save,
         { operation: "save-assistant-settings", waitMs: 10_000 }
       );
-      if (!saved.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
+      if (!saved.acquired) {
+        throw vibe64Error(
+          "Another settings change is being saved. Try again in a moment.",
+          "vibe64_session_assistant_settings_busy"
+        );
+      }
       return saved.value;
     }, "Vibe64 could not update this session's assistant selection.");
   }

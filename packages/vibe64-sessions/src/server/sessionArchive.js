@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { publicSession, sessionResult } from "./sessionResults.js";
@@ -112,9 +113,7 @@ function createSessionArchive({
   async function archiveSession(sessionId, input) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
-        const error = new Error("Wait for workspace preparation to finish before archiving this session.");
-        error.code = "vibe64_workspace_setup_running";
-        throw error;
+        throw vibe64Error("Wait for workspace preparation to finish before archiving this session.", "vibe64_workspace_setup_running");
       }
       const runtime = await project.createRuntimeWithoutSource();
       let routingCancelled = false;
@@ -122,9 +121,7 @@ function createSessionArchive({
       while (true) {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           if (setupRunner.isRunning(sessionId)) {
-            throw Object.assign(new Error("Wait for workspace preparation to finish before archiving this session."), {
-              code: "vibe64_workspace_setup_running"
-            });
+            throw vibe64Error("Wait for workspace preparation to finish before archiving this session.", "vibe64_workspace_setup_running");
           }
           const currentSession = await runtime.getSessionWithoutSource(sessionId);
           await runtime.store.assertSessionNotPinned(sessionId);
@@ -153,10 +150,11 @@ function createSessionArchive({
               cancelledRouting.get(conversationId || "") !== request.messageId));
           if (routingToCancel.length) {
             if (!routingCancelled) return { routingToCancel };
-            throw Object.assign(new Error("Chat routing changed while closing. Retry Close to cancel its remaining work."), {
-              code: "vibe64_assistant_routing_pending",
-              retryable: true
-            });
+            throw Object.assign(vibe64Error(
+              "Chat routing changed while closing. Retry Close to cancel its remaining work.",
+              "vibe64_assistant_routing_pending",
+              { messageCode: "vibe64_session_archive_routing_changed" }
+            ), { retryable: true });
           }
           const sourceCreationFailed = currentSession.sourceReady !== true &&
             normalizeText(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
@@ -225,10 +223,11 @@ function createSessionArchive({
           for (const { conversationId, request } of exclusive.value.routingToCancel) {
             const cancel = conversationId ? terminals.cancelTemporaryConversationRouting : terminals.cancelAssistantRoutingForSelection;
             if (typeof cancel !== "function") {
-              throw Object.assign(new Error("Chat routing cancellation is unavailable. Retry Close after reconnecting the workspace."), {
-                code: "vibe64_assistant_routing_pending",
-                retryable: true
-              });
+              throw Object.assign(vibe64Error(
+                "Chat routing cancellation is unavailable. Retry Close after reconnecting the workspace.",
+                "vibe64_assistant_routing_pending",
+                { messageCode: "vibe64_session_archive_routing_cancel_unavailable" }
+              ), { retryable: true });
             }
             await cancel.call(terminals, sessionId, conversationId
               ? { conversationId, messageId: request.messageId }
