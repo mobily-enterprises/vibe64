@@ -240,6 +240,7 @@ function createReleaseOrchestrator({
   /**
    * Builds the current plan for the saved commit and runs preflight on it.
    */
+  // readable-check: allow dependency-default - data: no chosen target ids plans every target
   async function plan({ targetIds = null, acknowledged = [] } = {}) {
     const baseline = await repository.baseline();
     if (!baseline.supported) throw publishingError(baseline.message, "vibe64_publishing_repository_unavailable");
