@@ -139,6 +139,11 @@ verification.
 - Do not restore `jskit doctor`, generator commands, scaffold provenance,
   receipts, migration copies, or CLI-managed CI state. Verify current source,
   runtime behavior, package boundaries, and tests through their direct owners.
+- Server code follows JSKIT's typed features guide
+  (`https://mobily-enterprises.github.io/jskit-ai/guide/framework/typed-features`);
+  `npm run lint` checks it, and each finding links its section. A rule that
+  applies to every JSKIT application changes in that guide and in
+  `@jskit-ai/config-eslint`, never as a local rule here.
 - Session source permissions on a host shared by several Unix identities must be
   correct when files are created; never add recursive permission repair after
   Git, agent, package or preview work. See
