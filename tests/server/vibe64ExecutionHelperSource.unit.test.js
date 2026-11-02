@@ -677,22 +677,9 @@ test("execution receipts follow no planted link and never touch its target", asy
   assert.throws(() => openManagedExecutionReceipts(path.join(root, "moved"), { ...ids, legacyUid: 0, uid: 0 }), /owned by another user/u);
 });
 
-test("runtime pack lists stay in step: interactive order and the helper PATH cover every pack", () => {
+test("runtime pack lists stay in step: the interactive order covers every pack", () => {
+  // The helper's command PATH is the host's (its helper settings), so the host keeps that list in step.
   assert.deepEqual([...VIBE64_INTERACTIVE_RUNTIME_PACKS].sort(), Object.keys(RUNTIME_PACKS).sort());
-
-  // The helper's own PATH names the pack folder; public tests must not.
-  const packMarker = "/runtime-packs/";
-  const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, daemonUser("alice"), "command")
-    .PATH.split(":")
-    .filter((entry) => entry.includes(packMarker))
-    .map((entry) => entry.slice(entry.indexOf(packMarker) + packMarker.length));
-  const packBinDirs = new Set(Object.values(RUNTIME_PACKS).flatMap((pack) => pack.binDirs));
-  for (const dir of helperPackDirs) {
-    assert.ok(packBinDirs.has(dir) || dir === "policy-bin" || dir === "guard-bin", `unknown helper PATH entry ${dir}`);
-  }
-  for (const [runtime, pack] of Object.entries(RUNTIME_PACKS)) {
-    assert.ok(pack.binDirs.some((dir) => helperPackDirs.includes(dir)), `helper PATH misses runtime ${runtime}`);
-  }
 });
 
 test("a starting controller releases every receipt and failed unit record except those it owns or that still run", () => {
@@ -937,7 +924,7 @@ test("release environment files are parsed with systemd's EnvironmentFile= rules
 test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
   const unit = deploymentServiceUnit({
     environmentFile: "/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
-    owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/handover/r1/start.sh",
+    owner: { username: daemonUser("test") }, requiredUnits: [], servicePath: "/usr/bin:/bin", startScript: "/handover/r1/start.sh",
     unitName: "vibe64-release-test.service",
     user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${APPLICATION_USERNAME_PREFIX}0123456789ab` },
     workingDirectory: "/area/app/releases/r1/workspace"

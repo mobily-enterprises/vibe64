@@ -129,8 +129,8 @@ test("each project of a workspace gets its own registered account and area", asy
   // Another project, or the same project of another workspace, is another account.
   const other = host.ensure("blog");
   assert.notEqual(other.username, account.username);
-  assert.notEqual(applicationIdentity({ username: daemonUser("other") }, "shop").username, account.username);
-  assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop").username, account.username);
+  assert.notEqual(applicationIdentity({ username: daemonUser("other") }, "shop", host.options).username, account.username);
+  assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop", host.options).username, account.username);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
@@ -158,9 +158,9 @@ test("a new application account needs a real project of the workspace, and room 
 
   host.ensure("shop");
   assert.throws(() => host.ensure("blog", { applicationLimit: 1 }), /test already has 1, its limit/u);
-  assert.deepEqual(host.created, [applicationIdentity(host.owner, "shop").username]);
+  assert.deepEqual(host.created, [applicationIdentity(host.owner, "shop", host.options).username]);
   // A registered account is the same account, limit or not.
-  assert.equal(host.ensure("shop", { applicationLimit: 1 }).username, applicationIdentity(host.owner, "shop").username);
+  assert.equal(host.ensure("shop", { applicationLimit: 1 }).username, applicationIdentity(host.owner, "shop", host.options).username);
   host.ensure("blog");
   await mkdir(path.join(projects, "news"));
   assert.throws(() => host.ensure("news", { applicationLimit: 2 }), /test already has 2, its limit/u);
@@ -182,7 +182,7 @@ test("a learner's practice project has its account, found by its folder below th
 
   // Its account and area are its slug's, as every project's are, and its
   // registration names it by that slug.
-  assert.equal(account.username, applicationIdentity(host.owner, slug).username);
+  assert.equal(account.username, applicationIdentity(host.owner, slug, host.options).username);
   assert.equal(account.home, path.join(host.options.areaRoot, "test", slug, "app", "home"));
   assert.equal(host.ensure(slug).username, account.username);
   for (const wrong of [
