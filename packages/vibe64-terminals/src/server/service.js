@@ -55,8 +55,9 @@ import { createServiceAgentProviders } from "./serviceAgentProviders.js";
  * @param {object} input
  * @param {object} input.codexTerminalController a host's Codex terminal settings
  * @param {RuntimeEnv} input.env
+ * @param {RuntimeEnv} input.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  */
-function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env }) {
+function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env, hostEnv }) {
   const context = codexRuntimeContext({
     env,
     providerOptions: codexTerminalController.codexAppServerProviderOptions || {},
@@ -65,7 +66,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
   if (context?.ok === false) {
     throw new Error(context.error || "Codex runtime context could not be resolved.");
   }
-  return context.providerOptions;
+  return { ...context.providerOptions, hostEnv };
 }
 
 /**
@@ -73,6 +74,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} dependencies.env
+ * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
@@ -89,6 +91,7 @@ function createService({
   // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
   env,
+  hostEnv,
   inspectAgentSkills = inspectGenesisSkills,
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
@@ -110,7 +113,7 @@ function createService({
    */
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
-  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
+  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env, hostEnv });
   const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
   const providerUsage = createProviderUsage({
     resolveConnection: (selection) => selection.engineId === "opencode"
@@ -205,6 +208,7 @@ function createService({
     commands,
     continueGoalAfterAccountChange: (sessionId, input) => goals.continueGoalAfterAccountChange(sessionId, input),
     env,
+    hostEnv,
     logger,
     opencodeTerminalController,
     prepareMainConversationOperation: (request) => mainConversationHost.prepareMainConversationOperation(request),
@@ -364,6 +368,7 @@ function createService({
     codexProviderConnections,
     codexProviderOptions,
     env,
+    hostEnv,
     logger,
     mainConversations,
     opencode,

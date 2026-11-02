@@ -18,10 +18,10 @@ function configuredRoot(env = {}) {
  * root is daemon state, never temporary space that a host may age out. The
  * server sets it below its system root at startup; a caller's environment may
  * name another root, and a process without a server uses the local state root.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the caller's env, read before this process's own
  */
-function codexAttachmentHostRoot({
-  env = process.env
-} = {}) {
+function codexAttachmentHostRoot({ env }) {
   return path.resolve(
     configuredRoot(env) ||
     configuredRoot(process.env) ||
@@ -41,8 +41,12 @@ function configureCodexAttachmentHostRoot(systemRoot, env) {
   return env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
 }
 
-async function prepareCodexAttachmentRoot(options = {}) {
-  await mkdir(codexAttachmentHostRoot(options), {
+/**
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the caller's env, read before this process's own
+ */
+async function prepareCodexAttachmentRoot({ env }) {
+  await mkdir(codexAttachmentHostRoot({ env }), {
     recursive: true
   });
 }

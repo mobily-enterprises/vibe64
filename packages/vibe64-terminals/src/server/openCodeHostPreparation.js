@@ -80,6 +80,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
  * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess
  * @param {RuntimeEnv} dependencies.env
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
+ * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {ListAssistantConnections} dependencies.listConnections
  * @param {PrepareAgentSessionCommandEnvironment} dependencies.prepareCommandEnvironment
  * @param {ProjectService} dependencies.project
@@ -96,6 +97,7 @@ function createOpenCodeHostPreparation({
   createServerProcess,
   env,
   getAssistantManager,
+  hostEnv,
   listConnections,
   prepareCommandEnvironment,
   project,
@@ -131,7 +133,7 @@ function createOpenCodeHostPreparation({
   }
 
   function sharedRoots() {
-    const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
+    const root = path.join(codexAppServerRuntimeBaseDir({ env, hostEnv }), "opencode");
     const serviceDataRoot = toText(project.currentServiceDataRoot());
     if (!serviceDataRoot) {
       throw new TypeError("OpenCode requires a persistent service data root.");

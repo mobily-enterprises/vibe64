@@ -33,11 +33,11 @@ function processUid() {
  * environment names, else the host's runtime directory, else a per-user cache.
  * @param {object} options
  * @param {RuntimeEnv} options.env
- * @param {RuntimeEnv} [options.hostEnv]
+ * @param {RuntimeEnv} options.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  */
 function codexAppServerRuntimeBaseDir({
   env,
-  hostEnv = process.env
+  hostEnv
 }) {
   const explicitDir = runtimeEnvValue(env, hostEnv, "VIBE64_AGENT_RUNTIME_DIR");
   if (explicitDir) {

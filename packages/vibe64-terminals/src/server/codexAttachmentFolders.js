@@ -8,6 +8,8 @@ import { targetRuntimeIdentity } from "@local/vibe64-core/server/projectRuntimeI
 import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const ATTACHMENT_FILES_DIRECTORY = "files";
 const ATTACHMENT_LOCKS_DIRECTORY = "locks";
 const ATTACHMENT_LEASE_LOCK_FILE = ".lease-lock";
@@ -20,23 +22,43 @@ function attachmentSessionKey(executionRoot, sessionId) {
   return path.join(stableHash(targetRuntimeIdentity(executionRoot)), stableHash(sessionId));
 }
 
-function attachmentFilesRoot(options = {}) {
-  return path.join(codexAttachmentHostRoot(options), ATTACHMENT_FILES_DIRECTORY);
+/** @typedef {{ env: RuntimeEnv }} AttachmentRootOptions the env that names the attachment root */
+
+/** @param {AttachmentRootOptions} options */
+function attachmentFilesRoot({ env }) {
+  return path.join(codexAttachmentHostRoot({ env }), ATTACHMENT_FILES_DIRECTORY);
 }
 
-function attachmentLocksRoot(options = {}) {
-  return path.join(codexAttachmentHostRoot(options), ATTACHMENT_LOCKS_DIRECTORY);
+/** @param {AttachmentRootOptions} options */
+function attachmentLocksRoot({ env }) {
+  return path.join(codexAttachmentHostRoot({ env }), ATTACHMENT_LOCKS_DIRECTORY);
 }
 
-function attachmentSessionLockPathFromKeys(projectKey, sessionKey, options = {}) {
+/**
+ * @param {string} projectKey
+ * @param {string} sessionKey
+ * @param {AttachmentRootOptions} options
+ */
+function attachmentSessionLockPathFromKeys(projectKey, sessionKey, options) {
   return path.join(attachmentLocksRoot(options), projectKey, `${sessionKey}.lock`);
 }
 
-function attachmentSessionTimerKey(projectKey, sessionKey, options = {}) {
+/**
+ * @param {string} projectKey
+ * @param {string} sessionKey
+ * @param {AttachmentRootOptions} options
+ */
+function attachmentSessionTimerKey(projectKey, sessionKey, options) {
   return path.resolve(attachmentSessionLockPathFromKeys(projectKey, sessionKey, options));
 }
 
-function attachmentHostDirectory(executionRoot, sessionId, attachmentId = "", options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {string} attachmentId one attachment's folder, or "" for the session's
+ * @param {AttachmentRootOptions} options
+ */
+function attachmentHostDirectory(executionRoot, sessionId, attachmentId, options) {
   const parts = [
     attachmentFilesRoot(options),
     ...attachmentSessionKey(executionRoot, sessionId).split(path.sep)
@@ -141,21 +163,33 @@ async function acquireAttachmentDirectoryLock(directory, options = {}) {
   }
 }
 
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentRootOptions} options
+ * @param {{ waitMs?: number }} lockOptions
+ */
 async function acquireAttachmentSessionLock(
   executionRoot,
   sessionId,
-  options = {},
-  lockOptions = {}
+  options,
+  lockOptions
 ) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
   return acquireAttachmentSessionKeyLock(projectKey, sessionKey, options, lockOptions);
 }
 
+/**
+ * @param {string} projectKey
+ * @param {string} sessionKey
+ * @param {AttachmentRootOptions} lockOptions
+ * @param {{ waitMs?: number }} options
+ */
 async function acquireAttachmentSessionKeyLock(
   projectKey,
   sessionKey,
-  lockOptions = {},
-  options = {}
+  lockOptions,
+  options
 ) {
   const {
     waitMs = 0

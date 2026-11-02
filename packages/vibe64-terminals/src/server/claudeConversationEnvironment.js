@@ -65,6 +65,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  * Vibe64's selected settings, managed command environment and Genesis host facts.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
+ * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {ProjectService} dependencies.project
  * @param {() => string} dependencies.command
  * @param {object} dependencies.credentialHome
@@ -80,6 +81,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  */
 function createClaudeConversationEnvironment({
   env,
+  hostEnv,
   project,
   command,
   credentialHome,
@@ -109,7 +111,7 @@ function createClaudeConversationEnvironment({
 
   async function sessionGuidanceEnvironment(entry) {
     if (await learningSessionExecutionRoot(entry.context.runtime, entry.context.sessionId)) return {};
-    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+    const runtimeRoot = codexAppServerRuntimeBaseDir({ env, hostEnv });
     const registry = await vibe64HostContextRegistry(runtimeRoot);
     await registry.register(entry.id, sessionGuidance(entry), entry.context.workdir);
     return vibe64HostContextEnvironment(runtimeRoot);

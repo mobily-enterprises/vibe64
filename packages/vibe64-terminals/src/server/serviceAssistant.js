@@ -81,6 +81,7 @@ function notSentDeliveryError(error, messageId) {
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  * @param {CodexAppServerProviderOptions} dependencies.codexProviderOptions
  * @param {RuntimeEnv} dependencies.env
+ * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {RuntimeLogger} dependencies.logger
  * @param {ConversationRuntime} dependencies.mainConversations
  * @param {OpenCodeSessionRegistration} dependencies.opencode
@@ -99,6 +100,7 @@ function createServiceAssistant({
   codexProviderConnections,
   codexProviderOptions,
   env,
+  hostEnv,
   logger,
   mainConversations,
   opencode,
@@ -171,7 +173,7 @@ function createServiceAssistant({
         workdir: "",
         project: {},
         session: {},
-        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })),
+        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env, hostEnv })),
         userKey: ""
       };
       options.runtimeDir ||= codexAppServerRuntimeDir(options);

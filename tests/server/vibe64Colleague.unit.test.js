@@ -4435,7 +4435,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   const host = native.host(scope);
   const oldSelection = { ...selection, engineId: "claude", modelProviderId: "anthropic" };
   const context = { sessionId: scopeId, assistantScope: scope, assistantSelection: oldSelection };
-  const producer = createClaudeConversationHost({ env: host.env, command: () => host.commands.claude,
+  const producer = createClaudeConversationHost({ env: host.env, hostEnv: process.env, command: () => host.commands.claude,
     publishConversation: async () => {},
     credentialHome: { home: host.env.HOME }, systemRoot: root,
     project: { createRuntime: () => assert.fail("A retained scoped producer cannot borrow a development session"), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },

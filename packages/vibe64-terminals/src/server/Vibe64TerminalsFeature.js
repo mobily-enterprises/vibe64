@@ -98,6 +98,7 @@ function createVibe64TerminalsFeature({
         actions: actionCatalogue,
         codexTerminalController,
         env: terminalsProviderEnv(env, process.env),
+        hostEnv: process.env,
         logger,
         opencodeTerminalController,
         productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,

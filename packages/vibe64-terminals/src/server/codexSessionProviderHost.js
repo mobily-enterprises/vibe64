@@ -86,11 +86,12 @@ function runWithCodexAppServerProjectContext(projectContext, operation) {
  * @param {CodexSessionEnvironment} host.sessionEnvironment
  * @param {CodexProviderConnectionStore} host.providerConnections
  * @param {RuntimeEnv} host.env
+ * @param {RuntimeEnv} host.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {RuntimeLogger} host.logger
  * @param {CodexAppServerRunOwner} host.runOwner read when a preparation runs, after the owner exists
  */
 function createCodexSessionProviderHost(host) {
-  const { runtimeHost, sessionRuntimeHost, sessionEnvironment, providerConnections, env, logger } = host;
+  const { runtimeHost, sessionRuntimeHost, sessionEnvironment, providerConnections, env, hostEnv, logger } = host;
   const { codexAppServerProviderKey, codexAppServerProviderKeyFields } = runtimeHost;
   const { createRuntimeForSession, createStoreForSession } = sessionRuntimeHost;
   const { codexManagedCommandEnv, vibe64SessionContextInput } = sessionEnvironment;
@@ -100,7 +101,7 @@ function createCodexSessionProviderHost(host) {
   async function prepareCodexAppServerSessionProvider(sessionId, options, providerKey, identity) {
     const { learningRuntime, ...nativeOptions } = options;
     const projectContext = captureProjectRequestContext();
-    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+    const runtimeRoot = codexAppServerRuntimeBaseDir({ env, hostEnv });
     /** @param {Vibe64SessionRuntime} runtime */
     async function readProviderSession(runtime) {
       if (options.renewalId) {
