@@ -11,9 +11,13 @@ import {
   temporaryAiTaskPresentation
 } from "@/lib/vibe64TemporaryAiTasks.js";
 
+/** @typedef {ReturnType<typeof import("./useVibe64TemporaryAiTaskRecords.js").useVibe64TemporaryAiTaskRecords>} TemporaryAiTaskRecords */
+
 /**
  * Temporary AI's messages: sending a task's draft or a generated request,
  * cancelling or editing a message not yet answered, and stopping a task's turn.
+ * @param {object} options
+ * @param {TemporaryAiTaskRecords} options.records the task records this composable updates
  */
 function useVibe64TemporaryAiMessages({
   tasks,

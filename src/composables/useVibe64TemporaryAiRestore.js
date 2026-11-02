@@ -11,10 +11,14 @@ import {
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { temporaryAiRequest, temporaryAiTurnIsActive } from "@/lib/vibe64TemporaryAiTasks.js";
 
+/** @typedef {ReturnType<typeof import("./useVibe64TemporaryAiTaskRecords.js").useVibe64TemporaryAiTaskRecords>} TemporaryAiTaskRecords */
+
 /**
  * Temporary AI's saved task list: restores it for the current session and
  * viewer, follows other views' changes to it, and releases it when the session
  * or viewer changes.
+ * @param {object} options
+ * @param {TemporaryAiTaskRecords} options.records the task records this composable updates
  */
 function useVibe64TemporaryAiRestore({
   tasks,
