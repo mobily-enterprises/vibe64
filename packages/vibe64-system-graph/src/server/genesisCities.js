@@ -37,18 +37,33 @@ const CITY_DEFINITIONS = Object.freeze({
   })
 });
 
-function cityError(kind, message, code = "vibe64_invalid_genesis_city") {
-  const error = vibe64Error(message, code);
-  error.details = {
-    cityKind: kind,
-    path: CITY_DEFINITIONS[kind]?.path || ""
-  };
-  return error;
+/**
+ * A City refusal that names the City's kind and path in its details.
+ * @param {string} kind
+ * @param {string} message
+ * @param {string} code
+ * @param {{ messageCode?: string, messageParams?: Record<string, unknown> }} [messageFields]
+ */
+function cityError(kind, message, code, messageFields = {}) {
+  return vibe64Error(message, code, {
+    ...messageFields,
+    details: {
+      cityKind: kind,
+      path: CITY_DEFINITIONS[kind]?.path || ""
+    }
+  });
 }
 
-function genesisCityError(kind, message, code) {
+/**
+ * A City refusal whose sentence starts with the City's title.
+ * @param {string} kind
+ * @param {string} message
+ * @param {string} code
+ * @param {{ messageCode?: string, messageParams?: Record<string, unknown> }} [messageFields]
+ */
+function genesisCityError(kind, message, code, messageFields = {}) {
   const title = CITY_DEFINITIONS[kind]?.title || "Genesis City";
-  return cityError(kind, `${title} ${message}`, code);
+  return cityError(kind, `${title} ${message}`, code, messageFields);
 }
 
 function cityDefinition(kind) {
@@ -72,9 +87,9 @@ function validateGenesisCity(city, kind) {
   try {
     return validateCityDocument(city, kind);
   } catch (error) {
-    if (error?.code === "CITY_INVALID") throw cityError(kind, error.message);
+    if (error?.code === "CITY_INVALID") throw cityError(kind, error.message, "vibe64_invalid_genesis_city");
     if (error?.code === "ARCHITECTURE_INVALID") {
-      throw cityError(kind, `${definition.title} architecture is invalid: ${error.message}`);
+      throw cityError(kind, `${definition.title} architecture is invalid: ${error.message}`, "vibe64_invalid_genesis_city_architecture");
     }
     throw error;
   }
@@ -107,11 +122,11 @@ async function readGenesisCity(projectRoot, kind) {
     try {
       city = JSON.parse(source);
     } catch {
-      throw genesisCityError(kind, "contains invalid JSON.");
+      throw genesisCityError(kind, "contains invalid JSON.", "vibe64_invalid_genesis_city_json");
     }
     validateGenesisCity(city, kind);
     if (identity(await stat(filePath, { bigint: true })) !== revision) {
-      throw genesisCityError(kind, "changed while loading. Reload to read the new snapshot.");
+      throw genesisCityError(kind, "changed while loading. Reload to read the new snapshot.", "vibe64_genesis_city_changed");
     }
     const builtAt = new Date(Number(revisionStat.mtimeMs)).toISOString();
     return { builtAt, city, exists: true, kind, path: definition.path };
@@ -130,7 +145,13 @@ function requireGenesisCity(record, kind) {
     throw genesisCityError(
       kind,
       "has not been generated. Refresh analysis first.",
-      "vibe64_genesis_city_missing"
+      "vibe64_genesis_city_missing",
+      {
+        messageCode: "vibe64_genesis_city_not_generated",
+        messageParams: {
+          kind
+        }
+      }
     );
   }
   return record.city;
@@ -144,17 +165,24 @@ function requireGenesisCity(record, kind) {
 const CALL_WEB_PATH = GENESIS_CALL_WEB_PATH;
 const CALL_WEB_MAX_BYTES = 64 * 1024 * 1024;
 
-function callWebError(message, code = "vibe64_invalid_genesis_call_web") {
-  const error = vibe64Error(`The call web ${message}`, code);
-  error.details = { path: CALL_WEB_PATH };
-  return error;
+/**
+ * A call web refusal that names the call web's path in its details.
+ * @param {string} message
+ * @param {string} code
+ */
+function callWebError(message, code) {
+  return vibe64Error(`The call web ${message}`, code, {
+    details: {
+      path: CALL_WEB_PATH
+    }
+  });
 }
 
 function validateGenesisCallWeb(document, files) {
   try {
     return validateCallWeb(document, { files });
   } catch (error) {
-    if (error?.code === "CALL_WEB_INVALID") throw callWebError(`is invalid: ${error.message}`);
+    if (error?.code === "CALL_WEB_INVALID") throw callWebError(`is invalid: ${error.message}`, "vibe64_invalid_genesis_call_web");
     throw error;
   }
 }
@@ -163,20 +191,20 @@ async function readGenesisCallWeb(projectRoot, architecture, options = {}) {
   const { validate = validateGenesisCallWeb } = options;
   const summary = architecture?.callWeb;
   if (!summary) return null;
-  if (summary.path !== CALL_WEB_PATH) throw callWebError(`must be ${CALL_WEB_PATH}.`);
+  if (summary.path !== CALL_WEB_PATH) throw callWebError(`must be ${CALL_WEB_PATH}.`, "vibe64_invalid_genesis_call_web_path");
   let handle;
   try {
     handle = await open(path.resolve(projectRoot, CALL_WEB_PATH), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (error) {
     if (isMissingPathError(error)) throw callWebError("is missing. Refresh analysis.", "vibe64_genesis_call_web_missing");
-    if (error?.code === "ELOOP") throw callWebError("must be a regular file.");
+    if (error?.code === "ELOOP") throw callWebError("must be a regular file.", "vibe64_invalid_genesis_call_web_file");
     throw error;
   }
   let source;
   try {
     const info = await handle.stat();
-    if (!info.isFile()) throw callWebError("must be a regular file.");
-    if (info.size > CALL_WEB_MAX_BYTES) throw callWebError("is larger than 64 MiB.");
+    if (!info.isFile()) throw callWebError("must be a regular file.", "vibe64_invalid_genesis_call_web_file");
+    if (info.size > CALL_WEB_MAX_BYTES) throw callWebError("is larger than 64 MiB.", "vibe64_invalid_genesis_call_web_too_large");
     source = Buffer.alloc(info.size);
     let length = 0;
     while (length < source.length) {
@@ -195,7 +223,7 @@ async function readGenesisCallWeb(projectRoot, architecture, options = {}) {
   try {
     document = JSON.parse(source.toString("utf8"));
   } catch {
-    throw callWebError("contains invalid JSON.");
+    throw callWebError("contains invalid JSON.", "vibe64_invalid_genesis_call_web_json");
   }
   return validate(document, architecture.files);
 }

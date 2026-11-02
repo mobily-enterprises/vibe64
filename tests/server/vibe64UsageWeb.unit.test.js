@@ -495,7 +495,7 @@ test("the call web is read only as the exact bytes the Machine City names", asyn
     assert.equal(`sha256:${createHash("sha256").update(bytes).digest("hex")}`, architecture.callWeb.identity);
     await writeFile(path.join(root, ".genesis/call-web.json"), Buffer.concat([bytes, Buffer.from(" ")]));
     await assert.rejects(readGenesisCallWeb(root, architecture, { validate: (value) => value }), { code: "vibe64_genesis_call_web_changed" });
-    await assert.rejects(readGenesisCallWeb(root, { ...architecture, callWeb: { ...architecture.callWeb, path: "../call-web.json" } }), { code: "vibe64_invalid_genesis_call_web" });
+    await assert.rejects(readGenesisCallWeb(root, { ...architecture, callWeb: { ...architecture.callWeb, path: "../call-web.json" } }), { code: "vibe64_invalid_genesis_call_web_path" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -511,12 +511,12 @@ test("the call web is read only as a regular file of at most 64 MiB", async () =
     await writeFile(elsewhere, await readFile(fixture("call-web.json")));
     await symlink(elsewhere, file);
     await assert.rejects(readGenesisCallWeb(root, architecture, { validate: (value) => value }),
-      { code: "vibe64_invalid_genesis_call_web", message: "The call web must be a regular file." });
+      { code: "vibe64_invalid_genesis_call_web_file", message: "The call web must be a regular file." });
     await rm(file);
     await writeFile(file, "");
     await truncate(file, 64 * 1024 * 1024 + 1);
     await assert.rejects(readGenesisCallWeb(root, architecture, { validate: (value) => value }),
-      { code: "vibe64_invalid_genesis_call_web", message: "The call web is larger than 64 MiB." });
+      { code: "vibe64_invalid_genesis_call_web_too_large", message: "The call web is larger than 64 MiB." });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
