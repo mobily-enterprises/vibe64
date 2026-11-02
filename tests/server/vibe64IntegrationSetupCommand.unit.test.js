@@ -260,6 +260,18 @@ test("Ads requests bind explicit inputs and reviewed launch confirmation to the 
   assert.deepEqual(buildIntegrationSetupRequest({ operation: "ads-discover", integrationId: "google-ads", ads: {} }).ads, {});
 });
 
+test("a bad Ads field is a 422 refusal that names the field", () => {
+  for (const [operation, ads, field] of [["ads-campaign", { campaignId: "33/../44" }, "campaignId"],
+    ["ads-discover", { customerId: "123" }, "customerId"], ["ads-targets", { customerId: "1234567890", name: " " }, "name"]]) {
+    assert.throws(() => buildIntegrationSetupRequest({ operation, integrationId: "google-ads", ads }), {
+      code: "vibe64_integration_setup_ads_field_invalid",
+      message: `Check advertising field ${field}.`,
+      params: { field },
+      statusCode: 422
+    });
+  }
+});
+
 test("Ads responses reject credentials, mismatched campaign reviews and wrong operations", () => {
   const request = buildIntegrationSetupRequest({ operation: "ads-campaign", integrationId: "google-ads", ads: { campaignId: "33" } });
   const value = { protocol: request.protocol, requestId: request.requestId, status: "ads", operation: request.operation,

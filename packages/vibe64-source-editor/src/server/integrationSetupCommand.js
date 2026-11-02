@@ -189,7 +189,9 @@ function validateAdsSelection(operation, values) {
         : field === "reviewId" ? typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
           : field.endsWith("Confirmed") ? value === true
             : typeof value === "string" && value.trim().length > 0 && value.length <= 100 && !/[\p{Cc}\p{Cf}]/u.test(value);
-    if (!valid) invalid(`Check advertising field ${field}.`, 422);
+    if (!valid) {
+      throw sourceEditorError(`Check advertising field ${field}.`, "vibe64_integration_setup_ads_field_invalid", {}, 422, { params: { field } });
+    }
   }
   return structuredClone(values);
 }
