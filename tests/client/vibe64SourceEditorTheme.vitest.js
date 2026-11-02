@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 describe("Files editor theme", () => {
   it("paints the sticky gutter on an opaque surface", () => {
     const editor = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue",
+      "../../src/composables/useVibe64SourceCodeMirror.js",
       import.meta.url
     ), "utf8");
     const gutter = editor.match(/"\.cm-gutters": \{([^}]*)\}/u)?.[1] || "";
