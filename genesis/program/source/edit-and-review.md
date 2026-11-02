@@ -78,6 +78,17 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SourceEditorFileSync.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceEditorHeader.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceEditorFinder.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceEditorSidebar.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceEditorSideRail.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceNewFileDialog.vue`
+- `src/composables/useVibe64SourceCodeMirror.js`
+- `src/composables/useVibe64SourceFilePresentation.js`
+- `src/composables/useVibe64SourceEditorDownloads.js`
+- `src/composables/useVibe64SourceTreeExpansion.js`
+- `src/lib/vibe64SourceEditorLanguages.js`
+- `src/lib/vibe64SourceFilePaths.js`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue`
 - `src/composables/useVibe64RepositoryWorkspace.js`
@@ -923,6 +934,17 @@ Interface/Code, whose presentation their host records.
   `useVibe64SourceEditorExplanations()`. It keeps the session lifecycle: the
   refresh after the agent's work, the switch to another session and the final
   save on unmount.
+- `Vibe64SessionSourceEditor` lays out the editor view from its parts:
+  `Vibe64SourceEditorHeader` (the file's name, presentation switch and file
+  actions), `Vibe64SourceEditorFinder` (Open file and Find in files),
+  `Vibe64SourceEditorSidebar` (the file list's toolbar, starred files, find
+  results, source tree and dropped uploads), `Vibe64SourceNewFileDialog` and
+  `Vibe64SourceEditorSideRail` (a collapsed panel's rail). In it,
+  `useVibe64SourceCodeMirror()` owns the CodeMirror view, its theme, languages
+  and source-path clicks; `useVibe64SourceFilePresentation()` chooses Interface,
+  Code, rendered Markdown or image; `useVibe64SourceEditorDownloads()` downloads
+  files, asking first about unsaved edits; and `useVibe64SourceTreeExpansion()`
+  remembers each session's open folders in the browser.
 - The source-editor service owns explanation cache lookup, temporary conversation
   creation and cleanup. `useVibe64SourceEditorExplanations()`, which
   `useVibe64SourceEditor()` composes, owns the selected explanation,

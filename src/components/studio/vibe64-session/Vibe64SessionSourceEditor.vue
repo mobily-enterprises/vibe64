@@ -9,254 +9,32 @@
     }"
     aria-label="Session source editor"
   >
-    <header
+    <Vibe64SourceEditorHeader
       v-if="!singleFile || filePresentation === 'code'"
-      class="vibe64-source-editor__header"
-    >
-      <v-btn
-        v-if="!singleFile && mobile && !codeFocusMode"
-        :aria-expanded="!fileListCollapsed"
-        :aria-label="fileListCollapsed ? 'Show files' : 'Hide files'"
-        :icon="fileListCollapsed ? mdiFolderOutline : mdiClose"
-        variant="text"
-        @click="fileListCollapsed ? expandFileList() : collapseFileList()"
-      />
-      <div class="vibe64-source-editor__title">
-        <v-icon
-          v-if="!mobile"
-          :icon="mdiFileCodeOutline"
-          size="19"
-        />
-        <h2 :title="editor.loadingPath.value || displayedPath || 'Choose a source file'">
-          {{ selectedFileName }}
-        </h2>
-      </div>
-      <v-btn v-if="editor.selectedPath.value && markdownRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
-      <v-btn v-else-if="editor.selectedPath.value && svgRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the SVG source' : 'Show the image'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'SVG source' : 'Image' }}</v-btn>
-      <v-btn v-else-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
-      <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
-        <v-btn
-          :disabled="!editor.dirty.value || editor.saving.value"
-          :aria-label="editor.saving.value ? 'Saving file' : 'Save now'"
-          :icon="mdiContentSaveOutline"
-          variant="tonal"
-          @click="editor.saveNow"
-        />
-        <v-menu>
-          <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="File actions" variant="text" />
-          </template>
-          <v-list density="compact">
-            <v-list-item
-              v-if="editor.statusLabel.value"
-              :title="editor.statusLabel.value"
-              :class="{ 'text-error': editor.saveError.value }"
-            />
-            <v-list-item
-              v-if="fileBookmarks"
-              :title="selectedStarred ? 'Unstar file' : 'Star file'"
-              :prepend-icon="selectedStarred ? mdiStar : mdiStarOutline"
-              :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
-              @click="fileBookmarks.toggle(displayedPath)"
-            />
-            <v-list-item
-              title="Download file"
-              :prepend-icon="mdiDownload"
-              :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
-              @click="requestDownload(displayedPath)"
-            />
-            <v-list-item
-              title="Undo"
-              :prepend-icon="mdiUndoVariant"
-              :disabled="!editor.selectedPath.value"
-              @click="runEditorCommand('undo')"
-            />
-            <v-list-item
-              title="Redo"
-              :prepend-icon="mdiRedoVariant"
-              :disabled="!editor.selectedPath.value"
-              @click="runEditorCommand('redo')"
-            />
-            <v-list-item
-              v-if="!singleFile"
-              title="Explain file or selection"
-              :prepend-icon="mdiRobotOutline"
-              :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
-              @click="explainCurrentSelection"
-            />
-            <v-list-item
-              title="Refresh files"
-              :prepend-icon="mdiRefresh"
-              :disabled="editor.loadingTree.value"
-              @click="refreshFiles"
-            />
-          </v-list>
-        </v-menu>
-      </div>
-      <div v-else class="vibe64-source-editor__actions">
-        <v-btn
-          v-if="fileBookmarks"
-          :aria-label="selectedStarred ? 'Unstar file' : 'Star file'"
-          :aria-pressed="selectedStarred"
-          :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
-          :icon="selectedStarred ? mdiStar : mdiStarOutline"
-          size="small"
-          :title="selectedStarred ? 'Unstar file' : 'Star file'"
-          variant="text"
-          @click="fileBookmarks.toggle(displayedPath)"
-        />
-        <v-btn
-          aria-label="Download file"
-          :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
-          :icon="mdiDownload"
-          size="small"
-          :title="downloadingPath ? 'Downloading file…' : 'Download file'"
-          variant="text"
-          @click="requestDownload(displayedPath)"
-        />
-        <span
-          v-if="editor.statusLabel.value"
-          class="vibe64-source-editor__status"
-          :class="{ 'vibe64-source-editor__status--error': editor.saveError.value }"
-        >
-          {{ editor.statusLabel.value }}
-        </span>
-        <v-btn
-          :disabled="!editor.selectedPath.value"
-          :icon="mdiUndoVariant"
-          size="small"
-          title="Undo"
-          type="button"
-          variant="text"
-          @click="runEditorCommand('undo')"
-        />
-        <v-btn
-          :disabled="!editor.selectedPath.value"
-          :icon="mdiRedoVariant"
-          size="small"
-          title="Redo"
-          type="button"
-          variant="text"
-          @click="runEditorCommand('redo')"
-        />
-        <v-btn
-          :disabled="!editor.dirty.value || editor.saving.value"
-          :icon="mdiContentSaveOutline"
-          :loading="editor.saving.value"
-          size="small"
-          title="Save now"
-          type="button"
-          variant="tonal"
-          @click="editor.saveNow"
-        />
-        <v-btn
-          v-if="!singleFile"
-          class="vibe64-source-editor__explain-button"
-          :aria-busy="editor.explanationBusy.value || editor.explanationClosing.value ? 'true' : 'false'"
-          color="primary"
-          :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
-          :prepend-icon="mdiRobotOutline"
-          size="small"
-          :title="!assistantAvailable
-            ? assistantUnavailableMessage
-            : editor.explanationClosing.value ? 'Closing explanation'
-              : editor.explanationBusy.value ? 'Explanation in progress' : 'Explain file or selection'"
-          type="button"
-          variant="tonal"
-          @click="explainCurrentSelection"
-        >
-          {{ editor.explanationClosing.value ? "Closing…" : editor.explanationBusy.value ? "Working…" : "Explain" }}
-        </v-btn>
-        <v-btn
-          v-if="!singleFile"
-          :disabled="editor.loadingTree.value"
-          :icon="mdiRefresh"
-          :aria-busy="editor.loadingTree.value"
-          size="small"
-          title="Refresh files"
-          type="button"
-          variant="text"
-          @click="refreshFiles"
-        />
-      </div>
-    </header>
+      v-model:file-list-collapsed="fileListCollapsed"
+      v-model:file-presentation="filePresentation"
+      :assistant-available="assistantAvailable"
+      :assistant-unavailable-message="assistantUnavailableMessage"
+      :code-focus-mode="codeFocusMode"
+      :displayed-path="displayedPath"
+      :downloading-path="downloadingPath"
+      :editor="editor"
+      :file-bookmarks="fileBookmarks"
+      :markdown-renderable="markdownRenderable"
+      :mobile="mobile"
+      :selected-file-name="selectedFileName"
+      :single-file="singleFile"
+      :svg-renderable="svgRenderable"
+      @command="runEditorCommand"
+      @download="requestDownload"
+      @explain="explainCurrentSelection"
+      @refresh="refreshFiles"
+    />
 
-    <div
+    <Vibe64SourceEditorFinder
       v-if="!singleFile && !codeFocusMode && (!mobile || !fileListCollapsed)"
-      class="vibe64-source-editor__tools"
-    >
-      <div class="vibe64-source-editor__tool">
-        <v-text-field
-          autocomplete="off"
-          clearable
-          density="compact"
-          hide-details
-          label="Open file"
-          :model-value="editor.fileQuery.value"
-          :prepend-inner-icon="mdiFileSearchOutline"
-          variant="outlined"
-          @keydown.enter.prevent="editor.openFirstFileMatch"
-          @update:model-value="editor.updateFileQuery"
-        />
-        <div
-          v-if="fastOpenPanelVisible"
-          class="vibe64-source-editor__matches"
-        >
-          <div
-            v-if="editor.fileMatchesLoading.value"
-            class="vibe64-source-editor__match-note"
-          >
-            Finding files...
-          </div>
-          <div
-            v-else-if="editor.fileMatchesError.value"
-            class="vibe64-source-editor__match-note vibe64-source-editor__match-note--error"
-          >
-            {{ editor.fileMatchesError.value }}
-          </div>
-          <template v-else>
-            <button
-              v-for="file in editor.fileMatches.value"
-              :key="file.path"
-              class="vibe64-source-editor__match"
-              :title="file.path"
-              type="button"
-              @click="editor.openFileMatch(file.path)"
-            >
-              <span class="vibe64-source-editor__match-name">{{ file.name || basename(file.path) }}</span>
-              <span class="vibe64-source-editor__match-path">{{ file.path }}</span>
-            </button>
-            <div
-              v-if="!editor.fileMatches.value.length"
-              class="vibe64-source-editor__match-note"
-            >
-              No matching files.
-            </div>
-            <div
-              v-if="editor.fileMatchesTruncated.value"
-              class="vibe64-source-editor__match-note"
-            >
-              Keep typing to narrow the list.
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="vibe64-source-editor__tool">
-        <v-text-field
-          autocomplete="off"
-          clearable
-          density="compact"
-          hide-details
-          label="Find in files"
-          :model-value="editor.searchQuery.value"
-          :prepend-inner-icon="mdiMagnify"
-          variant="outlined"
-          @keydown.enter.prevent="editor.openSearchResult(editor.searchResults.value[0])"
-          @update:model-value="editor.updateSearchQuery"
-        />
-      </div>
-    </div>
+      :editor="editor"
+    />
 
     <div
       class="vibe64-source-editor__body"
@@ -265,173 +43,26 @@
         'vibe64-source-editor__body--file-list-collapsed': fileListCollapsed && !codeFocusMode
       }"
     >
-      <aside
+      <Vibe64SourceEditorSidebar
         v-if="!singleFile && !codeFocusMode"
         v-show="!mobile || !fileListCollapsed"
-        class="vibe64-source-editor__sidebar"
-        :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed, 'vibe64-source-editor__sidebar--drop': dropDepth > 0 }"
-        @dragenter="dragEnter"
-        @dragover="dragOver"
-        @dragleave="dragLeave"
-        @drop="dropFiles"
-      >
-        <button
-          v-if="fileListCollapsed"
-          aria-label="Show files"
-          class="vibe64-source-editor__side-rail"
-          title="Show files"
-          type="button"
-          @click="expandFileList"
-        >
-          <v-icon :icon="mdiChevronRight" size="22" />
-          <span>Files</span>
-        </button>
-        <template v-else>
-          <div class="vibe64-source-editor__tree-toolbar">
-            <span v-if="dropDepth > 0" class="vibe64-source-editor__drop-label" role="status">Drop to upload to {{ uploadFolderLabel }}</span>
-            <span v-else>Files</span>
-            <div class="vibe64-source-editor__tree-actions">
-              <v-btn
-                v-if="filesActions"
-                :aria-label="`Upload files to ${uploadFolderLabel}`"
-                :disabled="!editor.tree.value"
-                :icon="mdiUpload"
-                size="x-small"
-                :title="`Upload files to ${uploadFolderLabel}`"
-                type="button"
-                variant="text"
-                @click="emit('upload', { folder: uploadFolder })"
-              />
-              <v-btn
-                aria-label="New file at source root"
-                :disabled="editor.creatingFile.value || !editor.tree.value"
-                :icon="mdiFilePlusOutline"
-                size="x-small"
-                title="New file at source root"
-                type="button"
-                variant="text"
-                @click="openNewFileDialog('')"
-              />
-              <v-btn
-                class="vibe64-source-editor__collapse-files-button"
-                aria-label="Collapse file list"
-                :icon="mdiChevronLeft"
-                size="small"
-                title="Collapse file list"
-                type="button"
-                variant="text"
-                @click="collapseFileList"
-              />
-              <v-btn
-                aria-label="Close all folders"
-                :disabled="!editor.tree.value || !expandedDirectoryPaths.length"
-                :icon="mdiCollapseAllOutline"
-                size="x-small"
-                title="Close all folders"
-                type="button"
-                variant="text"
-                @click="closeAllDirectories"
-              />
-            </div>
-          </div>
-
-          <details v-if="fileBookmarks" class="vibe64-source-editor__starred" :open="fileBookmarks.files.value.length <= 4">
-            <summary>Starred <span>{{ fileBookmarks.files.value.length }}</span></summary>
-            <Vibe64StarredFilesList :bookmarks="fileBookmarks" compact @open-file="editor.openFile" />
-          </details>
-
-          <section
-            v-if="searchPanelVisible"
-            class="vibe64-source-editor__search-results"
-            aria-label="Find results"
-          >
-            <div class="vibe64-source-editor__search-heading">
-              <span>Find results</span>
-              <small>{{ editor.searchResults.value.length }}</small>
-            </div>
-            <div
-              v-if="editor.searchIndexLabel.value"
-              class="vibe64-source-editor__notice"
-              :class="{ 'vibe64-source-editor__notice--error': editor.searchIndex.value?.state === 'error' }"
-              role="status"
-            >
-              {{ editor.searchIndexLabel.value }}
-            </div>
-            <div
-              v-if="editor.searchLoading.value && !editor.searchResults.value.length"
-              class="vibe64-source-editor__notice"
-            >
-              Searching files...
-            </div>
-            <div
-              v-else-if="editor.searchError.value"
-              class="vibe64-source-editor__notice vibe64-source-editor__notice--error"
-            >
-              {{ editor.searchError.value }}
-            </div>
-            <div
-              v-else-if="!editor.searchResults.value.length && editor.searchIndex.value?.state !== 'error'"
-              class="vibe64-source-editor__notice"
-            >
-              {{ editor.searchIndexPending.value ? "Results will appear as files are indexed." : "No results." }}
-            </div>
-            <template v-else>
-              <button
-                v-for="result in editor.searchResults.value"
-                :key="`${result.path}:${result.line}:${result.column}:${result.preview}`"
-                class="vibe64-source-editor__search-result"
-                :title="searchResultTitle(result)"
-                type="button"
-                @click="editor.openSearchResult(result)"
-              >
-                <span class="vibe64-source-editor__search-path">{{ result.path }}</span>
-                <span class="vibe64-source-editor__search-location">Line {{ result.line }}</span>
-                <span class="vibe64-source-editor__search-preview">{{ result.preview }}</span>
-              </button>
-            </template>
-            <div
-              v-if="editor.searchTruncated.value"
-              class="vibe64-source-editor__notice"
-            >
-              Search stopped at the first matches. Narrow the query for more precision.
-            </div>
-          </section>
-
-          <div
-            v-if="editor.loadingTree.value && !editor.tree.value"
-            class="vibe64-source-editor__notice"
-          >
-            Loading files...
-          </div>
-          <div
-            v-else-if="editor.loadError.value && !editor.tree.value"
-            class="vibe64-source-editor__notice vibe64-source-editor__notice--error"
-          >
-            {{ editor.loadError.value }}
-          </div>
-          <Vibe64SourceFileTree
-            v-else-if="editor.tree.value"
-            :expanded-paths="expandedDirectoryPaths"
-            :load-errors="editor.treeLoadErrors.value"
-            :loading-paths="editor.treeLoadingPaths.value"
-            :node="editor.tree.value"
-            :selected-path="displayedPath"
-            :starred-paths="fileBookmarks?.paths.value || []"
-            :assistant-draft-available="assistantDraftAvailable"
-            :files-actions="filesActions"
-            @ask-assistant="askAssistantAboutPath"
-            @copy-path="copySourcePath"
-            @directory-open-change="handleDirectoryOpenChange"
-            @load-more-directory="editor.loadMoreDirectory"
-            @new-file="openNewFileDialog"
-            @open-file="editor.openFile"
-            @toggle-star="fileBookmarks?.toggle($event)"
-            @download-file="requestDownload"
-            @transfer="emit('transfer', $event)"
-            @upload="uploadInto"
-          />
-        </template>
-      </aside>
+        :assistant-draft-available="assistantDraftAvailable"
+        :collapsed="fileListCollapsed"
+        :displayed-path="displayedPath"
+        :editor="editor"
+        :expanded-paths="expandedDirectoryPaths"
+        :file-bookmarks="fileBookmarks"
+        :files-actions="filesActions"
+        @ask-assistant-about-file="emit('ask-assistant-about-file', $event)"
+        @close-all-directories="closeAllDirectories"
+        @collapse="collapseFileList"
+        @directory-open-change="handleDirectoryOpenChange"
+        @download-file="requestDownload"
+        @expand="expandFileList"
+        @new-file="openNewFileDialog"
+        @transfer="emit('transfer', $event)"
+        @upload="emit('upload', $event)"
+      />
 
       <main v-show="singleFile || !mobile || fileListCollapsed || codeFocusMode" class="vibe64-source-editor__main">
         <div
@@ -572,74 +203,25 @@
               @stop="editor.stopExplanation"
               @update:followup="editor.updateExplanationFollowup"
             />
-            <button
+            <Vibe64SourceEditorSideRail
               v-show="explanationCollapsed"
               aria-label="Show explanation"
-              class="vibe64-source-editor__side-rail vibe64-source-editor__side-rail--right"
+              class="vibe64-source-editor__side-rail--right"
+              :icon="mdiChevronLeft"
+              label="AI"
               title="Show explanation"
-              type="button"
               @click="expandExplanation"
-            >
-              <v-icon :icon="mdiChevronLeft" size="22" />
-              <span>AI</span>
-            </button>
+            />
           </div>
         </div>
       </main>
     </div>
 
-    <v-dialog
-      v-model="newFileDialogOpen"
-      max-width="520"
-    >
-      <v-card>
-        <v-card-title>New file</v-card-title>
-        <v-card-text class="vibe64-source-editor__new-file-dialog">
-          <p>
-            {{ newFileDirectoryLabel }}
-          </p>
-          <v-alert
-            v-if="newFileError"
-            density="compact"
-            type="warning"
-            variant="tonal"
-          >
-            {{ newFileError }}
-          </v-alert>
-          <v-text-field
-            v-model="newFileName"
-            autofocus
-            autocomplete="off"
-            :disabled="editor.creatingFile.value"
-            label="Path"
-            placeholder="components/NewFile.vue"
-            variant="outlined"
-            @keydown.enter.prevent="submitNewFile"
-          />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn
-            :disabled="editor.creatingFile.value"
-            type="button"
-            variant="text"
-            @click="closeNewFileDialog"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            :disabled="newFileCreateDisabled"
-            :loading="editor.creatingFile.value"
-            type="button"
-            variant="flat"
-            @click="submitNewFile"
-          >
-            Create
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <Vibe64SourceNewFileDialog
+      ref="newFileDialog"
+      :editor="editor"
+      @created="newFileCreated"
+    />
     <v-dialog v-model="downloadDraftOpen" max-width="440">
       <v-card title="Download this file?">
         <v-card-text>
@@ -658,363 +240,102 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { Compartment, EditorState } from "@codemirror/state";
-import {
-  crosshairCursor,
-  drawSelection,
-  dropCursor,
-  EditorView,
-  highlightActiveLineGutter,
-  keymap,
-  lineNumbers,
-  rectangularSelection
-} from "@codemirror/view";
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentWithTab,
-  redo,
-  undo
-} from "@codemirror/commands";
-import {
-  bracketMatching,
-  defaultHighlightStyle,
-  indentOnInput,
-  StreamLanguage,
-  syntaxHighlighting
-} from "@codemirror/language";
-import { searchKeymap } from "@codemirror/search";
-import {
-  javascript,
-  jsxLanguage,
-  tsxLanguage,
-  typescriptLanguage
-} from "@codemirror/lang-javascript";
-import { html } from "@codemirror/lang-html";
-import { json } from "@codemirror/lang-json";
-import { cpp } from "@codemirror/lang-cpp";
-import { markdown } from "@codemirror/lang-markdown";
-import { shell } from "@codemirror/legacy-modes/mode/shell";
-import {
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiCollapseAllOutline,
-  mdiClose,
-  mdiDotsVertical,
-  mdiFolderOutline,
-  mdiContentSaveOutline,
-  mdiDownload,
-  mdiFileCodeOutline,
-  mdiFilePlusOutline,
-  mdiFileSearchOutline,
-  mdiMagnify,
-  mdiRedoVariant,
-  mdiRefresh,
-  mdiRobotOutline,
-  mdiStar,
-  mdiStarOutline,
-  mdiUndoVariant,
-  mdiUpload
-} from "@mdi/js";
-
+import { mdiChevronLeft, mdiDownload } from "@mdi/js";
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
-import { Marked } from "marked";
 import GithubMarkdown from "@/components/studio/GithubMarkdown.vue";
-import {
-  markdownDocumentLinkTarget,
-  normalizeSourceEditorDirectoryPaths,
-  normalizeSourceEditorPath,
-  sourcePathReferenceAtLineColumn
-} from "@/lib/vibe64SourceEditorLinks.js";
-import { useVibe64SystemGraph } from "@local/vibe64-system-graph/client";
+import Vibe64SourceEditorFinder from "@/components/studio/vibe64-session/Vibe64SourceEditorFinder.vue";
+import Vibe64SourceEditorHeader from "@/components/studio/vibe64-session/Vibe64SourceEditorHeader.vue";
+import Vibe64SourceEditorSideRail from "@/components/studio/vibe64-session/Vibe64SourceEditorSideRail.vue";
+import Vibe64SourceEditorSidebar from "@/components/studio/vibe64-session/Vibe64SourceEditorSidebar.vue";
 import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
-import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
+import Vibe64SourceNewFileDialog from "@/components/studio/vibe64-session/Vibe64SourceNewFileDialog.vue";
 import Vibe64ImagePreview from "@/components/studio/files/Vibe64ImagePreview.vue";
-import { filePreviewImageType } from "@local/vibe64-source-editor/shared/fileTypes";
-import Vibe64StarredFilesList from "@/components/studio/vibe64-session/Vibe64StarredFilesList.vue";
-import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { vibe64SourceEditorDownloadPath } from "@/lib/vibe64SessionRequestConfig.js";
-import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
-import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
-import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { vibe64DroppedFiles, vibe64FileArea } from "@/lib/vibe64FileAreas.js";
-import {
-  useVibe64SourceEditor
-} from "@/composables/useVibe64SourceEditor.js";
-import {
-  readLocalStorageJson,
-  stableLocalStorageKeyPart,
-  writeLocalStorageJson
-} from "@/lib/browserLocalStorage.js";
-import {
-  writeClipboardText
-} from "@/lib/clipboard.js";
-import {
-  sourceEditorDocumentChanges
-} from "@/lib/vibe64SourceEditorDocumentChanges.js";
-
-const SOURCE_EDITOR_TREE_STATE_STORAGE_KEY = "vibe64:source-editor:tree-state";
+import { useVibe64SourceEditor } from "@/composables/useVibe64SourceEditor.js";
+import { useVibe64SourceCodeMirror } from "@/composables/useVibe64SourceCodeMirror.js";
+import { useVibe64SourceEditorDownloads } from "@/composables/useVibe64SourceEditorDownloads.js";
+import { useVibe64SourceFilePresentation } from "@/composables/useVibe64SourceFilePresentation.js";
+import { useVibe64SourceTreeExpansion } from "@/composables/useVibe64SourceTreeExpansion.js";
+import { basename } from "@/lib/vibe64SourceFilePaths.js";
 
 const props = defineProps({
   singleFile: { type: Boolean, default: false },
   architectureFacts: { type: Object, default: null },
   agentActive: { type: Boolean, default: false },
   fileBookmarks: { type: Object, default: null },
-  active: {
-    default: false,
-    type: Boolean
-  },
-  assistantAvailable: {
-    default: true,
-    type: Boolean
-  },
-  assistantUnavailableMessage: {
-    default: "The selected AI connection is unavailable for this account.",
-    type: String
-  },
-  codeFocusMode: {
-    default: false,
-    type: Boolean
-  },
-  openRequest: {
-    default: null,
-    type: Object
-  },
-  projectSlug: {
-    default: "",
-    type: String
-  },
-  sessionId: {
-    default: "",
-    type: String
-  },
-  sessionsApiPath: {
-    default: "",
-    type: String
-  },
-  assistantDraftAvailable: {
-    default: false,
-    type: Boolean
-  },
-  navigateReferencedSource: {
-    default: null,
-    type: Function
-  },
-  sourcePathClickWithoutModifier: {
-    default: false,
-    type: Boolean
-  },
+  active: { default: false, type: Boolean },
+  assistantAvailable: { default: true, type: Boolean },
+  assistantUnavailableMessage: { default: "The selected AI connection is unavailable for this account.", type: String },
+  codeFocusMode: { default: false, type: Boolean },
+  openRequest: { default: null, type: Object },
+  projectSlug: { default: "", type: String },
+  sessionId: { default: "", type: String },
+  sessionsApiPath: { default: "", type: String },
+  assistantDraftAvailable: { default: false, type: Boolean },
+  navigateReferencedSource: { default: null, type: Function },
+  sourcePathClickWithoutModifier: { default: false, type: Boolean },
   // Files offers uploads and "Move or copy…" in the tree, and refreshes it
   // after an upload, move or copy.
-  filesActions: {
-    default: false,
-    type: Boolean
-  },
-  refreshKey: {
-    default: 0,
-    type: Number
-  }
+  filesActions: { default: false, type: Boolean },
+  refreshKey: { default: 0, type: Number }
 });
 const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program", "transfer", "upload"]);
 
 const editorElement = ref(null);
-let editorView = null;
+const sourceEditorElement = ref(null);
+const newFileDialog = ref(null);
+// The CodeMirror view; the editor reads the live text from it.
+const editorView = shallowRef(null);
 let explanationFocusTimer = null;
-let renderedEditorPath = "";
-let resettingEditor = false;
 let sourceEditorUnmounted = false;
 const editor = useVibe64SourceEditor({
   active: () => props.active,
   agentActive: () => props.agentActive,
   navigateReferencedSource: (navigation) => props.navigateReferencedSource?.(navigation),
   projectSlug: () => props.projectSlug,
-  readCurrentText: () => editorView?.state.doc.toString() ?? "",
+  readCurrentText: () => editorView.value?.state.doc.toString() ?? "",
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
-const filePresentation = ref('interface');
-const interfaceSymbolId = ref('');
-const symbolPresentation = ref('description');
-// Architecture supplies its existing snapshot at mount. Only
-// standalone file browsing owns another graph reader.
-const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId') });
-const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
-const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
-const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);
-const interfaceSymbols = computed(() => (interfaceArchitecture.value?.symbols || []).filter(symbol => symbol.fileId === interfaceFile.value?.id && symbol.visibility === 'public'));
-const interfacePrograms = computed(() => (interfaceArchitecture.value?.program?.modules || []).filter(program => program.sources.includes(editor.selectedPath.value)));
-const interfaceSymbol = computed(() => interfaceSymbols.value.find(symbol => symbol.id === interfaceSymbolId.value));
-const interfaceSymbolSource = computed(() => {
-  const symbol = interfaceSymbol.value;
-  if (!symbol?.end || !interfaceCurrent.value) return '';
-  const lines = editor.text.value.split('\n');
-  const selected = lines.slice(symbol.start.line - 1, symbol.end.line);
-  if (!selected.length) return '';
-  selected[selected.length - 1] = selected.at(-1).slice(0, symbol.end.column - 1);
-  selected[0] = selected[0].slice(symbol.start.column - 1);
-  return selected.join('\n');
+const {
+  activeFileInterpretation,
+  activeInterfaceInterpretation,
+  filePresentation,
+  imagePreviewUrl,
+  imagePreviewVersion,
+  interfaceArchitecture,
+  interfaceCurrent,
+  interfaceFile,
+  interfaceGraph,
+  interfacePrograms,
+  interfaceSymbolId,
+  interfaceSymbolSource,
+  interfaceSymbols,
+  markdownRenderable,
+  openMarkdownLink,
+  presentFileOverview,
+  presentInterfaceSymbol,
+  renderedMarkdownHtml,
+  selectInterfaceSymbol,
+  svgRenderable,
+  symbolPresentation
+} = useVibe64SourceFilePresentation({
+  editor,
+  onInterfaceLocation: (location) => emit("interface-location", location),
+  props
 });
-function showWholeFileCode() { filePresentation.value = 'code'; nextTick(() => { editorView?.requestMeasure(); editorView?.focus(); }); }
-function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'steps'; }
-function currentInterpretation(scope, symbolId, presentation) {
-  return editor.interpretations.value.find(record => record.path === editor.selectedPath.value && record.scope === scope && (record.symbolId || '') === symbolId && record.presentation === presentation && record.status === 'current' && record.fileHash === editor.savedHash.value);
-}
-const activeInterfaceInterpretation = computed(() => {
-  const range = editor.activeExplanation.value?.sourceRange;
-  return Boolean(range?.path === editor.selectedPath.value && range.presentation === symbolPresentation.value
-    && (range.symbolId || '') === interfaceSymbolId.value && range.scope === (interfaceSymbolId.value ? 'selection' : 'file'));
-});
-const activeFileInterpretation = computed(() => {
-  const range = editor.activeExplanation.value?.sourceRange;
-  return range?.path === editor.selectedPath.value && range.scope === 'file' && range.presentation === 'description';
-});
-function presentFileOverview(force = false) {
-  if (!force && currentInterpretation('file', '', 'description')) return;
-  if (!editor.selectedPath.value || editor.dirty.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
-  const lines = editor.text.value.split('\n');
-  void editor.explainSelection({ scope: 'file', presentation: 'description', force, expectedHash: editor.savedHash.value, startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 });
-}
-function presentInterfaceSymbol(presentation, force = false) {
-  symbolPresentation.value = presentation;
-  const symbol = interfaceSymbol.value;
-  if (presentation !== 'steps' || !Array.isArray(symbol?.parameters) || !symbol?.end || !interfaceCurrent.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
-  if (!force && currentInterpretation('selection', symbol.id, presentation)) return;
-  void editor.explainSelection({ scope: 'selection', symbolId: symbol.id, presentation, force, expectedHash: editor.savedHash.value, startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column });
-}
-// The file browser opens Markdown formatted; the header switches to its source.
-// GithubMarkdown sanitizes the HTML against its allowlist before display.
-// Embedded single-file views keep Interface/Code, which their host records.
-const markdownRenderable = computed(() => !props.singleFile && sourceEditorPathIsMarkdown(editor.selectedPath.value));
-// SVG opens as the image it draws (from the saved file), with its source a click away.
-const svgRenderable = computed(() => !props.singleFile && filePreviewImageType(editor.selectedPath.value) === 'image/svg+xml');
-const markdownRenderer = new Marked({
-  async: false,
-  gfm: true,
-  walkTokens(token) {
-    // Images in the document load from this session's files, like the image preview.
-    const path = token.type === 'image' && markdownDocumentLinkTarget(editor.selectedPath.value, token.href);
-    if (path) token.href = scopedDevelopmentApiUrl(
-      vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, path),
-      props.projectSlug
-    );
-  }
-});
-const renderedMarkdownHtml = computed(() => filePresentation.value === 'rendered' && markdownRenderable.value ? markdownRenderer.parse(editor.text.value) : '');
-watch(editor.selectedPath, () => {
-  const codeRequested = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value;
-  filePresentation.value = codeRequested ? 'code' : markdownRenderable.value || svgRenderable.value ? 'rendered' : 'interface';
-  interfaceSymbolId.value = ''; symbolPresentation.value = 'description';
-});
-function openMarkdownLink(event) {
-  const anchor = event.target?.closest?.('a[href]');
-  if (!anchor) return;
-  // Links must not navigate the editor page itself.
-  event.preventDefault();
-  const target = anchor.getAttribute('href').trim();
-  if (/^(?:https?:|mailto:)/iu.test(target)) {
-    globalThis.open?.(target, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  const path = markdownDocumentLinkTarget(editor.selectedPath.value, target);
-  if (path) void editor.openFile(path);
-}
-watch([interfaceSymbols, interfaceCurrent, () => props.openRequest], () => {
-  if (props.openRequest?.path !== editor.selectedPath.value || !interfaceCurrent.value) return;
-  const requested = interfaceSymbols.value.find(symbol => symbol.id === props.openRequest.symbolId || (props.openRequest.symbol && (symbol.qualifiedName === props.openRequest.symbol || symbol.name === props.openRequest.symbol)));
-  if (requested && requested.id !== interfaceSymbolId.value) selectInterfaceSymbol(requested.id);
-  if (props.openRequest.symbolPresentation) symbolPresentation.value = props.openRequest.symbolPresentation;
-});
-watch([editor.selectedPath, interfaceSymbolId, filePresentation, symbolPresentation], () => {
-  if (props.singleFile && props.active && interfaceCurrent.value && editor.selectedPath.value) emit('interface-location', {
-    path: editor.selectedPath.value, symbolId: interfaceSymbolId.value,
-    presentation: filePresentation.value, symbolPresentation: symbolPresentation.value
-  });
-}, { flush: 'post' });
+function showWholeFileCode() { filePresentation.value = 'code'; nextTick(() => { editorView.value?.requestMeasure(); editorView.value?.focus(); }); }
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
-// Files uploads into the current folder: the open file's folder, or the root.
-const uploadFolder = computed(() => normalizeSourceEditorPath(displayedPath.value).split("/").slice(0, -1).join("/"));
-const uploadFolderLabel = computed(() => [vibe64FileArea("repo").label, ...uploadFolder.value.split("/").filter(Boolean)].join(" › "));
-const uploadFeedback = useUiFeedback({ source: "vibe64.files" });
-const dropDepth = ref(0);
-const imagePreviewVersion = ref(0);
-// Binary images open as images; an SVG does when its image view is chosen.
-const imagePreviewUrl = computed(() => {
-  const filePath = editor.downloadOnlyFile.value?.path ||
-    (svgRenderable.value && filePresentation.value === 'rendered' ? editor.selectedPath.value : "");
-  if (editor.loadingFile.value || !filePreviewImageType(filePath)) return "";
-  return scopedDevelopmentApiUrl(
-    `${vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, filePath)}&inline=1`,
-    props.projectSlug
-  );
-});
+const selectedFileName = computed(() => (
+  editor.loadingPath.value || displayedPath.value
+    ? basename(editor.loadingPath.value || displayedPath.value)
+    : "Choose a source file"
+));
 
 function refreshFiles() {
   imagePreviewVersion.value += 1;
   void editor.refresh();
-}
-
-const selectedStarred = computed(() => props.fileBookmarks?.paths.value.includes(displayedPath.value) || false);
-const downloadingPath = ref("");
-const downloadDraftOpen = ref(false);
-const downloadSaving = ref(false);
-const downloadError = ref("");
-let draftDownload = null;
-const downloadFeedback = useUiFeedback({ source: "vibe64.source-editor.download" });
-
-function requestDownload(filePath) {
-  if (!filePath || downloadingPath.value) {
-    return;
-  }
-  const target = {
-    path: filePath,
-    sessionId: props.sessionId,
-    sessionsApiPath: readRefOrGetterValue(props.sessionsApiPath),
-    projectSlug: props.projectSlug
-  };
-  if (filePath === editor.selectedPath.value && (editor.dirty.value || editor.saving.value)) {
-    draftDownload = target;
-    downloadError.value = "";
-    downloadDraftOpen.value = true;
-  } else {
-    void downloadFile(target);
-  }
-}
-
-async function downloadFile(target) {
-  downloadingPath.value = target.path;
-  try {
-    await downloadAttachment(
-      scopedDevelopmentApiUrl(
-        vibe64SourceEditorDownloadPath(target.sessionsApiPath, target.sessionId, target.path),
-        target.projectSlug
-      ),
-      basename(target.path),
-      "File could not download. Check your connection and access, then retry."
-    );
-  } catch (cause) {
-    downloadFeedback.error(cause, "File could not download.");
-  } finally {
-    downloadingPath.value = "";
-  }
-}
-
-function downloadSavedDraft() {
-  downloadDraftOpen.value = false;
-  void downloadFile(draftDownload);
-}
-
-async function saveAndDownload() {
-  downloadSaving.value = true;
-  await editor.saveNow();
-  downloadSaving.value = false;
-  if (editor.dirty.value || editor.saveError.value) {
-    downloadError.value = editor.saveError.value || "The file still has unsaved edits.";
-    return;
-  }
-  downloadSavedDraft();
 }
 
 watch([() => props.active, () => props.agentActive], ([active, working], [wasActive, wasWorking]) => {
@@ -1022,122 +343,73 @@ watch([() => props.active, () => props.agentActive], ([active, working], [wasAct
     void props.fileBookmarks?.refresh();
   }
 });
-watch(() => props.sessionId, () => {
-  downloadDraftOpen.value = false;
-});
+const {
+  downloadDraftOpen,
+  downloadError,
+  downloadSavedDraft,
+  downloadSaving,
+  downloadingPath,
+  requestDownload,
+  saveAndDownload
+} = useVibe64SourceEditorDownloads({ editor, props });
 watch(() => props.refreshKey, refreshFiles);
-const languageCompartment = new Compartment();
-const lineWrappingCompartment = new Compartment();
-const editorPerformanceSetup = [
-  lineNumbers(),
-  highlightActiveLineGutter(),
-  history(),
-  drawSelection(),
-  dropCursor(),
-  EditorState.allowMultipleSelections.of(true),
-  indentOnInput(),
-  syntaxHighlighting(defaultHighlightStyle, {
-    fallback: true
-  }),
-  bracketMatching(),
-  rectangularSelection(),
-  crosshairCursor(),
-  keymap.of([
-    indentWithTab,
-    ...defaultKeymap,
-    ...historyKeymap,
-    ...searchKeymap
-  ])
-];
-const sourcePathClickExtension = EditorView.domEventHandlers({
-  click(event, view) {
-    if (!sourcePathNavigationGesture(event) || event.button !== 0) {
-      return false;
-    }
-    const sourcePath = sourcePathReferenceAtEvent(view, event);
-    if (!sourcePath) {
-      return false;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    void editor.openReferencedSourcePath({
-      fromPath: editor.selectedPath.value,
-      target: sourcePath.target
-    });
-    return true;
-  },
-  mouseleave(_event, view) {
-    setSourcePathHoverState(view, false);
-    return false;
-  },
-  mousemove(event, view) {
-    setSourcePathHoverState(view, Boolean(
-      sourcePathNavigationGesture(event) &&
-      sourcePathReferenceAtEvent(view, event)
-    ));
-    return false;
-  }
-});
-const expandedDirectoryPaths = ref([]);
 const explanationCollapsed = ref(false);
 const { smAndDown: mobile } = useDisplay();
 const fileListCollapsed = ref(mobile.value);
 
-const newFileDialogOpen = ref(false);
-const sourceEditorElement = ref(null);
-const newFileDirectory = ref("");
-const newFileError = ref("");
-const newFileName = ref("");
-const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
-  sessionId: props.sessionId,
-  sessionsApiPath: props.sessionsApiPath
-}));
-const fastOpenPanelVisible = computed(() => Boolean(editor.fileQuery.value));
-const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || editor.searchResults.value.length > 0);
-const selectedFileName = computed(() => (
-  editor.loadingPath.value || displayedPath.value
-    ? basename(editor.loadingPath.value || displayedPath.value)
-    : "Choose a source file"
-));
-const newFileDirectoryLabel = computed(() => (
-  newFileDirectory.value
-    ? `Create in ${newFileDirectory.value}`
-    : "Create in source root"
-));
-const newFilePath = computed(() => {
-  const name = normalizeNewFileEntryPath(newFileName.value);
-  if (!name) {
-    return "";
-  }
-  return newFileDirectory.value
-    ? `${newFileDirectory.value}/${name}`
-    : name;
+watch(mobile, (compact) => {
+  fileListCollapsed.value = compact;
 });
-const newFileCreateDisabled = computed(() => Boolean(
-  editor.creatingFile.value ||
-  !newFilePath.value
-));
 
-function normalizeNewFileEntryPath(value = "") {
-  const raw = normalizeSourceEditorPath(value).replace(/\/+$/u, "");
-  if (!raw || raw.startsWith("/")) {
-    return "";
+watch(editor.loadingPath, (filePath) => {
+  if (mobile.value && filePath) {
+    collapseFileList();
   }
-  const parts = raw.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
-    return "";
+});
+
+watch(() => props.openRequest, (request = null) => {
+  if (request?.path) {
+    if (request.path === editor.selectedPath.value && request.presentation === "code") showWholeFileCode();
+    if (request.presentation === "interface") filePresentation.value = "interface";
+    editor.openRequest(request);
   }
-  return parts.join("/");
-}
+}, {
+  deep: true,
+  immediate: true
+});
 
-function basename(filePath = "") {
-  const segments = String(filePath || "").split("/");
-  return segments.at(-1) || filePath;
-}
+const {
+  currentEditorSelectionRange,
+  runEditorCommand
+} = useVibe64SourceCodeMirror({
+  active: () => props.active,
+  editor,
+  element: editorElement,
+  filePresentation,
+  sourcePathClickWithoutModifier: () => props.sourcePathClickWithoutModifier,
+  viewRef: editorView
+});
 
-function searchResultTitle(result = {}) {
-  return `${result.path || ""}:${result.line || 1}:${result.column || 1}`;
-}
+watch(() => editor.activeExplanation.value?.id || "", (explanationId = "") => {
+  if (explanationId) {
+    explanationCollapsed.value = false;
+  }
+});
+
+const {
+  closeAllDirectories,
+  expandedDirectoryPaths,
+  handleDirectoryOpenChange,
+  revealCreatedFile
+} = useVibe64SourceTreeExpansion({ editor, props });
+
+onBeforeUnmount(() => {
+  sourceEditorUnmounted = true;
+  if (explanationFocusTimer) {
+    clearTimeout(explanationFocusTimer);
+    explanationFocusTimer = null;
+  }
+});
 
 async function focusAfterLayout(rootElement = null, selector = "") {
   await nextTick();
@@ -1180,389 +452,15 @@ function expandFileList() {
   fileListCollapsed.value = false;
 }
 
-function addExpandedDirectoryPaths(paths = []) {
-  const normalizedPaths = normalizeSourceEditorDirectoryPaths(paths);
-  if (!normalizedPaths.length) {
-    return;
-  }
-  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths([
-    ...expandedDirectoryPaths.value,
-    ...normalizedPaths
-  ]);
-}
-
-function parentDirectoryPathsFor(filePath = "") {
-  const parts = normalizeSourceEditorPath(filePath).split("/").filter(Boolean);
-  const paths = [];
-  for (let index = 1; index < parts.length; index += 1) {
-    paths.push(parts.slice(0, index).join("/"));
-  }
-  return paths;
-}
-
-// "Upload here" opens the folder so the new files show once they arrive.
-function uploadInto(directoryPath = "") {
-  handleDirectoryOpenChange({ open: true, path: directoryPath });
-  emit("upload", { folder: normalizeSourceEditorPath(directoryPath) });
-}
-
-const fileDrag = (event) => props.filesActions && event.dataTransfer?.types.includes("Files");
-
-function dragEnter(event) {
-  if (!fileDrag(event)) return;
-  event.preventDefault();
-  dropDepth.value += 1;
-}
-
-function dragOver(event) {
-  if (!fileDrag(event)) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = "copy";
-}
-
-function dragLeave(event) {
-  if (fileDrag(event)) dropDepth.value = Math.max(0, dropDepth.value - 1);
-}
-
-function dropFiles(event) {
-  if (!fileDrag(event)) return;
-  event.preventDefault();
-  dropDepth.value = 0;
-  try {
-    emit("upload", { folder: uploadFolder.value, files: vibe64DroppedFiles(event.dataTransfer) });
-  } catch (error) {
-    uploadFeedback.error(error);
-  }
-}
-
 function openNewFileDialog(directoryPath = "") {
-  newFileDirectory.value = normalizeSourceEditorPath(directoryPath);
-  newFileName.value = "";
-  newFileError.value = "";
-  newFileDialogOpen.value = true;
+  newFileDialog.value?.open(directoryPath);
 }
 
-function closeNewFileDialog() {
-  if (editor.creatingFile.value) {
-    return;
-  }
-  newFileDialogOpen.value = false;
-  newFileError.value = "";
-}
-
-async function submitNewFile() {
-  const filePath = newFilePath.value;
-  if (!filePath || editor.creatingFile.value) {
-    if (String(newFileName.value || "").trim()) {
-      newFileError.value = "Enter a nested file path without absolute or parent-directory segments.";
-    }
-    return;
-  }
-  const created = await editor.createFile(filePath);
-  if (!created) {
-    newFileError.value = editor.createFileError.value || "Source file could not be created.";
-    return;
-  }
-  addExpandedDirectoryPaths(parentDirectoryPathsFor(filePath));
-  newFileDialogOpen.value = false;
-  newFileError.value = "";
+function newFileCreated(filePath) {
+  revealCreatedFile(filePath);
   if (mobile.value) {
     collapseFileList();
   }
-}
-
-async function copySourcePath(path = "") {
-  const normalizedPath = normalizeSourceEditorPath(path);
-  if (!normalizedPath) {
-    return;
-  }
-  try {
-    await writeClipboardText(normalizedPath);
-  } catch {
-    // Clipboard failures are non-destructive; leave the tree state untouched.
-  }
-}
-
-function askAssistantAboutPath(path = "") {
-  const normalizedPath = normalizeSourceEditorPath(path);
-  if (!normalizedPath || !props.assistantDraftAvailable) {
-    return;
-  }
-  emit("ask-assistant-about-file", normalizedPath);
-}
-
-function sourceEditorTreeStateStorageKey({
-  sessionId = "",
-  sessionsApiPath = ""
-} = {}) {
-  const normalizedSessionId = String(sessionId || "").trim();
-  const normalizedSessionsApiPath = String(sessionsApiPath || "").trim();
-  if (!normalizedSessionId || !normalizedSessionsApiPath) {
-    return "";
-  }
-  return [
-    SOURCE_EDITOR_TREE_STATE_STORAGE_KEY,
-    stableLocalStorageKeyPart(normalizedSessionsApiPath),
-    stableLocalStorageKeyPart(normalizedSessionId)
-  ].join(":");
-}
-
-function languageExtension(filePath = "") {
-  const lowerPath = String(filePath || "").toLowerCase();
-  if (lowerPath.endsWith(".vue")) {
-    return htmlSourceLanguage({
-      matchClosingTags: false
-    });
-  }
-  if (/\.(html|htm|xhtml|svg)$/u.test(lowerPath)) {
-    return htmlSourceLanguage();
-  }
-  if (/\.(js|jsx|mjs|cjs)$/u.test(lowerPath)) {
-    return javascript({
-      jsx: true
-    });
-  }
-  if (/\.(ts|tsx)$/u.test(lowerPath)) {
-    return javascript({
-      jsx: lowerPath.endsWith(".tsx"),
-      typescript: true
-    });
-  }
-  if (lowerPath.endsWith(".json")) {
-    return json();
-  }
-  if (/\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$/u.test(lowerPath)) {
-    return cpp();
-  }
-  if (/\.(sh|bash|zsh|fish)$/u.test(lowerPath)) {
-    return StreamLanguage.define(shell);
-  }
-  if (sourceEditorPathIsMarkdown(lowerPath)) {
-    return markdown();
-  }
-  return [];
-}
-
-function sourceEditorPathIsMarkdown(filePath = "") {
-  const lowerPath = String(filePath || "").toLowerCase();
-  return /\.(md|markdown|todo)$/u.test(lowerPath) || /(^|\/)todo$/u.test(lowerPath);
-}
-
-function sourceEditorLineWrappingExtension(filePath = "") {
-  return sourceEditorPathIsMarkdown(filePath) ? EditorView.lineWrapping : [];
-}
-
-function htmlSourceLanguage(options = {}) {
-  return html({
-    selfClosingTags: true,
-    ...options,
-    nestedLanguages: [
-      {
-        attrs: (attrs = {}) => ["ts", "typescript"].includes(String(attrs.lang || "").toLowerCase()),
-        parser: typescriptLanguage.parser,
-        tag: "script"
-      },
-      {
-        attrs: (attrs = {}) => String(attrs.lang || "").toLowerCase() === "jsx",
-        parser: jsxLanguage.parser,
-        tag: "script"
-      },
-      {
-        attrs: (attrs = {}) => String(attrs.lang || "").toLowerCase() === "tsx",
-        parser: tsxLanguage.parser,
-        tag: "script"
-      }
-    ]
-  });
-}
-
-function sourcePathModifierPressed(event = {}) {
-  return event.ctrlKey || event.metaKey;
-}
-
-function sourcePathNavigationGesture(event = {}) {
-  return props.sourcePathClickWithoutModifier || sourcePathModifierPressed(event);
-}
-
-function setSourcePathHoverState(view, active = false) {
-  view.dom.classList.toggle("vibe64-source-editor__codemirror--source-link-hover", active);
-}
-
-function sourcePathReferenceAtEvent(view, event = {}) {
-  const position = view.posAtCoords({
-    x: event.clientX,
-    y: event.clientY
-  });
-  if (position == null) {
-    return null;
-  }
-  const line = view.state.doc.lineAt(position);
-  return sourcePathReferenceAtLineColumn(line.text, position - line.from);
-}
-
-function createEditor() {
-  if (!editorElement.value || editorView) {
-    return;
-  }
-  editorView = new EditorView({
-    parent: editorElement.value,
-    state: EditorState.create({
-      doc: editor.text.value,
-      extensions: [
-        editorPerformanceSetup,
-        sourcePathClickExtension,
-        languageCompartment.of(languageExtension(editor.selectedPath.value)),
-        lineWrappingCompartment.of(sourceEditorLineWrappingExtension(editor.selectedPath.value)),
-        EditorView.updateListener.of((update) => {
-          if (!update.docChanged || resettingEditor) {
-            return;
-          }
-          editor.updateText();
-        }),
-        EditorView.theme({
-          "&": {
-            backgroundColor: "rgb(var(--v-theme-surface))",
-            color: "rgb(var(--v-theme-on-surface))",
-            fontSize: "13px",
-            height: "100%"
-          },
-          ".cm-content": {
-            caretColor: "rgb(var(--v-theme-primary))",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace"
-          },
-          ".cm-focused": {
-            outline: "none"
-          },
-          // The gutter stays in place while a long line scrolls sideways (a
-          // phone editing one line), so its tint sits on an opaque surface:
-          // a translucent gutter let the scrolled code show through the numbers.
-          ".cm-gutters": {
-            backgroundColor: "rgb(var(--v-theme-surface))",
-            backgroundImage: "linear-gradient(rgba(var(--v-theme-surface-variant), 0.38), rgba(var(--v-theme-surface-variant), 0.38))",
-            borderRight: "1px solid rgba(var(--v-border-color), 0.28)",
-            color: "rgba(var(--v-theme-on-surface), 0.56)"
-          },
-          ".cm-scroller": {
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace"
-          },
-          ".cm-selectionBackground": {
-            backgroundColor: "rgba(var(--v-theme-primary), 0.22)"
-          }
-        })
-      ]
-    })
-  });
-  renderedEditorPath = editor.selectedPath.value;
-}
-
-function replaceEditorDocument() {
-  if (!editorView) {
-    return;
-  }
-  const selectedPath = editor.selectedPath.value;
-  const sameFile = renderedEditorPath === selectedPath;
-  const currentText = editorView.state.doc.toString();
-  const changes = editorView.state.changes(sameFile
-    ? sourceEditorDocumentChanges(currentText, editor.text.value)
-    : [{
-        from: 0,
-        insert: editor.text.value,
-        to: currentText.length
-      }]);
-  const effects = [
-    languageCompartment.reconfigure(languageExtension(selectedPath)),
-    lineWrappingCompartment.reconfigure(sourceEditorLineWrappingExtension(selectedPath))
-  ];
-  const cursorRequest = editor.cursorRequest.value;
-  const explicitCursorRequest = (
-    cursorRequest?.path === selectedPath &&
-    Number(cursorRequest.line || 0) > 0
-  );
-  if (sameFile && !explicitCursorRequest) {
-    const scrollSnapshot = editorView.scrollSnapshot().map(changes);
-    if (scrollSnapshot) {
-      effects.unshift(scrollSnapshot);
-    }
-  }
-
-  resettingEditor = true;
-  try {
-    editorView.dispatch({
-      changes,
-      effects
-    });
-  } finally {
-    resettingEditor = false;
-  }
-  renderedEditorPath = selectedPath;
-  applyCursorRequest();
-}
-
-function applyCursorRequest() {
-  if (!editorView) {
-    return;
-  }
-  const request = editor.cursorRequest.value;
-  const line = Number(request?.line || 0);
-  if (!line) {
-    return;
-  }
-  const boundedLine = Math.max(1, Math.min(line, editorView.state.doc.lines));
-  const lineInfo = editorView.state.doc.line(boundedLine);
-  const column = Math.max(0, Number(request?.column || 1) - 1);
-  const anchor = Math.min(lineInfo.to, lineInfo.from + column);
-  editorView.dispatch({
-    selection: {
-      anchor
-    },
-    scrollIntoView: true
-  });
-  if (filePresentation.value === "code") editorView.focus();
-}
-
-function runEditorCommand(command = "") {
-  if (!editorView) {
-    return;
-  }
-  if (command === "undo") {
-    undo(editorView);
-  } else if (command === "redo") {
-    redo(editorView);
-  }
-}
-
-function currentEditorSelectionRange() {
-  if (!editorView) {
-    return {
-      endColumn: 1,
-      endLine: 1,
-      startColumn: 1,
-      startLine: 1
-    };
-  }
-  const selection = editorView.state.selection.main;
-  const from = Math.min(selection.from, selection.to);
-  const to = Math.max(selection.from, selection.to);
-  const fromLine = editorView.state.doc.lineAt(from);
-  const toLine = editorView.state.doc.lineAt(to);
-  if (selection.empty) {
-    const firstLine = editorView.state.doc.line(1);
-    const lastLine = editorView.state.doc.line(editorView.state.doc.lines);
-    return {
-      endColumn: Math.max(1, lastLine.length + 1),
-      endLine: lastLine.number,
-      scope: "file",
-      startColumn: 1,
-      startLine: firstLine.number
-    };
-  }
-  return {
-    endColumn: Math.max(1, to - toLine.from + 1),
-    endLine: toLine.number,
-    scope: "selection",
-    startColumn: Math.max(1, from - fromLine.from + 1),
-    startLine: fromLine.number
-  };
 }
 
 function explainCurrentSelection() {
@@ -1609,126 +507,9 @@ function openExplanationSourceLink(sourceLink = {}) {
     line: Number(sourceLink.line || 0) || 0
   });
 }
-
-function handleDirectoryOpenChange({
-  open = false,
-  path = ""
-} = {}) {
-  const normalizedPath = normalizeSourceEditorPath(path);
-  if (!normalizedPath) {
-    return;
-  }
-  const nextPaths = new Set(expandedDirectoryPaths.value);
-  if (open) {
-    nextPaths.add(normalizedPath);
-    editor.loadDirectory(normalizedPath);
-  } else {
-    nextPaths.delete(normalizedPath);
-  }
-  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths([...nextPaths]);
-}
-
-function closeAllDirectories() {
-  expandedDirectoryPaths.value = [];
-}
-
-watch(mobile, (compact) => {
-  fileListCollapsed.value = compact;
-});
-
-watch(editor.loadingPath, (filePath) => {
-  if (mobile.value && filePath) {
-    collapseFileList();
-  }
-});
-
-watch(() => props.openRequest, (request = null) => {
-  if (request?.path) {
-    if (request.path === editor.selectedPath.value && request.presentation === "code") showWholeFileCode();
-    if (request.presentation === "interface") filePresentation.value = "interface";
-    editor.openRequest(request);
-  }
-}, {
-  deep: true,
-  immediate: true
-});
-
-watch(() => props.active, async (active) => {
-  if (!active) {
-    return;
-  }
-  await nextTick();
-  editorView?.requestMeasure?.();
-});
-
-watch(editor.loadedVersion, () => {
-  replaceEditorDocument();
-});
-
-watch(() => editor.activeExplanation.value?.id || "", (explanationId = "") => {
-  if (explanationId) {
-    explanationCollapsed.value = false;
-  }
-});
-
-watch(editor.revealedDirectoryPaths, (paths) => {
-  addExpandedDirectoryPaths(paths);
-});
-
-watch(treeStateStorageKey, (storageKey = "") => {
-  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths(
-    readLocalStorageJson(storageKey, [])
-  );
-}, {
-  immediate: true
-});
-
-watch(expandedDirectoryPaths, (paths) => {
-  if (treeStateStorageKey.value) {
-    writeLocalStorageJson(treeStateStorageKey.value, normalizeSourceEditorDirectoryPaths(paths));
-  }
-});
-
-onMounted(() => {
-  createEditor();
-});
-
-onBeforeUnmount(() => {
-  sourceEditorUnmounted = true;
-  if (explanationFocusTimer) {
-    clearTimeout(explanationFocusTimer);
-    explanationFocusTimer = null;
-  }
-  editorView?.destroy();
-  editorView = null;
-  renderedEditorPath = "";
-});
 </script>
 
 <style scoped>
-.vibe64-source-editor__starred {
-  margin-bottom: 0.75rem;
-}
-
-.vibe64-source-editor__starred .starred-files-list {
-  max-height: 14rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.vibe64-source-editor__starred summary {
-  cursor: pointer;
-  padding: 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.vibe64-source-editor__starred summary span {
-  margin-left: 0.25rem;
-  font-weight: 400;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-}
-
 .vibe64-source-editor__download-status {
   position: absolute;
   width: 1px;
@@ -1745,160 +526,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.vibe64-source-editor__header {
-  align-items: center;
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.3);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.48rem;
-  justify-content: space-between;
-  min-width: 0;
-  padding: 0.24rem 0.52rem;
-}
-
-.vibe64-source-editor__title {
-  align-items: center;
-  display: flex;
-  gap: 0.42rem;
-  min-width: 0;
-}
-
-.vibe64-source-editor__title h2 {
-  font-size: 0.9rem;
-  font-weight: 760;
-  letter-spacing: 0;
-  line-height: 1.15;
-  margin: 0;
-  max-width: min(52vw, 46rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__actions {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.22rem;
-}
-
-.vibe64-source-editor__actions :deep(.v-btn) {
-  block-size: 1.9rem;
-  min-block-size: 1.9rem;
-  min-inline-size: 1.9rem;
-}
-
-.vibe64-source-editor__status {
-  color: rgba(var(--v-theme-on-surface), 0.64);
-  font-size: 0.75rem;
-  margin-right: 0.35rem;
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__status--error {
-  color: rgb(var(--v-theme-error));
-}
-
-.vibe64-source-editor__explain-button {
-  font-weight: 680;
-  min-inline-size: 6.25rem;
-  text-transform: none;
-}
-
-.vibe64-source-editor__tools {
-  align-items: start;
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.24);
-  display: grid;
-  gap: 0.38rem;
-  grid-template-columns: minmax(14rem, 22rem) minmax(14rem, 1fr);
-  min-width: 0;
-  padding: 0.22rem 0.48rem;
-}
-
-.vibe64-source-editor__tools :deep(.v-field) {
-  min-block-size: 2.35rem;
-}
-
-.vibe64-source-editor__tools :deep(.v-field__input) {
-  min-block-size: 2.35rem;
-  padding-block: 0.28rem;
-}
-
-.vibe64-source-editor__tools :deep(.v-field__prepend-inner),
-.vibe64-source-editor__tools :deep(.v-field__clearable) {
-  padding-top: 0.4rem;
-}
-
-.vibe64-source-editor__tool {
-  min-width: 0;
-  position: relative;
-}
-
-.vibe64-source-editor__matches {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.35);
-  border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  display: grid;
-  gap: 0.08rem;
-  inset-inline: 0;
-  margin-top: 0.28rem;
-  max-block-size: min(18rem, 52vh);
-  overflow: auto;
-  padding: 0.28rem;
-  position: absolute;
-  z-index: 8;
-}
-
-.vibe64-source-editor__match {
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  color: rgb(var(--v-theme-on-surface));
-  cursor: pointer;
-  display: grid;
-  gap: 0.08rem;
-  min-width: 0;
-  padding: 0.42rem 0.5rem;
-  text-align: left;
-}
-
-.vibe64-source-editor__match:hover {
-  background: rgba(var(--v-theme-primary), 0.08);
-}
-
-.vibe64-source-editor__match-name,
-.vibe64-source-editor__match-path {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__match-name {
-  font-size: 0.84rem;
-  font-weight: 720;
-}
-
-.vibe64-source-editor__match-path {
-  color: rgba(var(--v-theme-on-surface), 0.58);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.72rem;
-}
-
-.vibe64-source-editor__match-note {
-  color: rgba(var(--v-theme-on-surface), 0.64);
-  font-size: 0.78rem;
-  padding: 0.48rem 0.55rem;
-}
-
-.vibe64-source-editor__match-note--error {
-  color: rgb(var(--v-theme-error));
-}
-
 .vibe64-source-editor__body {
   block-size: 100%;
   contain: layout style;
@@ -1911,182 +538,6 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__body--file-list-collapsed {
   grid-template-columns: 2.65rem minmax(0, 1fr);
-}
-
-.vibe64-source-editor__sidebar {
-  border-right: 1px solid rgba(var(--v-border-color), 0.26);
-  contain: layout style paint;
-  min-block-size: 0;
-  overflow: auto;
-  padding: 0 0.64rem 0.64rem;
-}
-
-.vibe64-source-editor__sidebar--collapsed {
-  overflow: hidden;
-  padding: 0;
-}
-
-.vibe64-source-editor__side-rail {
-  align-items: center;
-  appearance: none;
-  background: rgba(var(--v-theme-primary), 0.08);
-  border: 0;
-  color: rgba(var(--v-theme-on-surface), 0.74);
-  cursor: pointer;
-  display: grid;
-  gap: 0.34rem;
-  grid-template-rows: auto auto;
-  height: 100%;
-  justify-items: center;
-  min-height: 0;
-  min-width: 0;
-  padding: 0.56rem 0.18rem;
-  width: 100%;
-}
-
-.vibe64-source-editor__side-rail:hover,
-.vibe64-source-editor__side-rail:focus-visible {
-  background: rgba(var(--v-theme-primary), 0.14);
-  outline: 0;
-}
-
-.vibe64-source-editor__side-rail span {
-  font-size: 0.76rem;
-  font-weight: 740;
-  letter-spacing: 0;
-  line-height: 1;
-  transform: rotate(180deg);
-  writing-mode: vertical-rl;
-}
-
-.vibe64-source-editor__side-rail--right {
-  background: rgba(var(--v-theme-primary), 0.07);
-}
-
-.vibe64-source-editor__tree-toolbar {
-  align-items: center;
-  background: rgb(var(--v-theme-surface));
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
-  box-sizing: border-box;
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  display: flex;
-  font-size: 0.72rem;
-  font-weight: 720;
-  justify-content: space-between;
-  letter-spacing: 0;
-  margin: 0 -0.64rem 0.44rem;
-  min-width: 0;
-  padding: 0.48rem 0.72rem 0.34rem;
-  position: sticky;
-  top: 0;
-  z-index: 4;
-}
-
-.vibe64-source-editor__sidebar--drop {
-  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 8%, rgb(var(--v-theme-surface)));
-  outline: 2px dashed rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
-
-.vibe64-source-editor__drop-label {
-  color: rgb(var(--v-theme-primary));
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__tree-actions {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.08rem;
-}
-
-.vibe64-source-editor__collapse-files-button {
-  min-inline-size: 2.2rem;
-}
-
-.vibe64-source-editor__search-results {
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.24);
-  display: grid;
-  gap: 0.16rem;
-  margin: -0.1rem -0.1rem 0.58rem;
-  max-block-size: min(21rem, 45vh);
-  overflow: auto;
-  padding: 0 0 0.58rem;
-}
-
-.vibe64-source-editor__search-heading {
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.66);
-  display: flex;
-  font-size: 0.72rem;
-  font-weight: 760;
-  justify-content: space-between;
-  letter-spacing: 0;
-  padding: 0 0.16rem 0.22rem;
-  text-transform: uppercase;
-}
-
-.vibe64-source-editor__search-heading small {
-  color: rgba(var(--v-theme-on-surface), 0.52);
-  font-size: 0.7rem;
-}
-
-.vibe64-source-editor__search-result {
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-  color: rgb(var(--v-theme-on-surface));
-  cursor: pointer;
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-  padding: 0.46rem 0.5rem;
-  text-align: left;
-}
-
-.vibe64-source-editor__search-result:hover {
-  background: rgba(var(--v-theme-primary), 0.08);
-}
-
-.vibe64-source-editor__new-file-dialog {
-  display: grid;
-  gap: 0.76rem;
-}
-
-.vibe64-source-editor__new-file-dialog p {
-  color: rgba(var(--v-theme-on-surface), 0.66);
-  font-size: 0.84rem;
-  line-height: 1.35;
-  margin: 0;
-}
-
-.vibe64-source-editor__search-path,
-.vibe64-source-editor__search-location,
-.vibe64-source-editor__search-preview {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__search-path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.75rem;
-  font-weight: 720;
-}
-
-.vibe64-source-editor__search-location {
-  color: rgba(var(--v-theme-on-surface), 0.54);
-  font-size: 0.7rem;
-}
-
-.vibe64-source-editor__search-preview {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.72rem;
 }
 
 .vibe64-source-editor__main {
@@ -2188,7 +639,6 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-.vibe64-source-editor__notice,
 .vibe64-source-editor__empty,
 .vibe64-source-editor__banner {
   color: rgba(var(--v-theme-on-surface), 0.68);
@@ -2196,7 +646,6 @@ onBeforeUnmount(() => {
   padding: 0.72rem;
 }
 
-.vibe64-source-editor__notice--error,
 .vibe64-source-editor__banner--error {
   color: rgb(var(--v-theme-error));
 }
@@ -2206,10 +655,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .vibe64-source-editor__tools {
-    grid-template-columns: 1fr;
-  }
-
   .vibe64-source-editor__body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(9rem, 14rem) minmax(0, 1fr);
@@ -2218,23 +663,6 @@ onBeforeUnmount(() => {
   .vibe64-source-editor__body--file-list-collapsed {
     grid-template-columns: 1fr;
     grid-template-rows: 2.65rem minmax(0, 1fr);
-  }
-
-  .vibe64-source-editor__sidebar {
-    border-bottom: 1px solid rgba(var(--v-border-color), 0.26);
-    border-right: 0;
-  }
-
-  .vibe64-source-editor__side-rail {
-    grid-template-columns: auto auto;
-    grid-template-rows: 1fr;
-    justify-content: start;
-    padding: 0.18rem 0.56rem;
-  }
-
-  .vibe64-source-editor__side-rail span {
-    transform: none;
-    writing-mode: horizontal-tb;
   }
 
   .vibe64-source-editor__workspace--with-explanation {
@@ -2247,33 +675,8 @@ onBeforeUnmount(() => {
   }
 }
 
-.vibe64-source-editor--mobile .vibe64-source-editor__header {
-  flex-wrap: nowrap;
-  gap: 0;
-  padding: 0 0.25rem;
-}
-
-.vibe64-source-editor--mobile .vibe64-source-editor__title {
-  flex: 1;
-  overflow: hidden;
-}
-
-.vibe64-source-editor--mobile .vibe64-source-editor__title h2 {
-  max-width: 100%;
-  font-weight: 500;
-}
-
-.vibe64-source-editor__mobile-actions {
-  display: flex;
-  flex: 0 0 auto;
-}
-
 .vibe64-source-editor--mobile-file-open {
   grid-template-rows: auto minmax(0, 1fr);
-}
-
-.vibe64-source-editor--mobile .vibe64-source-editor__tools {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .vibe64-source-editor--mobile .vibe64-source-editor__body {

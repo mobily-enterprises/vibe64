@@ -224,7 +224,7 @@ describe("source explanation Material interaction", () => {
 
   it("uses a stable pending action instead of a loading spinner", () => {
     const editor = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue",
+      "../../src/components/studio/vibe64-session/Vibe64SourceEditorHeader.vue",
       import.meta.url
     ), "utf8");
     const explainButton = editor.match(
