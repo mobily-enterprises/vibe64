@@ -6,7 +6,7 @@ import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import {
   LOCAL_PLAYWRIGHT_MESSAGE,
@@ -470,14 +470,18 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
     const current = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
     if (current.error || current.descriptor.token !== descriptor.token ||
         current.descriptor.controlGenerationId !== descriptor.controlGenerationId) {
-      throw Object.assign(new Error("The original browser-test command generation has ended. Tests were not run."), {
-        code: "vibe64_test_approval_interrupted"
-      });
+      throw vibe64Error(
+        "The original browser-test command generation has ended. Tests were not run.",
+        "vibe64_test_approval_interrupted"
+      );
     }
     if (runner === "npm") {
       const latest = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8"));
       if (latest.scripts?.[args[1]] !== scriptText) {
-        throw new Error("The test script changed while awaiting approval. Run the new command explicitly.");
+        throw vibe64Error(
+          "The test script changed while awaiting approval. Run the new command explicitly.",
+          "vibe64_test_script_changed"
+        );
       }
     }
     return current;

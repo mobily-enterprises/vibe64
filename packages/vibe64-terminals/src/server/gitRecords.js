@@ -1,5 +1,6 @@
 import path from "node:path";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 
 const GIT_HISTORY_RECORD_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%s";
 const DEFAULT_CHANGE_FILE_LIMIT = 200;
@@ -140,10 +141,7 @@ function safeChangePath(value = "") {
     filePath === ".." ||
     filePath.startsWith("../")
   ) {
-    throw Object.assign(new Error("Choose a changed project file."), {
-      code: "vibe64_session_change_path_invalid",
-      details: {}
-    });
+    throw vibe64Error("Choose a changed project file.", "vibe64_session_change_path_invalid");
   }
   return filePath;
 }
