@@ -95,8 +95,8 @@ function targetRuntimeIdentity(targetRoot = "") {
       : projectRuntimeIdentity(contextSlug);
   }
 
-  const { learningSpaceRoot, projectsRoot } = getStudioProjectContext();
-  const catalogSlug = catalogProjectSlugFromTargetRoot(resolvedTargetRoot, { learningSpaceRoot, projectsRoot });
+  const { learningSpaceRoot, slugProjectsRoot } = getStudioProjectContext();
+  const catalogSlug = catalogProjectSlugFromTargetRoot(resolvedTargetRoot, { learningSpaceRoot, projectsRoot: slugProjectsRoot });
   if (catalogSlug) {
     return projectRuntimeIdentity(catalogSlug);
   }

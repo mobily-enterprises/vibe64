@@ -109,14 +109,15 @@ function createStudioProjectContext({
     systemRoot
   });
 
+  // An editor without a catalogue still resolves a slug's folder, and a
+  // folder's runtime identity, below the projects root its environment names.
+  const slugProjectsRoot = projectsRoot || resolveStudioProjectsRoot({ env, home });
   const paths = createProjectPaths({
     managedSourceRoot,
     practiceOwner,
     projectCatalogEnabled,
     projectsRoot,
-    // An editor without a catalogue still resolves a slug's folder below the
-    // projects root its environment names.
-    slugProjectsRoot: projectsRoot || resolveStudioProjectsRoot({ env, home }),
+    slugProjectsRoot,
     systemRoot
   });
 
@@ -279,6 +280,9 @@ function createStudioProjectContext({
     discardWorkspaceProjectRecord: workspaceRecords.discardWorkspaceProjectRecord,
     get projectsRoot() {
       return projectsRoot;
+    },
+    get slugProjectsRoot() {
+      return slugProjectsRoot;
     },
     get projectCatalogEnabled() {
       return projectCatalogEnabled;

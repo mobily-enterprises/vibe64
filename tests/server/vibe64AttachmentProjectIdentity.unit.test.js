@@ -22,6 +22,9 @@ import {
   localProjectKeyFromTargetRoot
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  VIBE64_PROJECTS_ROOT_ENV
+} from "../../packages/vibe64-core/src/server/studioRoots.js";
+import {
   cleanupCodexAttachments,
   renewCodexAttachments,
   storeCodexAttachment
@@ -143,6 +146,20 @@ test("catalogue runtime identity remains stable across isolated session checkout
     assert.deepEqual(identities, [`project:${slug}`, `project:${slug}`]);
     assert.equal(targetRuntimeIdentity(firstExecutionRoot), `project:${slug}`);
     assert.equal(targetRuntimeIdentity(secondExecutionRoot), `project:${slug}`);
+  });
+});
+
+test("a local editor without a catalogue keeps the project identity of a folder under its environment's projects root", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "env-projects");
+    const context = configureStudioProjectContext({ env: { [VIBE64_PROJECTS_ROOT_ENV]: projectsRoot },
+      explicitSystemRoot: path.join(root, "system"), home: root, runtimeProfile: { mode: "local" } });
+    assert.equal(context.projectCatalogEnabled, false);
+    assert.equal(context.projectsRoot, "");
+    const executionRoot = path.join(projectsRoot, "notes", "sessions", "active", SESSION_ID, "source");
+    assert.equal(targetRuntimeIdentity(path.join(projectsRoot, "notes")), "project:notes");
+    assert.equal(targetRuntimeIdentity(executionRoot), "project:notes");
+    assert.match(targetRuntimeIdentity(path.join(root, "elsewhere", "notes")), /^local-project:notes-[a-f0-9]{12}$/u);
   });
 });
 
