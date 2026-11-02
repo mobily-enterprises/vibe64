@@ -37,22 +37,16 @@ function connectedPackageTypeUsesScript(type) {
   return type === CONNECTED_CUSTOM_PACKAGE_TYPE;
 }
 
-function connectedPackageTypeLabel(type) {
-  return CONNECTED_PACKAGE_TYPES.find(entry => entry.value === type)?.label || String(type || "");
-}
-
 function connectedPackageTypeListText(conjunction = "or") {
   const values = CONNECTED_PACKAGE_TYPE_VALUES;
   return `${values.slice(0, -1).join(", ")} ${conjunction} ${values.at(-1)}`;
 }
 
 export {
-  CONNECTED_CUSTOM_PACKAGE_TYPE,
   CONNECTED_CUSTOM_RUNNER_CONTRACT,
   CONNECTED_PACKAGE_TYPES,
   CONNECTED_PACKAGE_TYPE_VALUES,
   CONNECTED_SOURCES_CONTRACT,
-  connectedPackageTypeLabel,
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,
   isConnectedPackageType

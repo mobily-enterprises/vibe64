@@ -44,7 +44,7 @@ function safeConnectionUrl(connectionUrl = "", engine = "") {
   return databaseDialect(engine).sanitizeConnectionUrl(connectionUrl);
 }
 
-function structuredConnection(endpoint = {}, dialect = {}) {
+function structuredConnection(endpoint, dialect) {
   const host = toText(endpoint.host);
   const database = toText(endpoint.database);
   const user = toText(endpoint.username);
@@ -155,7 +155,6 @@ async function withSessionKnex(endpoint, operation) {
 }
 
 export {
-  createSessionKnex,
   resolveDatabaseConnection,
   withSessionKnex
 };

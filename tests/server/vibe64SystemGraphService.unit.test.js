@@ -18,9 +18,11 @@ import {
   readGenesisCity
 } from "../../packages/vibe64-system-graph/src/server/genesisCities.js";
 import {
-  ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES,
+  __testables,
   createService
 } from "../../packages/vibe64-system-graph/src/server/service.js";
+
+const { ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES } = __testables;
 
 function machineCityFixture() {
   return {

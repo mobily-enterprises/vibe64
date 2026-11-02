@@ -1,4 +1,5 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -40,7 +41,8 @@ function registerProjectWatch({ actions, realtime }) {
       for (const detach of binding?.holds || []) detach();
     }
     async function watch(input, acknowledge) {
-      const reply = typeof acknowledge === "function" ? acknowledge : () => {};
+      // readable-check: allow method-probe - input validation: a browser may emit a watch without an acknowledgement callback
+      const reply = typeof acknowledge === "function" ? acknowledge : doNothing;
       if (closed) return;
       const watchId = typeof input?.watchId === "string" ? input.watchId : "";
       if (!watchId || watchId.length > 200) {

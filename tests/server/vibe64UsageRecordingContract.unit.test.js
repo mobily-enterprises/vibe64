@@ -13,7 +13,6 @@ import {
   usageRecordingsPath
 } from "@local/vibe64-usage-recording/server/recordingFiles";
 import {
-  USAGE_TRACERS,
   recordingUnavailableReason,
   usageRecordingEnvironment,
   usageTracersForRuntimes
@@ -89,8 +88,9 @@ test("recording directories sit beside the session and accept only recording ids
 test("each runtime tracer follows the tracer interface", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "vibe64-usage-tracers-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  assert.deepEqual(USAGE_TRACERS.map((tracer) => tracer.runtime), USAGE_TRACER_RUNTIMES);
-  for (const tracer of USAGE_TRACERS) {
+  const tracers = usageTracersForRuntimes(USAGE_TRACER_RUNTIMES);
+  assert.deepEqual(tracers.map((tracer) => tracer.runtime), USAGE_TRACER_RUNTIMES);
+  for (const tracer of tracers) {
     assert.equal(typeof tracer.label, "string");
     for (const targetKind of ["web", "terminal"]) {
       const result = await tracer.prepare({ recordingDirectory: directory, sourceRoot: directory, recordingId: "rec_abcdefghijklmnopqrst", targetKind });

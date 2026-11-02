@@ -639,6 +639,7 @@ function createService({
     return { functions: page.items, total: functions.length, truncated: page.more };
   }
 
+  // readable-check: allow dependency-default - data: an interaction the page could not tie to a component file records none
   async function recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null }) {
     const context = await sessionContext(sessionId);
     const { entry } = await recordingFor(context, recordingId);

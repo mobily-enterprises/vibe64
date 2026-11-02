@@ -11,4 +11,4 @@ function isVibe64AvatarId(value) {
   return VIBE64_AVATAR_IDS.includes(value);
 }
 
-export { VIBE64_AVATAR_CHOICES, VIBE64_AVATAR_IDS, VIBE64_DEFAULT_AVATARS, isVibe64AvatarId };
+export { VIBE64_AVATAR_CHOICES, VIBE64_DEFAULT_AVATARS, isVibe64AvatarId };

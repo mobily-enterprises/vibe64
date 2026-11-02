@@ -286,11 +286,8 @@ function createSessionPresenceService({
 const __testables = Object.freeze({ assertPresenceInput, SESSION_PRESENCE_IDLE_MS });
 
 export {
-  SESSION_PRESENCE_MAX_ENTRIES,
-  VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   createSessionPresencePublisher,
   createSessionPresenceService,
   presenceActor,
-  presencePayload,
   __testables
 };

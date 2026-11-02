@@ -602,7 +602,9 @@ function createService({
   });
 }
 
+const __testables = Object.freeze({ ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES });
+
 export {
-  ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES,
-  createService
+  createService,
+  __testables
 };

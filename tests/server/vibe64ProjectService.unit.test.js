@@ -1744,6 +1744,7 @@ test("current-app inspection resolves Env without materializing session files", 
     });
     const inspected = [];
     const currentApp = createCurrentAppService({
+      env: process.env,
       inspectOutputs(input) {
         assert.equal(input.environment.CURRENT_APP_VALUE, "active-value");
         inspected.push(input.projectRoot);

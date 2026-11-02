@@ -27,7 +27,7 @@ import { createSessionActions } from "../../packages/vibe64-sessions/src/server/
 import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { Vibe64ColleagueFeature, Vibe64ColleagueFocusFeature } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js";
-import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
+import { createColleagueBrowserFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import { createControlledColleagueNativeCommands } from "../fixtures/colleagueNativeCommands.js";
@@ -5477,7 +5477,7 @@ test("Colleague socket focus preserves the original action authorization and inp
   t.after(() => release?.());
   const f = await fixture(t, [], { watching: true });
   let connect;
-  registerColleagueFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  createColleagueBrowserFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();
   socket.connected = true;
   release = connect({ socket, readRequest: async () => ({ ...f.context.requestMeta.request }) });
@@ -5494,7 +5494,7 @@ test("Colleague socket focus preserves the original action authorization and inp
 test("Colleague socket focus cannot return after disconnect during authorization", async t => {
   const f = await fixture(t, [], { watching: true });
   let connect;
-  registerColleagueFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  createColleagueBrowserFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();
   socket.connected = true;
   const gate = Promise.withResolvers(), entered = Promise.withResolvers();

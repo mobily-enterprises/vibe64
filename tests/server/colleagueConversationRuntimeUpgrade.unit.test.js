@@ -217,7 +217,7 @@ async function nativeContinuityFixture(t, { schema = 3, longHome = false } = {})
 
 test("native continuity preflight creates no installation or backup and accepts earlier pending product upgrades", async t => {
   const empty = await fixture(t);
-  await upgradeColleagueNativeContinuity({ ...empty, backupRoot: path.join(empty.systemRoot, "upgrades", "backups", "native"), apply: false, report() {} });
+  await upgradeColleagueNativeContinuity({ ...empty, backupRoot: path.join(empty.systemRoot, "upgrades", "backups", "native"), env: process.env, apply: false, report() {} });
   await assert.rejects(stat(empty.systemRoot), { code: "ENOENT" });
   for (const schema of [1, 2, 3]) {
     const f = await nativeContinuityFixture(t, { schema });
@@ -1162,7 +1162,7 @@ test("completed retired marker repair rejects a new eligible owner after manifes
 test("completed marker repair leaves the unchanged native continuity proof mandatory", async t => {
   const f = await retiredOperationFixture(t);
   const runContinuity = () => upgradeColleagueNativeContinuity({ systemRoot: f.systemRoot,
-    backupRoot: path.join(f.systemRoot, "upgrades", "backups", "native-continuity"), apply: false, report() {} });
+    backupRoot: path.join(f.systemRoot, "upgrades", "backups", "native-continuity"), env: process.env, apply: false, report() {} });
   await assert.rejects(runContinuity(), /unfinished\/unsupported state/);
   await f.run(true);
   // The toy fixture has no real native UUID/history: removing the completed

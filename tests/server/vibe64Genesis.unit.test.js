@@ -765,6 +765,7 @@ test("a blank initialized project stays in Genesis onboarding before ordinary wo
     await initializeGenesisProject({ projectRoot });
 
     const rendered = await renderGenesisPrompt({
+      environment: process.env,
       action: {
         promptId: "conversation"
       },
@@ -813,6 +814,7 @@ test("Vibe64 uses the current bounded opening and component-scoped Stack guidanc
     await writeFile(path.join(projectRoot, "app.js"), "export const app = true;\n", "utf8");
 
     const opening = await renderGenesisPrompt({
+      environment: process.env,
       action: {
         genesisTask: "start"
       },
@@ -833,6 +835,7 @@ test("Vibe64 uses the current bounded opening and component-scoped Stack guidanc
     assert.match(opening.prompt, /https:\/\/vuejs\.org\//u);
 
     const rendered = await renderGenesisPrompt({
+      environment: process.env,
       input: {
         conversationRequest: "Continue the existing work."
       },
@@ -846,6 +849,7 @@ test("Vibe64 uses the current bounded opening and component-scoped Stack guidanc
 
     const commit = "a".repeat(40);
     const deslop = await renderGenesisPrompt({
+      environment: process.env,
       action: {
         genesisTask: "deslop"
       },
@@ -864,6 +868,7 @@ test("Vibe64 uses the current bounded opening and component-scoped Stack guidanc
     assert.match(deslop.prompt, /For every affected JSKIT screen/u);
 
     const ownChanges = await renderGenesisPrompt({
+      environment: process.env,
       action: { genesisTask: "deslop" },
       input: { request: "Deslop" },
       projectRoot
@@ -879,6 +884,7 @@ test("Genesis owns the opening conversation for an existing uninitialized projec
     await writeFile(path.join(projectRoot, "app.js"), "export const answer = 42;\n", "utf8");
 
     const rendered = await renderGenesisPrompt({
+      environment: process.env,
       input: {
         conversationRequest: "Change the answer."
       },

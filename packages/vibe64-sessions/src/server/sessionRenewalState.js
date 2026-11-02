@@ -606,9 +606,7 @@ function publicSessionRenewalState(value = null) {
 const __testables = Object.freeze({ normalizeSessionRenewalState, renewalHandoverHash });
 
 export {
-  SESSION_RENEWAL_KIND,
   SESSION_RENEWAL_MAINTENANCE_STEP,
-  SESSION_RENEWAL_SCHEMA_VERSION,
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
   assertSessionRenewalDraftVersion,
@@ -619,7 +617,6 @@ export {
   publicSessionRenewalState,
   readSessionRenewalState,
   renewalHandoverText,
-  renewalOperationKey,
   writeSessionRenewalState,
   __testables
 };
