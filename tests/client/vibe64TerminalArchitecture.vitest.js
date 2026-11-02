@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const sourceRoot = path.resolve("src");
 const packageRoot = path.resolve("packages");
-const terminalRuntimePath = path.resolve("src/composables/useVibe64Terminal.js");
+const terminalDisplayPath = path.resolve("src/composables/useVibe64TerminalDisplay.js");
 const terminalElementPath = path.resolve("src/components/studio/Vibe64Terminal.vue");
 const terminalSurfacePath = path.resolve("src/components/studio/Vibe64TerminalSurface.vue");
 const terminalTakeoverPath = path.resolve("src/composables/useVibe64TerminalMobileTakeover.js");
@@ -28,13 +28,13 @@ function clientSourceFiles(root) {
 }
 
 describe("Vibe64 terminal architecture", () => {
-  it("keeps direct xterm construction inside the canonical runtime", () => {
+  it("keeps direct xterm construction inside the canonical runtime's display", () => {
     const owners = [
       ...clientSourceFiles(sourceRoot),
       ...clientSourceFiles(packageRoot)
     ].filter((filePath) => /new\s+terminalLibrary\.Terminal\s*\(/u.test(readFileSync(filePath, "utf8")));
 
-    expect(owners).toEqual([terminalRuntimePath]);
+    expect(owners).toEqual([terminalDisplayPath]);
   });
 
   it("has one public terminal element and no superseded terminal shells", () => {

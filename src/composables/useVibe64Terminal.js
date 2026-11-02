@@ -1,14 +1,4 @@
-import { computed, getCurrentScope, nextTick, onScopeDispose, ref, unref, watch } from "vue";
-import { isDynamicImportError } from "@jskit-ai/kernel/client/asyncModuleRecovery";
-import {
-  useShellAsyncModuleRecoveryRuntime
-} from "@jskit-ai/shell-web/client/asyncModuleRecovery";
-import {
-  STUDIO_TERMINAL_SCROLLBACK_ROWS,
-  reportableTerminalSize,
-  terminalTranscriptTail,
-  terminalResizeErrorMessage
-} from "@/lib/studioTerminalSize.js";
+import { computed, getCurrentScope, onScopeDispose, ref, unref, watch } from "vue";
 import {
   stripTerminalControlSequences,
   terminalLastMeaningfulLine
@@ -16,7 +6,9 @@ import {
 import { validateTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import { createTerminalMatcherEngine } from "@/lib/vibe64TerminalMatchers.js";
 import { createTerminalPolicyEngine } from "@/lib/vibe64TerminalPolicies.js";
-import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
+import { useVibe64TerminalConnection } from "@/composables/useVibe64TerminalConnection.js";
+import { useVibe64TerminalDisplay } from "@/composables/useVibe64TerminalDisplay.js";
+import { useVibe64TerminalLifecycle } from "@/composables/useVibe64TerminalLifecycle.js";
 
 const TERMINAL_RECONNECT_DELAY_MS = 250;
 const TERMINAL_RECONNECT_MAX_DELAY_MS = 5_000;
@@ -25,6 +17,11 @@ function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
 }
 
+/**
+ * The one terminal runtime: a session's state, presentation, policies and
+ * matchers, composed with its live stream (useVibe64TerminalConnection), its
+ * screen (useVibe64TerminalDisplay) and its lifecycle (useVibe64TerminalLifecycle).
+ */
 function useVibe64Terminal({
   driver,
   fitOnResize = null,
@@ -53,51 +50,13 @@ function useVibe64Terminal({
   const terminalCloseError = ref("");
   const terminalError = ref("");
   const terminalExitCode = ref(null);
-  const terminalFocused = ref(false);
   const terminalMetadata = ref({});
-  const terminalOutput = ref("");
-  const terminalSelectedText = ref("");
   const terminalStarting = ref(false);
-  const terminalConnectionStatus = ref("detached");
   const terminalAttention = ref(null);
   const terminalExpanded = ref(Boolean(initiallyExpanded));
   const terminalOwnership = ref("none");
   const terminalPresentation = ref(String(presentation || "inline"));
   const terminalVisible = ref(Boolean(initiallyVisible));
-
-  let terminalInstance = null;
-  let terminalFitAddon = null;
-  let terminalConnection = null;
-  let terminalConnectionGeneration = 0;
-  let terminalConnectionSessionId = "";
-  let terminalConnectionOpenPromise = null;
-  let terminalConnectionOpenSessionId = "";
-  let terminalReconnectAttempt = 0;
-  let terminalReconnectBlocked = false;
-  let terminalReconnectTimer = null;
-  let terminalDataDisposable = null;
-  let terminalSelectionDisposable = null;
-  let terminalScrollDisposable = null;
-  let terminalFocusInHandler = null;
-  let terminalFocusOutHandler = null;
-  let terminalWindowBlurHandler = null;
-  let terminalResizeHandler = null;
-  let terminalResizeReportTimer = null;
-  let terminalResizeObserver = null;
-  let terminalReportedCols = 0;
-  let terminalReportedRows = 0;
-  let terminalInitialResizeReported = false;
-  let terminalLatestOutput = "";
-  let terminalOutputOffset = 0;
-  let terminalOutputVersion = 0;
-  let terminalFollowOutput = true;
-  let terminalSetupPromise = null;
-  let terminalMountedHost = null;
-  let terminalExitNotifiedSessionId = "";
-  let terminalSettledNotifiedSessionId = "";
-  let terminalLastStartInput = {};
-  const terminalExitWaiters = new Map();
-  const terminalSettlementWaiters = new Map();
 
   const notifyOutput = resolveCallback(onOutput, () => null);
   const notifyEvent = resolveCallback(onEvent, () => null);
@@ -105,15 +64,60 @@ function useVibe64Terminal({
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const notifyUserData = resolveCallback(onUserData, () => null);
-  const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
   const terminalExited = computed(() => terminalStatus.value === "exited");
-  const terminalPlainOutput = computed(() => stripTerminalControlSequences(terminalOutput.value));
-  const terminalSummaryLine = computed(() => terminalLastMeaningfulLine(terminalOutput.value));
   const terminalReconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
   const terminalReconnectMaxDelay = Math.max(
     terminalReconnectDelay,
     Number(reconnectMaxDelayMs) || 0
   );
+
+  const connection = useVibe64TerminalConnection({
+    driver: terminalDriver,
+    terminalSessionId,
+    terminalStatus,
+    terminalError,
+    emitTerminalEvent,
+    applySessionMessage: applyTerminalStreamMessage,
+    notifyUserData,
+    // The display is built on this connection; its size is read once both exist.
+    readTerminalSize: () => display.terminalCurrentSize(),
+    liveResize: terminalLiveResize,
+    resizeReportDelay: terminalResizeReportDelay,
+    reconnectDelay: terminalReconnectDelay,
+    reconnectMaxDelay: terminalReconnectMaxDelay
+  });
+  const display = useVibe64TerminalDisplay({
+    connection,
+    terminalHost,
+    terminalError,
+    readOnly: terminalReadOnly,
+    fitOnResize: terminalFitOnResize,
+    reportOutput: reportTerminalOutput
+  });
+  const { terminalOutput } = display;
+  const terminalPlainOutput = computed(() => stripTerminalControlSequences(terminalOutput.value));
+  const terminalSummaryLine = computed(() => terminalLastMeaningfulLine(terminalOutput.value));
+  const lifecycle = useVibe64TerminalLifecycle({
+    driver: terminalDriver,
+    terminal: {
+      terminalAttention,
+      terminalError,
+      terminalExitCode,
+      terminalOwnership,
+      terminalSessionId,
+      terminalStarting,
+      terminalStatus,
+      applyTerminalSession,
+      emitTerminalEvent,
+      expandTerminal,
+      inspectTerminalMatchers,
+      resetTerminalSessionState,
+      showTerminal,
+      terminalSnapshot
+    },
+    connection,
+    display
+  });
 
   function currentSessionId() {
     return String(terminalSessionId.value || "");
@@ -189,20 +193,20 @@ function useVibe64Terminal({
   const terminalPolicyEngine = createTerminalPolicyEngine({
     actions: {
       collapse: collapseTerminal,
-      close: closeTerminal,
-      detach: detachTerminal,
+      close: lifecycle.closeTerminal,
+      detach: lifecycle.detachTerminal,
       emit(action) {
         return emitTerminalEvent(action.eventType || action.name || "policy-event", {
           policyEvent: action.event
         });
       },
       expand: expandTerminal,
-      focus: focusTerminal,
+      focus: display.focusTerminal,
       hide: hideTerminal,
       interrupt: interruptTerminal,
       minimize: minimizeTerminal,
       send(action) {
-        return sendTerminalData(action.data, {
+        return connection.sendTerminalData(action.data, {
           source: "policy"
         });
       },
@@ -231,11 +235,17 @@ function useVibe64Terminal({
       exitCode: terminalExitCode.value,
       metadata: terminalMetadata.value,
       output: terminalOutput.value,
-      outputVersion: terminalOutputVersion,
+      outputVersion: display.currentOutputVersion(),
       sessionId: currentSessionId(),
       source,
       status: terminalStatus.value
     });
+  }
+
+  function reportTerminalOutput(outputEvent) {
+    notifyOutput(outputEvent);
+    emitTerminalEvent("output", outputEvent);
+    inspectTerminalMatchers(outputEvent.source);
   }
 
   function setTerminalHost(element) {
@@ -264,315 +274,14 @@ function useVibe64Terminal({
     return Number.isFinite(delay) && delay > 0 ? delay : 0;
   }
 
-  function normalizedOutputVersion(value) {
-    const version = Number(value || 0);
-    return Number.isFinite(version) && version > 0 ? version : 0;
-  }
-
-  function resetReportedTerminalSize() {
-    terminalReportedCols = 0;
-    terminalReportedRows = 0;
-  }
-
-  function resetInitialTerminalResize() {
-    terminalInitialResizeReported = false;
-  }
-
-  function updateTerminalSelection() {
-    terminalSelectedText.value = terminalInstance?.hasSelection?.()
-      ? terminalInstance.getSelection()
-      : "";
-  }
-
-  function terminalViewportAtBottom() {
-    const buffer = terminalInstance?.buffer?.active;
-    if (!buffer) {
-      return true;
-    }
-    const viewportY = Number(buffer.viewportY);
-    const baseY = Number(buffer.baseY);
-    if (!Number.isFinite(viewportY) || !Number.isFinite(baseY)) {
-      return true;
-    }
-    return viewportY >= baseY;
-  }
-
-  function updateTerminalFollowOutput() {
-    terminalFollowOutput = terminalViewportAtBottom();
-  }
-
-  function syncTerminalFocus() {
-    const host = terminalHost.value;
-    const activeElement = document.activeElement;
-    terminalFocused.value = Boolean(host && activeElement && host.contains(activeElement));
-  }
-
-  function terminalCurrentSize() {
-    return reportableTerminalSize({
-      cols: terminalInstance?.cols,
-      rows: terminalInstance?.rows
-    });
-  }
-
-  function terminalSizeAlreadyReported(size = {}) {
-    return size.cols === terminalReportedCols && size.rows === terminalReportedRows;
-  }
-
-  function fitTerminalUi() {
-    if (!terminalFitAddon || !terminalInstance) {
-      return false;
-    }
-    terminalFitAddon.fit();
-    terminalInstance.refresh?.(0, Math.max(0, terminalInstance.rows - 1));
-    const size = terminalCurrentSize();
-    scheduleTerminalResizeReport();
-    return Boolean(size);
-  }
-
-  async function setupTerminalUi() {
-    if (terminalInstance) {
-      await nextTick();
-      fitTerminalUi();
-      return true;
-    }
-    if (terminalSetupPromise) {
-      return terminalSetupPromise;
-    }
-
-    terminalSetupPromise = (async () => {
-      await nextTick();
-      if (terminalInstance) {
-        fitTerminalUi();
-        return true;
-      }
-      if (!terminalHost.value) {
-        return false;
-      }
-      const host = terminalHost.value;
-      let terminalLibrary;
-      try {
-        terminalLibrary = await loadXtermModules();
-      } catch (error) {
-        terminalError.value = "Terminal module could not load. Check your connection and retry.";
-        asyncModuleRecoveryRuntime?.notify?.(error, {
-          label: "Terminal",
-          stale: isDynamicImportError(error)
-        });
-        return false;
-      }
-      if (!terminalHost.value || terminalHost.value !== host) {
-        return false;
-      }
-      host.replaceChildren();
-      terminalInstance = new terminalLibrary.Terminal({
-        cursorBlink: false,
-        disableStdin: false,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-        fontSize: 13,
-        scrollback: STUDIO_TERMINAL_SCROLLBACK_ROWS,
-        theme: {
-          background: "#101216",
-          foreground: "#f5f7fb"
-        }
-      });
-      terminalFitAddon = new terminalLibrary.FitAddon();
-      terminalInstance.loadAddon(terminalFitAddon);
-      terminalInstance.open(host);
-      terminalMountedHost = host;
-      fitTerminalUi();
-      terminalDataDisposable = terminalInstance.onData((data) => {
-        if (terminalReadOnly()) {
-          return;
-        }
-        void sendTerminalData(data, {
-          source: "user"
-        });
-      });
-      terminalSelectionDisposable = terminalInstance.onSelectionChange(updateTerminalSelection);
-      terminalScrollDisposable = terminalInstance.onScroll?.(updateTerminalFollowOutput) || null;
-      terminalFocusInHandler = () => {
-        terminalFocused.value = true;
-      };
-      terminalFocusOutHandler = () => {
-        window.setTimeout(syncTerminalFocus, 0);
-      };
-      terminalWindowBlurHandler = () => {
-        terminalFocused.value = false;
-      };
-      host.addEventListener("focusin", terminalFocusInHandler);
-      host.addEventListener("focusout", terminalFocusOutHandler);
-      window.addEventListener("blur", terminalWindowBlurHandler);
-      terminalResizeHandler = () => {
-        fitTerminalUi();
-      };
-      if (terminalFitOnResize()) {
-        window.addEventListener("resize", terminalResizeHandler);
-      }
-      if (terminalFitOnResize() && typeof ResizeObserver !== "undefined") {
-        terminalResizeObserver = new ResizeObserver(() => {
-          fitTerminalUi();
-        });
-        terminalResizeObserver.observe(host);
-      }
-      writeTerminalOutput(terminalLatestOutput);
-      return true;
-    })();
-
-    try {
-      return await terminalSetupPromise;
-    } finally {
-      terminalSetupPromise = null;
-    }
-  }
-
-  function clearTerminalReconnect({
-    resetAttempt = true
-  } = {}) {
-    if (terminalReconnectTimer !== null) {
-      globalThis.clearTimeout(terminalReconnectTimer);
-      terminalReconnectTimer = null;
-    }
-    if (resetAttempt) {
-      terminalReconnectAttempt = 0;
-    }
-  }
-
-  function releaseTerminalConnection(status) {
-    const connection = terminalConnection;
-    const disconnectedSessionId = terminalConnectionSessionId || currentSessionId();
-    terminalConnectionGeneration += 1;
-    terminalConnection = null;
-    terminalConnectionSessionId = "";
-    terminalConnectionOpenPromise = null;
-    terminalConnectionOpenSessionId = "";
-    terminalConnectionStatus.value = status;
-    resetReportedTerminalSize();
-    return {
-      connection,
-      sessionId: disconnectedSessionId
-    };
-  }
-
-  function closeTerminalSocket() {
-    clearTerminalReconnect();
-    terminalReconnectBlocked = false;
-    const {
-      connection,
-      sessionId: disconnectedSessionId
-    } = releaseTerminalConnection("detached");
-    connection?.close?.();
-    if (connection) {
-      emitTerminalEvent("disconnected", {
-        intentional: true,
-        sessionId: disconnectedSessionId
-      });
-    }
-  }
-
-  function terminalCanReconnect(sessionId) {
-    return Boolean(
-      terminalDriver.reconnectOnDisconnect === true &&
-      !terminalReconnectBlocked &&
-      sessionId &&
-      sessionId === currentSessionId() &&
-      terminalStatus.value !== "exited"
-    );
-  }
-
-  function scheduleTerminalReconnect(sessionId) {
-    if (terminalReconnectTimer !== null || !terminalCanReconnect(sessionId)) {
-      return false;
-    }
-    const delayMs = Math.min(
-      terminalReconnectMaxDelay,
-      terminalReconnectDelay * (2 ** terminalReconnectAttempt)
-    );
-    terminalReconnectAttempt += 1;
-    terminalConnectionStatus.value = "reconnecting";
-    emitTerminalEvent("reconnecting", {
-      attempt: terminalReconnectAttempt,
-      delayMs,
-      sessionId
-    });
-    terminalReconnectTimer = globalThis.setTimeout(async () => {
-      terminalReconnectTimer = null;
-      if (!terminalCanReconnect(sessionId)) {
-        return;
-      }
-      if (!(await connectTerminalSocket())) {
-        scheduleTerminalReconnect(sessionId);
-      }
-    }, delayMs);
-    return true;
-  }
-
-  function recoverTerminalConnection(sessionId) {
-    const { connection } = releaseTerminalConnection("disconnected");
-    connection?.close?.();
-    scheduleTerminalReconnect(sessionId);
-  }
-
-  function disposeTerminalDisplay() {
-    terminalDataDisposable?.dispose?.();
-    terminalDataDisposable = null;
-    terminalSelectionDisposable?.dispose?.();
-    terminalSelectionDisposable = null;
-    terminalScrollDisposable?.dispose?.();
-    terminalScrollDisposable = null;
-    const mountedHost = terminalMountedHost || terminalHost.value;
-    if (terminalFocusInHandler) {
-      mountedHost?.removeEventListener("focusin", terminalFocusInHandler);
-      terminalFocusInHandler = null;
-    }
-    if (terminalFocusOutHandler) {
-      mountedHost?.removeEventListener("focusout", terminalFocusOutHandler);
-      terminalFocusOutHandler = null;
-    }
-    terminalMountedHost = null;
-    if (terminalWindowBlurHandler) {
-      window.removeEventListener("blur", terminalWindowBlurHandler);
-      terminalWindowBlurHandler = null;
-    }
-    if (terminalResizeHandler) {
-      window.removeEventListener("resize", terminalResizeHandler);
-      terminalResizeHandler = null;
-    }
-    terminalResizeObserver?.disconnect?.();
-    terminalResizeObserver = null;
-    if (terminalResizeReportTimer) {
-      window.clearTimeout(terminalResizeReportTimer);
-      terminalResizeReportTimer = null;
-    }
-    terminalInstance?.dispose?.();
-    terminalInstance = null;
-    terminalFitAddon = null;
-    terminalSetupPromise = null;
-    terminalOutputOffset = 0;
-    terminalFollowOutput = true;
-    terminalFocused.value = false;
-    terminalSelectedText.value = "";
-    resetReportedTerminalSize();
-  }
-
   function disposeTerminalUi() {
-    closeTerminalSocket();
-    disposeTerminalDisplay();
-  }
-
-  function resetTerminalDisplay() {
-    terminalLatestOutput = "";
-    terminalOutputOffset = 0;
-    terminalOutputVersion = 0;
-    terminalOutput.value = "";
-    terminalFollowOutput = true;
-    resetReportedTerminalSize();
-    resetInitialTerminalResize();
-    terminalInstance?.reset?.();
+    connection.closeTerminalSocket();
+    display.disposeTerminalDisplay();
   }
 
   function resetTerminalSessionState() {
-    clearTerminalReconnect();
-    terminalReconnectBlocked = false;
+    connection.clearTerminalReconnect();
+    connection.allowTerminalReconnect();
     terminalSessionId.value = "";
     terminalStatus.value = "";
     terminalCommandPreview.value = "";
@@ -596,309 +305,8 @@ function useVibe64Terminal({
     };
   }
 
-  async function attachTerminal(session = {}, {
-    connect = true,
-    fallbackStatus = "running",
-    ownership = "attached",
-    preserveOutput = false,
-    resize = true,
-    show = false
-  } = {}) {
-    const sessionId = String(session.id || session.terminalSessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("Terminal session id is required.");
-    }
-    terminalOwnership.value = ownership === "owned" ? "owned" : "attached";
-    applyTerminalSession({
-      ...session,
-      id: sessionId
-    }, {
-      fallbackStatus,
-      preserveOutput,
-      resize
-    });
-    if (show) {
-      showTerminal();
-    }
-    emitTerminalEvent("attached", {
-      ownership: terminalOwnership.value
-    });
-    if (connect && terminalStatus.value !== "exited") {
-      await connectTerminalSocket();
-    }
-    return terminalSnapshot();
-  }
-
-  async function startTerminal(input = {}, {
-    connect = true,
-    show = true
-  } = {}) {
-    if (terminalStarting.value) {
-      return false;
-    }
-    if (typeof terminalDriver.startSession !== "function") {
-      throw new Error("This terminal driver cannot start sessions.");
-    }
-    terminalStarting.value = true;
-    terminalLastStartInput = input && typeof input === "object" ? input : {};
-    terminalError.value = "";
-    if (show) {
-      showTerminal();
-      expandTerminal();
-    }
-    emitTerminalEvent("start-requested", {
-      input
-    });
-    emitTerminalEvent("starting", {
-      input
-    });
-    try {
-      const session = await terminalDriver.startSession(input);
-      if (!session || session.ok === false) {
-        throw new Error(session?.error || "Terminal could not start.");
-      }
-      await attachTerminal(session, {
-        connect,
-        ownership: "owned",
-        show: false
-      });
-      emitTerminalEvent("started", {
-        session: terminalSnapshot()
-      });
-      return terminalSnapshot();
-    } catch (error) {
-      terminalError.value = String(error?.message || error || "Terminal could not start.");
-      return false;
-    } finally {
-      terminalStarting.value = false;
-    }
-  }
-
-  async function closeTerminal({
-    deleteSession = terminalOwnership.value === "owned",
-    preserveOutput = false
-  } = {}) {
-    const sessionId = currentSessionId();
-    const ownership = terminalOwnership.value;
-    closeTerminalSocket();
-    if (deleteSession && sessionId && typeof terminalDriver.closeSession === "function") {
-      try {
-        await terminalDriver.closeSession(sessionId);
-      } catch (error) {
-        terminalError.value = String(error?.message || error || "Terminal could not close.");
-        return false;
-      }
-    }
-    emitTerminalEvent("close", {
-      deleted: Boolean(deleteSession),
-      ownership
-    });
-    resetTerminalSessionState();
-    if (!preserveOutput) {
-      resetTerminalDisplay();
-    }
-    return true;
-  }
-
-  function detachTerminal({
-    preserveOutput = true
-  } = {}) {
-    const ownership = terminalOwnership.value;
-    const sessionId = currentSessionId();
-    closeTerminalSocket();
-    emitTerminalEvent("detached", {
-      ownership,
-      sessionId
-    });
-    resetTerminalSessionState();
-    if (!preserveOutput) {
-      resetTerminalDisplay();
-    }
-    return true;
-  }
-
-  async function restartTerminal(input = terminalLastStartInput, {
-    deleteSession = terminalOwnership.value === "owned",
-    show = true
-  } = {}) {
-    const previousSessionId = currentSessionId();
-    if (previousSessionId && !(await closeTerminal({
-      deleteSession
-    }))) {
-      return false;
-    }
-    const session = await startTerminal(input, {
-      show
-    });
-    if (session) {
-      emitTerminalEvent("restart", {
-        previousSessionId
-      });
-    }
-    return session;
-  }
-
-  function waitForExit(sessionId = currentSessionId()) {
-    const normalizedSessionId = String(sessionId || "");
-    if (!normalizedSessionId) {
-      return Promise.reject(new Error("Terminal session id is required."));
-    }
-    if (
-      normalizedSessionId === currentSessionId() &&
-      terminalStatus.value === "exited"
-    ) {
-      return Promise.resolve(terminalSnapshot());
-    }
-    return new Promise((resolve) => {
-      const waiters = terminalExitWaiters.get(normalizedSessionId) || [];
-      waiters.push(resolve);
-      terminalExitWaiters.set(normalizedSessionId, waiters);
-    });
-  }
-
-  function waitForSettlement(sessionId = currentSessionId()) {
-    const normalizedSessionId = String(sessionId || "");
-    if (!normalizedSessionId) {
-      return Promise.reject(new Error("Terminal session id is required."));
-    }
-    if (
-      normalizedSessionId === currentSessionId() &&
-      (terminalStatus.value === "exited" || terminalError.value)
-    ) {
-      return Promise.resolve(terminalSnapshot());
-    }
-    return new Promise((resolve) => {
-      const waiters = terminalSettlementWaiters.get(normalizedSessionId) || [];
-      waiters.push(resolve);
-      terminalSettlementWaiters.set(normalizedSessionId, waiters);
-    });
-  }
-
-  function resolveExitWaiters(sessionId) {
-    const waiters = terminalExitWaiters.get(sessionId) || [];
-    terminalExitWaiters.delete(sessionId);
-    const snapshot = terminalSnapshot();
-    for (const resolve of waiters) {
-      resolve(snapshot);
-    }
-    resolveSettlementWaiters(sessionId);
-  }
-
-  function resolveSettlementWaiters(sessionId) {
-    const waiters = terminalSettlementWaiters.get(sessionId) || [];
-    terminalSettlementWaiters.delete(sessionId);
-    const snapshot = terminalSnapshot();
-    for (const resolve of waiters) {
-      resolve(snapshot);
-    }
-  }
-
-  function scrollTerminalToBottom() {
-    terminalInstance?.scrollToBottom?.();
-    terminalFollowOutput = true;
-  }
-
-  function scrollTerminalToBottomIfFollowing() {
-    if (terminalFollowOutput) {
-      scrollTerminalToBottom();
-    }
-  }
-
-  function writeTerminalOutput(output, {
-    outputVersion = 0,
-    replace = false
-  } = {}) {
-    const previousOutput = terminalLatestOutput;
-    const nextOutput = terminalTranscriptTail(output);
-    const nextOutputVersion = normalizedOutputVersion(outputVersion);
-    if (
-      nextOutputVersion &&
-      terminalOutputVersion &&
-      nextOutputVersion < terminalOutputVersion
-    ) {
-      return false;
-    }
-    if (replace) {
-      terminalInstance?.reset?.();
-      terminalOutputOffset = 0;
-    } else if (previousOutput && !nextOutput.startsWith(previousOutput)) {
-      if (!nextOutputVersion || nextOutputVersion <= terminalOutputVersion) {
-        return false;
-      }
-      terminalInstance?.reset?.();
-      terminalOutputOffset = 0;
-    }
-    terminalLatestOutput = nextOutput;
-    terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
-    terminalOutput.value = terminalLatestOutput;
-    if (terminalLatestOutput !== previousOutput) {
-      const source = replace ? "replacement" : "snapshot";
-      const outputEvent = {
-        outputVersion: terminalOutputVersion,
-        output: terminalLatestOutput,
-        source
-      };
-      notifyOutput(outputEvent);
-      emitTerminalEvent("output", outputEvent);
-      inspectTerminalMatchers(source);
-    }
-    if (!terminalInstance) {
-      return;
-    }
-    if (terminalLatestOutput.length < terminalOutputOffset) {
-      terminalInstance.reset();
-      terminalOutputOffset = 0;
-    }
-    const outputChunk = terminalLatestOutput.slice(terminalOutputOffset);
-    if (outputChunk) {
-      terminalInstance.write(outputChunk, scrollTerminalToBottomIfFollowing);
-    }
-    terminalOutputOffset = terminalLatestOutput.length;
-    return true;
-  }
-
-  function appendTerminalOutput(chunk, {
-    outputVersion = 0
-  } = {}) {
-    const outputChunk = String(chunk || "");
-    if (!outputChunk) {
-      return false;
-    }
-    const nextOutputVersion = normalizedOutputVersion(outputVersion);
-    if (
-      nextOutputVersion &&
-      terminalOutputVersion &&
-      nextOutputVersion <= terminalOutputVersion
-    ) {
-      return false;
-    }
-    // The PTY stream is incremental; this string is only its reconnect,
-    // matcher, and copy tail. Keeping complete terminal history here made
-    // every active Codex repaint rescan and copy an ever-growing transcript
-    // (hundreds of MB in seconds for long sessions). Keep history bounded at
-    // its owner instead of masking the feedback with timers or throttles.
-    terminalLatestOutput = terminalTranscriptTail(terminalLatestOutput + outputChunk);
-    terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
-    terminalOutput.value = terminalLatestOutput;
-    const outputEvent = {
-      chunk: outputChunk,
-      output: terminalLatestOutput,
-      outputVersion: terminalOutputVersion,
-      source: "append"
-    };
-    notifyOutput(outputEvent);
-    emitTerminalEvent("output", outputEvent);
-    inspectTerminalMatchers("append");
-    if (!terminalInstance) {
-      return true;
-    }
-    terminalInstance.write(outputChunk, scrollTerminalToBottomIfFollowing);
-    terminalOutputOffset = terminalLatestOutput.length;
-    return true;
-  }
-
   function setTerminalOutput(output, options = {}) {
-    return writeTerminalOutput(output, options);
+    return display.writeTerminalOutput(output, options);
   }
 
   function applyTerminalSession(session = {}, {
@@ -915,11 +323,11 @@ function useVibe64Terminal({
       nextTerminalSessionId !== terminalSessionId.value
     );
     if (terminalSessionChanged) {
-      closeTerminalSocket();
-      resetTerminalDisplay();
+      connection.closeTerminalSocket();
+      display.resetTerminalDisplay();
     }
     if (!terminalSessionId.value || terminalSessionChanged) {
-      terminalReconnectBlocked = false;
+      connection.allowTerminalReconnect();
     }
     terminalSessionId.value = nextTerminalSessionId;
     const nextStatus = String(terminalSession.status || fallbackStatus || "");
@@ -933,13 +341,13 @@ function useVibe64Terminal({
       ? terminalSession.metadata
       : {};
     if (!preserveOutput || Object.hasOwn(terminalSession, "output")) {
-      writeTerminalOutput(terminalSession.output || "", {
+      display.writeTerminalOutput(terminalSession.output || "", {
         outputVersion: terminalSession.outputVersion,
         replace: replaceOutput
       });
     }
     if (resize) {
-      void sendTerminalResize();
+      void connection.sendTerminalResize();
     }
     notifySessionUpdate(terminalSession);
     notifyStatusUpdate({
@@ -950,41 +358,9 @@ function useVibe64Terminal({
     });
   }
 
-  function handleTerminalConnectionEvent(message, {
-    generation,
-    sessionId
-  } = {}) {
-    if (
-      generation !== terminalConnectionGeneration ||
-      sessionId !== terminalConnectionSessionId
-    ) {
-      return;
-    }
-
-    if (message?.type === "connected") {
-      clearTerminalReconnect({
-        resetAttempt: false
-      });
-      terminalReconnectBlocked = false;
-      terminalConnectionStatus.value = "connected";
-      terminalError.value = "";
-      emitTerminalEvent("connected");
-      return;
-    }
-
-    if (message?.type === "disconnected") {
-      terminalConnectionStatus.value = "disconnected";
-      emitTerminalEvent("disconnected", {
-        intentional: message.intentional === true
-      });
-      if (message.intentional !== true) {
-        recoverTerminalConnection(sessionId);
-      }
-      return;
-    }
-
-    if (message?.type === "snapshot") {
-      terminalReconnectAttempt = 0;
+  /** The stream's snapshot, output, metadata and status messages about the session. */
+  function applyTerminalStreamMessage(message) {
+    if (message.type === "snapshot") {
       applyTerminalSession(message.session || {}, {
         replaceOutput: message.replaceOutput === true
       });
@@ -994,14 +370,14 @@ function useVibe64Terminal({
       return;
     }
 
-    if (message?.type === "output") {
-      appendTerminalOutput(message.chunk, {
+    if (message.type === "output") {
+      display.appendTerminalOutput(message.chunk, {
         outputVersion: message.outputVersion
       });
       return;
     }
 
-    if (message?.type === "metadata") {
+    if (message.type === "metadata") {
       terminalMetadata.value = message.metadata &&
         typeof message.metadata === "object" &&
         !Array.isArray(message.metadata)
@@ -1018,7 +394,7 @@ function useVibe64Terminal({
       return;
     }
 
-    if (message?.type === "status") {
+    if (message.type === "status") {
       const nextStatus = String(message.status || terminalStatus.value || "");
       terminalExitCode.value = nextStatus === "exited" ? message.exitCode ?? null : null;
       terminalCloseError.value = String(message.closeError || "");
@@ -1029,169 +405,7 @@ function useVibe64Terminal({
         id: terminalSessionId.value,
         status: terminalStatus.value
       });
-      return;
     }
-
-    if (message?.type === "resize.error") {
-      return;
-    }
-
-    if (message?.type === "error") {
-      const error = String(message.error || "Terminal stream failed.");
-      if (terminalResizeErrorMessage(error)) {
-        return;
-      }
-      emitTerminalEvent("stream-error", {
-        code: String(message.code || ""),
-        error
-      });
-      terminalReconnectBlocked = true;
-      clearTerminalReconnect();
-      terminalError.value = error;
-    }
-  }
-
-  async function connectTerminalSocket() {
-    if (!terminalSessionId.value) {
-      return false;
-    }
-    if (terminalConnectionSessionId && terminalConnectionSessionId !== terminalSessionId.value) {
-      closeTerminalSocket();
-    }
-    if (terminalConnection?.isOpen?.() && terminalConnectionSessionId === terminalSessionId.value) {
-      return true;
-    }
-    if (terminalConnectionOpenPromise && terminalConnectionOpenSessionId === terminalSessionId.value) {
-      return terminalConnectionOpenPromise;
-    }
-    if (terminalConnectionOpenPromise) {
-      closeTerminalSocket();
-    }
-
-    const connectionSessionId = terminalSessionId.value;
-    const generation = terminalConnectionGeneration + 1;
-    terminalConnectionGeneration = generation;
-    terminalConnectionSessionId = connectionSessionId;
-    terminalConnectionOpenSessionId = connectionSessionId;
-    terminalConnectionStatus.value = "connecting";
-    try {
-      terminalConnection = terminalDriver.openConnection({
-        onEvent(message) {
-          handleTerminalConnectionEvent(message, {
-            generation,
-            sessionId: connectionSessionId
-          });
-        },
-        sessionId: connectionSessionId
-      });
-    } catch {
-      terminalConnectionStatus.value = "disconnected";
-      scheduleTerminalReconnect(connectionSessionId);
-      return false;
-    }
-    const connection = terminalConnection;
-    terminalConnectionOpenPromise = Promise.resolve(connection?.ready).then((ready) => {
-      if (
-        generation === terminalConnectionGeneration &&
-        connectionSessionId === terminalConnectionSessionId
-      ) {
-        terminalConnectionStatus.value = ready ? "connected" : "disconnected";
-        if (ready) {
-          terminalError.value = "";
-        } else {
-          scheduleTerminalReconnect(connectionSessionId);
-        }
-      }
-      return Boolean(ready);
-    }).catch(() => {
-      if (generation === terminalConnectionGeneration) {
-        terminalConnectionStatus.value = "disconnected";
-        scheduleTerminalReconnect(connectionSessionId);
-      }
-      return false;
-    }).finally(() => {
-      if (generation === terminalConnectionGeneration) {
-        terminalConnectionOpenPromise = null;
-        terminalConnectionOpenSessionId = "";
-      }
-    });
-
-    return terminalConnectionOpenPromise;
-  }
-
-  async function sendTerminalData(data, {
-    source = "program"
-  } = {}) {
-    if (!terminalSessionId.value || terminalStatus.value === "exited") {
-      return false;
-    }
-    const input = String(data || "");
-    if (source === "user") {
-      notifyUserData(input);
-    }
-    emitTerminalEvent("input", {
-      data: input,
-      source
-    });
-    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen?.()) {
-      terminalError.value = "Terminal stream is not connected.";
-      return false;
-    }
-    try {
-      return Boolean(await terminalConnection.sendInput(input));
-    } catch (error) {
-      terminalError.value = String(error?.message || error || "Terminal input failed.");
-      return false;
-    }
-  }
-
-  async function sendTerminalResize() {
-    if (terminalResizeReportTimer) {
-      window.clearTimeout(terminalResizeReportTimer);
-      terminalResizeReportTimer = null;
-    }
-    if (!terminalSessionId.value || terminalStatus.value === "exited") {
-      return false;
-    }
-    if (!terminalLiveResize() && terminalInitialResizeReported) {
-      return false;
-    }
-    const size = terminalCurrentSize();
-    if (!size || terminalSizeAlreadyReported(size)) {
-      return false;
-    }
-    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen?.()) {
-      return false;
-    }
-    terminalReportedCols = size.cols;
-    terminalReportedRows = size.rows;
-    if (!await terminalConnection.sendResize(size)) {
-      return false;
-    }
-    emitTerminalEvent("resize", size);
-    if (!terminalLiveResize()) {
-      terminalInitialResizeReported = true;
-    }
-    return true;
-  }
-
-  function scheduleTerminalResizeReport() {
-    if (!terminalReportedCols || !terminalReportedRows) {
-      void sendTerminalResize();
-      return;
-    }
-    const delay = terminalResizeReportDelay();
-    if (!delay) {
-      void sendTerminalResize();
-      return;
-    }
-    if (terminalResizeReportTimer) {
-      window.clearTimeout(terminalResizeReportTimer);
-    }
-    terminalResizeReportTimer = window.setTimeout(() => {
-      terminalResizeReportTimer = null;
-      void sendTerminalResize();
-    }, delay);
   }
 
   function terminalKeyData(key) {
@@ -1209,7 +423,7 @@ function useVibe64Terminal({
   }
 
   function sendTerminalKey(key, options = {}) {
-    return sendTerminalData(terminalKeyData(key), {
+    return connection.sendTerminalData(terminalKeyData(key), {
       source: "control",
       ...options
     });
@@ -1227,26 +441,11 @@ function useVibe64Terminal({
     return interruptTerminal();
   }
 
-  async function focusTerminal() {
-    if (!(await setupTerminalUi())) {
-      return false;
-    }
-    try {
-      terminalInstance?.focus?.();
-    } catch (error) {
-      terminalError.value = String(error?.message || error || "Terminal focus failed.");
-      return false;
-    }
-    syncTerminalFocus();
-    return true;
-  }
-
   watch(terminalSessionId, (nextSessionId, previousSessionId) => {
     if (nextSessionId === previousSessionId) {
       return;
     }
-    terminalExitNotifiedSessionId = "";
-    terminalSettledNotifiedSessionId = "";
+    lifecycle.forgetSettledSession();
     terminalAttention.value = null;
     terminalMatcherEngine.reset(nextSessionId);
     terminalPolicyEngine.reset();
@@ -1257,122 +456,60 @@ function useVibe64Terminal({
     flush: "sync"
   });
 
-  watch(terminalStatus, (status, previousStatus) => {
-    if (status === previousStatus) {
-      return;
-    }
-    inspectTerminalMatchers("status");
-    emitTerminalEvent("status", {
-      exitCode: terminalExitCode.value,
-      previousStatus: String(previousStatus || ""),
-      status: String(status || "")
-    });
-    if (status === "exited") {
-      clearTerminalReconnect();
-    }
-    if (
-      status === "exited" &&
-      currentSessionId() &&
-      terminalExitNotifiedSessionId !== currentSessionId()
-    ) {
-      terminalExitNotifiedSessionId = currentSessionId();
-      resolveExitWaiters(currentSessionId());
-      emitTerminalEvent("exit", {
-        exitCode: terminalExitCode.value,
-        status
-      });
-      if (terminalSettledNotifiedSessionId !== currentSessionId()) {
-        terminalSettledNotifiedSessionId = currentSessionId();
-        emitTerminalEvent("settled", {
-          error: "",
-          exitCode: terminalExitCode.value,
-          status
-        });
-      }
-    }
-  }, {
-    flush: "sync"
-  });
-
   if (getCurrentScope()) {
-    onScopeDispose(closeTerminalSocket);
+    onScopeDispose(connection.closeTerminalSocket);
   }
 
-  watch(terminalError, (error, previousError) => {
-    if (!error || error === previousError) {
-      return;
-    }
-    terminalAttention.value = {
-      error: String(error),
-      kind: "error"
-    };
-    inspectTerminalMatchers("error");
-    resolveSettlementWaiters(currentSessionId());
-    emitTerminalEvent("error", {
-      error: String(error)
-    });
-    if (currentSessionId() && terminalSettledNotifiedSessionId !== currentSessionId()) {
-      terminalSettledNotifiedSessionId = currentSessionId();
-      emitTerminalEvent("settled", {
-        error: String(error),
-        exitCode: terminalExitCode.value,
-        status: terminalStatus.value
-      });
-    }
-  }, {
-    flush: "sync"
-  });
-
   return {
-    attachTerminal,
+    attachTerminal: lifecycle.attachTerminal,
     applyTerminalSession,
-    closeTerminalSocket,
-    closeTerminal,
-    connectTerminalSocket,
-    detachTerminal,
-    disposeTerminalDisplay,
+    closeTerminalSocket: connection.closeTerminalSocket,
+    closeTerminal: lifecycle.closeTerminal,
+    connectTerminalSocket: connection.connectTerminalSocket,
+    detachTerminal: lifecycle.detachTerminal,
+    disposeTerminalDisplay: display.disposeTerminalDisplay,
     disposeTerminalUi,
     collapseTerminal,
     expandTerminal,
-    focusTerminal,
+    focusTerminal: display.focusTerminal,
     hideTerminal,
     interruptTerminal,
     minimizeTerminal,
-    resetTerminalDisplay,
+    resetTerminalDisplay: display.resetTerminalDisplay,
     resetTerminalSessionState,
-    restartTerminal,
+    restartTerminal: lifecycle.restartTerminal,
     sendCtrlC,
-    sendTerminalData,
+    sendTerminalData: connection.sendTerminalData,
     sendTerminalKey,
     setTerminalHost,
     setTerminalOutput,
     showTerminal,
-    setupTerminalUi,
-    startTerminal,
+    setupTerminalUi: display.setupTerminalUi,
+    startTerminal: lifecycle.startTerminal,
     terminalCommandPreview,
     terminalCloseError,
-    terminalConnectionStatus,
+    terminalConnectionStatus: connection.terminalConnectionStatus,
     terminalAttention,
     terminalError,
     terminalExpanded,
     terminalExited,
     terminalExitCode,
-    terminalFocused,
+    terminalFocused: display.terminalFocused,
     terminalHost,
     terminalMetadata,
     terminalOwnership,
     terminalOutput,
     terminalPlainOutput,
     terminalPresentation,
-    terminalSelectedText,
+    terminalSelectedText: display.terminalSelectedText,
     terminalSessionId,
     terminalStarting,
     terminalStatus,
     terminalSummaryLine,
     terminalVisible,
     terminalSnapshot,
-    waitForExit,
-    waitForSettlement
+    waitForExit: lifecycle.waitForExit,
+    waitForSettlement: lifecycle.waitForSettlement
   };
 }
 
