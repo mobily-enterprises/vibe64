@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
-import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
 
 test("native provider switches preserve history without restarting, and cold recovery restores the provider", {
   skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false,
@@ -125,7 +125,7 @@ test("native provider switches preserve history without restarting, and cold rec
   await client.request("account/login/start", { type: "apiKey", apiKey: "fixture-secret-openai" });
   const environment = { PATH: "/usr/bin:/bin", VIBE64_TEST_CONTROL_GENERATION: "routing-fixture" };
   let settingsProvider = "openai";
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     threadEnv: environment, prepareThreadEnvironment: async () => environment,
     logger: { info: (fields) => logs.push(fields), warn: (fields) => logs.push(fields) },
     prepareThreadParams: async (params) => {
@@ -268,7 +268,7 @@ test("native provider switches preserve history without restarting, and cold rec
   for (const modelProvider of ["deepseek", "glm"]) {
     await provider.resumeThread(threadId, settings(modelProvider));
     await client.request("thread/unsubscribe", { threadId });
-    const restored = new CodexAppServerAgentProvider(provider.options);
+    const restored = createCodexAppServerAgentProvider(provider.options);
     restored.runtime = provider.runtime;
     restored.client = client;
     restored.activeClient = async () => client;
@@ -350,7 +350,7 @@ test("native provider switches preserve history without restarting, and cold rec
   nextClient = new CodexAppServerJsonRpcClient({ endpoint: `unix://${coldSocket}`, requestTimeoutMs: 10_000 });
   await nextClient.connect();
   await nextClient.initialize({ clientInfo: { name: "vibe64-cold-provider-test", version: "1" }, capabilities: { experimentalApi: true } });
-  const coldObserver = new CodexAppServerAgentProvider(provider.options);
+  const coldObserver = createCodexAppServerAgentProvider(provider.options);
   coldObserver.runtime = provider.runtime;
   coldObserver.client = nextClient;
   coldObserver.activeClient = async () => nextClient;

@@ -23,9 +23,11 @@ import { createTrainingService } from "../../packages/vibe64-training/src/server
 import { createLearningFacts } from "../../packages/vibe64-training/src/server/learningFacts.js";
 import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { createTrainingLessonVisuals } from "../../packages/vibe64-training/src/server/lessonVisuals.js";
-import { NO_LEARNING_SPACE } from "../../packages/vibe64-training/src/server/learningSpace.js";
+import { __testables as learningSpaceTestables } from "../../packages/vibe64-training/src/server/learningSpace.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const { NO_LEARNING_SPACE } = learningSpaceTestables;
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the

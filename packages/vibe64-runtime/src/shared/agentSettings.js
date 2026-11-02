@@ -297,15 +297,6 @@ function effectiveVibe64AgentExecutionSettings(value = {}) {
   };
 }
 
-function publicVibe64AgentSettings(value = {}) {
-  const normalized = normalizeVibe64AgentSettings(value);
-  return {
-    model: normalized.model,
-    providerId: normalized.providerId,
-    thinking: normalized.thinking
-  };
-}
-
 function displayVibe64AgentSetting(providerId = "", parameterId = "", value = "") {
   const provider = agentProviderDefinition(providerId);
   const parameter = agentProviderParameter(provider, parameterId);
@@ -325,7 +316,6 @@ const __testables = Object.freeze({
 });
 
 export {
-  VIBE64_AGENT_PARAMETER_IDS,
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,
@@ -336,6 +326,5 @@ export {
   effectiveVibe64AgentSettings,
   findVibe64AgentProvider,
   normalizeVibe64AgentSettings,
-  publicVibe64AgentSettings,
   __testables
 };

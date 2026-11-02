@@ -5,6 +5,8 @@ import { portNumbers } from "get-port";
 import { vibe64SharedModes } from "@local/vibe64-execution/server";
 import { resolveRuntimeEnv } from "./runtimeEnv.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const DEFAULT_PORT_SEARCH_LIMIT = 50;
 const DEFAULT_SOCKET_FILE_NAME = "server.sock";
 
@@ -31,9 +33,12 @@ function hasExplicitPortOption(options = {}) {
   return String(options.port ?? "").trim() !== "";
 }
 
-function defaultListenSocketPath({
-  env = process.env
-} = {}) {
+/**
+ * The listen socket path when none is configured: below XDG_RUNTIME_DIR, or a per-user temporary folder.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ */
+function defaultListenSocketPath({ env }) {
   const runtimeDir = String(env.XDG_RUNTIME_DIR || "").trim();
   if (runtimeDir) {
     return path.join(runtimeDir, "vibe64", DEFAULT_SOCKET_FILE_NAME);
@@ -43,10 +48,18 @@ function defaultListenSocketPath({
   return path.join(os.tmpdir(), `vibe64-${uid}`, DEFAULT_SOCKET_FILE_NAME);
 }
 
+/**
+ * Where the server listens: a TCP port when one is requested, otherwise a socket.
+ * @param {object} input
+ * @param {RuntimeEnv} input.env the process environment, for the default socket path
+ * @param {object} [input.options]
+ * @param {ReturnType<typeof resolveRuntimeEnv>} [input.runtimeEnv]
+ */
 function resolveListenTarget({
+  env,
   options = {},
   runtimeEnv = resolveRuntimeEnv()
-} = {}) {
+}) {
   const portRequested = hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true;
   if (portRequested) {
     const port = Number(explicitOptionValue(options, "port") ?? runtimeEnv.PORT);
@@ -59,7 +72,7 @@ function resolveListenTarget({
 
   const socketPath = String(
     explicitOptionValue(options, "listenSocket") ||
-    defaultListenSocketPath()
+    defaultListenSocketPath({ env })
   ).trim();
   return {
     socketPath: path.resolve(socketPath),

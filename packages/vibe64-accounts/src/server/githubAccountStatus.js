@@ -458,7 +458,6 @@ function rememberedGithubIdentity(value) {
 }
 
 export {
-  GITHUB_GIT_CREDENTIAL_HELPER,
   readGithubAccountStatus,
   readGithubStatus,
   readGithubStoredStatus,

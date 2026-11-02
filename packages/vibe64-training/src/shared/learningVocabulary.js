@@ -469,7 +469,17 @@ function lessonAvailable(steps, options) {
 const __testables = Object.freeze({ createLearningVocabulary, lessonStepNeeds });
 
 export {
-  BUILT_IN_FACTS, TRAINING_GUIDE_CAPTION_LIMIT, declaredLearningVocabulary,
-  filePathExpression as TRAINING_GUIDE_FILE_PATH, learningPlaceOpenTo, learningVocabulary, lessonAvailable, lessonStepAvailable,
-  registerLearningVocabulary, trainingGuideCommand, trainingGuideRequest, trainingGuideSteps, trainingPlaceShown, __testables
+  TRAINING_GUIDE_CAPTION_LIMIT,
+  declaredLearningVocabulary,
+  filePathExpression as TRAINING_GUIDE_FILE_PATH,
+  learningPlaceOpenTo,
+  learningVocabulary,
+  lessonAvailable,
+  lessonStepAvailable,
+  registerLearningVocabulary,
+  trainingGuideCommand,
+  trainingGuideRequest,
+  trainingGuideSteps,
+  trainingPlaceShown,
+  __testables
 };

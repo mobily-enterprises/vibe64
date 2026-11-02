@@ -7,7 +7,7 @@ import os from "node:os";
 import { createServer } from "node:http";
 import path from "node:path";
 import test from "node:test";
-import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
 
 function harness({ status = "idle", historyMode = "paginated", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {} } = {}) {
   const calls = [];
@@ -42,7 +42,7 @@ function harness({ status = "idle", historyMode = "paginated", goal = null, stay
     if (method === "turn/start") return { turn: { id: "turn-2" } };
     throw new Error(`Unexpected RPC ${method}`);
   } };
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     threadEnv: environment,
     threadControlTimeoutMs: 500,
     logger: { info: (fields) => logs.push(fields) },
@@ -310,7 +310,7 @@ test("native Codex paginated reload applies changed controls and preserves histo
   client.subscribe((event) => { for (const listener of events) listener(event); });
   let environment = { PATH: "/usr/bin:/bin", VIBE64_TEST_CONTROL_GENERATION: "A" };
   let instructions = "CALENDAR_INSTRUCTIONS_A";
-  const provider = new CodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
+  const provider = createCodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
     readInstructions: () => instructions });
   provider.client = client;
   provider.activeClient = async () => client;
@@ -558,7 +558,7 @@ PY` };
   const nativeRequest = client.request.bind(client);
   client.request = (method, params, options) => { requests.push({ method, params }); return nativeRequest(method, params, options); };
   const environment = { PATH: process.env.PATH, ...hostEnvironment };
-  provider = new CodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
+  provider = createCodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
     readInstructions: async () => { instructionReads += 1; return readInstructions(); },
     bindThreadContext: (threadId, context, params) => registry.register(threadId, context, params.cwd) });
   provider.client = client;

@@ -4,6 +4,8 @@ import {
   githubCredentialContext, normalizeGithubAccountMode, runVibe64Command
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /**
  * The project's GitHub owner/name, wherever its record keeps it ("" for none).
  */
@@ -19,9 +21,15 @@ export function requireGithubRepository(project, feature = "GitHub tools") {
   return fullName;
 }
 
-export function githubApi(input, options = {}) {
+/**
+ * Calls the GitHub API as the request's person, through the GitHub CLI and their credentials.
+ * @param {{ vibe64User?: object }} input
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the server's environment, which names the GitHub account mode
+ */
+export function githubApi(input, options) {
   const {
-    env = process.env,
+    env,
     runCommand = runVibe64Command,
     feature = "Pull requests",
     failureCode = "vibe64_github_pull_requests_failed",

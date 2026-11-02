@@ -1,8 +1,7 @@
 import {
   CodexAppServerAgentProvider as SharedCodexAppServerAgentProvider,
-  CODEX_APP_SERVER_INVALID_REQUEST_CODE,
   assertCodexAuthPreflightReady as assertNativeCodexAuthPreflightReady,
-  codexAppServerEndpointForTarget, codexCliResumeCommand as nativeCodexCliResumeCommand, codexTextInput, shellQuote
+  codexAppServerEndpointForTarget, codexCliResumeCommand as nativeCodexCliResumeCommand, shellQuote
 } from "@jskit-ai/assistant-core/server/codex-provider";
 import { createCodexAccountReader } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
@@ -156,7 +155,7 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
   if (!scope && !options.modelProviderId && !loginGeneration && !toText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
     return "";
   }
-  const namespace = runtimeNamespace();
+  const namespace = runtimeNamespace({ env: process.env });
   const runtimeInstanceId = toText(options.runtimeInstanceId);
   const executionMode = codexAppServerExecutionMode(options);
   return [
@@ -501,35 +500,6 @@ function codexAppServerControlsLog(logger) {
   );
 }
 
-async function ensureCodexAppServerRuntime(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
-  return runtime.ensure({ ...parameters, runtimeDir: options.runtimeDir || codexAppServerRuntimeDir(options) });
-}
-
-async function startCodexAppServerProcess(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
-  return runtime.start({
-    ...parameters,
-    runtimeDir: options.runtimeDir === undefined ? codexAppServerRuntimeDir({
-      env: options.env,
-      executionRoot: options.executionRoot,
-      runtimeInstanceId: options.runtimeInstanceId,
-      workdir: options.workdir
-    }) : options.runtimeDir
-  });
-}
-
-async function stopCodexAppServerRuntime(options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
-  return runtime.stop(parameters);
-}
-
-async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
-  const { runtime, parameters } = codexAppServerRuntimeHost(options);
-  return runtime.isLive(metadata, parameters);
-}
-
-
 class CodexAppServerAgentProvider extends SharedCodexAppServerAgentProvider {
   constructor(options = {}) {
     const host = codexAppServerRuntimeHost(options);
@@ -562,24 +532,16 @@ const __testables = Object.freeze({ CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE })
 
 export {
   CODEX_APP_SERVER_EXECUTION_MODES,
-  CODEX_APP_SERVER_INVALID_REQUEST_CODE,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
-  codexAppServerMetadataIsLive,
   codexAppServerControlsLog,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost,
-  currentCodexAccountIdentitySignature,
   readCodexSelectedAccountAccess,
   codexCliResumeCommand,
-  codexTextInput,
   createCodexAppServerAgentProvider,
-  ensureCodexAppServerRuntime,
-  startCodexAppServerProcess,
-  stopCodexAppServerRuntime,
   __testables
 };

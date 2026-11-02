@@ -296,10 +296,7 @@ function createSourceEditorExplanationCache({ now }) {
 
 export {
   createSourceEditorExplanationCache,
-  SOURCE_EDITOR_EXPLANATION_CACHE_MAX_ENTRIES,
-  SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS,
   sourceEditorCompletedCacheIdentityUnchanged,
   sourceEditorExplanationCacheKey,
-  sourceEditorExplanationCacheTemplate,
   sourceEditorInterpretationCacheOptions
 };

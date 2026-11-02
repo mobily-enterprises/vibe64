@@ -4,9 +4,6 @@ import path from "node:path";
 
 import { aiConnectionError } from "./aiConnectionError.js";
 import {
-  AI_CONNECTION_KEY_MAXIMUM_CHARACTERS,
-  AI_CONNECTION_LABEL_MAXIMUM_CHARACTERS,
-  AI_CONNECTION_STORE_VERSION,
   OPENCODE_ZEN_PROVIDER_ID,
   RETIRED_ZEN_MODEL_ID,
   ZAI_PROVIDER_ID,
@@ -621,11 +618,5 @@ function createAiConnectionStore({
 }
 
 export {
-  AI_CONNECTION_KEY_MAXIMUM_CHARACTERS,
-  AI_CONNECTION_LABEL_MAXIMUM_CHARACTERS,
-  AI_CONNECTION_STORE_VERSION,
-  OPENCODE_ZEN_PROVIDER_ID,
-  RETIRED_ZEN_MODEL_ID,
-  connectionFingerprint,
   createAiConnectionStore
 };

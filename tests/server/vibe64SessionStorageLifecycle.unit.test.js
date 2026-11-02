@@ -188,7 +188,7 @@ test("host capacity checks run before extraction and replacement without changin
 
 test("preparation writes survive real archive publication without changing the session format", async () => {
   await withTemporaryRoot(async (root) => {
-    const runtime = new Vibe64SessionRuntime({ projectContextRoot: root,
+    const runtime = new Vibe64SessionRuntime({ promptEnvironment: process.env, projectContextRoot: root,
       projectRuntimeRoot: path.join(root, "state"), inspectSourceByDefault: false });
     await runtime.store.createSession({ sessionId: "session-a", runtimeKind: "genesis",
       metadata: { source_creation_failed: "yes" } });

@@ -184,7 +184,5 @@ async function streamSourceEditorExplanationFollowup(context, input, options) {
 }
 
 export {
-  SOURCE_EDITOR_FOLLOWUP_OUTPUT_SCHEMA,
-  sourceEditorHelperFollowupThread,
   streamSourceEditorExplanationFollowup
 };

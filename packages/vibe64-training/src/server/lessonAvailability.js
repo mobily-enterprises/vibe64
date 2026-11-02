@@ -18,4 +18,4 @@ function lessonAvailableTo(lesson, actor) {
   return lessonAvailable(lesson.steps || [], { viewer: learningViewer(actor) });
 }
 
-export { availableStepIds, learningViewer, lessonAvailableTo };
+export { availableStepIds, lessonAvailableTo };

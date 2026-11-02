@@ -286,4 +286,4 @@ function registerRoutes(http, { projectContext, publishing }) {
   registerApkDownloadRoutes(routes, { publishing });
 }
 
-export { publishingStatusCode, registerRoutes };
+export { registerRoutes };

@@ -9,7 +9,7 @@ import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
-import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 
@@ -25,7 +25,7 @@ test("native Codex Stop kills current and late commands while preserving other w
   const notifications = [];
   const delayedStarts = [];
   const threads = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   let child, client, sequence = 0, stderr = "", delayCommandStart = false;
   const exists = (file) => access(path.join(cwd, file)).then(() => true, () => false);
   async function waitFor(predicate, label) {

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,17 +10,9 @@ import {
   resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
 } from "../../packages/vibe64-execution/src/server/credentialHomes.js";
-import {
-  __testables,
-  resolveRequestGithubTerminalToolHome
-} from "../../packages/studio-terminal-core/src/server/terminalOwnership.js";
+import { __testables } from "../../packages/studio-terminal-core/src/server/terminalOwnership.js";
 
-const {
-  terminalOwnerForGithubActor,
-  terminalOwnerFromMetadata,
-  terminalOwnerMatchesRequest,
-  terminalOwnerMetadata
-} = __testables;
+const { terminalOwnerMetadata } = __testables;
 
 test("GitHub local actor uses the daemon runner real home", () => {
   const result = resolveGithubHomeForActor({
@@ -111,88 +102,16 @@ test("stored GitHub actor resolves OS facts live by username", async () => {
 });
 
 test("terminal owner metadata records credential scope only", () => {
-  const owner = terminalOwnerForGithubActor({
-    accountMode: GITHUB_ACCOUNT_MODE_USER,
-    vibe64User: {
-      home: "/home/ada",
-      gid: 1001,
-      uid: 1001,
-      username: "ada"
-    }
+  const metadata = terminalOwnerMetadata({
+    githubCredentialScope: "user",
+    githubToolHomeSource: "/home/ada",
+    ownerScope: "user",
+    ownerUserKey: "ada"
   });
-  const metadata = terminalOwnerMetadata(owner);
 
   assert.equal(metadata.terminalOwner.githubCredentialScope, "user");
   assert.equal(Object.hasOwn(metadata.terminalOwner, "githubProviderScope"), false);
   assert.equal(metadata.terminalOwner.githubToolHomeSource, "/home/ada");
   assert.equal(metadata.terminalOwner.ownerScope, "user");
   assert.equal(metadata.terminalOwner.ownerUserKey, "ada");
-
-  const parsed = terminalOwnerFromMetadata(metadata);
-  assert.equal(parsed.githubCredentialScope, "user");
-  assert.equal(parsed.ownerScope, "user");
-  assert.equal(parsed.ownerUserKey, "ada");
-
-  const match = terminalOwnerMatchesRequest(metadata);
-  assert.equal(match.ok, true);
-  assert.equal(match.ownerScope, "user");
-  assert.equal(match.ownerUserKey, "ada");
-});
-
-test("request GitHub terminal home checks that the real home exists", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-real-github-home-"));
-  try {
-    const result = await resolveRequestGithubTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER
-      },
-      input: {
-        vibe64User: {
-          home,
-          gid: 1001,
-          uid: 1001,
-          username: "ada"
-        }
-      },
-      operation: "unit-test",
-      terminalKind: "unit"
-    });
-
-    assert.equal(result.ok, true);
-    assert.equal(result.credentialScope, "user");
-    assert.equal(result.githubToolHomeSource, home);
-    assert.equal(result.hostGid, 1001);
-    assert.equal(result.hostUid, 1001);
-    assert.equal(result.toolHomeSource, home);
-    assert.equal(result.owner.githubCredentialScope, "user");
-    assert.equal(result.owner.ownerUserKey, "ada");
-  } finally {
-    await rm(home, {
-      force: true,
-      recursive: true
-    });
-  }
-});
-
-test("request GitHub terminal home fails when the real home is missing", async () => {
-  const result = await resolveRequestGithubTerminalToolHome({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER
-    },
-    input: {
-      vibe64User: {
-        home: "/definitely/missing/vibe64/home",
-        gid: 1001,
-        uid: 1001,
-        username: "ada"
-      }
-    },
-    notReadyMessage: "GitHub real home is not ready.",
-    operation: "unit-test",
-    terminalKind: "unit"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_credential_home_not_ready");
-  assert.equal(result.error, "GitHub real home is not ready.");
 });

@@ -32,7 +32,7 @@ import { createModelRouting } from "./modelRouting.js";
  * and the AI management policy; the service owns login sessions and status reads.
  * @param {object} dependencies
  * @param {AccountsRuntime} dependencies.accountRuntime
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env the process environment: login and status commands run in it
  * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
  * @param {RuntimeLogger} dependencies.logger
  * @param {PersonalProfile} dependencies.personalProfile
@@ -45,7 +45,7 @@ import { createModelRouting } from "./modelRouting.js";
  */
 function createService({
   accountRuntime,
-  env = process.env,
+  env,
   invalidateAgentRuntimes,
   logger,
   personalProfile,

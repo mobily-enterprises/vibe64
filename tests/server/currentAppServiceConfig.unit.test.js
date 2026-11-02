@@ -91,6 +91,7 @@ test("current app tells the Outputs reason when the host is still preparing its 
     const seen = [];
     for (const status of ["not-prepared", "missing-configuration"]) {
       const service = createService({
+        env: process.env,
         inspectOutputs(input) {
           seen.push(input.resourcesPreparing);
           return { diagnostics: [], resources: [], stackHash: "h", status: "ready", targets: [] };
@@ -109,6 +110,7 @@ test("current app tells the Outputs reason when the host is still preparing its 
 test("missing Vibe64 Outputs declarations are unconfigured, not guessed", async () => {
   await withTemporaryRoot(async (root) => {
     const service = createService({
+      env: process.env,
       inspectOutputs() {
         const error = new Error("Genesis requires genesis/stack.md. Run genesis init first.");
         error.code = "STACK_REQUIRED";
@@ -130,6 +132,7 @@ test("missing Vibe64 Outputs declarations are unconfigured, not guessed", async 
 test("a project without a baseline source is unconfigured until a session exists", async () => {
   let inspected = false;
   const service = createService({
+    env: process.env,
     inspectOutputs() {
       inspected = true;
       return {};
@@ -149,6 +152,7 @@ test("current app never inspects a project namespace as source", async () => {
   let inspected = false;
   const projectNamespace = "/home/merc/.local/state/vibe64/managed-sources/merc/projects/demo";
   const service = createService({
+    env: process.env,
     inspectOutputs() {
       inspected = true;
       return {};
@@ -181,6 +185,7 @@ test("session inspection uses that session's source directory", async () => {
     );
     let inspectedRoot = "";
     const service = createService({
+      env: process.env,
       inspectOutputs({ projectRoot }) {
         inspectedRoot = projectRoot;
         return {
@@ -206,6 +211,7 @@ test("session inspection uses that session's source directory", async () => {
 test("unexpected Genesis inspection errors remain visible", async () => {
   await withTemporaryRoot(async (root) => {
     const service = createService({
+      env: process.env,
       inspectOutputs() {
         const error = new Error("Cannot read Stack file.");
         error.code = "EACCES";

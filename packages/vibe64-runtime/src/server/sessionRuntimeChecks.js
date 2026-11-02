@@ -244,16 +244,11 @@ export {
   assertUsableSession,
   GENESIS_SESSION_KIND,
   inspectSessionSource,
-  learningNativeExecutionRoot,
-  plainManifest,
   plainSessionView,
   requireLearningNativeDirectory,
   requireSessionSourceRoot,
-  SESSION_RENEWAL_HANDOVER_HASH_PATTERN,
   sessionAvailabilityIssue,
   sessionHasRenewalHandover,
-  sessionIsSupported,
   sessionSourceCreationFailed,
-  sessionSourceRecoveryWasSaved,
-  unsupportedSessionError
+  sessionSourceRecoveryWasSaved
 };

@@ -580,7 +580,6 @@ export {
   assistantSetupRoleValue,
   assistantMainAiChanged,
   isAssistantRoutingOwner,
-  isMainChatPurpose,
   needsMainChatApproval,
   assistantRoutingFromMetadata,
   assistantRoutingGoalFromMetadata,

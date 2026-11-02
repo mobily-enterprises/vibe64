@@ -41,12 +41,13 @@ import {
 import {
   archivedSessionStatus, assertSupportedSession, assertUsableSession, GENESIS_SESSION_KIND,
   inspectSessionSource, plainSessionView, requireLearningNativeDirectory, requireSessionSourceRoot,
-  sessionAvailabilityIssue, sessionHasRenewalHandover, sessionIsSupported, sessionSourceCreationFailed,
+  sessionAvailabilityIssue, sessionHasRenewalHandover, sessionSourceCreationFailed,
   sessionSourceRecoveryWasSaved
 } from "./sessionRuntimeChecks.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./sessionRuntimeRenewal.js").RenewalSessionRequest} RenewalSessionRequest */
 
 
@@ -73,7 +74,8 @@ class Vibe64SessionRuntime {
    * @param {string} [options.projectContextRoot]
    * @param {string} [options.projectRuntimeRoot]
    * @param {string} [options.projectSessionSourceRoot]
-   * @param {object} [options.promptEnvironment]
+   * @param {RuntimeEnv | (() => RuntimeEnv | Promise<RuntimeEnv>)} options.promptEnvironment the environment prompts
+   *   render with, or a function that reads it once
    * @param {typeof renderGenesisPrompt} [options.promptRenderer]
    * @param {boolean} [options.sourceInspectionAvailable]
    * @param {object | null} [options.sourceInspectionError]
@@ -87,12 +89,12 @@ class Vibe64SessionRuntime {
     projectContextRoot = process.cwd(),
     projectRuntimeRoot = "",
     projectSessionSourceRoot = "",
-    promptEnvironment = process.env,
+    promptEnvironment,
     promptRenderer = renderGenesisPrompt,
     sourceInspectionAvailable = true,
     sourceInspectionError = null,
     store = undefined
-  } = {}) {
+  }) {
     this.learningScope = validateLearningSessionScope(learningScope);
     if (this.learningScope?.noExercise && (projectSessionSourceRoot || createSessionSource)) {
       throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
@@ -532,9 +534,5 @@ class Vibe64SessionRuntime {
 }
 
 export {
-  GENESIS_SESSION_KIND,
-  Vibe64SessionRuntime,
-  assertSupportedSession,
-  plainSessionView,
-  sessionIsSupported
+  Vibe64SessionRuntime
 };

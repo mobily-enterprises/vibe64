@@ -130,4 +130,4 @@ function createTrainingStepReviewer({ learners, terminals }) {
   return Object.freeze({ review });
 }
 
-export { createTrainingStepReviewer, OUTPUT_SCHEMA as TRAINING_REVIEW_OUTPUT_SCHEMA, STABLE_CONTEXT as TRAINING_REVIEW_STABLE_CONTEXT };
+export { createTrainingStepReviewer };

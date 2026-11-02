@@ -55,7 +55,6 @@ function usageRecordingEnvironment({ recordingDirectory, sourceRoot, targetKind 
 }
 
 export {
-  USAGE_TRACERS,
   mergePrependEnvironment,
   recordingUnavailableReason,
   usageRecordingEnvironment,

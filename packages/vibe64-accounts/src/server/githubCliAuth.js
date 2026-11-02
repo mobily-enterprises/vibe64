@@ -54,8 +54,6 @@ export {
   GITHUB_RECONNECT_REQUIRED_CODE,
   GITHUB_RECONNECT_REQUIRED_MESSAGE,
   githubCliAccountFailureMessage,
-  githubCliCommandOutput,
   githubCliFailureDetails,
-  githubCliOutputRequiresReconnect,
   redactGithubCliOutput
 };

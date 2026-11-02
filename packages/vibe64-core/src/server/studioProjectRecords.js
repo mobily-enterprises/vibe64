@@ -33,6 +33,8 @@ import {
 import { VIBE64_PROJECTS_ROOT_ENV, resolveDefaultProjectsRoot } from "./studioRoots.js";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 // Project records and their saved metadata: slugs, context and runtime
 // roots, metadata files and the GitHub repository read from Git remotes.
 const DEFAULT_CATALOGUE_REPOSITORY_BRANCH = "main";
@@ -41,11 +43,18 @@ function normalizeRoot(value, fallbackRoot = process.cwd()) {
   return path.resolve(String(value || "").trim() || fallbackRoot);
 }
 
+/**
+ * The project catalogue's folder.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.home]
+ */
 function resolveStudioProjectsRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   home = os.homedir()
-} = {}) {
+}) {
   return normalizeRoot(
     explicitRoot || env[VIBE64_PROJECTS_ROOT_ENV],
     resolveDefaultProjectsRoot(home)
@@ -111,7 +120,7 @@ function resolveProjectContextRoot({
   projectsRoot = "",
   slug = ""
 } = {}) {
-  const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot());
+  const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot({ env: process.env }));
   const normalizedSlug = normalizeProjectSlug(slug);
   const projectContextRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
   if (!pathInsideOrEqual(normalizedProjectsRoot, projectContextRoot)) {
@@ -605,23 +614,15 @@ export {
   assertDirectoryUsable,
   assertCatalogueRepositoryMetadata,
   DEFAULT_CATALOGUE_REPOSITORY_BRANCH,
-  gitCommandOutput,
-  githubRemoteRecord,
-  githubRepositoryFromGitRemotes,
-  githubRepositoryFromRemoteUrl,
   localProjectKeyFromTargetRoot,
-  localProjectSlugFromTargetRoot,
   normalizeDevelopmentDatabaseName,
   normalizeDevelopmentDatabaseScope,
   normalizeProjectMetadata,
   normalizeRoot,
-  parseGithubRemote,
   practiceOwnershipDiffers,
   projectCatalogUnavailableError,
   projectDeletingError,
   projectMetadataFromInput,
-  projectMetadataPath,
-  projectMetadataWithGitRemote,
   projectRecord,
   projectSlugExistsError,
   projectSlugFromInput,
@@ -631,10 +632,7 @@ export {
   resolveCatalogProjectRuntimeRoot,
   resolveProjectContextRoot,
   resolveStudioProjectsRoot,
-  runGit,
-  runGitCommand,
   selectedProjectRecord,
-  workspaceProjectRecord,
   workspaceProjectRecordForPath,
   writeProjectMetadata
 };

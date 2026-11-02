@@ -34,6 +34,7 @@ function registerColleagueFocus({
       }
     }
     async function update(input, acknowledge) {
+      // readable-check: allow method-probe - input validation: a browser may emit focus without an acknowledgement callback
       if (typeof acknowledge !== "function" || closed) return;
       try {
         if (typeof input?.clientId !== "string" || !input.clientId || input.clientId.length > 200) {
@@ -111,4 +112,4 @@ function createColleagueBrowserFocus({
   return Object.freeze({ close });
 }
 
-export { createColleagueBrowserFocus, registerColleagueFocus };
+export { createColleagueBrowserFocus };

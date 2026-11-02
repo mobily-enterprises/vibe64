@@ -108,11 +108,6 @@ function createPersonalAiProfileStore({
 
 export {
   MAX_PREFERRED_NAME_LENGTH,
-  PERSONAL_AI_PROFILE_FILE,
-  PERSONAL_AI_PROFILE_VERSION,
   createPersonalAiProfileStore,
-  emptyPersonalAiProfile,
-  normalizePersonalAiProfile,
-  normalizePreferredName,
-  personalAiProfilePath
+  normalizePreferredName
 };

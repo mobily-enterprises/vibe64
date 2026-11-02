@@ -1,16 +1,18 @@
-function projectServiceSourceRoot(project = null) {
-  // readable-check: allow method-probe - optional operation: without a project service there is no selected source
-  if (project && typeof project.currentProjectSourceRoot === "function") {
-    return String(project.currentProjectSourceRoot() || "").trim();
-  }
-  return "";
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
+/**
+ * The selected project's source root, or empty when none is selected.
+ * @param {ProjectService} project
+ */
+function projectServiceSourceRoot(project) {
+  return String(project.currentProjectSourceRoot() || "").trim();
 }
 
-function projectServiceNamespaceRoot(project = null) {
-  // readable-check: allow method-probe - optional operation: without a project service there is no selected namespace
-  if (!project || typeof project.currentTargetRoot !== "function") {
-    return "";
-  }
+/**
+ * The selected project's namespace root, or empty when none is selected.
+ * @param {ProjectService} project
+ */
+function projectServiceNamespaceRoot(project) {
   return String(project.currentTargetRoot() || "").trim();
 }
 

@@ -4,8 +4,7 @@ import path from "node:path";
 import {
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_LOGIN,
-  PREVIEW_IDENTITY_SELECTOR_TYPES,
-  PREVIEW_IDENTITY_SELECTOR_USER_ID
+  PREVIEW_IDENTITY_SELECTOR_TYPES
 } from "../shared/previewIdentity.js";
 import { vibe64Error as previewIdentityError } from "./core.js";
 
@@ -424,16 +423,12 @@ export {
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
-  PREVIEW_IDENTITY_SELECTOR_EMAIL,
-  PREVIEW_IDENTITY_SELECTOR_LOGIN,
   PREVIEW_IDENTITY_SELECTOR_TYPES,
-  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   PREVIEW_IDENTITY_SUBJECT_SELECTOR,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   normalizePreviewApplicationIdentities,
   normalizePreviewAuthKind,
-  normalizePreviewIdentitySelector,
   normalizePreviewIdentitySelection,
   previewAuthEnvironment,
   previewAuthIdentityAvailable,

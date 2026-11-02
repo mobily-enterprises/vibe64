@@ -185,6 +185,5 @@ async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
 
 export {
   ensureSessionSourceGitAlternatesDissociated,
-  inspectSessionSourceMergeState,
-  sessionSourceGitAlternatesPath
+  inspectSessionSourceMergeState
 };

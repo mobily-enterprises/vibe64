@@ -17,7 +17,6 @@ import {
   createTraceReader,
   readInteractions,
   readJsonFile,
-  readRequestLog,
   recordingRequestRows,
   writeJsonFile
 } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
@@ -198,6 +197,11 @@ async function unlessBlocked(read, fifos) {
   return result;
 }
 
+// The ids of a recording's request rows before any trace is read: only the Preview proxy's request log.
+async function loggedRequestIds(directory) {
+  return (await recordingRequestRows(directory, createTraceReader(directory))).map((row) => row.id);
+}
+
 test("recording files are read only as regular files within their caps, and written through no link", async (t) => {
   const directory = await temporary(t);
   const outside = await temporary(t);
@@ -206,12 +210,12 @@ test("recording files are read only as regular files within their caps, and writ
   // A log linked elsewhere is not read.
   await writeFile(path.join(outside, "requests.ndjson"), ndjson([request("r_000001")]));
   await symlink(path.join(outside, "requests.ndjson"), log);
-  assert.deepEqual(await readRequestLog(directory), []);
+  assert.deepEqual(await loggedRequestIds(directory), []);
   // A log is read up to 8 MiB: a line after that is not.
   await rm(log);
   const filler = `${"x".repeat(60 * 1024)}\n`;
   await writeFile(log, ndjson([request("r_000001")]) + filler.repeat(Math.ceil(8 * 1024 * 1024 / filler.length)) + ndjson([request("r_000002")]));
-  assert.deepEqual((await readRequestLog(directory)).map((row) => row.id), ["r_000001"]);
+  assert.deepEqual(await loggedRequestIds(directory), ["r_000001"]);
   // A FIFO is never waited on, as a log or as a hits file; a linked hits file is not read.
   const fifos = [path.join(directory, "interactions.ndjson"), path.join(directory, "hits-nodejs-7.ndjson")];
   await exec("mkfifo", fifos);

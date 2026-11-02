@@ -9,6 +9,7 @@ import { passthroughEnvironment } from "@local/vibe64-packaging/server/stages";
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
 /** @typedef {import("./types.js").ProjectRepository} ProjectRepository */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
 const KEEP = 10;
@@ -23,8 +24,8 @@ function failureOutput(outcome, home) {
   return text.replaceAll(home, "~").slice(-OUTPUT_TAIL);
 }
 
-function checkEnvironment(home, base = process.env) {
-  return { ...passthroughEnvironment(base), HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
+function checkEnvironment(home, baseEnvironment) {
+  return { ...passthroughEnvironment(baseEnvironment), HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
 }
 
 /**
@@ -35,6 +36,7 @@ function checkEnvironment(home, base = process.env) {
  * @param {object} dependencies
  * @param {string} dependencies.runtimeRoot
  * @param {ProjectRepository} dependencies.repository
+ * @param {RuntimeEnv} dependencies.baseEnvironment PATH and locale for the checks
  * @param {typeof verifyGenesisProject} [dependencies.verify]
  * @param {ReturnType<typeof checkCommandRunner>} [dependencies.processRunner]
  * @param {() => string} [dependencies.now]
@@ -42,6 +44,7 @@ function checkEnvironment(home, base = process.env) {
 function createVerificationRunner({
   runtimeRoot,
   repository,
+  baseEnvironment,
   verify = verifyGenesisProject,
   processRunner = checkCommandRunner(),
   now = () => new Date().toISOString()
@@ -84,7 +87,7 @@ function createVerificationRunner({
         };
         const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({
           projectRoot: root,
-          environment: checkEnvironment(home),
+          environment: checkEnvironment(home, baseEnvironment),
           onEvent,
           processRunner
         }));

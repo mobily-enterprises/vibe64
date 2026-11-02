@@ -16,12 +16,6 @@ const PROJECT_REPOSITORY_MODE_MANAGED_GIT = "managed_git";
 const PROJECT_REPOSITORY_MODE_LOCAL_SOURCE = "local_source";
 const PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH = "main";
 
-const PROJECT_REPOSITORY_MODES = Object.freeze({
-  GITHUB: PROJECT_REPOSITORY_MODE_GITHUB,
-  MANAGED_GIT: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-  LOCAL_SOURCE: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-});
-
 async function readProjectRepositoryWorkflow(projectRuntimeRoot) {
   if (!path.isAbsolute(projectRuntimeRoot || "")) throw new Error("Repository workflow requires a project runtime root.");
   try {
@@ -435,12 +429,9 @@ export {
   assertSessionRepositoryReview,
   sessionRepositoryDestination,
   PROJECT_REPOSITORY_MODE_GITHUB,
-  PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
-  PROJECT_REPOSITORY_MODES,
   normalizeProjectGithubRepository,
-  normalizeProjectRepository,
   normalizeRepositoryMode,
   projectRepositoryStorageRole,
   projectRequiresGithubConnection,

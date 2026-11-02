@@ -85,7 +85,7 @@ test("Codex message preparation reuses only current resources and Env files", as
     };
     const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      projectContext: createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
         resources: [{ component: "jskit-mysql", resource: { id: "database", kind: "mysql",
           environmentAlternatives: [{ preferred: true, bindings: { host: "DB_HOST", port: "DB_PORT",
@@ -139,7 +139,7 @@ test("Codex message preparation reuses only current resources and Env files", as
 test("Codex context avoids source inspection while retaining workspace and account checks", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({ ...projectServiceCollaborators(), logger: console, env: {},
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
+      projectContext: createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
     const runtime = await service.createRuntime();
     const sessionId = "codex-context";
     const workdir = sourcePath(targetRoot, sessionId);
@@ -217,7 +217,7 @@ test("resource configuration follows resolved application settings without secre
     let defaults = [{ name: "WORKERS", value: "2" }, { name: "AUTH_SECRET", value: "default-secret" }];
     const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: { UNRELATED_HOST_SETTING: "not-project-configuration" },
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      projectContext: createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment() {
         inspections += 1;
         if (failure) throw failure;
@@ -280,6 +280,7 @@ test("managed session credentials preserve resource configuration identity, but 
     const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext: createStudioProjectContext({
+        env: process.env,
         explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
         explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
         explicitTargetRoot: targetRoot, home: path.dirname(targetRoot)

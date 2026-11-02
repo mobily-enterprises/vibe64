@@ -3,17 +3,26 @@ import {
   appCredentialContext, operatorCliCommand, operatorCliStartFailed, runVibe64Command
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const runners = new WeakMap();
 // Native status keeps the runner's error text; this prefix marks a Claude Code that could not be executed.
 const CLAUDE_START_FAILED_ERROR = "Claude Code didn't start.";
 // The account-wide sign-in read belongs to no project or session.
 const CLAUDE_STATUS_EXECUTION = Object.freeze({ label: "Checking the Claude sign-in", operationId: "claude-auth-status" });
 
+/**
+ * Reads the Claude Code sign-in status for the app credential home.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {ReturnType<typeof appCredentialContext>} [options.credentialHome]
+ * @param {typeof runVibe64Command} [options.commandRunner]
+ */
 async function readClaudeCodeAuthStatus({
-  env = process.env,
+  env,
   credentialHome = appCredentialContext(),
   commandRunner = runVibe64Command
-} = {}) {
+}) {
   let capture = runners.get(commandRunner);
   if (!capture) {
     capture = async (input) => {

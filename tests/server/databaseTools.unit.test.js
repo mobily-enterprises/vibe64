@@ -72,8 +72,8 @@ import {
   statementCommand
 } from "../../packages/vibe64-database-tools/src/server/sqlPolicy.js";
 import {
-  codexAppServerHelperTurnSettings
-} from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+  __testables as codexAppServerHelperThreadsTestables
+} from "../../packages/vibe64-runtime/src/server/codexAppServerHelperThreads.js";
 
 const {
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
@@ -83,6 +83,7 @@ const {
 const { DATABASE_DIALECTS } = databaseDialectTestables;
 const { databaseValue, normalizeRawResponse } = queryExecutorTestables;
 const { MAX_DATABASE_SCHEMA_MATCHES, MAX_DATABASE_SCHEMA_RESULT_BYTES } = schemaAccessTestables;
+const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 
 function testSchema() {
   return {

@@ -473,7 +473,6 @@ export {
   pageOf,
   readInteractions,
   readJsonFile,
-  readRequestLog,
   recordedRequestPath,
   recordingRequestRows,
   writeJsonFile

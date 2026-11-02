@@ -4,10 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  connectionFingerprint,
-  createAiConnectionStore
-} from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
+import { connectionFingerprint } from "../../packages/vibe64-accounts/src/server/aiConnectionRecords.js";
+import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { verifyZaiConnection } from "../../packages/vibe64-accounts/src/server/zaiConnectionVerifier.js";
 import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/shared/assistantAccess.js";
 

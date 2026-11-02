@@ -423,19 +423,13 @@ const __testables = Object.freeze({
 });
 
 export {
-  REDACTED_RUNTIME_CONFIG_VALUE,
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
-  missingRuntimeConfigRecords,
   normalizeRuntimeConfigKey,
   normalizeRuntimeConfigOwner,
-  normalizeRuntimeConfigPhase,
-  normalizeRuntimeConfigPhases,
   normalizeRuntimeConfigRecord,
   normalizeRuntimeConfigScope,
-  normalizeRuntimeConfigTarget,
-  normalizeRuntimeConfigTargets,
   resolveRuntimeConfig,
   runtimeConfigDotenvFile,
   runtimeConfigEnv,
@@ -443,6 +437,5 @@ export {
   runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyLooksSecret,
   runtimeConfigRecordsForScope,
-  runtimeConfigViewModel,
   __testables
 };

@@ -1,21 +1,5 @@
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-const VIBE64_AGENT_TASK_STATES = Object.freeze({
-  COMPLETED: "completed",
-  RUNNING: "running",
-  STARTING: "starting",
-  STOPPED: "stopped",
-  STOPPING: "stopping",
-  WAITING: "waiting"
-});
-
-const VIBE64_AGENT_TASK_ACTIVE_STATES = new Set([
-  VIBE64_AGENT_TASK_STATES.RUNNING,
-  VIBE64_AGENT_TASK_STATES.STARTING,
-  VIBE64_AGENT_TASK_STATES.STOPPING,
-  VIBE64_AGENT_TASK_STATES.WAITING
-]);
-
 const VIBE64_AGENT_TASK_RESULT_KINDS = Object.freeze({
   COMPLETE: "complete",
   CONTINUE: "continue"
@@ -69,19 +53,7 @@ function normalizeVibe64AgentTaskResult(value = null) {
   };
 }
 
-function vibe64AgentTaskIsActive(task = null) {
-  return Boolean(
-    task &&
-    typeof task === "object" &&
-    !Array.isArray(task) &&
-    VIBE64_AGENT_TASK_ACTIVE_STATES.has(toText(task.state))
-  );
-}
-
 export {
-  VIBE64_AGENT_TASK_RESULT_KINDS,
   VIBE64_AGENT_TASK_RESULT_SCHEMA,
-  VIBE64_AGENT_TASK_STATES,
-  normalizeVibe64AgentTaskResult,
-  vibe64AgentTaskIsActive
+  normalizeVibe64AgentTaskResult
 };

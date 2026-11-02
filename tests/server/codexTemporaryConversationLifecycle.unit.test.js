@@ -46,13 +46,15 @@ import {
   createService as createSourceEditorService
 } from "../../packages/vibe64-source-editor/src/server/service.js";
 import {
-  CodexAppServerAgentProvider,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   codexAppServerRuntimeDir,
+  createCodexAppServerAgentProvider
+} from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import {
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
-} from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+} from "./codexAppServerTestHelpers.js";
 import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   MINIMUM_CODEX_VERSION
@@ -13039,7 +13041,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
     const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
     assert.notEqual(context.ok, false, context.error || "native conversation context must be available");
     assert.equal(context.provider, provider, "the retained owner captures the actual Public subclass");
-    assert.ok(provider instanceof CodexAppServerAgentProvider);
+    assert.equal(provider.constructor, createCodexAppServerAgentProvider().constructor);
     const result = await provider.resumeThread(threadId, {
       cwd: session.metadata.source_path,
       model: "gpt-5.5"
@@ -13120,7 +13122,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
           assert.fail(`Unexpected native request ${method}; recovery must not infer an authored turn.`);
         }
       };
-      provider = new CodexAppServerAgentProvider(providerOptions);
+      provider = createCodexAppServerAgentProvider(providerOptions);
       provider.client = client;
       provider.runtime = { ...captures.runtimeInfo, executionId: "replacement-process" };
       provider.initializeResult = { userAgent: captures.serverUserAgent };
@@ -13234,7 +13236,7 @@ test("Codex real provider refreshes Public commands and current instructions wit
           assert.fail(`Unexpected native request ${method}; recovery must not author user work.`);
         }
       };
-      provider = new CodexAppServerAgentProvider(providerOptions);
+      provider = createCodexAppServerAgentProvider(providerOptions);
       provider.client = client;
       provider.runtime = { ...captures.runtimeInfo, executionId: "same-process" };
       provider.initializeResult = { userAgent: captures.serverUserAgent };
@@ -13273,7 +13275,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
   // login identity, generation checks, Helper ledger and resume stay intact.
   const providerFactory = (providerOptions, { calls, subscribers, captures }) => {
     const fixture = createProvider(calls, subscribers, captures, providerOptions);
-    const provider = new CodexAppServerAgentProvider(providerOptions);
+    const provider = createCodexAppServerAgentProvider(providerOptions);
     providers.push(provider);
     activeProvider = provider;
     assert.equal(provider.isHelperProvider(), false, "original managed Helpers share the interactive provider policy");
@@ -13359,7 +13361,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
           executionProfile: profile, outputSchema: sourceExplanationOutputSchema(), prompt: "Continue once after token refresh.", threadId
         });
         await waitForCapturedTurns(refreshed, 1);
-        assert.ok(activeProvider instanceof CodexAppServerAgentProvider);
+        assert.equal(activeProvider.constructor, createCodexAppServerAgentProvider().constructor);
         const currentRuntime = await activeProvider.currentRuntimeInfo();
         assert.equal(currentRuntime.accountIdentitySignature, firstRuntime.accountIdentitySignature);
         assert.notEqual(currentRuntime.authStateSignature, firstRuntime.authStateSignature);
@@ -13560,9 +13562,9 @@ test("Main browser fresh authorization for a local practice project opened as an
   // ordinary write grant and an ordinary projectSlug browser authority. The
   // retained grant keeps write (it no longer expires to CONTROL); publication
   // must still read fresh authority and revocation must still suppress it.
-  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
-    assertProjectEffectAdmission, registerPracticeRequestActor, resolveProjectRequestContext,
-    captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const { currentProjectRequestContext, assertProjectEffectAdmission, registerPracticeRequestActor,
+    resolveProjectRequestContext, captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const { runWithPracticeProjectContext, currentPracticeProjectScope } = await import("../../packages/vibe64-core/src/server/practiceContext.js");
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
   const slug = "training-839fb16d3aed40c88b26cb4ec8fe1229";

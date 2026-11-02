@@ -190,8 +190,6 @@ async function removeSessionOwnedWorktreeDirectory({
 }
 
 export {
-  COMMAND_BUFFER_BYTES,
-  GIT_TIMEOUT_MS,
   inspectWorktreeDirty,
   isExactGitWorktree,
   metadataValue,

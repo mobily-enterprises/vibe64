@@ -224,4 +224,4 @@ function createProjectRepository({ readProject }) {
   });
 }
 
-export { createProjectRepository, githubRepositoryOf };
+export { createProjectRepository };

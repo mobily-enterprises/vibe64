@@ -50,6 +50,7 @@
     "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js",
     "./server/sha256Hex": "./src/server/sha256Hex.js",
+    "./shared/acceptEvery": "./src/shared/acceptEvery.js",
     "./shared/doNothing": "./src/shared/doNothing.js",
     "./shared/actionFields": "./src/shared/actionFields.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",

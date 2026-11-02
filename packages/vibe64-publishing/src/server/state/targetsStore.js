@@ -120,4 +120,4 @@ function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() 
   });
 }
 
-export { TARGETS_CONTRACT, createTargetsStore, normalizeTarget };
+export { createTargetsStore };

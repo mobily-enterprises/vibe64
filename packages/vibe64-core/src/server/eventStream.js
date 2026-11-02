@@ -82,10 +82,10 @@ async function sendVibe64EventStream(reply, run, options = {}) {
     await run({
       emit,
       isClosed: () => closed,
+      /**
+       * @param {() => void} handler
+       */
       onClose(handler) {
-        if (typeof handler !== "function") {
-          return;
-        }
         if (closed) {
           runCloseHandler(handler);
           return;

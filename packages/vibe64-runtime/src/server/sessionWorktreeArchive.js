@@ -422,7 +422,6 @@ export {
   archiveSessionSource,
   commitRenewalSessionSourceStage,
   prepareRenewalSessionSource,
-  renewalSourceStagePath,
   restoreRenewalSessionSourceStage,
   stagePreparedRenewalSessionSource
 };

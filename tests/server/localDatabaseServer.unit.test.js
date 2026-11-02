@@ -55,7 +55,7 @@ test("the project answers with Env over Stack defaults, ignores the shell, and s
     const options = { ...projectServiceCollaborators(), logger: console,
       // A shell export must not count: Workspace setup never receives it.
       env: { DB_PASSWORD: "from-the-shell", DATABASE_URL: "mysql://shell@nowhere/x" },
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      projectContext: createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({
         components: [],
         environmentDefaults: [
@@ -95,7 +95,7 @@ test("project status counts only values the project's processes get", async () =
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: { DB_HOST: "127.0.0.1", DB_PORT: "5432", DB_DATABASE: "rails", DB_USERNAME: "rails" },
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      projectContext: createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [{ component: "rails-postgresql",
         resource: { id: "database", kind: "postgresql", environmentAlternatives: [{ preferred: true, allowEmpty: ["password"],
           bindings: { database: "DB_DATABASE", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USERNAME" } }] } }] })

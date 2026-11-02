@@ -77,6 +77,7 @@ require("node:http").createServer((_request, response) => {
   const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(root, "managed"),
       explicitSystemRoot: path.join(root, "system"),
       explicitTargetRoot: sourceRoot

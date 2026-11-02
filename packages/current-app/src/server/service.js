@@ -60,12 +60,12 @@ function outputsView(root, outputs) {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env the base environment the outputs inspection runs in
  * @param {typeof inspectVibe64Outputs} [dependencies.inspectOutputs]
  * @param {ProjectService} dependencies.project
  */
 function createService({
-  env = process.env,
+  env,
   inspectOutputs = inspectVibe64Outputs,
   project
 }) {

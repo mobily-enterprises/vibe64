@@ -6,6 +6,7 @@ import {
   finishConversationOperation as finishSessionOperation
 } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { writeJsonFile } from "./sessionFiles.js";
 import { acquireSessionLock, sessionLockPath } from "./sessionLocks.js";
 import { assertValidVibe64SessionId, SESSION_RENEWAL_STATE_FILE_PATTERN } from "./sessionRecordRules.js";
@@ -125,7 +126,7 @@ function createSessionStoreLocks({ state, storePaths }) {
    * Run operation under lockPath. A caller already inside that lock joins the
    * existing lease; otherwise acquire() takes the lock or names the rejection.
    */
-  async function runReentrantExclusive(lockPath, acquire, operation, beforeOperation = null) {
+  async function runReentrantExclusive(lockPath, acquire, operation, beforeOperation = doNothing) {
     const activeLocks = sessionExclusiveContext.getStore();
     const inheritedContext = activeLocks?.get(lockPath);
     if (inheritedContext?.participant?.active === true) {
@@ -156,9 +157,7 @@ function createSessionStoreLocks({ state, storePaths }) {
       participant
     });
     try {
-      if (beforeOperation) {
-        await beforeOperation();
-      }
+      await beforeOperation();
       return await sessionExclusiveContext.run(nextLocks, async () => ({
         acquired: true,
         value: await operation()

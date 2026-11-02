@@ -4,11 +4,20 @@ import { validRepositoryBranch } from "@local/vibe64-core/server/projectReposito
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
+/**
+ * Lists the project's branches, or creates one from a checked commit.
+ * @param {object} project
+ * @param {object} input
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the server's environment, which names the GitHub account mode
+ */
 async function repositoryBranches(project, input = {}, {
   runCommand = runVibe64Command,
-  env = process.env,
+  env,
   runExclusive = runProjectSourceExclusive
-} = {}) {
+}) {
   const mode = project.repositoryMode || project.repository?.mode;
   if (!["github", "managed_git"].includes(mode)) {
     throw new Error("Use the local Git controls to switch the opened folder before creating a session.");

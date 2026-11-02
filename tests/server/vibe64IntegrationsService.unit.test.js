@@ -729,7 +729,7 @@ test("n8n registration uses real project Env and nested session locking", { time
   await mkdir(target, { recursive: true }); await mkdir(source, { recursive: true });
   await promisify(execFile)("git", ["init", "--quiet"], { cwd: source });
   const project = createProjectService({ ...projectServiceCollaborators(), env: {},
-    projectContext: createStudioProjectContext({ explicitManagedSourceRoot: path.join(root, "managed-source"),
+    projectContext: createStudioProjectContext({ env: process.env, explicitManagedSourceRoot: path.join(root, "managed-source"),
       explicitSystemRoot: path.join(root, "system"), explicitTargetRoot: target, home: root }),
     inspectEnvironment: async () => ({ status: "ready", components: [], resources: [], environmentDefaults: [],
       files: [{ format: "dotenv", path: ".env" }] })

@@ -499,6 +499,5 @@ function createService({
 }
 
 export {
-  commandCheck,
   createService
 };

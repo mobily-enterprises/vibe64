@@ -92,7 +92,7 @@ async function restoreColleagueNativeContinuity({
   apply,
   backupRoot,
   report,
-  env = process.env
+  env
 }, historicalInteractive = false) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));

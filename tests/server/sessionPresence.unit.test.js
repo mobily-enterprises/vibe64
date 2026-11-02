@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { VIBE64_SESSION_PRESENCE_CHANGED_EVENT } from "../../packages/vibe64-runtime/src/shared/sessionPresence.js";
 import {
   __testables,
-  VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   createSessionPresencePublisher,
   createSessionPresenceService,
   presenceActor

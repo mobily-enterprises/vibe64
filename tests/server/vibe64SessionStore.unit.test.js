@@ -8,11 +8,11 @@ import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
 
 import {
   VIBE64_SESSION_STATUS,
-  assertVibe64SessionStatus,
   createVibe64SessionStore,
   vibe64SessionStatusIsHidden,
   vibe64SessionStatusIsOpen
 } from "@local/vibe64-runtime/server/sessionStore";
+import { assertVibe64SessionStatus } from "@local/vibe64-runtime/server/sessionRecordRules";
 import {
   markHistoricalConversationRewound,
   projectRuntimeRoot,

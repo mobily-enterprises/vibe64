@@ -70,10 +70,8 @@ import {
 import {
   runVibe64AgentWriteExclusive
 } from "../../packages/vibe64-runtime/src/server/agentWriteLock.js";
-import {
-  runWithPracticeProjectContext,
-  runWithProjectRequestContext
-} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/practiceContext.js";
 import {
   createVibe64SessionStore
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
@@ -655,6 +653,7 @@ test("session status refreshes do not inspect Git and explicit source health che
     project: {
       async createRuntime(options = {}) {
         runtime = new Vibe64SessionRuntime({
+          promptEnvironment: process.env,
           inspectSourceByDefault: !options.withoutSource,
           sourceInspectionAvailable: false,
           store: {
@@ -4857,7 +4856,7 @@ test("source pin works during assistant preparation and retains closing and rene
     });
     await store.createSession({ sessionId: "source", runtimeKind: "genesis" });
     await writeProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) });
-    const runtime = new Vibe64SessionRuntime({ store, inspectSourceByDefault: false });
+    const runtime = new Vibe64SessionRuntime({ store, promptEnvironment: process.env, inspectSourceByDefault: false });
     const service = createService({ project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {} });
     const ready = Promise.withResolvers();
     const release = Promise.withResolvers();

@@ -618,7 +618,6 @@ export {
   localDatabaseServerDeclarations,
   managesProjectResources,
   normalizeResourceEnvironment,
-  preferredAlternative,
   requiredAlternative,
   resourceKindIsDatabase,
   resourceSemanticIsSecret,

@@ -139,7 +139,5 @@ function createRepositoryUpdateProbe({
 }
 
 export {
-  REPOSITORY_UPDATE_PROBE_INTERVAL_MS,
-  REPOSITORY_UPDATE_PROBE_RETRY_MS,
   createRepositoryUpdateProbe
 };

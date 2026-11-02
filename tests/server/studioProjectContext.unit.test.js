@@ -10,14 +10,13 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  PROJECT_SLUG_MAX_LENGTH,
   createStudioProjectContext,
   normalizeProjectSlug,
   projectSlugFromName,
   resolveProjectContextRoot,
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
-  PROJECT_SLUG_MAX_LENGTH as SHARED_PROJECT_SLUG_MAX_LENGTH,
+  PROJECT_SLUG_MAX_LENGTH,
   PROJECT_SLUG_PATTERN
 } from "../../packages/vibe64-core/src/shared/projectSlug.js";
 import {
@@ -724,7 +723,6 @@ test("project slug contract resolves only canonical Vibe64 project roots", async
     }), path.join(projectsRoot, "app_1-alpha"));
 
     // Browser forms check names against the same shared rule the server enforces.
-    assert.equal(SHARED_PROJECT_SLUG_MAX_LENGTH, PROJECT_SLUG_MAX_LENGTH);
     assert.equal(PROJECT_SLUG_PATTERN.test("app_1-alpha"), true);
     assert.equal(PROJECT_SLUG_PATTERN.test("-dash"), false);
     assert.equal(normalizeProjectSlug("a".repeat(PROJECT_SLUG_MAX_LENGTH)), "a".repeat(PROJECT_SLUG_MAX_LENGTH));
@@ -1455,7 +1453,7 @@ test("local project authority follows the checked-out branch and reports detache
     await mkdir(targetRoot);
     await runGit(targetRoot, ["init", "--initial-branch=trunk"]);
     await runGit(targetRoot, ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "base"]);
-    const context = createStudioProjectContext({ explicitTargetRoot: targetRoot, home: root,
+    const context = createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: root,
       runtimeProfile: { local: true, mode: "local" } });
     assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "trunk");
     await runGit(targetRoot, ["checkout", "-b", "topic"]);
@@ -1626,7 +1624,7 @@ function practiceSlugOf(training) {
 async function localPracticeContext(root) {
   const working = path.join(root, "working");
   await mkdir(working, { recursive: true });
-  return createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+  return createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
 }
 

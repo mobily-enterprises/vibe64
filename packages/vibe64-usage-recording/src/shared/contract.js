@@ -25,7 +25,6 @@ const USAGE_RECORDING_STATES = Object.freeze(["starting", "recording", "stopping
 const USAGE_RECORDING_STOP_REASONS = Object.freeze([
   "person", "time-limit", "request-limit", "size-limit", "target-exited", "session-ended", "error"
 ]);
-const USAGE_RECORDING_TARGET_KINDS = Object.freeze(["web", "terminal"]);
 const USAGE_TRACER_RUNTIMES = Object.freeze(["nodejs", "python", "php"]);
 
 const MIB = 1024 * 1024;
@@ -131,9 +130,7 @@ export {
   USAGE_RECORDING_REQUEST_HEADER,
   USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
-  USAGE_RECORDING_TARGET_KINDS,
   USAGE_REQUEST_ID_PATTERN,
-  USAGE_SCOPE_KINDS,
   USAGE_TRACE_SCHEMA,
   usageScopeKind,
   usageTraceLineProblem,

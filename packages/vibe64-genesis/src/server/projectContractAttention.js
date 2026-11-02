@@ -26,7 +26,6 @@ function genesisStackUnreadable(error) {
 }
 
 export {
-  GENESIS_STACK_CONTRACTS_INCOMPLETE,
   GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention,

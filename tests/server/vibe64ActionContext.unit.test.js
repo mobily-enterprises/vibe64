@@ -60,7 +60,7 @@ test("project owner actions admit the standalone local owner but not foreign req
       assert.equal(writes, 1);
     } finally {
       await app.close();
-      configureStudioProjectContext();
+      configureStudioProjectContext({ env: process.env });
     }
   });
 });
@@ -394,7 +394,7 @@ test("a practice project action admits only its own learner, through the host co
     assert.deepEqual(await underActionPolicy(definition).execute({ projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
       "requestless internal work runs as the marker's learner");
   } finally {
-    configureStudioProjectContext();
+    configureStudioProjectContext({ env: process.env });
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -408,7 +408,7 @@ test("Colleague acting for a learner opens only the projects of their mode and r
   let releaseMode = () => {};
   t.after(async () => {
     releaseMode();
-    configureStudioProjectContext();
+    configureStudioProjectContext({ env: process.env });
     await rm(root, { force: true, recursive: true });
   });
   const practiceSlug = "training-12345678123442348234123456789abc";

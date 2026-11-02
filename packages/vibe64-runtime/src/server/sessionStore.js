@@ -1,20 +1,17 @@
 import { conversationMessageIdentity, conversationMessageVersion } from "@jskit-ai/assistant-core/server/conversation";
 import {
   assertValidVibe64SessionId,
-  assertVibe64SessionStatus,
   isValidVibe64SessionId,
   learningSessionBinding,
   normalizeVibe64AgentRunState,
   validateLearningSessionScope,
   VIBE64_AGENT_RUN_STATE,
-  VIBE64_SESSION_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,
   vibe64AgentRunStateIsActive,
-  vibe64AgentRunStateIsTerminal,
   vibe64SessionStatusIsHidden,
   vibe64SessionStatusIsOpen
 } from "./sessionRecordRules.js";
-import { readActiveSessionMetadataValues, resolveVibe64SessionPaths, systemClock } from "./sessionStoreLayout.js";
+import { readActiveSessionMetadataValues, systemClock } from "./sessionStoreLayout.js";
 import { createSessionStoreState } from "./sessionStoreState.js";
 import { createSessionStorePaths } from "./sessionStorePaths.js";
 import { createSessionStoreLocks } from "./sessionStoreLocks.js";
@@ -234,9 +231,7 @@ function createVibe64SessionStore(options = {}) {
 export {
   systemClock,
   VIBE64_AGENT_RUN_STATE,
-  VIBE64_SESSION_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,
-  assertVibe64SessionStatus,
   assertValidVibe64SessionId,
   conversationMessageIdentity,
   conversationMessageVersion,
@@ -246,9 +241,7 @@ export {
   isValidVibe64SessionId,
   normalizeVibe64AgentRunState,
   readActiveSessionMetadataValues,
-  resolveVibe64SessionPaths,
   vibe64AgentRunStateIsActive,
-  vibe64AgentRunStateIsTerminal,
   vibe64SessionStatusIsHidden,
   vibe64SessionStatusIsOpen
 };

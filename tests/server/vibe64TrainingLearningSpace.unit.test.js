@@ -63,7 +63,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
   const store = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const working = path.join(root, "working");
   await mkdir(working);
-  const projectContext = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: systemRoot,
+  const projectContext = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: systemRoot,
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
   const closed = [];
   const failClose = { next: false };

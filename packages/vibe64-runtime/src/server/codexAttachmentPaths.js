@@ -4,6 +4,8 @@ import process from "node:process";
 
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
 
 function configuredRoot(env = {}) {
@@ -27,7 +29,12 @@ function codexAttachmentHostRoot({
   );
 }
 
-function configureCodexAttachmentHostRoot(systemRoot = "", env = process.env) {
+/**
+ * Names the attachment root below the system root in env, unless env already names one.
+ * @param {string} systemRoot
+ * @param {RuntimeEnv} env
+ */
+function configureCodexAttachmentHostRoot(systemRoot, env) {
   if (!configuredRoot(env)) {
     env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = path.join(path.resolve(systemRoot), "attachments");
   }

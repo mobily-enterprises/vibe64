@@ -60,7 +60,6 @@ const PROJECT_GITHUB_MIRROR_DIR = "github-mirror";
 const PROJECT_REPOSITORY_DIR = "repository.git";
 const PROJECT_RUNTIME_DIR = "runtime";
 const PROJECT_RUNTIME_CONFIG_DIR = "runtime-config";
-const PROJECT_INFO_CACHE_FILE = "projectInfoCache.json";
 
 function normalizeProjectStateSlug(value = "") {
   const slug = toText(value);
@@ -154,34 +153,17 @@ function resolveProjectRuntimeConfigRoot({
   }), PROJECT_RUNTIME_CONFIG_DIR);
 }
 
-function resolveProjectInfoCachePath({
-  projectRuntimeRoot = ""
-} = {}) {
-  return path.join(resolveProjectRuntimeRoot({
-    projectRuntimeRoot
-  }), PROJECT_INFO_CACHE_FILE);
-}
-
 export {
   normalizeProjectSlug,
-  PROJECT_SLUG_MAX_LENGTH,
   EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
   listProjectRuntimeRoots,
-  PROJECT_DEPLOYMENTS_DIR,
   PROJECT_CANONICAL_REPOSITORY_DIR,
   PROJECT_GITHUB_MIRROR_DIR,
-  PROJECT_INFO_CACHE_FILE,
-  PROJECT_REPOSITORY_DIR,
-  PROJECT_RECORD_FILE,
-  PROJECT_RUNTIME_CONFIG_DIR,
-  PROJECT_RUNTIME_DIR,
-  PROJECT_SESSIONS_DIR,
   normalizeProjectStateSlug,
   resolveProjectRecordPath,
   resolveProjectDeploymentsRoot,
   resolveProjectCanonicalRepositoryPath,
   resolveProjectGithubMirrorPath,
-  resolveProjectInfoCachePath,
   resolveProjectRuntimeConfigRoot,
   resolveProjectRuntimeFilesRoot,
   resolveProjectRuntimeRoot,

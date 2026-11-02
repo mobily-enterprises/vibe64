@@ -124,15 +124,12 @@ function isVibe64BrowserFlagEnabled({
   return browserStorageFlagEnabled(storage, storageKey);
 }
 
+const __testables = Object.freeze({ isVibe64LogLevelEnabled });
+
 export {
   DEFAULT_VIBE64_LOG_LEVEL,
-  isTruthyEnvValue,
   isVibe64BrowserFlagEnabled,
   isVibe64DebugLoggingEnabled,
-  isVibe64LogLevelEnabled,
-  normalizeVibe64LogLevel,
   resolveVibe64LogLevel,
-  STANDARD_LOG_LEVEL_ENV,
-  VIBE64_LOG_LEVEL_ENV,
-  VIBE64_LOG_LEVELS
+  __testables
 };

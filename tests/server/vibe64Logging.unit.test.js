@@ -9,8 +9,8 @@ import {
   sanitizeLogText
 } from "../../packages/vibe64-core/src/server/logging.js";
 import {
+  __testables as sharedLoggingTestables,
   isVibe64DebugLoggingEnabled,
-  isVibe64LogLevelEnabled,
   resolveVibe64LogLevel
 } from "../../packages/vibe64-core/src/shared/logging.js";
 import {
@@ -18,6 +18,7 @@ import {
 } from "../../packages/vibe64-runtime/src/server/sessionDebugLogCore.js";
 
 const { operationalLogFields } = __testables;
+const { isVibe64LogLevelEnabled } = sharedLoggingTestables;
 
 test("Vibe64 log level defaults to warnings and honors env overrides", () => {
   assert.deepEqual(resolveVibe64LogLevel({

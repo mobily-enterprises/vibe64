@@ -6,7 +6,7 @@ import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
-import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { __testables as codexAppServerHelperThreadsTestables } from "@local/vibe64-runtime/server/codexAppServerHelperThreads";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
@@ -16,6 +16,8 @@ import { createTrainingStepActions } from "../../packages/vibe64-training/src/se
 import { createTrainingStepOperations } from "../../packages/vibe64-training/src/server/stepOperations.js";
 import { createTrainingStepReviewer } from "../../packages/vibe64-training/src/server/stepReview.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 
 // The review check end to end over the real bundler, installed content,
 // learner store, step owner, actions and retained Helper. Only the evidence

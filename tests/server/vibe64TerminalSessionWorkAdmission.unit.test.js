@@ -2279,7 +2279,7 @@ test("captured practice control cannot admit fresh user work or session and repo
     codexAppServerProviderFactory: () => assert.fail("No denied user work may open a native provider.") });
   const working = path.join(f.root, "working");
   await mkdir(working);
-  const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "practice-system"),
+  const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "practice-system"),
     explicitManagedSourceRoot: path.join(f.root, "practice-source"), home: f.root, runtimeProfile: { local: true } });
   const actor = { uid: 42, username: "learner" };
   const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),

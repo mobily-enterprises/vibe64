@@ -33,6 +33,7 @@ async function fixture(targetRoot, options = {}) {
     ...options,
     ...hostOptions,
     projectContext: createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
       explicitTargetRoot: targetRoot,

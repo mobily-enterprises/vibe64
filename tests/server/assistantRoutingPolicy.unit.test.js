@@ -8,7 +8,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAccountsRuntime } from "@local/vibe64-accounts/server/accountsRuntime";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
-import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/practiceContext.js";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import {
   __testables,
@@ -35,10 +35,10 @@ import {
   assistantWorkflowUpgradeChanges
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
+  __testables as routingAssignmentsTestables,
   recommendedRoutingAssignments,
   routingAssignmentSelection,
   routingModelChoices,
-  routingModelScore,
   routingRunsInChoices,
   resolveAssistantPurpose
 } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
@@ -49,6 +49,7 @@ import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRou
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const { MAIN_CHAT_PURPOSES } = __testables;
+const { routingModelScore } = routingAssignmentsTestables;
 
 const revision = `sha256:${"a".repeat(64)}`;
 function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engineId = "codex") {
@@ -363,10 +364,11 @@ test("Accounts reads and saves both setups for the owner only and refuses person
     readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
   });
   const service = createService({
+    env: process.env,
     invalidateAgentRuntimes: async () => null,
     publishAccountChanged: async () => null,
     publishAuthSessionChanged: async () => null,
-    accountRuntime: createAccountsRuntime({ systemRoot: root, targetRoot: root,
+    accountRuntime: createAccountsRuntime({ env: process.env, systemRoot: root, targetRoot: root,
       requireAiManagement: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } }),
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options) });
   assert.equal(service.readModelRoutingWorkflows, undefined, "the per-tool workflow read is gone");

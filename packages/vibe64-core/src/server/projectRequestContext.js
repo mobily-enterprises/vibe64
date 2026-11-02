@@ -20,12 +20,10 @@ import {
   actionRequestMetaKey,
   assertProjectEffectAdmission,
   captureProjectRequestContext,
-  currentPracticeProjectScope,
   currentProjectRequestContext,
   practiceScopeKey,
   projectContextStorage,
-  retainPracticeContext,
-  runWithPracticeProjectContext
+  retainPracticeContext
 } from "./practiceContext.js";
 
 /** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
@@ -65,7 +63,7 @@ async function resolveProjectRequestContext({
   const slug = projectSlugFromRequest(request);
   const projectsRoot = String(
     projectContext.projectsRoot ||
-    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
+    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot({ env: process.env }))
   ).trim();
   const vibe64User = request.vibe64User || null;
   /**
@@ -259,10 +257,6 @@ function currentProjectSourceConfigRoot() {
   return String(currentProjectRequestContext()?.sourceConfigRoot || "").trim();
 }
 
-function currentProjectRecordPath() {
-  return String(currentProjectRequestContext()?.projectRecordPath || "").trim();
-}
-
 function currentProjectVibe64User() {
   return currentProjectRequestContext()?.vibe64User || null;
 }
@@ -321,11 +315,8 @@ function projectRequestErrorStatusCode(error = {}) {
 export {
   VIBE64_PROJECT_ROUTE_BASE,
   registerPracticeRequestActor,
-  currentPracticeProjectScope,
-  runWithPracticeProjectContext,
   captureProjectRequestContext,
   assertProjectEffectAdmission,
-  currentProjectRecordPath,
   currentProjectActionRequestMeta,
   currentProjectRequestContext,
   currentRequestIsPracticeProject,
@@ -340,6 +331,5 @@ export {
   runWithResolvedProjectRequestContext,
   runWithProjectRequestContext,
   isProjectRequestError,
-  projectRequestErrorStatusCode,
-  projectSlugFromRequest
+  projectRequestErrorStatusCode
 };

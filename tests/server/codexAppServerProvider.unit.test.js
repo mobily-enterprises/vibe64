@@ -20,19 +20,21 @@ import {
   CODEX_APP_SERVER_EXECUTION_MODES,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
-  codexAppServerMetadataIsLive,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
+  createCodexAppServerAgentProvider,
+  readCodexSelectedAccountAccess
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
+import {
+  codexAppServerMetadataIsLive,
   currentCodexAccountIdentitySignature,
   ensureCodexAppServerRuntime,
-  readCodexSelectedAccountAccess,
   startCodexAppServerProcess,
   stopCodexAppServerRuntime
-} from "@local/vibe64-runtime/server/codexAppServerAgent";
+} from "./codexAppServerTestHelpers.js";
 import { codexAppServerRequestIsInvalid, codexTurnInput } from "@jskit-ai/assistant-core/server/codex-provider";
 import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION, CODEX_APP_SERVER_TRANSPORT, codexAppServerHelperHomeDir, codexAppServerHelperWorkspaceDir } from "@jskit-ai/assistant-core/server/codex-process";
 import {
@@ -543,7 +545,7 @@ class ResponsiveFakeWebSocket extends FakeWebSocket {
 }
 
 test("codex provider preserves observers across connection replacement and rejects old socket output", async () => {
-  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  const provider = createCodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
   const runtime = { endpoint: "ws://localhost:9999" };
   provider.ensureRuntime = async () => {
     provider.runtime = runtime;
@@ -941,8 +943,8 @@ test("separate Codex session providers await one startup beyond the runtime lock
       timeoutMs: 1,
       WebSocketImpl: ResponsiveFakeWebSocket
     };
-    const first = new CodexAppServerAgentProvider(options);
-    const second = new CodexAppServerAgentProvider({ ...options });
+    const first = createCodexAppServerAgentProvider(options);
+    const second = createCodexAppServerAgentProvider({ ...options });
     const starting = first.ensureRuntime();
     await entered.promise;
     const waiting = second.ensureRuntime();
@@ -1627,7 +1629,7 @@ for (const replaced of [false, true]) {
         await writeMetadata(runtimeDir, replacement);
       }
       const stops = [];
-      const provider = new CodexAppServerAgentProvider({
+      const provider = createCodexAppServerAgentProvider({
         runtimeDir,
         async stopExecution(executionId) {
           stops.push(executionId);
@@ -1658,7 +1660,7 @@ for (const replaced of [false, true]) {
 
 test("Codex missing runtime metadata is not exit proof without retained process ownership", async () => {
   await withTemporaryDirectory(async (baseDir) => {
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       runtimeDir: path.join(baseDir, "codex-app-server-unknown"),
       async stopExecution() {
         assert.fail("Missing process ownership must not signal an execution.");
@@ -2169,7 +2171,7 @@ test("codex provider refuses to replace live legacy metadata without an exact id
 
 test("codex provider keeps the session runtime after interrupting a turn", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push({ method, params });
@@ -2203,7 +2205,7 @@ test("Codex Stop waits for its current command to exit without stopping older or
   const requests = [];
   let confirmExit;
   const exit = new Promise((resolve) => { confirmExit = resolve; });
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.client = {
     async request(method, params) {
       requests.push({ method, params });
@@ -2242,7 +2244,7 @@ test("Codex Stop waits for its current command to exit without stopping older or
 test("Codex stops a command reported after interruption and waits for native startup registration", async () => {
   let inventories = 0;
   let terminated = false;
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.client = { async request(method) {
     if (method === "thread/backgroundTerminals/list") {
       inventories += 1;
@@ -2263,7 +2265,7 @@ test("Codex stops a command reported after interruption and waits for native sta
 test("Codex command-stop failures reach the existing observation-stop owner", async () => {
   const failures = [];
   for (const data of [null, [{ processId: "process", itemId: "replacement-command" }]]) {
-    const provider = new CodexAppServerAgentProvider({ onObservationLost(error) { failures.push(error); } });
+    const provider = createCodexAppServerAgentProvider({ onObservationLost(error) { failures.push(error); } });
     provider.client = { isOpen: () => true, async request(method) {
       assert.notEqual(method, "thread/backgroundTerminals/terminate", "never stop an unverified command");
       return method === "thread/backgroundTerminals/list" ? { data } : {};
@@ -2281,7 +2283,7 @@ test("Codex command-stop failures reach the existing observation-stop owner", as
 
 test("failed command cleanup does not wait on the observation-stop operation that called it", { timeout: 2000 }, async () => {
   let stopping;
-  const provider = new CodexAppServerAgentProvider({ onObservationLost() { return stopping; } });
+  const provider = createCodexAppServerAgentProvider({ onObservationLost() { return stopping; } });
   provider.client = { isOpen: () => true, async request(method) {
     if (method === "thread/read") return { thread: { status: "active" } };
     if (method === "thread/backgroundTerminals/list") throw new Error("Control unavailable");
@@ -2499,7 +2501,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
       recursive: true
     });
     const commandCalls = [];
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       runtimeDir,
       commandRunner(request) {
         commandCalls.push(request);
@@ -2850,7 +2852,7 @@ test("shared Codex login identity accepts missing account metadata and survives 
     });
     const authPath = path.join(chatgptHome, ".codex", "auth.json");
     const originalAuth = await readFile(authPath, "utf8");
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       systemRoot,
       toolHomeSource: chatgptHome
     });
@@ -2868,7 +2870,7 @@ test("shared Codex login identity accepts missing account metadata and survives 
       accountId: null
     });
     assert.equal((await provider.currentRuntimeInfo()).accountIdentitySignature, first);
-    const restarted = new CodexAppServerAgentProvider({ systemRoot, toolHomeSource: chatgptHome });
+    const restarted = createCodexAppServerAgentProvider({ systemRoot, toolHomeSource: chatgptHome });
     assert.equal((await restarted.currentRuntimeInfo()).accountIdentitySignature, first);
     assert.equal(JSON.parse(await readFile(authPath, "utf8")).tokens.account_id, null);
     await assert.rejects(currentCodexAccountIdentitySignature({
@@ -2984,7 +2986,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
       updatedAt: "2026-06-04T00:00:00.000Z"
     });
     const commandCalls = [];
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       readyTimeoutMs: 2000,
       requestTimeoutMs: 1000,
       runtimeDir,
@@ -3092,7 +3094,7 @@ test("codex provider classifies invalid requests by JSON-RPC code and method", (
 test("Codex binds host context before exposing a new thread or resuming native work", async () => {
   const events = [];
   const bindings = new Map();
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     async bindThreadContext(id, context) {
       events.push("bind:" + id);
       bindings.set(id, context);
@@ -3121,7 +3123,7 @@ test("Codex binds host context before exposing a new thread or resuming native w
 
 test("codex provider persists an empty paginated thread before publishing it", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   let releaseHistory;
   const historyReady = new Promise((resolve) => { releaseHistory = resolve; });
   let historyRequested;
@@ -3164,7 +3166,7 @@ for (const failedMethod of ["thread/name/set", "thread/read"]) {
   test(`codex provider propagates paginated initialization failure at ${failedMethod}`, async () => {
     const requests = [];
     const failure = Object.assign(new Error("history initialization failed"), { code: -32603 });
-    const provider = new CodexAppServerAgentProvider({});
+    const provider = createCodexAppServerAgentProvider({});
     provider.activeClient = async () => ({
       async request(method) {
         requests.push(method);
@@ -3184,7 +3186,7 @@ test("codex provider does not persist ephemeral thread history at startup", asyn
     { id: "thread-ephemeral", ephemeral: true, historyMode: "paginated" }
   ]) {
     const requests = [];
-    const provider = new CodexAppServerAgentProvider({});
+    const provider = createCodexAppServerAgentProvider({});
     provider.activeClient = async () => ({
       async request(method, params) {
         requests.push(method);
@@ -3200,7 +3202,7 @@ test("codex provider does not persist ephemeral thread history at startup", asyn
 
 test("codex provider still rejects non-paginated persistent history", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push(method);
@@ -3214,7 +3216,7 @@ test("codex provider still rejects non-paginated persistent history", async () =
 
 test("codex provider reads full thread turns for response recovery", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push({
@@ -3247,7 +3249,7 @@ test("codex provider reads full thread turns for response recovery", async () =>
 
 test("codex provider reads thread status without requesting turns", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push({
@@ -3284,7 +3286,7 @@ test("codex provider reads thread status without requesting turns", async () => 
 
 test("codex provider resumes threads without returning their history", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push({
@@ -3325,7 +3327,7 @@ test("codex provider resumes threads without returning their history", async () 
 
 test("codex provider scopes each thread to its session environment", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     threadEnv: {
       DATABASE_URL: "mysql://session-database.test/app",
       DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
@@ -3401,7 +3403,7 @@ test("codex provider scopes each thread to its session environment", async () =>
 
 test("codex provider lists a bounded page of thread turns", async () => {
   const requests = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       requests.push({
@@ -3439,7 +3441,7 @@ test("codex provider lists a bounded page of thread turns", async () => {
 });
 
 test("codex provider coalesces concurrent availability checks", async () => {
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   let activeClientCalls = 0;
   let preflightCalls = 0;
   let releasePreflight = null;
@@ -3472,7 +3474,7 @@ test("codex provider coalesces concurrent availability checks", async () => {
 });
 
 test("codex provider reuses an available connection without another auth preflight", async () => {
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   let preflightCalls = 0;
   const client = {
     isOpen: () => true
@@ -3530,7 +3532,7 @@ test("codex provider reads every model catalog page with native pagination field
     data: [{ model: "gpt-5.6-sol" }],
     nextCursor: null
   }];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -3568,7 +3570,7 @@ test("codex provider reads every model catalog page with native pagination field
 
 test("codex provider fails closed when model catalog pagination repeats a cursor", async () => {
   const calls = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -3589,7 +3591,7 @@ test("codex provider fails closed when model catalog pagination repeats a cursor
 });
 
 test("codex provider fails closed when model catalog data is malformed", async () => {
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request() {
       return {
@@ -3607,7 +3609,7 @@ test("codex provider fails closed when model catalog data is malformed", async (
 
 test("codex provider clamps model pages and rejects oversized entries and cursors", async () => {
   const calls = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -3646,7 +3648,7 @@ test("codex provider clamps model pages and rejects oversized entries and cursor
 
 test("codex provider forwards cancellation through every model catalog page", async () => {
   const abortController = new AbortController();
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   let capturedSignal = null;
   provider.activeClient = async () => ({
     async request(_method, _params, options = {}) {
@@ -3693,7 +3695,7 @@ test("codex helper provider authoritatively inventories active and archived thre
     data: [{ id: "thread-archived" }],
     nextCursor: null
   }];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     accountIdentitySignature,
     executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
@@ -3758,7 +3760,7 @@ test("codex helper provider authoritatively inventories active and archived thre
 
 test("codex provider inventories only active app-server threads for one exact session cwd", async () => {
   const calls = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   const responses = [{
     data: [{ cwd: "/repo/session-source", id: "thread-two" }],
     nextCursor: "next-page"
@@ -3808,7 +3810,7 @@ test("codex provider inventories only active app-server threads for one exact se
 });
 
 test("codex session thread inventory fails closed for another cwd or repeated pagination", async () => {
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request() {
       return {
@@ -3843,7 +3845,7 @@ test("codex session thread inventory fails closed for another cwd or repeated pa
 test("codex helper thread inventory fails closed on a repeated cursor or an unusable id and keeps only ids", async () => {
   const runtimeDir = "/tmp/vibe64-helper-thread-inventory-invalid";
   const accountIdentitySignature = `sha256:${"c".repeat(64)}`;
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     accountIdentitySignature,
     executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
@@ -3903,7 +3905,7 @@ test("codex helper thread inventory fails closed on a repeated cursor or an unus
 
 test("codex provider reads effective config for one project cwd", async () => {
   const calls = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -3941,7 +3943,7 @@ test("codex provider trusts only the selected worktree before native hook discov
   const calls = [];
   const cwd = '/runtime/project.with.dots/session "one"/source';
   const config = { projects: { "/unrelated": { trust_level: "untrusted" } } };
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -3968,7 +3970,7 @@ test("codex provider trusts only the selected worktree before native hook discov
 });
 
 test("codex provider stops when native project trust cannot be saved", async () => {
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method) {
       if (method === "config/read") return { config: {} };
@@ -3980,7 +3982,7 @@ test("codex provider stops when native project trust cannot be saved", async () 
 
 test("codex provider persists hook trust through the app-server config API", async () => {
   const calls = [];
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => ({
     async request(method, params) {
       calls.push({ method, params });
@@ -4015,7 +4017,7 @@ test("codex provider persists hook trust through the app-server config API", asy
 
 test("codex provider discards a client that fails initialization", async () => {
   FakeWebSocket.instances = [];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     requestTimeoutMs: 1000,
     WebSocketImpl: InitializeErrorFakeWebSocket
   });
@@ -4034,7 +4036,7 @@ test("codex provider discards a client that fails initialization", async () => {
 
 test("codex provider exposes only the normalized connected app-server identity", async () => {
   FakeWebSocket.instances = [];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     requestTimeoutMs: 1000,
     WebSocketImpl: ResponsiveFakeWebSocket
   });
@@ -4057,7 +4059,7 @@ test("codex provider exposes only the normalized connected app-server identity",
 
 test("codex provider drops oversized app-server identity fields", async () => {
   FakeWebSocket.instances = [];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     requestTimeoutMs: 1000,
     WebSocketImpl: OversizedServerInfoFakeWebSocket
   });
@@ -4076,7 +4078,7 @@ test("codex provider drops oversized app-server identity fields", async () => {
 });
 
 test("codex helper provider redacts app-server request failures and refuses external server requests", async () => {
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     accountIdentitySignature: `sha256:${"d".repeat(64)}`,
     authStateSignature: "test-auth-state",
     executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER
@@ -4150,7 +4152,7 @@ test("codex helper provider retires its runtime when in-memory account activatio
         executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         toolHomeSource
       });
-      const provider = new CodexAppServerAgentProvider({
+      const provider = createCodexAppServerAgentProvider({
         authStateSignature: "test-auth-state",
         executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         requestTimeoutMs: 1000,
@@ -4205,7 +4207,7 @@ test("codex helper provider injects only the selected ChatGPT account and refres
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource
     });
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       authStateSignature: "test-auth-state",
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       project: {
@@ -4302,7 +4304,7 @@ test("codex helper provider injects API-key auth without persisting or exposing 
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource
     });
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       authStateSignature: "test-auth-state",
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       requestTimeoutMs: 1000,
@@ -4599,7 +4601,7 @@ test("codex JSON-RPC client connects to Unix socket endpoints without WebSocket 
 });
 
 test("Codex plan allowance reads once, accepts live updates and clears on auth changes", async () => {
-  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  const provider = createCodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
   provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
   await provider.openConnection();
   try {
@@ -4635,7 +4637,7 @@ test("Codex plan allowance reads once, accepts live updates and clears on auth c
 });
 
 test("Codex plan allowance ignores a read completed after an account switch", async () => {
-  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  const provider = createCodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
   provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
   await provider.openConnection();
   try {
@@ -4704,7 +4706,7 @@ for (const [state, signature, expectedRemoval] of [
 }
 
 test("Codex goal controls preserve objective and budget while changing status", async () => {
-  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  const provider = createCodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
   provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
   await provider.openConnection();
   try {
@@ -4729,7 +4731,7 @@ test("Codex goal controls preserve objective and budget while changing status", 
 });
 
 test("Codex observation stop pauses the same goal before interrupt and requires a fresh idle result", async () => {
-  const provider = new CodexAppServerAgentProvider();
+  const provider = createCodexAppServerAgentProvider();
   const calls = [];
   let active = true;
   const goal = { status: "active", objective: "Finish", createdAt: 123 };
@@ -4755,7 +4757,7 @@ test("Codex observation stop pauses the same goal before interrupt and requires 
 
 test("unexpected Codex transport loss blocks reconnection and notifies its execution owner", async () => {
   const failures = [];
-  const provider = new CodexAppServerAgentProvider({
+  const provider = createCodexAppServerAgentProvider({
     WebSocketImpl: ResponsiveFakeWebSocket,
     onObservationLost(error) { failures.push(error); }
   });

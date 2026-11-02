@@ -111,7 +111,6 @@ async function savedEnvValueRecords(provider, input) {
 export {
   NO_SAVED_ENV_VALUES,
   PROJECT_SAVED_ENV_VALUES_TOKEN,
-  SAVED_ENV_VALUES_CONTRACT,
   SAVED_ENV_VALUE_SOURCE,
   assertSavedEnvValues,
   offersSavedValues,

@@ -1,15 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 
 import {
-  acquireProjectSessionPolicyLock,
-  acquireProjectSourceMutationLock,
-  releaseProjectLock,
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
 } from "../../packages/vibe64-project/src/server/projectSourceMutationLock.js";
@@ -21,17 +18,17 @@ const lockModuleUrl = pathToFileURL(path.resolve(
 function lockChild(root, mode) {
   const source = mode === "hold"
     ? `
-      import { acquireProjectSourceMutationLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
-      const lock = await acquireProjectSourceMutationLock(process.argv[1], { timeoutMs: 5000 });
-      process.stdout.write("READY\\n");
-      await new Promise((resolve) => process.stdin.once("data", resolve));
-      await releaseProjectLock(lock);
+      import { runProjectSourceExclusive } from ${JSON.stringify(lockModuleUrl)};
+      await runProjectSourceExclusive(process.argv[1], async () => {
+        process.stdout.write("READY\\n");
+        await new Promise((resolve) => process.stdin.once("data", resolve));
+      }, { timeoutMs: 5000 });
     `
     : `
-      import { acquireProjectSourceMutationLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
-      const lock = await acquireProjectSourceMutationLock(process.argv[1], { timeoutMs: 5000 });
-      process.stdout.write("ACQUIRED\\n");
-      await releaseProjectLock(lock);
+      import { runProjectSourceExclusive } from ${JSON.stringify(lockModuleUrl)};
+      await runProjectSourceExclusive(process.argv[1], async () => {
+        process.stdout.write("ACQUIRED\\n");
+      }, { timeoutMs: 5000 });
     `;
   return spawn(process.execPath, ["--input-type=module", "--eval", source, root], {
     stdio: ["pipe", "pipe", "pipe"]
@@ -41,17 +38,17 @@ function lockChild(root, mode) {
 function sessionPolicyLockChild(root, mode) {
   const source = mode === "hold"
     ? `
-      import { acquireProjectSessionPolicyLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
-      const lock = await acquireProjectSessionPolicyLock(process.argv[1], { timeoutMs: 5000 });
-      process.stdout.write("READY\\n");
-      await new Promise((resolve) => process.stdin.once("data", resolve));
-      await releaseProjectLock(lock);
+      import { runProjectSessionPolicyExclusive } from ${JSON.stringify(lockModuleUrl)};
+      await runProjectSessionPolicyExclusive(process.argv[1], async () => {
+        process.stdout.write("READY\\n");
+        await new Promise((resolve) => process.stdin.once("data", resolve));
+      }, { timeoutMs: 5000 });
     `
     : `
-      import { acquireProjectSessionPolicyLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
-      const lock = await acquireProjectSessionPolicyLock(process.argv[1], { timeoutMs: 5000 });
-      process.stdout.write("ACQUIRED\\n");
-      await releaseProjectLock(lock);
+      import { runProjectSessionPolicyExclusive } from ${JSON.stringify(lockModuleUrl)};
+      await runProjectSessionPolicyExclusive(process.argv[1], async () => {
+        process.stdout.write("ACQUIRED\\n");
+      }, { timeoutMs: 5000 });
     `;
   return spawn(process.execPath, ["--input-type=module", "--eval", source, root], {
     stdio: ["pipe", "pipe", "pipe"]
@@ -143,23 +140,12 @@ test("separate processes contend on the same project source lock", async () => {
 
 test("session policy operations use a distinct lock from source mutations", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-project-lock-distinct-"));
-  let sourceLock;
-  let sessionPolicyLock;
   try {
-    sourceLock = await acquireProjectSourceMutationLock(root);
-    sessionPolicyLock = await acquireProjectSessionPolicyLock(root, {
+    const held = await runProjectSourceExclusive(root, () => runProjectSessionPolicyExclusive(root, () => readdir(path.join(root, "locks")), {
       timeoutMs: 500
-    });
-    assert.notEqual(sourceLock.lockPath, sessionPolicyLock.lockPath);
-    assert.equal(path.basename(sourceLock.lockPath), "source-mutation.lock");
-    assert.equal(path.basename(sessionPolicyLock.lockPath), "session-policy.lock");
+    }));
+    assert.deepEqual(held.sort(), ["session-policy.lock", "source-mutation.lock"]);
   } finally {
-    if (sessionPolicyLock) {
-      await releaseProjectLock(sessionPolicyLock);
-    }
-    if (sourceLock) {
-      await releaseProjectLock(sourceLock);
-    }
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -220,10 +206,9 @@ test("separate processes contend on the same project session policy lock", async
 test("a dead lock owner is reclaimed without a recursive repair", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-project-lock-"));
   try {
-    const first = await acquireProjectSourceMutationLock(root);
-    await releaseProjectLock(first);
-    const second = await acquireProjectSourceMutationLock(root);
-    assert.equal(await releaseProjectLock(second), true);
+    assert.equal(await runProjectSourceExclusive(root, async () => "first"), "first");
+    assert.equal(await runProjectSourceExclusive(root, async () => "second"), "second");
+    assert.deepEqual(await readdir(path.join(root, "locks")), [], "each release removes its own lock file");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

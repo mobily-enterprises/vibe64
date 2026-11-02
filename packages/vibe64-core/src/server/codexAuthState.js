@@ -181,11 +181,8 @@ async function codexAuthStateSignature({
 }
 
 export {
-  CODEX_AUTH_MARKER_RELATIVE_PATH,
   CODEX_AUTH_RECONNECTING_CODE,
   CODEX_AUTH_RECONNECTING_MESSAGE,
-  CODEX_AUTH_STATUS_RELATIVE_PATH,
-  CODEX_AUTH_STATE_SIGNATURE_VERSION,
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE,
   clearCodexAuthStatus,
@@ -196,7 +193,6 @@ export {
   currentCodexLoginGeneration,
   markCodexAuthReconnecting,
   markCodexReconnectRequired,
-  requireCodexAuthSystemRoot,
   readCodexAuthStatus,
   readCodexLoginId,
   writeCodexAuthMarker

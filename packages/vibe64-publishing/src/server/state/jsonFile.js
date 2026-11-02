@@ -4,11 +4,16 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+/**
+ * Reads one JSON state file; a missing file reads as what `fallback` returns.
+ * @param {string} file
+ * @param {() => unknown} fallback
+ */
 async function readJsonFile(file, fallback) {
   try {
     return JSON.parse(await readFile(file, "utf8"));
   } catch (error) {
-    if (error?.code === "ENOENT") return typeof fallback === "function" ? fallback() : fallback;
+    if (error?.code === "ENOENT") return fallback();
     if (error instanceof SyntaxError) {
       throw Object.assign(new Error(`${path.basename(file)} is not valid JSON.`), { code: "vibe64_publishing_state_invalid" });
     }

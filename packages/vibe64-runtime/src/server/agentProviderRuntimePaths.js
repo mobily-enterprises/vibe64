@@ -2,6 +2,8 @@ import os from "node:os";
 import path from "node:path";
 import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /**
  * Existing runtime path policy moved without change so the offline upgrade
  * can inventory the same native owners without loading execution/Genesis.
@@ -10,7 +12,12 @@ function hasOwn(object = {}, property = "") {
   return Object.prototype.hasOwnProperty.call(object, property);
 }
 
-function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
+/**
+ * @param {RuntimeEnv} env
+ * @param {RuntimeEnv} hostEnv
+ * @param {string} name
+ */
+function runtimeEnvValue(env, hostEnv, name) {
   const primaryEnv = isRecord(env) ? env : {};
   const fallbackEnv = isRecord(hostEnv) ? hostEnv : {};
   return toText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
@@ -21,10 +28,17 @@ function processUid() {
   return typeof process.getuid === "function" ? process.getuid() : "user";
 }
 
+/**
+ * The directory that holds native agent provider runtimes: the one the
+ * environment names, else the host's runtime directory, else a per-user cache.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {RuntimeEnv} [options.hostEnv]
+ */
 function codexAppServerRuntimeBaseDir({
-  env = process.env,
+  env,
   hostEnv = process.env
-} = {}) {
+}) {
   const explicitDir = runtimeEnvValue(env, hostEnv, "VIBE64_AGENT_RUNTIME_DIR");
   if (explicitDir) {
     return path.resolve(explicitDir);

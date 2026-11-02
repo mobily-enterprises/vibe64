@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  DEFAULT_MAX_OPEN_SESSIONS,
+  __testables,
   developmentDatabasePolicy
 } from "../../packages/vibe64-project/src/server/developmentDatabasePolicy.js";
+
+const { DEFAULT_MAX_OPEN_SESSIONS } = __testables;
 
 function sessions(count = 0) {
   return Array.from({ length: count }, (_unused, index) => ({

@@ -105,7 +105,6 @@ function sessionRenewalAdvisory({
 const __testables = Object.freeze({ contextUsageSignal, SESSION_RENEWAL_THRESHOLDS });
 
 export {
-  sessionAgeDays,
   sessionContextUsageFromMetadata,
   sessionRenewalAdvisory,
   __testables

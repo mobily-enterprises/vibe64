@@ -118,4 +118,4 @@ function createLanShare({
   });
 }
 
-export { createLanShare, lanAddresses };
+export { createLanShare };

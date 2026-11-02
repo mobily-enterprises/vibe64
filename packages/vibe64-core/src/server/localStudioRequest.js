@@ -76,7 +76,7 @@ function isTrustedStudioWebSocketRequest(request = {}) {
 }
 
 function isLocalStudioRequest(request) {
-  if (isLocalhostCheckBypassEnabled()) {
+  if (isLocalhostCheckBypassEnabled({ env: process.env })) {
     return true;
   }
   if (hasAuthenticatedVibe64User(request)) {
@@ -109,7 +109,6 @@ function requireLocalStudioRequest(request, reply, options = {}) {
 }
 
 export {
-  hasAuthenticatedVibe64User,
   isLocalStudioRequest,
   isLoopbackAddress,
   isTrustedStudioWebSocketRequest,

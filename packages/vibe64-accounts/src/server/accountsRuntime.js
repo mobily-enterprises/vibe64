@@ -17,8 +17,9 @@ const ALL_CODEX_AUTH_MODES = Object.freeze([
   API_KEY_AUTH_MODE
 ]);
 
-function resolveVibe64AccountsRoot(targetRoot) {
+function resolveVibe64AccountsRoot(targetRoot, env) {
   return resolveStudioTargetRoot({
+    env,
     explicitRoot: targetRoot
   });
 }
@@ -88,7 +89,7 @@ function unsupportedCodexAuthMode() {
  * @param {number | null} [dependencies.daemonUid]
  * @param {string} [dependencies.daemonUsername]
  * @param {(input: object) => object} [dependencies.debugInput]
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env the process environment: the system root and the Codex runtime read it
  * @param {string} [dependencies.githubAccountMode]
  * @param {(input: object) => object | null} [dependencies.previousGithub]
  * @param {ProjectService | null} [dependencies.project]
@@ -105,7 +106,7 @@ function createAccountsRuntime({
   daemonUid = null,
   daemonUsername = "",
   debugInput = noDebugInput,
-  env = process.env,
+  env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   previousGithub = noPreviousGithub,
   // readable-check: allow dependency-default - cross-repository slot vibe64.accounts.runtime: a composing host builds its runtime with no project, so its target root is empty
@@ -115,7 +116,7 @@ function createAccountsRuntime({
   systemRoot = "",
   targetRoot = "",
   unsupportedCodexAuthModeMessage = unsupportedCodexAuthMode
-} = {}) {
+}) {
   const explicitSystemRoot = String(systemRoot || "").trim();
   const resolvedSystemRoot = requireExplicitRoots && !explicitSystemRoot
     ? ""
@@ -127,8 +128,8 @@ function createAccountsRuntime({
   const readCodexRuntimeContext = requireExplicitRoots ? codexRuntimeContextRequiringSystemRoot : codexRuntimeContext;
 
   function currentTargetRoot() {
-    const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(project)).trim();
-    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
+    const selectedTargetRoot = String(targetRoot || (project ? projectServiceNamespaceRoot(project) : "")).trim();
+    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot, env) : "";
   }
 
   function readClaudeContext() {
@@ -196,16 +197,9 @@ function createAccountsRuntime({
 
 export {
   ACCOUNTS_RUNTIME_TOKEN,
-  ALL_CODEX_AUTH_MODES,
   API_KEY_AUTH_MODE,
   authError,
   BROWSER_AUTH_MODE,
   createAccountsRuntime,
-  DEVICE_AUTH_MODE,
-  noDebugInput,
-  noPreviousGithub,
-  normalizeCodexAuthModes,
-  ownerManagesAi,
-  resolveVibe64AccountsRoot,
-  unsupportedCodexAuthMode
+  DEVICE_AUTH_MODE
 };

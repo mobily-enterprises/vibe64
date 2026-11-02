@@ -37,7 +37,7 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
   };
 
   async function read(id) {
-    const record = await readJsonFile(fileOf(id), null);
+    const record = await readJsonFile(fileOf(id), () => null);
     if (!record) throw historyError(`There is no release ${id}.`);
     return record;
   }
@@ -87,7 +87,7 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     const ids = names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => RELEASE_ID.test(id));
     const records = [];
     for (const id of ids) {
-      const record = await readJsonFile(fileOf(id), null);
+      const record = await readJsonFile(fileOf(id), () => null);
       if (record?.contract === RELEASE_RECORD_CONTRACT) records.push(record);
     }
     /**
@@ -107,4 +107,4 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
   });
 }
 
-export { RELEASE_RECORD_CONTRACT, createReleaseHistoryStore };
+export { createReleaseHistoryStore };

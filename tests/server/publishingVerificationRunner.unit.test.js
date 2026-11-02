@@ -13,7 +13,7 @@ async function runner(t, verify) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-publishing-checks-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const repository = { withCheckout: async (_root, _commit, operation) => operation(root) };
-  return createVerificationRunner({ runtimeRoot: root, repository, verify });
+  return createVerificationRunner({ runtimeRoot: root, repository, baseEnvironment: process.env, verify });
 }
 
 test("a failed check records which one failed and the end of its output", async (t) => {

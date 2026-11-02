@@ -42,6 +42,7 @@ function project(targetRoot, options = {}) {
   return createService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
       explicitTargetRoot: targetRoot,
@@ -182,6 +183,7 @@ test("a catalog project can be created and selected without project-type setup",
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: projectsRoot,
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -207,6 +209,7 @@ test("a catalog project without a baseline checkout does not inspect its metadat
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: projectsRoot,
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -240,6 +243,7 @@ test("a catalog project without a baseline checkout does not inspect its metadat
 test("repository identities require a real project source", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: path.join(temporaryRoot, "projects"),
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -264,6 +268,7 @@ test("repository identities require a real project source", async () => {
 test("catalogue engineering settings follow the selected session source and save through Genesis", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: path.join(temporaryRoot, "projects"),
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -355,6 +360,7 @@ test("managed database defaults persist an explicit shared scope and provider-ow
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: projectsRoot,
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -430,6 +436,7 @@ test("managed development database scope is project state and changes only witho
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: projectsRoot,
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -591,6 +598,7 @@ test("managed development database scope is project state and changes only witho
 test("scope saving and session creation share one project policy boundary", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: path.join(temporaryRoot, "projects"),
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -800,6 +808,7 @@ test("project settings saves report the project's slug, not its raw directory na
 test("settings read reports no repository workflow, not a request failure, while the catalogue has no current project", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const realContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
       explicitTargetRoot: targetRoot,
@@ -867,6 +876,7 @@ test("catalogue collaboration follows the selected session source while prompt h
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
       explicitProjectsRoot: projectsRoot,
       explicitSystemRoot: path.join(temporaryRoot, "system"),
@@ -1198,6 +1208,7 @@ test("standalone collaboration is keyed to the exact local source folder", async
       ...collaboration,
       env: {},
       projectContext: createStudioProjectContext({
+        env: process.env,
         explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
         explicitSystemRoot: systemRoot,
         explicitTargetRoot: targetRoot,
@@ -1744,6 +1755,7 @@ test("current-app inspection resolves Env without materializing session files", 
     });
     const inspected = [];
     const currentApp = createCurrentAppService({
+      env: process.env,
       inspectOutputs(input) {
         assert.equal(input.environment.CURRENT_APP_VALUE, "active-value");
         inspected.push(input.projectRoot);

@@ -13,9 +13,10 @@ const NO_ACTIONS = Object.freeze({
 });
 
 // The project service operations a test's plain project double may leave out, answering as a project without
-// prepared resources, practice projects or a runtime root of its own would.
+// prepared resources, practice projects, a selected namespace or a runtime root of its own would.
 const PROJECT_SERVICE_DOUBLE_DEFAULTS = Object.freeze({
   currentProjectRuntimeRoot: () => "",
+  currentTargetRoot: () => "",
   listPracticeProjectSlugs: async () => [],
   projectEnvironmentStatus: async () => ({ status: "ready" }),
   projectExecutionEnvironment: async () => ({}),

@@ -65,6 +65,8 @@ import {
   vibe64IntegrationSetupInspection
 } from "./integrationSetup.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const require = createRequire(import.meta.url);
 const hostContextRegistries = new Map();
 
@@ -486,12 +488,19 @@ async function inspectVibe64ResourceEstimates(options = {}) {
   return vibe64ResourceEstimatesInspection({ section, outputsSection, workspaceSetupSection });
 }
 
+/**
+ * @param {object} request
+ * @param {object} [request.action] the prompt task: its genesisTask, id and label
+ * @param {RuntimeEnv} request.environment the environment Genesis runs in
+ * @param {object} [request.input] the request text and its options
+ * @param {string} request.projectRoot
+ */
 async function renderGenesisPrompt({
   action = {},
-  environment = process.env,
+  environment,
   input = {},
   projectRoot
-} = {}) {
+}) {
   const requestedTask = genesisPromptTask(action);
   const request = genesisPromptRequest(input, action);
   const generate = (promptTask) => runGenesisOperation(generatePrompt, {

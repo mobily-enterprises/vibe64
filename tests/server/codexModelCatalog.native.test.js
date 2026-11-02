@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
-import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 
 const leader = fileURLToPath(new URL("../../packages/vibe64-runtime/src/server/codexAppServerProcess.js", import.meta.url));
@@ -119,7 +119,7 @@ test("the managed native Codex runtime loads patch tools and context for real mo
     await client.initialize({ clientInfo: { name: "catalog-regression", version: "1" }, capabilities: { experimentalApi: true } });
     const adapter = JSON.parse(await readFile(path.join(runtimeDir, "history-adapter.json"), "utf8"));
     const environment = { PATH: "/usr/bin:/bin" };
-    const provider = new CodexAppServerAgentProvider({
+    const provider = createCodexAppServerAgentProvider({
       threadEnv: environment,
       prepareThreadEnvironment: async () => environment,
       prepareThreadParams: async (params) => ({

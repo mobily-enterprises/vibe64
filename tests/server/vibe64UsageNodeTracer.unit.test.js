@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse } from "@babel/parser";
 
 import { USAGE_RECORDING_LIMITS, usageTraceLineProblem } from "@local/vibe64-usage-recording/shared/contract";
-import { USAGE_TRACERS } from "@local/vibe64-usage-recording/server/tracers";
+import { usageTracersForRuntimes } from "@local/vibe64-usage-recording/server/tracers";
 import { instrumentSource } from "../../packages/vibe64-usage-recording/runtime/node/instrument.mjs";
 import { createTraceWriter } from "../../packages/vibe64-usage-recording/runtime/node/writer.mjs";
 
@@ -352,7 +352,7 @@ describe("stopping and setup", () => {
   });
 
   test("the Node.js tracer hands the exec helper its preload", () => {
-    const tracer = USAGE_TRACERS.find((entry) => entry.runtime === "nodejs");
+    const [tracer] = usageTracersForRuntimes(["nodejs"]);
     assert.deepEqual(tracer.prepare({}), { available: true, environment: {}, prependEnvironment: {}, nodePreload: PRELOAD });
   });
 });

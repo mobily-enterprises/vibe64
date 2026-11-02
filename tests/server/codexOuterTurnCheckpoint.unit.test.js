@@ -110,7 +110,7 @@ test("source-bearing Learning retains the original native source and Git checkpo
     await import("../../packages/vibe64-terminals/src/server/mainConversationContext.js");
   await withTemporaryRoot(async root => {
     const checkpoints = [], publications = [];
-    const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
+    const runtime = new Vibe64SessionRuntime({ promptEnvironment: process.env, projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
       projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope,
       inspectSourceByDefault: false,
       createSessionSource: async ({ session, store }) => {

@@ -11,7 +11,6 @@ import {
 } from "./studioRoots.js";
 import {
   normalizeProjectSlug,
-  PROJECT_SLUG_MAX_LENGTH,
   listProjectRuntimeRoots
 } from "./projectState.js";
 
@@ -34,6 +33,8 @@ import {
   selectedProjectRecord
 } from "./studioProjectRecords.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 let configuredContext = null;
 function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
   if (runtimeProfile?.projectCatalogEnabled === false) {
@@ -42,17 +43,30 @@ function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
   return !runtimeProfileIsLocal(runtimeProfile);
 }
 
+/**
+ * The Studio project context: its roots, the selected project and the workspace project records.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.cwd]
+ * @param {string} [options.explicitManagedSourceRoot]
+ * @param {string} [options.explicitSystemRoot]
+ * @param {string} [options.explicitProjectsRoot]
+ * @param {string} [options.explicitTargetRoot]
+ * @param {string} [options.home]
+ * @param {{ root?: string } | null} [options.learningSpace]
+ * @param {object | null} [options.runtimeProfile]
+ */
 function createStudioProjectContext({
   cwd = process.cwd(),
   explicitManagedSourceRoot = "",
   explicitSystemRoot = "",
-  env = process.env,
+  env,
   explicitProjectsRoot = "",
   explicitTargetRoot = "",
   home = os.homedir(),
   learningSpace = null,
   runtimeProfile = null
-} = {}) {
+}) {
   const practiceOwner = Object.freeze({});
   const projectCatalogEnabled = projectCatalogEnabledForRuntimeProfile(runtimeProfile);
   const projectsRoot = projectCatalogEnabled
@@ -311,20 +325,22 @@ function createStudioProjectContext({
   });
 }
 
-function configureStudioProjectContext(options = {}) {
+/**
+ * @param {Parameters<typeof createStudioProjectContext>[0]} options
+ */
+function configureStudioProjectContext(options) {
   configuredContext = createStudioProjectContext(options);
   return configuredContext;
 }
 
 function getStudioProjectContext() {
   if (!configuredContext) {
-    configuredContext = createStudioProjectContext();
+    configuredContext = createStudioProjectContext({ env: process.env });
   }
   return configuredContext;
 }
 
 export {
-  PROJECT_SLUG_MAX_LENGTH,
   configureStudioProjectContext,
   createStudioProjectContext,
   getStudioProjectContext,

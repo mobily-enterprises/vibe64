@@ -203,7 +203,6 @@ async function vibe64DriverInputFromRegistry(request = {}, {
 }
 
 export {
-  VIBE64_EPHEMERAL_CONTEXT_MAX_CHARACTERS,
   vibe64Driver,
   vibe64DriverInputFromRegistry
 };

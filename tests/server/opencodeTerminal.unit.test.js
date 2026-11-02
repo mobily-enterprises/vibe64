@@ -4586,7 +4586,7 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
     async runtimeFactory({ harness }) {
       const { managedSessionSourcePath } = await import("@local/vibe64-core/server/sessionSourcePath");
       const predecessorSource = harness.session.metadata.source_path;
-      const runtime = new Vibe64SessionRuntime({ projectContextRoot: harness.root,
+      const runtime = new Vibe64SessionRuntime({ promptEnvironment: process.env, projectContextRoot: harness.root,
         projectRuntimeRoot: path.join(harness.root, "runtime"), projectSessionSourceRoot: harness.root,
         createSessionSource: async ({ session, store, expectedCommit }) => {
           // Use the original renewal fixture's real clone/private attachment sequence.

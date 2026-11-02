@@ -5,9 +5,6 @@ import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
-  PREVIEW_IDENTITY_SELECTOR_EMAIL,
-  PREVIEW_IDENTITY_SELECTOR_LOGIN,
-  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   normalizePreviewApplicationIdentities,
@@ -18,6 +15,11 @@ import {
   previewAuthIdentityTypes,
   verifyPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
+import {
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID
+} from "../../packages/vibe64-core/src/shared/previewIdentity.js";
 
 function previewAuthFixture(overrides = {}) {
   return {

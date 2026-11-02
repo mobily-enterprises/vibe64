@@ -9,6 +9,7 @@ import {
 import path from "node:path";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import {
   resolveProjectCanonicalRepositoryPath
 } from "@local/vibe64-core/server/projectState";
@@ -152,8 +153,8 @@ async function createEmptyCanonicalRepository({
 }
 
 async function materializeInitialProject({
-  afterAuthorityVerification = null,
-  beforeAuthorityMutation = null,
+  afterAuthorityVerification = doNothing,
+  beforeAuthorityMutation = doNothing,
   defaultBranch = "main",
   initializeProject = initializeGenesisProject,
   projectName = "",
@@ -224,16 +225,12 @@ async function materializeInitialProject({
       branch,
       commit
     };
-    if (typeof beforeAuthorityMutation === "function") {
-      await beforeAuthorityMutation(materialization);
-    }
+    await beforeAuthorityMutation(materialization);
     const publication = await publish({
       ...materialization,
       sourceRoot
     });
-    if (typeof afterAuthorityVerification === "function") {
-      await afterAuthorityVerification(materialization);
-    }
+    await afterAuthorityVerification(materialization);
     return {
       materialization: {
         ...(publication && typeof publication === "object" && !Array.isArray(publication)

@@ -477,4 +477,4 @@ function createTrainingCourseInstaller({
   });
 }
 
-export { DEFAULT_CATALOGUE_REPOSITORY, createTrainingCourseInstaller };
+export { createTrainingCourseInstaller };

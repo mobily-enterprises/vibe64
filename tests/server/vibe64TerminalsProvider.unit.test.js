@@ -670,7 +670,12 @@ test("a Claude session whose source was never created blocks no idle close, proj
   await withTemporaryRoot(async root => {
     let runtime = null;
     const { project, runtimeRoot, targetRoot } = dormancyProject(root, async ({ runtimeRoot, targetRoot }) => {
-      runtime ||= new Vibe64SessionRuntime({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot, inspectSourceByDefault: false });
+      runtime ||= new Vibe64SessionRuntime({
+        projectContextRoot: targetRoot,
+        projectRuntimeRoot: runtimeRoot,
+        promptEnvironment: process.env,
+        inspectSourceByDefault: false
+      });
       return runtime;
     });
     await mkdir(targetRoot, { recursive: true });

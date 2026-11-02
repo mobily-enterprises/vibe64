@@ -234,8 +234,6 @@ function createSessionChangedPublisher({ events }) {
 }
 
 export {
-  VIBE64_SESSION_CHANGED_EVENT,
-  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   createSessionChangedPublisher,
   vibe64ProjectSessionsRoom,
   vibe64SessionViewersRoom,
