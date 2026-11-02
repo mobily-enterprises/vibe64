@@ -18,6 +18,9 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `src/components/learning/Vibe64LearningStepBar.vue`
 - `src/components/learning/Vibe64LearningRouteHold.vue`
 - `src/lib/vibe64Learning.js`
+- `src/lib/vibe64LearningModes.js`
+- `src/lib/vibe64LearningAttempts.js`
+- `src/lib/vibe64LearningStepHelp.js`
 - `src/components/learning/Vibe64LearningButton.vue`
 - `src/components/StudioAppShellLayout.vue`
 - `src/pages/app/index.vue`
@@ -118,7 +121,8 @@ pins are unchanged.
 
 ## Learn and Develop modes
 
-`vibe64Learning.js` reads the learner's mode from `GET learning-mode`
+The Learning controller (`vibe64Learning.js`, its modes in
+`vibe64LearningModes.js`) reads the learner's mode from `GET learning-mode`
 (`{on, currentAttemptId, lessonCode, lessonTitle, practiceSlug}`, normalized by
 `normalizeLearningMode`) once the overlay binds the viewer and again on every
 `learner.changed` except `steps` and `notes`; an unreadable mode
@@ -265,7 +269,7 @@ header `pane-switch`. A pane that fills the screen gets its caption inside its
 top edge (`inside` placement).
 
 The default (`navigate=false`, `highlight=true`) only points. The Colleague
-client (`Vibe64Colleague.vue`) and the Learning step reader (`vibe64Learning.js`)
+client (`Vibe64Colleague.vue`) and the Learning step help (`vibe64LearningStepHelp.js`)
 run `runTrainingGuideCommand`, which rings the deepest visible step with a
 caption such as "Dashboard → Database → ERD". `navigate=true` first runs the
 ordinary browser navigator and, for `filePath`, opens the file in Dashboard →

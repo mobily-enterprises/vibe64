@@ -8,6 +8,13 @@ Training actions.
 ## Sources
 
 - Main: `src/lib/vibe64Learning.js`
+- `src/lib/vibe64LearningModel.js`
+- `src/lib/vibe64LearningCurrentLesson.js`
+- `src/lib/vibe64LearningModes.js`
+- `src/lib/vibe64LearningAttempts.js`
+- `src/lib/vibe64LearningStepActions.js`
+- `src/lib/vibe64LearningStepHelp.js`
+- `src/lib/vibe64LearningNotes.js`
 - `src/components/Vibe64AssistantShellContext.vue`
 - `src/components/learning/Vibe64LearningOverlay.vue`
 - `src/components/learning/Vibe64LearningButton.vue`
@@ -39,6 +46,19 @@ mount `Vibe64LearningOverlay` once, and the **L** button
 (`Vibe64LearningButton`, anchor `data-vibe64-guide="learning"`) sits first in
 `StudioAppShellLayout` and the management `ShellLayout` headers. Stacking is
 guide overlay 3000 above L 2400 above Colleague.
+
+The controller composes one factory per concern over one reactive state
+(`LearningState`) and offers their members by name: the current lesson
+(`vibe64LearningCurrentLesson.js`: the lesson read, the selected step and the
+reader place), the modes (`vibe64LearningModes.js`: the mode, each mode's
+place, the Courses overlay and the Lesson pane), the attempts
+(`vibe64LearningAttempts.js`: the In progress / Archived list, start, restart,
+finish and delete), the step actions (`vibe64LearningStepActions.js`: check,
+answer, done, review and App presses), the step help
+(`vibe64LearningStepHelp.js`: Show me, Do it for me, Teach me and I'm stuck)
+and the learner notes (`vibe64LearningNotes.js`). The routes, addresses,
+normalized reads and step words are pure helpers in `vibe64LearningModel.js`.
+A change of viewer resets every part.
 
 - Mode: `mode` (`{on, currentAttemptId, lessonCode, lessonTitle,
   practiceSlug}`), `learnMode`, `lessonTitle`, `readLearningMode()`,

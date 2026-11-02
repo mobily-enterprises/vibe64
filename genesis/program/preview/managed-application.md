@@ -578,11 +578,12 @@ identity; a trusted `button`, its `request` and the displayed
 `response-displayed` are correlated while the frame stays visible. It does not
 know what a lesson's App requests or displays; the step's declared check
 verifies the interaction against the App server. The Learning
-controller (`src/lib/vibe64Learning.js`) begins a press only for L's current
-step of its prepared, not-ended version 2 attempt whose practice project is the
-open project, while L is not covering the app, when that step declares an
-automatic response check, and then sends `step.observe` with the attempt, step,
-project, session and App instance, interaction and request identities. The
+controller's step actions (`src/lib/vibe64LearningStepActions.js`) begin a
+press only for L's current step of its prepared, not-ended version 2 attempt
+whose practice project is the open project, while L is not covering the app,
+when that step declares an automatic response check, and then send
+`step.observe` with the attempt, step, project, session and App instance,
+interaction and request identities. The
 server re-admits its inner session and App-run reads on the ordinary practice
 project target.
 
