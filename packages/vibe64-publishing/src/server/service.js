@@ -620,4 +620,4 @@ function minutes(value) {
   return Math.round(Number(value) * 60 * 1000);
 }
 
-export { createPublishingService };
+export { createPublishingPackaging, createPublishingService, createPublishingToolchains };
