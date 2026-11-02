@@ -82,9 +82,11 @@ function createServiceSessionWork({
       const workflow = await project.readRepositoryWorkflow();
       if (workflow.requirePullRequest && !sessionConnectedContribution(session) && !context.creatingPullRequest &&
           !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
-        const error = new Error("This project requires a pull request. Create or open a pull request before saving this session.");
-        error.code = "vibe64_pull_request_required";
-        throw error;
+        throw vibe64Error(
+          "This project requires a pull request. Create or open a pull request before saving this session.",
+          "vibe64_pull_request_required",
+          { messageCode: "vibe64_project_pull_request_required" }
+        );
       }
     };
     await assertWorkflow();
