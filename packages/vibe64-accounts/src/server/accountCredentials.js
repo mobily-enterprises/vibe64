@@ -3,10 +3,11 @@ import { authError } from "./accountsRuntime.js";
 import { ensureToolHomeSource } from "./accountFiles.js";
 import { hostCommandOptionsForCredentialContext } from "./accountHostCommands.js";
 import { accountsResult, normalizedAccountId } from "./accountRecords.js";
-import { accountDebugSummary, authDebug } from "./accountsDebug.js";
+import { accountDebugSummary } from "./accountsDebug.js";
 import { githubGitIdentityFromInput, gitIdentitySaveCommandArgs, logoutCommandArgs } from "./authCommands.js";
 import { readGithubStoredStatus, recordGithubAuthInvalidState, writeGithubAuthStatus } from "./githubAccountStatus.js";
 
+/** @typedef {import("./accountsDebug.js").AuthDebug} AuthDebug */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
 /** @typedef {import("./types.js").AuthSessionViews} AuthSessionViews */
@@ -18,6 +19,7 @@ import { readGithubStoredStatus, recordGithubAuthInvalidState, writeGithubAuthSt
  * person's Git identity, and signing out of an account.
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
+ * @param {AuthDebug} dependencies.authDebug
  * @param {AuthSessionViews} dependencies.authSessionViews
  * @param {RuntimeEnv} dependencies.env
  * @param {AccountNotifications} dependencies.notifications
@@ -25,6 +27,7 @@ import { readGithubStoredStatus, recordGithubAuthInvalidState, writeGithubAuthSt
  */
 function createAccountCredentials({
   access,
+  authDebug,
   authSessionViews,
   env,
   notifications,

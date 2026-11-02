@@ -10,9 +10,10 @@ import {
 import { cleanAuthOutput, redactedAuthOutputTail } from "../shared/authOutput.js";
 import { authError } from "./accountsRuntime.js";
 import { accountsResult, authenticatingAccount, normalizedAccountId, normalizedAuthMode } from "./accountRecords.js";
-import { accountDebugSummary, authDebug } from "./accountsDebug.js";
+import { accountDebugSummary } from "./accountsDebug.js";
 import { ACCOUNT_AUTH_NAMESPACE, parseAuthOutput, publicAuthSession } from "./authCommands.js";
 
+/** @typedef {import("./accountsDebug.js").AuthDebug} AuthDebug */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
 /** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
@@ -37,12 +38,14 @@ function createAuthSessionState() {
  * the events it publishes, its terminal's input and size, and its cancel.
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
+ * @param {AuthDebug} dependencies.authDebug
  * @param {AccountNotifications} dependencies.notifications
  * @param {AuthSessionState} dependencies.state
  * @param {AccountStatusReads} dependencies.statusReads
  */
 function createAuthSessionViews({
   access,
+  authDebug,
   notifications,
   state,
   statusReads

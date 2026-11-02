@@ -65,21 +65,20 @@ function setupAccounts({
   project,
   terminals
 }) {
-  // The runtime env carries no PATH or HOME; the tools are looked up where this process finds them.
-  warnMissingOperatorClis(process.env);
+  warnMissingOperatorClis(env);
   const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
   const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
   const projectContext = getStudioProjectContext();
   const localRuntime = runtimeProfileIsLocal(projectContext.runtimeProfile);
   const resolvedAccountRuntime = accountRuntime ?? createAccountsRuntime({
-    env: process.env,
+    env,
     project,
     systemRoot,
     targetRoot
   });
   const accounts = createService({
     accountRuntime: resolvedAccountRuntime,
-    env: process.env,
+    env,
     personalProfile: localRuntime && systemRoot
       ? createPersonalProfile({ store: createPersonalAiProfileStore({ systemRoot }) })
       : NO_PERSONAL_PROFILE,

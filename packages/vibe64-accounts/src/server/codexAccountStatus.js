@@ -22,8 +22,9 @@ import { STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG } from "@local/studio-terminal-co
 import { ensureToolHomeSource, readOptionalJson, readOptionalText } from "./accountFiles.js";
 import { hostCommandOptionsForCredentialContext, hostCommandResultOutput } from "./accountHostCommands.js";
 import { accountConnected, accountDisconnected, operatorCliAccount } from "./accountRecords.js";
-import { accountDebugSummary, authDebug } from "./accountsDebug.js";
+import { accountDebugSummary } from "./accountsDebug.js";
 
+/** @typedef {import("./accountsDebug.js").AuthDebug} AuthDebug */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
@@ -145,11 +146,13 @@ async function readCodexStatus({
  * The live Codex status read, one at a time, and the marker turnover it records.
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
+ * @param {AuthDebug} dependencies.authDebug
  * @param {RuntimeEnv} dependencies.env
  * @param {AccountNotifications} dependencies.notifications
  */
 function createCodexAccountStatus({
   access,
+  authDebug,
   env,
   notifications
 }) {

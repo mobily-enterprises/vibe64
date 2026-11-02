@@ -15,7 +15,7 @@ import {
   hostCommandOptionsForCredentialContext
 } from "./accountHostCommands.js";
 import { ACCOUNT_DEFINITIONS, normalizedAccountId, normalizedAuthMode } from "./accountRecords.js";
-import { accountDebugSummary, authDebug } from "./accountsDebug.js";
+import { accountDebugSummary } from "./accountsDebug.js";
 import {
   ACCOUNT_AUTH_NAMESPACE,
   accountAuthWorkingDirectory,
@@ -31,6 +31,7 @@ import {
   unsupportedAuthMode
 } from "./authCommands.js";
 
+/** @typedef {import("./accountsDebug.js").AuthDebug} AuthDebug */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -47,6 +48,7 @@ import {
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
  * @param {AccountsRuntime} dependencies.accountRuntime
+ * @param {AuthDebug} dependencies.authDebug
  * @param {AuthSessionViews} dependencies.authSessionViews
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
@@ -59,6 +61,7 @@ import {
 function createAuthTerminals({
   access,
   accountRuntime,
+  authDebug,
   authSessionViews,
   env,
   logger,

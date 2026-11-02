@@ -18,10 +18,11 @@ import {
   refreshRequested,
   requestedAccountIds
 } from "./accountRecords.js";
-import { accountDebugSummary, accountsDebugSummary, authDebug } from "./accountsDebug.js";
+import { accountDebugSummary, accountsDebugSummary } from "./accountsDebug.js";
 import { readCodexLocalStatus } from "./codexAccountStatus.js";
 import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus.js";
 
+/** @typedef {import("./accountsDebug.js").AuthDebug} AuthDebug */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -37,6 +38,7 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
  * @param {AccountsRuntime} dependencies.accountRuntime
+ * @param {AuthDebug} dependencies.authDebug
  * @param {CodexAccountStatus} dependencies.codexStatus
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
@@ -46,6 +48,7 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
 function createAccountStatusReads({
   access,
   accountRuntime,
+  authDebug,
   codexStatus,
   env,
   logger,

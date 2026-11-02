@@ -3,6 +3,7 @@ import { createAccountAccess } from "./accountAccess.js";
 import { createAccountCredentials } from "./accountCredentials.js";
 import { runDefaultHostCommand } from "./accountHostCommands.js";
 import { createAccountStatusReads } from "./accountStatusReads.js";
+import { createAuthDebug } from "./accountsDebug.js";
 import { createAuthSessionState, createAuthSessionViews } from "./authSessionViews.js";
 import { createAuthTerminals } from "./authTerminals.js";
 import { createCodexAccountStatus } from "./codexAccountStatus.js";
@@ -32,7 +33,7 @@ import { createModelRouting } from "./modelRouting.js";
  * and the AI management policy; the service owns login sessions and status reads.
  * @param {object} dependencies
  * @param {AccountsRuntime} dependencies.accountRuntime
- * @param {RuntimeEnv} dependencies.env the process environment: login and status commands run in it
+ * @param {RuntimeEnv} dependencies.env the server's runtime env: login and status commands run in it, and it sets the debug trail
  * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
  * @param {RuntimeLogger} dependencies.logger
  * @param {PersonalProfile} dependencies.personalProfile
@@ -69,14 +70,17 @@ function createService({
     notifications,
     runHostToolCommand
   });
+  const authDebug = createAuthDebug(env);
   const codexStatus = createCodexAccountStatus({
     access,
+    authDebug,
     env,
     notifications
   });
   const statusReads = createAccountStatusReads({
     access,
     accountRuntime,
+    authDebug,
     codexStatus,
     env,
     logger,
@@ -96,6 +100,7 @@ function createService({
   const authSessionState = createAuthSessionState();
   const authSessionViews = createAuthSessionViews({
     access,
+    authDebug,
     notifications,
     state: authSessionState,
     statusReads
@@ -103,6 +108,7 @@ function createService({
   const authTerminals = createAuthTerminals({
     access,
     accountRuntime,
+    authDebug,
     authSessionViews,
     env,
     logger,
@@ -114,6 +120,7 @@ function createService({
   });
   const credentials = createAccountCredentials({
     access,
+    authDebug,
     authSessionViews,
     env,
     notifications,
