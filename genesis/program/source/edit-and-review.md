@@ -9,6 +9,13 @@ from saved project work, and inspect one exact file change at a time.
 
 - `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
 - `src/components/studio/files/Vibe64FileArea.vue`
+- `src/components/studio/files/Vibe64FileAreaToolbar.vue`
+- `src/components/studio/files/Vibe64FileAreaListing.vue`
+- `src/composables/useVibe64FileAreaBrowser.js`
+- `src/composables/useVibe64FileAreaCommands.js`
+- `src/composables/useVibe64FileAreaFocus.js`
+- `src/composables/useVibe64FileAreaUploads.js`
+- `src/lib/vibe64FileAreaRequest.js`
 - `src/components/studio/files/Vibe64FileUploadQueue.vue`
 - `src/components/studio/files/Vibe64FileConflictDialog.vue`
 - `src/components/studio/files/Vibe64FileTransferDialog.vue`
@@ -947,6 +954,12 @@ Interface/Code, whose presentation their host records.
   Code, rendered Markdown or image; `useVibe64SourceEditorDownloads()` downloads
   files, asking first about unsaved edits; and `useVibe64SourceTreeExpansion()`
   remembers each session's open folders in the browser.
+- `Vibe64FileArea` presents every Files area except Repo from its folder
+  toolbar (`Vibe64FileAreaToolbar`) and item list (`Vibe64FileAreaListing`).
+  `useVibe64FileAreaBrowser()` owns the listing, the open file and their
+  refreshes; `useVibe64FileAreaCommands()` the one-at-a-time saves, creates,
+  renames and deletes; `useVibe64FileAreaUploads()` dropped and chosen uploads;
+  and `useVibe64FileAreaFocus()` where focus returns after a dialog.
 - The source-editor service owns explanation cache lookup, temporary conversation
   creation and cleanup. `useVibe64SourceEditorExplanations()`, which
   `useVibe64SourceEditor()` composes, owns the selected explanation,

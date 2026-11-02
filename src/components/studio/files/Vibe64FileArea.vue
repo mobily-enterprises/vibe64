@@ -16,41 +16,25 @@
     </div>
 
     <!-- An open file replaces the folder toolbar with its own bar. -->
-    <!-- The tab names the area, so the path shows only inside a folder. -->
-    <div v-if="!file" class="vibe64-file-area__toolbar">
-      <nav v-if="directory" class="vibe64-file-area__crumbs" aria-label="Folder">
-        <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
-          <v-icon v-if="index" :icon="mdiChevronRight" size="18" aria-hidden="true" />
-          <span v-if="index === breadcrumbs.length - 1" class="vibe64-file-area__crumb-current" aria-current="location">{{ crumb.title }}</span>
-          <v-btn v-else :disabled="loading || busy" variant="text" @click="loadDirectory(crumb.path, false, { focus: true })">{{ crumb.title }}</v-btn>
-        </template>
-      </nav>
-      <div v-if="!mobile" class="vibe64-file-area__actions">
-        <v-btn v-if="archived && area === 'session'" :prepend-icon="mdiDownload" variant="text" :loading="downloading.includes(archiveName)" @click="download(archiveName, 'archive')">Download archive</v-btn>
-        <v-btn v-if="location" :prepend-icon="mdiContentCopy" variant="text" @click="copyLocation">Copy AI path</v-btn>
-        <v-btn :icon="mdiRefresh" aria-label="Refresh files" title="Refresh files" variant="text" :disabled="loading || busy" @click="refresh" />
-        <template v-if="canWrite">
-          <v-btn :prepend-icon="mdiFolderPlusOutline" variant="text" :disabled="busy" @click="openDialog('mkdir')">New folder</v-btn>
-          <v-btn :prepend-icon="mdiFilePlusOutline" variant="text" :disabled="busy" @click="openNewFile">New file</v-btn>
-          <v-btn :prepend-icon="mdiUpload" color="primary" variant="flat" @click="chooseFiles">Upload</v-btn>
-        </template>
-      </div>
-      <div v-else class="vibe64-file-area__actions">
-        <v-btn v-if="canWrite" :icon="mdiUpload" aria-label="Upload files" color="primary" variant="tonal" @click="chooseFiles" />
-        <v-menu>
-          <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="More folder actions" variant="text" />
-          </template>
-          <v-list class="v64-focus-rings">
-            <v-list-item v-if="canWrite" :prepend-icon="mdiFilePlusOutline" title="New file" :disabled="busy" @click="openNewFile" />
-            <v-list-item v-if="canWrite" :prepend-icon="mdiFolderPlusOutline" title="New folder" :disabled="busy" @click="openDialog('mkdir')" />
-            <v-list-item v-if="location" :prepend-icon="mdiContentCopy" title="Copy AI path" @click="copyLocation" />
-            <v-list-item v-if="archived && area === 'session'" :prepend-icon="mdiDownload" title="Download archive" :disabled="downloading.includes(archiveName)" @click="download(archiveName, 'archive')" />
-            <v-list-item :prepend-icon="mdiRefresh" title="Refresh" :disabled="loading || busy" @click="refresh" />
-          </v-list>
-        </v-menu>
-      </div>
-    </div>
+    <Vibe64FileAreaToolbar
+      v-if="!file"
+      :archive-available="archived && area === 'session'"
+      :archive-downloading="downloading.includes(archiveName)"
+      :breadcrumbs="breadcrumbs"
+      :busy="busy"
+      :can-write="canWrite"
+      :directory="directory"
+      :loading="loading"
+      :location="location"
+      :mobile="mobile"
+      @copy-location="copyLocation"
+      @download-archive="download(archiveName, 'archive')"
+      @new-file="openNewFile"
+      @new-folder="openDialog('mkdir')"
+      @open-folder="loadDirectory($event, false, { focus: true })"
+      @refresh="refresh"
+      @upload="chooseFiles"
+    />
     <input ref="uploadInput" type="file" multiple class="d-none" aria-label="Choose files to upload" @change="pickFiles">
     <p v-if="!file && areaInfo.description" class="vibe64-file-area__description">{{ areaInfo.description }}</p>
 
@@ -108,42 +92,23 @@
     </template>
 
     <template v-else>
-      <v-list v-if="entries.length" class="vibe64-file-area__body vibe64-file-area__listing" aria-label="Files and folders">
-        <v-list-item v-for="entry in entries" :key="entry.path" class="vibe64-file-area__row">
-          <!-- Each row is a list item whose name is a button covering the row;
-               its own actions sit above that button. -->
-          <button class="vibe64-file-area__open" :data-path="entry.path" :disabled="busy" type="button" @click="openEntry(entry)">
-            <v-icon class="vibe64-file-area__open-icon" :icon="entryIcon(entry)" aria-hidden="true" />
-            <span class="vibe64-file-area__open-text">
-              <span class="vibe64-file-area__open-name">{{ entry.name }}</span>
-              <span class="vibe64-file-area__open-detail">{{ entrySubtitle(entry) }}</span>
-            </span>
-          </button>
-          <template #append>
-            <v-btn
-              v-if="entry.type === 'file' && !mobile"
-              :icon="mdiDownload"
-              :aria-label="`Download ${entry.name}`"
-              :loading="downloading.includes(entry.path)"
-              title="Download"
-              variant="text"
-              @click.stop="download(entry.path)"
-            />
-            <v-menu v-if="canWrite || destinations.length || mobile">
-              <template #activator="{ props: menuProps }">
-                <v-btn v-bind="menuProps" :icon="mdiDotsVertical" :aria-label="`Actions for ${entry.name}`" variant="text" @click.stop />
-              </template>
-              <v-list class="v64-focus-rings">
-                <v-list-item v-if="entry.type === 'file' && mobile" :prepend-icon="mdiDownload" title="Download" @click="download(entry.path)" />
-                <v-list-item v-if="destinations.length" :prepend-icon="mdiFileMoveOutline" :title="readOnly ? 'Copy to…' : 'Move or copy…'" @click="openTransfer(entry)" />
-                <v-list-item v-if="canWrite" :prepend-icon="mdiPencilOutline" title="Rename" @click="openDialog('rename', entry)" />
-                <v-list-item v-if="canWrite" :prepend-icon="mdiDeleteOutline" title="Delete" @click="openDialog('delete', entry)" />
-              </v-list>
-            </v-menu>
-          </template>
-        </v-list-item>
-        <v-btn v-if="hasMore" class="ma-3" variant="text" :disabled="busy" @click="loadDirectory(directory, true)">Show more</v-btn>
-      </v-list>
+      <Vibe64FileAreaListing
+        v-if="entries.length"
+        :busy="busy"
+        :can-transfer="destinations.length > 0"
+        :can-write="canWrite"
+        :downloading="downloading"
+        :entries="entries"
+        :has-more="hasMore"
+        :mobile="mobile"
+        :read-only="readOnly"
+        @delete="openDialog('delete', $event)"
+        @download="download"
+        @open="openEntry"
+        @rename="openDialog('rename', $event)"
+        @show-more="loadDirectory(directory, true)"
+        @transfer="openTransfer"
+      />
       <div v-else class="vibe64-file-area__body vibe64-file-area__empty">
         <v-icon :icon="areaInfo.icon" size="48" aria-hidden="true" />
         <h3 tabindex="-1">{{ expired ? "This Session Dropzone has expired" : directory ? "This folder is empty" : `${areaInfo.label} is empty` }}</h3>
@@ -260,38 +225,32 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onScopeDispose, ref, useId, watch } from "vue";
+import { computed, ref, useId } from "vue";
 import { useDisplay } from "vuetify";
 import {
   mdiArrowLeft,
   mdiChevronLeft,
   mdiChevronRight,
   mdiClose,
-  mdiContentCopy,
   mdiDeleteOutline,
-  mdiDotsVertical,
   mdiDownload,
-  mdiFileImageOutline,
   mdiFileMoveOutline,
   mdiFileOutline,
   mdiFilePlusOutline,
-  mdiFolderOutline,
-  mdiFolderPlusOutline,
-  mdiPencilOutline,
-  mdiRefresh,
   mdiTrayArrowDown,
   mdiUpload
 } from "@mdi/js";
-import { filePreviewImageType } from "@local/vibe64-source-editor/shared/fileTypes";
-import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { useVibe64FileUploads } from "@/composables/useVibe64FileUploads.js";
-import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { useVibe64FileAreaBrowser } from "@/composables/useVibe64FileAreaBrowser.js";
+import { useVibe64FileAreaCommands } from "@/composables/useVibe64FileAreaCommands.js";
+import { useVibe64FileAreaFocus } from "@/composables/useVibe64FileAreaFocus.js";
+import { useVibe64FileAreaUploads } from "@/composables/useVibe64FileAreaUploads.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
-import { writeClipboardText } from "@/lib/clipboard.js";
-import { vibe64DroppedFiles, vibe64FileArea, vibe64FileTransferMessage } from "@/lib/vibe64FileAreas.js";
-import { formatFileSize } from "@/lib/vibe64FileSize.js";
+import { vibe64FileArea } from "@/lib/vibe64FileAreas.js";
+import { fileAreaUrl } from "@/lib/vibe64FileAreaRequest.js";
+import Vibe64FileAreaListing from "./Vibe64FileAreaListing.vue";
+import Vibe64FileAreaToolbar from "./Vibe64FileAreaToolbar.vue";
 import Vibe64FileConflictDialog from "./Vibe64FileConflictDialog.vue";
 import Vibe64FileTransferDialog from "./Vibe64FileTransferDialog.vue";
 import Vibe64FileUploadQueue from "./Vibe64FileUploadQueue.vue";
@@ -319,174 +278,79 @@ const areaInfo = computed(() => vibe64FileArea(props.area));
 const readOnly = computed(() => areaInfo.value.readOnly === true);
 const root = ref(null);
 const fileHeading = ref(null);
-const directory = ref("");
-const entries = ref([]);
-const location = ref("");
-const expired = ref(false);
-const hasMore = ref(false);
-const nextOffset = ref(0);
-const loading = ref(false);
-const loadError = ref("");
-const busy = ref(false);
-const file = ref(null);
-const draft = ref("");
-const dirty = computed(() => typeof file.value?.text === "string" && draft.value !== file.value.text);
-const canWrite = computed(() => !readOnly.value && !expired.value);
-const fileName = computed(() => file.value?.path.split("/").at(-1) || "");
-const fileEntry = computed(() => file.value && { name: fileName.value, path: file.value.path, type: "file" });
 const uploadInput = ref(null);
-const dragDepth = ref(0);
-const dialogOpen = ref(false);
-const dialogOperation = ref("");
-const dialogEntry = ref(null);
-const dialogName = ref("");
-const nameError = ref("");
-const newFileOpen = ref(false);
-const newFileName = ref("");
-const newFileText = ref("");
-const transferItem = ref(null);
+const busy = ref(false);
 // Downloads run beside other work; each shows progress on its own button.
 const downloading = ref([]);
 const archiveName = computed(() => `${props.sessionId}.tar.gz`);
 const dialogTitleId = `vibe64-file-dialog-${useId()}`;
 const newFileTitleId = `vibe64-new-file-dialog-${useId()}`;
-let generation = 0;
-let pendingRefresh = false;
-// Where focus goes back to when a dialog closes: the control that opened it,
-// or the row it was about when that control lived in a closed menu.
-let returnFocus = null;
-let uploadRefreshTimer = null;
 
-const uploads = useVibe64FileUploads({
-  endpoint: computed(() => props.base),
-  onAsk: () => rememberFocus(),
-  onUploaded: () => {
-    // A burst of small uploads refreshes the listing once.
-    clearTimeout(uploadRefreshTimer);
-    uploadRefreshTimer = setTimeout(() => {
-      if (file.value) pendingRefresh = true;
-      else void loadDirectory(directory.value, false, { quiet: true });
-    }, 250);
-  }
-});
+const focus = useVibe64FileAreaFocus({ root });
+const { restoreFocus } = focus;
+const browser = useVibe64FileAreaBrowser({ areaInfo, busy, fileHeading, focus, props, root });
+const {
+  breadcrumbs,
+  closeFile,
+  directory,
+  dirty,
+  draft,
+  entries,
+  expired,
+  file,
+  fileEntry,
+  fileName,
+  folderLabel,
+  hasMore,
+  imageSiblings,
+  loadDirectory,
+  loadError,
+  loading,
+  location,
+  openEntry,
+  refresh,
+  stepImage
+} = browser;
+const canWrite = computed(() => !readOnly.value && !expired.value);
+const {
+  dragDepth,
+  dragEnter,
+  dragLeave,
+  dragOver,
+  dropFiles,
+  startUploads,
+  uploads
+} = useVibe64FileAreaUploads({ browser, canWrite, feedback, focus, props });
+const {
+  confirmDialog,
+  copyLocation,
+  createFile,
+  dialogEntry,
+  dialogName,
+  dialogOpen,
+  dialogOperation,
+  dialogTitle,
+  nameError,
+  newFileName,
+  newFileOpen,
+  newFileText,
+  openDialog,
+  openNewFile,
+  openTransfer,
+  save,
+  saveShortcut,
+  transferItem,
+  transferred
+} = useVibe64FileAreaCommands({ browser, busy, emit, feedback, fileHeading, focus, props });
 
-const breadcrumbs = computed(() => [
-  { title: areaInfo.value.label, path: "" },
-  ...directory.value.split("/").filter(Boolean).map((name, index, parts) => ({ title: name, path: parts.slice(0, index + 1).join("/") }))
-]);
-const folderLabel = computed(() => breadcrumbs.value.map((crumb) => crumb.title).join(" › "));
-const dialogTitle = computed(() => ({
-  delete: `Delete “${dialogEntry.value?.name}”?`, rename: `Rename “${dialogEntry.value?.name}”`, mkdir: "New folder"
-})[dialogOperation.value] || "");
-const imageSiblings = computed(() => file.value?.image ? entries.value.filter((entry) => entry.type === "file" && filePreviewImageType(entry.name)) : []);
-
-function url(operation, filePath, query = {}) {
-  return `${props.base}/${operation}?${new URLSearchParams({ path: filePath, ...query })}`;
+function chooseFiles() {
+  uploadInput.value?.click();
 }
 
-async function request(endpoint, options) {
-  const result = await getHttpWebClient().request(endpoint, options);
-  if (result?.ok === false) throw new Error(vibe64ApiResponseError(result, "File operation failed."));
-  return result;
-}
-
-function rowElement(path) {
-  return path ? root.value?.querySelector(`[data-path="${path.replace(/["\\]/gu, "\\$&")}"]`) : null;
-}
-
-// After moving to another folder, focus its first item, or its empty state.
-function focusFolder() {
-  root.value?.querySelector("[data-path], .vibe64-file-area__empty h3")?.focus();
-}
-
-function rememberFocus(path = "") {
-  const active = globalThis.document?.activeElement;
-  returnFocus = active && !active.closest?.(".v-overlay") ? active : path;
-}
-
-async function restoreFocus() {
-  const target = returnFocus;
-  returnFocus = null;
-  await nextTick();
-  const element = typeof target === "string" ? rowElement(target) : target;
-  if (element?.isConnected) element.focus();
-  else if (target !== null) focusFolder();
-}
-
-// A quiet reload refreshes the listing without leaving an open file.
-async function loadDirectory(target = "", append = false, { quiet = false, focus = false } = {}) {
-  const current = ++generation;
-  if (!quiet) loading.value = true;
-  loadError.value = "";
-  try {
-    const result = await request(url("tree", target, { offset: append ? nextOffset.value : 0 }));
-    if (current !== generation) return;
-    if (!quiet) file.value = null;
-    directory.value = target;
-    entries.value = append ? [...entries.value, ...result.tree.children] : result.tree.children;
-    hasMore.value = result.tree.hasMore === true;
-    nextOffset.value = result.tree.nextOffset;
-    location.value = result.location || "";
-    expired.value = result.expired === true;
-    if (focus) {
-      loading.value = false;
-      await nextTick();
-      focusFolder();
-    }
-  } catch (error) {
-    if (current === generation) loadError.value = error.message;
-  } finally {
-    if (current === generation) loading.value = false;
-  }
-}
-
-// Opening moves focus into the item; a refresh of the open file does not.
-async function openEntry(entry, { focus = true } = {}) {
-  if (entry.type === "directory") return loadDirectory(entry.path, false, { focus: true });
-  if (filePreviewImageType(entry.name)) {
-    generation += 1;
-    loading.value = false;
-    file.value = {
-      image: true, path: entry.path, size: entry.size,
-      src: scopedDevelopmentApiUrl(url("download", entry.path, { inline: "1" }), props.projectSlug)
-    };
-    await nextTick();
-    root.value?.querySelector(".vibe64-image-preview__stage")?.focus();
-    return;
-  }
-  const current = ++generation;
-  loading.value = true;
-  try {
-    const result = await request(url("file", entry.path));
-    if (current !== generation) return;
-    file.value = result.file;
-    draft.value = result.file.text;
-  } catch (error) {
-    if (current !== generation) return;
-    // Binary and large files remain downloadable when they cannot be shown.
-    file.value = { path: entry.path, message: error.message };
-  } finally {
-    if (current === generation) loading.value = false;
-  }
-  if (focus && current === generation) {
-    await nextTick();
-    fileHeading.value?.focus();
-  }
-}
-
-// Back to the folder, with focus on the file that was open.
-async function closeFile() {
-  const path = file.value?.path || "";
-  file.value = null;
-  if (pendingRefresh) await refresh();
-  await nextTick();
-  rowElement(path)?.focus();
-}
-
-function stepImage(step) {
-  const images = imageSiblings.value;
-  const index = images.findIndex((entry) => entry.path === file.value.path);
-  if (images.length > 1) void openEntry(images[(index + step + images.length) % images.length]);
+function pickFiles(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  return startUploads(files);
 }
 
 // Esc returns to the folder and the arrow keys walk its images.
@@ -501,176 +365,16 @@ function previewKey(event) {
   event.preventDefault();
 }
 
-async function command(run, fallback = "File operation failed.") {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    await run();
-  } catch (error) {
-    feedback.error(error, fallback);
-  } finally {
-    busy.value = false;
-  }
-}
-
-function save() {
-  return command(async () => {
-    const result = await request(`${props.base}/file`, { method: "PUT", body: { path: file.value.path, baseHash: file.value.hash, text: draft.value } });
-    file.value = result.file;
-    draft.value = result.file.text;
-  });
-}
-
-function saveShortcut() {
-  if (dirty.value && !busy.value) void save();
-}
-
-function validName(name) {
-  const trimmed = name.trim();
-  return Boolean(trimmed) && !/[/\\]/u.test(trimmed) && ![".", ".."].includes(trimmed);
-}
-
-function openNewFile() {
-  rememberFocus();
-  newFileName.value = "";
-  newFileText.value = "";
-  nameError.value = "";
-  newFileOpen.value = true;
-}
-
-function createFile() {
-  if (!validName(newFileName.value)) {
-    nameError.value = "Enter a file name without slashes.";
-    return;
-  }
-  nameError.value = "";
-  return command(async () => {
-    const result = await request(`${props.base}/file`, {
-      method: "POST", body: { path: [directory.value, newFileName.value.trim()].filter(Boolean).join("/"), text: newFileText.value }
-    });
-    newFileOpen.value = false;
-    await loadDirectory(directory.value, false, { quiet: true });
-    file.value = result.file;
-    draft.value = result.file.text;
-    returnFocus = null;
-    await nextTick();
-    fileHeading.value?.focus();
-  }, "The file could not be created.");
-}
-
-function dragEnter(event) {
-  if (canWrite.value && event.dataTransfer?.types.includes("Files")) dragDepth.value += 1;
-}
-
-function dragOver(event) {
-  if (event.dataTransfer) event.dataTransfer.dropEffect = canWrite.value ? "copy" : "none";
-}
-
-function dragLeave() {
-  dragDepth.value = Math.max(0, dragDepth.value - 1);
-}
-
-function dropFiles(event) {
-  dragDepth.value = 0;
-  if (!canWrite.value) return;
-  try {
-    return startUploads(vibe64DroppedFiles(event.dataTransfer));
-  } catch (error) {
-    feedback.error(error);
-  }
-}
-
-function chooseFiles() {
-  uploadInput.value?.click();
-}
-
-function pickFiles(event) {
-  const files = [...(event.target.files || [])];
-  event.target.value = "";
-  return startUploads(files);
-}
-
-async function startUploads(files) {
-  try {
-    await uploads.start(files, directory.value);
-  } catch (error) {
-    feedback.error(error, "Upload failed.");
-  }
-}
-
 async function download(target, operation = "download") {
   if (downloading.value.includes(target)) return;
   downloading.value = [...downloading.value, target];
   try {
-    await downloadAttachment(scopedDevelopmentApiUrl(url(operation, target), props.projectSlug), target.split("/").at(-1), "Download failed.");
+    await downloadAttachment(scopedDevelopmentApiUrl(fileAreaUrl(props.base, operation, target), props.projectSlug), target.split("/").at(-1), "Download failed.");
   } catch (error) {
     feedback.error(error, "Download failed.");
   } finally {
     downloading.value = downloading.value.filter((candidate) => candidate !== target);
   }
-}
-
-function openDialog(operation, entry = null) {
-  rememberFocus(entry?.path);
-  dialogOperation.value = operation;
-  dialogEntry.value = entry;
-  dialogName.value = entry?.name || "";
-  nameError.value = "";
-  dialogOpen.value = true;
-}
-
-function confirmDialog() {
-  const operation = dialogOperation.value;
-  if (operation !== "delete" && !validName(dialogName.value)) {
-    nameError.value = "Enter a name without slashes.";
-    return;
-  }
-  return command(async () => {
-    const suffix = operation === "mkdir" ? "directory" : operation === "delete" ? "file" : "rename";
-    const parent = operation === "mkdir" ? directory.value : dialogEntry.value.path.split("/").slice(0, -1).join("/");
-    const destination = [parent, dialogName.value.trim()].filter(Boolean).join("/");
-    await request(`${props.base}/${suffix}`, {
-      method: operation === "delete" ? "DELETE" : "POST",
-      body: {
-        path: operation === "mkdir" ? destination : dialogEntry.value.path,
-        ...(operation === "rename" ? { destination } : {})
-      }
-    });
-    dialogOpen.value = false;
-    if (file.value && dialogEntry.value?.path === file.value.path) file.value = null;
-    await loadDirectory(directory.value);
-  });
-}
-
-function openTransfer(entry) {
-  rememberFocus(entry.path);
-  transferItem.value = entry;
-}
-
-function transferred(event) {
-  transferItem.value = null;
-  if (event.skipped) return;
-  feedback.success(vibe64FileTransferMessage(event));
-  if (event.mode === "move" && file.value?.path === event.item.path) file.value = null;
-  if (event.mode === "move" || event.destination.area === props.area) void loadDirectory(directory.value, false, { quiet: true });
-  emit("transferred", event);
-}
-
-function copyLocation() {
-  return command(async () => {
-    await writeClipboardText(location.value);
-    feedback.success("AI path copied.");
-  });
-}
-
-function refresh() {
-  if (dirty.value || busy.value) {
-    pendingRefresh = true;
-    return;
-  }
-  pendingRefresh = false;
-  if (file.value && !file.value.image) return openEntry({ type: "file", path: file.value.path, name: fileName.value }, { focus: false });
-  return loadDirectory(directory.value, false, { quiet: Boolean(file.value) });
 }
 
 // File actions show their words on wider screens and only icons on a phone.
@@ -679,36 +383,6 @@ function barAction(icon, label) {
     ? { icon, "aria-label": label.replace("…", ""), title: label, variant: "text" }
     : { "prepend-icon": icon, text: label, variant: "text" };
 }
-
-function entryIcon(entry) {
-  if (entry.type === "directory") return mdiFolderOutline;
-  return filePreviewImageType(entry.name) ? mdiFileImageOutline : mdiFileOutline;
-}
-
-function entrySubtitle(entry) {
-  if (entry.type !== "file") return "Folder";
-  const expiry = entry.expiresAt ? ` · Deleted after ${new Date(entry.expiresAt).toLocaleDateString()}` : "";
-  return `${formatFileSize(entry.size)}${expiry}`;
-}
-
-watch(() => props.base, () => {
-  directory.value = "";
-  void loadDirectory();
-}, { immediate: true });
-watch(() => props.refreshKey, () => {
-  if (props.active) void refresh(); else pendingRefresh = true;
-});
-watch(() => props.agentActive, (working, wasWorking) => {
-  if (!wasWorking || working) return;
-  if (props.active) void refresh(); else pendingRefresh = true;
-});
-watch([() => props.active, dirty], ([active, changed]) => {
-  if (active && !changed && pendingRefresh) void refresh();
-});
-onScopeDispose(() => {
-  generation += 1;
-  clearTimeout(uploadRefreshTimer);
-});
 </script>
 
 <style scoped>
@@ -738,49 +412,6 @@ onScopeDispose(() => {
   z-index: 3;
 }
 
-.vibe64-file-area__toolbar {
-  align-items: center;
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: var(--v64-space-1);
-  padding: var(--v64-space-2) var(--v64-space-2) 0 var(--v64-space-2);
-}
-
-.vibe64-file-area__crumbs {
-  align-items: center;
-  display: flex;
-  flex: 1 1 12rem;
-  flex-wrap: wrap;
-  min-inline-size: 0;
-}
-
-.vibe64-file-area__crumbs .v-btn {
-  font: var(--v64-type-title-md);
-  min-inline-size: 0;
-  padding-inline: var(--v64-space-2);
-  text-transform: none;
-}
-
-.vibe64-file-area__actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-inline-start: auto;
-}
-
-.vibe64-file-area__crumb-current {
-  color: rgb(var(--v-theme-on-surface));
-  font: var(--v64-type-title-md);
-  overflow-wrap: anywhere;
-  padding-inline: var(--v64-space-2);
-}
-
-.vibe64-file-area--mobile .vibe64-file-area__crumbs .v-btn {
-  min-block-size: 48px;
-}
-
 .vibe64-file-area__description {
   color: var(--v64-on-surface-variant);
   font: var(--v64-type-body-md);
@@ -791,84 +422,6 @@ onScopeDispose(() => {
 .vibe64-file-area__body {
   flex: 1;
   min-block-size: 0;
-}
-
-.vibe64-file-area__listing {
-  background: transparent;
-}
-
-.vibe64-file-area__open {
-  align-items: center;
-  appearance: none;
-  background: none;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  font: inherit;
-  gap: var(--v64-space-4);
-  inline-size: 100%;
-  min-inline-size: 0;
-  padding: var(--v64-space-1) 0;
-  text-align: start;
-}
-
-.vibe64-file-area__open:disabled {
-  cursor: default;
-}
-
-/* The state layer and focus ring cover the whole row, so all of it opens the item. */
-.vibe64-file-area__open::after {
-  content: "";
-  inset: 0;
-  position: absolute;
-  transition: background-color var(--v64-duration-short);
-}
-
-.vibe64-file-area__open:not(:disabled):hover::after {
-  background-color: rgba(var(--v-theme-on-surface), var(--v64-state-hover));
-}
-
-.vibe64-file-area__open:focus-visible {
-  outline: none;
-}
-
-.vibe64-file-area__open:focus-visible::after {
-  background-color: rgba(var(--v-theme-on-surface), var(--v64-state-focus));
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
-  outline-offset: -2px;
-}
-
-.vibe64-file-area__row :deep(.v-list-item__append) {
-  position: relative;
-  z-index: 1;
-}
-
-.vibe64-file-area__open-icon {
-  color: var(--v64-on-surface-variant);
-  flex: none;
-}
-
-.vibe64-file-area__open-text {
-  display: flex;
-  flex-direction: column;
-  min-inline-size: 0;
-}
-
-.vibe64-file-area__open-name,
-.vibe64-file-area__open-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-file-area__open-name {
-  font: var(--v64-type-body-lg);
-}
-
-.vibe64-file-area__open-detail {
-  color: var(--v64-on-surface-variant);
-  font: var(--v64-type-body-md);
 }
 
 /* Secondary text at full on-surface-variant contrast. */
