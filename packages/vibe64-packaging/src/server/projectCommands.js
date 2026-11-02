@@ -9,6 +9,7 @@ import path from "node:path";
 
 import { runVibe64Command } from "@local/vibe64-execution/server";
 
+import { publishError } from "./errors.js";
 import { tail } from "./tail.js";
 
 const COMMAND_TIMEOUT_MS = 60 * 60_000;
@@ -91,15 +92,12 @@ function checkCommandRunner({ projectSlug = "", runCommand = runVibe64Command } 
     const reason = result?.timedOut
       ? "timed out"
       : result?.exitCode == null ? String(result?.error || "could not start") : `exited with status ${result.exitCode}`;
-    throw Object.assign(new Error(`${command} failed: ${reason}.`), {
-      code: result?.timedOut ? "PROCESS_TIMEOUT" : code,
-      details: {
-        command,
-        args,
-        status: result?.exitCode ?? null,
-        stdout: tail(result?.stdout),
-        stderr: tail(result?.stderr || result?.error)
-      }
+    throw publishError(result?.timedOut ? "PROCESS_TIMEOUT" : code, `${command} failed: ${reason}.`, {
+      command,
+      args,
+      status: result?.exitCode ?? null,
+      stdout: tail(result?.stdout),
+      stderr: tail(result?.stderr || result?.error)
     });
   };
 }
