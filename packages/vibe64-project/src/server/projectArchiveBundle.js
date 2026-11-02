@@ -456,15 +456,8 @@ function utcTimestamp(value = new Date()) {
 }
 
 export {
-  ARCHIVE_TIMEOUT_MS,
-  assertArtifactInsideBundle,
-  assertNonEmptyFile,
-  COMMAND_BUFFER_BYTES,
-  commandOutput,
   createBundleManifest,
   createTarArchive,
-  portableRelativePath,
-  PROJECT_ARCHIVE_KIND,
   PROJECT_ARCHIVE_LIFECYCLE,
   PROJECT_ARCHIVE_LIFECYCLE_KIND,
   PROJECT_ARCHIVE_MANIFEST,
@@ -475,12 +468,7 @@ export {
   PROJECT_STATE_ARCHIVE,
   readArchiveLifecycle,
   readJsonIfExists,
-  readResourceEvidence,
   resourceEvidenceForArtifacts,
-  sha256File,
-  sha256Text,
-  tarExcludeArgs,
-  tarListingEvidence,
   utcTimestamp,
   validateBundleManifest,
   validateTarArchive,

@@ -127,6 +127,8 @@ function githubRepositoryFullName(repository) {
 }
 
 export {
-  CONNECTED_PROJECTS_FILE, CONNECTED_PROJECTS_LIMIT, githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects,
+  githubRepositoryFullName,
+  normalizeConnectedProjects,
+  readConnectedProjects,
   saveConnectedProjects
 };

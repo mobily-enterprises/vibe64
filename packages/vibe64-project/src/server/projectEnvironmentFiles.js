@@ -281,8 +281,6 @@ const __testables = Object.freeze({ GENERATED_ENV_HEADER });
 
 export {
   assertProjectionPath,
-  generatedDotenv,
-  generatedDotenvIsOwned,
   materializeProjectEnvironmentFiles,
   projectEnvironmentFilesAreCurrent,
   writeManagedGitExcludes,

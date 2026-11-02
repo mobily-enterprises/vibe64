@@ -133,7 +133,7 @@ async function acquireProjectSessionPolicyLock(projectRuntimeRoot, options = {})
   });
 }
 
-async function releaseProjectLock(lock = {}) {
+async function releaseProjectLock(lock) {
   const owner = await lockOwner(lock.lockPath);
   if (owner?.token === lock.token && owner?.pid === process.pid) {
     await rm(lock.lockPath, { force: true });
@@ -167,9 +167,6 @@ async function runProjectSessionPolicyExclusive(projectRuntimeRoot, operation, o
 }
 
 export {
-  acquireProjectSessionPolicyLock,
-  acquireProjectSourceMutationLock,
-  releaseProjectLock,
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
 };

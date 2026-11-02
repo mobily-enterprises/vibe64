@@ -104,7 +104,9 @@ function developmentDatabasePolicy({
   };
 }
 
+const __testables = Object.freeze({ DEFAULT_MAX_OPEN_SESSIONS });
+
 export {
-  DEFAULT_MAX_OPEN_SESSIONS,
-  developmentDatabasePolicy
+  developmentDatabasePolicy,
+  __testables
 };
