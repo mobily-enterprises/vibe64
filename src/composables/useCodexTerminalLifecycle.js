@@ -36,6 +36,22 @@ function codexAccountConnectedPayload(payload = {}) {
 /**
  * Starts, attaches, reconnects and closes one session's Codex terminal, and
  * delivers its attachments into it.
+ * @param {{
+ *   props: { readOnly?: boolean },
+ *   emit: (event: "session-update", payload: object) => void,
+ *   codexCommands: ReturnType<typeof import("./useVibe64CodexCommands.js").useVibe64CodexCommands>,
+ *   terminalController: ReturnType<typeof import("./useVibe64Terminal.js").useVibe64Terminal>,
+ *   resetTerminalOutput: ReturnType<typeof import("./useCodexTerminalOutput.js").useCodexTerminalOutput>["resetTerminalOutput"],
+ *   sessionId: import("vue").ComputedRef<string>,
+ *   serverTerminalSession: import("vue").ComputedRef<{ commandPreview: string, id: string, status: string }>,
+ *   staleTerminalSessionIds: import("vue").Ref<Set<string>>,
+ *   canUseTerminal: import("vue").ComputedRef<boolean>,
+ *   terminalCanStart: import("vue").ComputedRef<boolean>,
+ *   hasTerminalSession: import("vue").ComputedRef<boolean>,
+ *   terminalReconnectRequired: import("vue").ComputedRef<boolean>,
+ *   terminalAttachmentsEnabled: import("vue").ComputedRef<boolean>,
+ *   componentMounted: import("vue").Ref<boolean>
+ * }} options
  */
 function useCodexTerminalLifecycle({
   props,
