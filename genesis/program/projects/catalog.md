@@ -353,7 +353,9 @@ action catalogue as `runtime.actions.policy`. At registration the rule removes
 `projectSlug`; at each execution, after JSKIT's checks, it refuses a non-owner
 an owner operation (`vibe64_owner_required`, except a standalone local owner),
 replaces any transport user with the authenticated one, resolves and checks the
-project slug (`vibe64_action_project_mismatch`), applies the Colleague mode and
+project slug (`vibe64_action_project_mismatch` when the input's slug differs
+from the URL's, `vibe64_action_authorized_project_mismatch` when the
+host-resolved project differs), applies the Colleague mode and
 team AI gates, and runs the action inside the project request context.
 An action that resolves its own project (the policy without a host-resolved
 project) keeps the person's original request, so a local browser action is

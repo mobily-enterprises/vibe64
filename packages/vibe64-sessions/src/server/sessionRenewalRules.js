@@ -221,11 +221,11 @@ async function inspectSessionRenewalEligibility({
   if (!session || toText(session.status) !== VIBE64_SESSION_STATUS.ACTIVE) {
     throw renewalError(
       "Only an active session can be renewed.",
-      "vibe64_session_renewal_source_not_active"
+      "vibe64_session_renewal_session_inactive"
     );
   }
   if (session.pinnedSessionId === session.sessionId) {
-    throw renewalError("Unpin this session before renewing it.", "vibe64_session_pinned");
+    throw renewalError("Unpin this session before renewing it.", "vibe64_session_renewal_pinned");
   }
   assertWorkspaceIdle(session, setupRunner);
   await assertNoRepositoryOperation(runtime, session.sessionId);

@@ -123,7 +123,7 @@ function createProjectRepositories({
   async function connectedContributionSource(input = {}) {
     const current = await selection.currentProjectState();
     const repository = requireGithubRepository(current, "Connected contribution");
-    if (current.repositoryMode !== "github") throw vibe64Error("Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
+    if (current.repositoryMode !== "github") throw vibe64Error("Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_source_authority_required");
     const access = await inspectConnectedRepository(repository, input);
     if (access.permissions?.push !== true || access.archived || access.disabled) {
       throw vibe64Error(`Write access to ${repository} is required to prepare its contribution.`, "vibe64_contribution_access_required", {

@@ -106,7 +106,7 @@ function createExplanationOperations({
   async function runSourceEditorAgentOperation(input, operation) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
-      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const explanationId = sourceEditorClientExplanationId(input.explanationId) || sourceEditorExplanationId();
     const key = sourceEditorExplanationMemoryKey({ sessionId }, explanationId);

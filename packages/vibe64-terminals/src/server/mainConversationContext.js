@@ -99,7 +99,12 @@ async function readSessionConversationContext(engine, project, sessionId, option
   if (codex) return prepareCodexConversationContext(id, runtime, session, codex.allowClosing, codexHost);
   if (engine === "opencode") {
     if (!session) {
-      throw openCodeError("vibe64_session_not_found", "Vibe64 session is not available.", { sessionId: id }, 404);
+      // vibe64_session_not_found answers 404 wherever it is caught; this sentence has its own messageCode.
+      throw new AppError(404, "Vibe64 session is not available.", {
+        code: "vibe64_session_not_found",
+        messageCode: "vibe64_session_unavailable",
+        details: { sessionId: id }
+      });
     }
     const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) ||
       sessionSourcePath(session);

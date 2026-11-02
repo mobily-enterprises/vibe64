@@ -250,7 +250,7 @@ async function inspectSessionWorkDirect({
     if (!context.contribution) {
       throw saveError(
         "Publication inspection requires a bound contribution.",
-        "vibe64_contribution_authority_changed"
+        "vibe64_contribution_binding_required"
       );
     }
     const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);

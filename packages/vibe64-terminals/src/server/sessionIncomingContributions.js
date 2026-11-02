@@ -35,7 +35,7 @@ function incomingRepositoryContext(project, session) {
     metadata: { base_commit: session.metadata?.base_commit }
   }, project);
   if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB || context.branch.startsWith("vibe64-incoming/")) {
-    throw saveError("Incoming changes require the receiving GitHub repository's authority.", "vibe64_incoming_repository_required");
+    throw saveError("Incoming changes require the receiving GitHub repository's authority.", "vibe64_incoming_repository_authority_required");
   }
   return context;
 }

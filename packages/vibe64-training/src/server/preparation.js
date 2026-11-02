@@ -268,7 +268,7 @@ function createTrainingService({
                 existing.metadata.repository?.mode !== "managed_git") {
               throw conflictFailure(
                 "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created.",
-                "VIBE64_TRAINING_PROJECT_CONFLICT"
+                "VIBE64_TRAINING_EXERCISE_OWNERSHIP_CONFLICT"
               );
             }
           } else {

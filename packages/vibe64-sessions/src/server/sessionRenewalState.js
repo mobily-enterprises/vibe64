@@ -126,7 +126,7 @@ function renewalHandoverText(value = "", options = {}) {
   if (!allowEmpty && !handover.trim()) {
     throw renewalStateError(
       "Write or generate a handover before renewing this session.",
-      "vibe64_session_renewal_handover_required",
+      "vibe64_session_renewal_handover_missing",
       { statusCode: 400 }
     );
   }

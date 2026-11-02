@@ -279,14 +279,14 @@ test("managed source proof refuses missing, extra and changed canonical bytes wi
     { path: "node_modules/declared.txt", bytes: Buffer.from("declared") }];
   const fixture = await pinnedSourceFixture(t, files);
   const before = await repositorySnapshot(fixture.repositoryPath);
-  for (const [expected, code] of [
+  for (const [expected, messageCode] of [
     [files.slice(0, 1), "vibe64_managed_project_source_inventory_mismatch"],
     [[...files, { path: "missing.txt", bytes: Buffer.from("missing") }], "vibe64_managed_project_source_inventory_mismatch"],
     [[{ ...files[0], bytes: Buffer.from("HELLO") }, files[1]], "vibe64_managed_project_source_bytes_mismatch"],
-    [[{ ...files[0], path: "other.txt" }, files[1]], "vibe64_managed_project_source_mismatch"]
+    [[{ ...files[0], path: "other.txt" }, files[1]], "vibe64_managed_project_source_files_mismatch"]
   ]) {
     await assert.rejects(() => verifyManagedProjectSource({ ...fixture, files: expected, runCommand: directCommand }),
-      { code });
+      { code: "vibe64_managed_project_source_mismatch", messageCode });
     assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
   }
   // The generic proof excludes nothing. The installed reader, rather than this
@@ -313,7 +313,7 @@ test("managed source proof refuses executable, symlink, gitlink, non-UTF-8 and e
   const before = await repositorySnapshot(fixture.repositoryPath);
   await assert.rejects(() => verifyManagedProjectSource({ ...fixture,
     files: [{ path: "\uFFFD", bytes: Buffer.from("hello") }], runCommand: directCommand }),
-  { code: "vibe64_managed_project_source_inventory_mismatch" });
+  { code: "vibe64_managed_project_source_mismatch", messageCode: "vibe64_managed_project_source_inventory_mismatch" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
   const emptyTree = await directCommand({ command: "git", args: [
     "--git-dir", fixture.repositoryPath, "mktree", "-z"
@@ -325,7 +325,7 @@ test("managed source proof refuses executable, symlink, gitlink, non-UTF-8 and e
   ));
   const emptyTreeBefore = await repositorySnapshot(fixture.repositoryPath);
   await assert.rejects(() => verifyManagedProjectSource({ ...fixture, runCommand: directCommand }),
-    { code: "vibe64_managed_project_source_inventory_mismatch" });
+    { code: "vibe64_managed_project_source_mismatch", messageCode: "vibe64_managed_project_source_inventory_mismatch" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), emptyTreeBefore);
 });
 

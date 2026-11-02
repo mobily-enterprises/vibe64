@@ -370,7 +370,7 @@ function createSessionRenewalController({
         ) {
           throw renewalError(
             "Only an active session can be renewed.",
-            "vibe64_session_renewal_source_not_active"
+            "vibe64_session_renewal_session_inactive"
           );
         }
         const initial = createSessionRenewalState({

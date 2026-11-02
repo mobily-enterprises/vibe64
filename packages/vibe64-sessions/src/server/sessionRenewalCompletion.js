@@ -171,7 +171,7 @@ function createRenewalCompletion({
       if (archivedPredecessor.archived !== true) {
         throw renewalError(
           "The committed predecessor archive is not readable.",
-          "vibe64_session_renewal_archive_required",
+          "vibe64_session_renewal_archive_unreadable",
           { retryable: true, statusCode: 500 }
         );
       }

@@ -425,6 +425,8 @@ async function verifyManagedProjectSource({
   const listing = listingBytes.toString("utf8");
   const records = listing ? listing.split("\0") : [];
   if (listing) records.pop();
+  // Every mismatch below keeps vibe64_managed_project_source_mismatch, which composing hosts read; each
+  // sentence has its own messageCode.
   if (
     !listingBytes.equals(Buffer.from(listing, "utf8")) ||
     (listing && !listing.endsWith("\0")) ||
@@ -432,7 +434,8 @@ async function verifyManagedProjectSource({
   ) {
     throw vibe64Error(
       "Canonical source inventory differs from the pinned exercise; inspect the project before retrying.",
-      "vibe64_managed_project_source_inventory_mismatch"
+      "vibe64_managed_project_source_mismatch",
+      { messageCode: "vibe64_managed_project_source_inventory_mismatch" }
     );
   }
   const seen = new Set();
@@ -442,7 +445,8 @@ async function verifyManagedProjectSource({
       if (!expectedDirectories.delete(directory[2])) {
         throw vibe64Error(
           "Canonical source contains a directory outside the pinned exercise.",
-          "vibe64_managed_project_source_directory_unexpected"
+          "vibe64_managed_project_source_mismatch",
+          { messageCode: "vibe64_managed_project_source_directory_unexpected" }
         );
       }
       continue;
@@ -452,7 +456,8 @@ async function verifyManagedProjectSource({
     if (!match || !bytes || seen.has(match[3]) || Number(match[2]) !== bytes.length) {
       throw vibe64Error(
         "Canonical source must contain exactly the pinned ordinary nonexecutable files.",
-        "vibe64_managed_project_source_mismatch"
+        "vibe64_managed_project_source_mismatch",
+        { messageCode: "vibe64_managed_project_source_files_mismatch" }
       );
     }
     seen.add(match[3]);
@@ -463,8 +468,10 @@ async function verifyManagedProjectSource({
     if (objectId !== match[1]) {
       throw vibe64Error(
         `Canonical source bytes differ from the pinned exercise at ${match[3]}; inspect the project before retrying.`,
-        "vibe64_managed_project_source_bytes_mismatch",
+        "vibe64_managed_project_source_mismatch",
         {
+          messageCode: "vibe64_managed_project_source_bytes_mismatch",
+          messageParams: { path: match[3] },
           params: {
             path: match[3]
           }
