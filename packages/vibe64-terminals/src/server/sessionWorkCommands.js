@@ -3,22 +3,28 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SAVE_TIMEOUT_MS = 120_000;
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
 
 /**
- * A session work refusal. Its `details` are copied onto the error and into `error.details`; `messageFields`
- * (`{ messageCode, messageParams }`) names the sentence of a refusal that keeps a code callers branch on.
+ * A session work refusal: an AppError, a 409 conflict unless `options.status` names another. Its `details` are
+ * copied onto the error and into `error.details`; `options.messageCode` and `options.messageParams` name the
+ * sentence of a refusal that keeps a code callers branch on.
+ * @param {string} message
+ * @param {string} code
+ * @param {Record<string, unknown>} [details]
+ * @param {{ status?: number, messageCode?: string, messageParams?: Record<string, unknown> }} [options]
  */
-function saveError(message, code, details = {}, messageFields = {}) {
-  const error = new Error(message || "Vibe64 could not save this session.");
-  error.code = code;
-  error.details = details && typeof details === "object" && !Array.isArray(details)
+function saveError(message, code, details = {}, options = {}) {
+  const { status = 409, ...messageFields } = options;
+  const fields = details && typeof details === "object" && !Array.isArray(details)
     ? { ...details }
     : {};
-  Object.assign(error, details, messageFields);
+  const error = new AppError(status, message || "Vibe64 could not save this session.", { ...messageFields, code, details: fields });
+  Object.assign(error, fields);
   return error;
 }
 
@@ -120,7 +126,8 @@ async function git(runCommand, context, args, options = {}) {
     throw saveError(
       normalizeText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",
       normalizeText(result?.code) || "vibe64_session_save_git_failed",
-      { gitArgs: args }
+      { gitArgs: args },
+      { status: 500 }
     );
   }
   return result;

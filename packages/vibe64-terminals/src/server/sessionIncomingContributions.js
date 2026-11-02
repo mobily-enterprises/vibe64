@@ -59,7 +59,7 @@ async function inspectIncomingContributionsDirect({
   if ((id && !idPattern.test(id)) || !Number.isSafeInteger(offset) || offset < 0 ||
       !Number.isSafeInteger(limit) || limit < 1 || limit > 50 || (includeDiff && !id) ||
       !["all", "pending", "merged", "discarded", "unresolved"].includes(state)) {
-    throw saveError("Choose an exact incoming contribution or a valid page.", "vibe64_incoming_input_invalid");
+    throw saveError("Choose an exact incoming contribution or a valid page.", "vibe64_incoming_input_invalid", {}, { status: 400 });
   }
   if (await gitOutput(runCommand, context, ["rev-parse", "--is-shallow-repository"], options) !== "false") {
     throw saveError(
@@ -97,7 +97,9 @@ async function inspectIncomingContributionsDirect({
   if (id && !candidates.length) {
     throw saveError(
       "This incoming contribution is no longer present. Refresh the list and inspect its history.",
-      "vibe64_incoming_missing"
+      "vibe64_incoming_missing",
+      {},
+      { status: 404 }
     );
   }
   const refs = [{ remote: targetRef, head: targetHead }];
@@ -215,7 +217,7 @@ async function changeIncomingContributionDirect({
   runCommand = runVibe64Command
 } = {}) {
   if (!["merge", "discard", "review-repair"].includes(action) || !id) {
-    throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_action_invalid");
+    throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_action_invalid", {}, { status: 400 });
   }
   const context = incomingRepositoryContext(project, session);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, { label: "Updating incoming contribution", operationId });

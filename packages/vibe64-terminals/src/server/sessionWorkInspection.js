@@ -64,7 +64,7 @@ async function sessionChangeDiff(runCommand, context, work, requestedPath, optio
   } = options;
   const filePath = safeChangePath(requestedPath);
   if (!work.changedPaths.includes(filePath)) {
-    throw saveError("That file is not part of the current saved-work difference.", "vibe64_session_change_not_found");
+    throw saveError("That file is not part of the current saved-work difference.", "vibe64_session_change_not_found", {}, { status: 404 });
   }
   const result = await git(runCommand, context, [
     "--no-literal-pathspecs",

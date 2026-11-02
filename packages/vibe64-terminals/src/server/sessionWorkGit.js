@@ -227,15 +227,17 @@ async function runSessionWorkOperation({
     return response.value;
   }
   if (response?.error) {
-    throw saveError(
-      response.error.message,
-      response.error.code || "vibe64_session_work_operation_failed",
-      response.error.details
-    );
+    const { code, details, message, messageCode, messageParams, status } = response.error;
+    throw saveError(message, code || "vibe64_session_work_operation_failed", details, {
+      ...(messageCode ? { messageCode, messageParams } : {}),
+      status: Number(status) || 500
+    });
   }
   throw saveError(
     normalizeText(result?.stderr || result?.error || result?.output) || "Session repository inspection failed.",
-    normalizeText(result?.code) || "vibe64_session_work_operation_failed"
+    normalizeText(result?.code) || "vibe64_session_work_operation_failed",
+    {},
+    { status: 500 }
   );
 }
 

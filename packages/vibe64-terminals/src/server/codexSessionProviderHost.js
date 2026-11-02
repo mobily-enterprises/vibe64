@@ -4,6 +4,7 @@ import {
   codexAppServerFrozenTurnInterruptResponse as nativeCodexAppServerFrozenTurnInterruptResponse
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
@@ -53,6 +54,11 @@ function codexAppServerFrozenTurnInterruptResponse(input = {}) {
   return nativeCodexAppServerFrozenTurnInterruptResponse(input);
 }
 
+/**
+ * The refusal for a session whose Codex admission is frozen (a renewal or
+ * stop holds it), with the freeze's own code and sentence; null when admitted.
+ * @param {string} sessionId
+ */
 function codexAppServerAdmissionError(sessionId = "") {
   const failure = terminalNamespaceAdmissionFailure(
     codexTerminalNamespace(sessionId)
@@ -60,10 +66,11 @@ function codexAppServerAdmissionError(sessionId = "") {
   if (!failure) {
     return null;
   }
-  const error = new Error(failure.error || "Codex admission is unavailable.");
-  error.code = failure.code || "vibe64_session_renewal_quiesced";
-  error.retryable = false;
-  return error;
+  return Object.assign(vibe64Error(failure.error, failure.code, { status: 409 }), { retryable: false });
+}
+
+function assistantSessionClosingError() {
+  return vibe64Error("The assistant session is closing.", "vibe64_assistant_session_closing", { status: 409 });
 }
 
 /**
@@ -108,8 +115,8 @@ function createCodexSessionProviderHost(host) {
         const session = await runtime.getSessionForRenewalWithoutSource(sessionId);
         if ([VIBE64_SESSION_STATUS.RENEWAL_PENDING, VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING].includes(session.status)) {
           if (normalizeText(session.metadata?.renewal_id) !== options.renewalId) {
-            throw Object.assign(new Error("The assistant belongs to a different renewal reservation."), {
-              code: "vibe64_session_renewal_private"
+            throw vibe64Error("The assistant belongs to a different renewal reservation.", "vibe64_session_renewal_private", {
+              messageCode: "vibe64_session_renewal_assistant_private"
             });
           }
           return session;
@@ -173,7 +180,7 @@ function createCodexSessionProviderHost(host) {
           prepareThreadEnvironment: (threadEnv) => runWithCodexAppServerProjectContext(projectContext, async () => {
             host.runOwner.runtimeLifecycle.assertOpen();
             if (host.runOwner.runtimeLifecycle.sessionClosures.has(codexTerminalNamespace(sessionId))) {
-              throw new Error("The assistant session is closing.");
+              throw assistantSessionClosingError();
             }
             const admissionError = codexAppServerAdmissionError(sessionId);
             if (admissionError) throw admissionError;
@@ -182,7 +189,7 @@ function createCodexSessionProviderHost(host) {
             const runtime = await createRuntimeForSession();
             const session = await readProviderSession(runtime);
             if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
-              throw new Error("The assistant session is closing.");
+              throw assistantSessionClosingError();
             }
             const current = { ...threadEnv, ...await codexManagedCommandEnv({ runtime, session, sessionId }) };
             if (!await agentSessionCommandEnvironmentIsHealthy(current)) {
@@ -194,7 +201,7 @@ function createCodexSessionProviderHost(host) {
       },
       async prepareResumeGuard() {
         if (host.runOwner.runtimeLifecycle.sessionClosures.has(codexTerminalNamespace(sessionId))) {
-          throw new Error("The assistant session is closing.");
+          throw assistantSessionClosingError();
         }
         if (options.assistantScope) return null;
         // Renewal owns a hidden successor before its first handover turn.
@@ -212,7 +219,7 @@ function createCodexSessionProviderHost(host) {
         const runtime = await createRuntimeForSession();
         const session = await readProviderSession(runtime);
         if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
-          throw new Error("The assistant session is closing.");
+          throw assistantSessionClosingError();
         }
         const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
         if (learningRoot && normalizeText(params.cwd) && normalizeText(params.cwd) !== learningRoot) {
@@ -332,10 +339,11 @@ function createCodexSessionProviderHost(host) {
           (session && (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED ||
             codexThreadIdForWorkdir(session, connection.workdir) !== connection.threadId))
         ) {
-          throw Object.assign(new Error("The assistant session changed while its connection was being checked."), {
-            code: "vibe64_agent_session_changed",
-            retryable: true
-          });
+          throw Object.assign(vibe64Error(
+            "The assistant session changed while its connection was being checked.",
+            "vibe64_agent_session_changed",
+            { status: 409 }
+          ), { retryable: true });
         }
       },
       async readSession() {

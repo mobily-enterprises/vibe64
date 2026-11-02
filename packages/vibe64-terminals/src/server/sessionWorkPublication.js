@@ -38,7 +38,9 @@ async function createSaveCommit(runCommand, context, {
   if (!subject) {
     throw saveError(
       "Save requires an assistant-generated commit subject.",
-      "vibe64_session_save_message_required"
+      "vibe64_session_save_message_required",
+      {},
+      { status: 400 }
     );
   }
   return gitOutput(runCommand, context, [
@@ -161,7 +163,9 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     }
     throw saveError(
       reason,
-      normalizeText(pushed?.code) || "vibe64_session_save_git_failed"
+      normalizeText(pushed?.code) || "vibe64_session_save_git_failed",
+      {},
+      { status: 500 }
     );
   }
   throw saveError(

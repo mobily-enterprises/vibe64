@@ -337,10 +337,10 @@ function createServiceAgentConversations({
     const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
       .map(assistantRoutingRequestFromMetadata);
     if (requests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
-      throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), {
+      throw Object.assign(new AppError(409, "Finish or cancel pending chat routing and reviews before renewing this session.", {
         code: "vibe64_assistant_routing_pending",
-        retryable: true
-      });
+        messageCode: "vibe64_session_renewal_routing_pending"
+      }), { retryable: true });
     }
     const conversation = await sessionAgent.hasActiveTemporaryConversation(
       sessionId,
@@ -352,12 +352,9 @@ function createServiceAgentConversations({
       }
     );
     if (conversation?.active === true) {
-      const error = new Error(
-        "Wait for the temporary assistant task to finish before renewing this session."
-      );
-      error.code = "vibe64_session_renewal_temporary_ai_active";
-      error.retryable = true;
-      throw error;
+      throw Object.assign(new AppError(409, "Wait for the temporary assistant task to finish before renewing this session.", {
+        code: "vibe64_session_renewal_temporary_ai_active"
+      }), { retryable: true });
     }
     return {
       idle: true,

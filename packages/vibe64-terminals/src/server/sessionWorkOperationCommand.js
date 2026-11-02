@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
 import {
   changeIncomingContributionDirect,
@@ -87,6 +88,10 @@ async function readInput() {
   return JSON.parse(serialized || "{}");
 }
 
+/**
+ * The failure the parent rethrows: a refusal keeps its status, code and message code; any other failure is a 500.
+ * @param {unknown} error
+ */
 function errorResponse(error) {
   return {
     error: {
@@ -94,7 +99,9 @@ function errorResponse(error) {
       details: error?.details && typeof error.details === "object" && !Array.isArray(error.details)
         ? error.details
         : {},
-      message: String(error?.message || "Session repository operation failed.")
+      message: String(error?.message || "Session repository operation failed."),
+      ...(error?.messageCode ? { messageCode: error.messageCode, messageParams: error.messageParams } : {}),
+      status: error instanceof AppError ? error.status : 500
     },
     ok: false
   };
