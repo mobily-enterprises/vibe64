@@ -52,6 +52,7 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   configureCodexAttachmentHostRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
+import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   BASELINE_LEDGER_EXISTS,
   BASELINE_STATE_WITHOUT_LEDGER,
@@ -422,6 +423,7 @@ async function createServer(options = {}) {
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     [VIBE64_TARGET_ROOT_ENV]: targetRoot || undefined
   };
+  configureVibe64SessionDebugLog(providerEnv);
   const { createInstalledRuntime: createRuntime = createInstalledRuntime } = options;
   const runtime = await withProcessEnv({
     [VIBE64_APP_ROOT_ENV]: appRoot,
