@@ -46,7 +46,7 @@ import { publishingError } from "./publishingError.js";
 const TWINE_VERSION = "6.1.0";
 
 function publishingRoots(env) {
-  const systemRoot = String(getStudioProjectContext()?.systemRoot || "").trim() || resolveDefaultLocalEditorSystemRoot();
+  const systemRoot = String(getStudioProjectContext()?.systemRoot || "").trim() || resolveDefaultLocalEditorSystemRoot({ env });
   const cacheHome = String(env.XDG_CACHE_HOME || "").trim() || path.join(os.homedir(), ".cache");
   return {
     personalRoot: path.resolve(env.VIBE64_PUBLISHING_HOME || path.join(systemRoot, "publishing")),

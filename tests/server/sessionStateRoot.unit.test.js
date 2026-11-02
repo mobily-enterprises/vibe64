@@ -22,7 +22,7 @@ function inside(child, parent) {
 
 test("live session state defaults to the local state root, never temporary space", () => {
   const root = codexAttachmentHostRoot({ env: {} });
-  assert.equal(root, path.join(resolveDefaultLocalEditorSystemRoot(), "attachments"));
+  assert.equal(root, path.join(resolveDefaultLocalEditorSystemRoot({ env: {} }), "attachments"));
   assert.equal(inside(root, tmpdir()), false, `${root} is inside ${tmpdir()}`);
 });
 

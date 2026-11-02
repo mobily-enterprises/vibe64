@@ -3497,6 +3497,7 @@ test("codex auth preflight uses the shared runtime directory when no session pat
     await assert.rejects(() => access(runtimeDir), { code: "ENOENT" });
 
     await assertCodexAuthPreflightReady({
+      env: {},
       commandRunner: async (request) => {
         requests.push(request);
         return {

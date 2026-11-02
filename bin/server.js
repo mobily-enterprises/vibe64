@@ -209,8 +209,8 @@ function macosDataMoveMessage({
   if (platform !== "darwin" || String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
     return "";
   }
-  const current = resolveDefaultLocalEditorSystemRoot(home, "darwin");
-  const previous = resolveDefaultLocalEditorSystemRoot(home, "linux");
+  const current = resolveDefaultLocalEditorSystemRoot({ env, home, platform: "darwin" });
+  const previous = resolveDefaultLocalEditorSystemRoot({ env, home, platform: "linux" });
   if (exists(current) || !exists(previous)) {
     return "";
   }
@@ -233,7 +233,7 @@ async function prepareLocalSystemRoot({
   if (String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
     return "";
   }
-  const root = resolveDefaultLocalEditorSystemRoot(home, platform);
+  const root = resolveDefaultLocalEditorSystemRoot({ env, home, platform });
   await makeDirectory(root, { recursive: true, mode: 0o700 });
   return root;
 }

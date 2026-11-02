@@ -231,7 +231,7 @@ test("server CLI detects direct execution without starting when imported", () =>
 test("server CLI creates the default local state folder before starting, and only that one", async () => {
   const made = [];
   const makeDirectory = async (root, options) => { made.push([root, options]); };
-  const root = resolveDefaultLocalEditorSystemRoot("/home/person", "linux");
+  const root = resolveDefaultLocalEditorSystemRoot({ env: {}, home: "/home/person", platform: "linux" });
   assert.equal(await prepareLocalSystemRoot({ env: {}, home: "/home/person", platform: "linux", makeDirectory }), root);
   assert.deepEqual(made, [[root, { recursive: true, mode: 0o700 }]]);
   assert.equal(await prepareLocalSystemRoot({ env: { VIBE64_SYSTEM_ROOT: "/srv/state" }, home: "/home/person", makeDirectory }), "");

@@ -23,7 +23,7 @@ function configuredRoot(env = {}) {
 function codexAttachmentHostRoot({ env }) {
   return path.resolve(
     configuredRoot(env) ||
-    path.join(resolveDefaultLocalEditorSystemRoot(), "attachments")
+    path.join(resolveDefaultLocalEditorSystemRoot({ env }), "attachments")
   );
 }
 

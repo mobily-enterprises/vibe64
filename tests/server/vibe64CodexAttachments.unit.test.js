@@ -1623,7 +1623,7 @@ test("the exact binary 500 MiB boundary succeeds and one extra byte is rejected"
 test("Codex attachment root comes from the caller's env and isolates files from sibling state", async () => {
   // An env that names no root uses the local state root, never temporary space.
   const defaultRoot = codexAttachmentHostRoot({ env: {} });
-  assert.equal(defaultRoot, path.join(resolveDefaultLocalEditorSystemRoot(), "attachments"));
+  assert.equal(defaultRoot, path.join(resolveDefaultLocalEditorSystemRoot({ env: {} }), "attachments"));
   assert.equal(defaultRoot.startsWith(tmpdir()), false);
 
   const configuredRoot = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-root-test-"));

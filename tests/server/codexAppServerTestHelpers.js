@@ -66,7 +66,7 @@ async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
 }
 
 async function currentCodexAccountIdentitySignature(providerOptions = {}, options = {}) {
-  return codexAppServerRuntimeHost(providerOptions).credentials.identity({}, options);
+  return codexAppServerRuntimeHost(inTestProcessEnv(providerOptions)).credentials.identity({}, options);
 }
 
 async function ensureCodexAppServerThreadForSession(options = {}) {

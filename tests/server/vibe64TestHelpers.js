@@ -71,7 +71,7 @@ function sourceMetadata(targetRoot, sessionId = "session") {
 }
 
 function projectRuntimeRoot(targetRoot) {
-  return path.join(resolveDefaultLocalEditorSystemRoot(), EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, localProjectKeyFromTargetRoot(targetRoot));
+  return path.join(resolveDefaultLocalEditorSystemRoot({ env: process.env }), EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, localProjectKeyFromTargetRoot(targetRoot));
 }
 
 // Seed completed historical state without retaining an application Undo API.

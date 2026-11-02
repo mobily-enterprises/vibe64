@@ -131,13 +131,13 @@ test("the Playwright check names the installed command without packs", () => {
 
 test("local data and project sources live in the person's own folders", () => {
   const home = "/Users/ada";
-  assert.equal(resolveDefaultLocalEditorSystemRoot(home, "darwin"), "/Users/ada/Library/Application Support/Vibe64");
+  assert.equal(resolveDefaultLocalEditorSystemRoot({ env: {}, home, platform: "darwin" }), "/Users/ada/Library/Application Support/Vibe64");
   assert.equal(resolveVibe64Roots({ env: {}, home, runtimeProfile: { local: true } }).managedSourceRoot, "/Users/ada/Vibe64");
 });
 
 test("macOS startup explains how to move data from the earlier folder and changes nothing", () => {
   const home = "/Users/ada";
-  const previous = resolveDefaultLocalEditorSystemRoot(home, "linux");
+  const previous = resolveDefaultLocalEditorSystemRoot({ env: {}, home, platform: "linux" });
   const current = path.join(home, "Library", "Application Support", "Vibe64");
   const existing = new Set([previous]);
   const message = macosDataMoveMessage({ env: {}, exists: (file) => existing.has(file), home, platform: "darwin" });

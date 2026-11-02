@@ -29,13 +29,17 @@ function runtimeProfileIsLocal(runtimeProfile) {
 
 /**
  * The person's own state folder: XDG on Linux, Application Support on macOS.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the env whose XDG_STATE_HOME names the Linux state folder
+ * @param {string} [options.home]
+ * @param {string} [options.platform]
  */
-function resolveDefaultLocalEditorSystemRoot(home = os.homedir(), platform = process.platform) {
+function resolveDefaultLocalEditorSystemRoot({ env, home = os.homedir(), platform = process.platform }) {
   const homeRoot = home || process.cwd();
   if (platform === "darwin") {
     return normalizeRoot(path.join(homeRoot, "Library", "Application Support", "Vibe64"));
   }
-  const stateHome = String(process.env.XDG_STATE_HOME || "").trim();
+  const stateHome = String(env.XDG_STATE_HOME || "").trim();
   return normalizeRoot(path.join(stateHome || path.join(homeRoot, ".local", "state"), "vibe64"));
 }
 
@@ -156,7 +160,7 @@ function resolveVibe64SystemRoot({
     return normalizeRoot(explicitSystemRoot);
   }
   if (runtimeProfileIsLocal(runtimeProfile)) {
-    return resolveDefaultLocalEditorSystemRoot(home);
+    return resolveDefaultLocalEditorSystemRoot({ env, home });
   }
   return normalizeRoot(path.join(projectsRoot || resolveDefaultProjectsRoot(home), VIBE64_SYSTEM_DIR));
 }
