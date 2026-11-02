@@ -1113,11 +1113,8 @@ import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
-import {
-  useVibe64AutopilotView,
-  vibe64AutopilotViewEmits,
-  vibe64AutopilotViewProps
-} from "@/composables/useVibe64AutopilotView.js";
+import { useVibe64AutopilotView } from "@/composables/useVibe64AutopilotView.js";
+import { vibe64AutopilotViewEmits, vibe64AutopilotViewProps } from "@/lib/vibe64AutopilotViewProps.js";
 import {
   promptHintConversationFingerprint,
   useVibe64PromptHints

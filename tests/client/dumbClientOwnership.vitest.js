@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 
 const DIRECT_SESSION_FILES = Object.freeze([
   "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
-  "src/composables/useVibe64AutopilotView.js"
+  "src/composables/useVibe64AutopilotView.js",
+  "src/composables/useVibe64AgentTurnState.js",
+  "src/composables/useVibe64AutopilotChatPane.js",
+  "src/composables/useVibe64MainChatDelivery.js",
+  "src/composables/useVibe64ShortActionDismissals.js"
 ]);
 
 const RETIRED_WORKFLOW_WORDS = Object.freeze([

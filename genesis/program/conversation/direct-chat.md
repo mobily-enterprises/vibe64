@@ -1402,6 +1402,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64AgentTurnState.js`
+- `src/composables/useVibe64AutopilotChatPane.js`
+- `src/composables/useVibe64MainChatDelivery.js`
+- `src/lib/vibe64AutopilotViewProps.js`
 - `src/composables/useVibe64ConversationLog.js`
 - `src/composables/useArchivedVibe64ConversationHistory.js`
 - `src/composables/useVibe64MountedSessionData.js`

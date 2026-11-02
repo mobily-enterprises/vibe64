@@ -17,7 +17,14 @@ import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRoutin
 import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
-const composablePath = path.resolve("src/composables/useVibe64AutopilotView.js");
+// The Autopilot view's composable and the composables it is built from.
+const composablePaths = [
+  "src/composables/useVibe64AutopilotView.js",
+  "src/composables/useVibe64AgentTurnState.js",
+  "src/composables/useVibe64AutopilotChatPane.js",
+  "src/composables/useVibe64MainChatDelivery.js",
+  "src/composables/useVibe64ShortActionDismissals.js"
+].map((file) => path.resolve(file));
 const saveWorkComposablePath = path.resolve("src/composables/useVibe64SessionSaveWork.js");
 const workspaceSetupComposablePath = path.resolve("src/composables/useVibe64WorkspaceSetupActivity.js");
 const temporaryAiRepairsPath = path.resolve("src/composables/useVibe64TemporaryAiRepairs.js");
@@ -865,7 +872,7 @@ describe("Vibe64 direct session view", () => {
 
   it("is chat-first and contains no workflow state-machine surface", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const retiredNames = [
       "AutopilotNavigation",
       "WorkflowControlForm",
@@ -925,7 +932,7 @@ describe("Vibe64 direct session view", () => {
 
   it("offers native confirmed Save with temporary action output, not an AI prompt", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const saveWork = fs.readFileSync(saveWorkComposablePath, "utf8");
     const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
     const combined = `${component}\n${composable}\n${saveWork}\n${repairs}`;
@@ -1090,7 +1097,7 @@ describe("Vibe64 direct session view", () => {
 
   it("labels active-turn messages as compact steering", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
     expect(component).toContain(':stop-visible="agentStopVisible"');
     // Only the live native turn can show the assistant as working; routing,
@@ -1114,7 +1121,7 @@ describe("Vibe64 direct session view", () => {
 
   it("requires complete compact structured answers while preserving free-form escape", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
     expect(component).toContain("<AssistantQuestionInputs")
     expect(component).toContain(':select-items="numberedQuestionSelectItems"');
@@ -1209,7 +1216,7 @@ describe("Vibe64 direct session view", () => {
 
   it("uses multiline Enter and moves Tab directly from chat input to Send", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
 
     expect(component).toContain("tab-to-submit");
