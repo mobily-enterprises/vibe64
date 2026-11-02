@@ -391,7 +391,7 @@ function createReleaseOrchestrator({
       throw publishingError(
         "The plan changed since you reviewed it (new saved work, targets or tools). Review the new plan.",
         "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
-        { details: { planHash: current.planHash } }
+        { details: { planHash: current.planHash }, messageCode: "vibe64_publishing_plan_changed_since_review" }
       );
     }
     return current;
@@ -404,7 +404,10 @@ function createReleaseOrchestrator({
   async function dryRun({ planHash, targetIds = [], acknowledged = [] }) {
     const current = await requireCurrentPlan({ planHash, targetIds, acknowledged });
     if (current.preflight.blocked) {
-      throw publishingError("Preflight found a problem that stops this release. Fix it first.", "VIBE64_PUBLISH_PREFLIGHT_BLOCKED");
+      throw publishingError(
+        "Preflight found a problem that stops this release. Fix it first.",
+        "vibe64_publishing_dry_run_preflight_blocked"
+      );
     }
     const record = await history.create({
       kind: "dry-run",

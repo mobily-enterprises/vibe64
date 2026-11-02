@@ -125,7 +125,11 @@ function createConfirmationService({
       // The token names this person's record; redeeming it says what else is
       // wrong (already used, expired or another plan).
       const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
-      if (index === -1) throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+      if (index === -1) {
+        throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID", {
+          messageCode: "vibe64_publishing_confirmation_not_opened"
+        });
+      }
       const redeemed = redeemPublishConfirmation({ token, planHash, actor, record: value.records[index], now: now() });
       value.records[index] = redeemed;
       if (value.pendingRequest?.planHash === planHash) value.pendingRequest = null;
