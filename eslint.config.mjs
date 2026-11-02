@@ -1,4 +1,4 @@
-import { baseConfig, formatterConfig, nodeConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
+import { baseConfig, formatterConfig, nodeConfig, sizeLimitsConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
 
 export default [
   {
@@ -56,6 +56,21 @@ export default [
     "packages/vibe64-usage-recording/src/server/**",
     "packages/vibe64-voice/src/server/**",
     "packages/*/src/shared/**"
+  ]),
+  // JSKIT's file and function size limits over all hand-written code, client and host scripts included.
+  ...sizeLimitsConfig([
+    "packages/*/src/**",
+    "packages/*/bin/**",
+    "packages/*/runtime/**",
+    "src/**",
+    "server/**",
+    "server.js",
+    "bin/**",
+    "config/**",
+    "tooling/**",
+    "docs/site/**",
+    "examples/**",
+    "*.config.mjs"
   ]),
   // JSKIT's one formatter config over server and shared code; published state-upgrade scripts are immutable.
   ...formatterConfig(["packages/*/src/server/**", "packages/*/src/shared/**", "server/**", "server.js"], {
