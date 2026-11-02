@@ -3912,16 +3912,18 @@ these account-setup operations do not create a conversation runner.
 - `vibe64HostContextRegistry()` and `vibe64HostContextEnvironment()` bind native
   conversations to the existing Genesis executable bridge. `vibe64Driver()`
   owns the single provider-neutral managed-session contribution.
-- `sendCodexAppServerPromptForSession()` and `stablePromptBody()` preserve the
-  authored user text without attaching Vibe64 turn context.
+- `createCodexMainMessagePreparation()` sends an ordinary message's authored
+  text as its prompt and renders the Genesis prompt only for the opening
+  request or a Genesis task, so no Vibe64 turn context is attached.
 - `writeMirroredCodexAppServerTerminalMessage()` copies the latest prior UI
   user's existing actor metadata onto a native-terminal user item in History;
   it does not alter provider input.
-- `sendCodexAppServerMessage()` recognizes only the provider's exact
-  missing-thread response for an inactive conversation and routes it through
-  `ensureCodexAppServerThreadForSession()` so its existing replacement,
-  durable-history recovery, and identity update complete before the pending
-  message starts the new ordinary turn.
+- JSKIT's Codex message commands recognize only the provider's exact
+  missing-thread response (`codexAppServerThreadIsMissing()`) for an inactive
+  conversation; `dispatchCodexAppServerMessage()` then starts the message as a
+  new turn through `ensureCodexAppServerThread()` with Vibe64's thread
+  preparation, so replacement, durable-history recovery and the identity update
+  complete before the pending message starts the new ordinary turn.
 - `startAttachedTerminal()` attaches OpenCode's native TUI to the session's
   existing upstream history in a session-owned PTY. The OpenCode interactive
   terminal facility owns its bounded snapshot, stream, input, resize and close;
