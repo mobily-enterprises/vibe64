@@ -2,7 +2,6 @@ import { finishVibe64Workflow, runVibe64Command } from "@local/vibe64-execution/
 import { inspectGenesisProjectFormat, inspectVibe64WorkspaceSetup } from "@local/vibe64-genesis/server";
 
 import { startResourceWorkflow } from "./resourceWorkflow.js";
-import { WORKSPACE_SETUP_COMMAND_TIMEOUT_MS } from "./workspaceSetupRules.js";
 import { createWorkspaceSetupRunnerState } from "./workspaceSetupRunnerState.js";
 import { createWorkspaceSetupExecution } from "./workspaceSetupExecution.js";
 import { createWorkspaceSetupMigration } from "./workspaceSetupMigration.js";
@@ -71,6 +70,5 @@ function createWorkspaceSetupRunner({
 }
 
 export {
-  WORKSPACE_SETUP_COMMAND_TIMEOUT_MS,
   createWorkspaceSetupRunner
 };

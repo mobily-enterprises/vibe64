@@ -4,8 +4,9 @@ import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebug
 
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 
-function previewProxyDebugEnabled(env = process.env) {
-  return /^(1|true|yes|on)$/iu.test(String(env?.[PREVIEW_PROXY_DEBUG_ENV] || "").trim());
+/** Whether this process's debug setting turns the Preview proxy's debug log on, read at each log. */
+function previewProxyDebugEnabled() {
+  return /^(1|true|yes|on)$/iu.test(String(process.env[PREVIEW_PROXY_DEBUG_ENV] || "").trim());
 }
 
 function previewProxyDebugLog(event = "", details = {}) {

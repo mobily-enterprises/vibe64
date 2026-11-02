@@ -137,7 +137,12 @@ function recordIsLinked(record = null) {
   return toText(record?.source) === SAVED_ENV_VALUE_SOURCE;
 }
 
-function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) {
+/**
+ * @param {object} record
+ * @param {string} scope
+ * @param {(record: object) => boolean} isUserValueRecord whether the scope stores the record's value itself
+ */
+function statusRecord(record, scope, isUserValueRecord) {
   const configured = record.valuePresent === true;
   const stored = isUserValueRecord(record) === true;
   const linked = recordIsLinked(record);
@@ -157,14 +162,25 @@ function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) 
   };
 }
 
-function sortedStatusRecords(records = [], scope = "", isUserValueRecord = () => false) {
+/**
+ * @param {object[]} records
+ * @param {string} scope
+ * @param {(record: object) => boolean} isUserValueRecord
+ */
+function sortedStatusRecords(records, scope, isUserValueRecord) {
   return (Array.isArray(records) ? records : [])
     .map((record) => statusRecord(record, scope, isUserValueRecord))
     .filter((record) => record.key)
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
-function scopeStatus(scope = "", records = [], isUserValueRecord = () => false) {
+/**
+ * One scope's Env status for the agent's env command.
+ * @param {string} scope
+ * @param {object[]} records
+ * @param {(record: object) => boolean} isUserValueRecord
+ */
+function scopeStatus(scope, records, isUserValueRecord) {
   return {
     available: true,
     records: sortedStatusRecords(records, scope, isUserValueRecord),

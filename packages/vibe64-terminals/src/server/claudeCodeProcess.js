@@ -9,6 +9,7 @@ import {
   createClaudeCodeProcess as nativeCreateClaudeCodeProcess
 } from "@jskit-ai/assistant-core/server/claude-process";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
@@ -159,8 +160,11 @@ async function createClaudeCodeProcess({
   }
 }
 
-/** Claude Code's configuration directory: CLAUDE_CONFIG_DIR, else the credential home's .claude. */
-function claudeConfigRoot({ env = process.env, credentialHome } = {}) {
+/**
+ * Claude Code's configuration directory: CLAUDE_CONFIG_DIR, else the credential home's .claude.
+ * @param {{ env: RuntimeEnv, credentialHome?: string }} options
+ */
+function claudeConfigRoot({ env, credentialHome }) {
   return env.CLAUDE_CONFIG_DIR || path.join((credentialHome || appCredentialContext()).home, ".claude");
 }
 

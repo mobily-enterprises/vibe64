@@ -1,4 +1,3 @@
-import process from "node:process";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
   VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
@@ -24,9 +23,9 @@ const LIVE_HOST_ENV_KEYS = Object.freeze([
  * The terminals service's env: the runtime env, with the host's live Preview, public address, guidance and Claude
  * command values read from the process env when set.
  * @param {RuntimeEnv} runtimeEnv
- * @param {NodeJS.ProcessEnv} [liveEnv]
+ * @param {NodeJS.ProcessEnv} liveEnv this process's environment
  */
-function terminalsProviderEnv(runtimeEnv, liveEnv = process.env) {
+function terminalsProviderEnv(runtimeEnv, liveEnv) {
   const env = {
     ...runtimeEnv
   };

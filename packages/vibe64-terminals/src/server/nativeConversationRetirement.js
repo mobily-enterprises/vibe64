@@ -53,7 +53,6 @@ async function prepareCodexModelRouting(sessionId, _selection, { runtime, sessio
 }
 
 export {
-  NATIVE_CONVERSATION_BINDING_KEY,
   isNativeConversationBindingKey,
   nativeConversationBindings,
   prepareCodexModelRouting

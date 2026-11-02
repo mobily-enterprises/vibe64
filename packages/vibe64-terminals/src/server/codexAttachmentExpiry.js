@@ -31,6 +31,8 @@ import {
   withAttachmentDirectoryLock
 } from "./codexAttachmentFolders.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
 const ATTACHMENT_RENEW_LOCK_WAIT_MS = 500;
 const ATTACHMENT_DELETE_LOCK_WAIT_MS = 30_000;
@@ -489,9 +491,14 @@ function scheduleAttachmentSessionCleanup(
   attachmentSessionCleanupTimers.set(timerKey, timer);
 }
 
-async function scanAttachmentSession(projectKey, sessionKey, options = {}) {
+/**
+ * @param {string} projectKey
+ * @param {string} sessionKey
+ * @param {{ env: RuntimeEnv, lockWaitMs?: number, now?: number }} options
+ */
+async function scanAttachmentSession(projectKey, sessionKey, options) {
   const {
-    env = process.env,
+    env,
     lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
     now = Date.now()
   } = options;

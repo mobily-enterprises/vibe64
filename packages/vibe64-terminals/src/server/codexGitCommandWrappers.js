@@ -2,11 +2,12 @@
 
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
 import { normalizeText } from "@local/vibe64-execution/server";
 import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 import { shortCommandHash, unixCommandSocketPath } from "./unixJsonCommand.js";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
 const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-github"]);
@@ -29,11 +30,15 @@ function attachmentRuntimeKey({
   ].join("\n"));
 }
 
+/**
+ * A session's Git command helper directory, under the attachment host root.
+ * @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options
+ */
 function commandHostDir({
-  env = process.env,
+  env,
   sessionId = "",
   stateRoot = ""
-} = {}) {
+}) {
   return path.join(
     codexAttachmentHostRoot({
       env
@@ -46,16 +51,21 @@ function commandHostDir({
   );
 }
 
+/** @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options */
 function commandSocketHostPath({
-  env = process.env,
+  env,
   sessionId = "",
   stateRoot = ""
-} = {}) {
+}) {
   const hostDir = commandHostDir({ env, sessionId, stateRoot });
   return unixCommandSocketPath(path.join(hostDir, "git-command.sock"), { env });
 }
 
-function wrapperHostPath(options = {}, command = "") {
+/**
+ * @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options
+ * @param {string} command
+ */
+function wrapperHostPath(options, command = "") {
   return path.join(commandHostDir(options), command);
 }
 
@@ -218,7 +228,8 @@ process.exitCode = exitCode;
 `;
 }
 
-async function writeWrappers(options = {}) {
+/** @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options */
+async function writeWrappers(options) {
   const dir = commandHostDir(options);
   await mkdir(dir, {
     recursive: true
@@ -230,13 +241,17 @@ async function writeWrappers(options = {}) {
   }));
 }
 
+/**
+ * The environment a session's Git command wrappers find their control socket through.
+ * @param {{ env: RuntimeEnv, generationId?: string, sessionId?: string, stateRoot?: string, token?: string }} options
+ */
 function commandEnvironment({
-  env = process.env,
+  env,
   generationId = "",
   sessionId = "",
   stateRoot = "",
   token = ""
-} = {}) {
+}) {
   const hostDir = commandHostDir({
     env,
     sessionId,
@@ -262,10 +277,6 @@ export {
   commandEnvironment,
   commandHostDir,
   commandSocketHostPath,
-  VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV,
-  VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
   writeWrappers
 };

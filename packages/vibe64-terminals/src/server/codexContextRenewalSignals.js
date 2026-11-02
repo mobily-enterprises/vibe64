@@ -351,9 +351,5 @@ function createCodexContextRefreshMarker({ project, runOwner }) {
 export {
   createCodexContextRefreshMarker,
   clearCodexAppServerContextRefreshPending,
-  writeCodexAppServerContextRefreshPending,
-  CONTEXT_COMPACTION_REASON,
-  contextCompactionKey,
-  recordCodexContextRenewalSignal,
   recordCodexContextUsageSignal
 };

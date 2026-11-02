@@ -92,7 +92,7 @@ async function closeStoppedLaunchTerminals(sessionId = "") {
   }));
 }
 
-function releaseLaunchSpecReservation(spec = {}) {
+function releaseLaunchSpecReservation(spec) {
   // readable-check: allow method-probe - optional operation: only a spec that reserved a port carries its release
   if (typeof spec.releasePortReservation !== "function") {
     return;
@@ -140,7 +140,8 @@ function reusableLaunchTerminal(sessionId = "", options = {}) {
   })) || null;
 }
 
-function launchSpecEnvironment(specEnv = {}, input = {}) {
+function launchSpecEnvironment(specEnv, input = {}) {
+  // readable-check: allow method-probe - input validation: a launch spec's env is a record or a function of the terminal input
   const value = typeof specEnv === "function"
     ? specEnv(input)
     : specEnv;
@@ -159,8 +160,8 @@ function composeLaunchTerminalEnvironment({
   envBase = null,
   hashBase = null,
   terminalEnv = {},
-  specEnv = {}
-} = {}) {
+  specEnv
+}) {
   const resolvedEnvBase = envBase && typeof envBase === "object" && !Array.isArray(envBase)
     ? envBase
     : terminalEnv;
@@ -176,6 +177,8 @@ function composeLaunchTerminalEnvironment({
     ...resolvedHashBase,
     ...staticSpecEnv
   };
+  // A function env stays a function, so the command resolves it per terminal.
+  // readable-check: allow method-probe - input validation: a launch spec's env is a record or a function of the terminal input
   const env = typeof specEnv === "function"
     ? (input = {}) => ({
         ...resolvedEnvBase,

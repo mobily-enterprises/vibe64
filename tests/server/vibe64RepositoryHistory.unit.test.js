@@ -265,7 +265,7 @@ test("session history reads its recorded commit in a created session without a l
     commits.unshift(await git(root, ["rev-parse", "HEAD"]));
   }
   const metadata = {};
-  const created = await createSessionSource({ project: localProject(root), runCommand: commandRunner,
+  const created = await createSessionSource({ env: process.env, project: localProject(root), runCommand: commandRunner,
     runtime: { projectContextRoot: root, projectSessionSourceRoot: sessionSourceRoot },
     session: { sessionId: "history" },
     store: { async mutateSession(_id, write) { return write(); },

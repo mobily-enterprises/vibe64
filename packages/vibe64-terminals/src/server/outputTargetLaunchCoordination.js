@@ -108,8 +108,8 @@ function createOutputTargetLaunchCoordination({
     outputTarget = {},
     spec = {},
     terminalSessionId = "",
-    updateMetadata = () => null
-  } = {}) {
+    updateMetadata
+  }) {
     const downloads = Array.isArray(spec.metadata?.outputDownloads)
       ? spec.metadata.outputDownloads
       : [];

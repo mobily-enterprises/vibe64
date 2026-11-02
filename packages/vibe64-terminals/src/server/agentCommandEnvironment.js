@@ -1,5 +1,3 @@
-import process from "node:process";
-
 import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import { requestUnixJsonCommand } from "./unixJsonCommand.js";
 import { codexTerminalNamespace, openCodeError } from "./terminalShared.js";
@@ -23,6 +21,8 @@ import {
 } from "./codexGitCommand.js";
 import { createKeyedQueue, createSharedOperations } from "@local/vibe64-core/server/keyedOperations";
 import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const preparations = createKeyedQueue();
 const closures = createSharedOperations();
@@ -116,7 +116,8 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
   };
 }
 
-async function prepareAgentSessionCommandEnvironment(options = {}) {
+/** @param {Parameters<typeof prepareAgentSessionCommandEnvironmentUnlocked>[0]} options */
+async function prepareAgentSessionCommandEnvironment(options) {
   const key = codexTerminalNamespace(toText(options.sessionId));
   if (closures.has(key)) throw commandBoundaryError("closing session");
   return preparations.run(key, () => {
@@ -133,12 +134,17 @@ async function closeAgentSessionCommandEnvironment(sessionId, operation) {
   });
 }
 
+/**
+ * Prepares every managed command a session's agent reaches, after its Git command.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the command environment the helper and Preview commands start from
+ */
 async function prepareAgentSessionCommandEnvironmentUnlocked({
   agentDatabaseCommand = null,
   agentEnvCommand = null,
   agentPreviewCommand = null,
   agentSessionCommand = null,
-  env = process.env,
+  env,
   gitCommand = null,
   gitEnvironment = env,
   prepareDatabaseCommand = prepareAgentDatabaseCommand,
@@ -151,7 +157,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   runtime = null,
   sessionId = "",
   worktreePath = ""
-} = {}) {
+}) {
   const normalizedSessionId = toText(sessionId);
   if (!gitCommand || !normalizedSessionId) {
     return {

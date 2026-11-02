@@ -20,15 +20,17 @@ import {
   createLaunchPreviewProxyRegistry,
   previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import {
-  createLaunchRestartBaseline,
-  createOutputTargetTerminalController,
-  launchRestartState,
-  outputTargetExecutionDescriptor,
-  previewIdentityCommandRunnerForLaunchTerminal,
+  __testables as launchRestartTestables,
+  createLaunchRestartBaseline
+} from "../../packages/vibe64-terminals/src/server/launchRestart.js";
+import { outputTargetExecutionDescriptor } from "../../packages/vibe64-terminals/src/server/outputTargetLaunchTerminals.js";
+import { previewIdentityCommandRunnerForLaunchTerminal } from "../../packages/vibe64-terminals/src/server/launchPreviewAuth.js";
+import {
   previewEditorOrigin,
   previewPublicOriginForLaunch
-} from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/previewPublicOrigin.js";
 import {
   addGenesisStack,
   initializeGenesisProject,
@@ -55,6 +57,7 @@ import {
   launchRestartRulesMatcher
 } from "../../packages/vibe64-core/src/server/launchRestartRules.js";
 
+const { launchRestartState } = launchRestartTestables;
 const { commandWithHttpReadiness, httpReadinessProbeCommand } = launchTargetTerminalTestables;
 const { launchRestartRulesMatcherSource } = launchRestartRulesTestables;
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
@@ -68,7 +71,7 @@ test("preview status, open, and identity selection reject frozen sessions before
     error: "Session renewal has frozen preview access.",
     ok: false
   };
-  const controller = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
+  const controller = createOutputTargetTerminalController({ env: process.env, ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
     project: {
       async createRuntime() {
         projectReads += 1;
@@ -106,7 +109,7 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
     async mutateSession(_id, update) { return update(); },
     async writeMetadataValue(_id, key, value) { metadata[key] = value; }
   };
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  const controller = createOutputTargetTerminalController({ env: process.env, ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
     project: { currentProjectSlug: () => "", async createRuntime() { return {
       store,
@@ -134,7 +137,7 @@ test("Preview Stop drains before queued recovery and isolates other session clea
   const entered = Promise.withResolvers();
   const drain = Promise.withResolvers();
   const cleaned = [];
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  const controller = createOutputTargetTerminalController({ env: process.env, ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Queued automatic recovery must not prepare after Stop."); },
     project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
@@ -173,7 +176,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
     let prepared = 0;
     let writes = 0;
     const metadata = { output_target_preview_stopped: value };
-    const controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+    const controller = createOutputTargetTerminalController({ env: process.env, stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
       ensureWorkspacePrepared() { prepared += 1; },
       project: { currentProjectSlug: () => "", async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
@@ -192,7 +195,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
 
 test("an explicit Preview start reruns a failed setup; an automatic one does not", async (t) => {
   const requests = [];
-  const controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  const controller = createOutputTargetTerminalController({ env: process.env, stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared(_sessionId, context) {
       requests.push(context.rerunFailedSetup);
       return { ok: false, error: "Workspace preparation failed." };
@@ -218,7 +221,7 @@ test("failed Preview browser cleanup retains Stop across controllers and retries
   const metadata = {};
   let failCleanup = true;
   let attempts = 0;
-  const options = { ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  const options = { env: process.env, ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Stopped Preview must not prepare a workspace."); },
     project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
@@ -1131,7 +1134,7 @@ test("the browser's own editor origin wins over rewritten routing headers", asyn
     response.end("<!doctype html><html><head></head><body>app</body></html>");
   });
   await new Promise(resolve => target.listen(0, "127.0.0.1", resolve));
-  const registry = createLaunchPreviewProxyRegistry();
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
   try {
     const preview = await registry.ensure({
       editorOrigin,

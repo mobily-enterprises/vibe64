@@ -16,19 +16,22 @@ const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
 
 const DEFAULT_PUBLIC_PROTOCOL = "https";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /**
  * The editor that asked for the Preview is the page that frames it. The
  * browser names its own origin; routing headers can be rewritten on the way
  * (a dev container's Host, for one), so they are only the fallback for callers
  * that send none. A configured public protocol wins for public hosts there, as
  * it does for the Preview's own origin.
+ * @param {{ editorOrigin?: string, env: RuntimeEnv, publicHost?: string, publicProtocol?: string }} input
  */
 function previewEditorOrigin({
   editorOrigin = "",
-  env = process.env,
+  env,
   publicHost = "",
   publicProtocol = ""
-} = {}) {
+}) {
   const browserOrigin = normalizePreviewEditorOrigin(editorOrigin);
   if (browserOrigin) {
     return browserOrigin;
@@ -36,7 +39,7 @@ function previewEditorOrigin({
   const host = String(publicHost || "").trim();
   const configuredProtocol = isLoopbackAddress(normalizeHostName(host))
     ? ""
-    : env?.[VIBE64_PUBLIC_PROTOCOL_ENV];
+    : env[VIBE64_PUBLIC_PROTOCOL_ENV];
   const protocol = String(configuredProtocol || publicProtocol || "").trim().toLowerCase().replace(/:$/u, "");
   if (!host || /[\s/\\@?#]/u.test(host) || !["http", "https"].includes(protocol)) {
     return "";
@@ -48,20 +51,24 @@ function previewEditorOrigin({
   }
 }
 
+/**
+ * The public origin a session's Preview is served at, or "" when its Studio host is loopback or matches no workspace.
+ * @param {{ env: RuntimeEnv, previewPublicDomain?: string, publicHost?: string, publicProtocol?: string, publicUserDomain?: string, sessionId?: string }} input
+ */
 function previewPublicOriginForLaunch({
-  env = process.env,
+  env,
   previewPublicDomain = "",
   publicHost = "",
   publicProtocol = "",
   publicUserDomain = "",
   sessionId = ""
-} = {}) {
+}) {
   const hostname = normalizeHostName(String(publicHost || "").trim());
   if (hostname && isLoopbackAddress(hostname)) {
     return "";
   }
-  const configuredUserDomain = normalizePublicHostDomain(publicUserDomain || env?.[VIBE64_PUBLIC_USER_DOMAIN_ENV] || "");
-  const configuredWorkspace = String(env?.[VIBE64_WORKSPACE_ENV] || "").trim().toLowerCase();
+  const configuredUserDomain = normalizePublicHostDomain(publicUserDomain || env[VIBE64_PUBLIC_USER_DOMAIN_ENV] || "");
+  const configuredWorkspace = String(env[VIBE64_WORKSPACE_ENV] || "").trim().toLowerCase();
   const studioHostMatch = hostname
     ? studioHostMatchForPreview(hostname, {
       publicUserDomain: configuredUserDomain
@@ -77,12 +84,12 @@ function previewPublicOriginForLaunch({
   }
   const workspace = studioHostMatch.workspace;
   const protocol = normalizePublicProtocol(
-    env?.[VIBE64_PUBLIC_PROTOCOL_ENV] ||
+    env[VIBE64_PUBLIC_PROTOCOL_ENV] ||
       publicProtocol ||
       DEFAULT_PUBLIC_PROTOCOL
   );
   const configuredPreviewDomain = String(
-    previewPublicDomain || env?.[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] || ""
+    previewPublicDomain || env[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] || ""
   ).trim();
   let baseDomain = normalizePublicDomain(
     configuredPreviewDomain || studioHostMatch.baseDomain
@@ -105,7 +112,7 @@ function previewPublicOriginForLaunch({
   ];
   // Separate Vibe64 installations may share a preview domain and cloned project
   // identities. Each one's configured namespace keeps those routes independent.
-  const namespace = String(env?.[VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV] || "").trim();
+  const namespace = String(env[VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV] || "").trim();
   if (namespace) hashInput.push(`namespace:${namespace}`);
   const publicPort = publicDomainPort(baseDomain, protocol);
   if (publicPort) {

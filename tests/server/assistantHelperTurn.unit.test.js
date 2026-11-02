@@ -29,7 +29,7 @@ async function fixture(t, { events = [], reported = profile } = {}) {
     fail: (message, code, reason) => Object.assign(new Error(message), { code, reason }),
     prefix: "naming",
     profile: { profileId: "helper", workloadId: "session_title" },
-    prompt: "Name it",
+    prompt: () => "Name it",
     promptLabel: "Name",
     record: {
       read: async () => saved,

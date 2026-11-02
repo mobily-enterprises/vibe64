@@ -16,7 +16,7 @@ const rejectedBeforeWrite = "Claude has no active turn for this message.";
  * Only this original pre-write guard is affirmative nondelivery evidence. A
  * timeout, an absent native receipt or a generic interrupted run is not proof.
  */
-export async function rejectedClaudeInputChanges({ metadata, runs, configRoot }) {
+async function rejectedClaudeInputChanges({ metadata, runs, configRoot }) {
   const raw = metadata.assistant_routing_request;
   if (!raw) return {};
   const request = JSON.parse(raw);
@@ -55,7 +55,7 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
 }
 
 export async function upgradeClaudeRejectedInput(context) {
-  const configRoot = claudeConfigRoot();
+  const configRoot = claudeConfigRoot({ env: process.env });
   const manifestPath = path.join(context.backupRoot, "manifest.json");
   await verifyUpgradeParents(context.systemRoot, manifestPath);
   const resuming = await readUpgradeFile(manifestPath) !== null;
@@ -119,3 +119,7 @@ export async function upgradeClaudeRejectedInput(context) {
   }
   return publishStateUpgradeFiles({ ...context, prepareUpdates });
 }
+
+const __testables = Object.freeze({ rejectedClaudeInputChanges });
+
+export { __testables };

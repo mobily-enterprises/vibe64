@@ -8,11 +8,15 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 // commit subjects, prompt hints). Each feature supplies only its prompt and the
 // durable record that retains the helper until its native conversation closes:
 // record = { read() -> helper | null, write(helper), retire() }.
+// prompt(profile) returns the turn's text for the resolved execution profile.
 // fail(message, code, reason, details) builds the feature's own error; reason is
 // one of cleanup_paths_invalid, cleanup_failed, failed, conversation_missing or
 // execution_profile_missing. Every cleanup error carries a cleanup reason; one
 // raised before the turn ran is marked beforeTurn, and one raised after a failed
 // turn keeps that failure as its cause.
+
+// A turn nobody can cancel gets a signal that never aborts.
+const UNCANCELLED = new AbortController().signal;
 
 function executionProfileSnapshot(value) {
   try {
@@ -81,7 +85,7 @@ async function runAssistantHelperTurn({
   promptLabel,
   record,
   resolveIdentity,
-  signal = null,
+  signal = UNCANCELLED,
   stableContext,
   stateRoot,
   vibe64User = null
@@ -117,7 +121,7 @@ async function runAssistantHelperTurn({
     assistantSelection: selection,
     vibe64User,
     expectedConnectionIdentity: connectionIdentity,
-    ...(signal ? { signal } : {}),
+    signal,
     async onEvent(event = {}) {
       if (event.type === "thread" || event.type === "turn") {
         if (normalizeText(event.threadId)) helper.conversationId = normalizeText(event.threadId);
@@ -137,16 +141,16 @@ async function runAssistantHelperTurn({
     await retain();
     await mkdir(helper.scope.workdir, { recursive: true });
     await mkdir(helper.scope.runtimeRoot, { recursive: true });
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, profile, options);
     resolvedProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
     helper.executionProfile = resolvedProfile;
     await retain();
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     result = await agent.runEphemeralChatTurn(helper.scope, {
       executionProfile,
       outputSchema,
-      prompt: typeof prompt === "function" ? prompt(resolvedProfile) : prompt,
+      prompt: prompt(resolvedProfile),
       promptLabel
     }, options);
     if (result?.ok !== true) {

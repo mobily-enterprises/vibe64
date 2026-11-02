@@ -15,10 +15,8 @@ import {
 } from "@local/vibe64-usage-recording/shared/contract";
 import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
-import {
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-  createLaunchPreviewProxyRegistry
-} from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { createLaunchPreviewProxyRegistry } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 
 const SESSION_ID = "session-proxy";
 const SECRETS = ["SECRET_AUTHORIZATION", "SECRET_COOKIE", "SECRET_QUERY", "SECRET_BODY", "token="];
@@ -90,7 +88,7 @@ test("the Preview proxy numbers recorded requests and no request content reaches
     timing: { eventMs: 0, pollMs: 10, readyMs: 60_000, stopIdleMs: 50 }
   });
   const call = (method, input = {}) => inProject(() => service[method]({ sessionId: SESSION_ID, ...input }));
-  const registry = createLaunchPreviewProxyRegistry();
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
   t.after(async () => {
     await registry.closeAll();
     await stopActiveUsageRecording("project:demo", SESSION_ID);

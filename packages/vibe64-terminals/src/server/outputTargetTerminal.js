@@ -5,17 +5,6 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import { startResourceWorkflow } from "./resourceWorkflow.js";
-import { createLaunchRestartBaseline, launchRestartState } from "./launchRestart.js";
-import { previewEditorOrigin, previewPublicOriginForLaunch } from "./previewPublicOrigin.js";
-import { previewIdentityCommandRunnerForLaunchTerminal } from "./launchPreviewAuth.js";
-import { OUTPUT_METADATA } from "./outputTargetMetadata.js";
-import { launchReadinessMarkerLineSeen } from "./launchPreviewReadiness.js";
-import { listOutputTargets, workspaceSetupLaunchDisabledReason } from "./outputTargetLaunchContext.js";
-import {
-  cleanupSupersededLaunchTerminals,
-  launchActionsFromOutput,
-  outputTargetExecutionDescriptor
-} from "./outputTargetLaunchTerminals.js";
 import { createOutputTargetTerminalState } from "./outputTargetTerminalState.js";
 import { createOutputTargetLaunchCoordination } from "./outputTargetLaunchCoordination.js";
 import { createOutputTargetLaunchStart } from "./outputTargetLaunchStart.js";
@@ -36,7 +25,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
  * @param {object} dependencies
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -50,7 +39,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
   ensureProjectServices,
-  env = process.env,
+  env,
   project,
   publishSessionChanged,
   runCommand = runVibe64Command,
@@ -128,17 +117,5 @@ function createOutputTargetTerminalController({
 }
 
 export {
-  OUTPUT_METADATA,
-  cleanupSupersededLaunchTerminals,
-  createLaunchRestartBaseline,
-  launchActionsFromOutput,
-  launchReadinessMarkerLineSeen,
-  launchRestartState,
-  listOutputTargets,
-  outputTargetExecutionDescriptor,
-  previewIdentityCommandRunnerForLaunchTerminal,
-  previewEditorOrigin,
-  previewPublicOriginForLaunch,
-  workspaceSetupLaunchDisabledReason,
   createOutputTargetTerminalController
 };

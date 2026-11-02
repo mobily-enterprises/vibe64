@@ -92,8 +92,9 @@ function runnerHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNNER_NAME);
 }
 
+/** The command's socket, under this server process's temporary directory. */
 function commandSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME));
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME), { env: process.env });
 }
 
 function commandRunsHostPath(wrapperHostDir = "") {
@@ -720,13 +721,6 @@ async function prepareAgentSessionCommand({
 }
 
 export {
-  AGENT_SESSION_COMMAND_NAME,
-  VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
-  VIBE64_WRAPPER_ENV,
   createAgentSessionCommandService,
   prepareAgentSessionCommand
 };

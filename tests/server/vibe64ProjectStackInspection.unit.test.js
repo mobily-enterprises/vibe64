@@ -34,7 +34,7 @@ async function fixture(root, mode = "managed_git") {
   const project = { repositoryMode: mode, repository: { mode, defaultBranch: "stable" },
     canonicalRepositoryPath: repository, githubRepository: { cloneUrl: repository },
     githubMirrorPath: path.join(root, "runtime/github-mirror/repository.git") };
-  return { source, repository, project, temporaryRoot, runCommand };
+  return { source, repository, project, temporaryRoot, runCommand, env: process.env };
 }
 
 test("saved Stack uses the configured canonical branch with no session and removes inspection files", async () => {

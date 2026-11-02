@@ -18,7 +18,6 @@ import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
 
 import {
   OPENCODE_EXPECTED_VERSION,
-  OPENCODE_HOST,
   OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess as startOpenCodeServer,
   openCodeProcessEnvironment,
@@ -301,7 +300,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, options = {}) {
  * @param {string} [dependencies.command]
  * @param {typeof runVibe64Command} [dependencies.commandRunner]
  * @param {string} [dependencies.dbPath]
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {object} [dependencies.execution]
  * @param {string} [dependencies.expectedVersion]
  * @param {typeof fetch} [dependencies.fetchImpl]
@@ -327,7 +326,7 @@ async function createOpenCodeServerProcess({
   command = "",
   commandRunner = runVibe64Command,
   dbPath = "",
-  env = process.env,
+  env,
   execution = {},
   // A host with runtime packs pins opencode; a person's own installation runs as installed.
   expectedVersion = runtimePackRoot() ? OPENCODE_EXPECTED_VERSION : "",
@@ -509,15 +508,19 @@ async function createOpenCodeServerProcess({
   });
 }
 
+/**
+ * Reads the OpenCode catalogue from a short-lived server with no plugins.
+ * @param {{ cacheRoot?: string, command?: string, commandRunner?: typeof runVibe64Command, createServerProcess?: typeof createOpenCodeServerProcess, env: RuntimeEnv, privateRoot?: string, workdir?: string }} options
+ */
 async function readOpenCodeCatalog({
   cacheRoot = "",
   command = "",
   commandRunner = runVibe64Command,
   createServerProcess = createOpenCodeServerProcess,
-  env = process.env,
+  env,
   privateRoot = "",
   workdir = ""
-} = {}) {
+}) {
   try {
     return await readNativeOpenCodeCatalog({
       privateRoot,
@@ -553,17 +556,21 @@ async function readOpenCodeCatalog({
   }
 }
 
+/**
+ * Verifies one provider API key with a single OpenCode helper run.
+ * @param {{ apiKey?: string, cacheRoot?: string, command?: string, commandRunner?: typeof runVibe64Command, env: RuntimeEnv, modelId?: string, modelProviderId?: string, privateRoot?: string, workdir?: string }} options
+ */
 async function verifyOpenCodeApiKey({
   apiKey = "",
   cacheRoot = "",
   command = "",
   commandRunner = runVibe64Command,
-  env = process.env,
+  env,
   modelId = "",
   modelProviderId = "",
   privateRoot = "",
   workdir = ""
-} = {}) {
+}) {
   try {
     return await verifyNativeOpenCodeApiKey({
       apiKey,
@@ -645,11 +652,8 @@ const __testables = Object.freeze({ openCodeInlineConfig, safeOpenCodeEnvironmen
 
 export {
   OPENCODE_HELPER_AGENT_ID,
-  OPENCODE_HELPER_SUBAGENT_PREFIX,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
-  OPENCODE_HOST,
-  OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,

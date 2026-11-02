@@ -74,6 +74,7 @@ test("OpenCode cold catalog unlocks complete Zen metadata with only its public i
   t.after(() => rm(root, { force: true, recursive: true }));
 
   const catalog = await readOpenCodeCatalog({
+    env: process.env,
     async createServerProcess(options) {
       starts.push(options);
       assert.deepEqual(JSON.parse(await readFile(
@@ -131,6 +132,7 @@ test("OpenCode verifies API keys with one bounded pure no-tools turn", async (t)
   t.after(() => rm(root, { force: true, recursive: true }));
 
   const result = await verifyOpenCodeApiKey({
+    env: process.env,
     apiKey: "zai-private-key",
     async commandRunner(request) {
       requests.push(request);
@@ -180,6 +182,7 @@ test("OpenCode API-key verification sanitizes provider failures and removes cred
 
   await assert.rejects(
     () => verifyOpenCodeApiKey({
+      env: process.env,
       apiKey: "must-not-surface",
       async commandRunner() {
         return {
@@ -203,6 +206,7 @@ test("OpenCode API-key verification sanitizes provider failures and removes cred
 
   await assert.rejects(
     () => verifyOpenCodeApiKey({
+      env: process.env,
       apiKey: "must-not-surface",
       async commandRunner() {
         return {

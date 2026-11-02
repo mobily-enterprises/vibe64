@@ -4,7 +4,13 @@ import { shellQuote } from "@local/vibe64-execution/server";
 
 import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 
-async function prepareAgentHelperCommand({ wrapperHostDir = "", env = process.env } = {}) {
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
+/**
+ * Writes a session's vibe64 and vibe64-helper commands into its wrapper directory.
+ * @param {{ wrapperHostDir?: string, env: RuntimeEnv }} options env locates the Studio app the commands run
+ */
+async function prepareAgentHelperCommand({ wrapperHostDir = "", env }) {
   const directory = String(wrapperHostDir || "").trim();
   if (!directory) {
     return { ok: false };

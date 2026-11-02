@@ -17,7 +17,7 @@ import { codexTerminalNamespace, vibe64Result } from "../../packages/vibe64-term
 export function createCodexTerminalController(options = {}) {
   const { nativeTestContext, ...controllerOptions } = options;
   const registration = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
-    connectionStatus: async () => true, publishConversation: async () => null, publishSessionChanged: async () => null,
+    connectionStatus: async () => true, env: process.env, publishConversation: async () => null, publishSessionChanged: async () => null,
     ...controllerOptions });
   const { provider } = registration;
   // Preserve only the test's original low-level view over actual named owners.

@@ -24,12 +24,13 @@ import {
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { __testables as runtimePacksTestables } from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
 import {
-  listOutputTargets,
-  workspaceSetupLaunchDisabledReason
-} from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+  __testables as outputTargetLaunchContextTestables,
+  listOutputTargets
+} from "../../packages/vibe64-terminals/src/server/outputTargetLaunchContext.js";
 
 const { vibe64OutputCommand, vibe64OutputTargetView, vibe64WebOutputDescriptor } = vibe64OutputTargetsTestables;
 const { runtimePackManagedCommands } = runtimePacksTestables;
+const { workspaceSetupLaunchDisabledReason } = outputTargetLaunchContextTestables;
 
 function outputsInspection(targets = []) {
   return {

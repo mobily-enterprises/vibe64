@@ -65,8 +65,9 @@ function commandWrapperHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_ENV_COMMAND_NAME);
 }
 
+/** The command's socket, under this server process's temporary directory. */
 function commandSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_ENV_COMMAND_SOCKET_NAME));
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_ENV_COMMAND_SOCKET_NAME), { env: process.env });
 }
 
 const commandServers = createSessionCommandServers({
@@ -496,7 +497,6 @@ const __testables = Object.freeze({
 });
 
 export {
-  VIBE64_AGENT_ENV_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV,
   createAgentEnvCommandService,

@@ -97,7 +97,7 @@ test("a Preview change made outside any request reaches the session's viewers", 
   const { createOutputTargetTerminalController } = await import("../../packages/vibe64-terminals/src/server/outputTargetTerminal.js");
   const sessionId = `preview-${crypto.randomUUID()}`;
   const store = { async mutateSession(_id, update) { return update(); }, async writeMetadataValue() {} };
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
+  const controller = createOutputTargetTerminalController({ env: process.env, ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     // Outside a request, the project service still knows the project it holds.
     project: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },

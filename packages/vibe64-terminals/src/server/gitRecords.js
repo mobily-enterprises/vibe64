@@ -158,7 +158,6 @@ export {
   DEFAULT_CHANGE_DIFF_LINE_LIMIT,
   DEFAULT_CHANGE_FILE_LIMIT,
   GIT_HISTORY_RECORD_FORMAT,
-  MAX_CHANGE_DIFF_LINE_LIMIT,
   MAX_CHANGE_FILE_LIMIT,
   boundedDiff,
   boundedInteger,
@@ -167,6 +166,5 @@ export {
   pageRecords,
   parseGitHistoryRecords,
   parseGitNameStatusZ,
-  parseGitNumstatZ,
   safeChangePath
 };

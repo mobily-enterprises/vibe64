@@ -437,6 +437,8 @@ function appendResponseHeader(headers, name, value) {
   headers[name] = Array.isArray(current) ? [...current, value] : [current, value];
 }
 
+const __testables = Object.freeze({ previewTokenCookieName, proxiedLocation });
+
 export {
   appendPreviewTokenQueryParam,
   cleanPreviewTokenRedirectLocation,
@@ -448,9 +450,7 @@ export {
   previewRequestTokenDiagnostics,
   previewResponseHeaders,
   previewTokenCookie,
-  previewTokenCookieName,
   previewTokenHash,
-  proxiedLocation,
   proxyRequestHeaders,
   proxyUpgradeHeaders,
   requestAcceptsHtml,
@@ -461,5 +461,6 @@ export {
   stripPreviewTokenQueryParam,
   targetRequestUrl,
   tokenMatches,
-  VIBE64_LAUNCH_ALIAS_PATTERN
+  VIBE64_LAUNCH_ALIAS_PATTERN,
+  __testables
 };

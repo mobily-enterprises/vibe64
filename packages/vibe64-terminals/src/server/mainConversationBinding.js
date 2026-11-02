@@ -523,7 +523,6 @@ async function readMainConversationHistory(store, sessionId) {
 export {
   MAIN_CONVERSATION_PRESENTATION,
   requireCompletedConversationRewind,
-  requireMainConversationAdmission,
   prepareProjectConversationCleanup,
   prepareConversationRuntimeInvalidation,
   prepareConversationReconciliation,
@@ -540,7 +539,6 @@ export {
   prepareSessionConversationStorage,
   createSessionConversationBinding,
   CLAUDE_PREPARATION_DELIVERY_STAGES,
-  requireScopedConversationContext,
   openMainConversation,
   publishMainConversationEvent,
   createMainConversationBinding,

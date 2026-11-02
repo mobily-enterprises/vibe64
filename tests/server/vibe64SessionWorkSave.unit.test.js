@@ -21,9 +21,9 @@ import {
   saveSessionWorkDirect as saveSessionWorkImplementation
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
+  __testables as sessionWorkUpdateTestables,
   checkSessionUpdates,
-  updateSessionWork as updateManagedSessionWork,
-  updateSessionWorkDirect as updateSessionWork
+  updateSessionWork as updateManagedSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import {
   inspectSessionUpdateFailure,
@@ -45,6 +45,7 @@ import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfi
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 
 const { canonicalRepositoryBackupPath } = repositoryStorageTestables;
+const { updateSessionWorkDirect: updateSessionWork } = sessionWorkUpdateTestables;
 
 const execFileAsync = promisify(execFile);
 
@@ -212,7 +213,7 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
       finishMaintenance = resolve;
     });
 
-    const result = await saveManagedSessionWorkImplementation({
+    const result = await saveManagedSessionWorkImplementation({ readConnectedWorkSnapshots: async () => [],
       checkpoint: saveMessageInput.checkpoint,
       derivedArtifactPaths: [],
       message: "Save through bounded managed stages",
@@ -279,7 +280,7 @@ test("managed Save keeps a Stack whose newer section proposal is pending", async
     assert.equal(await readFile(stackPath, "utf8"), incomplete, "Save cannot rewrite authored source");
     let finishMaintenance;
     const maintenance = new Promise(resolve => { finishMaintenance = resolve; });
-    const saved = await saveManagedSessionWorkImplementation({ ...input,
+    const saved = await saveManagedSessionWorkImplementation({ readConnectedWorkSnapshots: async () => [], ...input,
       checkpoint: prepared.checkpoint, message: "Save pending Stack", onCacheMaintenance: finishMaintenance });
     await maintenance;
     assert.equal(saved.status, "saved");
@@ -305,7 +306,7 @@ test("managed Save publishes its named checkpoint and preserves work added durin
     });
     await writeFile(path.join(session.sourcePath, "shared.txt"), "later work\n", "utf8");
 
-    const result = await saveManagedSessionWorkImplementation({
+    const result = await saveManagedSessionWorkImplementation({ readConnectedWorkSnapshots: async () => [],
       checkpoint: saveMessageInput.checkpoint,
       message: "Save the named work",
       operationId: "save-naming-race",
@@ -2707,7 +2708,7 @@ for (const mode of ["local_source", "managed_git"]) {
       canonicalHead = () => git(root, ["--git-dir", canonicalRepositoryPath, "rev-parse", "refs/heads/main"]);
     }
     const metadata = {};
-    const created = await createSessionSource({ project, runCommand: commandRunner,
+    const created = await createSessionSource({ env: process.env, project, runCommand: commandRunner,
       runtime: { projectContextRoot: root, projectSessionSourceRoot: path.join(root, "sessions") },
       session: { sessionId: "created" },
       store: { async mutateSession(_id, write) { return write(); },
@@ -2984,7 +2985,7 @@ test("contribution Save creates only its incoming ref and carries authority thro
   const { checkpoint } = await prepareSessionWorkSaveMessage({ project, session, runCommand, operationId });
   let maintained;
   const maintenance = new Promise(resolve => { maintained = resolve; });
-  const saved = await saveManagedSessionWorkImplementation({ project, session, runCommand, operationId, checkpoint,
+  const saved = await saveManagedSessionWorkImplementation({ readConnectedWorkSnapshots: async () => [], project, session, runCommand, operationId, checkpoint,
     message: "Improve the connected library", onCacheMaintenance: maintained });
   await maintenance;
   assert.equal(await git(f.remote, ["rev-parse", f.ref]), saved.saveCommit);

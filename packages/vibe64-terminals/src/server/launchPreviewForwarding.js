@@ -371,8 +371,13 @@ async function proxyPreviewRequest(request, response, {
   }
 }
 
+/**
+ * @param {URL} targetUrl
+ * @param {object} options
+ * @param {import("node:http").IncomingMessage} options.body the browser's request, streamed upstream
+ */
 function requestPreviewTarget(targetUrl, {
-  body = null,
+  body,
   headers = {},
   method = "GET",
   tracker
@@ -387,10 +392,6 @@ function requestPreviewTarget(targetUrl, {
     });
     tracker.trackRequest(upstreamRequest, "upstream-http-request");
     upstreamRequest.once("error", reject);
-    if (!body) {
-      upstreamRequest.end();
-      return;
-    }
     // The browser's body streams through for every method, keeping its own
     // content-length or chunked framing; an aborted upload aborts upstream.
     body.once("close", () => {

@@ -392,6 +392,7 @@ test("Codex attachment streams preserve binary bytes and atomically expose the f
   try {
     await withAttachmentRoot(root, async () => {
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           contentType: "application/octet-stream",
@@ -428,6 +429,7 @@ test("managed attachment files and directories honor the shared-process umask co
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "permissions.txt", stream: Readable.from(["permissions"]) },
         sessionId: "permissions-session"
@@ -450,6 +452,7 @@ test("duplicate Unicode filenames receive isolated attachment ids and paths", as
     await withAttachmentRoot(root, async () => {
       const results = await Promise.all(["first", "second"].map((contents) => (
         storeCodexAttachment({
+          env: process.env,
           executionRoot: "/source/project",
           input: {
             fileName: "résumé.txt",
@@ -477,6 +480,7 @@ test("configured-size overflow and empty streams leave no partial attachment", a
   try {
     await withAttachmentRoot(root, async () => {
       const tooLarge = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           fileName: "too-large.bin",
@@ -486,6 +490,7 @@ test("configured-size overflow and empty streams leave no partial attachment", a
         sessionId: "limit-session"
       });
       const empty = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           fileName: "empty.txt",
@@ -515,6 +520,7 @@ test("aborted Codex attachment streams reject and leave no partial file", async 
   try {
     await withAttachmentRoot(root, async () => {
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           fileName: "aborted.txt",
@@ -545,6 +551,7 @@ test("attachment DELETE rejects traversal instead of touching sibling namespaces
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           fileName: "keep.txt",
@@ -572,6 +579,7 @@ test("accepted attachments renew their persisted and in-process 30-minute lease"
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: {
           fileName: "renew.txt",
@@ -604,6 +612,7 @@ test("an attachment lease held by another process is busy until that process rel
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "process-lock.txt", stream: Readable.from(["locked"]) },
         sessionId: "process-lock-session"
@@ -653,6 +662,7 @@ test("SIGKILL releases an attachment lease for immediate renewal", async () => {
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "killed-lock.txt", stream: Readable.from(["locked"]) },
         sessionId: "killed-lock-session"
@@ -692,11 +702,13 @@ test("multi-attachment renewal records each lease after its own lock wait", asyn
     await withAttachmentRoot(root, async () => {
       const [first, second] = await Promise.all([
         storeCodexAttachment({
+          env: process.env,
           executionRoot: "/source/project",
           input: { fileName: "first-wait.txt", stream: Readable.from(["first"]) },
           sessionId: "renew-wait-session"
         }),
         storeCodexAttachment({
+          env: process.env,
           executionRoot: "/source/project",
           input: { fileName: "second-wait.txt", stream: Readable.from(["second"]) },
           sessionId: "renew-wait-session"
@@ -757,6 +769,7 @@ test("a cleanup timer in another process observes a later lease renewal", async 
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "cross-process.txt", stream: Readable.from(["keep"]) },
         sessionId: "cross-process-session"
@@ -829,6 +842,7 @@ test("Codex controller renews accepted attachments in the selected session sourc
       const sessionId = "controller-renew-session";
       const executionRoot = path.join(root, "managed", "sessions", "active", sessionId, "source");
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot,
         input: {
           fileName: "renew-controller.txt",
@@ -1028,6 +1042,7 @@ test("session cleanup leaves a slow active upload intact and succeeds after it f
   try {
     await withAttachmentRoot(root, async () => {
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "slow.txt", stream: upload },
         lockWaitMs: 25,
@@ -1068,6 +1083,7 @@ test("a concurrent startup sweep cannot remove an upload while it is starting", 
   try {
     await withAttachmentRoot(root, async () => {
       const seed = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
         sessionId: "startup-race-session"
@@ -1076,6 +1092,7 @@ test("a concurrent startup sweep cannot remove an upload while it is starting", 
       await utimes(seed.path, expiredTime, expiredTime);
 
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "starting.txt", stream: upload },
         lockWaitMs: 25,
@@ -1114,11 +1131,13 @@ test("session cleanup racing upload startup leaves no untracked attachment direc
   try {
     await withAttachmentRoot(root, async () => {
       const seed = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
         sessionId: "session-start-race"
       });
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "racing.txt", stream: upload },
         lockWaitMs: 250,
@@ -1162,6 +1181,7 @@ test("busy session cleanup preserves the attachment for its eventual expiry retr
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "expire-after-busy.txt", stream: Readable.from(["expired"]) },
         sessionId: "busy-expiry-session"
@@ -1197,11 +1217,13 @@ test("strict session attachment release retries busy ownership and cannot cross 
   try {
     await withAttachmentRoot(root, async () => {
       const owned = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "owned.txt", stream: Readable.from(["owned"]) },
         sessionId: "strict-release-session"
       });
       const sibling = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "sibling.txt", stream: Readable.from(["sibling"]) },
         sessionId: "strict-release-sibling"
@@ -1254,6 +1276,7 @@ test("startup defers a busy session scan and expires stale data after lock relea
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "deferred-stale.txt", stream: Readable.from(["stale"]) },
         sessionId: "deferred-scan-session"
@@ -1289,6 +1312,7 @@ test("session cleanup automatically retries after losing an active-upload lock r
   try {
     await withAttachmentRoot(root, async () => {
       const storing = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "cleanup-retry.txt", stream: upload },
         lockWaitMs: 25,
@@ -1324,6 +1348,7 @@ test("deferred session cleanup removes only attachments from its original snapsh
   try {
     await withAttachmentRoot(root, async () => {
       const storingFirst = storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "snapshot-first.txt", stream: firstUpload },
         lockWaitMs: 25,
@@ -1339,6 +1364,7 @@ test("deferred session cleanup removes only attachments from its original snapsh
         { lockWaitMs: 25 }
       ), false);
       const second = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "snapshot-second.txt", stream: Readable.from(["second-valid"]) },
         lockWaitMs: 25,
@@ -1373,6 +1399,7 @@ test("last-item DELETE prunes session data while its persistent lock remains reu
   try {
     await withAttachmentRoot(root, async () => {
       const first = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "first.txt", stream: Readable.from(["first"]) },
         sessionId: "last-delete-session"
@@ -1390,6 +1417,7 @@ test("last-item DELETE prunes session data while its persistent lock remains reu
       assert.equal((await stat(sessionLockPath)).isFile(), true);
 
       const second = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "second.txt", stream: Readable.from(["second"]) },
         lockWaitMs: 25,
@@ -1414,6 +1442,7 @@ test("startup removes a leftover retired-session quarantine", async () => {
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "live.txt", stream: Readable.from(["live"]) },
         sessionId: "session-quarantine-session"
@@ -1460,6 +1489,7 @@ test("attachment admission runs under the session lock and rejection creates no 
   try {
     await withAttachmentRoot(root, async () => {
       const storing = storeCodexAttachment({
+        env: process.env,
         beforeCreate: async () => {
           enterAdmission();
           await admission;
@@ -1501,11 +1531,13 @@ test("restart preparation expires stale stages and files without deleting anothe
   try {
     await withAttachmentRoot(root, async () => {
       const expired = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "expired.txt", stream: Readable.from(["old"]) },
         sessionId: "restart-session"
       });
       const live = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "live.txt", stream: Readable.from(["live"]) },
         sessionId: "restart-session"
@@ -1543,11 +1575,13 @@ test("attachment cleanup is idempotent and cannot cross session namespaces", asy
   try {
     await withAttachmentRoot(root, async () => {
       const first = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "first.txt", stream: Readable.from(["first"]) },
         sessionId: "session-first"
       });
       const second = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "second.txt", stream: Readable.from(["second"]) },
         sessionId: "session-second"
@@ -1582,11 +1616,13 @@ test("the exact binary 500 MiB boundary succeeds and one extra byte is rejected"
     await withAttachmentRoot(root, async () => {
       assert.equal(CODEX_ATTACHMENT_MAX_BYTES, 500 * 1024 * 1024);
       const accepted = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "exact.bin", stream: binaryUpload() },
         sessionId: "exact-limit"
       });
       const rejected = await storeCodexAttachment({
+        env: process.env,
         executionRoot: "/source/project",
         input: { fileName: "too-large.bin", stream: binaryUpload(true) },
         sessionId: "over-limit"
@@ -1647,6 +1683,7 @@ test("Codex attachment namespace follows project identity instead of its absolut
         slug: "beepollen",
         targetRoot: oldTargetRoot
       }, () => storeCodexAttachment({
+        env: process.env,
         executionRoot: oldTargetRoot,
         input: { fileName: "old.txt", stream: Readable.from(["hello"]) },
         sessionId
@@ -1656,6 +1693,7 @@ test("Codex attachment namespace follows project identity instead of its absolut
         slug: "beepollen",
         targetRoot: newTargetRoot
       }, () => storeCodexAttachment({
+        env: process.env,
         executionRoot: newTargetRoot,
         input: { fileName: "new.txt", stream: Readable.from(["hello"]) },
         sessionId

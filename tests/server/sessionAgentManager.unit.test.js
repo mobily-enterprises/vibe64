@@ -5,7 +5,6 @@ import { startTerminalSession, closeTerminalSession, readTerminalSession } from 
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
-  SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE,
   createSessionAgentManager
 } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import {
@@ -13,6 +12,8 @@ import {
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE
 } from "@local/vibe64-runtime/shared";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 

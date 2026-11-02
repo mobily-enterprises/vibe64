@@ -126,6 +126,7 @@ test("a configured assistant command boundary fails closed when preparation is i
 
 test("the shared command environment requires the helper dispatcher to be installed", async () => {
   await assert.rejects(prepareAgentSessionCommandEnvironment({
+    env: process.env,
     gitCommand: {},
     prepareGitCommand: async () => ({ ok: true, hostWrapperDir: "/managed/session-wrappers" }),
     prepareHelperCommand: async () => ({ ok: false }),
@@ -141,7 +142,7 @@ test("session cleanup drains admitted preparation, rejects overlapping acquisiti
   const preparing = new Promise((resolve) => { started = resolve; });
   const gate = new Promise((resolve) => { release = resolve; });
   const options = {
-    sessionId: "closing-command-environment", gitCommand: {},
+    env: process.env, sessionId: "closing-command-environment", gitCommand: {},
     prepareGitCommand: async () => { calls.push("prepare"); started(); await gate; return { ok: true, hostWrapperDir: "/tmp/example", env: {} }; },
     prepareHelperCommand: async () => ({ ok: true })
   };

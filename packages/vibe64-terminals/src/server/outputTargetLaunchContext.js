@@ -265,12 +265,14 @@ function managedPreviewLaunchPlan({
   };
 }
 
+const __testables = Object.freeze({ workspaceSetupLaunchDisabledReason });
+
 export {
   readLaunchContext,
   readPreparedLaunchContext,
   listOutputTargets,
-  workspaceSetupLaunchDisabledReason,
   findOutputTarget,
   previewTargetError,
-  managedPreviewLaunchPlan
+  managedPreviewLaunchPlan,
+  __testables
 };

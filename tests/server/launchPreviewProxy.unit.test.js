@@ -15,13 +15,14 @@ import {
   PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
   PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
-import { __testables } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
+import { __testables, previewProxyPortRange } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
 import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
@@ -31,23 +32,26 @@ import {
   createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
-  PREVIEW_PROXY_PORT_END,
-  PREVIEW_PROXY_PORT_START,
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-  appendPreviewTokenQueryParam,
-  assertPrivateFallbackSocketParent,
   createLaunchPreviewProxyRegistry,
-  injectLaunchPreviewBridge,
-  normalizePreviewTargetHref,
-  previewPublicSocketPath,
-  previewTokenCookie,
-  previewTokenCookieName,
-  pruneStalePreviewSockets,
-  proxiedLocation,
-  stripPreviewTokenQueryParam
+  previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { injectLaunchPreviewBridge } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
+import {
+  __testables as previewHeaderTestables,
+  appendPreviewTokenQueryParam,
+  normalizePreviewTargetHref,
+  previewTokenCookie,
+  stripPreviewTokenQueryParam
+} from "../../packages/vibe64-terminals/src/server/launchPreviewHeaders.js";
+import {
+  __testables as previewListeningTestables,
+  pruneStalePreviewSockets
+} from "../../packages/vibe64-terminals/src/server/launchPreviewListening.js";
 
 const { PREVIEW_PROXY_PORT_END_ENV, PREVIEW_PROXY_PORT_START_ENV } = __testables;
+const { previewTokenCookieName, proxiedLocation } = previewHeaderTestables;
+const { assertPrivateFallbackSocketParent } = previewListeningTestables;
+const { end: PREVIEW_PROXY_PORT_END, start: PREVIEW_PROXY_PORT_START } = previewProxyPortRange({});
 
 const TEST_PREVIEW_IDENTITY_SECRET = "a".repeat(64);
 
@@ -118,7 +122,7 @@ test("launch preview public socket path accepts Previews nested under their edit
 
 test("launch preview proxy injects HTML and proxies app-relative requests", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure("session-1", `${target.origin}/home?mode=dev`);
 
@@ -217,7 +221,7 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
 
 test("launch preview proxy never revalidates transformed HTML with upstream validators", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure("session-transformed-cache", `${target.origin}/cached-page`);
       const previewUrl = new URL(preview.href);
@@ -259,6 +263,7 @@ test("launch preview proxy uses the configured local port range", async () => {
   const port = await unusedLocalPort();
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry({
+      hostEnv: process.env,
       env: {
         [PREVIEW_PROXY_PORT_END_ENV]: String(port),
         [PREVIEW_PROXY_PORT_START_ENV]: String(port)
@@ -278,7 +283,7 @@ test("launch preview proxy uses the configured local port range", async () => {
 
 test("local preview keeps bootstrap and app redirects on the browser's loopback host", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure("loopback-alias", `${target.origin}/forwarded-redirect?mode=dev`);
       const browserUrl = new URL(preview.href);
@@ -321,7 +326,7 @@ test("local preview keeps bootstrap and app redirects on the browser's loopback 
 
 test("launch preview proxy preserves the canonical target host when using an alternate connect URL", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     const canonicalHref = "http://127.0.0.1:4101/home?mode=dev";
     try {
       const preview = await registry.ensure({
@@ -351,7 +356,7 @@ async function previewBootstrapCookie(href) {
 
 test("Preview streams every method's request body upstream with its own framing", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         sessionId: "session-request-body",
@@ -396,7 +401,7 @@ test("Preview streams every method's request body upstream with its own framing"
 
 test("Preview refuses an HTML page too large to inject the bridge", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         sessionId: "session-huge-html",
@@ -417,7 +422,7 @@ test("Preview refuses an HTML page too large to inject the bridge", async () => 
 
 test("an injected Preview page is addressed only by the editors that asked for it and sets no frame-ancestors", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     const input = {
       sessionId: "session-editor-origin",
       targetHref: `${target.origin}/home`,
@@ -448,6 +453,7 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   await withTargetServer(async (target) => {
     const publicOrigin = "https://v64preview-abcd1234ef56.workspace.users.example.test";
     const registry = createLaunchPreviewProxyRegistry({
+      hostEnv: process.env,
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }
@@ -499,7 +505,7 @@ test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HT
   await withTargetServer(async (target) => {
     const publicOrigin = "https://v64preview-abcd1234ef56.workspace.users.example.test";
     const env = { VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir };
-    const registry = createLaunchPreviewProxyRegistry({ env });
+    const registry = createLaunchPreviewProxyRegistry({ env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         previewPublicOrigin: publicOrigin,
@@ -561,7 +567,7 @@ test("launch preview proxy republishes a public socket removed outside its regis
     const env = {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     };
-    const registry = createLaunchPreviewProxyRegistry({ env });
+    const registry = createLaunchPreviewProxyRegistry({ env, hostEnv: process.env });
     const input = {
       previewPublicOrigin: publicOrigin,
       sessionId: "session-republish",
@@ -794,6 +800,7 @@ test("launch preview proxy reuses an in-flight public Unix socket start", async 
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     });
     const registry = createLaunchPreviewProxyRegistry({
+      hostEnv: process.env,
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }
@@ -837,7 +844,7 @@ test("launch preview restarts keep their origin and rotate their bearer token", 
     const env = {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     };
-    const registry = createLaunchPreviewProxyRegistry({ env });
+    const registry = createLaunchPreviewProxyRegistry({ env, hostEnv: process.env });
     try {
       const first = await registry.ensure({
         previewPublicOrigin: publicOrigin,
@@ -906,6 +913,7 @@ test("launch preview proxy does not unlink a live public Unix socket owned outsi
       });
     });
     const registry = createLaunchPreviewProxyRegistry({
+      hostEnv: process.env,
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }
@@ -951,6 +959,7 @@ test("launch preview proxy keeps public tokens valid after local status ensures"
   await withTargetServer(async (target) => {
     const publicOrigin = "https://v64preview-tokenstable1.workspace.users.example.test";
     const registry = createLaunchPreviewProxyRegistry({
+      hostEnv: process.env,
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }
@@ -1001,7 +1010,7 @@ test("launch preview proxy keeps public tokens valid after local status ensures"
 
 test("launch preview proxy scopes tokens by project, session, and terminal", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const alpha = await runWithProjectRequestContext({
         slug: "alpha_1",
@@ -1039,7 +1048,7 @@ test("launch preview proxy scopes tokens by project, session, and terminal", asy
 
 test("launch preview proxy does not inject JSKIT auth cookies into ordinary requests", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "ordinary-request");
       const preview = await registry.ensure({
@@ -1068,7 +1077,7 @@ test("launch preview proxy does not inject JSKIT auth cookies into ordinary requ
 
 test("launch preview proxy preserves browser-owned native JSKIT auth cookies", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "native-cookie");
       const preview = await registry.ensure({
@@ -1102,7 +1111,7 @@ test("launch preview proxy preserves browser-owned native JSKIT auth cookies", a
 
 test("launch preview proxy treats a retired preview auth kind as no preview auth", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         previewAuth: {
@@ -1151,7 +1160,7 @@ test("launch preview proxy delegates identity exchange to the app-owned command"
           statusCode: 200
         };
       };
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = {
         ...commandPreviewAuth(target.origin, "application-command"),
@@ -1219,7 +1228,7 @@ test("launch preview proxy delegates identity exchange to the app-owned command"
 
 test("launch preview identity control requires preview authorization and a valid scoped grant", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "grant-validation");
       const preview = await registry.ensure({
@@ -1299,7 +1308,7 @@ test("launch preview identity failure leaves the browser signed out with the exa
         signedOut: true,
         statusCode: 404
       });
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "missing-user");
       const preview = await registry.ensure({
@@ -1350,7 +1359,7 @@ test("launch preview Guest exchange forwards native logout cookies", async () =>
           statusCode: 200
         };
       };
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "guest");
       const preview = await registry.ensure({
@@ -1404,7 +1413,7 @@ test("separate preview browsers can exchange different identities without shared
           statusCode: 200
         };
       };
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "two-browsers");
       const preview = await registry.ensure({
@@ -1444,7 +1453,7 @@ test("separate preview browsers can exchange different identities without shared
 
 test("launch preview proxy forwards provider-native JSKIT cookies from ordinary app responses", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const previewAuth = commandPreviewAuth(target.origin, "native-set-cookie");
       const preview = await registry.ensure({
@@ -1471,7 +1480,7 @@ test("preview HTTP and WebSockets present their own origin on loopback and forwa
   for (const transport of ["http", "websocket"]) {
     const withServer = transport === "http" ? withTargetServer : withWebSocketTargetServer;
     await withServer(async (target) => {
-      const registry = createLaunchPreviewProxyRegistry();
+      const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
       try {
         const preview = await registry.ensure("origin-proof", `${target.origin}/api/ping`);
         const browserUrl = new URL(preview.href);
@@ -1514,7 +1523,7 @@ test("preview HTTP and WebSockets present their own origin on loopback and forwa
 
 test("a form post presented on loopback returns its page on the preview origin", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure("form-origin", `${target.origin}/form-page`);
       const browserUrl = new URL(preview.href);
@@ -1543,7 +1552,7 @@ test("a form post presented on loopback returns its page on the preview origin",
 
 test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
   await withWebSocketTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         sessionId: "session-websocket",
@@ -1583,7 +1592,7 @@ test("launch preview proxy forwards tokenized WebSocket upgrades without leaking
 
 test("launch preview proxy close resolves while a browser WebSocket is still open", async () => {
   await withWebSocketTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     const preview = await registry.ensure({
       sessionId: "session-websocket-close",
       targetHref: `${target.origin}/hmr`,
@@ -1608,6 +1617,8 @@ test("launch preview proxy close resolves while a browser WebSocket is still ope
 test("launch preview proxy keeps idle WebSocket upgrades alive until proxy close", async () => {
   await withWebSocketTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry({
+      env: process.env,
+      hostEnv: process.env,
       socketIdleTimeoutMs: 50
     });
     try {
@@ -1646,7 +1657,7 @@ test("launch preview proxy keeps idle WebSocket upgrades alive until proxy close
 
 test("launch preview proxy handles client abort during rejected WebSocket upgrade", async () => {
   await withRejectedUpgradeTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure({
         sessionId: "session-websocket-rejected-abort",
@@ -1696,7 +1707,7 @@ test("launch preview proxy keeps target redirects on clean proxy URLs", () => {
 
 test("launch preview proxy strips only its token while preserving app query flags", async () => {
   await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
+    const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
     try {
       const preview = await registry.ensure("session-query-flags", `${target.origin}/home`);
       const previewUrl = new URL(preview.href);
@@ -1741,7 +1752,7 @@ test("launch preview token appending preserves valueless query parameters", () =
 });
 
 test("launch preview proxy serves stable starting HTML while the target is unavailable", async () => {
-  const registry = createLaunchPreviewProxyRegistry();
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
   try {
     const preview = await registry.ensure("session-unavailable", "http://127.0.0.1:9/home");
     const previewUrl = new URL(preview.href);
@@ -1792,7 +1803,7 @@ test("launch preview proxy gives reused HTTP connections the configured request 
     response.end('{"ok":true}');
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-  const registry = createLaunchPreviewProxyRegistry({ socketIdleTimeoutMs: 10000 });
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env, socketIdleTimeoutMs: 10000 });
   try {
     const preview = await registry.ensure("session-http-reuse", `http://127.0.0.1:${server.address().port}/api/save`);
     const warmup = await fetch(preview.href);
@@ -1824,7 +1835,7 @@ test("launch preview proxy handles aborted upstream response bodies", async () =
       resolve();
     });
   });
-  const registry = createLaunchPreviewProxyRegistry();
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
   try {
     const address = server.address();
     const preview = await registry.ensure("session-aborted-body", `http://127.0.0.1:${address.port}/stream`);

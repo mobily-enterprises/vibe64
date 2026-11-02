@@ -15,7 +15,7 @@ const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "se
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64 helper's "));
   t.after(() => rm(root, { recursive: true, force: true }));
-  assert.deepEqual(await prepareAgentHelperCommand({ wrapperHostDir: root }), { ok: true });
+  assert.deepEqual(await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root }), { ok: true });
   return { root, helper: path.join(root, "vibe64-helper") };
 }
 
@@ -90,7 +90,7 @@ process.exitCode = 23;
   for (const group of HELPER_GROUPS) {
     const existing = path.join(root, `vibe64-${group}`);
     await writeFile(existing, wrapper, { mode: 0o755 });
-    await prepareAgentHelperCommand({ wrapperHostDir: root });
+    await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
     assert.equal(await readFile(existing, "utf8"), wrapper);
     const options = { cwd: root, env: { ...process.env, HELPER_TEST_IDENTITY: "session-1", PATH: `${root}:${process.env.PATH}` }, input };
     const result = await run("vibe64-helper", [group, ...args], options);

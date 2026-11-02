@@ -149,9 +149,16 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
   };
 }
 
+/**
+ * @param {import("node:http").IncomingMessage} request
+ * @param {import("node:http").ServerResponse} response
+ * @param {object} options
+ * @param {((grant: object) => object) | null} options.consumeIdentityGrant null when the Preview has no identity signing
+ * @param {((input: object) => Promise<object>) | null} options.executePreviewIdentityCommand null when the Preview was launched without identity switching
+ */
 async function proxyPreviewIdentityExchange(request, response, {
   consumeIdentityGrant,
-  executePreviewIdentityCommand = null,
+  executePreviewIdentityCommand,
   previewAuth = null,
   proxyOrigin = "",
   token = ""

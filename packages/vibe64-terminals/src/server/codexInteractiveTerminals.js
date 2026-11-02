@@ -564,4 +564,4 @@ function createCodexInteractiveTerminals({
   });
 }
 
-export { codexRemoteEndpointForWorkdir, createCodexInteractiveTerminals };
+export { createCodexInteractiveTerminals };

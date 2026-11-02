@@ -226,7 +226,7 @@ function normalizeCodexSessionResult(result = {}) {
 
 /**
  * @param {object} dependencies
- * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
+ * @param {(context: object) => Promise<boolean>} dependencies.connectionStatus
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
  * @param {ListAssistantConnections} dependencies.listConnections
  * @param {CodexAppServerRunOwner} dependencies.runOwner
@@ -238,12 +238,12 @@ function normalizeCodexSessionResult(result = {}) {
  * @param {CodexAssistantCatalog} dependencies.catalog
  * @param {CodexInteractiveTerminals} dependencies.terminals
  * @param {CodexSessionAttachmentRenewal} dependencies.attachments
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {CodexSessionTurnCheckpoint} dependencies.checkpoint
  */
 function createCodexSessionAgentProvider({
-  connectionStatus = async () => true,
+  connectionStatus,
   runNativeDetachedConversation,
   listConnections,
   runOwner: codexAppServerRunOwner,
@@ -255,7 +255,7 @@ function createCodexSessionAgentProvider({
   catalog: codexAssistantCatalog,
   terminals,
   attachments,
-  env = process.env,
+  env,
   publishSessionChanged,
   checkpoint: checkpointCodexAppServerTurn
 }) {

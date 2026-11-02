@@ -5,7 +5,9 @@ import path from "node:path";
 import test from "node:test";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
-import { rejectedClaudeInputChanges, upgradeClaudeRejectedInput } from "../../packages/vibe64-terminals/src/server/assistantClaudeDeliveryUpgrade.js";
+import { __testables, upgradeClaudeRejectedInput } from "../../packages/vibe64-terminals/src/server/assistantClaudeDeliveryUpgrade.js";
+
+const { rejectedClaudeInputChanges } = __testables;
 
 const threadId = "c117ec52-748a-4b8a-8a1b-d70653ab3732";
 const messageId = "records-catchup-1";

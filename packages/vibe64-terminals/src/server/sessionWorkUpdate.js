@@ -696,6 +696,8 @@ async function updateSessionWork(input = {}) {
   });
 }
 
+const __testables = Object.freeze({ updateSessionWorkDirect });
+
 export {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,
@@ -705,5 +707,5 @@ export {
   readSessionAuthorityHeads,
   regenerateSessionWorkUpdateDirect,
   updateSessionWork,
-  updateSessionWorkDirect
+  __testables
 };

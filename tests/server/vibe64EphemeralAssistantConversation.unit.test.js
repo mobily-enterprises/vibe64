@@ -10,9 +10,11 @@ import {
   createOpenCodeSessionAgentProvider
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
 import {
-  createSessionAgentManager,
-  defineEphemeralAssistantScope
+  createSessionAgentManager
 } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import {
+  defineEphemeralAssistantScope
+} from "../../packages/vibe64-terminals/src/server/agent/sessionAgentRules.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;

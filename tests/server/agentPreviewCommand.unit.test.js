@@ -649,7 +649,7 @@ test("managed preview browser eval validates stdin before starting browser contr
       ...process.env,
       ...prepared.env
     };
-    await prepareAgentHelperCommand({ wrapperHostDir: root });
+    await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
     const helper = path.join(root, "vibe64-helper");
     const help = await execWithInput(helper, [
       "preview",
@@ -1132,6 +1132,7 @@ test("agent preview wrapper forwards command input over the private session sock
   try {
     let receivedInput = null;
     const prepared = await prepareAgentPreviewCommand({
+      env: process.env,
       commandService: { logger: silentLogger,
         registerBrowserWorker() {},
         async run(input) {
@@ -1341,7 +1342,7 @@ test("managed browser does not start when its project environment cannot be read
     async runManagedCommand() { assert.fail("A browser must not start with an unreadable environment."); }
   });
   try {
-    const prepared = await prepareAgentPreviewCommand({ commandService, sessionId, wrapperHostDir: root });
+    const prepared = await prepareAgentPreviewCommand({ env: process.env, commandService, sessionId, wrapperHostDir: root });
     await assert.rejects(execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
       env: { ...process.env, ...prepared.env }, input: "return true;"
     }), /Project environment unavailable/u);
@@ -1529,7 +1530,7 @@ test("managed browser identity returns from the app port to the real Preview pro
     response.end(`<!doctype html><html><body>${request.headers.cookie?.includes("app_session=ada")
       ? "Signed in as Ada" : "Sign in"}</body></html>`);
   });
-  const registry = createLaunchPreviewProxyRegistry();
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
   let commandService;
   try {
     await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
@@ -2148,7 +2149,7 @@ test("managed preview browser preserves stale files when owner cleanup is unprov
       }
     });
     try {
-      const prepared = await prepareAgentPreviewCommand({ commandService, sessionId, wrapperHostDir: root });
+      const prepared = await prepareAgentPreviewCommand({ env: process.env, commandService, sessionId, wrapperHostDir: root });
       await writeFile(prepared.hostBrowserMetadataPath, "invalid metadata");
       await assert.rejects(execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
         env: { ...process.env, ...prepared.env }
@@ -2181,7 +2182,7 @@ test("managed preview browser does not replace an unrelated listener after owner
     }
   });
   try {
-    const prepared = await prepareAgentPreviewCommand({ commandService, sessionId, wrapperHostDir: root });
+    const prepared = await prepareAgentPreviewCommand({ env: process.env, commandService, sessionId, wrapperHostDir: root });
     await new Promise((resolve) => listener.listen(prepared.hostBrowserSocketPath, resolve));
     await writeFile(prepared.hostBrowserMetadataPath, "unrelated metadata");
     await assert.rejects(execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
@@ -2454,6 +2455,7 @@ test("agent preview command preparation does not rewrite an unchanged wrapper fi
           };
         }
       },
+      env: process.env,
       sessionId: "idempotent-wrapper-session",
       wrapperHostDir: root
     };
@@ -2481,6 +2483,7 @@ test("agent preview preparation repairs one missing cached socket and fences its
   try {
     const options = {
       commandService,
+      env: process.env,
       sessionId,
       wrapperHostDir: root
     };

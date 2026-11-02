@@ -261,6 +261,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
   configureVibe64Host({ runtimePackRoot: runtimeRoot });
   const managedCommands = [];
   const prepared = await prepareAgentPreviewCommand({
+    env: process.env,
     commandService,
     project: {
       slug: "example"

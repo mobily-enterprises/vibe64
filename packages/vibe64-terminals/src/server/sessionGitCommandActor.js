@@ -11,6 +11,8 @@ import {
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandFailure } from "./commandFailure.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 
@@ -37,17 +39,21 @@ function actorMetadataRecord({
 
 const SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS = Object.freeze(Object.keys(actorMetadataRecord()));
 
+/**
+ * The actor metadata a session's Git commands run as: the signed-in user in user account mode, else the local account.
+ * @param {{ env: RuntimeEnv, reason?: string, session?: object, sourceRoot?: string, threadId?: string, vibe64User?: object | null, workdir?: string }} input
+ */
 function sessionGitCommandActorMetadata({
-  env = process.env,
+  env,
   reason = "",
   session = {},
   sourceRoot = "",
   threadId = "",
   vibe64User = null,
   workdir = ""
-} = {}) {
+}) {
   const accountMode = normalizeGithubAccountMode(
-    env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    env[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
     GITHUB_ACCOUNT_MODE_LOCAL
   );
   const ownerScope = accountMode === GITHUB_ACCOUNT_MODE_USER ? "user" : "local";
@@ -187,8 +193,12 @@ async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", meta
   return true;
 }
 
+/**
+ * Records who a session's Git commands run as, keeping a stored actor unless asked to overwrite it.
+ * @param {{ env: RuntimeEnv, overwrite?: boolean, reason?: string, runtime?: object | null, session?: object, sessionId?: string, sourceRoot?: string, threadId?: string, vibe64User?: object | null, workdir?: string }} input
+ */
 async function recordSessionGitCommandActor({
-  env = process.env,
+  env,
   overwrite = false,
   reason = "",
   runtime = null,
@@ -198,7 +208,7 @@ async function recordSessionGitCommandActor({
   threadId = "",
   vibe64User = null,
   workdir = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId) || normalizeText(session.sessionId);
   const sessionContext = {
     ...session,
@@ -278,8 +288,5 @@ export {
   SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   recordSessionGitCommandActor,
   sessionRequiresGithubActor,
-  sessionGitCommandActorFromMetadata,
-  sessionGitCommandActorMetadata,
-  sessionWithGitCommandActorMetadata,
-  writeSessionGitCommandActorMetadata
+  sessionGitCommandActorFromMetadata
 };

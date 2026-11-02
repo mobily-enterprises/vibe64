@@ -298,7 +298,6 @@ function openCodeSelection(session) {
 
 export {
   learningSessionExecutionRoot,
-  MAIN_CONVERSATION_STATE_KEY,
   readClaudeConversationOwnerContext,
   readSessionConversationContext,
   requireCompletedNativeConversationReplacement,

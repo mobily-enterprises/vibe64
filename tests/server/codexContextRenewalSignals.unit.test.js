@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  recordCodexContextRenewalSignal,
+  createCodexContextRefreshMarker,
   recordCodexContextUsageSignal
 } from "../../packages/vibe64-terminals/src/server/codexContextRenewalSignals.js";
 import { codexContextUsageFromNotification } from "@jskit-ai/assistant-core/server/codex-events";
@@ -18,50 +18,53 @@ function memoryStore(initial = {}) {
     },
     async writeMetadataValue(_sessionId, name, value) {
       values.set(name, String(value));
+    },
+    value(name) {
+      return values.get(name) || "";
     }
   };
 }
 
-test("context compaction signals accumulate once per stable provider event", async () => {
-  const store = memoryStore();
-  const input = {
-    at: "2026-08-24T01:00:00.000Z",
-    eventId: "item-1",
-    reason: "context_compacted",
-    threadId: "thread-1",
-    turnId: "turn-1"
+/** The marker Codex registration calls when a native event asks for a context refresh. */
+function contextRefreshMarker(store) {
+  return createCodexContextRefreshMarker({
+    project: { createSessionStore: async () => store },
+    runOwner: { readAgentRunForSession: async () => null }
+  });
+}
+
+function compactionItem(itemId, turnId) {
+  return { method: "item/completed", params: { item: { id: itemId, type: "contextCompaction" }, turnId } };
+}
+
+function compactionEvidence(store) {
+  return {
+    count: store.value("agent_context_compaction_count"),
+    key: store.value("agent_context_compaction_last_key")
   };
+}
 
-  const first = await recordCodexContextRenewalSignal(store, "session-1", input);
-  const duplicate = await recordCodexContextRenewalSignal(store, "session-1", input);
-  const second = await recordCodexContextRenewalSignal(store, "session-1", {
-    ...input,
-    at: "2026-08-24T02:00:00.000Z",
-    eventId: "item-2",
-    turnId: "turn-2"
-  });
+test("context compaction signals accumulate once per stable provider event", async () => {
+  const store = memoryStore({ agent_briefing_delivered: "yes" });
+  const markContextRefresh = contextRefreshMarker(store);
+  const compacted = { reason: "context_compacted" };
 
-  assert.deepEqual(first, {
-    at: input.at,
-    count: 1,
-    duplicate: false,
-    key: "context_compacted:thread-1:turn-1:item-1"
-  });
-  assert.equal(duplicate.count, 1);
-  assert.equal(duplicate.duplicate, true);
-  assert.equal(second.count, 2);
-  assert.equal(second.duplicate, false);
+  await markContextRefresh("session-1", "thread-1", compactionItem("item-1", "turn-1"), compacted);
+  assert.deepEqual(compactionEvidence(store), { count: "1", key: "context_compacted:thread-1:turn-1:item-1" });
+  assert.ok(!Number.isNaN(Date.parse(store.value("agent_context_compaction_last_at"))));
+  await markContextRefresh("session-1", "thread-1", compactionItem("item-1", "turn-1"), compacted);
+  assert.deepEqual(compactionEvidence(store), { count: "1", key: "context_compacted:thread-1:turn-1:item-1" });
+  await markContextRefresh("session-1", "thread-1", compactionItem("item-2", "turn-2"), compacted);
+  assert.deepEqual(compactionEvidence(store), { count: "2", key: "context_compacted:thread-1:turn-2:item-2" });
 });
 
 test("non-compaction and unidentifiable signals do not affect renewal evidence", async () => {
-  const store = memoryStore();
-  assert.equal(await recordCodexContextRenewalSignal(store, "session-1", {
-    reason: "context_refresh_required",
-    threadId: "thread-1"
-  }), null);
-  assert.equal(await recordCodexContextRenewalSignal(store, "session-1", {
-    reason: "context_compacted"
-  }), null);
+  const store = memoryStore({ agent_briefing_delivered: "yes" });
+  const markContextRefresh = contextRefreshMarker(store);
+  await markContextRefresh("session-1", "thread-1", compactionItem("item-1", "turn-1"), { reason: "context_refresh_required" });
+  assert.deepEqual(compactionEvidence(store), { count: "", key: "" });
+  assert.equal(await markContextRefresh("session-1", "", compactionItem("item-2", "turn-2"), { reason: "context_compacted" }), null);
+  assert.deepEqual(compactionEvidence(store), { count: "", key: "" });
 });
 
 test("Codex main-thread token usage persists last-turn context pressure, not cumulative spend", async () => {

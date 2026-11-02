@@ -36,8 +36,9 @@ function wrapperHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_NAME);
 }
 
+/** The command's socket, under this server process's temporary directory. */
 function commandSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_SOCKET_NAME));
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_SOCKET_NAME), { env: process.env });
 }
 
 function usageText() {

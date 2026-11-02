@@ -53,7 +53,8 @@ async function fixture(t) {
       return { ok: true };
     }
   };
-  const create = () => createSessionNaming({ agent, publishSessionChanged: async (...args) => events.push(args), logger: { warn: (...args) => warnings.push(args) } });
+  const create = () => createSessionNaming({ agent, publishSessionChanged: async (...args) => events.push(args), logger: { warn: (...args) => warnings.push(args) },
+    signal: new AbortController().signal });
   return { store, context, calls, events, warnings, agent, profile, create, naming: create(), root };
 }
 
@@ -229,7 +230,7 @@ test("Learning naming refuses an earlier-mode lesson conversation without runnin
   const run = f.agent.runEphemeralChatTurn;
   f.agent.runEphemeralChatTurn = async (...args) => { helperRuns++; return run(...args); };
   f.naming = createSessionNaming({ agent: f.agent, publishSessionChanged: async (...args) => f.events.push(args),
-    logger: { warn: (...args) => f.warnings.push(args) } });
+    logger: { warn: (...args) => f.warnings.push(args) }, signal: new AbortController().signal });
   await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "Bookings" });
   f.naming.start(f.context, "first");
   await f.naming.close();

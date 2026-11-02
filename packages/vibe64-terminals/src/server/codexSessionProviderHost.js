@@ -67,10 +67,10 @@ function codexAppServerAdmissionError(sessionId = "") {
 }
 
 /**
- * @param {object | null} [projectContext] the request's project context
- * @param {() => Promise<unknown>} [operation]
+ * @param {object | null} projectContext the request's project context
+ * @param {() => Promise<unknown>} operation
  */
-function runWithCodexAppServerProjectContext(projectContext = null, operation = async () => null) {
+function runWithCodexAppServerProjectContext(projectContext, operation) {
   if (projectContext?.targetRoot || projectContext?.learningScope) {
     return runWithProjectRequestContext(projectContext, operation);
   }
