@@ -300,6 +300,7 @@ const { view } = defineProps({
   // members are read once.
   view: { type: Object, required: true }
 });
+/** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   agentActive, agentObservationLost, agentStopEnabled, agentStopVisible, agentWorking, answerChoices,
   approvalMode, assistantAccessError, assistantAccessLoading, assistantAccessScopeKey,

@@ -258,6 +258,7 @@ const { view } = defineProps({
   // members are read once.
   view: { type: Object, required: true }
 });
+/** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   checkTemporaryAiUpdate, connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,

@@ -727,11 +727,11 @@ describe("flow", () => {
     mocks.openCode.connections.value = [FREE_GLM];
     const { state } = await flow({ setUp: true });
     const card = (id) => state.cards.find((item) => item.id === id);
-    expect(state.cardRows(card("deepseek")).map(({ kind, engineId }) => [kind, engineId]))
+    expect(state.setupCards.cardRows(card("deepseek")).map(({ kind, engineId }) => [kind, engineId]))
       .toEqual([["codex-provider", "codex"], ["codex-provider", "claude"]]);
-    expect(state.cardRows(card("codex")).map(({ kind }) => kind)).toEqual(["codex"]);
-    expect([state.cardRows(card("glm")).length, state.cardRows(card("glm").free).map(({ id }) => id)]).toEqual([0, ["zai"]]);
-    expect(state.cardRows(card("claude"))).toEqual([]);
+    expect(state.setupCards.cardRows(card("codex")).map(({ kind }) => kind)).toEqual(["codex"]);
+    expect([state.setupCards.cardRows(card("glm")).length, state.setupCards.cardRows(card("glm").free).map(({ id }) => id)]).toEqual([0, ["zai"]]);
+    expect(state.setupCards.cardRows(card("claude"))).toEqual([]);
     state.openManage(card("deepseek"));
     expect([state.manageOpen, state.managedCard.id]).toEqual([true, "deepseek"]);
   });
