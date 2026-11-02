@@ -157,11 +157,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       await state.cancelMessage?.(messageId);
       return { ok: true, cancelled: true, messageId, interrupted: false };
     },
-    async readAgentGoal(sessionId: string) {
+    async readCanonicalAgentGoal(sessionId: string) {
       requireSession(sessionId);
       return state.goal || { status: "unsupported", goal: null, target: { segmentId: null, capabilities: { goals: false } } };
     },
-    async updateAgentGoal(sessionId: string, input) {
+    async updateCanonicalAgentGoal(sessionId: string, input) {
       requireSession(sessionId);
       if (!state.updateGoal) throw new Error("This scenario has not supplied a goal command response.");
       const { sessionId: _sessionId, vibe64User: _user, ...command } = input;
@@ -600,7 +600,6 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   const sessionAgent = {
     async inspectAssistantPurposes() { return {}; },
     async assistantAccess() { return { canUse: true }; },
-    async requireAssistantAccess() {},
     async requireAssistantAccessForSelection() {},
     async resolveSelection(input) { return resolveVibe64AssistantSelection(capabilities, input); },
     async createConversation() {
@@ -654,6 +653,8 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   service = createSessionConversations({ systemRoot: root, sessionAgent, conversationRuntime: common, actions, attachments,
     logger: silentLogger,
     prepareAgentSkills: async () => {},
+    // The controlled native methods need no engine preparation.
+    prepareSelection: async () => {},
     readSessionContext: async (sessionId, options = {}) => ({
       ...options, runtime, session: await runtime.getSession(sessionId)
     }),
