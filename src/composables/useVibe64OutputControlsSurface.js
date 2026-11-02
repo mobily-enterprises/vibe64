@@ -1,12 +1,14 @@
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, toValue, watch } from "vue";
+import { useVibe64OutputControls } from "@/composables/useVibe64OutputControls.js";
 import {
   launchPreviewLocationStorageKey,
-  launchPreviewToolbarStorageKey,
+  launchPreviewToolbarStorageKey
+} from "@/lib/vibe64LaunchBrowserWindow.js";
+import { resolveLaunchPreviewDestination } from "@/lib/vibe64LaunchPreviewDestination.js";
+import {
   nextLaunchPreviewToolbarPosition,
-  normalizeLaunchPreviewToolbarPosition,
-  resolveLaunchPreviewDestination,
-  useVibe64OutputControls
-} from "@/composables/useVibe64OutputControls.js";
+  normalizeLaunchPreviewToolbarPosition
+} from "@/lib/vibe64LaunchPreviewToolbar.js";
 import {
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,

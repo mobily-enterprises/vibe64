@@ -7,7 +7,7 @@ const interactiveTerminalPath = path.resolve(
   "src/components/studio/Vibe64InteractiveTerminal.vue"
 );
 const launchTerminalConsumerPath = path.resolve("src/components/studio/Vibe64OutputControls.vue");
-const launchTerminalStatePath = path.resolve("src/composables/useVibe64OutputControls.js");
+const launchTerminalStatePath = path.resolve("src/composables/useVibe64OutputLaunch.js");
 const launchTerminalSurfaceStatePath = path.resolve(
   "src/composables/useVibe64OutputControlsSurface.js"
 );
