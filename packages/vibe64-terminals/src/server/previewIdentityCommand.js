@@ -23,8 +23,8 @@ const PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES = 16 * 1024;
 const PREVIEW_TOKEN_COOKIE_PREFIX = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
 const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 
-function previewIdentityCommandError(message = "", code = "vibe64_preview_identity_command_failed", statusCode = 502) {
-  return new AppError(statusCode, message || "Application preview identity command failed.", { code });
+function previewIdentityCommandError(message = "", code = "vibe64_preview_identity_command_failed", statusCode = 502, params = {}) {
+  return new AppError(statusCode, message || "Application preview identity command failed.", { code, params });
 }
 
 function commandRequestSubject(selection = {}) {
@@ -65,14 +65,14 @@ function normalizeCommandSetCookie(value = []) {
   if (!Array.isArray(value)) {
     throw previewIdentityCommandError(
       "Application preview identity command returned invalid cookies.",
-      "vibe64_preview_identity_command_response_invalid"
+      "vibe64_preview_identity_command_cookies_invalid"
     );
   }
   const entries = value;
   if (entries.length > PREVIEW_IDENTITY_COMMAND_MAX_COOKIES) {
     throw previewIdentityCommandError(
       "Application preview identity command returned too many cookies.",
-      "vibe64_preview_identity_command_response_invalid"
+      "vibe64_preview_identity_command_cookies_too_many"
     );
   }
   return entries.map((entry, index) => {
@@ -91,7 +91,9 @@ function normalizeCommandSetCookie(value = []) {
     ) {
       throw previewIdentityCommandError(
         `Application preview identity command returned invalid cookie ${index + 1}.`,
-        "vibe64_preview_identity_command_response_invalid"
+        "vibe64_preview_identity_command_cookie_invalid",
+        502,
+        { cookie: index + 1 }
       );
     }
     return header;
@@ -120,7 +122,7 @@ function normalizePreviewIdentityCommandResponse(value = {}, options = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw previewIdentityCommandError(
       "Application preview identity command returned invalid JSON.",
-      "vibe64_preview_identity_command_response_invalid"
+      "vibe64_preview_identity_command_json_invalid"
     );
   }
   if (
@@ -153,7 +155,7 @@ function normalizePreviewIdentityCommandResponse(value = {}, options = {}) {
   if (setCookie.length < 1 || (!signedOut && !identity)) {
     throw previewIdentityCommandError(
       "Application preview identity command did not return an authenticated browser session.",
-      "vibe64_preview_identity_command_response_invalid"
+      "vibe64_preview_identity_command_session_missing"
     );
   }
   return {
@@ -173,7 +175,7 @@ function parsePreviewIdentityCommandResponse(stdout = "", options = {}) {
   } catch {
     throw previewIdentityCommandError(
       "Application preview identity command returned invalid JSON.",
-      "vibe64_preview_identity_command_response_invalid"
+      "vibe64_preview_identity_command_json_invalid"
     );
   }
   return normalizePreviewIdentityCommandResponse(value, options);

@@ -250,7 +250,7 @@ function createServiceAssistant({
       });
     }
     if (!state.assistantRuntime.updateModelAccess) {
-      throw new AppError(503, "This Vibe64 host does not support changing provider model access.", {
+      throw new AppError(409, "This Vibe64 host does not support changing provider model access.", {
         code: "vibe64_assistant_model_access_unavailable"
       });
     }
@@ -537,7 +537,10 @@ function createServiceAssistant({
 
   async function openBrowserConversation(sessionId, options = {}) {
     if (!options.browserAuthority || options.browserAuthority.sessionId !== sessionId) {
-      throw new AppError(403, "Main browser conversations require current project access.", { code: "conversation_forbidden" });
+      throw new AppError(403, "Main browser conversations require current project access.", {
+        code: "conversation_forbidden",
+        messageCode: "vibe64_main_browser_conversation_forbidden"
+      });
     }
     const diagnostics = realtimeDebugEnabled(env);
     let phase = "session-read";
@@ -611,7 +614,10 @@ function createServiceAssistant({
   async function openTemporaryBrowserConversation(sessionId, conversationId, options = {}) {
     const authority = options.browserAuthority;
     if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
-      throw new AppError(403, "Temporary browser conversations require current project access.", { code: "conversation_forbidden" });
+      throw new AppError(403, "Temporary browser conversations require current project access.", {
+        code: "conversation_forbidden",
+        messageCode: "vibe64_temporary_browser_conversation_forbidden"
+      });
     }
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
     return mainConversations.open({

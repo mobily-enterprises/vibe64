@@ -62,8 +62,11 @@ function isSuggestionPin(entry = {}) {
   return entry.isFile() && entry.name.startsWith(ATTACHMENT_SUGGESTION_PIN_PREFIX);
 }
 
-function attachmentUploadValidationError(code, message, statusCode = 400) {
-  return new AppError(statusCode, message, { code });
+/**
+ * An attachment refusal. `options` carries `messageCode` for a refusal that keeps a code callers branch on.
+ */
+function attachmentUploadValidationError(code, message, statusCode = 400, options = {}) {
+  return new AppError(statusCode, message, { ...options, code });
 }
 
 function waitForAttachmentLock() {

@@ -152,7 +152,7 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
       ? await addressedSession(runtime, input.projectSlug, input.destinationSessionId, ownSessionId)
       : await runtime.store.readCurrentSession();
     if (!session) {
-      throw new AppError(409, "The destination project has no selected session.", { code: "vibe64_project_message_session_required" });
+      throw new AppError(409, "The destination project has no selected session.", { code: "vibe64_project_message_session_unselected" });
     }
     if (session.sessionId === ownSessionId) {
       const addressed = explicitSession

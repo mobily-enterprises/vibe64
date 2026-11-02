@@ -77,7 +77,10 @@ function createTemporaryConversationInteraction({
     async function execute(actionId, input, context) {
       const authority = context?.browserAuthority;
       if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
-        throw new AppError(403, "Temporary commands require their original action authority.", { code: "conversation_forbidden" });
+        throw new AppError(403, "Temporary commands require their original action authority.", {
+          code: "conversation_forbidden",
+          messageCode: "vibe64_temporary_command_forbidden"
+        });
       }
       return actions.execute({
         actionId,

@@ -75,7 +75,10 @@ const commandServers = createSessionCommandServers({
     payload: commandFailure(
       "Managed Git control generation is no longer current. Reconnect the assistant.",
       "vibe64_agent_control_unavailable",
-      { diagnostic: { stage: "control", commandSubmitted: false, executionId: null } }
+      {
+        diagnostic: { stage: "control", commandSubmitted: false, executionId: null },
+        messageCode: "vibe64_agent_git_control_stale"
+      }
     )
   },
   requestFailure: {
