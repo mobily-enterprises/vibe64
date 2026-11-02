@@ -12,12 +12,12 @@ const ZAI_RETRYABLE_ERROR_CODES = new Set([
   "1305"
 ]);
 
+/**
+ * The verifier's internal failure: the connection store reads `retryable` and
+ * `providerErrorCode` and answers the caller with its own refusal.
+ */
 function zaiVerificationError({ retryable = false, providerErrorCode = "" } = {}) {
-  const error = new Error("Z.AI key verification did not complete.");
-  error.retryable = retryable;
-  error.statusCode = retryable ? 503 : 422;
-  error.providerErrorCode = providerErrorCode;
-  return error;
+  return Object.assign(new Error("Z.AI key verification did not complete."), { retryable, providerErrorCode });
 }
 
 async function zaiResponseBody(response) {

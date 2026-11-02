@@ -1,4 +1,5 @@
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createAiConnectionStore } from "./aiConnectionStore.js";
 import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
 import { ZAI_FREE_MODEL_ID } from "./assistantProviderPolicy.js";
@@ -134,7 +135,7 @@ function configureAiConnectionRuntime({ aiConnections, terminals, requireAiManag
    */
   async function updateModelAccess({ modelProviderId = "", unlocked, vibe64User } = {}) {
     const denied = await requireAiManagement({ vibe64User });
-    if (denied) throw Object.assign(new Error(denied.error), { code: denied.code, statusCode: 403 });
+    if (denied) throw new AppError(403, denied.error, { code: denied.code });
     return { connection: await aiConnections.updateModelAccess(modelProviderId, { unlocked }), ok: true };
   }
 
