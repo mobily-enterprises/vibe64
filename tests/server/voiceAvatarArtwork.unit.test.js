@@ -15,6 +15,15 @@ const MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL = new URL(
   "../../packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue",
   import.meta.url
 );
+const MERC_AVATAR_STYLE_URL = new URL(
+  "../../packages/vibe64-voice/src/client/mercAvatarMotion.css",
+  import.meta.url
+);
+
+async function readBlueMangaAvatar() {
+  const files = [MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, MERC_AVATAR_STYLE_URL, AVATAR_MOTION_URL];
+  return (await Promise.all(files.map((url) => readFile(url, "utf8")))).join("");
+}
 
 function assertAvatarExpressionCycle(avatar, constantName, state) {
   const expressionList = avatar.match(new RegExp(
@@ -33,10 +42,11 @@ function assertAvatarExpressionCycle(avatar, constantName, state) {
 }
 
 test("the Colleague avatar chooses between the Merc and Yu artworks", async () => {
-  const [canonicalAvatar, blueMangaIllustration, originalAvatar] = await Promise.all([
+  const [canonicalAvatar, blueMangaIllustration, originalAvatar, sharedStyle] = await Promise.all([
     readFile(MERC_AVATAR_URL, "utf8"),
     readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8"),
-    readFile(MERC_ILLUSTRATED_AVATAR_URL, "utf8")
+    readFile(MERC_ILLUSTRATED_AVATAR_URL, "utf8"),
+    readFile(MERC_AVATAR_STYLE_URL, "utf8")
   ]);
 
   const colleague = await readFile(new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url), "utf8");
@@ -53,7 +63,10 @@ test("the Colleague avatar chooses between the Merc and Yu artworks", async () =
   assert.match(blueMangaIllustration, /class="merc-avatar__hair merc-avatar__hair--crown-spikes"/u);
   assert.match(blueMangaIllustration, /class="merc-avatar__eye-light merc-avatar__eye-star"/u);
   assert.match(blueMangaIllustration, /class="merc-avatar__hood"/u);
-  assert.match(blueMangaIllustration, /prefers-reduced-motion: reduce/u);
+  for (const artwork of [blueMangaIllustration, originalAvatar]) {
+    assert.match(artwork, /<style scoped src="\.\/mercAvatarMotion\.css"><\/style>/u);
+  }
+  assert.match(sharedStyle, /prefers-reduced-motion: reduce/u);
   assert.match(originalAvatar, /aria-label="Illustrated AI avatar of Merc"/u);
   assert.match(originalAvatar, /class="merc-avatar"/u);
   assert.match(originalAvatar, /class="merc-avatar__hair merc-avatar__hair--back"/u);
@@ -63,7 +76,7 @@ test("the Colleague avatar chooses between the Merc and Yu artworks", async () =
 });
 
 test("the fifth avatar rests in a slight smile with lighter skin, uniform blue hair, and smaller dark oval eyes", async () => {
-  const avatar = await readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8") + await readFile(AVATAR_MOTION_URL, "utf8");
+  const avatar = await readBlueMangaAvatar();
 
   assert.match(avatar, /return IDLE_MOUTH_POSES\[idleGesture\.value\] \|\| "soft-smile";/u);
   assert.match(avatar, /"tiny-nod": "warm-smile"[\s\S]*?"curious-tilt": "warm-smile"/u);
@@ -81,7 +94,7 @@ test("the fifth avatar rests in a slight smile with lighter skin, uniform blue h
 });
 
 test("Merc cycles ten distinct idle gestures without competing with active voice states", async () => {
-  const avatar = await readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8") + await readFile(AVATAR_MOTION_URL, "utf8");
+  const avatar = await readBlueMangaAvatar();
   const gestureList = avatar.match(/const IDLE_GESTURES = Object\.freeze\(\[([\s\S]*?)\]\);/u);
   assert.ok(gestureList);
   const gestures = [...gestureList[1].matchAll(/"([a-z-]+)"/gu)].map((match) => match[1]);
@@ -98,7 +111,7 @@ test("Merc cycles ten distinct idle gestures without competing with active voice
 });
 
 test("Merc keeps soft and warm idle smiles with a rare big smile while preserving speech poses", async () => {
-  const avatar = await readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8") + await readFile(AVATAR_MOTION_URL, "utf8");
+  const avatar = await readBlueMangaAvatar();
   const mouthPoseList = avatar.match(/const IDLE_MOUTH_POSES = Object\.freeze\(\{([\s\S]*?)\}\);/u);
   assert.ok(mouthPoseList);
   const idleMouthPoses = Object.fromEntries(
@@ -122,14 +135,14 @@ test("Merc keeps soft and warm idle smiles with a rare big smile while preservin
 });
 
 test("Merc cycles a distinct series of thoughtful expressions while an assistant turn is active", async () => {
-  const avatar = await readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8") + await readFile(AVATAR_MOTION_URL, "utf8");
+  const avatar = await readBlueMangaAvatar();
   assertAvatarExpressionCycle(avatar, "THINKING_EXPRESSIONS", "thinking");
   assert.match(avatar, /activeExpressionIndexes\[state\] = \(index \+ 1\) % sequence\.length/u);
   assert.match(avatar, /ACTIVE_EXPRESSION_DURATION_MS\[state\]/u);
 });
 
 test("Merc gives recording, message delivery, and active thinking their own varied faces", async () => {
-  const avatar = await readFile(MERC_BLUE_MANGA_ILLUSTRATED_AVATAR_URL, "utf8") + await readFile(AVATAR_MOTION_URL, "utf8");
+  const avatar = await readBlueMangaAvatar();
   for (const [constantName, state] of [
     ["LISTENING_EXPRESSIONS", "listening"],
     ["PRE_THINKING_EXPRESSIONS", "pre-thinking"],

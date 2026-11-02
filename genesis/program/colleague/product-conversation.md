@@ -78,6 +78,15 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/shared/learningFocus.js`
 - `packages/vibe64-colleague/src/shared/navigationPanes.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-colleague/src/client/useColleagueLearning.js`
+- `packages/vibe64-colleague/src/client/useColleagueTeachMe.js`
+- `packages/vibe64-colleague/src/client/useColleagueFreshStart.js`
+- `packages/vibe64-colleague/src/client/ColleagueFreshDialog.vue`
+- `packages/vibe64-colleague/src/client/useColleagueHistory.js`
+- `packages/vibe64-colleague/src/client/useColleagueWatchesAndOperations.js`
+- `packages/vibe64-colleague/src/client/ColleagueWatchesDialog.vue`
+- `packages/vibe64-colleague/src/client/ColleagueOperationsDialog.vue`
+- `packages/vibe64-colleague/src/client/colleagueModel.js`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
 - `src/composables/useVibe64ColleagueNavigation.js`
 - `src/components/Vibe64LocalColleagueHost.vue`
@@ -160,7 +169,7 @@ step; closing (and opening an app place while Courses is open) calls
 a phone's Colleague dialog does not come back afterwards. `openCourses()` and
 `closeCourses()` stay the learner's own Courses button and close. **Teach me** records one
 request on that controller; `colleagueLearningRequests.js` consumes it once for
-the same signed-in person, reveals Colleague, rereads its state (so the send
+the same signed-in person, reveals Colleague, rereads its state (`useColleagueTeachMe.js`, so the send
 goes to the lesson's Learn thread) and sends the fixed text "Teach me this
 step." through the ordinary send. When that read reports `modelSetupRequired`,
 nothing is sent: the setup warning says to connect an AI and press Teach me
@@ -170,9 +179,9 @@ place or opens it ("show me"). Both acknowledge truthfully with the guide receip
 `{shown, step?, reason?}`. On a phone the dialog minimises itself before
 opening Courses or ringing a control; after it gave way to Courses (a Courses
 command or **Open in Learning**), the learner's own hiding of Courses
-(controller `hiddenBy === "learner"`) reopens the dialog, while Show me and
+(controller `hiddenBy === "learner"`) reopens the dialog (`useColleagueLearning.js`), while Show me and
 other app navigation leave the app visible.
-In Learn mode, while an attempt is not ended, Colleague's header row (drawer,
+In Learn mode, while an attempt is not ended, Colleague's header row (`useColleagueLearning.js`; drawer,
 phone dialog, voice inside the same panel; not when minimised) shows a compact
 **Step N/M** button (school icon, check once passed; name "Current lesson step:
 <title>") read from the Learning controller only; Develop shows none. It opens
@@ -819,7 +828,8 @@ work or stop an agent. New user steering takes priority and captures its own
 focus. Reports get their own canonical system/assistant turn, preserving the
 user's previous answer. Cancelling a pending watch suppresses its late report;
 it does not stop the watched agent. A compact eye-and-count composer button opens watch and assignment details
-in an application-owned Vuetify dialog. No watch panels consume height below
+in an application-owned Vuetify dialog (`ColleagueWatchesDialog.vue`; recent operation receipts in
+`ColleagueOperationsDialog.vue`, both fed by `useColleagueWatchesAndOperations.js`). No watch panels consume height below
 chat. Resume/Cancel remain the existing actions, and closing details returns to
 the same chat/draft. The client continues fetching state while minimized with
 an active watch.
@@ -1074,7 +1084,8 @@ every tool definition on each model request.
 ## Fresh/history client presentation
 
 The original Colleague element keeps its shared uncertainty status and Check
-delivery action, and adds explicit Start fresh confirmation. The confirmation
+delivery action, and adds explicit Start fresh confirmation (`ColleagueFreshDialog.vue`, operated by
+`useColleagueFreshStart.js`). The confirmation
 explains that the old voice conversation ends, nothing is resent, history remains
 readable and watches/assignments continue. Active admission, Stop, voice setup,
 capture or sending must resolve first. Only the matching pending uncertain speech
@@ -1097,7 +1108,7 @@ Voice-presentation failure reports separately and retains the committed text
 chat/draft without restoring the archive operation. A late openVoice result
 cannot hide a different actor or conversation view.
 
-Previous conversations reuses the original responsive conversation dialog and
+Previous conversations (`useColleagueHistory.js`) reuses the original responsive conversation dialog and
 transcript renderer with the existing page normalizer/merge owner. Archived reads
 create no runtime subscription, composer, model selection, voice connection or
 delivery action. The archived-page caller forwards the shared transcript completion

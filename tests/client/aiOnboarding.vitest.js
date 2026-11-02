@@ -516,13 +516,13 @@ describe("flow", () => {
     expect([state.screen, state.wasSetUp]).toEqual(["choose", true]);
     const codex = state.cards.find(({ id }) => id === "codex");
     expect(codex).toMatchObject({ connected: true, through: ["codex"] });
-    expect(state.cardAction(codex)).toBe("checking");
+    expect(state.setupCards.cardAction(codex)).toBe("checking");
     routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
-    expect(state.cardAction(codex)).toBe("keep");
-    expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
+    expect(state.setupCards.cardAction(codex)).toBe("keep");
+    expect(state.setupCards.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
     await onboarding.reload();
-    expect(state.cardAction(state.cards.find(({ id }) => id === "deepseek"))).toBe("main");
+    expect(state.setupCards.cardAction(state.cards.find(({ id }) => id === "deepseek"))).toBe("main");
     routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
     await state.keep(codex);
     expect(state.screen).toBe("success");
@@ -586,7 +586,7 @@ describe("flow", () => {
     routeSenior({ assignment: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     const card = (id) => state.cards.find((item) => item.id === id);
     expect([state.mainAi.label, state.mainCard.id]).toEqual(["DeepSeek, via Claude Code", "deepseek"]);
-    expect([state.cardAction(card("deepseek")), state.cardAction(card("codex"))]).toEqual(["keep", "main"]);
+    expect([state.setupCards.cardAction(card("deepseek")), state.setupCards.cardAction(card("codex"))]).toEqual(["keep", "main"]);
   });
 
   it("checks and routes a DeepSeek key connected only in Claude Code as Claude Code, not Codex", async () => {
@@ -692,9 +692,9 @@ describe("flow", () => {
     const { state } = await flow({ setUp: true });
     const card = (id) => state.cards.find((item) => item.id === id);
     routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
-    expect(state.cardNote(card("codex"))).toBe("");
-    expect(state.cardNote(card("claude"))).toBe(claude.upgrade);
-    expect(state.connectedLabel(card("codex"))).toBe("Connected · in use");
+    expect(state.setupCards.cardNote(card("codex"))).toBe("");
+    expect(state.setupCards.cardNote(card("claude"))).toBe(claude.upgrade);
+    expect(state.setupCards.connectedLabel(card("codex"))).toBe("Connected · in use");
   });
 
   it("a redo opened before connections load never moves Colleague unasked", async () => {
@@ -741,13 +741,13 @@ describe("flow", () => {
     const { state } = await flow({ setUp: true });
     const claudeCard = state.cards.find(({ id }) => id === "claude");
     expect(state.orderedCards.map(({ id }) => id)).toEqual(["claude", "codex", "deepseek", "glm"]);
-    expect([state.cardAction(claudeCard), state.cardNote(claudeCard), state.configured(claudeCard)]).toEqual(["reconnect", "", true]);
+    expect([state.setupCards.cardAction(claudeCard), state.setupCards.cardNote(claudeCard), state.setupCards.configured(claudeCard)]).toEqual(["reconnect", "", true]);
     mocks.accounts.status.value.accounts[1] = { id: "claude", connected: false, status: "not_connected" };
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek")
       .configuredEngines = ["codex"];
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
     expect(state.orderedCards.map(({ id }) => id)).toEqual(["codex", "deepseek", "claude", "glm"]);
-    expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
+    expect(state.setupCards.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
   });
 
   it("keeps connections no card shows: they count as connected and appear under Advanced", async () => {
@@ -765,7 +765,7 @@ describe("flow", () => {
     mocks.accounts.status.value.missingTools = [{ id: "claude", label: "Claude Code" }, { id: "opencode", label: "opencode" }];
     const { state } = await flow();
     const card = (id) => state.cards.find((item) => item.id === id);
-    expect([state.neededTool(card("claude"))?.label, state.neededTool(card("codex")), state.neededTool(card("glm").free)?.label])
+    expect([state.setupCards.neededTool(card("claude"))?.label, state.setupCards.neededTool(card("codex")), state.setupCards.neededTool(card("glm").free)?.label])
       .toEqual(["Claude Code", null, "opencode"]);
   });
 
@@ -780,15 +780,15 @@ describe("flow", () => {
     const card = (id) => state.cards.find((item) => item.id === id);
     expect([...mocks.tools.ids].sort()).toEqual(["claude", "codex", "opencode"]);
     expect(mocks.tools.options.enabled.value).toBe(true);
-    expect(["claude", "codex", "deepseek", "glm"].map((id) => [id, state.installFirst(card(id))?.name || "", state.toolReady(card(id))]))
+    expect(["claude", "codex", "deepseek", "glm"].map((id) => [id, state.setupCards.installFirst(card(id))?.name || "", state.setupCards.toolReady(card(id))]))
       .toEqual([["claude", "Claude Code", false], ["codex", "", true], ["deepseek", "Claude Code", false], ["glm", "", true]]);
-    expect(state.installFirst(card("glm").free)?.name).toBe("opencode");
-    expect(state.cardClass(card("claude"))["aio-card--needs-tool"]).toBe(true);
-    expect(state.cardClass(card("codex"))["aio-card--needs-tool"]).toBe(false);
+    expect(state.setupCards.installFirst(card("glm").free)?.name).toBe("opencode");
+    expect(state.setupCards.cardClass(card("claude"))["aio-card--needs-tool"]).toBe(true);
+    expect(state.setupCards.cardClass(card("codex"))["aio-card--needs-tool"]).toBe(false);
     // Only Codex runs here: one line offers it above the recommended card, which still needs installing.
     expect([state.readyHere?.id, state.noToolHere]).toEqual(["codex", false]);
-    state.toggleInstall(card("claude"));
-    expect([state.installOpen, state.cardClass(card("claude"))["aio-card--installing"]]).toEqual(["claude", true]);
+    state.setupCards.toggleInstall(card("claude"));
+    expect([state.setupCards.installOpen.value, state.setupCards.cardClass(card("claude"))["aio-card--installing"]]).toEqual(["claude", true]);
     mocks.accounts.refresh = vi.fn().mockResolvedValue({});
     await state.checkTools();
     expect([mocks.accounts.refresh.mock.calls.length, mocks.tools.check.mock.calls.length]).toEqual([1, 1]);
@@ -799,13 +799,13 @@ describe("flow", () => {
     mocks.tools.tools.value = [toolRow("claude", "Claude Code", "missing"), toolRow("codex", "Codex", "missing"),
       toolRow("opencode", "opencode", "missing")];
     let { state } = await flow();
-    expect(state.cards.every((card) => state.installFirst(card))).toBe(true);
+    expect(state.cards.every((card) => state.setupCards.installFirst(card))).toBe(true);
     expect([state.noToolHere, state.readyHere]).toEqual([true, null]);
     app.unmount();
     mocks.accounts.status.value.missingTools = [];
     ({ state } = await flow());
     expect(mocks.tools.options.enabled.value).toBe(false);
-    expect(state.cards.map((card) => [state.cardTool(card), state.cardClass(card)["aio-card--needs-tool"]]))
+    expect(state.cards.map((card) => [state.cardTool(card), state.setupCards.cardClass(card)["aio-card--needs-tool"]]))
       .toEqual(state.cards.map(() => [null, false]));
   });
 
@@ -820,7 +820,7 @@ describe("flow", () => {
   it("inline with nothing configured shows the onboarding cards, also while the only AI needs reconnecting", async () => {
     mocks.accounts.status.value.accounts[1] = { id: "claude", connected: false, status: "reconnect_required" };
     const state = await inline();
-    expect([state.wasSetUp, state.skippable, state.cardAction(state.cards.find(({ id }) => id === "claude"))])
+    expect([state.wasSetUp, state.skippable, state.setupCards.cardAction(state.cards.find(({ id }) => id === "claude"))])
       .toEqual([false, false, "reconnect"]);
     app.unmount();
     mocks.accounts.status.value.accounts[1] = { id: "claude", connected: true, status: "connected" };
@@ -866,21 +866,35 @@ describe("flow", () => {
   });
 
   it("never offers removal on the card face and turns motion off for reduced-motion users", async () => {
+    const read = (file) => readFile(new URL(`../../packages/vibe64-accounts/src/client/onboarding/${file}`, import.meta.url), "utf8");
     for (const file of ["AiOnboarding.vue", "AiSetup.vue"]) {
-      const source = await readFile(new URL(`../../packages/vibe64-accounts/src/client/onboarding/${file}`, import.meta.url), "utf8");
+      const source = await read(file);
       expect(source).not.toMatch(/removeConnection|requestRemove|Disconnect|logout|>\s*Remove\s*</u);
       expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none;[\s\S]*transform: none;/u);
     }
+    // The setup's parts: none offers removal, and each one that moves stops for reduced motion.
+    const parts = ["AiSetupProviderCard.vue", "AiSetupHelloProof.vue", "AiSetupSuccessMark.vue", "AiSetupRoutingChoice.vue",
+      "AiSetupConnectSteps.vue", "AiSetupModelsSummary.vue"];
+    const [card, proof, mark, routing, ...still] = await Promise.all(parts.map(read));
+    for (const source of [card, proof, mark, routing, ...still]) {
+      expect(source).not.toMatch(/removeConnection|requestRemove|Disconnect|logout|>\s*Remove\s*</u);
+    }
+    for (const source of [card, proof, mark]) expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none;/u);
+    for (const source of [card, routing]) expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*transition: none;/u);
+    for (const source of still) expect(source).not.toMatch(/animation:|transition:/u);
   });
 
   it("leaves who may use a connection to the host, through the connection-access slot", async () => {
     const read = (file) => readFile(new URL(`../../packages/vibe64-accounts/src/client/${file}`, import.meta.url), "utf8");
     const files = ["onboarding/AiOnboarding.vue", "onboarding/AiSetup.vue", "onboarding/AiOnboardingHost.vue",
-      "studio/AiProviderManage.vue", "studio/AiConnectionRow.vue", "studio/AiSetupAdvanced.vue"];
+      "studio/AiProviderManage.vue", "studio/AiConnectionRow.vue", "studio/AiSetupAdvanced.vue", "onboarding/AiSetupProviderCard.vue",
+      "onboarding/AiSetupHelloProof.vue", "onboarding/AiSetupConnectSteps.vue", "onboarding/AiSetupRoutingChoice.vue",
+      "onboarding/AiSetupSuccessMark.vue", "onboarding/AiSetupModelsSummary.vue"];
     const sources = await Promise.all(files.map(read));
     for (const source of sources) expect(source).not.toMatch(/Workspace use|Personal use|Workspace members|workspace owner|your account menu|[Hh]osted/u);
-    const [, setup, , manage, row, advanced] = sources;
-    expect(setup.match(/<slot name="connection-access" :card="(?:card|chosen)" place="(?:badge|success)" \/>/gu)).toHaveLength(2);
+    const [, setup, , manage, row, advanced, card] = sources;
+    expect(`${setup}\n${card}`.match(/<slot name="connection-access" :card="(?:card|chosen)" place="(?:badge|success)" \/>/gu)).toHaveLength(2);
+    expect(card).toMatch(/<slot name="connection-access" :card="card" place="badge" \/>/u);
     expect(row).toMatch(/<slot name="connection-access" :connection="account" place="row" \/>/u);
     for (const source of [setup, manage, advanced]) expect(source).toMatch(/#connection-access="scope"><slot name="connection-access" v-bind="scope" \/>/u);
   });

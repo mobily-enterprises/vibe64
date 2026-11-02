@@ -6,14 +6,10 @@ import {
   mdiArrowLeft,
   mdiClose,
   mdiCreditCardOutline,
-  mdiEyeOffOutline,
-  mdiEyeOutline,
-  mdiLockOutline,
   mdiMagnify,
   mdiRobotOutline
 } from "@mdi/js";
-import AiPersonalUse from "./AiPersonalUse.vue";
-import AiWaitStatus from "./AiWaitStatus.vue";
+import AiProviderKeyForm from "./AiProviderKeyForm.vue";
 import CliInstallNotice from "./CliInstallNotice.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import NativeProviderConnections from "./NativeProviderConnections.vue";
@@ -40,26 +36,18 @@ const {
   confirmModelAccessUnlock,
   confirmRemove,
   editorActivator,
-  editorApiKey,
-  editorApiKeyVisible,
   editorBackLabel,
   editorCanSave,
-  editorCatalogModelCount,
-  editorConnectionPolicy,
-  editorError,
   editorEyebrow,
   editorLabel,
   editorOpen,
   editorOrigin,
   editorPreparing,
   editorProviderId,
-  editorProviderRevision,
-  editorRouteExplanation,
   editorRoutingPending,
   editorRoutingSetupError,
   editorSaving,
   editorTitle,
-  editorVerificationCopy,
   emit,
   filteredProviders,
   finishConnectionRouting,
@@ -390,80 +378,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       </v-card-text>
 
       <template v-else>
-        <v-card-text
-          :aria-busy="editorPreparing ? 'true' : undefined"
-          class="vibe64-provider-editor__body"
-        >
-          <v-sheet class="vibe64-provider-editor__provider" rounded="lg">
-            <v-avatar color="primary" size="44" variant="tonal">
-              <v-icon :icon="mdiRobotOutline" size="24" />
-            </v-avatar>
-            <span>
-              <strong>{{ editorLabel }}</strong>
-              <small>
-                {{ editorProviderId }}<template v-if="editorCatalogModelCount"> · {{ editorCatalogModelCount }} models found</template>
-              </small>
-            </span>
-          </v-sheet>
-
-          <v-sheet
-            v-if="editorPreparing"
-            aria-label="Loading current provider details"
-            class="vibe64-provider-editor__route"
-            rounded="lg"
-          >
-            <v-skeleton-loader type="heading, paragraph" />
-          </v-sheet>
-
-          <v-sheet v-else-if="editorConnectionPolicy" class="vibe64-provider-editor__route" rounded="lg">
-            <span>
-              <strong>{{ editorConnectionPolicy.routeLabel || editorConnectionPolicy.productLabel }}</strong>
-              <v-chip v-if="editorConnectionPolicy.accessLabel === 'Workspace use'" color="primary" size="x-small" variant="tonal">
-                {{ editorConnectionPolicy.accessLabel }}
-              </v-chip>
-              <AiPersonalUse v-else :provider-id="editorProviderId" />
-            </span>
-            <p>{{ editorRouteExplanation }}</p>
-          </v-sheet>
-
-          <v-text-field
-            v-model="editorApiKey"
-            autocomplete="new-password"
-            :disabled="editorSaving"
-            :error-messages="editorError ? [editorError] : []"
-            hint="Paste the key for this provider. It will not be shown again."
-            label="API key"
-            persistent-hint
-            :type="editorApiKeyVisible ? 'text' : 'password'"
-            variant="outlined"
-            @update:model-value="editorError = ''"
-          >
-            <template #append-inner>
-              <v-btn
-                :aria-label="editorApiKeyVisible ? 'Hide API key' : 'Show API key'"
-                :disabled="editorSaving"
-                :icon="editorApiKeyVisible ? mdiEyeOffOutline : mdiEyeOutline"
-                type="button"
-                variant="text"
-                @click="editorApiKeyVisible = !editorApiKeyVisible"
-              />
-            </template>
-          </v-text-field>
-
-          <AiWaitStatus :active="editorPreparing || editorSaving" :label="editorVerificationCopy" />
-          <div v-if="!editorPreparing && !editorSaving" aria-live="polite" class="vibe64-provider-editor__security">
-            <v-icon :icon="mdiLockOutline" size="18" />
-            <span>{{ editorVerificationCopy }}</span>
-          </div>
-
-          <v-alert
-            v-if="!editorPreparing && (!editorProviderRevision || !editorConnectionPolicy)"
-            text="Vibe64 could not confirm this provider's current OpenCode definition. Go back and try again."
-            title="Provider confirmation required"
-            type="warning"
-            variant="tonal"
-          />
-        </v-card-text>
+        <AiProviderKeyForm class="vibe64-provider-editor__body" />
         <v-card-actions class="vibe64-provider-editor__actions">
           <v-btn :disabled="editorSaving" type="button" variant="text" @click="closeEditor">{{ editorBackLabel }}</v-btn>
           <v-btn
@@ -569,15 +484,11 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-dialog-title,
-.vibe64-provider-editor__provider,
-.vibe64-provider-editor__route > span,
-.vibe64-provider-editor__security,
 .vibe64-provider-editor__recovery {
   display: flex;
 }
 
-.vibe64-add-ai__body > p,
-.vibe64-provider-editor__route p {
+.vibe64-add-ai__body > p {
   margin: 0;
 }
 
@@ -592,8 +503,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 .vibe64-provider-picker__body,
 .vibe64-provider-picker__empty,
 .vibe64-provider-picker__recovery,
-.vibe64-provider-editor__body,
-.vibe64-provider-editor__provider > span:last-child {
+.vibe64-provider-editor__body {
   display: grid;
 }
 
@@ -602,22 +512,6 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 .vibe64-provider-picker__recovery,
 .vibe64-provider-editor__body {
   gap: 1rem;
-}
-
-.vibe64-provider-editor__provider small {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.vibe64-provider-editor__route > span {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.vibe64-provider-editor__security {
-  align-items: center;
-  font-size: 0.8125rem;
-  gap: 0.5rem;
 }
 
 .vibe64-dialog-title {
@@ -696,32 +590,6 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 
 .vibe64-provider-picker__recovery .v-btn {
   justify-self: end;
-}
-
-.vibe64-provider-editor__provider {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.06);
-  border: 1px solid rgba(var(--v-theme-outline), var(--v-border-opacity));
-  gap: 0.75rem;
-  padding: 0.85rem;
-}
-
-.vibe64-provider-editor__provider > span:last-child {
-  gap: 0.1rem;
-}
-
-.vibe64-provider-editor__route {
-  background: rgba(var(--v-theme-primary), 0.06);
-  border: 1px solid rgba(var(--v-theme-outline), var(--v-border-opacity));
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.85rem;
-}
-
-.vibe64-provider-editor__route p {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.45;
 }
 
 .vibe64-provider-editor__recovery {

@@ -9,6 +9,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `packages/vibe64-voice/src/client/MercAvatar.vue`
 - `packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/MercIllustratedAvatar.vue`
+- `packages/vibe64-voice/src/client/mercAvatarMotion.css`
 - `packages/vibe64-voice/src/client/Vibe64AvatarSetting.vue`
 - `packages/vibe64-voice/src/shared/avatars.js`
 - `packages/vibe64-voice/src/shared/routes.js`
@@ -22,6 +23,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/composables/useVibe64AgentSettings.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-colleague/src/client/useColleagueVoicePreviews.js`
 - `src/App.vue`
 
 ## Public contract
@@ -37,6 +39,7 @@ JSKIT binding without replacing the conversation.
 The voice package owns the assistant avatar artwork: `Vibe64ColleagueAvatar`
 selects Merc (blond illustrated) or Yu (blue-haired manga) and animates blink,
 gestures, expressions and mouth from the host's mouthLevel/mouthPose/state.
+Both artworks share one layout and motion stylesheet; each keeps its own colours.
 Its catalogue (`shared/avatars`) supplies the saved IDs, chooser labels and the
 per-target defaults: Merc for Colleague, Yu for project agents.
 `Vibe64AvatarSetting` is the single Avatar chooser; a host supplies its value,
@@ -216,7 +219,7 @@ sending entries cannot be cancelled by these actions. A matching canonical user
 with receipt:false is unadmitted: it neither clears speech nor acknowledges a
 speech invitation. Accepted readback remains the original acknowledgement owner.
 The Public host directly projects the existing pending transcript and current
-recording as at most two previewMessages, deduplicated by exact ID; the singular
+recording (`useColleagueVoicePreviews.js`) as at most two previewMessages, deduplicated by exact ID; the singular
 previewMessage contract remains available. This is presentation, not a second
 queue or transcript store. Core matches a descriptor to each existing failed or
 synthetic preview row. The newer capture stays visible/discardable; its Edit is

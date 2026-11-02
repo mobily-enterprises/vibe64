@@ -43,16 +43,7 @@
         @init="initialize" @nodes-initialized="fitIfPending" @node-click="selectNode" @node-drag-start="dragging = true" @node-drag-stop="rearrangeSubsystem" @viewport-change="compact = $event.zoom < 0.5" @viewport-change-end="viewportChanged" @pane-click="clearSelection"
       >
         <template #node-page="{ data, selected }">
-          <article class="storyboard-page" :class="{ 'storyboard-page--compact': compact, 'storyboard-page--root': !data.parentId, 'storyboard-page--selected': selected, 'architecture-context': expandedSubsystemId && data.id !== selectedPageId }" :title="[data.title, ...data.identities, data.file].filter(Boolean).join('\n')">
-            <Handle v-if="data.parentId" id="parent" type="target" :position="Position.Top" />
-            <div class="storyboard-page__meta"><span>{{ data.kind }}</span><span>{{ data.surface }}</span><button v-if="data.file" type="button" class="storyboard-page__usage nodrag nopan" :aria-label="`Show usage of ${data.title}`" @click.stop="showUsage({ q: data.file })">Show usage</button></div>
-            <h2>{{ data.title }}</h2>
-            <div v-if="data.identities.length" class="storyboard-page__routes"><span v-for="identity in data.identities" :key="identity">{{ identity }}</span></div>
-            <p v-else class="storyboard-page__unregistered">No navigation identity recorded</p>
-            <span v-if="data.unresolvedCalls" class="storyboard-page__unresolved">{{ data.unresolvedCalls }} unresolved calls</span>
-            <Handle v-if="data.callCount" id="engine-out" type="source" :position="Position.Right" />
-            <Handle v-if="data.childCount" id="children" type="source" :position="Position.Bottom" />
-          </article>
+          <Vibe64ArchitecturePageNode :data="data" :selected="selected" :compact="compact" :context="Boolean(expandedSubsystemId) && data.id !== selectedPageId" @show-usage="showUsage" />
         </template>
         <template #node-external-dependencies="{ data }">
           <aside class="external-dependencies" aria-label="External dependencies">
@@ -86,30 +77,7 @@
           </div>
         </template>
         <template #node-subsystem="{ data, selected }">
-          <article
-            class="engine-subsystem" :class="{ 'engine-subsystem--compact': compact, 'engine-subsystem--library': data.library, 'engine-subsystem--support': data.placementKind === 'support', 'engine-subsystem--entry': data.entryFiles.length, 'engine-subsystem--cycle': data.cycleLabel, 'engine-subsystem--selected': selected, 'engine-subsystem--expanded': data.expanded, 'architecture-context': expandedSubsystemId && !data.expanded }"
-            :title="`${data.root}\n${data.description || 'Description not recorded.'}${data.sourceLines != null ? '\n' + data.sourceLines.toLocaleString() + ' measured source lines' : ''}${data.cycleLabel ? '\n' + data.cycleLabel : ''}${data.entryFiles.length ? '\nEntry files: ' + data.entryFiles.join(', ') : ''}`"
-          >
-            <template v-for="port in ports" :key="port.id"><Handle :id="port.id" :type="port.type" :position="port.position" /></template>
-            <Handle
-              v-for="(receiver, index) in data.receivers || []" :key="receiver.id" :id="`controller:${receiver.id}`" type="target" :position="Position.Left"
-              :style="{ top: `${(index + 1) * 100 / (data.receivers.length + 1)}%` }"
-            />
-            <span v-if="data.arrangeable" class="engine-subsystem__grip" role="button" tabindex="0" aria-label="Rearrange subsystem" title="Drag to arrange. Arrow keys move sideways." @keydown.left.stop.prevent="moveSubsystem(data.id, -1)" @keydown.right.stop.prevent="moveSubsystem(data.id, 1)" @dblclick.stop>⠿</span>
-            <div class="engine-subsystem__content">
-              <div v-if="data.entryFiles.length" class="engine-subsystem__start">Start here</div>
-              <div class="engine-subsystem__meta"><span>{{ data.library ? 'Shared library' : data.opaque ? 'Opaque package' : data.entryFiles.length ? 'Entry point' : data.provenance === 'fallback' ? 'Directory group' : 'Subsystem' }}</span><span v-if="data.version">{{ data.version }}</span></div>
-              <h2>{{ data.title }}</h2>
-              <div v-if="data.root" class="engine-subsystem__directory">{{ data.root }}</div>
-              <p class="engine-subsystem__description">{{ data.description || (data.opaque ? 'Public package boundary. Internals stay opaque.' : 'Description not recorded.') }}</p>
-              <div class="engine-subsystem__api" :title="data.publicSummary">{{ data.publicSummary }}</div>
-              <div class="engine-subsystem__size" :title="data.opaque ? 'Package internals are not measured.' : `${data.measuredFiles} of ${data.fileIds.length} files measured; physical source lines include comments and blanks. Card area has a readability floor.`">
-                {{ data.opaque ? 'Unmeasured package' : data.sourceLines == null ? 'Size unavailable' : `${data.sizePartial ? '~' : ''}${data.sourceLines.toLocaleString()} source lines` }}<span v-if="!data.opaque"> · {{ data.fileIds.length }} files</span>
-              </div>
-              <div v-if="data.receivers?.length" class="engine-subsystem__receivers"><span v-for="receiver in data.receivers.slice(0, 2)" :key="receiver.id" :title="receiver.path">↳ {{ receiver.path.split('/').pop() }}</span><span v-if="data.receivers.length > 2" :title="data.receivers.map(receiver => receiver.path).join('\n')">+ {{ data.receivers.length - 2 }} receiving files</span></div>
-            </div>
-            <div v-if="data.cycleLabel" class="engine-subsystem__warning" role="img" :aria-label="data.cycleLabel" :title="data.cycleLabel">{{ data.cycleLabel }}</div>
-          </article>
+          <Vibe64ArchitectureSubsystemNode :data="data" :selected="selected" :compact="compact" :context="Boolean(expandedSubsystemId) && !data.expanded" @move="moveSubsystem(data.id, $event)" />
         </template>
         <template #edge-controller="edge">
           <BaseEdge :id="edge.id" :path="controllerPath(edge)" :marker-end="edge.markerEnd" :style="edge.style" :interaction-width="18" />
@@ -144,13 +112,15 @@
 
 <script setup>
 import { computed, markRaw, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, toRef, unref, watch } from 'vue';
-import { BaseEdge, Handle, MarkerType, Position, VueFlow } from '@vue-flow/core';
-import { useRoute, useRouter } from 'vue-router';
+import { BaseEdge, MarkerType, VueFlow } from '@vue-flow/core';
 import { useVibe64SystemGraph } from '../composables/useVibe64SystemGraph.js';
 import Vibe64UsageView from '../usage/Vibe64UsageView.vue';
-import { sameQuery, sameUsageState, usageQueryFor, usageStateFromQuery } from '../usage/usageModel.js';
+import { usageStateFromQuery } from '../usage/usageModel.js';
+import { useVibe64UsageState } from '../usage/useVibe64UsageState.js';
 import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
 import Vibe64ProgramInspector from './Vibe64ProgramInspector.vue';
+import Vibe64ArchitecturePageNode from './Vibe64ArchitecturePageNode.vue';
+import Vibe64ArchitectureSubsystemNode from './Vibe64ArchitectureSubsystemNode.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
 const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: { type: Object, default: null }, restoreRequest: { type: Object, default: null }, usageOpenRequest: { type: Object, default: null } });
@@ -158,15 +128,9 @@ const { architecture, error, loading, refreshing, refreshProgress, refreshOutput
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion')
 });
 const emit = defineEmits(['inspect-file', 'open-source-file', 'select-preview']);
-// The system dashboard route's query keeps Usage's state, so a reload reopens
-// the same entry, mode, subsystem, recording and request.
-const route = useRoute();
-const router = useRouter();
-const usageState = ref(usageStateFromQuery(route?.query));
-const usageMounted = ref(usageState.value.view === 'usage');
-const usageFind = shallowRef(null);
-const usageSnapshotKey = computed(() => [architecture.value?.sourceHash, architecture.value?.callWeb?.identity].filter(Boolean).join(':'));
-const onSystemRoute = computed(() => props.active && /\/dashboard\/system\/?$/u.test(route?.path || ''));
+const { usageState, usageMounted, usageFind, usageSnapshotKey } = useVibe64UsageState({
+  props, architecture, onMapShown: () => { if (fitPending) void nextTick(() => fit(initialIds.value)); }
+});
 const canvas = ref(null);
 const dismissedError = ref('');
 watch(error, () => { dismissedError.value = ''; });
@@ -515,12 +479,6 @@ const externalCount = ref(0);
 const initialIds = ref([]);
 const contentCount = computed(() => uiIds.value.length + engineIds.value.length);
 const entryWarning = computed(() => architecture.value?.layoutDiagnostic || architecture.value?.entryPointDiagnostic || ((architecture.value?.layout?.groups || []).flatMap(group => group.subsystems).some(member => !(architecture.value?.subsystems || []).some(owner => !owner.opaque && owner.root === member.root)) ? 'Some declared architecture roots are not indexed. Re-scan project or correct their Stack paths.' : (architecture.value?.entryPoints || []).some(entry => entry.resolution !== 'resolved') ? 'Some declared entry files are not indexed. Re-scan project or correct their Stack paths.' : ''));
-const ports = [
-  ['top-in', 'target', Position.Top], ['bottom-out', 'source', Position.Bottom],
-  ['top-out', 'source', Position.Top], ['bottom-in', 'target', Position.Bottom],
-  ['left-in', 'target', Position.Left], ['left-out', 'source', Position.Left],
-  ['right-in', 'target', Position.Right], ['right-out', 'source', Position.Right]
-].map(([id, type, position]) => ({ id, type, position }));
 function controllerPath(edge) {
   const { sourceX, sourceY, targetX, targetY } = edge;
   return `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
@@ -638,12 +596,8 @@ watch(canvas, (element, previous, onCleanup) => {
 }, { flush: 'post' });
 onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 
-// Map | Usage: Usage's watchers and actions follow the Map code below.
+// Map | Usage: leaving Usage remembers its state, so returning (or Show usage) resumes it.
 let usageMemory = null;
-watch(() => usageState.value.view, view => {
-  if (view === 'usage') usageMounted.value = true;
-  else if (fitPending) void nextTick(() => fit(initialIds.value));
-});
 function setArchitectureView(view) {
   if (!view || view === usageState.value.view) return;
   if (view === 'map') { usageMemory = usageState.value; usageState.value = usageStateFromQuery({}); }
@@ -659,31 +613,6 @@ function showUsageForDetail(owner) {
   if (currentProgram.value) return showUsage({ q: currentProgram.value.title, kind: 'program-operation' });
   return showUsage({ q: owner.root && owner.root !== '.' ? `${owner.root}/` : '' });
 }
-watch([usageState, onSystemRoute], ([state, onRoute]) => {
-  if (!onRoute || !router) return;
-  const query = usageQueryFor(route.query, state);
-  if (!sameQuery(query, route.query)) void router.replace({ query });
-}, { immediate: true });
-watch(() => route?.query, query => {
-  // A query without Usage keys (a plain tool switch) keeps the current view.
-  if (!onSystemRoute.value || !query?.view) return;
-  const next = usageStateFromQuery(query);
-  if (!sameUsageState(next, usageState.value)) usageState.value = next;
-});
-let handledUsageOpen = null;
-watch(() => props.usageOpenRequest, request => {
-  if (!request || request === handledUsageOpen) return;
-  handledUsageOpen = request;
-  usageState.value = usageStateFromQuery({ view: 'usage', mode: request.mode || 'recording', entry: request.entryId, recording: request.recordingId, request: request.requestId });
-  // An entry opened from elsewhere (Pick in Preview) is also searched for in the list.
-  if (request.entryId && usageState.value.mode !== 'recording') usageFind.value = { entryId: request.entryId };
-}, { immediate: true });
-let handledRestore = null;
-watch(() => props.restoreRequest, request => {
-  if (!request?.usage || request === handledRestore) return;
-  handledRestore = request;
-  usageState.value = usageStateFromQuery({ ...request.usage, view: 'usage' });
-}, { immediate: true });
 </script>
 
 <style>
@@ -700,9 +629,6 @@ watch(() => props.restoreRequest, request => {
 .ui-storyboard__actions { display: flex; align-items: center; gap: 4px; }
 .ui-storyboard__views { flex: none; }
 .ui-storyboard__usage { flex: 1; min-height: 0; }
-.storyboard-page__usage { margin-left: auto; color: #367e70; cursor: pointer; text-transform: none; letter-spacing: normal; font-size: 11px; border-radius: 4px; padding: 0 4px; }
-.storyboard-page__usage:hover { background: #dcece6; }
-.storyboard-page__usage:focus-visible { outline: 2px solid #377dcb; }
 .ui-storyboard__canvas { --diagram-label-scale: 2.5; container-type: size; position: relative; flex: 1; min-height: 0; outline: none; overflow: hidden; background-color: #f6f8fb; background-image: radial-gradient(#ced7e2 .8px, transparent .8px); background-size: 22px 22px; }
 .ui-storyboard__canvas :deep(.vue-flow) { height: 100%; }
 .ui-storyboard__canvas :deep(.vue-flow__edge-path) { vector-effect: non-scaling-stroke; }
@@ -726,27 +652,12 @@ watch(() => props.restoreRequest, request => {
 .subsystem-zoom__navigation-hint { flex: none; margin: 0; padding: 3px 18px; font-size: 11px; line-height: 16px; color: #69817d; border-bottom: 1px solid #edf2f0; }
 .subsystem-zoom__file { height: min(720px, 75vh); min-height: 0; overflow: hidden; }
 .subsystem-zoom__file :deep(.vibe64-source-editor) { height: 100%; }
-.storyboard-page { width: 100%; height: 100%; padding: 18px 20px; border: 1px solid #ccd6e2; border-radius: 12px; background: #fff; color: #213549; box-shadow: 0 3px 12px #30465d0b; }
-.storyboard-page--root { border-top: 4px solid #4582c1; padding-top: 15px; }
-.storyboard-page--selected { border-color: #377dcb; box-shadow: 0 0 0 3px #377dcb22; }
-.storyboard-page__meta { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; letter-spacing: .04em; color: #6e8195; text-transform: uppercase; }
-.storyboard-page h2 { margin: 10px 0 6px; font-size: 19px; font-weight: 650; line-height: 26px; overflow-wrap: anywhere; }
-.storyboard-page__routes { display: flex; flex-direction: column; font-family: ui-monospace, monospace; font-size: 12px; line-height: 20px; color: #4b6985; overflow-wrap: anywhere; }
-.storyboard-page__unregistered { margin: 0; font-size: 11px; color: #7a8b9b; }
-.storyboard-page :deep(.vue-flow__handle) { width: 6px; height: 6px; border: 0; background: #93a7ba; pointer-events: none; }
 .ui-storyboard__legend { position: absolute; bottom: 16px; left: 20px; right: 20px; display: flex; justify-content: space-between; gap: 12px; pointer-events: none; font-size: 11px; color: #6d8094; }
 .ui-storyboard__error { position: absolute; z-index: 12; top: 12px; left: 12px; max-width: min(520px, calc(100% - 24px)); flex: none; font-size: 12px; }
 .ui-storyboard__empty { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; text-align: center; padding: 24px; pointer-events: none; }
 .ui-storyboard__empty button { pointer-events: auto; }
 .ui-storyboard__empty h2 { margin: 0 0 8px; font-size: 20px; }
 .ui-storyboard__empty p { max-width: 420px; margin: 0; font-size: 14px; }
-.engine-subsystem { position: relative; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%; background: #fff; color: #213c40; border: 1px solid #bfcfce; border-radius: 50%; box-shadow: 0 3px 12px #30465d0b; }
-.engine-subsystem__content { width: 72%; min-width: 0; }
-.engine-subsystem--entry { border-color: #4b9386; border-width: 2px; }
-.engine-subsystem__start { color: #34796e; font-size: 12px; font-weight: 650; margin-bottom: 6px; }
-.engine-subsystem--support { background: #f0f2f5; border-style: dashed; color: #64717e; box-shadow: none; }
-.engine-subsystem--support .engine-subsystem__directory { color: #64717e; }
-.engine-subsystem--cycle { border-color: #c69a6f; background: #fffdf9; }
 .external-dependencies { width: 100%; height: 100%; border: 1px solid #afbfce; border-radius: 10px; background: #f0f4f9; color: #304b64; overflow: hidden; }
 .external-dependencies header { height: 98px; padding: 18px 20px; border-bottom: 1px solid #d5dfe9; }
 .external-dependencies h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 650; }
@@ -755,28 +666,8 @@ watch(() => props.restoreRequest, request => {
 .external-dependencies button { display: block; width: 100%; padding: 7px 12px; border: 0; border-bottom: 1px solid #dde5ed; border-radius: 4px; text-align: left; font: 15px/22px ui-monospace, monospace; overflow-wrap: anywhere; color: inherit; cursor: pointer; }
 .external-dependencies button:hover { background: #dfe9f3; color: #245e90; }
 .external-dependencies button:focus-visible { outline: 2px solid #377dcb; outline-offset: -2px; }
-.engine-subsystem--overview { position: relative; display: flex; flex-direction: column; justify-content: center; padding: 12px 16px; border-radius: 7px; box-shadow: none; }
-.engine-subsystem--overview h2 { margin: 0; font-size: 17px; line-height: 20px; }
-.engine-subsystem--overview .engine-subsystem__meta,
-.engine-subsystem--overview .engine-subsystem__directory,
-.engine-subsystem--overview .engine-subsystem__description,
-.engine-subsystem--overview .engine-subsystem__size,
-.engine-subsystem--overview .engine-subsystem__receivers { display: none; }
-.engine-subsystem--overview .engine-subsystem__warning { position: absolute; top: 6px; right: 22px; margin: 0; width: 6px; height: 6px; border-radius: 50%; background: #ba8459; font-size: 0; }
-.engine-subsystem__volume { position: absolute; bottom: 0; left: 0; height: 3px; max-width: 100%; background: #6f9b91; border-radius: 0 0 3px 3px; }
-.engine-subsystem--overview .engine-subsystem__grip { font-size: 14px; top: 2px; right: 2px; padding: 0 3px; }
-.engine-subsystem--selected { box-shadow: 0 0 0 3px #4b938633; border-color: #4b9386; }
-.engine-subsystem__meta { display: flex; justify-content: center; gap: 8px; color: #6b8987; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
-.engine-subsystem h2 { margin: 8px 0 5px; font-size: 18px; line-height: 24px; font-weight: 650; overflow-wrap: anywhere; }
-.engine-subsystem__directory { font-family: ui-monospace, monospace; font-size: 11px; line-height: 17px; color: #4d7772; overflow-wrap: anywhere; }
-.engine-subsystem__description { margin: 10px 0 8px; font-size: 12px; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.engine-subsystem__size { font-size: 11px; line-height: 17px; color: #708583; }
-.storyboard-page__unresolved { font-size: 10px; color: #94602f; }
-.engine-subsystem__receivers { display: flex; flex-direction: column; margin-top: 5px; font-family: ui-monospace, monospace; font-size: 10px; color: #7954b3; }
 .controller-call-label { overflow: visible; }
 .controller-call-label div { width: max-content; max-width: 330px; padding: 2px 5px; border-radius: 4px; background: #f6f0ff; color: #68469e; font: 10px/18px ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.engine-subsystem__warning { margin-top: 6px; color: #94602f; font-size: 10px; }
-.engine-subsystem :deep(.vue-flow__handle) { width: 5px; height: 5px; background: #7895a4; border: 0; pointer-events: none; opacity: 0; }
 .architecture-annotation { height: 100%; width: 100%; pointer-events: none; color: #6f8392; }
 .architecture-annotation--heading { pointer-events: auto; user-select: none; cursor: default; display: flex; align-items: baseline; gap: 14px; padding: 4px 0; }
 .architecture-annotation--heading strong { font-size: 22px; color: #29475a; font-weight: 650; }
@@ -786,25 +677,6 @@ watch(() => props.restoreRequest, request => {
 .architecture-annotation--layer span { width: calc(var(--layer-label-width) - 24px); font-size: 10px; line-height: 14px; }
 .architecture-annotation--divider { background: #c2d0dc; }
 .ui-storyboard__notice { position: absolute; top: 12px; left: 12px; max-width: 460px; padding: 8px 12px; background: #fff7e9; color: #875829; font-size: 12px; border-radius: 6px; }
-.engine-subsystem__grip { position: absolute; top: 14%; right: 14%; padding: 2px 5px; font-size: 18px; line-height: 22px; color: #87a09b; cursor: grab; border-radius: 4px; touch-action: none; }
-.engine-subsystem__grip:hover { color: #336d60; background: #e9f3ee; }
-.engine-subsystem__grip:active { cursor: grabbing; }
-.engine-subsystem__grip:focus-visible { outline: 2px solid #377dcb; }
-.engine-subsystem--compact h2 { font-size: calc(14px * var(--diagram-label-scale)); line-height: 1.15; margin: 0 0 8px; }
-.engine-subsystem--compact .engine-subsystem__directory { font-size: calc(8px * var(--diagram-label-scale)); line-height: 1.25; }
-.engine-subsystem--compact .engine-subsystem__start { font-size: calc(9px * var(--diagram-label-scale)); }
-.engine-subsystem--compact .engine-subsystem__meta,
-.engine-subsystem--compact .engine-subsystem__description, .engine-subsystem--compact .engine-subsystem__receivers,
-.engine-subsystem--compact .engine-subsystem__warning { display: none; }
-.engine-subsystem--compact .engine-subsystem__size { font-size: calc(9px * var(--diagram-label-scale)); line-height: 1.3; }
-.engine-subsystem--compact .engine-subsystem__grip { font-size: calc(12px * var(--diagram-label-scale)); }
-.engine-subsystem--overview.engine-subsystem--compact h2 { font-size: 17px; line-height: 20px; max-height: none; overflow: visible; margin: 0; }
-.engine-subsystem--overview.engine-subsystem--compact { padding: 12px 16px; }
-.engine-subsystem--overview.engine-subsystem--compact .engine-subsystem__grip { font-size: 14px; }
-.engine-subsystem--declared .engine-subsystem__directory { display: block; margin-top: 5px; }
-.engine-subsystem__api { margin-top: 7px; color: #557c75; font-size: 11px; line-height: 17px; }
-.engine-subsystem--library { border-color: #7b70aa; background: #fdfcff; }
-.engine-subsystem--library .engine-subsystem__description { display: -webkit-box; margin: 7px 0 0; -webkit-line-clamp: 2; }
 .architecture-annotation--libraries { padding: 8px 4px; }
 .architecture-annotation--libraries strong { display: block; font-size: 22px; color: #60528a; }
 .architecture-annotation--libraries span { display: block; font-size: 12px; margin-top: 5px; }
@@ -812,12 +684,5 @@ watch(() => props.restoreRequest, request => {
 .architecture-annotation--support strong, .architecture-annotation--support span { display: block; width: calc(var(--layer-label-width) - 24px); }
 .architecture-annotation--support strong { font-size: 16px; color: #657282; }
 .architecture-annotation--support span { font-size: 11px; line-height: 17px; margin-top: 6px; }
-.engine-subsystem h2, .engine-subsystem__directory, .engine-subsystem__description, .engine-subsystem__api { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.engine-subsystem__api { -webkit-line-clamp: 1; }
-.engine-subsystem--compact .engine-subsystem__size, .engine-subsystem--compact .engine-subsystem__api { display: none; }
-.storyboard-page--compact { display: flex; flex-direction: column; justify-content: center; padding: 12px; }
-.storyboard-page--compact h2 { font-size: 19px; line-height: 26px; margin: 0 0 6px; overflow-wrap: anywhere; }
-.storyboard-page--compact .storyboard-page__meta, .storyboard-page--compact .storyboard-page__unregistered { display: none; }
-.storyboard-page--compact .storyboard-page__routes { font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .ui-storyboard__toolbar { gap: 4px 6px; padding: 4px 8px; } .ui-storyboard__heading { display: contents; } .ui-storyboard__heading p { order: 1; flex-basis: 100%; } .ui-storyboard__actions { margin-left: auto; } .ui-storyboard__legend { left: 12px; bottom: 10px; } .ui-storyboard__legend span { display: none; } }
 </style>

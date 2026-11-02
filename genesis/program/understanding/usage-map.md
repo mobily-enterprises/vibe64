@@ -21,6 +21,7 @@ reach, or the functions one recorded request actually ran. Architecture shows it
 - `packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue`
 - `packages/vibe64-system-graph/src/client/usage/usageModel.js`
 - `packages/vibe64-system-graph/src/client/usage/useVibe64UsageWeb.js`
+- `packages/vibe64-system-graph/src/client/usage/useVibe64UsageState.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
 - `tests/fixtures/usage-map/machine-city.json`
 - `tests/fixtures/usage-map/call-web.json`

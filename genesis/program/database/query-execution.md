@@ -18,6 +18,16 @@ connection and share one query-ownership boundary.
 - `packages/vibe64-database-tools/src/server/sessionQueries.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
+- `packages/vibe64-database-tools/src/client/composables/useDatabaseTableQueries.js`
+- `packages/vibe64-database-tools/src/client/components/DatabaseQueryEditor.vue`
+- `packages/vibe64-database-tools/src/client/components/DatabaseFilterDialog.vue`
+- `packages/vibe64-database-tools/src/client/components/DatabaseQueryResults.vue`
+- `packages/vibe64-database-tools/src/client/queryResultCells.js`
+- `packages/vibe64-database-tools/src/client/databaseText.js`
+- `packages/vibe64-database-tools/src/client/composables/useDatabaseRowEditing.js`
+- `packages/vibe64-database-tools/src/client/components/DatabaseRowDialogs.vue`
+- `packages/vibe64-database-tools/src/client/composables/useDatabaseCopilot.js`
+- `packages/vibe64-database-tools/src/client/components/DatabaseCopilotPanel.vue`
 - Main: `packages/vibe64-database-tools/src/server/queryExecutor.js`
 - `packages/vibe64-database-tools/src/server/sqlPolicy.js`
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`

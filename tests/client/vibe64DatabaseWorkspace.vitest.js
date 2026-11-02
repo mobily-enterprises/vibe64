@@ -49,16 +49,31 @@ vi.mock("vuetify/components/VCard", () => ({
 }));
 
 import Vibe64DatabaseWorkspace from "../../packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue";
+import DatabaseCopilotPanel from "../../packages/vibe64-database-tools/src/client/components/DatabaseCopilotPanel.vue";
+import DatabaseFilterDialog from "../../packages/vibe64-database-tools/src/client/components/DatabaseFilterDialog.vue";
+import DatabaseNavigator from "../../packages/vibe64-database-tools/src/client/components/DatabaseNavigator.vue";
+import DatabaseQueryEditor from "../../packages/vibe64-database-tools/src/client/components/DatabaseQueryEditor.vue";
+import DatabaseQueryResults from "../../packages/vibe64-database-tools/src/client/components/DatabaseQueryResults.vue";
+import DatabaseRowDialogs from "../../packages/vibe64-database-tools/src/client/components/DatabaseRowDialogs.vue";
 
-// Real component setup/template; database operations and heavyweight presentation stay at test boundaries.
-const filename = new URL(
-  "../../packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue", import.meta.url
-).pathname;
-const { descriptor } = parse(readFileSync(filename, "utf8"), { filename });
-const script = compileScript(descriptor, { id: "database-workspace-test" });
-Vibe64DatabaseWorkspace.render = new Function("Vue", compile(descriptor.template.content, {
-  bindingMetadata: script.bindings, mode: "function", prefixIdentifiers: true
-}).code)(Vue);
+// Real component setups/templates for the workspace and its parts; database operations and heavyweight
+// presentation stay at test boundaries.
+for (const [component, file] of [
+  [Vibe64DatabaseWorkspace, "Vibe64DatabaseWorkspace.vue"],
+  [DatabaseCopilotPanel, "DatabaseCopilotPanel.vue"],
+  [DatabaseFilterDialog, "DatabaseFilterDialog.vue"],
+  [DatabaseNavigator, "DatabaseNavigator.vue"],
+  [DatabaseQueryEditor, "DatabaseQueryEditor.vue"],
+  [DatabaseQueryResults, "DatabaseQueryResults.vue"],
+  [DatabaseRowDialogs, "DatabaseRowDialogs.vue"]
+]) {
+  const filename = new URL(`../../packages/vibe64-database-tools/src/client/components/${file}`, import.meta.url).pathname;
+  const { descriptor } = parse(readFileSync(filename, "utf8"), { filename });
+  const script = compileScript(descriptor, { id: "database-workspace-test" });
+  component.render = new Function("Vue", compile(descriptor.template.content, {
+    bindingMetadata: script.bindings, mode: "function", prefixIdentifiers: true
+  }).code)(Vue);
+}
 
 function passthroughComponent(element) {
   return Vue.defineComponent({
