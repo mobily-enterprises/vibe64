@@ -14,6 +14,7 @@ choice into machine-local Vibe64 metadata.
 - Main: `packages/vibe64-project/src/server/projectSettings.js`
 - `packages/vibe64-project/src/server/service.js`
 - `src/components/studio/ProjectSettingsPanel.vue`
+- `src/composables/useVibe64EngineeringSettings.js`
 - `src/lib/studioGateApi.js`
 - `src/lib/studioUrls.js`
 

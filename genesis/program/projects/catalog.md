@@ -65,6 +65,7 @@ workspace.
 - `src/pages/app/project/[slug].vue`
 - `tests/server/mobilePaneSwipe.unit.test.js`
 - `src/components/studio/ProjectSelectionGate.vue`
+- `src/composables/useVibe64DevelopmentDatabaseSettings.js`
 - `packages/vibe64-terminals/src/server/serviceProjectRuntime.js`
 - `packages/vibe64-terminals/src/server/projectRuntimeDormancy.js`
 - `packages/vibe64-core/src/server/projectRuntimeOpenState.js`

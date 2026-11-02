@@ -21,7 +21,10 @@ describe("Env panel", () => {
 
   it("keeps managed database lifetime separate from application Env", () => {
     const envSource = componentSource("src/components/studio/EnvPanel.vue");
-    const settingsSource = componentSource("src/components/studio/ProjectSettingsPanel.vue");
+    const settingsSource = [
+      componentSource("src/components/studio/ProjectSettingsPanel.vue"),
+      readFileSync("src/composables/useVibe64DevelopmentDatabaseSettings.js", "utf8")
+    ].join("\n");
 
     expect(envSource).not.toContain("Development database");
     expect(settingsSource).toContain("A separate database for each session");
