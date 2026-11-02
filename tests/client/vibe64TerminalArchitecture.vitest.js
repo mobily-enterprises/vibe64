@@ -7,6 +7,7 @@ const packageRoot = path.resolve("packages");
 const terminalRuntimePath = path.resolve("src/composables/useVibe64Terminal.js");
 const terminalElementPath = path.resolve("src/components/studio/Vibe64Terminal.vue");
 const terminalSurfacePath = path.resolve("src/components/studio/Vibe64TerminalSurface.vue");
+const terminalTakeoverPath = path.resolve("src/composables/useVibe64TerminalMobileTakeover.js");
 
 function clientSourceFiles(root) {
   if (!existsSync(root)) {
@@ -93,6 +94,7 @@ describe("Vibe64 terminal architecture", () => {
   it("keeps compact output and terminal controls in the shared presentation seam", () => {
     const element = readFileSync(terminalElementPath, "utf8");
     const surface = readFileSync(terminalSurfacePath, "utf8");
+    const takeover = readFileSync(terminalTakeoverPath, "utf8");
 
     expect(surface).toContain('class="vibe64-terminal-surface__summary"');
     expect(surface).toContain('terminalLastMeaningfulLine(props.output)');
@@ -103,11 +105,11 @@ describe("Vibe64 terminal architecture", () => {
     expect(surface).toContain('<Teleport :disabled="!mobileTakeoverActive" to="body">');
     expect(surface).toContain(":aria-modal=\"mobileTakeoverActive ? 'true' : undefined\"");
     expect(surface).toContain(":role=\"mobileTakeoverActive ? 'dialog' : 'region'\"");
-    expect(surface).toContain("document.body.style.overflow = \"hidden\";");
-    expect(surface).toContain("record.element.inert = true;");
-    expect(surface).toContain("takeoverPendingRestoreTarget = document.activeElement !== document.body");
-    expect(surface).toContain("takeoverRestoreTarget = takeoverPendingRestoreTarget || document.activeElement;");
-    expect(surface).toContain('event.key === "Escape"');
+    expect(takeover).toContain("document.body.style.overflow = \"hidden\";");
+    expect(takeover).toContain("record.element.inert = true;");
+    expect(takeover).toContain("takeoverPendingRestoreTarget = document.activeElement !== document.body");
+    expect(takeover).toContain("takeoverRestoreTarget = takeoverPendingRestoreTarget || document.activeElement;");
+    expect(takeover).toContain('event.key === "Escape"');
     expect(surface).toContain('default: false');
     expect(surface).toContain('@media (pointer: coarse)');
     expect(surface).not.toContain(':loading="starting"');
