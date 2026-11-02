@@ -24,6 +24,8 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64ArchitecturePageNode.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64ArchitectureSubsystemNode.vue`
 - `packages/vibe64-system-graph/src/client/architectureModel.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue`
