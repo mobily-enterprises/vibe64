@@ -35,10 +35,10 @@ import {
   assistantWorkflowUpgradeChanges
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
+  __testables as routingAssignmentsTestables,
   recommendedRoutingAssignments,
   routingAssignmentSelection,
   routingModelChoices,
-  routingModelScore,
   routingRunsInChoices,
   resolveAssistantPurpose
 } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
@@ -49,6 +49,7 @@ import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRou
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const { MAIN_CHAT_PURPOSES } = __testables;
+const { routingModelScore } = routingAssignmentsTestables;
 
 const revision = `sha256:${"a".repeat(64)}`;
 function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engineId = "codex") {

@@ -445,8 +445,5 @@ async function validateRecoveryBundle({
 export {
   recoveryDetailsFromSession,
   saveSessionSourceRecovery,
-  validateRecoveryBundle,
-  writeBranchRecoveryBundle,
-  writeCheckpointRecoveryBundle,
-  writeDirtyRecoveryArtifacts
+  validateRecoveryBundle
 };

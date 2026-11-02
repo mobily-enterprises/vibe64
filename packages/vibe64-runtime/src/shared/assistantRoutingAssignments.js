@@ -354,12 +354,14 @@ function resolveAssistantPurpose({
   }
 }
 
+const __testables = Object.freeze({ routingModelScore });
+
 export {
   hasConnectedAssistantModels,
   recommendedRoutingAssignments,
   resolveAssistantPurpose,
   routingAssignmentSelection,
   routingModelChoices,
-  routingModelScore,
-  routingRunsInChoices
+  routingRunsInChoices,
+  __testables
 };

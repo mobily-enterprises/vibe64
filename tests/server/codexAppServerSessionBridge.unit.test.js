@@ -8,13 +8,16 @@ import test from "node:test";
 import { MINIMUM_CODEX_VERSION } from "@local/vibe64-runtime/server/minimumCodexVersion";
 import {
   __testables as codexAppServerSessionBridgeTestables,
-  assertCodexAppServerHelperCompatibility,
   assertCodexAppServerHelperOutputWithinLimit,
-  codexAppServerHelperThreadSettings,
-  codexAppServerHelperTurnSettings,
-  codexAppServerThreadStartSettings,
+  codexAppServerHelperIsolation,
   codexAppServerThreadSettings,
-  codexAppServerTurnSettings,
+  codexAppServerTurnSettings
+} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import {
+  __testables as codexAppServerHelperThreadsTestables,
+  codexAppServerThreadStartSettings
+} from "@local/vibe64-runtime/server/codexAppServerHelperThreads";
+import {
   ensureCodexAppServerThreadForSession,
   prepareCodexAppServerHelperThreadStartSettings,
   resumeCodexAppServerHelperThread,
@@ -23,7 +26,7 @@ import {
   sendCodexAppServerPromptForSession,
   startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession
-} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+} from "./codexAppServerTestHelpers.js";
 import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
@@ -469,7 +472,7 @@ test("Codex helper accepts the minimum and newer patch, minor and major versions
     `${major + 1}.0.0`
   ]) {
     const provider = helperInventoryProvider({ userAgent: `vibe64/${version} (unit test)` });
-    assert.deepEqual(assertCodexAppServerHelperCompatibility(provider), {
+    assert.deepEqual(codexAppServerHelperIsolation.assertCompatibility(provider), {
       minimumVersion: MINIMUM_CODEX_VERSION,
       version
     });
@@ -2652,6 +2655,7 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
 const { codexAppServerIdentityMetadata } = codexAppServerSessionBridgeTestables;
+const { codexAppServerHelperThreadSettings, codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 const { VIBE64_CODEX_SPARK_MODEL } = agentSettingsTestables;
 
 const boundLearningSchemas = { schemas: [{ type: "function", function: {

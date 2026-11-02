@@ -8,7 +8,7 @@ import { createSessionAttachments } from "../../packages/vibe64-terminals/src/se
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { prepareCodexAttachmentStorage } from "../../packages/vibe64-terminals/src/server/codexAttachments.js";
 import { codexTurnInput } from "@jskit-ai/assistant-core/server/codex-provider";
-import { sendCodexAppServerPromptForSession } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+import { sendCodexAppServerPromptForSession } from "./codexAppServerTestHelpers.js";
 import { createOpenCodeServerClient } from "@jskit-ai/assistant-core/testing/native-opencode";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";

@@ -10,7 +10,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 
-import { CodexAppServerAgentProvider, startCodexAppServerProcess } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { startCodexAppServerProcess } from "./codexAppServerTestHelpers.js";
 import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 
@@ -104,7 +105,7 @@ test("native Codex code-mode commands enter the session execution wrapper", {
   await client.connect();
   await client.initialize();
   client.subscribe((event) => events.push(event));
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => client;
   const config = await codexAppServerProjectHookTrustConfig(provider, cwd);
   assert.ok(config?.["hooks.state"]?.["/<session-flags>/config.toml:pre_tool_use:0:0"], "Native Codex must discover and trust the managed hook");

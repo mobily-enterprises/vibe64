@@ -56,8 +56,6 @@ function assertSourceInspectionHealthy(inspection = null) {
 }
 
 export {
-  SOURCE_INSPECTION_KINDS,
   assertSourceInspectionHealthy,
-  sourceInspectionDisabledReason,
   sourceInspectionFailure
 };

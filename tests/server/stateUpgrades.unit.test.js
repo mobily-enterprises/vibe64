@@ -16,7 +16,7 @@ import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server
 import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { upgradeIndependentProviderCredentials as clearProviderCredentials } from "../../packages/vibe64-accounts/src/server/providerCredentialsUpgrade.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
-import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
@@ -281,12 +281,12 @@ test("upgrading a legacy connection restores the AI controls identity lookup wit
   await mkdir(path.dirname(authPath), { recursive: true });
   await writeFile(authPath, credentials);
   const options = { systemRoot: f.systemRoot, toolHomeSource };
-  const beforeUpgrade = new CodexAppServerAgentProvider(options);
+  const beforeUpgrade = createCodexAppServerAgentProvider(options);
   await assert.rejects(beforeUpgrade.currentRuntimeInfo(), { code: "vibe64_codex_login_identity_unavailable" });
   await f.run();
   assert.equal(await readCodexLoginId(f.systemRoot), "", "deployment preflight does not modify the marker");
   await f.run(true);
-  const afterRestart = new CodexAppServerAgentProvider(options);
+  const afterRestart = createCodexAppServerAgentProvider(options);
   const identity = (await afterRestart.currentRuntimeInfo()).accountIdentitySignature;
   assert.match(identity, /^sha256:[a-f0-9]{64}$/u);
   assert.equal((await afterRestart.currentRuntimeInfo()).accountIdentitySignature, identity);

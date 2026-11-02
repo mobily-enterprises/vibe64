@@ -41,7 +41,7 @@ import {
 import {
   archivedSessionStatus, assertSupportedSession, assertUsableSession, GENESIS_SESSION_KIND,
   inspectSessionSource, plainSessionView, requireLearningNativeDirectory, requireSessionSourceRoot,
-  sessionAvailabilityIssue, sessionHasRenewalHandover, sessionIsSupported, sessionSourceCreationFailed,
+  sessionAvailabilityIssue, sessionHasRenewalHandover, sessionSourceCreationFailed,
   sessionSourceRecoveryWasSaved
 } from "./sessionRuntimeChecks.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -532,9 +532,5 @@ class Vibe64SessionRuntime {
 }
 
 export {
-  GENESIS_SESSION_KIND,
-  Vibe64SessionRuntime,
-  assertSupportedSession,
-  plainSessionView,
-  sessionIsSupported
+  Vibe64SessionRuntime
 };

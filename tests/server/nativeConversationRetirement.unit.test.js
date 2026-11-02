@@ -6,7 +6,7 @@ import test from "node:test";
 import { EventEmitter } from "node:events";
 import { nativeConversationBindings } from "@local/vibe64-terminals/server/nativeConversationBindings";
 import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
-import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 
@@ -52,7 +52,7 @@ function codexExportProvider(native = codexExportClient()) {
     }
     close() { this.readyState = 3; this.emit("close"); }
   }
-  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ExportSocket });
+  const provider = createCodexAppServerAgentProvider({ WebSocketImpl: ExportSocket });
   provider.activeClient = async () => ({ endpoint: "ws://native", request: () => assert.fail("shared observer used for export") });
   return { provider, sockets, native };
 }
@@ -124,7 +124,7 @@ test("saved inventory separates main bindings from acknowledged predecessors and
 });
 
 test("Codex descendant discovery includes archived, CLI and spawned conversations with bounded pagination", async () => {
-  const provider = new CodexAppServerAgentProvider();
+  const provider = createCodexAppServerAgentProvider();
   const calls = [];
   provider.activeClient = async () => ({ request: async (method, params) => {
     calls.push(params);
@@ -142,7 +142,7 @@ test("Codex descendant discovery includes archived, CLI and spawned conversation
 });
 
 test("Codex native storage inventory discovers independent CLI roots as well as archived forks", async () => {
-  const provider = new CodexAppServerAgentProvider();
+  const provider = createCodexAppServerAgentProvider();
   provider.activeClient = async () => ({ request: async (method, params) => {
     assert.equal(method, "thread/list");
     assert.equal(params.cwd, "/saved/source");
@@ -156,7 +156,7 @@ test("Codex native storage inventory discovers independent CLI roots as well as 
 });
 
 test("Codex native absence requires complete inventory across directories, providers and archived threads", async () => {
-  const provider = new CodexAppServerAgentProvider();
+  const provider = createCodexAppServerAgentProvider();
   let present = true;
   const calls = [];
   provider.activeClient = async () => ({ request: async (_method, params) => {

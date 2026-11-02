@@ -13,7 +13,7 @@ import {
   createVibe64SessionStore
 } from "@local/vibe64-runtime/server/sessionStore";
 import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
-import { renewalSourceStagePath } from "@local/vibe64-runtime/server/sessionWorktreeArchive";
+import { renewalSourceStagePath } from "@local/vibe64-runtime/server/sessionWorktreeGit";
 import {
   projectRuntimeRoot,
   sourceMetadata,

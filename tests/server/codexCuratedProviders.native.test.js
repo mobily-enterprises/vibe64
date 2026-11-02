@@ -13,7 +13,7 @@ import { zstdDecompressSync, gunzipSync } from "node:zlib";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
-import { startCodexAppServerHelperThread, sendCodexAppServerHelperTurn } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+import { startCodexAppServerHelperThread, sendCodexAppServerHelperTurn } from "./codexAppServerTestHelpers.js";
 import { __testables } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 

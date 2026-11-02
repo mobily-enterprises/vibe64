@@ -8,13 +8,12 @@ import {
 } from "../shared/agentExecutionProfiles.js";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 import { createCodexAppServerIsolation } from "@jskit-ai/assistant-core/server/codex-configuration";
-import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-// Codex helper threads: read-only threads a Vibe64 helper starts, resumes and
-// sends one bounded turn to, with their isolation, settings and output limits.
-// Session threads start through the same isolation.
+// Codex helper threads: the isolation, settings and output limits of the
+// read-only threads a Vibe64 helper starts, resumes and sends one bounded turn
+// to. Session threads start through the same isolation.
 const CODEX_APP_SERVER_HELPER_SANDBOX = "read-only";
 const CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH = 512;
 const CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT = 128;
@@ -86,8 +85,6 @@ const codexAppServerHelperIsolation = createCodexAppServerIsolation({
   },
   createError: codexAppServerHelperPolicyError
 });
-
-const assertCodexAppServerHelperCompatibility = codexAppServerHelperIsolation.assertCompatibility;
 
 function codexAppServerHelperPolicyError(message = "", details = {}) {
   return new Vibe64AgentExecutionProfileError(
@@ -242,32 +239,6 @@ function codexAppServerHelperThreadStartPreparation({
   };
 }
 
-async function prepareCodexAppServerHelperThreadStartSettings({
-  systemPrompt = "",
-  ephemeral = false,
-  executionProfile = null,
-  provider = null
-} = {}) {
-  const preparation = codexAppServerHelperThreadStartPreparation({ systemPrompt, ephemeral, executionProfile });
-  const enforcement = await codexAppServerHelperIsolation.inspect(provider, preparation.inspection);
-  return preparation.prepared(enforcement);
-}
-
-async function startCodexAppServerHelperThread(options = {}) {
-  let executionProfile;
-  const result = await codexAppServerHelperIsolation.start(options.provider, async () => {
-    const prepared = await prepareCodexAppServerHelperThreadStartSettings(options);
-    executionProfile = prepared.executionProfile;
-    return prepared;
-  });
-  return Object.freeze({
-    enforcement: result.enforcement,
-    executionProfile,
-    thread: result.thread,
-    threadId: result.threadId
-  });
-}
-
 function codexAppServerHelperThreadResumePreparation({
   systemPrompt = "",
   executionProfile = null
@@ -288,36 +259,6 @@ function codexAppServerHelperThreadResumePreparation({
       };
     }
   };
-}
-
-async function prepareCodexAppServerHelperThreadResumeSettings({
-  systemPrompt = "",
-  executionProfile = null,
-  provider = null
-} = {}) {
-  const preparation = codexAppServerHelperThreadResumePreparation({ systemPrompt, executionProfile });
-  const enforcement = await codexAppServerHelperIsolation.inspect(provider, preparation.inspection);
-  return preparation.prepared(enforcement);
-}
-
-async function resumeCodexAppServerHelperThread({
-  systemPrompt = "",
-  executionProfile = null,
-  provider = null,
-  threadId = ""
-} = {}) {
-  let profile;
-  const result = await codexAppServerHelperIsolation.resume(provider, threadId, async () => {
-    const prepared = await prepareCodexAppServerHelperThreadResumeSettings({ systemPrompt, executionProfile, provider });
-    profile = prepared.executionProfile;
-    return prepared;
-  });
-  return Object.freeze({
-    enforcement: result.enforcement,
-    executionProfile: profile,
-    thread: result.thread,
-    threadId: result.threadId
-  });
 }
 
 function prepareCodexAppServerHelperTurn({
@@ -364,49 +305,17 @@ function prepareCodexAppServerHelperTurn({
   };
 }
 
-async function sendCodexAppServerHelperTurn({
-  executionProfile = null,
-  outputSchema = null,
-  prompt = "",
-  provider = null,
-  threadId = ""
-} = {}) {
-  const prepared = prepareCodexAppServerHelperTurn({ executionProfile, outputSchema, prompt, provider, threadId });
-  return sendPreparedCodexAppServerHelperTurn(provider, prepared, codexAppServerHelperIsolation);
-}
+const __testables = Object.freeze({
+  codexAppServerHelperThreadSettings,
+  codexAppServerHelperTurnSettings
+});
 
 export {
-  assertCodexAppServerHelperCompatibility,
   assertCodexAppServerHelperOutputWithinLimit,
-  CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS,
-  CODEX_APP_SERVER_HELPER_CONFIG_RESPONSE_MAX_BYTES,
-  CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH,
-  CODEX_APP_SERVER_HELPER_HOOK_ERROR_MAX_COUNT,
-  CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH,
-  CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH,
-  CODEX_APP_SERVER_HELPER_HOOK_MAX_COUNT,
-  CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES,
-  CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT,
-  CODEX_APP_SERVER_HELPER_MCP_SERVER_NAME_MAX_LENGTH,
-  CODEX_APP_SERVER_HELPER_SANDBOX,
-  CODEX_APP_SERVER_HELPER_THREAD_SOURCE,
-  CODEX_APP_SERVER_HELPER_TOOL_FEATURES,
-  CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH,
   codexAppServerHelperIsolation,
-  codexAppServerHelperOutputSchema,
-  codexAppServerHelperPolicyError,
-  codexAppServerHelperProfile,
   codexAppServerHelperThreadResumePreparation,
-  codexAppServerHelperThreadResumeSettings,
-  codexAppServerHelperThreadSettings,
   codexAppServerHelperThreadStartPreparation,
-  codexAppServerHelperThreadStartSettings,
-  codexAppServerHelperTurnSettings,
   codexAppServerThreadStartSettings,
-  prepareCodexAppServerHelperThreadResumeSettings,
-  prepareCodexAppServerHelperThreadStartSettings,
   prepareCodexAppServerHelperTurn,
-  resumeCodexAppServerHelperThread,
-  sendCodexAppServerHelperTurn,
-  startCodexAppServerHelperThread
+  __testables
 };

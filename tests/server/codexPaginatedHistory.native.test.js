@@ -9,11 +9,11 @@ import path from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import {
-  CodexAppServerAgentProvider,
+  ensureCodexAppServerThreadForSession,
   startCodexAppServerProcess
-} from "@local/vibe64-runtime/server/codexAppServerAgent";
-import { ensureCodexAppServerThreadForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+} from "./codexAppServerTestHelpers.js";
 
 const codexVersion = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 
@@ -87,7 +87,7 @@ test("native paginated conversations accept their first message and survive reco
     },
     check_for_update_on_startup: false
   };
-  const provider = new CodexAppServerAgentProvider({});
+  const provider = createCodexAppServerAgentProvider({});
   provider.activeClient = async () => client;
   // The production bridge resumes with the user's configured default provider.
   // Keep that default local too, instead of relying only on per-thread overrides.

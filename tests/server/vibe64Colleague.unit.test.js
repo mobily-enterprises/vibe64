@@ -25,7 +25,7 @@ import { createColleagueNavigationCoordination } from "../../packages/vibe64-col
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
-import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { __testables as codexAppServerHelperThreadsTestables } from "@local/vibe64-runtime/server/codexAppServerHelperThreads";
 import { Vibe64ColleagueFeature, Vibe64ColleagueFocusFeature } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js";
 import { createColleagueBrowserFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
@@ -34,6 +34,7 @@ import { createControlledColleagueNativeCommands } from "../fixtures/colleagueNa
 import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 
 const { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } = __testables;
+const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 
 const fixtureResources = new WeakMap();
 
