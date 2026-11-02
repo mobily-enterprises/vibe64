@@ -23,7 +23,8 @@ import {
  * @param {string} dependencies.managedSourceRoot
  * @param {object} dependencies.practiceOwner
  * @param {boolean} dependencies.projectCatalogEnabled
- * @param {string} dependencies.projectsRoot
+ * @param {string} dependencies.projectsRoot the catalogue's root, "" without a catalogue
+ * @param {string} dependencies.slugProjectsRoot the root a slug's folder resolves below, catalogue or not
  * @param {string} dependencies.systemRoot
  */
 function createProjectPaths({
@@ -31,6 +32,7 @@ function createProjectPaths({
   practiceOwner,
   projectCatalogEnabled,
   projectsRoot,
+  slugProjectsRoot,
   systemRoot
 }) {
   function practiceScope(slug) {
@@ -78,7 +80,7 @@ function createProjectPaths({
     const scope = practiceScope(slug);
     if (scope) return scope.targetRoot;
     return resolveProjectContextRoot({
-      projectsRoot,
+      projectsRoot: slugProjectsRoot,
       slug: normalizeProjectSlug(slug)
     });
   }

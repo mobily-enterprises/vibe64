@@ -4,7 +4,6 @@ import {
   assertProjectDirectoryUsable,
   getStudioProjectContext,
   normalizeProjectSlug,
-  resolveStudioProjectsRoot,
   resolveProjectContextRoot
 } from "./studioProjectContext.js";
 import { pathExists, vibe64Error } from "./core.js";
@@ -61,10 +60,7 @@ async function resolveProjectRequestContext({
   request = {}
 } = {}) {
   const slug = projectSlugFromRequest(request);
-  const projectsRoot = String(
-    projectContext.projectsRoot ||
-    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot({ env: process.env }))
-  ).trim();
+  const { projectsRoot } = projectContext;
   const vibe64User = request.vibe64User || null;
   /**
    * A person's own page or session request (HTTP or WebSocket, which carry

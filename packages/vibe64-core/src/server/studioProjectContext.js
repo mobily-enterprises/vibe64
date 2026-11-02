@@ -114,6 +114,9 @@ function createStudioProjectContext({
     practiceOwner,
     projectCatalogEnabled,
     projectsRoot,
+    // An editor without a catalogue still resolves a slug's folder below the
+    // projects root its environment names.
+    slugProjectsRoot: projectsRoot || resolveStudioProjectsRoot({ env, home }),
     systemRoot
   });
 

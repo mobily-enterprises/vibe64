@@ -116,11 +116,12 @@ function projectSlugFromInput(input) {
   return normalizeProjectSlug(projectSlugFromName(input?.name));
 }
 
-function resolveProjectContextRoot({
-  projectsRoot = "",
-  slug = ""
-} = {}) {
-  const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot({ env: process.env }));
+/**
+ * The folder a slug's project lives in, directly below the projects root.
+ * @param {{ projectsRoot: string, slug: string }} options
+ */
+function resolveProjectContextRoot({ projectsRoot, slug }) {
+  const normalizedProjectsRoot = normalizeRoot(projectsRoot);
   const normalizedSlug = normalizeProjectSlug(slug);
   const projectContextRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
   if (!pathInsideOrEqual(normalizedProjectsRoot, projectContextRoot)) {
