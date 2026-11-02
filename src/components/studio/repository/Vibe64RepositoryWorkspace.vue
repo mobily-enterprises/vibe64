@@ -204,87 +204,14 @@
             color="primary"
             indeterminate
           />
-          <div v-else-if="history.versions.length" class="vibe64-repository-workspace__history">
-            <div class="vibe64-repository-workspace__history-intro">
-              <div class="vibe64-repository-workspace__history-heading">
-                <span aria-hidden="true" class="vibe64-repository-workspace__history-icon">
-                  <v-icon :icon="mdiSourceCommit" size="18" />
-                </span>
-                <div>
-                  <strong>Saved versions</strong>
-                  <span>Newest first. Open a version to review its files.</span>
-                </div>
-              </div>
-              <v-chip label size="x-small" variant="tonal">
-                {{ history.versions.length }} loaded
-              </v-chip>
-            </div>
-            <ol class="vibe64-repository-workspace__versions" aria-label="Saved versions">
-              <li
-                v-for="(version, index) in history.versions"
-                :key="version.commit"
-                class="vibe64-repository-workspace__history-item"
-              >
-                <span
-                  aria-hidden="true"
-                  class="vibe64-repository-workspace__commit-marker"
-                  :class="{
-                    'vibe64-repository-workspace__commit-marker--first': index === 0,
-                    'vibe64-repository-workspace__commit-marker--last': index === history.versions.length - 1
-                  }"
-                >
-                  <span
-                    class="vibe64-repository-workspace__commit-node"
-                    :class="{ 'vibe64-repository-workspace__commit-node--latest': index === 0 }"
-                  >
-                    <v-icon :icon="version.isMerge ? mdiSourceMerge : mdiSourceCommit" size="15" />
-                  </span>
-                </span>
-                <button
-                  :aria-current="versionSheetOpen && selectedVersion?.commit === version.commit ? 'true' : undefined"
-                  :aria-label="versionButtonLabel(version, index)"
-                  class="vibe64-repository-workspace__version"
-                  type="button"
-                  @click="openVersion(version)"
-                >
-                  <span class="vibe64-repository-workspace__version-copy">
-                    <span class="vibe64-repository-workspace__version-heading">
-                      <strong>{{ version.message || "Saved work" }}</strong>
-                      <v-chip v-if="index === 0" color="primary" label size="x-small" variant="tonal">
-                        Latest
-                      </v-chip>
-                      <v-chip v-if="version.isMerge" label size="x-small" variant="outlined">
-                        Merge
-                      </v-chip>
-                    </span>
-                    <span class="vibe64-repository-workspace__version-meta">
-                      <span>
-                        <v-icon :icon="mdiAccountOutline" size="15" />
-                        {{ version.author || "Unknown author" }}
-                      </span>
-                      <span>
-                        <v-icon :icon="mdiClockOutline" size="15" />
-                        {{ formatVersionDate(version.committedAt) }}
-                      </span>
-                      <code>{{ version.shortCommit }}</code>
-                    </span>
-                  </span>
-                  <v-icon aria-hidden="true" :icon="mdiChevronRight" size="20" />
-                </button>
-              </li>
-              <li v-if="history.nextCursor" class="vibe64-repository-workspace__load-more">
-                <v-btn
-                  :loading="history.loading"
-                  size="small"
-                  type="button"
-                  variant="text"
-                  @click="loadHistory({ append: true })"
-                >
-                  Load older versions
-                </v-btn>
-              </li>
-            </ol>
-          </div>
+          <Vibe64RepositoryHistoryList
+            v-else-if="history.versions.length"
+            :history="history"
+            :selected-version="selectedVersion"
+            :version-sheet-open="versionSheetOpen"
+            @load-more="loadHistory({ append: true })"
+            @open-version="openVersion"
+          />
           <div v-else-if="!history.error" class="vibe64-repository-workspace__empty">
             <strong>No saved versions yet</strong>
             <span>Versions will appear here after work is saved.</span>
@@ -293,106 +220,24 @@
       </div>
     </section>
 
-    <v-dialog
-      :model-value="versionSheetOpen"
-      class="vibe64-repository-version-dialog"
-      fullscreen
-      scrollable
-      transition="dialog-bottom-transition"
-      @update:model-value="!$event && closeVersion()"
-    >
-      <v-card class="vibe64-repository-version-dialog__card">
-        <v-card-title class="vibe64-repository-version-dialog__header">
-          <span aria-hidden="true" class="vibe64-repository-version-dialog__icon">
-            <v-icon
-              :icon="selectedVersion?.isMerge ? mdiSourceMerge : mdiSourceCommit"
-              size="22"
-            />
-          </span>
-          <div class="vibe64-repository-version-dialog__heading">
-            <span class="vibe64-repository-version-dialog__eyebrow">
-              {{ selectedVersion?.isMerge ? "Merge version" : "Saved version" }}
-            </span>
-            <h2>{{ selectedVersion?.message || "Saved version" }}</h2>
-            <div v-if="selectedVersion" class="vibe64-repository-version-dialog__meta">
-              <span>
-                <v-icon :icon="mdiAccountOutline" size="16" />
-                {{ selectedVersion.author || "Unknown author" }}
-              </span>
-              <span>
-                <v-icon :icon="mdiClockOutline" size="16" />
-                {{ formatVersionDate(selectedVersion.committedAt) }}
-              </span>
-              <code>{{ selectedVersion.shortCommit }}</code>
-              <v-chip v-if="versionFiles.payload" label size="x-small" variant="tonal">
-                {{ versionFileCountLabel }}
-              </v-chip>
-            </div>
-          </div>
-          <v-btn
-            aria-label="Close version details"
-            :icon="mdiClose"
-            size="small"
-            type="button"
-            variant="text"
-            @click="closeVersion"
-          />
-        </v-card-title>
-        <v-divider />
-        <v-card-text class="vibe64-repository-version-dialog__body">
-          <StudioErrorNotice
-            v-if="versionFiles.error"
-            class="vibe64-repository-version-dialog__error"
-            compact
-            :error="versionFiles.error"
-            title="Version details could not load"
-          >
-            <template v-if="!versionFiles.payload" #actions>
-              <v-btn
-                :aria-busy="versionFiles.loading ? 'true' : undefined"
-                :disabled="versionFiles.loading"
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="selectVersion(selectedVersion)"
-              >
-                {{ versionFiles.loading ? "Retrying…" : "Retry files" }}
-              </v-btn>
-            </template>
-          </StudioErrorNotice>
-          <v-progress-linear
-            v-if="versionFiles.loading && !versionFiles.payload && !versionFiles.error"
-            color="primary"
-            indeterminate
-          />
-          <Vibe64RepositoryFileBrowser
-            v-if="versionFiles.payload"
-            aria-label="Files in this version"
-            class="vibe64-repository-version-dialog__files"
-            embedded
-            :error="versionDiff.error"
-            :files="versionFiles.payload?.files || []"
-            :loading="versionDiff.loading"
-            :loading-more="versionFiles.loadingMore"
-            :payload="versionDiff.payload"
-            :selected-path="selectedVersionPath"
-            :truncated="versionFiles.payload?.truncated === true"
-            @load-more="loadMoreVersionFiles"
-            @select="selectVersionFile"
-          />
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <Vibe64RepositoryVersionDialog
+      :open="versionSheetOpen"
+      :selected-version="selectedVersion"
+      :selected-version-path="selectedVersionPath"
+      :version-diff="versionDiff"
+      :version-files="versionFiles"
+      @close="closeVersion"
+      @load-more="loadMoreVersionFiles"
+      @retry-files="selectVersion(selectedVersion)"
+      @select-file="selectVersionFile"
+    />
   </section>
 </template>
 
 <script setup>
+// A session's current changes or the project's saved versions, with checking for, applying and saving updates.
 import { computed, ref, watch } from "vue";
 import {
-  mdiAccountOutline,
-  mdiChevronRight,
-  mdiClockOutline,
-  mdiClose,
   mdiCloudRefreshOutline,
   mdiFileCompare,
   mdiSourceRepository,
@@ -404,8 +249,11 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
+import Vibe64RepositoryHistoryList from "@/components/studio/repository/Vibe64RepositoryHistoryList.vue";
+import Vibe64RepositoryVersionDialog from "@/components/studio/repository/Vibe64RepositoryVersionDialog.vue";
 import { useVibe64RepositoryWorkspace } from "@/composables/useVibe64RepositoryWorkspace.js";
 import { repositoryUpdateRelationship } from "@local/vibe64-core/shared";
+import { formatVersionDate } from "@/lib/vibe64RepositoryVersionLabels.js";
 
 const props = defineProps({
   dashboardContext: { default: () => ({}), type: Object },
@@ -461,11 +309,6 @@ async function reconcileHistory() {
   historyReview.value = null;
   return applyReviewedUpdates({ historyReview: review });
 }
-
-const versionFileCountLabel = computed(() => {
-  const count = Number(versionFiles.payload?.totalCount || 0);
-  return `${count} changed ${count === 1 ? "file" : "files"}`;
-});
 
 const pageTitle = computed(() => view.value === "history" ? "Git log" : "Current changes");
 const pageDescription = computed(() => view.value === "history"
@@ -621,30 +464,6 @@ const canResolveUpdateWithTemporaryAi = computed(() => [
 ].includes(String(updates.errorCode || "").trim()));
 const resolvingUpdateProblem = ref(false);
 
-function formatVersionDate(value = "") {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? "Unknown time"
-    : new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short"
-      }).format(parsed);
-}
-
-function versionButtonLabel(version = {}, index = -1) {
-  const parts = [
-    index === 0 ? "Latest saved version" : "Saved version",
-    version.message || "Saved work",
-    version.author || "Unknown author",
-    formatVersionDate(version.committedAt),
-    version.shortCommit
-  ];
-  if (version.isMerge) {
-    parts.splice(1, 0, "merge");
-  }
-  return parts.filter(Boolean).join(", ");
-}
-
 async function resolveUpdateProblem() {
   if (
     resolvingUpdateProblem.value ||
@@ -704,7 +523,6 @@ function closeVersion() {
 }
 
 .vibe64-repository-workspace__summary-copy span,
-.vibe64-repository-workspace__history-intro span,
 .vibe64-repository-workspace__empty span {
   color: rgba(var(--v-theme-on-surface), 0.66);
   font-size: 0.84rem;
@@ -782,275 +600,6 @@ function closeVersion() {
   overflow: visible;
 }
 
-.vibe64-repository-workspace__history {
-  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
-  border-radius: var(--v64-shape-lg, 16px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.vibe64-repository-workspace__history-intro {
-  align-items: center;
-  background: var(--v64-surface-container-low);
-  border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  padding: 0.9rem 1.1rem;
-}
-
-.vibe64-repository-workspace__history-heading {
-  align-items: center;
-  display: flex;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__history-heading > div {
-  display: grid;
-  gap: 0.18rem;
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__history-icon,
-.vibe64-repository-version-dialog__icon {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.11);
-  border-radius: 50%;
-  color: rgb(var(--v-theme-primary));
-  display: inline-flex;
-  flex: 0 0 auto;
-  justify-content: center;
-}
-
-.vibe64-repository-workspace__history-icon {
-  height: 2.1rem;
-  width: 2.1rem;
-}
-
-.vibe64-repository-workspace__versions {
-  list-style: none;
-  margin: 0;
-  min-width: 0;
-  overflow: auto;
-  padding: 0;
-}
-
-.vibe64-repository-workspace__history-item {
-  display: grid;
-  grid-template-columns: 3.25rem minmax(0, 1fr);
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__commit-marker {
-  display: flex;
-  justify-content: center;
-  min-height: 5rem;
-  position: relative;
-}
-
-.vibe64-repository-workspace__commit-marker::before {
-  background: rgba(var(--v-theme-outline), 0.34);
-  bottom: 0;
-  content: "";
-  left: calc(50% - 1px);
-  position: absolute;
-  top: 0;
-  width: 2px;
-}
-
-.vibe64-repository-workspace__commit-marker--first::before {
-  top: 1.55rem;
-}
-
-.vibe64-repository-workspace__commit-marker--last::before {
-  bottom: calc(100% - 1.55rem);
-}
-
-.vibe64-repository-workspace__commit-node {
-  align-items: center;
-  background: rgb(var(--v-theme-surface));
-  border: 2px solid rgba(var(--v-theme-outline), 0.56);
-  border-radius: 50%;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  display: flex;
-  height: 2rem;
-  justify-content: center;
-  margin-top: 0.55rem;
-  position: relative;
-  width: 2rem;
-  z-index: 1;
-}
-
-.vibe64-repository-workspace__commit-node--latest {
-  background: rgb(var(--v-theme-primary));
-  border-color: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-  box-shadow: 0 0 0 0.25rem rgba(var(--v-theme-primary), 0.1);
-}
-
-.vibe64-repository-workspace__version {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1);
-  color: inherit;
-  cursor: pointer;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 5rem;
-  padding: 0.65rem 1rem 0.65rem 0.15rem;
-  text-align: start;
-  transition: background-color 120ms ease;
-  width: 100%;
-}
-
-.vibe64-repository-workspace__version:hover,
-.vibe64-repository-workspace__version:focus-visible,
-.vibe64-repository-workspace__version[aria-current="true"] {
-  background: rgba(var(--v-theme-primary), 0.08);
-  outline: none;
-}
-
-.vibe64-repository-workspace__version:focus-visible {
-  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
-}
-
-.vibe64-repository-workspace__version-copy {
-  display: grid;
-  gap: 0.35rem;
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__version-heading {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__version-heading strong {
-  font-size: 0.94rem;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-repository-workspace__version-meta,
-.vibe64-repository-version-dialog__meta {
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.56);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
-  gap: 0.35rem 0.85rem;
-}
-
-.vibe64-repository-workspace__version-meta > span,
-.vibe64-repository-version-dialog__meta > span {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.vibe64-repository-workspace__version-meta code,
-.vibe64-repository-version-dialog__meta code {
-  background: rgba(var(--v-theme-surface-variant), 0.52);
-  border-radius: 0.35rem;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.73rem;
-  padding: 0.1rem 0.35rem;
-}
-
-.vibe64-repository-workspace__load-more {
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.1);
-  padding: 0.55rem 1rem 0.55rem 3.25rem;
-}
-
-.vibe64-repository-version-dialog__card {
-  border-radius: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  width: 100%;
-}
-
-.vibe64-repository-version-dialog__header {
-  align-items: flex-start;
-  background: rgba(var(--v-theme-surface-variant), 0.18);
-  display: flex;
-  gap: 0.8rem;
-  padding: 1rem 1.1rem;
-}
-
-.vibe64-repository-version-dialog__icon {
-  height: 2.6rem;
-  margin-top: 0.1rem;
-  width: 2.6rem;
-}
-
-.vibe64-repository-version-dialog__heading {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.vibe64-repository-version-dialog__eyebrow {
-  color: rgb(var(--v-theme-primary));
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.vibe64-repository-version-dialog__heading h2 {
-  font-size: 1.08rem;
-  line-height: 1.35;
-  margin: 0;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.vibe64-repository-version-dialog__meta {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-}
-
-.vibe64-repository-version-dialog__body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-}
-
-.vibe64-repository-version-dialog__error {
-  flex: 0 0 auto;
-  max-height: 50%;
-  overflow: auto;
-}
-
-.vibe64-repository-version-dialog__body > .vibe64-repository-version-dialog__files {
-  flex: 1 1 0;
-  height: auto;
-  min-height: 0;
-}
-
-:global(.vibe64-repository-version-dialog .v-overlay__content) {
-  height: 100dvh;
-  margin: 0;
-  max-height: 100dvh;
-  max-width: none;
-  width: 100vw;
-}
-
 /* M3 empty state: a quiet dashed slot, centred, where content will appear. */
 .vibe64-repository-workspace__empty {
   background: var(--v64-surface-container-low);
@@ -1101,14 +650,6 @@ function closeVersion() {
 }
 
 @media (max-width: 780px) {
-  .vibe64-repository-workspace__version {
-    grid-template-columns: minmax(0, 1fr) 1.1rem;
-  }
-
-  .vibe64-repository-workspace__version code {
-    display: none;
-  }
-
   .vibe64-repository-workspace__summary {
     align-items: stretch;
     flex-direction: column;
