@@ -42,7 +42,7 @@ export async function upgradeIndependentProviderCredentials({
   // managed native auth left by a prior stopped process. These are editor-owned
   // private homes; the person's independent CLI configuration is not enumerated.
   const runtimeBases = [...new Set([
-    codexAppServerRuntimeBaseDir({ env, hostEnv: env }),
+    codexAppServerRuntimeBaseDir({ env }),
     path.join(home, ".cache", "vibe64", "agent-providers"),
     ...(path.isAbsolute(env.XDG_RUNTIME_DIR || "") ? [path.join(env.XDG_RUNTIME_DIR, "vibe64", "agent-providers")] : [])
   ])];
