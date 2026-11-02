@@ -43,7 +43,10 @@ function createColleagueHistory({
       const previous = state.record.previousConversations.find(old => old.freshOperation.operationId === input.operationId);
       if (previous) {
         if (previous.scopeId !== input.expectedConversationId || !isDeepStrictEqual(previous.unconfirmedMessages, reported)) {
-          throw failure("This recovery ID belongs to another request. Use the original request or a new recovery ID.");
+          throw failure(
+            "This recovery ID belongs to another request. Use the original request or a new recovery ID.",
+            "vibe64_colleague_recovery_id_reused"
+          );
         }
         return {
           operationId: input.operationId,
@@ -60,7 +63,8 @@ function createColleagueHistory({
           throw failure(
             "An unconfirmed message ID belongs to different saved words. Keep the original request before starting fresh.",
             "ACTION_VALIDATION_FAILED",
-            400
+            400,
+            { messageCode: "vibe64_colleague_unconfirmed_message_changed" }
           );
         }
       }
@@ -93,12 +97,15 @@ function createColleagueHistory({
       try {
         validateColleagueConversationRecord({ ...state.record, ...patch }, state.key);
       } catch (error) {
-        throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400);
+        throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400, {
+          messageCode: "vibe64_colleague_fresh_start_invalid",
+          messageParams: { reason: error.message }
+        });
       }
       // A summary receipt left after its run is retried before the next
       // summary; it belongs to this thread, not to the conversation rotated here.
       if (serviceState.lifecycle.closed || state.stopping || state.running || state.opening || state.transfer || state.summaryRunning) {
-        throw failure("Finish or stop Colleague's current turn or summary before starting fresh.");
+        throw failure("Finish or stop Colleague's current turn or summary before starting fresh.", "vibe64_colleague_fresh_start_busy");
       }
       state.rotating = true;
       try {
@@ -169,7 +176,11 @@ function createColleagueHistory({
   async function readHistoryPage(input, context) {
     const state = await threads.stateFor(context);
     const old = state.record.previousConversations.find(chat => chat.scopeId === input.conversationId);
-    if (!old) throw failure("This previous Colleague conversation is unavailable.", "conversation_forbidden", 403);
+    if (!old) {
+      throw failure("This previous Colleague conversation is unavailable.", "conversation_forbidden", 403, {
+        messageCode: "vibe64_colleague_previous_conversation_unavailable"
+      });
+    }
     const options = { ...(input.beforeTurnId ? { beforeTurnId: input.beforeTurnId } : {}), limit: input.limit || 50 };
     const page = await records.transcript.readConversationLogPage(old.runtimeId, { ...options, presentation: true });
     const runtimeState = old.conversationMetadata?.runtime;

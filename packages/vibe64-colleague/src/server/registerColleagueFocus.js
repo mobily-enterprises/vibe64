@@ -37,7 +37,7 @@ function registerColleagueFocus({
       if (typeof acknowledge !== "function" || closed) return;
       try {
         if (typeof input?.clientId !== "string" || !input.clientId || input.clientId.length > 200) {
-          throw new AppError(400, "A browser client identity is required.");
+          throw new AppError(400, "A browser client identity is required.", { code: "vibe64_colleague_focus_client_required" });
         }
         const binding = bindings.get(input.clientId) || { owner: { connected: true }, revision: 0 };
         bindings.set(input.clientId, binding);

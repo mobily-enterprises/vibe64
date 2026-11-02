@@ -60,7 +60,7 @@ function createColleagueTurns({
   async function summarize(input, context) {
     const state = await threads.stateFor(context);
     if (serviceState.lifecycle.closed || state.stopping || state.summaryRunning) {
-      throw failure("Finish or stop the current Colleague summary first.");
+      throw failure("Finish or stop the current Colleague summary first.", "vibe64_colleague_summary_busy");
     }
     state.requestContext = context;
     const scoped = threads.actionContext(state, {
@@ -81,9 +81,9 @@ function createColleagueTurns({
     const selecting = state.admission.then(async () => {
       threads.assertCurrentConversation(state, expected);
       if (serviceState.lifecycle.closed || state.stopping || state.running) {
-        throw failure("Finish or stop Colleague's current turn before changing its model.");
+        throw failure("Finish or stop Colleague's current turn before changing its model.", "vibe64_colleague_model_change_busy");
       }
-      if (!input.assistantSelection) throw failure("Choose a model for Colleague.");
+      if (!input.assistantSelection) throw failure("Choose a model for Colleague.", "vibe64_colleague_model_required");
       const selected = await conversations.chooseSelection(context, input.assistantSelection);
       const settings = await terminals.resolveConversationConfiguration(
         selected,
@@ -99,7 +99,7 @@ function createColleagueTurns({
       const savedRuntime = state.record.conversationMetadata?.runtime;
       if (current?.status === "working" || savedRuntime?.engine === "codex" &&
           codexAppServerTurnStateFromAgentRun(savedRuntime.binding?.codexAppServerRun || {}).active) {
-        throw failure("Stop Colleague's previous native turn before changing its model.");
+        throw failure("Stop Colleague's previous native turn before changing its model.", "vibe64_colleague_model_change_native_busy");
       }
       if (conversation && state.runtimeOwner === conversations.nativeRuntime && settings.engine === "api") {
         // The completed native envelope is not the ordinary API's response
@@ -161,8 +161,8 @@ function createColleagueTurns({
     const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
     const admitted = state.admission.then(async () => {
       threads.assertCurrentConversation(state, expected);
-      if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
-      if (state.stopping) throw failure("Colleague is stopping its previous turn. Send again once it has stopped.");
+      if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.", "vibe64_colleague_shutting_down");
+      if (state.stopping) throw failure("Colleague is stopping its previous turn. Send again once it has stopped.", "vibe64_colleague_turn_stopping");
       if (state.record.previousConversations.some(old => old.unconfirmedMessages.some(message => message.messageId === input.messageId) ||
           old.conversationLog.some(turn => turn.messages.some(message => message.messageId === input.messageId)) ||
           [
@@ -172,7 +172,8 @@ function createColleagueTurns({
         throw failure(
           "This message belongs to retained Colleague history. Nothing was resent; write a new message in the current conversation.",
           "ACTION_VALIDATION_FAILED",
-          400
+          400,
+          { messageCode: "vibe64_colleague_message_retained" }
         );
       }
       const previousTurn = state.record.conversationLog.find(turn =>
@@ -180,7 +181,7 @@ function createColleagueTurns({
       const previousMessage = previousTurn?.messages.find(message => message.messageId === input.messageId);
       if (previousMessage) {
         if (previousMessage.text !== input.message) {
-          throw failure("This message ID belongs to a different request. Use a new message ID.");
+          throw failure("This message ID belongs to a different request. Use a new message ID.", "vibe64_colleague_message_id_reused");
         }
         return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
       }
@@ -211,7 +212,7 @@ function createColleagueTurns({
           messageId: input.messageId,
           text: input.message
         });
-        if (!turn) throw failure("The authored Colleague message could not be admitted.");
+        if (!turn) throw failure("The authored Colleague message could not be admitted.", "vibe64_colleague_message_unadmitted");
         state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
         state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
         if (!state.running) {

@@ -239,7 +239,7 @@ function createColleagueConversations({
   async function transferConversation(state, context, owner) {
     if (state.runtimeOwner === owner) return state.conversation;
     if (state.opening || [...state.browserObservers].some(observer => observer.attaching)) {
-      throw failure("Wait for Colleague's current conversation observer to open before changing its model.");
+      throw failure("Wait for Colleague's current conversation observer to open before changing its model.", "vibe64_colleague_observer_opening");
     }
     const gate = Promise.withResolvers();
     state.transfer = gate.promise;
@@ -278,7 +278,10 @@ function createColleagueConversations({
     await conversation.retrySave();
     const current = await conversation.read();
     if (current.replacement) {
-      throw failure("A model change is unfinished. Select that model again to finish it before sending another message.");
+      throw failure(
+        "A model change is unfinished. Select that model again to finish it before sending another message.",
+        "vibe64_colleague_model_change_unfinished"
+      );
     }
     if (current.configuration.systemPrompt !== systemPrompt) await conversation.configure({ systemPrompt });
     state.conversation = conversation;

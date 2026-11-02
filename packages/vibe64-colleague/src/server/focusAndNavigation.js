@@ -24,7 +24,9 @@ function createColleagueFocusAndNavigation({ threads }) {
     const state = await threads.stateFor(context);
     threads.assertCurrentConversation(state, context.colleague?.conversationId);
     if (context.colleague?.userKey && context.colleague.userKey !== state.userKey) {
-      throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
+      throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403, {
+        messageCode: "vibe64_colleague_conversation_unavailable"
+      });
     }
     if (context.requestMeta?.request) state.requestContext = context;
     const connection = state.connections.get(context.colleague?.clientId);
@@ -36,7 +38,7 @@ function createColleagueFocusAndNavigation({ threads }) {
     // A socket's focus update carries its browser binding, the lifetime of that focus.
     const browserBinding = context.colleagueBrowserBinding;
     const state = await threads.stateFor(context);
-    if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
+    if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.", "vibe64_colleague_focus_stale");
     const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
     connection.focus = input.focus;
     state.connections.set(input.clientId, connection);
