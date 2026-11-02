@@ -23,6 +23,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `src/pages/app/index.vue`
 - `src/pages/app/learning.vue`
 - `src/pages/app/project/[slug].vue`
+- `src/components/studio/Vibe64ProjectPaneControls.vue`
 - `src/composables/useVibe64AppPage.js`
 - `src/components/studio/Vibe64DashboardShell.vue`
 - `src/components/studio/ProjectSelectionGate.vue`
