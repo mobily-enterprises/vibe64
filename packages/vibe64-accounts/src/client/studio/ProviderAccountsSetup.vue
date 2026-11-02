@@ -238,39 +238,11 @@
             v-if="session"
             class="accounts-setup__session"
           >
-            <ol
+            <CodexSignInSteps
               v-if="settingsStep || authorizeStep"
-              aria-label="Connect Codex"
-              class="accounts-setup__steps pa-0 mt-0 mb-2"
-            >
-              <li
-                :aria-current="settingsStep ? 'step' : undefined"
-                class="d-flex align-center ga-2 text-label-large"
-              >
-                <v-avatar
-                  color="primary"
-                  size="28"
-                  :variant="settingsStep ? 'flat' : 'tonal'"
-                >
-                  1
-                </v-avatar>
-                Prepare
-              </li>
-              <li class="accounts-setup__step-divider" aria-hidden="true"><v-divider /></li>
-              <li
-                :aria-current="authorizeStep ? 'step' : undefined"
-                class="d-flex align-center ga-2 text-label-large"
-              >
-                <v-avatar
-                  :color="authorizeStep ? 'primary' : undefined"
-                  size="28"
-                  :variant="authorizeStep ? 'flat' : 'tonal'"
-                >
-                  2
-                </v-avatar>
-                Connect
-              </li>
-            </ol>
+              :settings-step="settingsStep"
+              :authorize-step="authorizeStep"
+            />
 
             <div
               v-if="settingsStep"
@@ -302,23 +274,15 @@
                   It’s enabled — continue
                 </v-btn>
               </div>
-              <v-expansion-panels variant="accordion" flat>
-                <v-expansion-panel bg-color="transparent" rounded="lg">
-                  <v-expansion-panel-title min-height="48" class="text-body-medium px-0">
-                    Where is this setting?
-                  </v-expansion-panel-title>
-                  <v-expansion-panel-text>
-                    <img
-                      alt="ChatGPT Security settings with device code authorization for Codex enabled"
-                      class="accounts-setup__reference-image"
-                      :src="codexDeviceSettingsImage"
-                    >
-                    <p class="text-body-small text-medium-emphasis mt-3 mb-0">
-                      If your workspace manages this setting, ask a workspace admin to enable it.
-                    </p>
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-              </v-expansion-panels>
+              <SignInReferenceImage
+                title="Where is this setting?"
+                alt="ChatGPT Security settings with device code authorization for Codex enabled"
+                :src="codexDeviceSettingsImage"
+              >
+                <p class="text-body-small text-medium-emphasis mt-3 mb-0">
+                  If your workspace manages this setting, ask a workspace admin to enable it.
+                </p>
+              </SignInReferenceImage>
             </div>
 
             <div v-else-if="account.id === 'claude'" class="accounts-setup__instruction-copy">
@@ -440,24 +404,12 @@
               <p v-if="statusMessage && !sessionWaiting(session)" class="text-body-medium text-medium-emphasis ma-0" role="status">
                 {{ statusMessage }}
               </p>
-              <v-expansion-panels
+              <SignInReferenceImage
                 v-if="authorizeStep"
-                variant="accordion"
-                flat
-              >
-                <v-expansion-panel bg-color="transparent" rounded="lg">
-                  <v-expansion-panel-title min-height="48" class="text-body-medium px-0">
-                    What will I see in ChatGPT?
-                  </v-expansion-panel-title>
-                  <v-expansion-panel-text>
-                    <img
-                      alt="Codex device authorization page with one-time code entry fields"
-                      class="accounts-setup__reference-image"
-                      :src="codexDeviceAuthorizeImage"
-                    >
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-              </v-expansion-panels>
+                title="What will I see in ChatGPT?"
+                alt="Codex device authorization page with one-time code entry fields"
+                :src="codexDeviceAuthorizeImage"
+              />
             </div>
 
             <div
@@ -505,6 +457,8 @@ import codexDeviceSettingsImage from "/src/assets/codex-device-code-settings.png
 import Vibe64Terminal from "/src/components/studio/Vibe64Terminal.vue";
 import AiWaitStatus from "./AiWaitStatus.vue";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
+import CodexSignInSteps from "./CodexSignInSteps.vue";
+import SignInReferenceImage from "./SignInReferenceImage.vue";
 import {
   useProviderAccountsSetup
 } from "../composables/useProviderAccountsSetup.js";
@@ -710,25 +664,6 @@ const setupRows = computed(() => accountRows.value.map((account) => {
   min-width: 0;
 }
 
-.accounts-setup__steps {
-  align-items: center;
-  display: flex;
-  gap: 1rem;
-  list-style: none;
-}
-
-.accounts-setup__steps li {
-  flex-shrink: 0;
-}
-
-.accounts-setup__steps .accounts-setup__step-divider {
-  flex: 1;
-}
-
-.accounts-setup__steps [aria-current="step"] {
-  color: rgb(var(--v-theme-primary));
-}
-
 .accounts-setup__code-block {
   container-type: inline-size;
   display: grid;
@@ -768,12 +703,6 @@ const setupRows = computed(() => accountRows.value.map((account) => {
 
 .accounts-setup__authorize-action {
   width: 100%;
-}
-
-.accounts-setup__reference-image {
-  display: block;
-  height: auto;
-  max-width: 100%;
 }
 
 .accounts-setup__terminal {

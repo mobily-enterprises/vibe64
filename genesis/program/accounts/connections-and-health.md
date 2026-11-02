@@ -70,10 +70,19 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionDialogs.vue`
+- `packages/vibe64-accounts/src/client/studio/AiProviderKeyForm.vue`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionRow.vue`
 - `packages/vibe64-accounts/src/client/studio/AiProviderManage.vue`
 - `packages/vibe64-accounts/src/client/studio/AiSetupAdvanced.vue`
 - `packages/vibe64-accounts/src/client/composables/useAiConnectionManager.js`
+- `packages/vibe64-accounts/src/client/composables/useAiProviderPicker.js`
+- `packages/vibe64-accounts/src/client/composables/useNativeAiSetup.js`
+- `packages/vibe64-accounts/src/client/composables/useConfiguredAiRows.js`
+- `packages/vibe64-accounts/src/client/composables/useAiKeyEditor.js`
+- `packages/vibe64-accounts/src/client/composables/useModelAccess.js`
+- `packages/vibe64-accounts/src/client/composables/useAiConnectionRemoval.js`
+- `packages/vibe64-accounts/src/client/lib/aiConnectionChoices.js`
+- `packages/vibe64-accounts/src/client/lib/zenModelCheck.js`
 - `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
 
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
@@ -89,6 +98,17 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiSetup.vue`
+- `packages/vibe64-accounts/src/client/onboarding/useAiSetupCards.js`
+- `packages/vibe64-accounts/src/client/onboarding/useAiSetupTools.js`
+- `packages/vibe64-accounts/src/client/onboarding/useAiSetupSuccess.js`
+- `packages/vibe64-accounts/src/client/onboarding/useAiSetupProviderLinks.js`
+- `packages/vibe64-accounts/src/client/onboarding/useAiTeamSetupOffer.js`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupProviderCard.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupConnectSteps.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupRoutingChoice.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupSuccessMark.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupHelloProof.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiSetupModelsSummary.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiTeamSetupCard.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingMark.vue`
@@ -99,6 +119,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/bin/claude-auth-browser`
 - `packages/studio-terminal-core/src/server/claudeRuntime.js`
 - `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
+- `packages/vibe64-accounts/src/client/studio/CodexSignInSteps.vue`
+- `packages/vibe64-accounts/src/client/studio/SignInReferenceImage.vue`
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
 - Main: `packages/vibe64-accounts/src/server/service.js`
@@ -364,6 +386,15 @@ Removal confirms the exact owning orchestrator/provider.
 AI onboarding is owned by the client `onboarding/` module of
 `packages/vibe64-accounts` and composes these same setup components in their
 embedded mode; it has no connection implementation of its own.
+`AiSetup` holds the flow: its screens, finishing, routing, the team focus and
+the tour offer. `useAiSetupCards` (with `useAiSetupTools` for each card's AI
+tool on this computer) decides the cards' order, main AI and next action, and
+is provided to each `AiSetupProviderCard`; `useAiSetupSuccess` owns success's
+Colleague note and hello, `useAiTeamSetupOffer` the team card's offer, and
+`useAiSetupProviderLinks` `openProvider` with route following. The connect
+steps, routing choice, success mark, hello reply and Models summary are parts
+of their own (`AiSetupConnectSteps`, `AiSetupRoutingChoice`,
+`AiSetupSuccessMark`, `AiSetupHelloProof`, `AiSetupModelsSummary`).
 `aiOnboardingProviders.js` is the only place for provider ranks, copy, each
 plan's official name and price with any budget advice beneath it,
 the monogram shape, sign-up URLs, the orchestrator and provider id each card connects
@@ -422,7 +453,10 @@ manager's rows to the card by native, curated and OpenCode ids) offers
 off), provides it, and opens `studio/AiProviderManage.vue` with that card's
 rows, each an `AiConnectionRow` (sign-in or key change, Z.AI or Zen model
 access, Remove). The dialogs behind those actions are the moved
-`studio/AiConnectionDialogs.vue`, shared with AI Accounts. A card whose rows
+`studio/AiConnectionDialogs.vue`, shared with AI Accounts; its key editor's
+form is `studio/AiProviderKeyForm.vue`. The manager composes one part per
+concern (provider picker, native sign-in setup, configured rows, key editor,
+model access with the Zen check, removal) and returns them as one object. A card whose rows
 exist but no longer work shows Reconnect, which opens its connect step; cards
 with connections lead a configured setup. Once anything is configured, the collapsed
 `studio/AiSetupAdvanced.vue` under the cards holds only plumbing: Add a
