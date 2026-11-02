@@ -50,7 +50,6 @@ const DIRECT_EXECUTION_ALLOWLIST = new Map([
   }],
   ...[
     "packages/vibe64-packaging/bin/vibe64-publish.js",
-    "packages/vibe64-packaging/src/server/packers/registryRecipe.js",
     "packages/vibe64-publishing/src/server/credentialBroker.js"
   ].map((filePath) => [filePath, { "child_process import": { count: 1, reason: PUBLISHING_TOOLS } }]),
   ["packages/vibe64-packaging/src/server/stages.js", {
