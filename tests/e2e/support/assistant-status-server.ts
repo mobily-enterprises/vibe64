@@ -18,6 +18,7 @@ import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
 import { createConversationRuntime, createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
 import { normalizeConversationTurn } from "@jskit-ai/assistant-core/shared/conversation";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { requestBody, requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
 import { createSessionChangedPublisher, vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { PROJECT_WATCH } from "@local/vibe64-sessions/shared/project-watch";
@@ -45,6 +46,10 @@ import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
   readyProjectSelectionPayload, WORKSPACE_SLUG
 } from "./base-shell-data.ts";
+
+// The real server configures the Studio project context at startup; this
+// fixture's conversation actions read it the same way.
+configureStudioProjectContext({ env: process.env });
 
 type Handler = (response: ServerResponse, request: IncomingMessage) => void | Promise<void>;
 type GoalView = { status: string; goal: Record<string, unknown> | null;
@@ -188,7 +193,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     async updateAssistantSelection() { throw new Error("This scenario has not supplied a selection response."); },
     browserConversations: createMainBrowserConversations({ actions, terminals })
   };
-  const projectContext = { projectsRoot: "/workspace", async readWorkspaceProject() { return { project: { projectRoot: session.targetRoot } }; } };
+  const projectContext = { currentPracticeProjectScope: () => null, projectsRoot: "/workspace", async readWorkspaceProject() { return { project: { projectRoot: session.targetRoot } }; } };
   registerVibe64ActionContext(actions, {
     projectContext,
     resolveUser: async () => owner,
