@@ -5,6 +5,11 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
+/** A binding with no command-specific fields. */
+function captureNothing() {
+  return {};
+}
+
 function projectContextRoot(project) {
   const root = toText(project?.projectRoot || project?.path);
   return root ? path.resolve(root) : "";
@@ -20,7 +25,7 @@ function projectContextRoot(project) {
  * @param {object} [options]
  * @param {() => object} [options.capture]
  */
-function createAgentCommandProjectBinding(project, errors, { capture = () => ({}) } = {}) {
+function createAgentCommandProjectBinding(project, errors, { capture = captureNothing } = {}) {
   const bindings = new Map();
   const fail = ([message, code]) => vibe64Error(message, code);
 

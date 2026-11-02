@@ -5,6 +5,8 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 import { inspectGenesisStackComponents } from "@local/vibe64-genesis/server";
 import { canonicalProjectSource, githubSourceCommandOptions, prepareGithubMirrorReference } from "./sessionSource.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const MAX_INPUT_BYTES = 1024 * 1024;
 const MAX_INPUT_FILES = 128;
 
@@ -15,15 +17,17 @@ function inspectionError(code, message) {
 /**
  * Caller holds the existing project source lock, so conversion cannot change
  * repository identity between source selection and inspection.
+ * @param {{ project: object, temporaryRoot: string, vibe64User?: object | null, env: RuntimeEnv, signal?: AbortSignal, runCommand?: typeof runVibe64Command }} input
+ *   env selects the GitHub account mode the repository is read with
  */
 async function inspectCanonicalProjectStack({
   project,
   temporaryRoot,
   vibe64User = null,
-  env = process.env,
+  env,
   signal,
   runCommand = runVibe64Command
-} = {}) {
+}) {
   const source = canonicalProjectSource(project, project?.sourceRoot);
   if (![PROJECT_REPOSITORY_MODE_GITHUB, PROJECT_REPOSITORY_MODE_MANAGED_GIT].includes(source.mode)) {
     throw inspectionError("vibe64_stack_repository_mode", "Saved Stack inspection requires a managed project repository.");

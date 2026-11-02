@@ -88,7 +88,7 @@ test("the real chat helper renames only its bound session and cannot use the she
   });
   t.after(() => service.closeAllForSession("one"));
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId: "one", wrapperHostDir });
-  await prepareAgentHelperCommand({ wrapperHostDir });
+  await prepareAgentHelperCommand({ env: process.env, wrapperHostDir });
   // A managed child has the rename capability, never the shell transport token.
   const env = { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL };
   const result = await execFileAsync(path.join(wrapperHostDir, "vibe64-helper"), ["session", "rename", "My renamed session"], { env });

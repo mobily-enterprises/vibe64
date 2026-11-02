@@ -11,6 +11,8 @@ import {
 } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 function sourceError(message = "", code = "vibe64_session_source_failed") {
   return vibe64Error(message || "Vibe64 could not create the session source.", code);
 }
@@ -62,11 +64,17 @@ function runGit(cwd = "", args = [], allowedRoots = [], options = {}) {
   });
 }
 
-async function githubSourceCommandOptions(vibe64User = null, env = process.env, {
+/**
+ * The GitHub credentials a session source command runs with, in the environment's account mode.
+ * @param {object | null} vibe64User
+ * @param {RuntimeEnv} env
+ * @param {{ runCommand?: typeof runVibe64Command }} [commands]
+ */
+async function githubSourceCommandOptions(vibe64User, env, {
   runCommand = runVibe64Command
 } = {}) {
   const accountMode = normalizeGithubAccountMode(
-    env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    env[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
     GITHUB_ACCOUNT_MODE_LOCAL
   );
   const context = githubCredentialContext({

@@ -12,7 +12,7 @@ import { nativeConversationBindings } from "./nativeConversationRetirement.js";
  * command identity; visible wording never establishes management provenance.
  */
 export async function upgradeClaudeCommandMessages(context) {
-  const configRoot = claudeConfigRoot();
+  const configRoot = claudeConfigRoot({ env: process.env });
   return publishStateUpgradeFiles({
     ...context,
     async prepareUpdates(temporaryRoot) {

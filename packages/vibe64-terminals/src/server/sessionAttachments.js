@@ -55,9 +55,9 @@ async function readSavedAttachment(paths, id) {
 /**
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  */
-function createSessionAttachments({ project, env = process.env }) {
+function createSessionAttachments({ project, env }) {
   async function attachmentContext(context) {
     const runtime = context.runtime || await project.createRuntimeWithoutSource();
     const session = context.session || await runtime.getSessionWithoutSource(context.sessionId);

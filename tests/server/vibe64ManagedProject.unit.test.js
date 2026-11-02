@@ -461,7 +461,7 @@ test("shared managed repository owner provisions and clones a real private pract
       assert.equal((await execFileAsync("git", ["--git-dir", canonical, "rev-list", "--count", proof.commit])).stdout.trim(), "1");
       await project.runInProjectContext(slug, async () => {
         const runtime = await project.createRuntimeWithoutSource({ createSessionSource: context =>
-          project.runProjectSourceExclusive(async () => createSessionSource({ ...context, project: await project.readCurrentProject(),
+          project.runProjectSourceExclusive(async () => createSessionSource({ env: process.env, ...context, project: await project.readCurrentProject(),
             runCommand: directCommand }), { operation: "session-source-create" }) });
         const session = await runtime.createSession({ metadata: {}, sessionId: `training-${training.practiceId}`,
           sourceContext: { expectedCommit: proof.commit, vibe64User: actor } });

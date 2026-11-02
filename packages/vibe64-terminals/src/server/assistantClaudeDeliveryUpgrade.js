@@ -55,7 +55,7 @@ async function rejectedClaudeInputChanges({ metadata, runs, configRoot }) {
 }
 
 export async function upgradeClaudeRejectedInput(context) {
-  const configRoot = claudeConfigRoot();
+  const configRoot = claudeConfigRoot({ env: process.env });
   const manifestPath = path.join(context.backupRoot, "manifest.json");
   await verifyUpgradeParents(context.systemRoot, manifestPath);
   const resuming = await readUpgradeFile(manifestPath) !== null;

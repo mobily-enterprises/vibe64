@@ -77,6 +77,7 @@ async function directCommand(request = {}) {
 function sourceContext(root, sessionId = "session-1") {
   const metadata = {};
   return {
+    env: process.env,
     metadata,
     project: {
       repository: {

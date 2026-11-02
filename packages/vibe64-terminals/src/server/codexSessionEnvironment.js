@@ -22,8 +22,12 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 
-function codexAttachmentEnvForController(env = process.env) {
-  const explicitRoot = normalizeText(env?.[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]) ||
+/**
+ * The env attachment storage resolves its root from: the controller's configured root, else this process's live one.
+ * @param {RuntimeEnv} env
+ */
+function codexAttachmentEnvForController(env) {
+  const explicitRoot = normalizeText(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]) ||
     normalizeText(process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]);
   return explicitRoot
     ? {

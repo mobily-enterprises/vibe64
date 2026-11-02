@@ -97,8 +97,8 @@ async function markLaunchTerminalReady({
   store,
   sessionId = "",
   terminalSession = {},
-  updateMetadata = () => null
-} = {}) {
+  updateMetadata
+}) {
   const terminalSessionId = String(terminalSession.id || "").trim();
   const currentTerminal = readTerminalSession(terminalSessionId, {
     namespace
@@ -301,13 +301,13 @@ async function readyLaunchPreview({
 
 async function ensureLaunchPreviewProxy({
   context = {},
-  launchPreviewProxies = null,
+  launchPreviewProxies,
   options = {},
   previewPublicOrigin = "",
   sessionId = "",
   targetHref = "",
   terminal = null
-} = {}) {
+}) {
   return launchPreviewProxies.ensure({
     locatorSource: await readPreviewLocatorSource(context.session),
     editorOrigin: previewEditorOrigin({

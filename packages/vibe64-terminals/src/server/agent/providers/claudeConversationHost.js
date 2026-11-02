@@ -52,7 +52,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.project
  * @param {RuntimeLogger} dependencies.logger
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -75,7 +75,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  */
 function createClaudeConversationHost({
-  env = process.env,
+  env,
   project,
   logger,
   publishSessionChanged: publishApplicationSessionChanged,

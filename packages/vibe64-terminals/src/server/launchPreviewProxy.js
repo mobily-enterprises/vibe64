@@ -33,29 +33,41 @@ import {
 import { createPreviewIdentityGrantConsumer } from "./launchPreviewIdentity.js";
 import { proxyPreviewRequest, proxyPreviewUpgrade } from "./launchPreviewForwarding.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
-function normalizePreviewProxySocketIdleTimeoutMs(value = undefined, options = {}) {
-  const {
-    env = process.env
-  } = options;
-  const number = Number(value ?? env?.[PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV]);
+
+/**
+ * @param {number | undefined} value
+ * @param {RuntimeEnv} env
+ */
+function normalizePreviewProxySocketIdleTimeoutMs(value, env) {
+  const number = Number(value ?? env[PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV]);
   return Number.isSafeInteger(number) && number > 0
     ? number
     : DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS;
 }
 
+/**
+ * The Preview proxies of one controller, keyed by project, session and public origin.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the configured Preview env
+ * @param {NodeJS.ProcessEnv} options.hostEnv this process's live env, under the configured env
+ * @param {number} [options.socketIdleTimeoutMs]
+ */
 function createLaunchPreviewProxyRegistry({
-  env = process.env,
-  hostEnv = process.env,
+  env,
+  hostEnv,
   socketIdleTimeoutMs = undefined
-} = {}) {
-  const runtimeEnv = previewProxyRuntimeEnv(env, hostEnv);
+}) {
+  const runtimeEnv = {
+    ...hostEnv,
+    ...env
+  };
   const proxies = new Map();
   const pendingStarts = new Map();
   let publicSocketPreparation = null;
-  const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, {
-    env: runtimeEnv
-  });
+  const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, runtimeEnv);
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
@@ -289,19 +301,6 @@ function createLaunchPreviewProxyRegistry({
   });
 }
 
-function previewProxyRuntimeEnv(env = {}, hostEnv = process.env) {
-  const hostRuntimeEnv = hostEnv && typeof hostEnv === "object" && !Array.isArray(hostEnv)
-    ? hostEnv
-    : {};
-  const configuredEnv = env && typeof env === "object" && !Array.isArray(env)
-    ? env
-    : {};
-  return {
-    ...hostRuntimeEnv,
-    ...configuredEnv
-  };
-}
-
 function previewProxyScope(input = {}, options = {}) {
   const {
     publicOrigin = "",
@@ -372,7 +371,7 @@ async function startLaunchPreviewProxy({
   targetUrl
 } = {}, scope = {}, options = {}) {
   const {
-    env = process.env,
+    env,
     executePreviewIdentityCommand = null,
     previewAuth = null,
     publicOrigin = "",

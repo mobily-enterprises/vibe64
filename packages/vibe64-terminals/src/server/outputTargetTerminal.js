@@ -25,7 +25,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
  * @param {object} dependencies
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -39,7 +39,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
   ensureProjectServices,
-  env = process.env,
+  env,
   project,
   publishSessionChanged,
   runCommand = runVibe64Command,

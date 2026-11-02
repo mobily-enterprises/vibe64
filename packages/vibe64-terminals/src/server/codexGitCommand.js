@@ -1,7 +1,6 @@
 import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import process from "node:process";
 import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 
 import { normalizeText, resolveGithubHomeForStoredActor, runVibe64Command } from "@local/vibe64-execution/server";
@@ -202,7 +201,7 @@ function localGitCommandToolHome() {
 /**
  * @param {object} dependencies
  * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeActorAccess]
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {typeof fetch} [dependencies.fetch]
  * @param {RuntimeLogger} dependencies.logger
  * @param {() => number} [dependencies.now]
@@ -211,7 +210,7 @@ function localGitCommandToolHome() {
  */
 function createCodexGitCommandService({
   authorizeActorAccess = null,
-  env = process.env,
+  env,
   fetch: fetchRemote = globalThis.fetch,
   logger,
   now = Date.now,
@@ -607,12 +606,16 @@ function createCodexGitCommandService({
   });
 }
 
+/**
+ * Starts a session's Git control and writes its command wrappers.
+ * @param {{ commandService: ReturnType<typeof createCodexGitCommandService> | null, env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options
+ */
 async function prepareCodexGitCommand({
   commandService,
-  env = process.env,
+  env,
   sessionId = "",
   stateRoot = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId);
   if (!commandService || !normalizedSessionId) {
     return {
@@ -662,12 +665,13 @@ async function prepareCodexGitCommand({
  * directory, which holds every agent command wrapper of the session.
  * Renewal, changeover and project runtime closes keep both: the same session
  * reconnects and its helpers are rewritten in place.
+ * @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options
  */
 async function removeCodexGitCommandSession({
-  env = process.env,
+  env,
   sessionId = "",
   stateRoot = ""
-} = {}) {
+}) {
   const normalizedSessionId = normalizeText(sessionId);
   if (!normalizedSessionId) {
     return { ok: false, removed: false };

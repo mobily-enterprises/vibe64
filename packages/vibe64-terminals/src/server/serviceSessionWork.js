@@ -165,7 +165,7 @@ function createServiceSessionWork({
       onProgress: input.onProgress,
       operationId: input.operationId,
       project: projectRecord,
-      readConnectedWorkSnapshots: input.assertConnectedWorkSaved,
+      readConnectedWorkSnapshots: assertConnectedWorkSaved,
       runCommand: execution.runCommand,
       runProjectSourceExclusive: (operation, options) => project.runProjectSourceExclusive(async () => {
         assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);

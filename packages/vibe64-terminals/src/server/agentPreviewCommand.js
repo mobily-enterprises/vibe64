@@ -240,7 +240,7 @@ function browserWorkerToken({
  * @param {number} [options.browserControlHealthFailureLimit]
  * @param {number} [options.browserControlHealthIntervalMs]
  * @param {AgentPreviewCommandService} options.commandService
- * @param {RuntimeEnv} [options.env]
+ * @param {RuntimeEnv} options.env
  * @param {object} [options.project]
  * @param {string} [options.sessionId]
  * @param {string} [options.worktreePath]
@@ -252,7 +252,7 @@ async function prepareAgentPreviewCommand({
   browserControlHealthFailureLimit = 4,
   browserControlHealthIntervalMs = 15_000,
   commandService,
-  env = process.env,
+  env,
   project = {},
   sessionId = "",
   worktreePath = "",

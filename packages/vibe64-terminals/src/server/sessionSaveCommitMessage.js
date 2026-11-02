@@ -133,7 +133,7 @@ async function generateSessionSaveCommitMessage({ agent, agentContext = {}, chan
     taskId: SESSION_SAVE_TASK_ID,
     profile: SESSION_SAVE_COMMIT_EXECUTION_PROFILE,
     outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
-    prompt: sessionSaveCommitMessagePrompt(changes),
+    prompt: () => sessionSaveCommitMessagePrompt(changes),
     promptLabel: "Name saved work",
     stableContext: "Write only a commit subject from supplied changes. You have no tools or project access.",
     fail: commitMessageError,

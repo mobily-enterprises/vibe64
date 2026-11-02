@@ -4,6 +4,9 @@
 // https://github.com is asked, the one host Vibe64's Git credential helper
 // gives a GitHub token to; the token goes only into this request's
 // Authorization header.
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const GITHUB_ORIGIN = "https://github.com";
 // A listing of a few named branches is a few hundred bytes.
 const MAX_LISTING_BYTES = 1024 * 1024;
@@ -15,8 +18,9 @@ const DELIMITER_PACKET = "0001";
  * case). Node's fetch uses HTTPS_PROXY only when the server started with
  * NODE_USE_ENV_PROXY=1, and never ALL_PROXY. Where it would not take the proxy
  * Git takes, the heads are read with Git; this is decided before any read.
+ * @param {RuntimeEnv} env
  */
-function fetchReachesGithubAsGit(env = process.env) {
+function fetchReachesGithubAsGit(env) {
   const setting = (name) => String(env[name.toLowerCase()] || env[name] || "").trim();
   if (setting("HTTPS_PROXY")) return String(env.NODE_USE_ENV_PROXY || "").trim() === "1";
   return !setting("ALL_PROXY");

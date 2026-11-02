@@ -92,7 +92,7 @@ test("all assistant controls connect with long workspace paths and stay isolated
         sessionId,
         stateRoot: path.join(root, workspace, "state")
       });
-      const options = { commandService, sessionId, wrapperHostDir: git.hostWrapperDir };
+      const options = { commandService, env: process.env, sessionId, wrapperHostDir: git.hostWrapperDir };
       assert.ok(Buffer.byteLength(path.join(git.hostWrapperDir, "preview-command.sock")) > 107);
       assert.ok(Buffer.byteLength(path.join(git.hostWrapperDir, "session-command.sock")) > 107);
       const preview = await prepareAgentPreviewCommand(options);

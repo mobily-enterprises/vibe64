@@ -9,17 +9,22 @@ function cleanText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
 }
 
+// Without a standalone profile the actor has no preferred name of their own.
+const NO_PERSONAL_PROFILE = Object.freeze({
+  async read() {
+    return {};
+  }
+});
+
 async function conversationActorMetadata({
   actorUser = currentActorUser,
-  personalProfileStore = null,
+  personalProfileStore = NO_PERSONAL_PROFILE,
   vibe64User = null
 } = {}) {
   const authenticated = vibe64User && typeof vibe64User === "object" && !Array.isArray(vibe64User)
     ? vibe64User
     : null;
-  const localProfile = !authenticated && personalProfileStore
-    ? await personalProfileStore.read()
-    : {};
+  const localProfile = authenticated ? {} : await personalProfileStore.read();
   const source = authenticated || actorUser();
   const preferredName = cleanText(
     authenticated ? source.preferredName : localProfile.preferredName

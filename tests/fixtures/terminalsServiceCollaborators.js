@@ -44,6 +44,7 @@ function completedProjectDouble(project) {
 function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServices = null, ...dependencies }) {
   completedProjectDouble(dependencies.project);
   return {
+    env: process.env,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,

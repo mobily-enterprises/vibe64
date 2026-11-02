@@ -27,7 +27,8 @@ async function fixture(t) {
     root, sourceRoot, runtimeRoot,
     input: {
       sourceRoot, operation: { kind: "output", targetId: "app" }, runtimes: ["node26"],
-      steps: [{ argv: ["npm", "run", "dev"], workdir: "." }]
+      steps: [{ argv: ["npm", "run", "dev"], workdir: "." }],
+      env: process.env
     }
   };
 }

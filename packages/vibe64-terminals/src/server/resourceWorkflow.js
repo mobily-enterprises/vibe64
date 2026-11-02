@@ -14,6 +14,8 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { openedFileWithin } from "./openedFileWithin.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const fileDigests = new Map();
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_INPUT_BYTES = 16 * 1024 * 1024;
@@ -106,7 +108,13 @@ async function installedRuntimeIdentity(pack, env) {
   return { commands };
 }
 
-async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], steps = [], configuration = {}, env = process.env }) {
+/**
+ * The compatibility key resource accounting learns under: the operation, its runtimes and their identities, its
+ * commands and dependency files, never source paths or env values.
+ * @param {{ sourceRoot: string, operation: object, runtimes?: string[], steps?: object[], configuration?: object, env: RuntimeEnv }} input
+ *   env is the command environment whose PATH finds each runtime's commands
+ */
+async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], steps = [], configuration = {}, env }) {
   const root = await realpath(sourceRoot);
   const runtimeNames = [...new Set(runtimes)].sort();
   const commandSteps = steps.map((step) => {
@@ -179,7 +187,7 @@ async function startResourceWorkflow({
   environment = "development",
   kind,
   label,
-  env = process.env
+  env
 }) {
   if (!vibe64ManagedExecutionProvider() && !vibe64ManagedExecutionRequired()) return { ok: true, workflow: null };
   const project = currentProjectRequestContext();

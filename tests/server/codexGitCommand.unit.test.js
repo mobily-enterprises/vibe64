@@ -190,7 +190,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     assert.equal(result.stdout, "Vibe64 GitHub refresh requested.\n");
     assert.equal(events.length, 1);
     assert.deepEqual(events[0].realtime.payload, { projectSlug: "second", githubRefresh: true, reason: "github-refreshed" });
-    await prepareAgentHelperCommand({ wrapperHostDir: prepared.hostWrapperDir });
+    await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: prepared.hostWrapperDir });
     const helper = path.join(prepared.hostWrapperDir, "vibe64-helper");
     const help = await runProcessWithInput(helper, ["github", "--help"], options);
     assert.equal(help.exitCode, 0, help.stderr);

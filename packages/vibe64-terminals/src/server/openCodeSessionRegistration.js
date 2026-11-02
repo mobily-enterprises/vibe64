@@ -34,7 +34,6 @@ import {
   readOpenCodeZenModelIds,
   verifyOpenCodeApiKey
 } from "./opencodeServerProcess.js";
-import process from "node:process";
 import {
   prepareAgentSessionCommandEnvironment
 } from "./agentCommandEnvironment.js";
@@ -74,7 +73,7 @@ import {
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {string} [dependencies.command]
  * @param {typeof createOpenCodeServerProcess} [dependencies.createServerProcess]
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {ListAssistantConnections} dependencies.listConnections
  * @param {RuntimeLogger} dependencies.logger
@@ -97,7 +96,7 @@ function createOpenCodeSessionRegistration({
   codexGitCommand,
   command = "",
   createServerProcess = createOpenCodeServerProcess,
-  env = process.env,
+  env,
   getAssistantManager,
   listConnections,
   logger,

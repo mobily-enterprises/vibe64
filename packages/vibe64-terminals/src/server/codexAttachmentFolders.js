@@ -58,7 +58,8 @@ function assertAttachmentId(attachmentId = "") {
   return normalized;
 }
 
-function isSuggestionPin(entry = {}) {
+/** @param {import("node:fs").Dirent} entry */
+function isSuggestionPin(entry) {
   return entry.isFile() && entry.name.startsWith(ATTACHMENT_SUGGESTION_PIN_PREFIX);
 }
 

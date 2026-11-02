@@ -97,7 +97,7 @@ function createVibe64TerminalsFeature({
       const terminals = createService({
         actions: actionCatalogue,
         codexTerminalController,
-        env: terminalsProviderEnv(env),
+        env: terminalsProviderEnv(env, process.env),
         logger,
         opencodeTerminalController,
         productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,

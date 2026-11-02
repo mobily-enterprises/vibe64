@@ -306,7 +306,7 @@ function openCodeAssistantCapabilities({
   connections = [],
   input = {},
   providers: providerResult,
-  zenModelIds = null
+  zenModelIds
 } = {}) {
   const normalizedConnectionRows = normalizedConnections(connections);
   const connectionById = new Map(normalizedConnectionRows.map((connection) => [connection.id, connection]));

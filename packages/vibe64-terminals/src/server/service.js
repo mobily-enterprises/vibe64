@@ -1,4 +1,3 @@
-import process from "node:process";
 import { inspectGenesisSkills } from "@local/vibe64-genesis/server";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -73,7 +72,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
@@ -89,7 +88,7 @@ function createService({
   actions,
   // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
-  env = process.env,
+  env,
   inspectAgentSkills = inspectGenesisSkills,
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default

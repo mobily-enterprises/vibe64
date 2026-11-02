@@ -17,15 +17,22 @@ import {
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import { previewProxyDebugLog } from "./launchPreviewDebugLog.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const LOOPBACK_HOST = "127.0.0.1";
 
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
 
-async function listenOnPreviewPort(server, options = {}) {
+/**
+ * Listens on the first free loopback port of the configured Preview range.
+ * @param {import("node:http").Server} server
+ * @param {{ env: RuntimeEnv, host?: string, portEnd?: number, portStart?: number }} options
+ */
+async function listenOnPreviewPort(server, options) {
   const {
-    env = process.env,
+    env,
     host = previewProxyListenHost(env),
     portEnd = undefined,
     portStart = undefined
@@ -65,7 +72,8 @@ async function assertPrivateFallbackSocketParent(socketDir = "") {
   }
 }
 
-async function preparePreviewSocketDirectory(env = process.env) {
+/** @param {RuntimeEnv} env */
+async function preparePreviewSocketDirectory(env) {
   const socketDir = previewProxySocketDir(env);
   if (socketDir === fallbackPreviewProxySocketDir()) {
     await assertPrivateFallbackSocketParent(socketDir);
@@ -78,10 +86,14 @@ async function preparePreviewSocketDirectory(env = process.env) {
   return socketDir;
 }
 
+/**
+ * Removes the Preview sockets no live listener holds.
+ * @param {{ env: RuntimeEnv, socketHasLiveListener?: typeof previewSocketHasLiveListener }} options
+ */
 async function pruneStalePreviewSockets({
-  env = process.env,
+  env,
   socketHasLiveListener = previewSocketHasLiveListener
-} = {}) {
+}) {
   const socketDir = await preparePreviewSocketDirectory(env);
   const names = await readdir(socketDir);
   let preserved = 0;
@@ -125,10 +137,15 @@ async function pruneStalePreviewSockets({
   };
 }
 
-async function listenOnPreviewSocket(server, options = {}) {
+/**
+ * Listens on the private socket a public Preview origin names.
+ * @param {import("node:http").Server} server
+ * @param {{ env: RuntimeEnv, publicOrigin: string }} options
+ */
+async function listenOnPreviewSocket(server, options) {
   const {
-    env = process.env,
-    publicOrigin = ""
+    env,
+    publicOrigin
   } = options;
   const socketPath = previewPublicSocketPath(publicOrigin, env);
   await preparePreviewSocketDirectory(env);
@@ -241,7 +258,11 @@ function normalizePreviewPublicOrigin(value = "") {
   return url.origin;
 }
 
-function previewPublicSocketPath(publicOrigin = "", env = process.env) {
+/**
+ * @param {string} publicOrigin
+ * @param {RuntimeEnv} env
+ */
+function previewPublicSocketPath(publicOrigin, env) {
   const origin = normalizePreviewPublicOrigin(publicOrigin);
   const url = new URL(origin);
   const host = url.hostname;
@@ -255,7 +276,8 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   return path.join(socketDir, `${match[1]}--${match[2]}${portSuffix}.sock`);
 }
 
-function previewProxySocketDir(env = process.env) {
+/** @param {RuntimeEnv} env */
+function previewProxySocketDir(env) {
   const configured = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || "").trim();
   if (configured) {
     return configured;
@@ -296,11 +318,16 @@ function tryListen(server, port, host) {
   });
 }
 
-function previewProxyListenHost(env = process.env) {
+/** @param {RuntimeEnv} env */
+function previewProxyListenHost(env) {
   return String(env[PREVIEW_PROXY_HOST_ENV] || LOOPBACK_HOST).trim() || LOOPBACK_HOST;
 }
 
-function previewProxyPublicHost(listenHost = LOOPBACK_HOST, env = process.env) {
+/**
+ * @param {string} listenHost
+ * @param {RuntimeEnv} env
+ */
+function previewProxyPublicHost(listenHost, env) {
   const configured = String(env[PREVIEW_PROXY_PUBLIC_HOST_ENV] || "").trim();
   if (configured) {
     return configured;

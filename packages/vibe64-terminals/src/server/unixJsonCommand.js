@@ -7,6 +7,8 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
@@ -81,8 +83,13 @@ function shortCommandHash(value = "") {
     .slice(0, 16);
 }
 
-function unixCommandSocketPath(identity, options = {}) {
-  const { env = process.env } = options;
+/**
+ * A short socket path for one command identity, under the environment's TMPDIR.
+ * @param {string} identity
+ * @param {{ env: RuntimeEnv }} options
+ */
+function unixCommandSocketPath(identity, options) {
+  const { env } = options;
   // readable-check: allow method-probe - platform object: process.getuid() exists only on POSIX
   const owner = typeof process.getuid === "function" ? process.getuid() : "user";
   const root = path.resolve(String(env.TMPDIR || "").trim() || tmpdir());

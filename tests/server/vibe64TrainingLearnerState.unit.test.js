@@ -1976,7 +1976,7 @@ test("a practice session is an ordinary local project session that stays the lea
       },
       async requireAssistantSelectionAccess() {},
       async createSessionSource(input) {
-        return project.runProjectSourceExclusive(async () => createSessionSource({ ...input,
+        return project.runProjectSourceExclusive(async () => createSessionSource({ env: process.env, ...input,
           project: await project.readCurrentProject() }), { operation: "session-source-create" });
       }
     },

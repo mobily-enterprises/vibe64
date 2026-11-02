@@ -13137,7 +13137,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
 test("Codex real provider refreshes Public commands and current instructions without authored work", async () => {
   const threadId = randomUUID();
   const protocol = [];
-  const commandService = createCodexGitCommandService({ logger: silentLogger, project: {} });
+  const commandService = createCodexGitCommandService({ env: process.env, logger: silentLogger, project: {} });
   let provider;
   let options;
   let nativeEnvironment;
@@ -13171,7 +13171,7 @@ test("Codex real provider refreshes Public commands and current instructions wit
     const registry = await vibe64HostContextRegistry(project.agentRuntimeRoot);
     await registry.register(threadId, { ...hostContext, conversationKind: "main" }, session.metadata.source_path);
     const replacement = await prepareCodexGitCommand({
-      commandService: createCodexGitCommandService({ logger: silentLogger, project: {} }),
+      commandService: createCodexGitCommandService({ env: process.env, logger: silentLogger, project: {} }),
       env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") },
       sessionId: session.sessionId,
       stateRoot: projectRuntimeRoot

@@ -46,6 +46,8 @@ import {
 } from "./codexAttachmentExpiry.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const CODEX_ATTACHMENT_MAX_BYTES = VIBE64_UPLOAD_MAX_BYTES;
 const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = VIBE64_UPLOAD_BODY_LIMIT_BYTES;
 function sanitizeAttachmentFileName(fileName = "") {
@@ -90,11 +92,15 @@ function attachmentByteCounter(maxBytes = CODEX_ATTACHMENT_MAX_BYTES) {
   return counter;
 }
 
+/**
+ * Prepares attachment storage at start: retires quarantined sessions and scans each session's expired files.
+ * @param {{ env: RuntimeEnv, lockWaitMs?: number, now?: number }} options
+ */
 async function prepareCodexAttachmentStorage({
-  env = process.env,
+  env,
   lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
   now = Date.now()
-} = {}) {
+}) {
   await prepareCodexAttachmentRoot({ env });
   const filesRoot = attachmentFilesRoot({ env });
   await mkdir(filesRoot, { mode: vibe64SharedModes().directory, recursive: true });
@@ -200,15 +206,19 @@ async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentI
   return result.value;
 }
 
+/**
+ * Stores one uploaded attachment for a session.
+ * @param {{ beforeCreate?: () => Promise<void> | void, env: RuntimeEnv, input?: object, lockWaitMs?: number, maxBytes?: number, sessionId?: string, executionRoot?: string }} options
+ */
 async function storeCodexAttachment({
   beforeCreate = doNothing,
-  env = process.env,
+  env,
   input = {},
   lockWaitMs = undefined,
   maxBytes = CODEX_ATTACHMENT_MAX_BYTES,
   sessionId = "",
   executionRoot = ""
-} = {}) {
+}) {
   const fileName = sanitizeAttachmentFileName(input.fileName);
   // readable-check: allow method-probe - platform object: an upload stream is a Node readable stream
   if (!input.stream || typeof input.stream.pipe !== "function") {

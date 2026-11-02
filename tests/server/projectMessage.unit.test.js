@@ -133,7 +133,7 @@ test("the installed helper sends through its bound socket and supplies server-ow
   });
   t.after(() => service.closeAllForSession("source"));
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId: "source", wrapperHostDir: root });
-  await prepareAgentHelperCommand({ wrapperHostDir: root });
+  await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
   const result = await promisify(execFile)(path.join(root, "vibe64-helper"),
     ["session", "message-project", "jskit-ai", "Publish then ping online with the version.", "stable-id"],
     { env: { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL } });
@@ -241,7 +241,7 @@ test("project-preview returns the other project's current Preview URL through th
   });
   t.after(() => service.closeAllForSession("source"));
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId: "source", wrapperHostDir: root });
-  await prepareAgentHelperCommand({ wrapperHostDir: root });
+  await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
   const env = { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL };
   const result = await promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "mercbot"], { env });
   assert.equal(result.stdout, "https://v64preview-abc.example.test/?vibe64_preview_token=t\n");
@@ -380,7 +380,7 @@ test("an assistant finds the other session by listing, or by its name, without a
   });
   t.after(() => service.closeAllForSession(GEOFF));
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId: GEOFF, wrapperHostDir: compas.root });
-  await prepareAgentHelperCommand({ wrapperHostDir: compas.root });
+  await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: compas.root });
   const helper = args => promisify(execFile)(path.join(compas.root, "vibe64-helper"), ["session", ...args],
     { env: { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL } });
 

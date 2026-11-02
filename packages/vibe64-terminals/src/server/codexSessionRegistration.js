@@ -112,7 +112,6 @@ import {
 import {
   createCodexSessionAgentProvider
 } from "./agent/providers/codexSessionAgentProvider.js";
-import process from "node:process";
 import {
   codexTerminalNamespace
 } from "./terminalShared.js";
@@ -168,7 +167,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {typeof createCodexHelperThreadLedger} [dependencies.codexHelperThreadLedgerFactory]
  * @param {boolean} [dependencies.codexToolHomeRequired]
  * @param {string} [dependencies.codexToolHomeSource]
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -193,7 +192,7 @@ function createCodexSessionRegistration({
   codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
-  env = process.env,
+  env,
   codexGitCommand,
   logger,
   project,
@@ -222,11 +221,14 @@ function createCodexSessionRegistration({
     codexAppServerProviderKeyFields
   } = codexRuntimeHost;
   const localRuntime = runtimeProfileIsLocal(getStudioProjectContext().runtimeProfile);
-  const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
-    ? createPersonalAiProfileStore({
-      systemRoot: codexAppServerProviderOptions.systemRoot
-    })
-    : null;
+  // Only a local run with a system root has a standalone profile.
+  const actorProfile = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
+    ? {
+        personalProfileStore: createPersonalAiProfileStore({
+          systemRoot: codexAppServerProviderOptions.systemRoot
+        })
+      }
+    : {};
 
   const providerConnections = createCodexProviderConnectionStore({ systemRoot: codexAppServerProviderOptions.systemRoot });
   const codexAccountPreparation = createCodexAccountPreparation({
@@ -451,7 +453,7 @@ function createCodexSessionRegistration({
 
   function currentConversationActorMetadata(vibe64User = null) {
     return conversationActorMetadata({
-      personalProfileStore,
+      ...actorProfile,
       vibe64User
     });
   }

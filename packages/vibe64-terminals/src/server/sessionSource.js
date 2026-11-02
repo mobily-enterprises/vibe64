@@ -430,7 +430,7 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {string} [dependencies.expectedCommit]
  * @param {string} [dependencies.expectedSourceRef]
  * @param {object} [dependencies.project] the current project's record
@@ -441,7 +441,7 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
  * @param {object | null} [dependencies.vibe64User]
  */
 async function createSessionSource({
-  env = process.env,
+  env,
   expectedCommit = "",
   expectedSourceRef = "",
   project = {},

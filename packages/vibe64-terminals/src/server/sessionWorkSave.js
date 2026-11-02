@@ -622,7 +622,7 @@ async function saveSessionWork({
   onCacheMaintenance = doNothing,
   operationId = crypto.randomUUID(),
   project = {},
-  readConnectedWorkSnapshots = async () => [],
+  readConnectedWorkSnapshots,
   runCommand = runVibe64Command,
   runProjectSourceExclusive = async (operation) => operation(),
   onProgress = doNothing,

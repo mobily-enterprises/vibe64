@@ -4,6 +4,8 @@ import { createCodexSessionAgentProvider as createProvider } from "../../package
 // Keep their mock identity (including the attachment retry key) unchanged.
 export function createCodexSessionAgentProvider({ controller, ...options } = {}) {
   const provider = createProvider({
+    connectionStatus: async () => true,
+    env: process.env,
     listConnections: async () => [],
     ...options,
     catalog: controller,
