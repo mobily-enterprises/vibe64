@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fixture, publishPlanFixture, planDocument, reportOutcome } from "../fixtures/assistantRouting.js";
-import { manageWorkPlan, readWorkPlan, readWorkPlanHistory } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { manageWorkPlan, readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { assistantWorkflowUpgradeChanges, parseRoutingDecision, assistantWorkflowInstructions } from "@local/vibe64-runtime/shared/assistantRouting";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+/** The plan History, read through the plan command's history operation. */
+async function planHistory(context) {
+  return (await manageWorkPlan(context, { operation: "history" }, "user")).history;
+}
 
 const request = { messageId: "request-1", message: "Execute the plan", submissionKind: "send" };
 const end = (state, result = "completed") => ({ payload: { agentRun: { active: false, state: result, providerTurnId: state.turnId } } });
@@ -20,7 +25,7 @@ async function review(f) { await f.service.send("session-1", request, f.context)
 for (const deslop of [true, false]) test(`implementation, review and explicit completion archive and auto-save exactly once with Deslop ${deslop}`, async t => {
   const saves = [];
   const f = await fixture(t, { mode: "auto", review: deslop }, { onPlanCompleted: async (sessionId, input) => {
-    saves.push({ sessionId, input, archived: (await readWorkPlanHistory(f.context)).length, status: f.state().status });
+    saves.push({ sessionId, input, archived: (await planHistory(f.context)).length, status: f.state().status });
     return "Saved automatically after completing the plan.";
   } });
   await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
@@ -33,9 +38,9 @@ for (const deslop of [true, false]) test(`implementation, review and explicit co
   await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
   const terminal = f.state(); await finish(f, "complete");
   assert.equal(f.state().status, "complete"); assert.equal(await readWorkPlan(f.context), null);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+  assert.equal((await planHistory(f.context)).length, 1);
   await f.service.afterTurn("session-1", end(terminal), f.context);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 1); assert.equal(f.sends.length, 2);
+  assert.equal((await planHistory(f.context)).length, 1); assert.equal(f.sends.length, 2);
   // Save follows the archived plan once, after the completing turn ended.
   assert.equal(saves.length, 1);
   assert.equal(saves[0].sessionId, "session-1"); assert.equal(saves[0].archived, 1); assert.equal(saves[0].status, "complete");
@@ -49,7 +54,7 @@ test("a refused automatic save leaves a short note and keeps the completed plan"
   const plan = await readWorkPlan(f.context);
   await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
   await finish(f, "complete");
-  assert.equal(f.state().status, "complete"); assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+  assert.equal(f.state().status, "complete"); assert.equal((await planHistory(f.context)).length, 1);
   assert.match([...f.notices.values()].map(turn => JSON.stringify(turn)).join("\n"), /Automatic save didn't run: Nothing changed\./);
 });
 
@@ -70,7 +75,7 @@ test("Senior can reconcile checklist ticks during review and archive the complet
   await finish(f, "complete");
   assert.equal(f.state().status, "complete");
   assert.equal(await readWorkPlan(f.context), null);
-  const history = await readWorkPlanHistory(f.context);
+  const history = await planHistory(f.context);
   assert.equal(history.length, 1);
   assert.equal(history[0].revision, completed.revision);
   assert.equal(history[0].progressRevision, completed.progressRevision);
@@ -86,7 +91,7 @@ for (const change of ["wording", "fenced example"]) test(`completion still rejec
   plan = await readWorkPlan(f.context);
   await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
   await assert.rejects(report(f, "complete"), /explicitly complete/);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  assert.equal((await planHistory(f.context)).length, 0);
 });
 
 test("Senior saves necessary rework, Junior implements it, then Senior reviews again", async t => {
@@ -320,7 +325,7 @@ for (const final of ["missing", "archive-failure", "obsolete"]) test(`${final} c
   }
   await f.service.afterTurn("session-1", final === "obsolete" ? end({ turnId: "old-turn" }) : end(terminal), f.context);
   assert.notEqual(f.state().status, "complete"); assert.equal((await readWorkPlan(f.context)).status, "completed");
-  if (final !== "archive-failure") assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  if (final !== "archive-failure") assert.equal((await planHistory(f.context)).length, 0);
   else assert.match(f.state().error, /could not be archived/);
 });
 

@@ -460,9 +460,6 @@ const __testables = Object.freeze({
 });
 
 export {
-  OUTPUT_RESULT_MAX_BYTES,
-  OUTPUT_RESULTS_DIRECTORY,
-  OUTPUT_RUN_MAX_BYTES,
   listOutputResults,
   readOutputResult,
   removeOutputResults,

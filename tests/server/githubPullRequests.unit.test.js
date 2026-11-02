@@ -14,13 +14,15 @@ import { repositoryBranches } from "../../packages/vibe64-project/src/server/rep
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { prepareSessionPullRequestBranch, saveSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
-import { checkSessionUpdatesDirect, updateSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
+import { __testables as sessionWorkUpdateTestables, checkSessionUpdatesDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import getPlacements from "../../src/placement.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
+
+const { updateSessionWorkDirect } = sessionWorkUpdateTestables;
 
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
 const project = { repositoryMode: "github", repository: { defaultBranch: "main", mode: "github" },

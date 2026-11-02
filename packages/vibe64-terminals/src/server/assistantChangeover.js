@@ -3,8 +3,7 @@ import {
   createMainConversationBinding,
   readMainConversationHistory,
   MAIN_CONVERSATION_PRESENTATION,
-  requireCompletedConversationRewind,
-  requireMainConversationAdmission
+  requireCompletedConversationRewind
 } from "./mainConversationBinding.js";
 import { requireCompletedNativeConversationReplacement } from "./mainConversationContext.js";
 import { createConversationChangeover } from "@jskit-ai/assistant-core/server/conversation";
@@ -14,7 +13,7 @@ export function sessionConversationKey(session) {
   return selection.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
 }
 
-export { requireCompletedNativeConversationReplacement, requireCompletedConversationRewind, requireMainConversationAdmission };
+export { requireCompletedNativeConversationReplacement, requireCompletedConversationRewind };
 
 /**
  * A changeover ends the previous assistant's use of the session. Its native

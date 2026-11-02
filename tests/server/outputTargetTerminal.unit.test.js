@@ -20,15 +20,17 @@ import {
   createLaunchPreviewProxyRegistry,
   previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import {
-  createLaunchRestartBaseline,
-  createOutputTargetTerminalController,
-  launchRestartState,
-  outputTargetExecutionDescriptor,
-  previewIdentityCommandRunnerForLaunchTerminal,
+  __testables as launchRestartTestables,
+  createLaunchRestartBaseline
+} from "../../packages/vibe64-terminals/src/server/launchRestart.js";
+import { outputTargetExecutionDescriptor } from "../../packages/vibe64-terminals/src/server/outputTargetLaunchTerminals.js";
+import { previewIdentityCommandRunnerForLaunchTerminal } from "../../packages/vibe64-terminals/src/server/launchPreviewAuth.js";
+import {
   previewEditorOrigin,
   previewPublicOriginForLaunch
-} from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/previewPublicOrigin.js";
 import {
   addGenesisStack,
   initializeGenesisProject,
@@ -55,6 +57,7 @@ import {
   launchRestartRulesMatcher
 } from "../../packages/vibe64-core/src/server/launchRestartRules.js";
 
+const { launchRestartState } = launchRestartTestables;
 const { commandWithHttpReadiness, httpReadinessProbeCommand } = launchTargetTerminalTestables;
 const { launchRestartRulesMatcherSource } = launchRestartRulesTestables;
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";

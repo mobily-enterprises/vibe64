@@ -21,9 +21,9 @@ import {
   saveSessionWorkDirect as saveSessionWorkImplementation
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
+  __testables as sessionWorkUpdateTestables,
   checkSessionUpdates,
-  updateSessionWork as updateManagedSessionWork,
-  updateSessionWorkDirect as updateSessionWork
+  updateSessionWork as updateManagedSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import {
   inspectSessionUpdateFailure,
@@ -43,6 +43,8 @@ import {
 } from "../../packages/vibe64-execution/src/server/repositoryStorage.js";
 import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
+
+const { updateSessionWorkDirect: updateSessionWork } = sessionWorkUpdateTestables;
 
 const execFileAsync = promisify(execFile);
 

@@ -143,6 +143,5 @@ async function recoverSessionWorkSave({
 }
 
 export {
-  preparedSaveRef,
   recoverSessionWorkSave
 };

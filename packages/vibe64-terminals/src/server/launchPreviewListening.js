@@ -310,13 +310,14 @@ function previewProxyPublicHost(listenHost = LOOPBACK_HOST, env = process.env) {
     : listenHost;
 }
 
+const __testables = Object.freeze({ assertPrivateFallbackSocketParent });
+
 export {
-  assertPrivateFallbackSocketParent,
   listenOnPreviewPort,
   listenOnPreviewSocket,
   normalizePreviewPublicOrigin,
-  previewProxyListenHost,
   previewPublicSocketPath,
   pruneStalePreviewSockets,
-  unlinkIfExists
+  unlinkIfExists,
+  __testables
 };

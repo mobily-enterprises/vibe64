@@ -15,13 +15,14 @@ import {
   PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
   PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
-import { __testables } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
+import { __testables, previewProxyPortRange } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
 import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
@@ -31,23 +32,26 @@ import {
   createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
-  PREVIEW_PROXY_PORT_END,
-  PREVIEW_PROXY_PORT_START,
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-  appendPreviewTokenQueryParam,
-  assertPrivateFallbackSocketParent,
   createLaunchPreviewProxyRegistry,
-  injectLaunchPreviewBridge,
-  normalizePreviewTargetHref,
-  previewPublicSocketPath,
-  previewTokenCookie,
-  previewTokenCookieName,
-  pruneStalePreviewSockets,
-  proxiedLocation,
-  stripPreviewTokenQueryParam
+  previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { injectLaunchPreviewBridge } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
+import {
+  __testables as previewHeaderTestables,
+  appendPreviewTokenQueryParam,
+  normalizePreviewTargetHref,
+  previewTokenCookie,
+  stripPreviewTokenQueryParam
+} from "../../packages/vibe64-terminals/src/server/launchPreviewHeaders.js";
+import {
+  __testables as previewListeningTestables,
+  pruneStalePreviewSockets
+} from "../../packages/vibe64-terminals/src/server/launchPreviewListening.js";
 
 const { PREVIEW_PROXY_PORT_END_ENV, PREVIEW_PROXY_PORT_START_ENV } = __testables;
+const { previewTokenCookieName, proxiedLocation } = previewHeaderTestables;
+const { assertPrivateFallbackSocketParent } = previewListeningTestables;
+const { end: PREVIEW_PROXY_PORT_END, start: PREVIEW_PROXY_PORT_START } = previewProxyPortRange({});
 
 const TEST_PREVIEW_IDENTITY_SECRET = "a".repeat(64);
 

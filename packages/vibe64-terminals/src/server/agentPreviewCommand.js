@@ -368,7 +368,6 @@ const __testables = Object.freeze({
 });
 
 export {
-  VIBE64_AGENT_PREVIEW_COMMAND_GENERATION_ENV,
   createAgentPreviewCommandService,
   prepareAgentPreviewCommand,
   __testables

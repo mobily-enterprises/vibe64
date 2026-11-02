@@ -107,6 +107,5 @@ function injectLaunchPreviewBridge(html = "", options = {}) {
 }
 
 export {
-  injectLaunchPreviewBridge,
-  launchPreviewBridgeScript
+  injectLaunchPreviewBridge
 };

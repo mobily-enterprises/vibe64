@@ -496,7 +496,6 @@ const __testables = Object.freeze({
 });
 
 export {
-  VIBE64_AGENT_ENV_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV,
   createAgentEnvCommandService,

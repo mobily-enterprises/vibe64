@@ -5,17 +5,21 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 
+import { createSessionPromptHintsService } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
 import {
-  createSessionPromptHintsService,
-  parsePromptHintSuggestions,
+  __testables as promptHintRulesTestables,
+  parsePromptHintSuggestions
+} from "../../packages/vibe64-terminals/src/server/promptHintRules.js";
+import {
   readPromptHintBlueprint,
-  readPromptHintSubsystems,
-  visibleConversation
-} from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
+  readPromptHintSubsystems
+} from "../../packages/vibe64-terminals/src/server/promptHintGenesisFiles.js";
 import {
   currentProjectScopeKey,
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+
+const { visibleConversation } = promptHintRulesTestables;
 
 const fixtureRoots = [];
 after(async () => { for (const root of fixtureRoots) await rm(root, { recursive: true, force: true }); });

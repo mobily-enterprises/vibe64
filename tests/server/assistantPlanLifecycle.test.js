@@ -6,12 +6,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { __testables as assistantWorkPlanTestables, manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { __testables as assistantWorkPlanTestables, manageWorkPlan, readWorkPlan, readWorkPlanPage, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
 import { __testables as assistantPlanUpgradeTestables, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+/** The plan History, read through the plan command's history operation. */
+async function planHistory(context) {
+  return (await manageWorkPlan(context, { operation: "history" }, "user")).history;
+}
 
 const { workPlanPath } = assistantWorkPlanTestables;
 const { upgradePlanSession } = assistantPlanUpgradeTestables;
@@ -52,7 +57,7 @@ test("stable scope and separate progress retain explicit Senior completion and r
   await f.change("write", "senior", { text: openText + "- [ ] Missing acceptance check\n" });
   assert.equal((await readWorkPlan(f.context)).checked, 0);
   assert.equal((await readWorkPlan(f.context)).total, 3);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 0, "reopening the current plan does not duplicate it in History");
+  assert.equal((await planHistory(f.context)).length, 0, "reopening the current plan does not duplicate it in History");
 });
 
 test("Junior updates verified checklist ticks without changing scope or completing the plan", async t => {
@@ -107,7 +112,7 @@ test("new plans require acknowledged replacement and reopening moves the selecte
   await assert.rejects(f.change("reopen", "senior", { archiveId: first.artifactRevision }), /Once the user has authorized replacement/);
   await f.change("reopen", "senior", { archiveId: first.artifactRevision, archiveCurrent: true });
   assert.equal((await readWorkPlan(f.context)).text, first.text);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+  assert.equal((await planHistory(f.context)).length, 1);
   assert.equal((await readWorkPlanPage(f.context, { archiveId: first.artifactRevision })).available, false);
   await f.change("archive");
   const empty = await readWorkPlanPage(f.context);
@@ -132,11 +137,11 @@ test("Make current moves a completed archive to Active once, preserves evidence,
   const current = await readWorkPlan(f.context);
   assert.equal(current.text, completed.text.replace("Status: completed", "Status: active"));
   assert.equal(current.checked, completed.checked);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  assert.equal((await planHistory(f.context)).length, 0);
   await assert.rejects(f.change("reopen", "user", { archiveId: completed.artifactRevision, archiveCurrent: true }), /already a current plan/);
   assert.deepEqual(await readWorkPlan(f.context), current);
   await f.change("archive", "user");
-  const history = await readWorkPlanHistory(f.context);
+  const history = await planHistory(f.context);
   assert.equal(history.length, 1);
   assert.equal(history[0].artifactRevision, current.artifactRevision);
 });
@@ -301,7 +306,7 @@ test("archive replacement and reopen retain one exact pair and start replacement
   assert.notEqual(next.artifactRevision, old.artifactRevision);
   await f.change("archive");
   assert.equal((await readWorkPlanPage(f.context, { archiveId: next.artifactRevision })).progressText, next.progressText);
-  assert.equal((await readWorkPlanHistory(f.context)).some(item => item.id === old.artifactRevision), false, "Original reopen moved the old pair out of History");
+  assert.equal((await planHistory(f.context)).some(item => item.id === old.artifactRevision), false, "Original reopen moved the old pair out of History");
 });
 
 test("paired pages preserve full Unicode and reject progress replacement without changing scope", async t => {
@@ -414,7 +419,7 @@ test("actual paired offline publisher is read-only then backs up complete curren
   const current = await readWorkPlan({ runtime: { store }, session: { sessionId: "plan-session" } });
   assert.equal(current.text, original); assert.equal(current.progressText, null);
   assert.equal(current.revision, id);
-  assert.equal((await readWorkPlanHistory({ runtime: { store }, session: { sessionId: "plan-session" } }))[0].id, id);
+  assert.equal((await planHistory({ runtime: { store }, session: { sessionId: "plan-session" } }))[0].id, id);
   const exec = promisify(execFile);
   for (const scope of ["archived-plan", "archived-plan/conversations/side"]) {
     assert.equal((await exec("tar", ["-xOf", archiveFile, "./" + scope + "/plans/plan/" + id + ".md"])).stdout, original);
@@ -448,7 +453,7 @@ test("legacy current and archived plans remain exact read-only documents until t
   assert.equal(page.text, currentText);
   assert.equal(page.progressAvailable, false);
   assert.equal(page.progressText, "");
-  const history = await readWorkPlanHistory(f.context);
+  const history = await planHistory(f.context);
   assert.equal(history.length, 1);
   assert.equal(history[0].id, archiveId);
   const oldPage = await readWorkPlanPage(f.context, { archiveId });
@@ -501,7 +506,7 @@ test("direct pair readers hold the original per-path queue until referenced docu
     let writing;
     try {
       reading = reader === "current" ? readWorkPlan(f.context)
-        : reader === "page" ? readWorkPlanPage(f.context) : readWorkPlanHistory(f.context);
+        : reader === "page" ? readWorkPlanPage(f.context) : planHistory(f.context);
       await reached;
       let enteredMutation = false;
       writing = manageWorkPlan(f.context, {

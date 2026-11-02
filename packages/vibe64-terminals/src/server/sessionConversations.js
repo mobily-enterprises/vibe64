@@ -116,7 +116,6 @@ function createSessionConversations({
 }
 
 export {
-  temporaryConversationNamespace,
   prepareCopiedSessionConversation
 } from "./temporaryConversationRules.js";
 export {

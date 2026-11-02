@@ -4,36 +4,23 @@ import {
   lstatSync
 } from "node:fs";
 
-import { PREVIEW_PROXY_PORT_END, PREVIEW_PROXY_PORT_START } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import { normalizePreviewAuthKind } from "@local/vibe64-core/server/previewAuth";
 
-import {
-  injectLaunchPreviewBridge
-} from "./launchPreviewBridge.js";
-import {
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM
-} from "../shared/launchPreviewProtocol.js";
 import { previewProxyDebugLog } from "./launchPreviewDebugLog.js";
 import {
   appendPreviewTokenQueryParam,
   normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
-  previewTokenCookie,
-  previewTokenCookieName,
   previewTokenHash,
-  proxiedLocation,
-  requestPreviewOrigin,
-  stripPreviewTokenQueryParam
+  requestPreviewOrigin
 } from "./launchPreviewHeaders.js";
 import {
-  assertPrivateFallbackSocketParent,
   listenOnPreviewPort,
   listenOnPreviewSocket,
   normalizePreviewPublicOrigin,
-  previewProxyListenHost,
   previewPublicSocketPath,
   pruneStalePreviewSockets
 } from "./launchPreviewListening.js";
@@ -585,21 +572,7 @@ function proxyDescriptor(proxy, targetUrl) {
 }
 
 export {
-  PREVIEW_PROXY_PORT_END,
-  PREVIEW_PROXY_PORT_START,
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-  appendPreviewTokenQueryParam,
-  assertPrivateFallbackSocketParent,
   createLaunchPreviewProxyRegistry,
-  injectLaunchPreviewBridge,
-  listenOnPreviewPort,
   normalizePreviewEditorOrigin,
-  normalizePreviewTargetHref,
-  previewPublicSocketPath,
-  previewProxyListenHost,
-  previewTokenCookie,
-  previewTokenCookieName,
-  pruneStalePreviewSockets,
-  proxiedLocation,
-  stripPreviewTokenQueryParam
+  previewPublicSocketPath
 };

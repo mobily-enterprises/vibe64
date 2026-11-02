@@ -15,10 +15,8 @@ import {
 } from "@local/vibe64-usage-recording/shared/contract";
 import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
-import {
-  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-  createLaunchPreviewProxyRegistry
-} from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { createLaunchPreviewProxyRegistry } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 
 const SESSION_ID = "session-proxy";
 const SECRETS = ["SECRET_AUTHORIZATION", "SECRET_COOKIE", "SECRET_QUERY", "SECRET_BODY", "token="];

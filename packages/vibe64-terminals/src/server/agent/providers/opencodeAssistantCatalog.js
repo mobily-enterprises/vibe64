@@ -437,8 +437,6 @@ function openCodeAssistantCapabilities({
 }
 
 export {
-  OPENCODE_CAPABILITY_PAGE_LIMIT,
-  OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM,
   openCodeAssistantCapabilities,
   openCodeConfiguredAssistantCapabilities,
   openCodeHasConnection

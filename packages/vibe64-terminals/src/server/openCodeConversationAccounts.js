@@ -175,4 +175,4 @@ function createOpenCodeConversationAccounts({
   });
 }
 
-export { createOpenCodeConversationAccounts, OPENCODE_CATALOG_CACHE_MS };
+export { createOpenCodeConversationAccounts };

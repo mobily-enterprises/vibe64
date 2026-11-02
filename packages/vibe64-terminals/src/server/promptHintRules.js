@@ -310,6 +310,8 @@ function promptHintOwnerKey({
   return canonicalHash({ actorId, projectScope, sessionId });
 }
 
+const __testables = Object.freeze({ visibleConversation });
+
 export {
   PROMPT_HINT_ACTIVE_TASK_IDS,
   PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS,
@@ -341,5 +343,5 @@ export {
   promptHintSubscriberKey,
   samePromptHintBasis,
   sessionStateForHints,
-  visibleConversation
+  __testables
 };

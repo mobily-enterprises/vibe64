@@ -482,6 +482,5 @@ export {
   shortCommandHash,
   subscribeUnixCommandControlChanges,
   unixCommandSocketPath,
-  unixCommandSocketIsPresent,
-  unixJsonCommandServerIsHealthy
+  unixCommandSocketIsPresent
 };

@@ -424,11 +424,7 @@ function outputResultsMarkerLineSeen(output = "", marker = "") {
 const __testables = Object.freeze({ vibe64OutputCommand, vibe64OutputTargetView, vibe64WebOutputDescriptor });
 
 export {
-  OUTPUT_RESULTS_READY_MARKER_PREFIX,
-  VIBE64_RUNTIME_PACKS,
-  createVibe64GenericOutputTargetTerminalSpec,
   createVibe64OutputTargetTerminalSpec,
-  genericOutputStartupScript,
   inspectVibe64OutputsForContext,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,

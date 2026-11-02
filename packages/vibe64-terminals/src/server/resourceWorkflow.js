@@ -198,4 +198,6 @@ async function startResourceWorkflow({
   });
 }
 
-export { resourceWorkflowIdentity, startResourceWorkflow };
+const __testables = Object.freeze({ resourceWorkflowIdentity });
+
+export { startResourceWorkflow, __testables };

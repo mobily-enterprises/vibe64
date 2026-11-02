@@ -16,10 +16,8 @@ import {
   workspaceSetupState,
   workspaceSetupStateFromMetadata
 } from "@local/vibe64-runtime/server/workspaceSetupState";
-import {
-  createWorkspaceSetupRunner,
-  WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
-} from "../../packages/vibe64-terminals/src/server/workspaceSetup.js";
+import { createWorkspaceSetupRunner } from "../../packages/vibe64-terminals/src/server/workspaceSetup.js";
+import { WORKSPACE_SETUP_COMMAND_TIMEOUT_MS } from "../../packages/vibe64-terminals/src/server/workspaceSetupRules.js";
 import {
   initializeGenesisProject,
   inspectVibe64WorkspaceSetup

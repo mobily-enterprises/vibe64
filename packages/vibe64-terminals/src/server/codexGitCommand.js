@@ -24,10 +24,6 @@ import {
   commandEnvironment,
   commandHostDir,
   commandSocketHostPath,
-  VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV,
-  VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
   writeWrappers
 } from "./codexGitCommandWrappers.js";
@@ -683,13 +679,8 @@ async function removeCodexGitCommandSession({
 }
 
 export {
-  VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV,
-  VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
   createCodexGitCommandService,
-  gitCommandActorFromSession,
   prepareCodexGitCommand,
   removeCodexGitCommandSession
 };

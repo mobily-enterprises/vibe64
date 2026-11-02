@@ -2,13 +2,7 @@ import { sessionSourcePath as savedSessionSourcePath } from "@local/vibe64-core/
 
 import {
   PROMPT_HINT_CACHE_MAX_ENTRIES,
-  PROMPT_HINT_CACHE_TTL_MS,
-  PROMPT_HINT_CONTEXT_VERSION,
-  definePromptHintOperationId,
-  parsePromptHintSuggestions,
-  promptHintBasis,
-  promptHintPrompt,
-  visibleConversation
+  PROMPT_HINT_CACHE_TTL_MS
 } from "./promptHintRules.js";
 import { readPromptHintBlueprint, readPromptHintSubsystems } from "./promptHintGenesisFiles.js";
 import { createPromptHintState } from "./promptHintState.js";
@@ -79,15 +73,5 @@ function createSessionPromptHintsService({
 }
 
 export {
-  PROMPT_HINT_CACHE_MAX_ENTRIES,
-  PROMPT_HINT_CACHE_TTL_MS,
-  PROMPT_HINT_CONTEXT_VERSION,
-  createSessionPromptHintsService,
-  definePromptHintOperationId,
-  parsePromptHintSuggestions,
-  promptHintBasis,
-  promptHintPrompt,
-  readPromptHintBlueprint,
-  readPromptHintSubsystems,
-  visibleConversation
+  createSessionPromptHintsService
 };

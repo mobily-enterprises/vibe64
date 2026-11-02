@@ -178,8 +178,6 @@ function assistantUser(options = {}) {
 }
 
 export {
-  EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS,
-  SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE,
   agentOperationResult,
   assistantUser,
   bindingKey,

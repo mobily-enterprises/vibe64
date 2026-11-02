@@ -7,7 +7,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
-export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
+const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
 export function errorMessage(value, fallback = "Codex could not be prepared.") {
   return normalizeText(value?.error || value?.message || value) || fallback;

@@ -291,9 +291,6 @@ async function withWorkPlan(context, operation) {
 function readWorkPlan(context) {
   return withWorkPlan(context, () => readWorkPlanUnlocked(context));
 }
-function readWorkPlanHistory(context) {
-  return withWorkPlan(context, () => readWorkPlanHistoryUnlocked(context));
-}
 function readWorkPlanPage(context, options) {
   return withWorkPlan(context, () => readWorkPlanPageUnlocked(context, options));
 }
@@ -487,7 +484,6 @@ const __testables = Object.freeze({ workPlanPath });
 export {
   readWorkPlan,
   readWorkPlanPage,
-  readWorkPlanHistory,
   manageWorkPlan,
   workPlanInstructions,
   planProgressUpgradeChanges,

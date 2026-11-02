@@ -18,7 +18,6 @@ import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
 
 import {
   OPENCODE_EXPECTED_VERSION,
-  OPENCODE_HOST,
   OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess as startOpenCodeServer,
   openCodeProcessEnvironment,
@@ -645,11 +644,8 @@ const __testables = Object.freeze({ openCodeInlineConfig, safeOpenCodeEnvironmen
 
 export {
   OPENCODE_HELPER_AGENT_ID,
-  OPENCODE_HELPER_SUBAGENT_PREFIX,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
-  OPENCODE_HOST,
-  OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,

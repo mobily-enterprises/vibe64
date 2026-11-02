@@ -1,7 +1,3 @@
-import {
-  SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE, EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS, defineEphemeralAssistantScope,
-  sessionAgentProviderId
-} from "./sessionAgentRules.js";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { createSessionAgentManagerState } from "./sessionAgentManagerState.js";
 import { createSessionAgentBindings } from "./sessionAgentBindings.js";
@@ -198,9 +194,5 @@ function createSessionAgentManager({
 }
 
 export {
-  EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS,
-  SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE,
-  createSessionAgentManager,
-  defineEphemeralAssistantScope,
-  sessionAgentProviderId
+  createSessionAgentManager
 };

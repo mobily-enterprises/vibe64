@@ -5,10 +5,12 @@ import { lstat, mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from "n
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { resourceWorkflowIdentity, startResourceWorkflow } from "../../packages/vibe64-terminals/src/server/resourceWorkflow.js";
+import { __testables, startResourceWorkflow } from "../../packages/vibe64-terminals/src/server/resourceWorkflow.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+
+const { resourceWorkflowIdentity } = __testables;
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-resource-identity-"));

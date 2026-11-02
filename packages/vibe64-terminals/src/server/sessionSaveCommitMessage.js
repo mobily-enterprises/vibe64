@@ -145,7 +145,6 @@ async function generateSessionSaveCommitMessage({ agent, agentContext = {}, chan
 const __testables = Object.freeze({ normalizeSessionSaveCommitMessage, sessionSaveCommitMessagePrompt });
 
 export {
-  MAX_COMMIT_SUBJECT_LENGTH,
   cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage,
   __testables

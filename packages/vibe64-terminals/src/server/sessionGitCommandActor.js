@@ -278,8 +278,5 @@ export {
   SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   recordSessionGitCommandActor,
   sessionRequiresGithubActor,
-  sessionGitCommandActorFromMetadata,
-  sessionGitCommandActorMetadata,
-  sessionWithGitCommandActorMetadata,
-  writeSessionGitCommandActorMetadata
+  sessionGitCommandActorFromMetadata
 };

@@ -2,14 +2,14 @@ import path from "node:path";
 
 const MAX_AGENT_IDENTITY_VALUE_LENGTH = 512;
 
-export const AGENT_TERMINAL_IDENTITY_STATUS = Object.freeze({
+const AGENT_TERMINAL_IDENTITY_STATUS = Object.freeze({
   ATTENTION_REQUIRED: "attention_required",
   FAILED: "failed",
   PENDING: "pending",
   READY: "ready"
 });
 
-export const AGENT_TERMINAL_RESUME_STRATEGY = Object.freeze({
+const AGENT_TERMINAL_RESUME_STRATEGY = Object.freeze({
   NOT_RESUMABLE: "not-resumable",
   PROVIDER_NATIVE: "provider-native",
   TERMINAL_REUSE: "terminal-reuse"
@@ -28,7 +28,7 @@ function normalizeIdentityText(value) {
   return normalized;
 }
 
-export function normalizeAgentProvider(value) {
+function normalizeAgentProvider(value) {
   const provider = normalizeIdentityText(value).toLowerCase();
   if (!/^[a-z][a-z0-9_-]{0,63}$/u.test(provider)) {
     return "";
@@ -36,25 +36,25 @@ export function normalizeAgentProvider(value) {
   return provider;
 }
 
-export function normalizeAgentConversationId(value) {
+function normalizeAgentConversationId(value) {
   return normalizeIdentityText(value);
 }
 
-export function normalizeAgentResumeStrategy(value) {
+function normalizeAgentResumeStrategy(value) {
   const strategy = normalizeIdentityText(value);
   return Object.values(AGENT_TERMINAL_RESUME_STRATEGY).includes(strategy)
     ? strategy
     : "";
 }
 
-export function normalizeAgentIdentityStatus(value) {
+function normalizeAgentIdentityStatus(value) {
   const status = normalizeIdentityText(value);
   return Object.values(AGENT_TERMINAL_IDENTITY_STATUS).includes(status)
     ? status
     : "";
 }
 
-export function normalizeAgentWorkdir(value) {
+function normalizeAgentWorkdir(value) {
   const workdir = String(value || "").trim();
   if (!workdir) {
     return "";

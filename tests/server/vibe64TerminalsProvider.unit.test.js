@@ -32,7 +32,7 @@ import { terminalsProviderEnv } from "../../packages/vibe64-terminals/src/server
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/projectRuntimeDormancy.js";
-import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/previewPublicOrigin.js";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-terminals-provider-"));

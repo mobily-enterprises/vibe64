@@ -214,4 +214,4 @@ function createCodexAssistantCatalog({
   });
 }
 
-export { createCodexAssistantCatalog, withCodexAppServerModelCatalogDeadline };
+export { createCodexAssistantCatalog };

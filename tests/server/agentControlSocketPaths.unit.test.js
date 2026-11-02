@@ -11,15 +11,32 @@ import { prepareAgentEnvCommand } from "../../packages/vibe64-terminals/src/serv
 import { prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 import { prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
-import { requestUnixJsonCommand, unixCommandSocketPath, unixJsonCommandServerIsHealthy } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
+import { createSessionCommandServers, requestUnixJsonCommand, unixCommandSocketPath } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 test("a timed-out control health probe retains the listener and its credentials for retry", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-health-"));
   const socketPath = path.join(root, "control.sock");
+  const sessionId = "fixture-session";
+  const commandService = { logger: silentLogger };
+  const servers = createSessionCommandServers({
+    routePrefix: "/fixture-command",
+    label: "fixture",
+    maxBytes: 4096,
+    invalidJsonError: { code: "fixture_invalid_json", message: "Fixture input must be valid JSON." },
+    tooLargeError: { code: "fixture_input_too_large", message: "Fixture input is too large." },
+    notFound: { ok: false, code: "fixture_route_not_found" },
+    rejection: { statusCode: 409, payload: { ok: false, code: "vibe64_agent_control_unavailable" } },
+    requestFailure: { fallbackCode: "fixture_request_failed", fallbackMessage: "Fixture request failed." },
+    directoryMode: 0o700,
+    healthTimeoutMs: 250
+  });
+  const control = await servers.ensure({ commandService, sessionId, socketPath });
+  // A listener that does not answer takes over the socket path, so the next
+  // health probe of the live control times out.
   const requests = [];
   let respond = false;
-  const server = http.createServer(async (request, response) => {
+  const unanswered = http.createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     const input = JSON.parse(Buffer.concat(chunks).toString());
@@ -27,27 +44,33 @@ test("a timed-out control health probe retains the listener and its credentials 
     if (respond) response.end(JSON.stringify({ ok: true, sessionId: input.sessionId, generationId: input.generationId }));
   });
   t.after(async () => {
-    server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
+    unanswered.closeAllConnections();
+    await new Promise(resolve => unanswered.close(resolve));
+    await servers.closeForSession(sessionId);
     await rm(root, { recursive: true, force: true });
   });
-  await new Promise(resolve => server.listen(socketPath, resolve));
-  const entry = { commandService: { logger: silentLogger }, server, token: "fixture-token", sessionId: "fixture-session", generationId: "fixture-generation" };
-  const probe = { socketPath, sessionId: entry.sessionId, healthPath: "/health", timeoutMs: 50 };
-  await assert.rejects(unixJsonCommandServerIsHealthy(entry, probe), error => {
+  // The probe client keeps its connection to the live control open; drop it so
+  // the next probe connects to whatever listens on the path now.
+  control.server.closeIdleConnections();
+  await rm(socketPath);
+  await new Promise(resolve => unanswered.listen(socketPath, resolve));
+  await assert.rejects(servers.ensure({ commandService, sessionId, socketPath }), error => {
     assert.equal(error.code, "vibe64_agent_control_unavailable");
     assert.equal(error.cause.code, "ETIMEDOUT");
     assert.equal(error.retryable, true);
     return true;
   });
-  assert.equal(server.listening, true);
+  assert.equal(control.server.listening, true);
   respond = true;
-  assert.equal(await unixJsonCommandServerIsHealthy(entry, { ...probe, timeoutMs: 2000 }), true);
+  assert.equal(await servers.ensure({ commandService, sessionId, socketPath }), control);
   assert.deepEqual(requests.at(-1), {
-    sessionId: entry.sessionId, generationId: entry.generationId, token: entry.token
+    sessionId, generationId: control.generationId, token: control.token
   });
-  await new Promise(resolve => server.close(resolve));
-  assert.equal(await unixJsonCommandServerIsHealthy(entry, probe), false, "a missing socket still permits recovery");
+  unanswered.closeAllConnections();
+  await new Promise(resolve => unanswered.close(resolve));
+  const replacement = await servers.ensure({ commandService, sessionId, socketPath });
+  assert.notEqual(replacement.generationId, control.generationId, "a missing socket still permits recovery");
+  assert.equal(control.server.listening, false);
 });
 
 test("all assistant controls connect with long workspace paths and stay isolated", async () => {

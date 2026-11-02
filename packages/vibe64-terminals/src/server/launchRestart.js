@@ -300,11 +300,13 @@ async function launchRestartRecoveryForTerminal({
   }
 }
 
+const __testables = Object.freeze({ launchRestartState });
+
 export {
   createLaunchRestartBaseline,
   LAUNCH_RESTART_REASON_SOURCE_CHANGED,
   launchRestartRecoveryForTerminal,
-  launchRestartState,
   serializeLaunchRestartBaseline,
-  staleLaunchRecovery
+  staleLaunchRecovery,
+  __testables
 };
