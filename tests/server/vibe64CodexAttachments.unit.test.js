@@ -1979,6 +1979,7 @@ function delay(timeoutMs) {
 function explicitProjectContext(targetRoot) {
   const noTargetRoot = () => "";
   return {
+    currentPracticeProjectScope: () => null,
     projectCatalogEnabled: false,
     selectedProject: { slug: "project" },
     selectionSource: "explicit",
@@ -2219,11 +2220,9 @@ test("practice session attachments keep their project identity with or without a
   try {
     configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),
       env: {}, home: root, learningSpace: { root: learningSpaceRoot } });
-    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot), slug);
-    // A caller naming its own roots never reads the configured default space.
     const projectsRoot = path.join(root, "projects");
     assert.equal(catalogProjectSlugFromTargetRoot(executionRoot, { projectsRoot, learningSpaceRoot }), slug);
-    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot, { projectsRoot }), "");
+    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot, { projectsRoot, learningSpaceRoot: "" }), "");
     assert.equal(catalogProjectSlugFromTargetRoot(path.join(projectsRoot, "ordinary", "app"), { projectsRoot, learningSpaceRoot: "" }),
       "ordinary");
     assert.equal(targetRuntimeIdentity(executionRoot), `project:${slug}`);
@@ -2231,7 +2230,9 @@ test("practice session attachments keep their project identity with or without a
       () => targetRuntimeIdentity(executionRoot)), `project:${slug}`);
     for (const lookalike of [path.join(learningSpaceRoot, "NDI", "12345678-1234-4234-8234-123456789abd", slug),
       path.join(learningSpaceRoot, "NDI", slug)]) {
-      assert.equal(catalogProjectSlugFromTargetRoot(lookalike), "", "only the exact namespace layout names a practice project");
+      assert.equal(catalogProjectSlugFromTargetRoot(lookalike, { projectsRoot, learningSpaceRoot }), "",
+        "only the exact namespace layout names a practice project");
+      assert.equal(targetRuntimeIdentity(lookalike).startsWith("local-project:"), true);
     }
   } finally {
     configureStudioProjectContext({ env: process.env });

@@ -8,7 +8,6 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import process from "node:process";
 import { Readable } from "node:stream";
 import test from "node:test";
 
@@ -19,11 +18,9 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  configureStudioProjectContext,
   localProjectKeyFromTargetRoot
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import {
-  VIBE64_PROJECTS_ROOT_ENV
-} from "../../packages/vibe64-core/src/server/studioRoots.js";
 import {
   cleanupCodexAttachments,
   renewCodexAttachments,
@@ -39,6 +36,8 @@ const HASH_PATTERN = /^[a-f0-9]{12}$/u;
 async function withTemporaryRoot(operation) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-identity-"));
   try {
+    configureStudioProjectContext({ env: {}, explicitProjectsRoot: path.join(root, "projects"),
+      explicitSystemRoot: path.join(root, "system"), home: root });
     return await operation(root);
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -136,24 +135,14 @@ test("catalogue runtime identity remains stable across isolated session checkout
     };
     const firstExecutionRoot = path.join(sessionSourceRoot, "sessions", "active", "session-a", "source");
     const secondExecutionRoot = path.join(sessionSourceRoot, "sessions", "active", "session-b", "source");
-    const previousProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
-    process.env[VIBE64_PROJECTS_ROOT_ENV] = projectsRoot;
-    try {
-      const identities = await runWithProjectRequestContext(context, () => [
-        targetRuntimeIdentity(firstExecutionRoot),
-        targetRuntimeIdentity(secondExecutionRoot)
-      ]);
+    const identities = await runWithProjectRequestContext(context, () => [
+      targetRuntimeIdentity(firstExecutionRoot),
+      targetRuntimeIdentity(secondExecutionRoot)
+    ]);
 
-      assert.deepEqual(identities, [`project:${slug}`, `project:${slug}`]);
-      assert.equal(targetRuntimeIdentity(firstExecutionRoot), `project:${slug}`);
-      assert.equal(targetRuntimeIdentity(secondExecutionRoot), `project:${slug}`);
-    } finally {
-      if (previousProjectsRoot === undefined) {
-        delete process.env[VIBE64_PROJECTS_ROOT_ENV];
-      } else {
-        process.env[VIBE64_PROJECTS_ROOT_ENV] = previousProjectsRoot;
-      }
-    }
+    assert.deepEqual(identities, [`project:${slug}`, `project:${slug}`]);
+    assert.equal(targetRuntimeIdentity(firstExecutionRoot), `project:${slug}`);
+    assert.equal(targetRuntimeIdentity(secondExecutionRoot), `project:${slug}`);
   });
 });
 

@@ -8,8 +8,7 @@ import { practiceIdFromSlug } from "./learningSpace.js";
 import {
   getStudioProjectContext,
   localProjectKeyFromTargetRoot,
-  normalizeProjectSlug,
-  resolveStudioProjectsRoot
+  normalizeProjectSlug
 } from "./studioProjectContext.js";
 import { pathInsideOrEqual } from "./core.js";
 
@@ -29,25 +28,17 @@ function learningSpaceSlugFromTargetRoot(targetRoot, learningSpaceRoot) {
 }
 
 /**
- * A caller that names its projectsRoot names its learning space too; only the
- * default (no roots) reads the configured context's learning space.
+ * The catalogue or practice project a target root belongs to: its practice
+ * namespace in the learning space, else its first folder below the projects
+ * root; "" for neither. An empty root names no folder.
+ * @param {string} targetRoot an absolute path
+ * @param {{ projectsRoot: string, learningSpaceRoot: string }} roots
  */
-function catalogProjectSlugFromTargetRoot(targetRoot = "", options = {}) {
-  const {
-    projectsRoot = "",
-    learningSpaceRoot = projectsRoot ? "" : getStudioProjectContext()?.learningSpaceRoot
-  } = options;
-  const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
-  const practiceSlug = String(learningSpaceRoot || "").trim()
-    ? learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot)) : "";
+function catalogProjectSlugFromTargetRoot(targetRoot, { projectsRoot, learningSpaceRoot }) {
+  const practiceSlug = learningSpaceRoot ? learningSpaceSlugFromTargetRoot(targetRoot, path.resolve(learningSpaceRoot)) : "";
   if (practiceSlug) return practiceSlug;
-  const resolvedProjectsRoot = path.resolve(String(projectsRoot || "").trim() || resolveStudioProjectsRoot({ env: process.env }));
-  if (!pathInsideOrEqual(resolvedProjectsRoot, resolvedTargetRoot)) {
-    return "";
-  }
-
-  const relative = path.relative(resolvedProjectsRoot, resolvedTargetRoot);
-  const [candidateSlug = ""] = relative.split(path.sep).filter(Boolean);
+  if (!projectsRoot || !pathInsideOrEqual(projectsRoot, targetRoot)) return "";
+  const [candidateSlug = ""] = path.relative(path.resolve(projectsRoot), targetRoot).split(path.sep).filter(Boolean);
   if (!candidateSlug) {
     return "";
   }
@@ -104,7 +95,8 @@ function targetRuntimeIdentity(targetRoot = "") {
       : projectRuntimeIdentity(contextSlug);
   }
 
-  const catalogSlug = catalogProjectSlugFromTargetRoot(resolvedTargetRoot);
+  const { learningSpaceRoot, projectsRoot } = getStudioProjectContext();
+  const catalogSlug = catalogProjectSlugFromTargetRoot(resolvedTargetRoot, { learningSpaceRoot, projectsRoot });
   if (catalogSlug) {
     return projectRuntimeIdentity(catalogSlug);
   }
