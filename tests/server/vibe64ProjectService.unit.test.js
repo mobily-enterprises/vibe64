@@ -1588,6 +1588,7 @@ test("reserved Vibe64 Env names require an explicit Genesis Stack declaration", 
 
     assert.equal(response.ok, false);
     assert.equal(response.errors[0].code, "vibe64_env_reserved_key");
+    assert.deepEqual(response.params, { key: "VIBE64_INTERNAL_OVERRIDE" });
   });
 });
 

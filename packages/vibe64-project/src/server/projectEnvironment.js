@@ -396,9 +396,11 @@ function createProjectEnvironment({
         );
       }
       if (runtimeConfigKeyIsVibe64Reserved(normalizedKey) && !stackKeys.has(normalizedKey)) {
-        const error = new Error(`${normalizedKey} is reserved for Vibe64 and is not declared by the Genesis Stack.`);
-        error.code = "vibe64_env_reserved_key";
-        throw error;
+        throw vibe64Error(
+          `${normalizedKey} is reserved for Vibe64 and is not declared by the Genesis Stack.`,
+          "vibe64_env_reserved_key",
+          { params: { key: normalizedKey } }
+        );
       }
     }
     await saveEnvUserValues({
