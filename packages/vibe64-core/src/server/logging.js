@@ -4,6 +4,7 @@ import {
   resolveVibe64LogLevel
 } from "../shared/logging.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const VIBE64_LOG_REDACT_PATHS = Object.freeze([
@@ -38,11 +39,18 @@ const VIBE64_LOG_BEARER_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/giu;
 const VIBE64_LOG_URL_CREDENTIALS_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)([^/@\s:]+):([^/@\s]+)@/giu;
 const VIBE64_STREAM_REDACTION_PENDING_LIMIT = 65536;
 
+/**
+ * Fastify's logger options at the configured level, and a warning for a level that is not one.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the server's runtime env, which may set VIBE64_LOG_LEVEL or LOG_LEVEL
+ * @param {string} [options.defaultLevel]
+ * @param {string} [options.level] an explicit level, which wins over the env
+ */
 function createVibe64FastifyLoggerOptions({
   defaultLevel = DEFAULT_VIBE64_LOG_LEVEL,
-  env = globalThis?.process?.env || {},
+  env,
   level = ""
-} = {}) {
+}) {
   const resolved = resolveVibe64LogLevel({
     defaultLevel,
     env,
