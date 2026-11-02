@@ -225,6 +225,10 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
 - `src/composables/useVibe64TemporaryAi.js`
+- `src/composables/useVibe64TemporaryAiMessages.js`
+- `src/composables/useVibe64TemporaryAiRestore.js`
+- `src/composables/useVibe64TemporaryAiTaskRecords.js`
+- `src/lib/vibe64TemporaryAiTasks.js`
 - `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64TemporaryAiRepairs.js`

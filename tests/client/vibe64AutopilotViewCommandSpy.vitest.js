@@ -28,7 +28,13 @@ const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe6
 const temporaryAiPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"
 );
-const temporaryAiComposablePath = path.resolve("src/composables/useVibe64TemporaryAi.js");
+const temporaryAiComposablePaths = [
+  "src/composables/useVibe64TemporaryAi.js",
+  "src/composables/useVibe64TemporaryAiMessages.js",
+  "src/composables/useVibe64TemporaryAiRestore.js",
+  "src/composables/useVibe64TemporaryAiTaskRecords.js",
+  "src/lib/vibe64TemporaryAiTasks.js"
+].map((file) => path.resolve(file));
 const temporaryAiFixActionPath = path.resolve(
   "src/components/studio/Vibe64TemporaryAiFixAction.vue"
 );
@@ -973,7 +979,7 @@ describe("Vibe64 direct session view", () => {
   it("keeps temporary AI separate, restorable, multi-task, and attachment-owned", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const temporaryAi = fs.readFileSync(temporaryAiPath, "utf8");
-    const temporaryAiComposable = fs.readFileSync(temporaryAiComposablePath, "utf8");
+    const temporaryAiComposable = temporaryAiComposablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const temporaryAiFixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
     const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
