@@ -71,7 +71,9 @@ function createSessionAttachments({ project, env }) {
     return runtime.store.mutateSession(sessionId, async (paths) => {
       const saved = await readSavedAttachment(paths, id);
       if (saved) {
-        if (saved.conversationId !== conversationId) throw new Error("This attachment belongs to another conversation.");
+        if (saved.conversationId !== conversationId) {
+          throw new AppError(409, "This attachment belongs to another conversation.", { code: "vibe64_attachment_conversation_mismatch" });
+        }
         return saved;
       }
       return withUploadedAgentAttachment(executionRoot, sessionId, id, async (upload) => {

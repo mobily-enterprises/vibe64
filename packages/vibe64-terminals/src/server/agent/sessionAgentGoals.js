@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { assistantRoutingGoalFromMetadata, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
@@ -101,7 +102,7 @@ function createSessionAgentGoals({
     const operation = conversationOperations.providerOperation(provider, "updateGoal");
     // readable-check: allow method-probe - optional operation: an engine without goals refuses goal controls
     if (typeof operation !== "function") {
-      throw new TypeError("This assistant does not support goal controls.");
+      throw new AppError(400, "This assistant does not support goal controls.", { code: "vibe64_goal_controls_unsupported" });
     }
     requireCanonicalGoalSupport(provider, options);
     return operation.call(provider, {

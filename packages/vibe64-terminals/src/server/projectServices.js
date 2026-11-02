@@ -1,4 +1,5 @@
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { inspectVibe64ProjectServices } from "@local/vibe64-genesis/server";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -57,7 +58,9 @@ function createProjectServices({
   function opened(context) {
     const project = projectState(context);
     if (project.status === "closing") {
-      throw new Error("Project cleanup is unfinished. Wait for Close or retry the failed Close before reopening.");
+      throw new AppError(409, "Project cleanup is unfinished. Wait for Close or retry the failed Close before reopening.", {
+        code: "vibe64_project_cleanup_unfinished"
+      });
     }
     project.status = "open";
   }

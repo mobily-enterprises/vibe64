@@ -172,14 +172,16 @@ function createServiceMainConversationHost({
               input: { projectSlug: authority.projectSlug, sessionId: id },
               context: authority.requestContext
             });
-            if (grant.actor.id !== authority.actorId) throw new Error("The Main conversation's acting user changed.");
+            if (grant.actor.id !== authority.actorId) {
+              throw new AppError(409, "The Main conversation's acting user changed.", { code: "vibe64_main_actor_changed" });
+            }
             await assistant.requireAssistantSelectionAccess(current.assistantSelection, { vibe64User: grant.user });
             admitted.assertCurrent();
             async function retainGoal(action, reason) {
               const goalOptions = { runtime, vibe64User: grant.user };
               const observed = await goals.readAgentGoal(id, goalOptions);
               if (observed.threadId !== admitted.nativeThreadId || !observed.goal || observed.goal.status !== "active") {
-                throw new Error("This admitted Main turn no longer owns an active goal.");
+                throw new AppError(409, "This admitted Main turn no longer owns an active goal.", { code: "vibe64_main_goal_not_owned" });
               }
               admitted.assertCurrent();
               const result = await goals.updateAgentGoal(id, {

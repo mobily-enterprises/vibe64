@@ -50,10 +50,18 @@ function sessionAssistantSelection(options = {}) {
 }
 
 function providerBindingConflictError(sessionId = "", currentProviderId = "", requestedProviderId = "") {
-  const error = new Error(
-    `Assistant session ${toText(sessionId)} is bound to ${toText(currentProviderId)}, not ${toText(requestedProviderId)}.`
+  const error = new AppError(
+    409,
+    `Assistant session ${toText(sessionId)} is bound to ${toText(currentProviderId)}, not ${toText(requestedProviderId)}.`,
+    {
+      code: SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE,
+      params: {
+        sessionId: toText(sessionId),
+        currentProviderId: toText(currentProviderId),
+        requestedProviderId: toText(requestedProviderId)
+      }
+    }
   );
-  error.code = SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE;
   error.currentProviderId = toText(currentProviderId);
   error.requestedProviderId = toText(requestedProviderId);
   error.sessionId = toText(sessionId);

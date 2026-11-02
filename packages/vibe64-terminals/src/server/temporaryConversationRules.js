@@ -60,7 +60,9 @@ function presentation(input = {}) {
   const result = {};
   for (const key of textFields) {
     if (!Object.hasOwn(input, key)) continue;
-    if (typeof input[key] !== "string" || input[key].length > 100_000) throw new Error(`Invalid conversation ${key}.`);
+    if (typeof input[key] !== "string" || input[key].length > 100_000) {
+      throw new AppError(400, `Invalid conversation ${key}.`, { code: "vibe64_conversation_field_invalid", params: { field: key } });
+    }
     result[key] = input[key];
   }
   if (Object.hasOwn(result, "title")) {
@@ -76,7 +78,7 @@ function presentation(input = {}) {
   if (Object.hasOwn(input, "recoveryRetryKeys")) {
     if (!Array.isArray(input.recoveryRetryKeys) || input.recoveryRetryKeys.length > 3 ||
         input.recoveryRetryKeys.some((key) => typeof key !== "string" || key.length > 1000)) {
-      throw new Error("Invalid conversation repair retries.");
+      throw new AppError(400, "Invalid conversation repair retries.", { code: "vibe64_conversation_repair_retries_invalid" });
     }
     result.recoveryRetryKeys = input.recoveryRetryKeys;
   }
@@ -149,9 +151,14 @@ function requireSuccess(result) {
 }
 
 const teamTemporaryModesRefusal = () => new AppError(403, "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom.", { code: "vibe64_assistant_owner_required" });
+const temporaryAutoModeRefusal = () => new AppError(400, "Temporary chats use Senior or Junior. Auto is available in Main chat only.", {
+  code: "vibe64_temporary_chat_auto_unavailable"
+});
+const conversationClosingRefusal = () => new AppError(409, "This conversation is closing.", { code: "vibe64_conversation_closing" });
 
 export {
   attemptedChangeover,
+  conversationClosingRefusal,
   messageFields,
   numberedConversations,
   prepareCopiedSessionConversation,
@@ -160,5 +167,6 @@ export {
   requireSuccess,
   routingRequest,
   teamTemporaryModesRefusal,
+  temporaryAutoModeRefusal,
   temporaryConversationNamespace
 };

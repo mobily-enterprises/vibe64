@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE } from "@local/vibe64-runtime/shared";
 import { bindingKey, providerBindingConflictError, sessionAgentProviderId, sessionAssistantSelection } from "./sessionAgentRules.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -6,8 +7,10 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function providerNotImplementedError(providerId = "") {
   const id = toText(providerId);
-  const error = new Error(`Assistant provider is not implemented: ${id || "(missing)"}.`);
-  error.code = VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE;
+  const error = new AppError(400, `Assistant provider is not implemented: ${id || "(missing)"}.`, {
+    code: VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
+    params: { providerId: id }
+  });
   error.providerId = id;
   return error;
 }

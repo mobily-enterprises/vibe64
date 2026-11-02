@@ -23,7 +23,9 @@ import {
   routingRequest,
   attemptedChangeover,
   presentation,
-  teamTemporaryModesRefusal
+  conversationClosingRefusal,
+  teamTemporaryModesRefusal,
+  temporaryAutoModeRefusal
 } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
@@ -212,15 +214,17 @@ function createTemporaryConversationInteraction({
     }
     const update = async (ctx) => {
       const record = await chatRecords.recordFor(ctx, input.conversationId);
-      if (record.state === "closing") throw new Error("This conversation is closing.");
+      if (record.state === "closing") throw conversationClosingRefusal();
       const fields = presentation(input.presentation);
       const settingsChanged = input.agentSettings && ["model", "thinking"].some((key) =>
         input.agentSettings[key] !== record.agentSettings?.[key]);
       if (input.assistantRouting) {
         const requested = assistantRoutingPreferences(input.assistantRouting);
-        if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
+        if (requested.mode === "auto") throw temporaryAutoModeRefusal();
         if (record.recoveryOperation === "update" && !["fix", "custom"].includes(requested.mode)) {
-          throw new Error("Repair chats use Fix it with AI. Choose Custom to pick a different model.");
+          throw new AppError(400, "Repair chats use Fix it with AI. Choose Custom to pick a different model.", {
+            code: "vibe64_repair_chat_mode_invalid"
+          });
         }
         if (!isAssistantRoutingOwner(input.vibe64User || options.vibe64User) && ["senior", "junior"].includes(requested.mode)) {
           throw teamTemporaryModesRefusal();
@@ -234,9 +238,13 @@ function createTemporaryConversationInteraction({
       }
       if (settingsChanged && !input.assistantRouting) {
         const preferences = assistantRoutingFromMetadata(chatRecords.selectedContext(ctx, record).session.metadata);
-        if (preferences.mode === "auto") throw new Error("Choose Senior or Junior before customizing its model.");
+        if (preferences.mode === "auto") {
+          throw new AppError(409, "Choose Senior or Junior before customizing its model.", { code: "vibe64_temporary_chat_mode_required" });
+        }
         if (preferences.mode === "fix") {
-          throw new Error("Fix it with AI uses the model chosen in Models. Choose Custom to pick another model.");
+          throw new AppError(409, "Fix it with AI uses the model chosen in Models. Choose Custom to pick another model.", {
+            code: "vibe64_fix_chat_model_from_models"
+          });
         }
         const selection = record.assistantSelection;
         const override = await sessionAgent.resolveSelection({
@@ -299,7 +307,11 @@ function createTemporaryConversationInteraction({
       () => update(context),
       { operation: "temporary-assistant-settings", waitMs: 10_000 }
     );
-    if (!result.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
+    if (!result.acquired) {
+      throw new AppError(409, "Another settings change is being saved. Try again in a moment.", {
+        code: "vibe64_conversation_settings_busy"
+      });
+    }
     return result.value;
   }
 

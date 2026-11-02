@@ -222,7 +222,11 @@ function createServiceAssistant({
       await codexProviderConnections.runtimeOptions(integrationId);
       connection = await codexProviderConnections.read(integrationId, "codex");
     }
-    if (!connection?.apiKey) throw new Error("Reconnect the selected AI account before continuing.");
+    if (!connection?.apiKey) {
+      throw new AppError(409, "Reconnect the selected AI account before continuing.", {
+        code: "vibe64_assistant_account_reconnect_required"
+      });
+    }
     return {
       providerId: integrationId,
       model: assistantSelection.modelId,

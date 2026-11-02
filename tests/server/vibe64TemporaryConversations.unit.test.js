@@ -1261,7 +1261,7 @@ test("temporary goals retain identity while settings remain editable during acti
     assert.deepEqual(restored.goal, goal);
     await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "auto", review: true }
-    }, f.options), /Auto is available in Main chat only/);
+    }, f.options), { statusCode: 400, code: "vibe64_temporary_chat_auto_unavailable", message: /Auto is available in Main chat only/ });
     const configuration = createAssistantRoutingStore({ systemRoot: root });
     const saved = await configuration.read();
     await configuration.write({ ...saved, owner: { ...saved.owner, junior: f.senior } }, saved.revision);
@@ -1796,7 +1796,7 @@ test("existing idle merge repairs use Fix it with AI without rewriting saved pre
     assert.equal(JSON.parse(observed.routingMetadata.assistant_routing).mode, "fix");
     assert.deepEqual((await f.record()).routingMetadata, before.routingMetadata);
     await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
-      assistantRouting: { mode: "junior" } }, f.options), /Repair chats use Fix it with AI/);
+      assistantRouting: { mode: "junior" } }, f.options), { statusCode: 400, code: "vibe64_repair_chat_mode_invalid" });
     const started = await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "repair", message: "Resolve this merge while preserving both changes."
     }, f.options);
