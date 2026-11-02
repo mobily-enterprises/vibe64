@@ -21,10 +21,10 @@ import {
   saveSessionWorkDirect as saveSessionWorkImplementation
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
-  __testables as sessionWorkUpdateTestables,
   checkSessionUpdates,
-  updateSessionWork as updateManagedSessionWork
+  updateSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
+import { updateSessionWorkInProcess } from "./sessionWorkUpdateTestHelpers.js";
 import {
   inspectSessionUpdateFailure,
   recoverSessionWorkUpdate
@@ -45,7 +45,6 @@ import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfi
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 
 const { canonicalRepositoryBackupPath } = repositoryStorageTestables;
-const { updateSessionWorkDirect: updateSessionWork } = sessionWorkUpdateTestables;
 
 const execFileAsync = promisify(execFile);
 
@@ -780,7 +779,7 @@ test("managed Update admits four stages and persists recovery before changing so
     let locked = false;
     let recovery;
     let invalidated = false;
-    const result = await updateManagedSessionWork({
+    const result = await updateSessionWork({
       project,
       session,
       operationId: "managed-update",
@@ -834,7 +833,7 @@ test("managed Update leaves source untouched when merge conflicts cross the help
     await git(fixture.seed, ["commit", "-am", "upstream"]);
     await git(fixture.seed, ["push", "origin", "main"]);
     const requests = [];
-    await assert.rejects(updateManagedSessionWork({
+    await assert.rejects(updateSessionWork({
       project: githubProject(root, fixture.remote),
       session,
       beforeSourceChange() { assert.fail("Conflicts must not invalidate preparation."); },
@@ -1026,7 +1025,7 @@ test("Update resolves Genesis-derived overlap by regenerating from the merged au
     await writeFile(path.join(session.sourcePath, "local.txt"), "local\n", "utf8");
     await writeFile(path.join(session.sourcePath, ".genesis", "machine-city.json"), "{\"local\":true}\n", "utf8");
 
-    const result = await updateSessionWork({
+    const result = await updateSessionWorkInProcess({
       derivedArtifactPaths: [".genesis/machine-city.json", ".genesis/program-city.json"],
       operationId: "update-derived-overlap",
       project: githubProject(root, fixture.remote),
@@ -1426,7 +1425,8 @@ for (const scenario of ["repaired", "unreviewed", "unrelated", "derived", "upstr
       const headBefore = await git(session.sourcePath, ["rev-parse", "HEAD"]);
       const indexBefore = await git(session.sourcePath, ["write-tree"]);
       const statusBefore = await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]);
-      const updating = updateSessionWork({
+      const update = scenario === "derived" ? updateSessionWorkInProcess : updateSessionWork;
+      const updating = update({
         ...input, conflictRecovery, operationId: "check-repair",
         reviewedConflictId: scenario === "unreviewed" ? "" : conflictRecovery.reviewId
       });

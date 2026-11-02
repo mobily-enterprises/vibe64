@@ -667,17 +667,6 @@ async function runSessionUpdateStages({
   }, { operation: `update-session:${context.sessionId}` });
 }
 
-const UPDATE_STAGE_IMPLEMENTATIONS = {
-  "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,
-  "update-prepare": prepareSessionWorkUpdateDirect,
-  "update-derived": regenerateSessionWorkUpdateDirect,
-  "update-apply": applySessionWorkUpdateDirect
-};
-
-async function updateSessionWorkDirect(input = {}) {
-  return runSessionUpdateStages(input, (operation, values) => UPDATE_STAGE_IMPLEMENTATIONS[operation](values));
-}
-
 async function updateSessionWork(input = {}) {
   const { commandOptions = {}, runCommand = runVibe64Command, ...options } = input;
   return runSessionUpdateStages(options, (operation, values) => {
@@ -696,8 +685,6 @@ async function updateSessionWork(input = {}) {
   });
 }
 
-const __testables = Object.freeze({ updateSessionWorkDirect });
-
 export {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,
@@ -706,6 +693,5 @@ export {
   prepareSessionWorkUpdateDirect,
   readSessionAuthorityHeads,
   regenerateSessionWorkUpdateDirect,
-  updateSessionWork,
-  __testables
+  updateSessionWork
 };
