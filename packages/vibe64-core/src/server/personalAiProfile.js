@@ -81,7 +81,7 @@ function createPersonalAiProfileStore({
       if (error instanceof SyntaxError) {
         throw vibe64Error(
           "Stored personal AI profile is not valid JSON.",
-          "vibe64_personal_ai_profile_invalid"
+          "vibe64_personal_ai_profile_unreadable"
         );
       }
       throw error;

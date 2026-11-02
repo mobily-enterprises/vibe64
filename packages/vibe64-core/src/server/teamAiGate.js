@@ -7,6 +7,7 @@
 // ready({ actor }) resolves true when some team role has a usable
 // Workspace-use model. Without a reader (no AI accounts here) nothing is gated.
 
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { readWorkspaceTeam } from "./workspaceTeam.js";
 
 const TEAM_AI_REQUIRED_CODE = "vibe64_team_ai_required";
@@ -45,10 +46,9 @@ async function readTeamAiStatus({ actor = null } = {}) {
 async function assertTeamAiAllowsProject({ actor = null } = {}) {
   if (!isTeamMember(actor) || await readTeamAiReady({ actor })) return;
   const { ownerName } = await readWorkspaceTeam();
-  throw Object.assign(new Error(`Ask ${ownerName || "the workspace owner"} to set up AI for team members.`), {
+  throw new AppError(403, `Ask ${ownerName || "the workspace owner"} to set up AI for team members.`, {
     code: TEAM_AI_REQUIRED_CODE,
-    statusCode: 403,
-    ownerName,
+    params: { ownerName },
     details: { ownerName }
   });
 }

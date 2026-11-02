@@ -122,7 +122,7 @@ async function executeVibe64Action({ definition, input, context, run }) {
   if (Object.hasOwn(definition.input.schema.getFieldDefinitions(), "projectSlug")) trustedInput.projectSlug = slug;
   const resolved = context.vibe64Action?.project;
   if (resolved && resolved.slug !== slug) {
-    throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
+    throw actionContextError("vibe64_action_authorized_project_mismatch", "The authorized project does not match this operation.");
   }
   // An action from a person's request stays that person's request (its
   // headers, through the prototype), so practice admission compares the
