@@ -21,10 +21,6 @@ const PROOF_FIELDS = Object.freeze([
   "project", "files", "fileName", "sha256", "size", "certificateSha256", "applicationId", "versionName", "versionCode", "page", "index"
 ]);
 
-function brokerError(message, code, params) {
-  return publishingError(message, code, { params });
-}
-
 function accountEntryId(accountId) {
   return `account:${accountId}`;
 }
@@ -75,15 +71,15 @@ function createCredentialBroker({
   }
 
   async function addAccount({ kind, label, address = "", token, source = "token" } = {}) {
-    if (!ACCOUNT_KINDS.includes(kind)) throw brokerError("Choose npm, PyPI or GitHub.", "vibe64_publishing_account_kind_invalid");
+    if (!ACCOUNT_KINDS.includes(kind)) throw publishingError("Choose npm, PyPI or GitHub.", "vibe64_publishing_account_kind_invalid");
     let value = typeof token === "string" ? token.trim() : "";
     if (source === "github-cli") {
-      if (kind !== "github") throw brokerError("Only a GitHub account can come from the GitHub CLI.", "vibe64_publishing_account_cli_unsupported");
+      if (kind !== "github") throw publishingError("Only a GitHub account can come from the GitHub CLI.", "vibe64_publishing_account_cli_unsupported");
       value = await githubCliToken();
     }
-    if (!/^[\x21-\x7e]{8,4096}$/u.test(value)) throw brokerError("Paste the whole token: it is one word of at least 8 characters.", "vibe64_publishing_account_token_invalid");
+    if (!/^[\x21-\x7e]{8,4096}$/u.test(value)) throw publishingError("Paste the whole token: it is one word of at least 8 characters.", "vibe64_publishing_account_token_invalid");
     const id = slug(`${kind}-${label || address || kind}`) || kind;
-    if (!ACCOUNT_ID.test(id)) throw brokerError("Give the account a short name.", "vibe64_publishing_account_name_invalid");
+    if (!ACCOUNT_ID.test(id)) throw publishingError("Give the account a short name.", "vibe64_publishing_account_name_invalid");
     const entry = await keys.put(accountEntryId(id), {
       value,
       kind: "account",
@@ -99,7 +95,7 @@ function createCredentialBroker({
   }
 
   async function removeAccount(id) {
-    if (!ACCOUNT_ID.test(id || "")) throw brokerError("That is not an account.", "vibe64_publishing_account_invalid");
+    if (!ACCOUNT_ID.test(id || "")) throw publishingError("That is not an account.", "vibe64_publishing_account_invalid");
     await keys.remove(accountEntryId(id));
     return { removed: id };
   }
@@ -112,10 +108,7 @@ function createCredentialBroker({
       const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: "1" } });
       return stdout.trim();
     } catch {
-      throw brokerError(
-        "The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.",
-        "vibe64_publishing_github_cli_missing"
-      );
+      throw publishingError("The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.", "vibe64_publishing_github_cli_missing");
     }
   }
 
@@ -129,7 +122,7 @@ function createCredentialBroker({
         const stored = JSON.parse(keys.read(sideloadKeyEntryId(target)).toString("utf8"));
         return spec.id === ANDROID_SIDELOAD_KEYSTORE.id ? Buffer.from(stored.keystore, "base64") : stored.password;
       }
-      if (!target.account) throw brokerError(`Choose a publishing account for ${target.id}.`, "vibe64_publishing_account_missing", { targetId: target.id });
+      if (!target.account) throw publishingError(`Choose a publishing account for ${target.id}.`, "vibe64_publishing_account_missing", { params: { targetId: target.id } });
       const token = keys.read(accountEntryId(target.account)).toString("utf8");
       if (spec.id === "npm-userconfig") return packaging.npmTokenUserconfig({ registry: target.settings?.registry || undefined, token });
       return token;
@@ -178,7 +171,7 @@ function createCredentialBroker({
     javaHome
   }) {
     const entryId = sideloadKeyEntryId(target);
-    if (keys.has(entryId)) throw brokerError(`${target.package} already has an install key.`, "vibe64_publishing_key_exists");
+    if (keys.has(entryId)) throw publishingError(`${target.package} already has an install key.`, "vibe64_publishing_key_exists");
     return packaging.generateSideloadKey({
       javaHome,
       commonName: appName || target.package,
