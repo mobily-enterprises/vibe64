@@ -11,11 +11,17 @@ import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
-import { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
-import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueSelectionLabels.js";
+import { createColleagueModel } from "../../packages/vibe64-colleague/src/client/colleagueModel.js";
+import { useColleagueFreshStart } from "../../packages/vibe64-colleague/src/client/useColleagueFreshStart.js";
+import { useColleagueHistory } from "../../packages/vibe64-colleague/src/client/useColleagueHistory.js";
+import { useColleagueLearning } from "../../packages/vibe64-colleague/src/client/useColleagueLearning.js";
+import { useColleagueTeachMe } from "../../packages/vibe64-colleague/src/client/useColleagueTeachMe.js";
+import { useColleagueVoicePreviews } from "../../packages/vibe64-colleague/src/client/useColleagueVoicePreviews.js";
+import { useColleagueWatchesAndOperations } from "../../packages/vibe64-colleague/src/client/useColleagueWatchesAndOperations.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 import * as navigationPanes from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
@@ -1007,7 +1013,16 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "../shared/learningFocus.js": learningFocus,
     "@local/vibe64-training/shared/learner-events": { VIBE64_TRAINING_LEARNER_CHANGED_EVENT: "vibe64.training.learner.changed" },
     "/src/lib/vibe64ColleagueModelBridge.js": { registerVibe64ColleagueModel: () => () => {} },
-    "./colleagueSelectionLabels.js": { selectionLabels },
+    "./colleagueModel.js": { createColleagueModel },
+    "./useColleagueFreshStart.js": { useColleagueFreshStart },
+    "./useColleagueHistory.js": { useColleagueHistory },
+    "./useColleagueLearning.js": { useColleagueLearning },
+    "./useColleagueTeachMe.js": { useColleagueTeachMe },
+    "./useColleagueVoicePreviews.js": { useColleagueVoicePreviews },
+    "./useColleagueWatchesAndOperations.js": { useColleagueWatchesAndOperations },
+    "./ColleagueFreshDialog.vue": { default: {} },
+    "./ColleagueOperationsDialog.vue": { default: {} },
+    "./ColleagueWatchesDialog.vue": { default: {} },
     "@local/vibe64-accounts/client": { AiOnboardingNudge: {}, requestVibe64AiOnboarding: () => events.push(["ai-onboarding"]) },
     vue,
     vuetify: { useDisplay: () => display },
@@ -1026,7 +1041,6 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
       VIBE64_COLLEAGUE_VIEW_KEY: Symbol("view"), VIBE64_LEARNING_KEY: Symbol("learning") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
-    "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
     "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} },
     "/src/lib/vibe64AccountConnectionsDialog.js": {
       requestVibe64AccountConnectionsDialog: options => { events.push(["account-setup", options]); return true; }

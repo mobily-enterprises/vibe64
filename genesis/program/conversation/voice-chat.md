@@ -23,6 +23,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/composables/useVibe64AgentSettings.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-colleague/src/client/useColleagueVoicePreviews.js`
 - `src/App.vue`
 
 ## Public contract
@@ -218,7 +219,7 @@ sending entries cannot be cancelled by these actions. A matching canonical user
 with receipt:false is unadmitted: it neither clears speech nor acknowledges a
 speech invitation. Accepted readback remains the original acknowledgement owner.
 The Public host directly projects the existing pending transcript and current
-recording as at most two previewMessages, deduplicated by exact ID; the singular
+recording (`useColleagueVoicePreviews.js`) as at most two previewMessages, deduplicated by exact ID; the singular
 previewMessage contract remains available. This is presentation, not a second
 queue or transcript store. Core matches a descriptor to each existing failed or
 synthetic preview row. The newer capture stays visible/discardable; its Edit is

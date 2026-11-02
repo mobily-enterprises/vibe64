@@ -5,23 +5,31 @@ import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, unref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, unref, watch } from "vue";
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
-import { latestAssistantMessageAwaitingUserReply, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { registerVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
-import { selectionLabels } from "./colleagueSelectionLabels.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
+import { createColleagueModel } from "./colleagueModel.js";
+import { useColleagueFreshStart } from "./useColleagueFreshStart.js";
+import { useColleagueHistory } from "./useColleagueHistory.js";
+import { useColleagueLearning } from "./useColleagueLearning.js";
+import { useColleagueTeachMe } from "./useColleagueTeachMe.js";
+import { useColleagueVoicePreviews } from "./useColleagueVoicePreviews.js";
+import { useColleagueWatchesAndOperations } from "./useColleagueWatchesAndOperations.js";
+import ColleagueFreshDialog from "./ColleagueFreshDialog.vue";
+import ColleagueOperationsDialog from "./ColleagueOperationsDialog.vue";
+import ColleagueWatchesDialog from "./ColleagueWatchesDialog.vue";
 import { applyLearningNavigation } from "../shared/learningFocus.js";
 
 const props = defineProps({
@@ -53,65 +61,15 @@ watch(shown, (value, was) => {
 // The shared Learning controller (L and Courses), when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
-// The header's current-step button reads only the Learning controller's client
-// state; it shows that step in the Learn page's Lesson pane.
-const learningStep = computed(() => {
-  const controller = learningController.value;
-  // Only Learn mode teaches; Develop's Colleague shows no lesson step.
-  const mode = unref(controller?.mode);
-  const attemptId = mode?.on === true ? unref(controller.lessonAttemptId) ?? mode.currentAttemptId : "";
-  const stepId = unref(controller?.stepId);
-  const lesson = unref(controller?.lesson);
-  const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
-  const index = steps.findIndex(step => step?.id === stepId);
-  if (!attemptId || !stepId || index < 0 || lesson.attempt?.ended) return null;
-  const results = unref(controller.results);
-  // lesson.read names the steps this attempt has passed.
-  const passed = (Array.isArray(lesson?.passedStepIds) && lesson.passedStepIds.includes(stepId))
-    || (Array.isArray(results) && results.some(result => result?.stepId === stepId && result.outcome === "passed"));
-  return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
-    position: index + 1, total: steps.length, passed };
+const { learningStep, stepButton, showLearningStep, leaveForLearning } = useColleagueLearning({
+  learningController, xs, shown, toggleConversation, reopenConversation, reportFailure
 });
-// The same compact button in the drawer header (desktop) or the phone dialog
-// header; both stay mounted (the dialog is eager), so only one carries it.
-const stepButton = computed(() => learningStep.value && {
-  class: ["vibe64-colleague__step-button", { "vibe64-colleague__step-button--passed": learningStep.value.passed }],
-  variant: "flat", rounded: "pill", height: 32, "data-test": "colleague-current-step",
-  "aria-label": `Show the current lesson step: ${learningStep.value.title}`,
-  title: `Current lesson step: ${learningStep.value.title}`
-});
-// Step N/M: the Lesson pane at this step. A phone shows one surface, so
-// Colleague's full-screen dialog minimises to show it (the avatar brings it back).
-function showLearningStep() {
-  const step = learningStep.value;
-  const controller = learningController.value;
-  if (!step || typeof controller?.openLesson !== "function") return;
-  const show = () => applyLearningNavigation(controller, { attemptId: step.attemptId, stepId: step.stepId });
-  if (xs.value && shown.value) toggleConversation().then(show).catch(reportFailure);
-  else Promise.resolve(show()).catch(reportFailure);
-}
-// A phone shows one surface. When Colleague's dialog gave way to Courses and
-// the learner then closes Courses themselves, the dialog comes back (not the
-// app behind it). Show me, Teach me and app navigation close Courses to show
-// something else, so they never bring the dialog back.
-let returnFromLearning = false;
-function leaveForLearning() {
-  returnFromLearning = true;
-  return toggleConversation();
-}
+/** Shows Colleague again, revealing its own voice chat when one holds the conversation. */
 function reopenConversation() {
   if (shown.value) return;
   if (voice?.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
   else open.value = true;
 }
-watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
-  // On a phone, Colleague's dialog comes back when the learner closes the
-  // Courses it gave way to.
-  if (learningOpen || !wasOpen) return;
-  const back = returnFromLearning && learningController.value?.hiddenBy === "learner";
-  returnFromLearning = false;
-  if (back && xs.value) reopenConversation();
-});
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
   open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
@@ -197,21 +155,16 @@ const productError = ref("");
 const pointerNotice = ref("");
 const actorKey = computed(() => viewer?.value?.actorKey || viewer?.actorKey || "");
 const feedback = useShellWebErrorRuntime();
-const watchDetails = ref(false);
 const watchButton = ref(null);
-const operationDetails = ref(false);
 const operationButton = ref(null);
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
 const clientId = crypto.randomUUID();
 const working = computed(() => conversation.runtime.value?.snapshot.value?.status === "working");
-const watches = computed(() => (product.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
-const operations = computed(() => product.value.operations || (product.value.operation ? [product.value.operation] : []));
-const assignments = computed(() => (product.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
-const watchControlCount = computed(() => watches.value.length + assignments.value.length);
 let mounted = true;
 let revision = 0;
+const isMounted = () => mounted;
 
 function reportFailure(error) {
   const message = String(error?.message || error || "Colleague could not complete this request.");
@@ -343,83 +296,7 @@ watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) 
   waitForConversation().then(() => staleVoice.value && openVoice()).catch(reportFailure);
 });
 
-function voicePreviewActionsAllowed(messageId) {
-  const transcript = voiceTranscript.value;
-  const session = voiceSession.value;
-  const runtime = conversation.runtime.value;
-  const pending = session?.pendingTranscript.value;
-  const selected = pending?.messageId === messageId || transcript?.id === messageId && transcript.canTake;
-  const receipt = runtime?.delivery.find?.(messageId);
-  return Boolean(selected && session && session.canTakeTranscript(messageId) && !session.sending.value &&
-    (!receipt || receipt.status === "failed") &&
-    (!receipt || !runtime?.delivery.state.messages.some(message => message.status === "uncertain")));
-}
-function selectedVoiceTranscriptSession(messageId) {
-  const runtime = conversation.runtime.value;
-  if (!mounted || !runtime?.current.value || !voicePreviewActionsAllowed(messageId)) return null;
-  return voiceSession.value;
-}
-async function takeVoiceTranscript(messageId) {
-  const session = selectedVoiceTranscriptSession(messageId);
-  if (!session) return false;
-  const runtime = conversation.runtime.value;
-  if (!await session.takeTranscript(messageId)) return false;
-  // A definitely unsent message leaves the chat through JSKIT's Edit; the
-  // speech bubble, not the typed draft, now holds its words.
-  if (runtime.delivery.find?.(messageId)?.status === "failed") runtime.delivery.edit(messageId);
-  return true;
-}
-async function editVoiceTranscript(messageId) {
-  const session = selectedVoiceTranscriptSession(messageId);
-  if (!session) return false;
-  const runtime = conversation.runtime.value;
-  if (!await session.beginTranscriptEdit(messageId)) return false;
-  // Explicit Edit retires only a definite local rejection, through JSKIT's
-  // Edit. Plain Retry keeps the original authored text and steering intent
-  // on the delivery owner.
-  if (runtime.delivery.find?.(messageId)?.status === "failed") return runtime.delivery.edit(messageId) !== null;
-  return true;
-}
-function updateVoiceTranscript(messageId, text) {
-  const session = selectedVoiceTranscriptSession(messageId);
-  if (session?.pendingTranscript.value?.messageId !== messageId) return false;
-  session.editTranscript(text, messageId);
-  return true;
-}
-async function sendVoiceTranscript(messageId) {
-  const session = selectedVoiceTranscriptSession(messageId);
-  const pending = session?.pendingTranscript.value;
-  if (pending?.messageId !== messageId || !pending.text.trim() ||
-    conversation.runtime.value?.delivery.state.messages.some(message => message.status === "uncertain")) return false;
-  await session.deliverTranscript();
-  return true;
-}
-const voicePreviews = computed(() => {
-  const transcript = voiceTranscript.value;
-  const session = voiceSession.value;
-  const pending = session?.pendingTranscript.value;
-  // Snapshot only the existing pending and current capture owners; never queue.
-  const previews = pending ? [{ id: pending.messageId, text: pending.text }] : [];
-  if (transcript && transcript.id !== pending?.messageId) previews.push(transcript);
-  return previews.map(preview => {
-    const review = pending?.messageId === preview.id;
-    const allowed = voicePreviewActionsAllowed(preview.id);
-    return { ...preview, actions: {
-      canDiscard: allowed,
-      canEdit: allowed && (!pending || review),
-      discard: takeVoiceTranscript,
-      edit: editVoiceTranscript,
-      editing: review && pending.editing === true,
-      update: updateVoiceTranscript,
-      send: review && (pending.reviewBeforeSend || !session.sending.value) ? sendVoiceTranscript : null,
-      canSend: Boolean(review && allowed && !session.sending.value && pending.text.trim() &&
-        !conversation.runtime.value?.delivery.state.messages.some(message => message.status === "uncertain")),
-      sending: Boolean(review && session.sending.value)
-    } };
-  });
-});
-const voicePreview = computed(() => voicePreviews.value.find(preview => preview.id === voiceTranscript.value?.id)
-  || voicePreviews.value[0] || null);
+const { voicePreviews, voicePreview } = useColleagueVoicePreviews({ voiceTranscript, voiceSession, conversation, isMounted });
 const bodyVisible = computed(() => open.value || Boolean((voiceSession.value || staleVoice.value) && voice.controller.state.visible));
 
 const adapter = computed(() => {
@@ -436,201 +313,12 @@ const connectionError = computed(() => productError.value || conversation.runtim
 // A native snapshot reports no error as an empty string; it must not hide a
 // failed Colleague turn such as an unverified application operation.
 const turnError = computed(() => conversation.runtime.value?.snapshot.value?.error || product.value.error);
-const freshConfirm = ref(false);
-const freshBusy = ref(false);
-const freshError = ref("");
-// Only the pending operator request is retained here. Durable idempotency and
-// archived delivery evidence belong to the original server owner.
-const freshOperation = shallowRef(null);
-const freshBlocked = computed(() => {
-  if (pointerNotice.value) return "Colleague already changed in another tab. Resolve the old speech, then choose Refresh conversation instead of starting another fresh request.";
-  const runtime = conversation.runtime.value;
-  if (!runtime?.current.value || working.value || sending.value || runtime.stopping.value) {
-    return "Wait for the current request or Stop to finish before starting fresh.";
-  }
-  if (voice?.controller.state.busy || voice?.controller.state.nextTarget) return "Finish the pending voice switch before starting fresh.";
-  const session = voiceSession.value;
-  if (!session) return "";
-  if (session.starting?.value || session.capturing?.value || session.sending.value) {
-    return "Pause the microphone, then discard newer unsent speech with its X before starting fresh. You can also explicitly stop voice chat.";
-  }
-  const pending = session.pendingTranscript.value;
-  if (pending && runtime.delivery.find(pending.messageId)?.status !== "uncertain") {
-    return "Send or discard the reviewed speech before starting fresh.";
-  }
-  return "";
-});
-function showFreshConfirmation() {
-  closeHistory();
-  freshError.value = "";
-  freshConfirm.value = true;
-}
-function closeFreshConfirmation() {
-  if (!freshBusy.value) freshConfirm.value = false;
-}
-function freshScopeCurrent(operation) {
-  return mounted && actorKey.value === operation.actor && conversation.runtime.value === operation.runtime &&
-    product.value.conversationId === operation.body.expectedConversationId;
-}
-async function startFresh() {
-  if (freshBusy.value) return false;
-  if (freshBlocked.value) { freshError.value = freshBlocked.value; return false; }
-  let operation = freshOperation.value;
-  if (!operation) {
-    const runtime = conversation.runtime.value;
-    const unconfirmedMessages = runtime.delivery.state.messages.filter(message => message.status === "uncertain").map(message => {
-      const request = message.payload?.request;
-      const data = request?.data || message.payload?.data;
-      return { messageId: message.id, text: request?.text ?? message.payload?.message,
-        clientId: data?.clientId, ...(data?.focus ? { focus: { ...data.focus } } : {}) };
-    });
-    if (unconfirmedMessages.length > 8 || unconfirmedMessages.some(message =>
-      typeof message.text !== "string" || !message.text.trim() || message.text.length > 24000 || !message.clientId)) {
-      freshError.value = "The original uncertain delivery evidence is incomplete or too large. Check delivery before starting fresh.";
-      return false;
-    }
-    operation = { actor: actorKey.value, runtime, session: voiceSession.value,
-      binding: voiceSession.value ? voice.controller.state.binding : null,
-      body: { operationId: crypto.randomUUID(), expectedConversationId: product.value.conversationId, unconfirmedMessages } };
-    // Invalidate a product read that began before this operation. Its late
-    // pointer cannot retire the original binding while archive is unresolved.
-    revision += 1;
-    freshOperation.value = operation;
-  }
-  if (!freshScopeCurrent(operation)) return false;
-  freshBusy.value = true;
-  freshError.value = "";
-  try {
-    const result = await requestColleague("/conversations/fresh", { method: "POST", body: operation.body });
-    if (!freshScopeCurrent(operation)) return false;
-    if (result.fresh?.operationId !== operation.body.operationId ||
-      result.fresh.previousConversationId !== operation.body.expectedConversationId ||
-      !result.fresh.conversationId || !result.conversationId) throw new Error("The fresh conversation receipt did not match this request. Retry the same operation.");
-    // Archive success alone cannot discard speech captured while HTTP was held,
-    // or end a different assistant that the person opened in the meantime.
-    if (freshBlocked.value || operation.session && voice.controller.state.session && (voice.controller.state.session !== operation.session ||
-      voice.controller.state.binding !== operation.binding)) {
-      throw new Error(freshBlocked.value || "The voice conversation changed. Return to the original conversation before retrying this fresh operation.");
-    }
-    if (operation.session && voice.controller.state.session === operation.session) await voice.controller.end({ discard: true });
-    if (!freshScopeCurrent(operation)) return false;
-    if (operation.session && (voice.controller.state.session || voice.controller.state.busy || voice.controller.state.nextTarget)) {
-      throw new Error("Another voice conversation opened during retirement. Resolve it before retrying this fresh operation.");
-    }
-    // The original apply owner preserves the latest same-actor draft while
-    // following the CURRENT server pointer, never a historic receipt successor.
-    apply(result, ++revision, operation.actor, true);
-    if (mounted && actorKey.value === operation.actor && product.value.conversationId === result.conversationId) {
-      freshBusy.value = false;
-      freshOperation.value = null;
-      freshConfirm.value = false;
-      productError.value = "";
-      open.value = true;
-      voiceTranscript.value = null;
-      const controller = voice?.controller;
-      if (controller && !controller.state.session && !controller.state.binding && !controller.state.busy && !controller.state.nextTarget) {
-        // Restore the original controls with a paused binding. Archive success
-        // is already committed; presentation failure must not repeat it.
-        try { await openVoice(); }
-        catch (error) {
-          if (mounted && actorKey.value === operation.actor && product.value.conversationId === result.conversationId) {
-            reportFailure(new Error(`The fresh conversation is ready, but its voice controls could not open. Reopen Colleague to try again. ${error.message}`));
-          }
-        }
-        if (!mounted || actorKey.value !== operation.actor || product.value.conversationId !== result.conversationId) return false;
-        open.value = true;
-      }
-      return true;
-    }
-    return false;
-  } catch (error) {
-    if (freshScopeCurrent(operation)) freshError.value = `${error.message} Nothing was resent. Retry this same fresh operation to check its result.`;
-    return false;
-  } finally {
-    if (freshOperation.value === operation) freshBusy.value = false;
-  }
-}
-
-const historyOpen = ref(false);
-const historyLoading = ref(false);
-const historyError = ref("");
-const historyConversations = ref([]);
-const historyNextOffset = ref(null);
-const historyHasMore = ref(false);
-const historyId = ref("");
-const historyPages = ref([]);
-const historyUnconfirmed = ref([]);
-const historyUnconfirmedDelivery = ref(null);
-const historyTurns = computed(() => mergeConversationLogPages(historyPages.value).conversationLog);
-const historyPagination = computed(() => historyPages.value[0]?.pagination || {});
-let historyRevision = 0;
-function closeHistory() {
-  historyRevision += 1;
-  historyOpen.value = false;
-  historyLoading.value = false;
-  historyId.value = "";
-  historyPages.value = [];
-  historyConversations.value = [];
-  historyUnconfirmed.value = [];
-  historyUnconfirmedDelivery.value = null;
-  historyError.value = "";
-}
-async function loadHistory({ more = false } = {}) {
-  if (historyLoading.value) return;
-  const expectedActor = actorKey.value;
-  const expectedHistory = ++historyRevision;
-  historyOpen.value = true;
-  historyId.value = "";
-  historyPages.value = [];
-  historyUnconfirmed.value = [];
-  historyUnconfirmedDelivery.value = null;
-  historyLoading.value = true;
-  historyError.value = "";
-  try {
-    const offset = more ? historyNextOffset.value : 0;
-    const result = await requestColleague(`/conversations/history?offset=${offset}&limit=20`, { method: "GET" });
-    if (!mounted || expectedActor !== actorKey.value || expectedHistory !== historyRevision || !historyOpen.value) return;
-    historyConversations.value = more ? [...historyConversations.value, ...result.conversations] : result.conversations;
-    historyNextOffset.value = result.nextOffset;
-    historyHasMore.value = result.hasMore;
-  } catch (error) {
-    if (mounted && expectedActor === actorKey.value && expectedHistory === historyRevision) historyError.value = error.message;
-  } finally {
-    if (expectedHistory === historyRevision) historyLoading.value = false;
-  }
-}
-async function readHistoryPage(conversationId, { more = false, complete } = {}) {
-  if (historyLoading.value) {
-    complete?.({ changed: false });
-    return;
-  }
-  let changed = false;
-  const expectedActor = actorKey.value;
-  const expectedHistory = ++historyRevision;
-  const before = more ? historyPagination.value.nextBeforeTurnId : "";
-  historyId.value = conversationId;
-  if (!more) {
-    historyPages.value = [];
-    historyUnconfirmed.value = [];
-    historyUnconfirmedDelivery.value = null;
-  }
-  historyLoading.value = true;
-  historyError.value = "";
-  try {
-    const result = await requestColleague(`/conversations/history/page?conversationId=${encodeURIComponent(conversationId)}&limit=20${before ? `&beforeTurnId=${encodeURIComponent(before)}` : ""}`, { method: "GET" });
-    if (!mounted || expectedActor !== actorKey.value || expectedHistory !== historyRevision || !historyOpen.value) return;
-    if (result.id !== conversationId || result.readOnly !== true) throw new Error("The saved conversation response did not match this read-only history.");
-    historyPages.value = [normalizeConversationLogPage(result), ...(more ? historyPages.value : [])];
-    historyUnconfirmed.value = result.unconfirmedMessages || [];
-    historyUnconfirmedDelivery.value = result.unconfirmedDelivery || null;
-    changed = true;
-  } catch (error) {
-    if (mounted && expectedActor === actorKey.value && expectedHistory === historyRevision) historyError.value = error.message;
-  } finally {
-    if (expectedHistory === historyRevision) historyLoading.value = false;
-    complete?.({ changed });
-  }
-}
+const { historyOpen, historyLoading, historyError, historyConversations, historyHasMore, historyId, historyPages,
+  historyUnconfirmed, historyUnconfirmedDelivery, historyTurns, historyPagination, closeHistory, loadHistory, readHistoryPage
+} = useColleagueHistory({ actorKey, requestColleague, isMounted });
+const { freshConfirm, freshBusy, freshError, freshOperation, freshBlocked, showFreshConfirmation, closeFreshConfirmation, startFresh } =
+  useColleagueFreshStart({ conversation, voice, voiceSession, voiceTranscript, actorKey, product, productError, pointerNotice, open,
+    working, sending, isMounted, nextRevision: () => ++revision, requestColleague, apply, openVoice, closeHistory, reportFailure });
 realtimeSocket.on("connect", refresh);
 // The server picks the thread from the mode and the current lesson.
 useRealtimeEvent({
@@ -656,8 +344,7 @@ async function sendMessage(message, options = {}, target = conversation.runtime.
   if (!target?.available.value) return false;
   return target.send({ message, data: { clientId, focus: options.focus } }, { messageId: options.messageId });
 }
-// Teach me on a step: reveal this conversation (voice stays as it is) and send
-// the step's fixed message through the ordinary send with the current browser focus.
+/** Resolves with Colleague's available conversation; fails after timeoutMs or once Colleague leaves this view. */
 function waitForConversation(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     let stop = null;
@@ -675,23 +362,10 @@ function waitForConversation(timeoutMs = 10000) {
     }, { immediate: true });
   });
 }
-// Without a usable AI model Teach me sends nothing: the conversation opens and
-// says so, offering Set up your AI to connect one.
-const teachNeedsModel = ref(false);
-async function revealForLearning() {
-  teachNeedsModel.value = false;
-  reopenConversation();
-  // A fresh read says whether a model is usable before anything is sent.
-  await refresh();
-  if (product.value.modelSetupRequired) {
-    teachNeedsModel.value = true;
-    return false;
-  }
-  await waitForConversation();
-  if (bodyVisible.value) await focusConversationComposer();
-  return true;
-}
-watch(() => product.value.modelSetupRequired, required => { if (!required) teachNeedsModel.value = false; });
+// Teach me on a step: reveal this conversation (voice stays as it is) and send
+// the step's fixed message through the ordinary send with the current browser focus.
+const { teachNeedsModel, revealForLearning } = useColleagueTeachMe({ product, refresh, reopenConversation, waitForConversation,
+  bodyVisible, focusConversationComposer });
 const stopLearningRequests = watchColleagueLearningRequests({ learning: learningController.value, actorKey: () => actorKey.value,
   reveal: revealForLearning, report: reportFailure,
   send: async message => sendMessage(message, { focus: { ...props.focus } }) });
@@ -737,89 +411,12 @@ async function saveSelection(selection, { report = true } = {}) {
 }
 const selectModel = assistantSelection => saveSelection({ assistantSelection });
 // AI onboarding reads and switches this Colleague's model through the bridge.
-async function withLabels(selection) {
-  try {
-    const query = new URLSearchParams({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
-      allConnectedModels: "true", connectedOnly: "true" });
-    return { selection, ...selectionLabels(await requestColleague(`/models?${query}`, { method: "GET" }), selection) };
-  } catch { return { selection, ...selectionLabels(null, selection) }; }
-}
-// The bridge registers on mount, before the first read names the conversation.
-async function conversationReady() {
-  if (!product.value.conversationId) await refresh();
-  return Boolean(product.value.conversationId);
-}
-const colleagueModel = {
-  async current() {
-    await conversationReady();
-    return product.value.assistantSelection ? withLabels(product.value.assistantSelection) : null;
-  },
-  async select(assistantSelection) {
-    if (!await conversationReady()) return { ok: false, error: productError.value || "Colleague is not ready yet; try again in a moment." };
-    const result = await saveSelection({ assistantSelection }, { report: false });
-    const selection = result?.ok === false ? null : result?.assistantSelection;
-    if (!selection) return { ok: false, error: result?.error || "Colleague could not switch to this AI." };
-    return { ok: true, ...await withLabels(selection) };
-  },
-  async sayHello(message) {
-    if (!await conversationReady()) return { ok: false, error: productError.value || "Colleague is not ready yet." };
-    const target = await waitForConversation();
-    const sent = target.turns.value.length;
-    if (!await sendMessage(message, { focus: { ...props.focus } }, target)) return { ok: false, error: target.error.value || "Colleague didn't receive it." };
-    // Settles on the reply, a failed turn or the conversation's error, within 15 seconds.
-    const outcome = () => {
-      if (target.turns.value.length <= sent) return null;
-      const { status, error } = target.turns.value.at(-1)?.assistant || {};
-      const failure = target.snapshot.value?.status === "working" ? "" : target.snapshot.value?.error;
-      if (["failed", "interrupted"].includes(status) || failure) return { ok: false, error: failure || error || "It stopped with an error." };
-      const reply = latestAssistantMessageAwaitingUserReply(target.turns.value);
-      return reply ? { ok: true, reply } : null;
-    };
-    let stop = null;
-    const result = await new Promise(resolve => {
-      const timer = setTimeout(() => resolve({ ok: false, error: "It took too long to reply." }), 15000);
-      stop = watch(outcome, value => { if (value) { clearTimeout(timer); resolve(value); } }, { immediate: true });
-    });
-    stop();
-    return result;
-  },
-  // Shows the conversation with its composer focused, for "Start building".
-  async reveal() {
-    reopenConversation();
-    await focusConversationComposer();
-  }
-};
+const colleagueModel = createColleagueModel({ product, productError, refresh, requestColleague, saveSelection, waitForConversation,
+  sendMessage, reopenConversation, focusConversationComposer, readFocus: () => props.focus });
 let unregisterModel = null;
-async function changeWatch(watch, operation) {
-  try {
-    await requestColleague(`/watches/${operation}`, { method: "POST", body: { watchId: watch.watchId } });
-    await refresh();
-  } catch (error) { reportFailure(error); }
-}
-async function openOperationTarget(item) {
-  const target = item?.target;
-  if (!target?.projectSlug || !props.navigate) return reportFailure("This operation target cannot be opened from the current app.");
-  try {
-    const result = await props.navigate({ projectSlug: target.projectSlug,
-      ...(target.sessionId ? { sessionId: target.sessionId } : {}),
-      ...(target.conversationId ? { conversationId: target.conversationId } : {}) });
-    const opened = result?.focus || result;
-    if (opened?.projectSlug !== target.projectSlug || target.sessionId && opened.sessionId !== target.sessionId ||
-        target.conversationId && opened.conversationId !== target.conversationId) {
-      throw new Error("The operation target did not open.");
-    }
-    operationDetails.value = false;
-  } catch (error) { reportFailure(error); }
-}
-function prepareOperationRecovery(item) {
-  if (!item?.id || !["failed", "unknown"].includes(item.status)) return false;
-  const target = [item.target?.projectSlug, item.target?.sessionId, item.target?.conversationId].filter(Boolean).join(" / ") || "its saved target";
-  draft.value = item.status === "unknown"
-    ? `Inspect the saved target for the uncertain ${item.label} receipt (${item.id}) at ${target}. Tell me what actually happened. Do not repeat the operation unless inspection proves no effect and I explicitly ask you to continue.`
-    : `Recheck the saved target for the failed ${item.label} receipt (${item.id}) at ${target}, then retry only if the operation is still needed and safe. Do not repeat any confirmed side effect.`;
-  operationDetails.value = false;
-  return true;
-}
+const { watchDetails, operationDetails, watches, operations, assignments, watchControlCount, changeWatch, openOperationTarget,
+  prepareOperationRecovery } = useColleagueWatchesAndOperations({ product, draft, requestColleague, refresh, reportFailure,
+  readNavigate: () => props.navigate });
 watch(open, value => { if (value) void refresh(); });
 watch(actorKey, () => {
   revision += 1;
@@ -1017,79 +614,19 @@ onBeforeUnmount(() => {
       />
     </aside>
   </Teleport>
-  <v-dialog v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Watches and assignments">
-    <v-card class="vibe64-colleague__watch-dialog">
-      <v-card-title class="vibe64-colleague__watch-title d-flex align-center text-title-large">
-        <span class="vibe64-colleague__watch-badge" aria-hidden="true"><v-icon :icon="mdiEyeOutline" size="22" /></span>
-        <span class="flex-grow-1">Watches and assignments</span>
-        <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
-      </v-card-title>
-      <v-card-text class="vibe64-colleague__watch-details">
-        <section v-if="watches.length" class="vibe64-colleague__watch-card" aria-label="Watches">
-          <p class="text-title-medium">Watches ({{ watches.length }})</p>
-          <ul>
-            <li v-for="item in watches" :key="item.watchId">
-              <div>
-                <strong>{{ item.projectSlug || 'Workspace' }}</strong> · <span class="vibe64-colleague__watch-chip" :data-status="item.status">{{ item.status }}</span>
-                <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
-              </div>
-              <div class="d-flex flex-wrap ga-1">
-                <v-btn v-if="item.status === 'paused'" variant="text" min-height="48" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item, 'resume')">Resume</v-btn>
-                <v-btn variant="text" min-height="48" :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item, 'cancel')">Cancel</v-btn>
-              </div>
-            </li>
-          </ul>
-        </section>
-        <section v-if="assignments.length" class="vibe64-colleague__watch-card" aria-label="Ongoing assignments">
-          <p class="text-title-medium">Ongoing assignments ({{ assignments.length }})</p>
-          <ul>
-            <li v-for="item in assignments" :key="item.assignmentId">
-              <strong>{{ item.projectSlug }}</strong> · {{ item.status }} · {{ item.turnLimit - item.turnsUsed }} turns left
-              <p>{{ item.summary }}</p><p>{{ item.criteria }}</p>
-            </li>
-          </ul>
-        </section>
-        <p v-if="!watches.length && !assignments.length" class="vibe64-colleague__watch-empty" role="status">No ongoing watches or assignments.</p>
-      </v-card-text>
-    </v-card>
-  </v-dialog>
-  <v-dialog v-model="operationDetails" :activator="operationButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Recent operations">
-    <v-card>
-      <v-card-title class="d-flex align-center text-title-large">
-        <span class="flex-grow-1">Recent operations</span>
-        <v-btn :icon="mdiClose" variant="text" aria-label="Close recent operations" title="Close recent operations" @click="operationDetails = false" />
-      </v-card-title>
-      <v-card-text class="vibe64-colleague__operation-details">
-        <p>These receipts report what Vibe64 actually recorded. An uncertain receipt is not safe to repeat until its target is inspected.</p>
-        <ol>
-          <li v-for="item in operations" :key="item.id">
-            <p><strong>{{ item.label }}</strong> · {{ item.status }}<span v-if="item.at"> · {{ item.at }}</span></p>
-            <p v-if="item.target">{{ [item.target.projectSlug, item.target.sessionId, item.target.conversationId].filter(Boolean).join(' · ') }}</p>
-            <p v-if="item.error" class="text-error">{{ item.error }}</p>
-            <div class="d-flex flex-wrap ga-1">
-              <v-btn v-if="item.target?.projectSlug && props.navigate" variant="text" min-height="48" @click="openOperationTarget(item)">Open target</v-btn>
-              <v-btn v-if="item.status === 'unknown'" variant="text" min-height="48" @click="prepareOperationRecovery(item)">Prepare inspection</v-btn>
-              <v-btn v-else-if="item.status === 'failed' && item.canPrepareRetry" variant="text" min-height="48" @click="prepareOperationRecovery(item)">Prepare retry</v-btn>
-            </div>
-          </li>
-        </ol>
-      </v-card-text>
-    </v-card>
-  </v-dialog>
-  <v-dialog :model-value="freshConfirm" max-width="520" :persistent="freshBusy" @update:model-value="value => !value && closeFreshConfirmation()">
-    <v-card title="Start a fresh conversation?">
-      <v-card-text>
-        <p>This ends the old voice conversation. Nothing will be resent. Its history and any unconfirmed words remain available in Previous conversations. Watches and assignments continue.</p>
-        <p>Your typed draft and personal microphone, speaker, avatar and voice preferences stay. The new conversation does not automatically start voice.</p>
-        <p v-if="freshBlocked" role="status">{{ freshBlocked }}</p>
-        <p v-if="freshError" role="alert">{{ freshError }}</p>
-      </v-card-text>
-      <v-card-actions>
-        <v-btn :disabled="freshBusy" @click="closeFreshConfirmation">{{ freshOperation ? 'Close' : 'Cancel' }}</v-btn>
-        <v-btn :disabled="freshBusy || Boolean(freshBlocked)" color="primary" @click="startFresh">{{ freshBusy ? 'Checking fresh conversation…' : freshOperation ? 'Retry same fresh operation' : 'Start fresh' }}</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  <ColleagueWatchesDialog
+    v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :fullscreen="xs"
+    :watches="watches" :assignments="assignments" @change-watch="changeWatch"
+  />
+  <ColleagueOperationsDialog
+    v-model="operationDetails" :activator="operationButton?.$el || modelButton?.$el" :fullscreen="xs"
+    :operations="operations" :can-open-targets="Boolean(props.navigate)"
+    @open-target="openOperationTarget" @prepare-recovery="prepareOperationRecovery"
+  />
+  <ColleagueFreshDialog
+    :open="freshConfirm" :busy="freshBusy" :blocked="freshBlocked" :error="freshError" :resuming="Boolean(freshOperation)"
+    @close="closeFreshConfirmation" @start="startFresh"
+  />
   <ConversationDialog :model-value="historyOpen" title="Previous conversations" close-label="Close previous conversations" @update:model-value="value => !value && closeHistory()">
     <div class="vibe64-colleague__history">
       <p>Read-only history. Unconfirmed words are annotations, not accepted messages.</p>
@@ -1152,24 +689,6 @@ onBeforeUnmount(() => {
   .vibe64-colleague__voice-tools :deep(.v-btn),
   .vibe64-colleague :deep(.assistant-conversation__avatar-size) { min-width: 48px !important; min-height: 48px !important; }
 }
-.vibe64-colleague__watch-dialog { border-radius: var(--v64-shape-xl, 28px); background: var(--v64-surface-container-low, rgb(var(--v-theme-surface))); }
-.vibe64-colleague__watch-title { gap: 12px; padding: 20px 16px 8px 24px; }
-.vibe64-colleague__watch-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14)); color: var(--v64-on-primary-container, rgb(var(--v-theme-primary))); }
-.vibe64-colleague__watch-details { padding: 8px 24px 24px; min-height: 0; overflow: auto; overflow-wrap: anywhere; font: var(--v64-type-body-md, inherit); }
-.vibe64-colleague__watch-details p { margin-block: 0 8px; }
-.vibe64-colleague__watch-card { padding: 16px; border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), .12)); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface)); }
-.vibe64-colleague__watch-card > .text-title-medium { margin-bottom: 12px; }
-.vibe64-colleague__watch-details section + section { margin-top: 12px; }
-.vibe64-colleague__watch-details ul { list-style: none; padding: 0; margin: 0; }
-.vibe64-colleague__watch-details li { padding-block: 12px; }
-.vibe64-colleague__watch-details li + li { border-top: 1px solid var(--v64-outline-variant, rgb(var(--v-theme-outline-variant))); }
-.vibe64-colleague__watch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--v64-shape-sm, 8px); background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), .08)); font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif); text-transform: capitalize; }
-.vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v64-on-surface-variant, currentColor); }
-.vibe64-colleague__watch-chip[data-status="active"] { background: var(--v64-success-container); }
-.vibe64-colleague__watch-chip[data-status="active"]::before { background: var(--v64-success); }
-.vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning, #f5c518); }
-.vibe64-colleague__watch-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
-.vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: var(--v64-on-surface-variant); }
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }
