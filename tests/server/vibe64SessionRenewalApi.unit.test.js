@@ -225,7 +225,7 @@ test("renewal draft transport stays bounded without rejecting 20,000 astral code
   assert.equal(rejected.errors.draft.code, "MAX_LENGTH");
 });
 
-test("renewal actions use server action context identity and domain-native idempotency", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
+test("renewal actions use server action context identity and declare no idempotency", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const sessions = {
     async inspectSessionRenewal(...args) {
@@ -281,9 +281,8 @@ test("renewal actions use server action context identity and domain-native idemp
 
   assert.deepEqual(calls, transitions.map(([name, , input]) => [name, "session-1", { ...input, sessionId: "session-1", vibe64User }]));
 
-  assert.equal(actionById(actions, ACTION_INSPECT_SESSION_RENEWAL).idempotency, "none");
-  for (const actionId of RENEWAL_ACTION_IDS.slice(1)) {
-    assert.equal(actionById(actions, actionId).idempotency, "domain_native");
+  for (const actionId of RENEWAL_ACTION_IDS) {
+    assert.equal(Object.hasOwn(actionById(actions, actionId), "idempotency"), false);
   }
 }));
 

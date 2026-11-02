@@ -62,7 +62,6 @@ function createTrainingLearnerNotesActions({ learnerNotes }) {
           expectedRevision: revision
         })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -74,12 +73,12 @@ function createTrainingLearnerNotesActions({ learnerNotes }) {
       execute: (input, context) => learnerNotes.updateNotes(input, context)
     }),
     // The learner's own Clear in Learning; it is not one of Colleague's tools.
+    // A repeated requestId replays its saved clear.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: TRAINING_LEARNER_NOTES_ACTIONS.CLEAR_NOTES,
       input: { mode: "create", schema: createSchema({ requestId, expectedRevision: revision }) },
       channels: ["api"],
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => learnerNotes.clearNotes(input, context)
     })

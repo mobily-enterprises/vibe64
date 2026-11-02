@@ -214,7 +214,7 @@ test("a host action contributor gates a team member's own operations, not intern
   actions.register({ contributorId: "unit", domain: "unit", actions: [Object.freeze({
     extensions: { vibe64: PROJECT_OPERATION },
     id: "unit.project.read", kind: "query", channels: ["api", "automation", "internal"], surfaces: ["app"],
-    permission: { require: "authenticated" }, idempotency: "none",
+    permission: { require: "authenticated" },
     input: { schema: createSchema({}) }, output: null,
     async execute() { return { ok: true }; } })] });
   registerVibe64ActionContext(actions, { projectContext: context, resolveUser: async () => actor, authorizeProject: async () => {} });

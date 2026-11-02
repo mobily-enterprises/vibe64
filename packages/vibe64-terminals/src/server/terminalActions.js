@@ -146,7 +146,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_RECORD_PREVIEW_DIAGNOSTIC,
       input: previewDiagnosticActionInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: input => terminals.recordPreviewDiagnostic(input.sessionId, input)
     }),
@@ -199,7 +198,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_UPDATE_AGENT_GOAL,
       input: agentGoalInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input)
     }),
@@ -207,7 +205,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_PAUSE_MAIN_GOAL,
       input: emptyInputValidator,
-      idempotency: "none",
       channels: ["automation"],
       extensions: { assistant: mainGoalPauseTool, vibe64: PROJECT_OPERATION },
       execute: (input, context) => terminals.pauseMainGoal(input, context)
@@ -216,7 +213,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_BLOCK_MAIN_GOAL,
       input: mainGoalBlockInputValidator,
-      idempotency: "none",
       channels: ["automation"],
       extensions: { assistant: mainGoalBlockTool, vibe64: PROJECT_OPERATION },
       execute: (input, context) => terminals.blockMainGoal(input, context)
@@ -233,7 +229,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_UPDATE_CANONICAL_AGENT_GOAL,
       input: canonicalAgentGoalInputValidator,
-      idempotency: "none",
       channels: ["internal"],
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.updateCanonicalAgentGoal(input.sessionId, input)
@@ -256,7 +251,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_ARCHIVE_WORK_PLAN,
       input: workPlanArchiveInputValidator,
-      idempotency: "none",
       extensions: {
         assistant: workPlanChangeTool(
           "Archive the exact session's current plan when the person asks, as the plan viewer's Archive does. First read every page of the current plan and pass its revision and progressRevision as expectedRevision and expectedProgressRevision. This moves the exact Plan and Progress pair to History and leaves no current plan; it does not mark unfinished work completed and starts no AI work. It is refused while Main chat or its review is working, or when the plan changed since the read (read again). Anyone who can work in the session can archive, as in the viewer."
@@ -269,7 +263,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_RESTORE_WORK_PLAN,
       input: workPlanRestoreInputValidator,
-      idempotency: "none",
       extensions: {
         assistant: workPlanChangeTool(
           "Make an archived plan current when the person asks, as the plan viewer's Make current does. Pass the archiveId of the History entry the person chose (from work-plan.read history). It reopens that exact Plan and Progress pair as Active and removes it from History; it starts no AI work, so ask in chat to continue its work. It is refused while a current plan exists (archive it first, only if the person agrees, or ask Senior in Main chat to replace it) and while Main chat or its review is working."
@@ -351,7 +344,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_WRITE_AGENT_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(false, "text"),
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.writeAgentTerminalText(input.sessionId, input.terminalSessionId, input)
     }),
@@ -359,7 +351,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_WRITE_AGENT_TERMINAL_KEY,
       input: terminalControlActionInputValidator(false, "key"),
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.writeAgentTerminalKey(input.sessionId, input.terminalSessionId, input)
     }),
@@ -395,7 +386,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_WRITE_GLOBAL_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(true, "text"),
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.writeGlobalCodexTerminalText(input.terminalSessionId, input)
     }),
@@ -403,7 +393,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_WRITE_GLOBAL_TERMINAL_KEY,
       input: terminalControlActionInputValidator(true, "key"),
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.writeGlobalCodexTerminalKey(input.terminalSessionId, input)
     }),
@@ -430,7 +419,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_SELECT_PREVIEW_IDENTITY,
       input: previewIdentityActionInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.selectPreviewIdentity(input.sessionId, input)
     }),
@@ -438,7 +426,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_UPLOAD_AGENT_ATTACHMENT,
       input: agentAttachmentActionInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.uploadAgentAttachment(input.sessionId, input)
     }),
@@ -541,7 +528,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_GENERATE_SESSION_PROMPT_HINTS,
       input: sessionPromptHintsActionInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.generateSessionPromptHints(input.sessionId, input)
     }),
@@ -549,7 +535,6 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_CANCEL_SESSION_PROMPT_HINTS,
       input: sessionPromptHintsActionInputValidator,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.cancelSessionPromptHints(input.sessionId, input)
     })

@@ -64,7 +64,6 @@ function createTrainingActions({ operations }) {
           release
         })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -116,7 +115,6 @@ function createTrainingActions({ operations }) {
         mode: "create",
         schema: createSchema({ on: { type: "boolean", required: true } })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -150,7 +148,6 @@ function createTrainingActions({ operations }) {
           expectedRevision: revision
         })
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -175,7 +172,6 @@ function createTrainingActions({ operations }) {
           archiveCurrent: { type: "boolean", required: false }
         })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -190,7 +186,6 @@ function createTrainingActions({ operations }) {
       ...VIBE64_COMMAND,
       id: TRAINING_ACTIONS.RESUME_LESSON,
       input: { mode: "create", schema: createSchema({ attemptId }) },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -213,7 +208,6 @@ function createTrainingActions({ operations }) {
           confirmed: { type: "boolean", required: false }
         })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -231,7 +225,6 @@ function createTrainingActions({ operations }) {
         mode: "create",
         schema: createSchema({ attemptId, expectedRevision: revision })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,

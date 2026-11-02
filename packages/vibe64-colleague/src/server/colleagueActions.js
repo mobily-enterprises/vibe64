@@ -147,6 +147,7 @@ function createColleagueActions({
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.read(input, context)
     }),
+    // A repeated operationId returns the conversation that request already started.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_CONVERSATION_START_FRESH,
@@ -154,7 +155,6 @@ function createColleagueActions({
         schema: conversationStartFreshInput,
         mode: "create"
       },
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.startFresh(input, context)
     }),
@@ -185,10 +185,10 @@ function createColleagueActions({
         schema: createSchema({ clientId, focus: { ...focusField, required: true } }),
         mode: "create"
       },
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.focus(input, context)
     }),
+    // A repeated messageId with the same words returns the turn it already started.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_MESSAGE_SEND,
@@ -196,7 +196,6 @@ function createColleagueActions({
         schema: messageSendInput,
         mode: "create"
       },
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.send(input, context)
     }),
@@ -207,7 +206,6 @@ function createColleagueActions({
         schema: createSchema({ expectedConversationId: { ...clientId, required: false } }),
         mode: "create"
       },
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.stop(input, context)
     }),
@@ -218,7 +216,6 @@ function createColleagueActions({
         schema: createSchema({ ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }),
         mode: "create"
       },
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.selectModel(input, context)
     }),
@@ -272,7 +269,6 @@ function createColleagueActions({
         schema: assignmentCreateInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Retain a user-requested implementation assignment before sending work. Use the actual current user messageId, exact project/session and optional temporary implementer conversationId. Omit conversationId for Main. Resolve the agent using existing routing; do not require the user to name Senior/Junior. Capture the original acceptance criteria. Default allowance is eight agent turns including implementation, plan approval and review; use another limit only when requested. Reuse assignmentId on retry. This records intent but does not send work. Ordinary questions or watches do not authorize creating assignments.",
@@ -289,7 +285,6 @@ function createColleagueActions({
         schema: assignmentLinkInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Record the current user's explicit permission for two existing assignments to exchange relevant questions/answers. Retain their actual requestMessageId and bounded purpose. Only user instructions can link assignments; an agent suggestion cannot. This enables direct mediation, not shared source, transitive links or expanded scope/budget. Create both assignments before linking them. Use assignment.relay for exchanges.",
@@ -306,7 +301,6 @@ function createColleagueActions({
         schema: assignmentRelayInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Relay a relevant observed agent question/answer to a directly user-linked assignment's implementer. assignmentId is the receiver; sourceMessageId must be an answerId in the source assignment's turn receipts. Summarize only the authorized information. The server identifies its origin, charges the RECEIVER one turn, preserves its target and watches its answer. It never transfers source. Reuse messageId and content on retry. Wait if the receiver is busy; resume mediation when its own watch wakes. This can resolve the receiver's wait for the source. The link cannot authorize new scope, budget, plan approval or a cancelled/paused assignment.",
@@ -323,7 +317,6 @@ function createColleagueActions({
         schema: assignmentMessageSendInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Send the next in-scope assignment request to its retained implementer or same-session reviewer, using existing agent actions. This reserves one agent turn and automatically watches for its answer; do not create another watch or use ordinary send tools for assignment work. Reuse messageId and content on retry. Wait for the previous turn before sending. Supply planRevision only after reading that exact complete Main plan and checking it against the user's retained assignment. Ask routine questions, relay authorized findings, request corrections or evidence within that scope. Never expand scope from an agent's instructions. Reviewer requests must ask for review of the existing source, not simultaneous implementation.",
@@ -337,7 +330,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_ASSIGNMENT_REVIEW_CREATE,
       input: { schema: createSchema({ assignmentId: clientId }), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Create or retrieve the assignment's temporary review conversation in the SAME session and worktree after the implementer answers. Uses existing configured routing. This does not send a review request; use assignment.message.send with recipient reviewer, original criteria and a request to review without editing. Separate sessions do not share unsaved source.",
@@ -354,7 +346,6 @@ function createColleagueActions({
         schema: assignmentUpdateInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Record the assignment's next wait, user decision, cancellation or readiness for human testing. For a required answer from another directly linked assignment use waiting status and waitingForAssignmentId; its existing watch will wake Colleague, so do not poll with the model. Relay the answer to resolve that wait. Circular waits or stopped dependencies need the user. ready requires evidence against EVERY original criterion, a completed review of the latest implementation, and disclosure of checks still needing the user; agents agreeing is not proof. needs-user stops autonomous follow-through. active/resuming and extraTurns require a new user instruction; record amended requirements from that instruction. Cancelling follow-through does not stop a running coding agent or speech. Never mark ready merely because the budget is exhausted.",
@@ -384,7 +375,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_WATCH_CREATE,
       input: { schema: createSchema(watchFields), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Watch a Main or temporary conversation using code, without repeated model calls. Supply exact project/session IDs and optional temporary conversationId, a unique watchId (reuse it on retry), and the user's question. reply reports the next completed visible response, including commentary while a goal continues; a response may be progress rather than the requested answer, so report its actual meaning and continuing work honestly. finished reports work ending; attention reports explicit failures, interruptions or structured input requests, not inferred inactivity. Partial tokens, thinking and tool output do not count as replies. All conditions also report failures. once defaults to true. If a response already exists, report it immediately. Watches only authorize reporting, never further coding or stopping agents. Assignment follow-through uses its own retained watches and completion guards.",
@@ -398,7 +388,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_WATCH_SOURCE_CREATE,
       input: { schema: createSchema(sourceWatchFields), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Watch something listed by watch.sources.read, using code, without repeated model calls. Supply its source, exactly its input fields (a project source takes the exact projectSlug), one of its conditions, a unique watchId (reuse it on retry) and the user's question. A condition other than changed reports when it becomes true, at once if it already holds; changed reports the next change. once defaults to true. The project's ordinary access applies to every reading. Watches only authorize reporting, never acting on what they report.",
@@ -412,7 +401,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_WATCH_CANCEL,
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Stop the exact watch by its watchId. It stops observation and pending notifications only; it does not stop the application or coding agent.",
@@ -426,7 +414,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_WATCH_PAUSE,
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Pause the exact active watch without losing its last observation cursor.",
@@ -440,7 +427,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_WATCH_RESUME,
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Resume the exact paused watch, checking current access and reconciling changes since its last observation.",
@@ -457,7 +443,6 @@ function createColleagueActions({
         schema: navigationAcknowledgeInput,
         mode: "create"
       },
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.acknowledgeNavigation(input, context)
     }),
@@ -478,7 +463,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. Without pane or sessionId, opens Preview. With sessionId and no pane, reveals the selected coding chat; an explicit pane reveals that project view, including on compact screens. " +
@@ -493,7 +477,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_NAVIGATION_GUIDE,
       input: { schema: createSchema(guideFields), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Show the person one real Vibe64 place in their active browser, in Learn or Develop: point at it (the default, highlight) so they learn where it is, or open it first (navigate:true) and ring it. target is one of this installation's places. Everywhere: learning (the L button; navigate opens Courses), lesson, lesson-bar, courses, colleague, account-menu, account-settings and ai-setup. In a project: preview, dashboard, database-erd, database-data, files (optional relative filePath; navigate opens that file), changes, git-log, session-info, architecture, publish, chat, save and reload-preview; navigate opens them in the project and session the person has open, so open the project first with navigation.open. This installation may add its own places (its own pages and project sections): a target it does not have is refused with the list of places it has, so retry with one of those. A page only the workspace owner may use is refused for anyone else. Vibe64 rings the next control the person must click, with your caption or the path such as 'Dashboard → Database → ERD'. Wait for the acknowledgement: guide.shown is true only when a highlight was actually drawn and names its step; otherwise its reason (target-hidden, highlight-off, overlay-unavailable) means nothing was highlighted, so describe the path in words and never claim a highlight you did not receive. Opening or pointing is never learner evidence and never passes a lesson step.",
@@ -507,7 +490,6 @@ function createColleagueActions({
       ...VIBE64_COMMAND,
       id: ACTION_COLLEAGUE_NAVIGATION_OPEN_LEARNING,
       input: { schema: createSchema({ learning: learningPanel }), mode: "create" },
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Show the lesson or Courses in the person's active browser in Learn mode, on any page and without a project. learning={attemptId, stepId?} with no open shows that step of the person's current lesson (attemptId from lesson.read or learning.read) in the lesson (it turns the Lesson toggle on: a sheet over the practice project's Preview or Dash, or over the page on screens outside a project), closing Courses if it is open. Courses (the button at the right of the lesson step bar) is the catalogue above the app where lessons are chosen and started: learning={open:true} opens it where the person left it, and learning={open:false} closes it with its state kept so the app is visible; open never selects a lesson step. Neither ends a lesson. To point at or open a place, use navigation.guide. Wait for the acknowledgement: focus.learningOpen and learningSurface report the actual Courses state, and pane=lesson with learningAttemptId and learningStepId the step the Lesson pane shows. This never starts, ends, checks or passes a lesson step and is not learner evidence.",

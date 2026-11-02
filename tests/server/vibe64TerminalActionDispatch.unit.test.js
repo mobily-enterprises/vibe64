@@ -296,7 +296,7 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
     for (const actionId of [ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL]) {
       const definition = actions.getDefinition(actionId);
       assert.deepEqual(definition.channels, ["internal"]);
-      assert.equal(definition.idempotency, "none");
+      assert.equal(Object.hasOwn(definition, "idempotency"), false);
       assert.equal(definition.extensions.assistant.exclude, true);
       await assert.rejects(actions.execute({ actionId,
         input: { sessionId: "session-1", projectSlug: slug, ...(actionId === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? input : {}) },

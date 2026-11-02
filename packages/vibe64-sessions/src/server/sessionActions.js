@@ -144,19 +144,19 @@ function createSessionActions({ sessions }) {
       },
       execute: (input) => sessions.renameSession(input.sessionId, input)
     }),
+    // A repeated resume finds the continuation already claimed or accepted and never sends it twice.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_RESUME_INTEGRATION_SETUP,
       input: { ...integrationSetupRequestActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.resumeIntegrationContinuation(input.sessionId, input)
     }),
+    // The first saved decision wins, so a repeated skip returns it.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_SKIP_INTEGRATION_SETUP,
       input: { ...integrationSetupRequestActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.skipIntegrationSetupRequest(input.sessionId, input)
     }),
@@ -262,55 +262,55 @@ function createSessionActions({ sessions }) {
       },
       execute: (input) => sessions.inspectSessionRenewal(input.sessionId, input)
     }),
+    // A repeated request with the same operationKey returns the renewal it already started.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
       input: { ...sessionRenewalDraftRequestActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.requestSessionRenewalDraft),
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.requestSessionRenewalDraft(input.sessionId, input)
     }),
+    // Saving the text already under review again changes nothing.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
       input: { ...sessionRenewalDraftUpdateActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.updateSessionRenewalDraft),
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.updateSessionRenewalDraft(input.sessionId, input)
     }),
+    // A repeated cancel finds the renewal already cancelled and returns it.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_CANCEL_SESSION_RENEWAL,
       input: { ...sessionRenewalDraftGuardActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.cancelSessionRenewal),
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.cancelSessionRenewal(input.sessionId, input)
     }),
+    // A repeated confirm finds the renewal already confirmed and returns it.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_CONFIRM_SESSION_RENEWAL,
       input: { ...sessionRenewalConfirmationActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.confirmSessionRenewal),
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.confirmSessionRenewal(input.sessionId, input)
     }),
+    // A repeated retry finds the renewal already running or completed and returns it.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_RETRY_SESSION_RENEWAL,
       input: { ...sessionRenewalRetryActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.retrySessionRenewal),
         vibe64: PROJECT_OPERATION
@@ -495,11 +495,11 @@ function createSessionActions({ sessions }) {
       },
       execute: (input) => sessions.interruptAgentTurn(input.sessionId, input)
     }),
+    // A repeated or older sequence from the same origin changes nothing and answers stale.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_UPDATE_SESSION_PRESENCE,
       input: { ...sessionPresenceActionInputValidator, mode: "create" },
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.updateSessionPresence(input.sessionId, input)
     }),

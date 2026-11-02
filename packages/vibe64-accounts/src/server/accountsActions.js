@@ -161,7 +161,6 @@ function createAccountsActions({ accounts }) {
       ...VIBE64_COMMAND,
       id: ACTION_SAVE_CODEX_PROVIDER,
       input: codexProviderInputValidator,
-      idempotency: "none",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.saveCodexProvider(input)
@@ -170,7 +169,6 @@ function createAccountsActions({ accounts }) {
       ...VIBE64_COMMAND,
       id: ACTION_REMOVE_CODEX_PROVIDER,
       input: codexProviderInputValidator,
-      idempotency: "none",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.removeCodexProvider(input)
@@ -268,7 +266,6 @@ function createAiConnectionActions({ managedAiConnections }) {
       ...VIBE64_COMMAND,
       id: ACTION_SAVE_AI_CONNECTION,
       input: aiConnectionInputValidators.save,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => managedAiConnections.save(input)
     }),
@@ -276,7 +273,6 @@ function createAiConnectionActions({ managedAiConnections }) {
       ...VIBE64_COMMAND,
       id: ACTION_REMOVE_AI_CONNECTION,
       input: aiConnectionInputValidators.remove,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => managedAiConnections.remove(input)
     }),
@@ -284,7 +280,6 @@ function createAiConnectionActions({ managedAiConnections }) {
       ...VIBE64_COMMAND,
       id: ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS,
       input: aiConnectionInputValidators.modelAccess,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => managedAiConnections.modelAccess(input)
     })

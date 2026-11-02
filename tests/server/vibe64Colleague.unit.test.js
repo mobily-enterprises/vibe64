@@ -269,7 +269,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     logger: silentLogger });
   const operation = Object.freeze({
     extensions: { vibe64: WORKSPACE_OPERATION },
-    id: "vibe64.test.operate", kind: "command", idempotency: "none",
+    id: "vibe64.test.operate", kind: "command",
     input: { schema: createSchema({ value: { type: "string", required: true } }), mode: "create" },
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
     async execute(input, context) { observations.mutations.push(input.value); await observations.onOperation?.(input, context); if (observations.failure) throw observations.failure; return { ok: true }; }
@@ -1246,7 +1246,7 @@ function registerWorkspaceConversation(f) {
   f.context.requestMeta.request.vibe64User.role = "owner";
   f.actions.register({ contributorId: "workspace-observer", domain: "workspace", actions: [{
     channels: ["api", "automation"], surfaces: ["app"],
-    ...Object.freeze({ extensions: { vibe64: WORKSPACE_OWNER_OPERATION }, id: "vibe64.test.workspace-conversation.read", kind: "query", idempotency: "none",
+    ...Object.freeze({ extensions: { vibe64: WORKSPACE_OWNER_OPERATION }, id: "vibe64.test.workspace-conversation.read", kind: "query",
       input: { schema: createSchema({ conversationId: { type: "string", required: true } }), mode: "create" }, output: null,
       async execute() { f.observations.reads += 1; return structuredClone(f.observations.target); }
     })
@@ -2940,7 +2940,7 @@ test("archive annotations do not duplicate verified receipts and older fresh ope
   assert.equal(next.conversations[0].unconfirmedCount, 0);
   const duplicate = await freshAction(f, firstInput);
   assert.equal(duplicate.conversationId, second.conversationId, "Product snapshot reports the actual latest active identity");
-  assert.equal(duplicate.fresh.conversationId, first.conversationId, "Idempotency receipt still identifies its exact successor");
+  assert.equal(duplicate.fresh.conversationId, first.conversationId, "The repeated recovery ID's receipt still identifies its exact successor");
 });
 
 test("original runtime retrySave failure leaves fresh pointer unchanged and can recover without replay", async t => {
@@ -5620,7 +5620,7 @@ test("each lesson attempt keeps its own teacher thread across mode switches, Lea
 });
 
 test("Develop hides teaching tools and Learn hides delegation but keeps watches; neither has Main's goal controls", async t => {
-  const action = (id, kind = "query") => Object.freeze({ id, kind, idempotency: "none",
+  const action = (id, kind = "query") => Object.freeze({ id, kind,
     input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true }),
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
     extensions: { assistant: { description: `Test ${id}.` }, vibe64: WORKSPACE_OPERATION } });
@@ -5805,7 +5805,7 @@ function registerDeploymentSource(f) {
   f.observations.deploymentReads = [];
   f.actions.register({ contributorId: "deployment-observer", domain: "test", actions: [{
     channels: ["api", "automation", "internal"], surfaces: ["app"],
-    ...Object.freeze({ extensions: { vibe64: PROJECT_OPERATION }, id: "vibe64.test.deployment.read", kind: "query", idempotency: "none",
+    ...Object.freeze({ extensions: { vibe64: PROJECT_OPERATION }, id: "vibe64.test.deployment.read", kind: "query",
       input: { schema: createSchema({}), mode: "create" }, output: null,
       async execute(_input, context) {
         f.observations.deploymentReads.push(context.projectSlug);

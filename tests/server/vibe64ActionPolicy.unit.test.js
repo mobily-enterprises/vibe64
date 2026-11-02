@@ -28,7 +28,7 @@ const PRACTICE_SLUG = "training-12345678123442348234123456789abc";
 // An operation that reports the input it received and the project it ran in.
 function operation(id, vibe64, fields = { text: { type: "string", required: true } }) {
   return {
-    id, version: 1, kind: "command", channels: ["api", "automation"], surfaces: ["app"], idempotency: "none",
+    id, version: 1, kind: "command", channels: ["api", "automation"], surfaces: ["app"],
     input: { schema: createSchema(fields), mode: "create" }, output: null,
     extensions: vibe64 ? { assistant: { exclude: true }, vibe64 } : { assistant: { exclude: true } },
     execute: (input, context) => ({ input, project: currentProjectRequestContext()?.slug ?? null, channel: context.channel })

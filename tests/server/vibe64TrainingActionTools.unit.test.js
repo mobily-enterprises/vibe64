@@ -275,7 +275,7 @@ test("finish and ended-start replay expose the original target and actual active
   assert.deepEqual(f.calls.at(-1), { operation: "finish", value: { actor: f.auth.user, attemptId: input.attemptId, expectedRevision: input.expectedRevision } });
   assert.equal(f.calls.at(-1).value.actor, f.auth.user);
   const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.finish");
-  assert.equal(definition.idempotency, "domain_native");
+  assert.equal(Object.hasOwn(definition, "idempotency"), false);
   assert.match(definition.extensions.assistant.description, /archived as one bundle/u);
   const { revision } = await f.learners.readState({ actor: f.auth.user });
   const start = await c.execute("lesson.start", { ...f.input, requestId: "start-second", expectedRevision: revision });

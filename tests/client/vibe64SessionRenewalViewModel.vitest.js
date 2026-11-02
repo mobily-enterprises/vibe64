@@ -130,7 +130,7 @@ describe("session renewal view model", () => {
     });
   });
 
-  it("creates bounded server-valid idempotency keys", () => {
+  it("creates bounded server-valid renewal operation keys", () => {
     const key = sessionRenewalOperationKey("session / one", {
       now: 123456,
       randomId: "uuid:value/unsafe"

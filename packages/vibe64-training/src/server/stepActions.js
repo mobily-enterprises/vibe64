@@ -128,6 +128,7 @@ function createTrainingStepActions({ stepOperations }) {
       },
       execute: (input, context) => stepOperations.readLesson(input, context)
     }),
+    // A repeated observation (the same exercise requestId) replays its saved result.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.OBSERVE_STEP,
@@ -140,7 +141,6 @@ function createTrainingStepActions({ stepOperations }) {
         })
       },
       channels: ["api"],
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => stepOperations.observeStep(input, context)
     }),
@@ -155,7 +155,6 @@ function createTrainingStepActions({ stepOperations }) {
           requestId
         })
       },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -166,6 +165,7 @@ function createTrainingStepActions({ stepOperations }) {
       },
       execute: (input, context) => stepOperations.runStepCheck(input, context)
     }),
+    // A repeated requestId with the same answer replays its saved result.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.ANSWER_STEP,
@@ -185,10 +185,10 @@ function createTrainingStepActions({ stepOperations }) {
         })
       },
       channels: ["api"],
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => stepOperations.answerStep(input, context)
     }),
+    // A repeated requestId replays its saved result.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.MARK_STEP_DONE,
@@ -201,11 +201,11 @@ function createTrainingStepActions({ stepOperations }) {
         })
       },
       channels: ["api"],
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => stepOperations.markStepDone(input, context)
     }),
     // The learner's own "Check my work" on a review step; Colleague never runs it.
+    // A repeated requestId replays its saved review.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.RUN_STEP_REVIEW,
@@ -218,7 +218,6 @@ function createTrainingStepActions({ stepOperations }) {
         })
       },
       channels: ["api"],
-      idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => stepOperations.runStepReview(input, context)
     }),
@@ -248,7 +247,6 @@ function createTrainingStepActions({ stepOperations }) {
         })
       },
       channels: ["api"],
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => stepOperations.saveReader(input, context)
     }),
@@ -270,7 +268,6 @@ function createTrainingStepActions({ stepOperations }) {
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.DELETE_LESSON,
       input: { mode: "create", schema: createSchema({ attemptId, confirmed: { type: "boolean", required: false } }) },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -285,7 +282,6 @@ function createTrainingStepActions({ stepOperations }) {
       ...VIBE64_COMMAND,
       id: TRAINING_STEP_ACTIONS.DELETE_ARCHIVED_LESSON,
       input: { mode: "create", schema: createSchema({ attemptId, confirmed: { type: "boolean", required: false } }) },
-      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
