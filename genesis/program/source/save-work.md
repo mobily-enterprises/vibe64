@@ -116,6 +116,7 @@ Git commands.
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
+- `src/composables/useVibe64TerminalMobileTakeover.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionSaveWork.js`

@@ -4,36 +4,46 @@ import {
   AUTO_START_ATTEMPT_COOLDOWN_MS,
   AUTO_START_STABILITY_DELAY_MS,
   autoStartOutputsLoading,
-  browserCanOpenTarget,
   launchAutoStartAttemptStorageKey,
+  readLaunchAutoStartAttemptCooldown,
+  shouldScheduleLaunchAutoStart
+} from "../../src/lib/vibe64LaunchAutoStart.js";
+import {
   launchBrowserTargetHref,
   launchBrowserTargetName,
-  launchControlsCanLoadTargets,
-  launchPreviewFromStatus,
-  launchPreviewTestNotice,
   launchPreviewLocationStorageKey,
-  launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
+  openLaunchBrowserTarget,
+  openPendingLaunchBrowserWindow,
+  openReadyLaunchBrowserTarget
+} from "../../src/lib/vibe64LaunchBrowserWindow.js";
+import {
+  launchPreviewFromStatus,
+  launchPreviewRequiresProxy,
+  launchPreviewTestNotice,
+  normalizeLaunchPreview
+} from "../../src/lib/vibe64LaunchPreview.js";
+import {
+  browserCanOpenTarget,
+  resolveLaunchPreviewDestination,
+  sameSiteLoopbackPreviewUrl
+} from "../../src/lib/vibe64LaunchPreviewDestination.js";
+import {
+  nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreviewToolbarPosition
+} from "../../src/lib/vibe64LaunchPreviewToolbar.js";
+import {
   LAUNCH_STATUS_RETRY_LIMIT,
-  outputTargetsRealtimeShouldRefresh,
   launchControlScopeKey,
+  launchControlsCanLoadTargets,
+  launchControlsSessionCanRun,
   launchStatusAgentWriteBusy,
   launchStatusErrorText,
   launchStatusRetryDelay,
   launchStatusShouldRetry,
   outputTargetWorktreePath,
-  launchControlsSessionCanRun,
-  nextLaunchPreviewToolbarPosition,
-  normalizeLaunchPreview,
-  normalizeLaunchPreviewToolbarPosition,
-  openLaunchBrowserTarget,
-  openPendingLaunchBrowserWindow,
-  openReadyLaunchBrowserTarget,
-  readLaunchAutoStartAttemptCooldown,
-  resolveLaunchPreviewDestination,
-  sameSiteLoopbackPreviewUrl,
-  shouldScheduleLaunchAutoStart
-} from "../../src/composables/useVibe64OutputControls.js";
+  outputTargetsRealtimeShouldRefresh
+} from "../../src/lib/vibe64LaunchStatus.js";
 import {
   vibe64BrowserTabOriginId
 } from "../../src/lib/vibe64BrowserTabOrigin.js";
@@ -888,7 +898,7 @@ it.each([
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
   const api = "/api/vibe64/sessions";
   const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
   const session = Vue.ref({ sessionId: "saved-initial", metadata: {
@@ -970,7 +980,7 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
   const api = "/api/vibe64/sessions";
   const session = Vue.ref({ sessionId: "preparing", workspaceSetup: { status: "running" }, metadata: {
     source_kind: "session_clone", source_path: "/controlled/sessions/active/preparing/source", source_path_authority: "managed_session_source"
@@ -1059,7 +1069,7 @@ it("a refresh captured for an earlier project or session does not refetch the cu
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
-  const { launchControlScopeKey, useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const reads = [];
   vi.stubGlobal("window", { location: new URL("http://localhost/app/project/scoped"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });

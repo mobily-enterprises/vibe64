@@ -74,10 +74,12 @@ describe("session name strip room", () => {
 });
 
 describe("Preview address bar groups", () => {
-  const controls = read("src/components/studio/Vibe64OutputControls.vue");
-  const client = controls.slice(controls.indexOf('aria-label="Preview page"'), controls.indexOf("</form>"));
-  const serverStart = controls.indexOf('aria-label="Preview server"');
-  const server = controls.slice(serverStart, controls.indexOf("embeddedManualStartButtonVisible", serverStart));
+  const addressBar = read("src/components/studio/Vibe64PreviewAddressBar.vue");
+  const toolbar = read("src/components/studio/Vibe64OutputToolbar.vue");
+  const controls = `${addressBar}\n${toolbar}`;
+  const client = addressBar.slice(addressBar.indexOf('aria-label="Preview page"'), addressBar.indexOf("</form>"));
+  const serverStart = toolbar.indexOf('aria-label="Preview server"');
+  const server = toolbar.slice(serverStart, toolbar.indexOf("embeddedManualStartButtonVisible", serverStart));
 
   it("keeps back, address, reload, pause, copy and open in a new tab in the client group", () => {
     for (const marker of ["Go back in preview", 'aria-label="Preview URL"', "Reload preview", "Suspend preview", "Copy preview URL", "mdiOpenInNew"]) {

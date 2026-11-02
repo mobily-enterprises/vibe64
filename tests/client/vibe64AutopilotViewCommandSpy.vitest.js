@@ -824,7 +824,7 @@ describe("Vibe64 direct session view", () => {
   it("uses one shared Fix it with AI control for every Temporary AI recovery launcher", () => {
     const autopilot = fs.readFileSync(componentPath, "utf8");
     const outputControls = fs.readFileSync(
-      path.resolve("src/components/studio/Vibe64OutputControls.vue"),
+      path.resolve("src/components/studio/Vibe64PreviewIdentityMenu.vue"),
       "utf8"
     );
     const repository = fs.readFileSync(
@@ -1172,7 +1172,7 @@ describe("Vibe64 direct session view", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
     const launchControls = fs.readFileSync(
-      path.resolve("src/components/studio/Vibe64OutputControls.vue"),
+      path.resolve("src/components/studio/Vibe64PreviewIdentityMenu.vue"),
       "utf8"
     );
 

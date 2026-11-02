@@ -16,31 +16,37 @@ import {
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
+import { launchToolbarDockShouldShow } from "../../src/lib/vibe64LaunchPreviewToolbar.js";
 import {
-  defaultPreviewIdentitySelection,
   launchPreviewAddressNavigationUrl,
-  launchPreviewEmptyText,
   launchPreviewFrameUrl,
-  isPreviewBridgeReadyMessage,
-  previewFrameLifecycleIdentity,
-  previewIdentityFromExchange,
-  previewIdentityLabelText,
-  previewIdentityLifecycleIdentity,
-  previewIdentityTitleText,
-  previewLoadingOverlayShouldShow,
-  launchPreviewIssue,
-  launchPreviewInFlightText,
-  launchPreviewNotice,
-  launchPreviewStatusText,
-  launchToolbarDockShouldShow,
-  normalizeConfiguredPreviewIdentities,
   previewAddressDisplayText,
-  previewOpeningOverlayVisible,
   previewRouteFromUrl,
   previewUrlForRoute,
-  redactPreviewDebugDetails,
-  useVibe64OutputControlsSurface
-} from "../../src/composables/useVibe64OutputControlsSurface.js";
+  redactPreviewDebugDetails
+} from "../../src/lib/vibe64PreviewAddress.js";
+import {
+  isPreviewBridgeReadyMessage,
+  previewFrameLifecycleIdentity,
+  previewIdentityLifecycleIdentity,
+  previewLoadingOverlayShouldShow,
+  previewOpeningOverlayVisible
+} from "../../src/lib/vibe64PreviewFrame.js";
+import {
+  defaultPreviewIdentitySelection,
+  normalizeConfiguredPreviewIdentities,
+  previewIdentityFromExchange,
+  previewIdentityLabelText,
+  previewIdentityTitleText
+} from "../../src/lib/vibe64PreviewIdentity.js";
+import {
+  launchPreviewEmptyText,
+  launchPreviewInFlightText,
+  launchPreviewIssue,
+  launchPreviewNotice,
+  launchPreviewStatusText
+} from "../../src/lib/vibe64PreviewStatusText.js";
+import { useVibe64OutputControlsSurface } from "../../src/composables/useVibe64OutputControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
   it("keeps launch lifecycle text stable during background polling", () => {

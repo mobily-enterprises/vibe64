@@ -34,8 +34,11 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-terminals/src/server/previewDiagnosticFiles.js`
 - `src/lib/vibe64ResourceRecovery.js`
 - `src/composables/useVibe64OutputControls.js`
+- `src/composables/useVibe64OutputLaunch.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `src/composables/useVibe64PreviewRecovery.js`
 - `src/components/studio/Vibe64OutputControls.vue`
+- `src/components/studio/Vibe64PreviewStatus.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
 ## Public contract

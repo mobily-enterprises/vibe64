@@ -746,8 +746,9 @@ by a caller. Quiet and snapshot HTTP controls share one snapshot action.
 Raw terminal controls are excluded from Colleague tools. Attachment multipart,
 binary download and terminal WebSocket framing remain transport adapters.
 Non-collapsible mobile terminals expose Exit full screen / Full screen through
-`Vibe64TerminalSurface.vue`. Leaving the takeover releases background inertness
-and restores navigation without closing or interrupting the native terminal.
+`Vibe64TerminalSurface.vue` and its `useVibe64TerminalMobileTakeover.js`.
+Leaving the takeover releases background inertness and restores navigation
+without closing or interrupting the native terminal.
 The separate Close terminal action retains its process-lifecycle meaning.
 The contracts and adapters are in
 `packages/vibe64-terminals/src/server/terminalActions.js`, `inputSchemas.js` and
@@ -1415,6 +1416,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/components/studio/Vibe64AgentTerminalStartPanel.vue`
 - `src/components/studio/Vibe64AgentTerminalDropOverlay.vue`
 - `src/composables/useVibe64AgentTerminalDisplay.js`
+- `src/composables/useVibe64Terminal.js`
+- `src/composables/useVibe64TerminalConnection.js`
+- `src/composables/useVibe64TerminalDisplay.js`
+- `src/composables/useVibe64TerminalLifecycle.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64RoutingNotice.vue`

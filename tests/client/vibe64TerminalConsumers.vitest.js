@@ -7,7 +7,8 @@ const interactiveTerminalPath = path.resolve(
   "src/components/studio/Vibe64InteractiveTerminal.vue"
 );
 const launchTerminalConsumerPath = path.resolve("src/components/studio/Vibe64OutputControls.vue");
-const launchTerminalStatePath = path.resolve("src/composables/useVibe64OutputControls.js");
+const launchToolbarPath = path.resolve("src/components/studio/Vibe64OutputToolbar.vue");
+const launchTerminalStatePath = path.resolve("src/composables/useVibe64OutputLaunch.js");
 const launchTerminalSurfaceStatePath = path.resolve(
   "src/composables/useVibe64OutputControlsSurface.js"
 );
@@ -33,6 +34,7 @@ describe("Vibe64 terminal consumers", () => {
     const codex = readFileSync(codexTerminalConsumerPath, "utf8");
     const interactive = readFileSync(interactiveTerminalPath, "utf8");
     const launch = readFileSync(launchTerminalConsumerPath, "utf8");
+    const launchToolbar = readFileSync(launchToolbarPath, "utf8");
     const launchState = readFileSync(launchTerminalStatePath, "utf8");
     const launchSurfaceState = readFileSync(launchTerminalSurfaceStatePath, "utf8");
     const longRunning = readFileSync(longRunningTerminalPath, "utf8");
@@ -63,14 +65,14 @@ describe("Vibe64 terminal consumers", () => {
     expect(launch).toContain('v-if="embeddedTerminalSurfaceVisible"');
     expect(launch).toContain('v-if="!embeddedPreview && terminalWindowVisible"');
     const toolbarTeleport = launch.match(/<Teleport\b[^>]*>/u)?.[0] || "";
-    expect(toolbarTeleport).toContain(":disabled=\"!toolbarTeleportTarget\"");
-    expect(toolbarTeleport).toContain(":to=\"toolbarTeleportTarget || 'body'\"");
+    expect(toolbarTeleport).toContain(":disabled=\"!toolbarTarget\"");
+    expect(toolbarTeleport).toContain(":to=\"toolbarTarget || 'body'\"");
     expect(toolbarTeleport).not.toContain("v-if=");
     expect(launch.match(/<Vibe64LongRunningTerminal/gu)).toHaveLength(2);
     expect(launch.match(/show-copy/gu)).toHaveLength(2);
     expect(launch.match(/@update:open="setTerminalExpanded"/gu)).toHaveLength(2);
-    expect(launch).toContain('aria-label="Show run output"');
-    expect(launch).toContain(":icon=\"mdiConsoleLine\"");
+    expect(launchToolbar).toContain('aria-label="Show run output"');
+    expect(launchToolbar).toContain(":icon=\"mdiConsoleLine\"");
     expect(launchState).toContain("terminalExpanded.value = false;");
     expect(launchState).not.toContain('launchTarget.defaultDisplay !== "minimized"');
     expect(launchSurfaceState).toMatch(

@@ -25,6 +25,7 @@ contract transported by the project's Stack.
 - `packages/vibe64-genesis/src/server/agentSpecs.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
+- `src/composables/useVibe64TerminalMobileTakeover.js`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
