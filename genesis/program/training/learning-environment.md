@@ -23,6 +23,8 @@ Training actions.
 - `packages/vibe64-training/src/shared/learnerEvents.js`
 - `packages/vibe64-training/src/shared/learnerContract.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `src/composables/useVibe64PreviewFrame.js`
+- `src/composables/useVibe64PreviewMessages.js`
 - `src/composables/useVibe64LearningOrientation.js`
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-training/src/server/learningSpace.js`
@@ -238,7 +240,8 @@ guide overlay 3000 above L 2400 above Colleague.
   identities and the Preview session, then rereads the lesson.
   `prepareExercise` reads a remembered but unread attempt when a practice App
   announces itself. The Preview output surface
-  (`src/composables/useVibe64OutputControlsSurface.js`) is the only caller.
+  (`src/composables/useVibe64OutputControlsSurface.js`, through the orientation
+  channel its `useVibe64PreviewFrame.js` binds to the frame) is the only caller.
 - `showMe(stepId)` minimises L and runs the step's guide through the browser
   navigator and `runTrainingGuideCommand`; a `files` guide waits for the
   navigated project view and opens the file in Dashboard → Files. A place that

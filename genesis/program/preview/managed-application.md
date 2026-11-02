@@ -146,6 +146,22 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/lib/vibe64LaunchBrowserWindow.js`
 - `src/lib/vibe64LaunchPreviewToolbar.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `src/composables/useVibe64PreviewTargets.js`
+- `src/composables/useVibe64OutputOptions.js`
+- `src/composables/useVibe64PreviewRecovery.js`
+- `src/composables/useVibe64PreviewToolbar.js`
+- `src/composables/useVibe64PreviewFrame.js`
+- `src/composables/useVibe64PreviewIdentity.js`
+- `src/composables/useVibe64PreviewReload.js`
+- `src/composables/useVibe64PreviewAddress.js`
+- `src/composables/useVibe64PreviewPick.js`
+- `src/composables/useVibe64PreviewMessages.js`
+- `src/composables/useVibe64PreviewPresentation.js`
+- `src/lib/vibe64PreviewAddress.js`
+- `src/lib/vibe64PreviewFrame.js`
+- `src/lib/vibe64PreviewIdentity.js`
+- `src/lib/vibe64PreviewPick.js`
+- `src/lib/vibe64PreviewStatusText.js`
 - `src/composables/useVibe64LearningOrientation.js`
 
 ## Public contract
@@ -579,8 +595,9 @@ project admission; there is no separate Learning App adapter, output namespace o
 `/api/learning/<attempt>/…` route. A lesson's
 automatic check needs a receipt of the learner's own App press, recorded through
 Training's browser-only `step.observe`; Run or an iframe load is never a pass.
-The output surface (`useVibe64OutputControlsSurface.js`, both hosts) admits
-the practice App's `orientation-available` announcement only from the exact
+The output surface (`useVibe64OutputControlsSurface.js`, both hosts, through
+`useVibe64PreviewMessages.js` and `useVibe64PreviewFrame.js`) admits the
+practice App's `orientation-available` announcement only from the exact
 Preview frame and origin and closes the channel whenever it replaces or clears
 that frame. Learning's orientation channel
 (`src/composables/useVibe64LearningOrientation.js`) owns the protocol: one

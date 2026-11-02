@@ -19,9 +19,9 @@ import {
 import {
   previewComponentSourcePath,
   previewPickColors,
-  previewUsageEntryForFile,
-  useVibe64OutputControlsSurface
-} from "../../src/composables/useVibe64OutputControlsSurface.js";
+  previewUsageEntryForFile
+} from "../../src/lib/vibe64PreviewPick.js";
+import { useVibe64OutputControlsSurface } from "../../src/composables/useVibe64OutputControlsSurface.js";
 
 // Click in Preview from the editor's side: Pick asks the bridge, turns the
 // picked component into a usage entry, and forwards recorded interactions.

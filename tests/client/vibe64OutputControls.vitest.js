@@ -898,7 +898,7 @@ it.each([
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
   const api = "/api/vibe64/sessions";
   const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
   const session = Vue.ref({ sessionId: "saved-initial", metadata: {
@@ -980,7 +980,7 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
   const api = "/api/vibe64/sessions";
   const session = Vue.ref({ sessionId: "preparing", workspaceSetup: { status: "running" }, metadata: {
     source_kind: "session_clone", source_path: "/controlled/sessions/active/preparing/source", source_path_authority: "managed_session_source"
