@@ -70,7 +70,9 @@
       "provides": [
         "runtime.actions.policy"
       ],
-      "requires": []
+      "requires": [
+        "runtime.env"
+      ]
     },
     "runtime": {
       "server": {
