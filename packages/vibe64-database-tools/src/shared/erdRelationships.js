@@ -11,7 +11,7 @@ export function erdRouteSnapshot(routes = []) {
   }));
 }
 
-export function buildErdRelationshipRoutes(nodes = [], relationships = [], options = {}) {
+export function buildErdRelationshipRoutes(nodes, relationships, options = {}) {
   const {
     previousRoutes = [],
     dragging = false,
