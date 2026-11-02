@@ -49,7 +49,7 @@ function createRenewalRestoration({
     if (published?.archived === true) {
       throw renewalError(
         "A predecessor archive exists before the renewal commit marker.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_archive_before_commit",
         { retryable: false, statusCode: 500 }
       );
     }
@@ -70,7 +70,7 @@ function createRenewalRestoration({
       if (!successorSessionId) {
         throw renewalError(
           "The predecessor archive transition has no exact successor.",
-          "vibe64_session_renewal_link_mismatch",
+          "vibe64_session_renewal_archive_successor_missing",
           { retryable: true, statusCode: 500 }
         );
       }
@@ -105,7 +105,7 @@ function createRenewalRestoration({
     if (sourceStatus !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
       throw renewalError(
         "The predecessor session no longer owns this renewal transition.",
-        "vibe64_session_renewal_link_mismatch",
+        "vibe64_session_renewal_predecessor_transition_lost",
         { retryable: true, statusCode: 500 }
       );
     }
@@ -139,7 +139,7 @@ function createRenewalRestoration({
     ) {
       throw renewalError(
         "Session renewal failure restoration has invalid durable ownership.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_failure_owner_invalid",
         { retryable: true, statusCode: 500 }
       );
     }
@@ -220,7 +220,7 @@ function createRenewalRestoration({
     ) {
       throw renewalError(
         "Session renewal cancellation has invalid durable ownership.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_cancellation_owner_invalid",
         { retryable: true, statusCode: 500 }
       );
     }

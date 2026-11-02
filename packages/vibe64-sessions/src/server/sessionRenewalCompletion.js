@@ -73,7 +73,7 @@ function createRenewalCompletion({
     if (predecessor.archived === true) {
       throw renewalError(
         "A predecessor archive exists before the renewal commit marker.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_archive_before_commit",
         { retryable: false, statusCode: 500 }
       );
     }
@@ -264,7 +264,7 @@ function createRenewalCompletion({
     if (!commit?.committedAt) {
       throw renewalError(
         "Session renewal has no durable commit marker.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_commit_marker_missing",
         { retryable: true, statusCode: 500 }
       );
     }
@@ -292,7 +292,7 @@ function createRenewalCompletion({
     if (!predecessorArchivedAt) {
       throw renewalError(
         "The committed predecessor archive has no publication timestamp.",
-        "vibe64_session_renewal_archive_invalid",
+        "vibe64_session_renewal_archive_timestamp_missing",
         { retryable: true, statusCode: 500 }
       );
     }
@@ -345,7 +345,7 @@ function createRenewalCompletion({
     if (!successorSessionId) {
       throw renewalError(
         "Completed session renewal has no successor.",
-        "vibe64_session_renewal_link_mismatch",
+        "vibe64_session_renewal_completed_successor_missing",
         { statusCode: 500 }
       );
     }

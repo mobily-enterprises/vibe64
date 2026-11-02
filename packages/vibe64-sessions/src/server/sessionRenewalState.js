@@ -62,17 +62,21 @@ const SESSION_RENEWAL_MAINTENANCE_STEPS = Object.freeze(
   Object.values(SESSION_RENEWAL_MAINTENANCE_STEP)
 );
 
+/**
+ * A renewal-state refusal at its status, or, at 500, a server fault: a plain
+ * Error whose message HTTP hides, still carrying its code.
+ * @param {string} message
+ * @param {string} code
+ * @param {{ details?: Record<string, unknown>, statusCode?: number }} [options]
+ */
 function renewalStateError(message, code, options = {}) {
   const {
-    details = null,
+    details,
     statusCode = 409
   } = options;
-  const error = vibe64Error(message, code);
-  error.statusCode = statusCode;
-  if (details) {
-    error.details = details;
-  }
-  return error;
+  return statusCode === 500
+    ? Object.assign(new Error(message), { code })
+    : vibe64Error(message, code, { status: statusCode, ...(details ? { details } : {}) });
 }
 
 function renewalTimestamp(value = "") {
@@ -80,7 +84,7 @@ function renewalTimestamp(value = "") {
   if (!timestamp || !Number.isFinite(Date.parse(timestamp))) {
     throw renewalStateError(
       "Session renewal has an invalid timestamp.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_timestamp_invalid",
       { statusCode: 500 }
     );
   }
@@ -145,7 +149,7 @@ function renewalDraft(value = {}, options = {}) {
   if (!Number.isSafeInteger(revision) || revision < 1) {
     throw renewalStateError(
       "Session renewal draft has an invalid revision.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_draft_revision_invalid",
       { statusCode: 500 }
     );
   }
@@ -153,7 +157,7 @@ function renewalDraft(value = {}, options = {}) {
   if (toText(draft.hash) !== hash) {
     throw renewalStateError(
       "Session renewal draft integrity check failed.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_draft_integrity_failed",
       { statusCode: 500 }
     );
   }
@@ -201,7 +205,7 @@ function renewalCommit(value = null, options = {}) {
   ) {
     throw renewalStateError(
       "Session renewal has an invalid commit marker.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_commit_marker_invalid",
       { statusCode: 500 }
     );
   }
@@ -225,7 +229,7 @@ function renewalMaintenance(value = null, commit = null) {
   ) {
     throw renewalStateError(
       "Session renewal has invalid post-commit maintenance state.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_maintenance_invalid",
       { statusCode: 500 }
     );
   }
@@ -238,7 +242,7 @@ function renewalMaintenance(value = null, commit = null) {
   ) {
     throw renewalStateError(
       "Completed session-renewal maintenance has unfinished work.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_maintenance_unfinished",
       { statusCode: 500 }
     );
   }
@@ -270,7 +274,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   if (!sessionId || (expectedSessionId && sessionId !== toText(expectedSessionId))) {
     throw renewalStateError(
       "Session renewal state belongs to a different session.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_state_session_mismatch",
       { statusCode: 500 }
     );
   }
@@ -280,14 +284,14 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   if (!SESSION_RENEWAL_STAGES.has(stage) || !SESSION_RENEWAL_STATUSES.has(status)) {
     throw renewalStateError(
       "Session renewal state has an invalid lifecycle.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_lifecycle_invalid",
       { statusCode: 500 }
     );
   }
   if (!Number.isSafeInteger(revision) || revision < 1) {
     throw renewalStateError(
       "Session renewal state has an invalid revision.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_revision_invalid",
       { statusCode: 500 }
     );
   }
@@ -313,7 +317,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   if (!normalized.renewalId) {
     throw renewalStateError(
       "Session renewal state has no renewal id.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_id_missing",
       { statusCode: 500 }
     );
   }
@@ -349,7 +353,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
     if (!normalized.maintenance) {
       throw renewalStateError(
         "Committed session renewal has no maintenance ledger.",
-        "vibe64_session_renewal_state_invalid",
+        "vibe64_session_renewal_maintenance_missing",
         { statusCode: 500 }
       );
     }
@@ -365,14 +369,14 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   )) {
     throw renewalStateError(
       "Session renewal has a commit marker outside its forward-only completion boundary.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_commit_marker_out_of_bounds",
       { statusCode: 500 }
     );
   }
   if (normalized.predecessorArchivedAt && !commit) {
     throw renewalStateError(
       "Session renewal claims a predecessor archive before its commit marker.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_archive_claim_before_commit",
       { statusCode: 500 }
     );
   }
@@ -402,7 +406,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   if (!lifecycleValid) {
     throw renewalStateError(
       "Session renewal state has an inconsistent lifecycle.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_lifecycle_inconsistent",
       { statusCode: 500 }
     );
   }
@@ -412,7 +416,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   ) {
     throw renewalStateError(
       "Completed session renewal has no durable commit marker.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_completed_commit_marker_missing",
       { statusCode: 500 }
     );
   }
@@ -525,7 +529,7 @@ async function readSessionRenewalState(runtime, sessionId = "") {
     }
     throw renewalStateError(
       "Session renewal state is not readable.",
-      "vibe64_session_renewal_state_invalid",
+      "vibe64_session_renewal_state_unreadable",
       { statusCode: 500 }
     );
   }

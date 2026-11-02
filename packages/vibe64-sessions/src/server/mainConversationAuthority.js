@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -32,9 +33,9 @@ function conversationContextGrant(_input, context) {
     const project = currentProjectRequestContext();
     if (getStudioProjectContext().projectCatalogEnabled !== false || !project || !request ||
         !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }))) {
-      throw Object.assign(new Error("Open this conversation from the local editor for its selected project."), {
+      throw new AppError(403, "Open this conversation from the local editor for its selected project.", {
         code: "conversation_forbidden",
-        statusCode: 403
+        messageCode: "vibe64_conversation_local_editor_required"
       });
     }
     // Standalone requests already resolve the selected project in the action

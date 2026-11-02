@@ -143,7 +143,7 @@ async function ensureSuccessorDiscarding(runtime, state, seedError) {
       if (!ownsExpectedSuccessor(current)) {
         throw renewalError(
           "The invalid renewed session no longer belongs to this renewal.",
-          "vibe64_session_renewal_link_mismatch",
+          "vibe64_session_renewal_invalid_successor_detached",
           { retryable: true, statusCode: 500 }
         );
       }
@@ -159,7 +159,7 @@ async function ensureSuccessorDiscarding(runtime, state, seedError) {
       ) {
         throw renewalError(
           "The invalid renewed session is no longer awaiting disposal.",
-          "vibe64_session_renewal_state_invalid",
+          "vibe64_session_renewal_successor_disposal_stale",
           { retryable: true, statusCode: 500 }
         );
       }
@@ -334,7 +334,7 @@ function createRenewalSuccessorSession({
     if (!successorSessionId) {
       throw renewalError(
         "The renewed session has no exact private successor.",
-        "vibe64_session_renewal_link_mismatch",
+        "vibe64_session_renewal_private_successor_missing",
         { statusCode: 500 }
       );
     }

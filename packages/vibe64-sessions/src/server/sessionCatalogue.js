@@ -1,3 +1,4 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { writeSessionUiSyncPreviewState } from "@local/vibe64-core/server/sessionUiSyncState";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
@@ -68,10 +69,7 @@ function createSessionCatalogue({
         runtime.store.mutateSession(sessionId, async () => {
           const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
           if (renewal && ![SESSION_RENEWAL_STATUS.COMPLETED, SESSION_RENEWAL_STATUS.CANCELLED].includes(renewal.status)) {
-            throw Object.assign(
-              new Error("Finish or cancel renewal before pinning this session."),
-              { code: "vibe64_session_pin_unavailable" }
-            );
+            throw vibe64Error("Finish or cancel renewal before pinning this session.", "vibe64_session_pin_renewal_unfinished");
           }
           return runtime.store.updatePinnedSession(sessionId, input.pinned);
         })

@@ -2,6 +2,7 @@ import {
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   VIBE64_SESSION_PRESENCE_IDLE_MS
 } from "@local/vibe64-runtime/shared";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -52,22 +53,13 @@ function assertPresenceInput(input = {}) {
     throw new TypeError("Session presence requires an actor, project, and session.");
   }
   if (!BROWSER_KEY_PATTERN.test(originId)) {
-    const error = new Error("Session presence origin is invalid.");
-    error.code = "vibe64_session_presence_origin_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw vibe64Error("Session presence origin is invalid.", "vibe64_session_presence_origin_invalid", { status: 400 });
   }
   if (conversationId && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) {
-    throw Object.assign(new Error("Session presence conversation is invalid."), {
-      code: "vibe64_session_presence_conversation_invalid",
-      statusCode: 400
-    });
+    throw vibe64Error("Session presence conversation is invalid.", "vibe64_session_presence_conversation_invalid", { status: 400 });
   }
   if (!Number.isSafeInteger(sequence) || sequence < 1) {
-    const error = new Error("Session presence sequence is invalid.");
-    error.code = "vibe64_session_presence_sequence_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw vibe64Error("Session presence sequence is invalid.", "vibe64_session_presence_sequence_invalid", { status: 400 });
   }
   return Object.freeze({
     actorId,

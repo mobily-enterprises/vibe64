@@ -43,18 +43,24 @@ const SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES = new Set([
   SESSION_RENEWAL_STAGE.SUCCESSOR_SETUP
 ]);
 
+/**
+ * A renewal refusal at its status, or, at 500, a server fault: a plain Error
+ * whose message HTTP hides, still carrying the code, details and retryability
+ * the renewal workflow records.
+ * @param {string} message
+ * @param {string} code
+ * @param {{ details?: Record<string, unknown> | null, retryable?: boolean, statusCode?: number }} [options]
+ */
 function renewalError(message, code, options = {}) {
   const {
-    details = null,
+    details,
     retryable = false,
     statusCode = 409
   } = options;
-  const error = vibe64Error(message, code);
+  const error = statusCode === 500
+    ? Object.assign(new Error(message), { code }, details ? { details } : {})
+    : vibe64Error(message, code, { status: statusCode, ...(details ? { details } : {}) });
   error.retryable = retryable;
-  error.statusCode = statusCode;
-  if (details) {
-    error.details = details;
-  }
   return error;
 }
 

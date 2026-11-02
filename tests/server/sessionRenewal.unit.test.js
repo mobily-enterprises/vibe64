@@ -1845,7 +1845,7 @@ test("restart discovery isolates an unreadable renewal artifact from another res
   assert.deepEqual(resumed.resumedSessionIds, [secondSessionId]);
   assert.equal(resumed.failures.length, 1);
   assert.equal(resumed.failures[0].sessionId, OLD_SESSION_ID);
-  assert.equal(resumed.failures[0].code, "vibe64_session_renewal_state_invalid");
+  assert.equal(resumed.failures[0].code, "vibe64_session_renewal_state_unreadable");
   assert.equal(
     (await readSessionRenewalState(context.runtime, secondSessionId)).status,
     SESSION_RENEWAL_STATUS.REVIEW
@@ -2452,7 +2452,7 @@ test("a cancellation that wins during confirmation eligibility remains terminal"
 
   eligibility.release();
   await assert.rejects(confirming, {
-    code: "vibe64_session_renewal_confirm_not_available"
+    code: "vibe64_session_renewal_confirm_withdrawn"
   });
 
   const durable = await readSessionRenewalState(context.runtime, OLD_SESSION_ID);
@@ -4146,11 +4146,11 @@ test("restart rejects a published predecessor without a durable commit marker", 
   assert.deepEqual(resumed.resumedSessionIds, []);
   assert.equal(resumed.failures.length, 1);
   assert.equal(resumed.failures[0].sessionId, OLD_SESSION_ID);
-  assert.equal(resumed.failures[0].code, "vibe64_session_renewal_state_invalid");
+  assert.equal(resumed.failures[0].code, "vibe64_session_renewal_archive_claim_before_commit");
   assert.equal(context.calls.compact, 0);
   await assert.rejects(
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_archive_claim_before_commit" }
   );
   assert.equal(context.currentSessionId, "");
   assert.equal(context.sessions.get(OLD_SESSION_ID).archived, true);

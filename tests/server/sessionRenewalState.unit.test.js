@@ -352,7 +352,7 @@ test("public renewal state marks the predecessor archive only behind the durable
   };
   assert.throws(
     () => publicSessionRenewalState(uncommitted),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_archive_claim_before_commit" }
   );
   const state = {
     ...uncommitted,
@@ -384,7 +384,7 @@ test("public renewal state marks the predecessor archive only behind the durable
       ...state,
       predecessorArchivedAt: "not-a-timestamp"
     }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_timestamp_invalid" }
   );
   for (const invalid of [
     {
@@ -405,7 +405,7 @@ test("public renewal state marks the predecessor archive only behind the durable
         ...state,
         ...invalid
       }, { expectedSessionId: "session-1" }),
-      { code: "vibe64_session_renewal_state_invalid" }
+      { code: "vibe64_session_renewal_commit_marker_out_of_bounds" }
     );
   }
 });
@@ -460,7 +460,7 @@ test("completed renewal state requires an exact commit marker and complete maint
       commit: undefined,
       maintenance: undefined
     }, { expectedSessionId: "session-1" }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_completed_commit_marker_missing" }
   );
   assert.throws(
     () => normalizeSessionRenewalState({
@@ -470,7 +470,7 @@ test("completed renewal state requires an exact commit marker and complete maint
         sourceSessionId: "another-session"
       }
     }, { expectedSessionId: "session-1" }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_commit_marker_invalid" }
   );
   assert.throws(
     () => normalizeSessionRenewalState({
@@ -483,7 +483,7 @@ test("completed renewal state requires an exact commit marker and complete maint
         }
       }
     }, { expectedSessionId: "session-1" }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_maintenance_unfinished" }
   );
 });
 
@@ -503,10 +503,10 @@ test("renewal state rejects cross-session reads and tampered drafts", () => {
 
   assert.throws(
     () => normalizeSessionRenewalState(state, { expectedSessionId: "session-2" }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_state_session_mismatch" }
   );
   assert.throws(
     () => normalizeSessionRenewalState(state, { expectedSessionId: "session-1" }),
-    { code: "vibe64_session_renewal_state_invalid" }
+    { code: "vibe64_session_renewal_draft_integrity_failed" }
   );
 });

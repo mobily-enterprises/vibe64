@@ -11,7 +11,10 @@ import { conversationTransportSchema } from "./conversationTransportSchema.js";
 const SUBSCRIBE_ACTION_ID = "vibe64.conversation.subscribe";
 
 function conversationUnavailable() {
-  return new AppError(403, "This conversation is unavailable.", { code: "conversation_forbidden" });
+  return new AppError(403, "This conversation is unavailable.", {
+    code: "conversation_forbidden",
+    messageCode: "vibe64_conversation_unavailable"
+  });
 }
 
 /**
@@ -57,7 +60,7 @@ function createConversationHost({ colleagueConversations, http, mainConversation
       headers: request?.headers,
       vibe64User: authenticatedVibe64User(context)
     })) {
-      throw Object.assign(new Error("Open this conversation from this Studio's own origin."), { statusCode: 403 });
+      throw new AppError(403, "Open this conversation from this Studio's own origin.", { code: "vibe64_conversation_origin_untrusted" });
     }
   }
 
