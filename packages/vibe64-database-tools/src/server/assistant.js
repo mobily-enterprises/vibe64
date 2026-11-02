@@ -204,29 +204,16 @@ function executionProfileSnapshot(value = null) {
 }
 
 /**
- * A caller that does not follow the assistant's events receives none.
+ * The two in-process tools of one database assistant turn: they search the turn's schema and run read queries on its
+ * already admitted database, and record each lookup and query for the turn's result.
+ * @param {object} dependencies
+ * @param {object} dependencies.schema
+ * @param {(sql: string) => Promise<object>} dependencies.executeReadQuery
+ * @param {Error} dependencies.invalidResponseError
  */
-async function ignoreAssistantEvent() {}
-
-async function runDatabaseAssistant({
-  agentContext = {},
-  assistant = {},
-  executeReadQuery,
-  messages = [],
-  runAgentTurn,
-  schema = {}
-} = {}) {
-  const { onEvent: forwardEvent = ignoreAssistantEvent } = agentContext;
+function createDatabaseAssistantTools({ schema, executeReadQuery, invalidResponseError }) {
   const queries = [];
   const schemaLookups = [];
-  let response = null;
-  let threadId = "";
-  let observedExecutionProfile = null;
-  const prompt = initialAssistantPrompt(schema, messages);
-  const invalidResponseError = vibe64Error(
-    "The database assistant returned an invalid response.",
-    "vibe64_database_assistant_response_invalid"
-  );
   function searchSchema({ search }) {
     if (!toText(search)) throw invalidResponseError;
     const schemaResult = searchDatabaseSchema(schema, search);
@@ -245,73 +232,113 @@ async function runDatabaseAssistant({
     queries.push({ result: queryResult, sql });
     return assistantQueryResult(sql, queryResult);
   }
+  return Object.freeze({
+    queries,
+    readQuery,
+    schemaLookups,
+    searchSchema
+  });
+}
 
-  // These two in-process actions close over the already admitted database.
-  // They are not registered on HTTP, general automation or native Helper tools.
+/** @typedef {ReturnType<typeof createDatabaseAssistantTools>} DatabaseAssistantTools */
+
+/**
+ * The database assistant's two in-process actions. They close over one turn's already admitted database, and are not
+ * registered on HTTP, general automation or native Helper tools.
+ * @param {object} dependencies
+ * @param {DatabaseAssistantTools} dependencies.assistantTools
+ */
+function createDatabaseAssistantActions({ assistantTools }) {
+  return Object.freeze([
+    Object.freeze({
+      ...DATABASE_ASSISTANT_ACTION_FIELDS,
+      id: "vibe64.database.assistant.schema.search",
+      input: {
+        schema: createSchema({
+          search: {
+            type: "string",
+            required: true,
+            noTrim: true,
+            minLength: 1,
+            maxLength: MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS
+          }
+        }),
+        mode: "replace"
+      },
+      output: {
+        schema: createSchema({
+          search: { type: "string", required: true, noTrim: true },
+          result: { type: "object", required: true, additionalProperties: true }
+        }),
+        mode: "replace"
+      },
+      extensions: {
+        assistant: {
+          description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation."
+        }
+      },
+      execute: (input) => assistantTools.searchSchema(input)
+    }),
+    Object.freeze({
+      ...DATABASE_ASSISTANT_ACTION_FIELDS,
+      id: "vibe64.database.assistant.query.read",
+      input: {
+        schema: createSchema({
+          sql: {
+            type: "string",
+            required: true,
+            noTrim: true,
+            minLength: 1,
+            maxLength: DATABASE_ASSISTANT_SQL_MAX_CHARACTERS
+          }
+        }),
+        mode: "replace"
+      },
+      output: {
+        schema: createSchema({
+          sql: { type: "string", required: true, noTrim: true },
+          result: { type: "object", required: true, additionalProperties: true }
+        }),
+        mode: "replace"
+      },
+      extensions: {
+        assistant: {
+          description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review."
+        }
+      },
+      execute: (input) => assistantTools.readQuery(input)
+    })
+  ]);
+}
+
+/**
+ * A caller that does not follow the assistant's events receives none.
+ */
+async function ignoreAssistantEvent() {}
+
+async function runDatabaseAssistant({
+  agentContext = {},
+  assistant = {},
+  executeReadQuery,
+  messages = [],
+  runAgentTurn,
+  schema = {}
+} = {}) {
+  const { onEvent: forwardEvent = ignoreAssistantEvent } = agentContext;
+  let response = null;
+  let threadId = "";
+  let observedExecutionProfile = null;
+  const prompt = initialAssistantPrompt(schema, messages);
+  const invalidResponseError = vibe64Error(
+    "The database assistant returned an invalid response.",
+    "vibe64_database_assistant_response_invalid"
+  );
+  const assistantTools = createDatabaseAssistantTools({ schema, executeReadQuery, invalidResponseError });
   const actions = createActionCatalogue();
   actions.register({
     contributorId: "database.copilot",
     domain: "database",
-    actions: Object.freeze([
-      Object.freeze({
-        ...DATABASE_ASSISTANT_ACTION_FIELDS,
-        id: "vibe64.database.assistant.schema.search",
-        input: {
-          schema: createSchema({
-            search: {
-              type: "string",
-              required: true,
-              noTrim: true,
-              minLength: 1,
-              maxLength: MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS
-            }
-          }),
-          mode: "replace"
-        },
-        output: {
-          schema: createSchema({
-            search: { type: "string", required: true, noTrim: true },
-            result: { type: "object", required: true, additionalProperties: true }
-          }),
-          mode: "replace"
-        },
-        extensions: {
-          assistant: {
-            description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation."
-          }
-        },
-        execute: (input) => searchSchema(input)
-      }),
-      Object.freeze({
-        ...DATABASE_ASSISTANT_ACTION_FIELDS,
-        id: "vibe64.database.assistant.query.read",
-        input: {
-          schema: createSchema({
-            sql: {
-              type: "string",
-              required: true,
-              noTrim: true,
-              minLength: 1,
-              maxLength: DATABASE_ASSISTANT_SQL_MAX_CHARACTERS
-            }
-          }),
-          mode: "replace"
-        },
-        output: {
-          schema: createSchema({
-            sql: { type: "string", required: true, noTrim: true },
-            result: { type: "object", required: true, additionalProperties: true }
-          }),
-          mode: "replace"
-        },
-        extensions: {
-          assistant: {
-            description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review."
-          }
-        },
-        execute: (input) => readQuery(input)
-      })
-    ])
+    actions: createDatabaseAssistantActions({ assistantTools })
   });
   // Domain bounds apply before the shared tool-result transport and its next
   // response. Retain the original outer serialization allowance.
@@ -388,8 +415,8 @@ async function runDatabaseAssistant({
     intent: response.intent,
     model: toText(observedExecutionProfile?.model || assistant.model),
     ok: true,
-    queries,
-    schemaLookups,
+    queries: assistantTools.queries,
+    schemaLookups: assistantTools.schemaLookups,
     sql: response.sql
   };
 }
