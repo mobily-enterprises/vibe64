@@ -25,7 +25,7 @@ test("server defaults to loopback host", () => {
   try {
     assert.equal(resolveRuntimeEnv().HOST, "127.0.0.1");
     assert.equal(resolveRuntimeEnv().PORT, null);
-    assert.equal(resolveListenTarget().transport, "socket");
+    assert.equal(resolveListenTarget({ env: process.env }).transport, "socket");
   } finally {
     if (previousHost == null) {
       delete process.env.HOST;

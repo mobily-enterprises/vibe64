@@ -15,6 +15,7 @@ function project(targetRoot, options = {}) {
   return createService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
       explicitTargetRoot: targetRoot,

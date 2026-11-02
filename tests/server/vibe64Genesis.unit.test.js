@@ -923,6 +923,7 @@ test("Codex thread commands run Vibe64's Genesis without a project dependency", 
     await initializeGenesisProject({ projectRoot });
     await writeFile(path.join(projectRoot, "app.js"), "export const answer = 42;\n", "utf8");
     const codexRuntime = codexRuntimeContext({
+      env: process.env,
       shimDirs: withGenesisCommandShim(),
       terminalEnv: {
         GENESIS_RESOURCE: "available"

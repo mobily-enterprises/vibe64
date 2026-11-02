@@ -2196,7 +2196,7 @@ test("practice session attachments keep their project identity with or without a
       assert.equal(catalogProjectSlugFromTargetRoot(lookalike), "", "only the exact namespace layout names a practice project");
     }
   } finally {
-    configureStudioProjectContext();
+    configureStudioProjectContext({ env: process.env });
     await rm(root, { force: true, recursive: true });
   }
 });

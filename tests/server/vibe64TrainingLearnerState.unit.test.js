@@ -1896,7 +1896,7 @@ test("actual saved exercise caller admits only its same original local Project r
     import("../../packages/vibe64-project/src/server/service.js"),
     import("../../packages/vibe64-core/src/server/projectRequestContext.js")
   ]);
-  const projectContext = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
+  const projectContext = createStudioProjectContext({ env: process.env, explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true, mode: "local" } });
   const project = createProject({ ...projectServiceCollaborators(), projectContext });
   // Practice projects are ordinary projects: the attempt is read fresh and the
@@ -1956,7 +1956,7 @@ test("a practice session is an ordinary local project session that stays the lea
     import("../../packages/vibe64-terminals/src/server/sessionSource.js"),
     import("../../packages/vibe64-core/src/server/projectRequestContext.js")
   ]);
-  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
+  const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
   const project = createProject({ ...projectServiceCollaborators(), projectContext: core });
   const repository = createManagedProjectRepositoryService({ projectContext: core, project });

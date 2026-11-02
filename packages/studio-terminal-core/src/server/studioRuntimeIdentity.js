@@ -2,7 +2,8 @@ import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
-import process from "node:process";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const VIBE64_LOCAL_RUNTIME_NAMESPACE = "__local__";
 
@@ -20,9 +21,12 @@ function normalizeRuntimeNamespace(value = "") {
     .replace(/^-+|-+$/gu, "");
 }
 
-function runtimeNamespace({
-  env = process.env
-} = {}) {
+/**
+ * The runtime namespace every Vibe64 runtime name starts with.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ */
+function runtimeNamespace({ env }) {
   const namespace = normalizeRuntimeNamespace(env[VIBE64_RUNTIME_NAMESPACE_ENV]);
   if (!namespace) {
     throw new Error(`${VIBE64_RUNTIME_NAMESPACE_ENV} is required for Vibe64 runtime naming.`);

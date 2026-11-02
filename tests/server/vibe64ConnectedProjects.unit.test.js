@@ -14,6 +14,7 @@ const composition = { name: "Editor", repository: "https://github.com/example/ed
 const customLibrary = { ...library, type: "custom", script: "tooling/prepare-native-worker.mjs" };
 function service(root, options = {}) {
   return createService({ ...projectServiceCollaborators(), logger: console, env: {}, projectContext: createStudioProjectContext({
+    env: process.env,
     explicitManagedSourceRoot: path.join(path.dirname(root), "managed-source"),
     explicitSystemRoot: path.join(path.dirname(root), "system"), explicitTargetRoot: root, home: path.dirname(root)
   }), inspectCollaboration: async () => ({ choices: {}, status: "defaulted" }),
@@ -59,7 +60,7 @@ test("connection identity rejects credentials, duplicate identities and runtime 
 
 test("Incoming integration checks fresh receiving write access and the existing publication policy", async () => {
   await withTemporaryRoot(async root => {
-    const context = createStudioProjectContext({ explicitTargetRoot: root, explicitSystemRoot: path.join(root, "system"), home: root });
+    const context = createStudioProjectContext({ env: process.env, explicitTargetRoot: root, explicitSystemRoot: path.join(root, "system"), home: root });
     const current = { slug: "receiving", path: root, repositoryMode: "github",
       repository: { mode: "github", defaultBranch: "main" }, githubRepository: { fullName: "example/library" } };
     const actor = { username: "receiver", role: "owner" };
@@ -92,7 +93,7 @@ test("Incoming integration checks fresh receiving write access and the existing 
 
 test("a contribution source reads only the receiving integration branch", async () => {
   await withTemporaryRoot(async root => {
-    const context = createStudioProjectContext({ explicitTargetRoot: root, explicitSystemRoot: path.join(root, "system"), home: root });
+    const context = createStudioProjectContext({ env: process.env, explicitTargetRoot: root, explicitSystemRoot: path.join(root, "system"), home: root });
     const current = { slug: "receiving", path: root, repositoryMode: "github",
       repository: { mode: "github", defaultBranch: "release/main" }, githubRepository: { fullName: "Example/Library" } };
     const reads = [];
@@ -209,6 +210,7 @@ test("connection mutations require owner and receiving repository write access",
 test("catalogue settings change only the exact session source, preserving the other session's list", async () => {
   await withTemporaryRoot(async (root) => {
     const projectContext = createStudioProjectContext({
+      env: process.env,
       explicitManagedSourceRoot: path.join(root, "sources"), explicitProjectsRoot: path.join(root, "projects"),
       explicitSystemRoot: path.join(root, "system"), home: root
     });

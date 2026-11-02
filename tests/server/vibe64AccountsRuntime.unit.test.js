@@ -468,7 +468,7 @@ test("accounts feature reads roots only from its named runtime env capability", 
 test("standalone registers connection actions once and host-owned account runtimes supply their own wiring", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    configureStudioProjectContext({ systemRoot, projectsRoot: path.join(root, "projects"), runtimeProfile: { mode: "local", local: true } });
+    configureStudioProjectContext({ env: process.env, systemRoot, projectsRoot: path.join(root, "projects"), runtimeProfile: { mode: "local", local: true } });
     try {
       for (const hostOwned of [false, true]) {
         const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
@@ -482,7 +482,7 @@ test("standalone registers connection actions once and host-owned account runtim
           for (const definition of definitions) assert.equal(definition.extensions.vibe64.projectScoped, false);
         } finally { await feature.runtime.shutdown(); }
       }
-    } finally { configureStudioProjectContext(); }
+    } finally { configureStudioProjectContext({ env: process.env }); }
   });
 });
 

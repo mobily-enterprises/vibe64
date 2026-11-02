@@ -2,6 +2,8 @@ import path from "node:path";
 import process from "node:process";
 import os from "node:os";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
@@ -58,21 +60,37 @@ function resolveVibe64ManagedSourceRoot({
   return normalizeRoot(explicitRoot, resolveDefaultManagedSourceRoot({ home }));
 }
 
+/**
+ * The folder Vibe64's own application files live in.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.fallbackRoot]
+ */
 function resolveStudioAppRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   fallbackRoot = process.cwd()
-} = {}) {
+}) {
   return normalizeRoot(explicitRoot || env[VIBE64_APP_ROOT_ENV], fallbackRoot);
 }
 
+/**
+ * The project folder this process works on.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.cwd]
+ * @param {string} [options.studioAppRoot]
+ * @param {boolean} [options.allowCwdFallback]
+ */
 function resolveStudioTargetRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   cwd = process.cwd(),
   studioAppRoot = "",
   allowCwdFallback = true
-} = {}) {
+}) {
   if (String(explicitRoot || "").trim() || String(env[VIBE64_TARGET_ROOT_ENV] || "").trim()) {
     return normalizeRoot(explicitRoot || env[VIBE64_TARGET_ROOT_ENV], cwd);
   }
@@ -97,11 +115,18 @@ function resolveStudioTargetRoot({
   return normalizedCwd;
 }
 
+/**
+ * The project folder named explicitly or by the environment; empty when neither names one.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.cwd]
+ */
 function resolveExplicitStudioTargetRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   cwd = process.cwd()
-} = {}) {
+}) {
   return resolveStudioTargetRoot({
     allowCwdFallback: false,
     cwd,
@@ -110,13 +135,22 @@ function resolveExplicitStudioTargetRoot({
   });
 }
 
+/**
+ * The folder Vibe64 keeps its own state in.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.home]
+ * @param {string} [options.projectsRoot]
+ * @param {object | null} [options.runtimeProfile]
+ */
 function resolveVibe64SystemRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   home = os.homedir(),
   projectsRoot = "",
   runtimeProfile = null
-} = {}) {
+}) {
   const explicitSystemRoot = explicitRoot || env[VIBE64_SYSTEM_ROOT_ENV];
   if (String(explicitSystemRoot || "").trim()) {
     return normalizeRoot(explicitSystemRoot);
@@ -127,13 +161,22 @@ function resolveVibe64SystemRoot({
   return normalizeRoot(path.join(projectsRoot || resolveDefaultProjectsRoot(home), VIBE64_SYSTEM_DIR));
 }
 
+/**
+ * The folder managed services keep their data in.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitRoot]
+ * @param {string} [options.home]
+ * @param {object | null} [options.runtimeProfile]
+ * @param {string} [options.systemRoot]
+ */
 function resolveVibe64ServiceDataRoot({
-  env = process.env,
+  env,
   explicitRoot = "",
   home = os.homedir(),
   runtimeProfile = null,
   systemRoot = ""
-} = {}) {
+}) {
   const explicitServiceRoot = explicitRoot || env[VIBE64_SERVICE_DATA_ROOT_ENV];
   if (String(explicitServiceRoot || "").trim()) {
     return normalizeRoot(explicitServiceRoot);
@@ -148,14 +191,24 @@ function resolveVibe64ServiceDataRoot({
   return path.join(resolvedSystemRoot, "services");
 }
 
+/**
+ * The managed source, projects, service data and system roots, resolved together.
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ * @param {string} [options.explicitManagedSourceRoot]
+ * @param {string} [options.explicitSystemRoot]
+ * @param {string} [options.home]
+ * @param {string} [options.projectsRoot]
+ * @param {object | null} [options.runtimeProfile]
+ */
 function resolveVibe64Roots({
-  env = process.env,
+  env,
   explicitManagedSourceRoot = "",
   explicitSystemRoot = "",
   home = os.homedir(),
   projectsRoot = "",
   runtimeProfile = null
-} = {}) {
+}) {
   const localProfile = runtimeProfileIsLocal(runtimeProfile);
   const resolvedProjectsRoot = projectsRoot
     ? normalizeRoot(projectsRoot)

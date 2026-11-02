@@ -1453,7 +1453,7 @@ test("local project authority follows the checked-out branch and reports detache
     await mkdir(targetRoot);
     await runGit(targetRoot, ["init", "--initial-branch=trunk"]);
     await runGit(targetRoot, ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "base"]);
-    const context = createStudioProjectContext({ explicitTargetRoot: targetRoot, home: root,
+    const context = createStudioProjectContext({ env: process.env, explicitTargetRoot: targetRoot, home: root,
       runtimeProfile: { local: true, mode: "local" } });
     assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "trunk");
     await runGit(targetRoot, ["checkout", "-b", "topic"]);
@@ -1624,7 +1624,7 @@ function practiceSlugOf(training) {
 async function localPracticeContext(root) {
   const working = path.join(root, "working");
   await mkdir(working, { recursive: true });
-  return createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+  return createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
 }
 

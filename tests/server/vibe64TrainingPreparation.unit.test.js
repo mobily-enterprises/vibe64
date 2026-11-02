@@ -338,7 +338,7 @@ test("local preparation admits the original exercise effects under its existing 
   const { currentProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
   const working = path.join(f.root, "working");
   await mkdir(working);
-  const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
+  const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
   let barrierHeld = false;
   let barrierAdmissions = 0;
@@ -402,7 +402,7 @@ test("practice preparation creates an ordinary initial session under exactly its
   ]);
   const working = path.join(f.root, "working");
   await mkdir(working);
-  const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
+  const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
   const actualProject = createProject({ ...projectServiceCollaborators(), projectContext: core });
   const originalRuntime = f.owners.project.createRuntime;

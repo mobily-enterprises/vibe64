@@ -99,7 +99,7 @@ test("standalone Main and temporary conversations use the selected local project
       assert.equal(sends.length, 1, "Lost local authority cannot dispatch another send");
     } finally {
       await app.close();
-      configureStudioProjectContext();
+      configureStudioProjectContext({ env: process.env });
     }
   });
 });

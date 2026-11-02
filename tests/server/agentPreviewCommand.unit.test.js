@@ -1204,6 +1204,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
     const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext: createStudioProjectContext({
+        env: process.env,
         explicitTargetRoot: root,
         explicitManagedSourceRoot: path.join(path.dirname(root), "managed-source"),
         explicitSystemRoot: path.join(path.dirname(root), "system"),

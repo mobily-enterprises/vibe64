@@ -1,5 +1,7 @@
 import { isTruthyEnvValue } from "./runtimeEnv.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const VIBE64_RUNTIME_MODE_LOCAL = "local";
 const VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV = "VIBE64_ALLOW_UNSAFE_LOCAL_MODE";
 
@@ -26,10 +28,14 @@ function createVibe64RuntimeProfile({
   });
 }
 
-function assertSafeLocalModeListenTarget(profile = {}, listenTarget = {}, options = {}) {
-  const {
-    env = process.env
-  } = options;
+/**
+ * Refuses a local editor that would listen on a public TCP host.
+ * @param {object} profile
+ * @param {object} listenTarget
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
+ */
+function assertSafeLocalModeListenTarget(profile, listenTarget, { env }) {
   if (profile.mode !== VIBE64_RUNTIME_MODE_LOCAL || listenTarget.transport !== "tcp") {
     return;
   }

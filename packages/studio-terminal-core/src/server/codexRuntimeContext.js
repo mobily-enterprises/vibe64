@@ -18,6 +18,8 @@ import {
   codexCredentialContext
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 function normalizeAbsolutePath(value = "") {
   const normalized = normalizeText(value);
   return normalized && path.isAbsolute(normalized) ? path.resolve(normalized) : "";
@@ -54,7 +56,7 @@ function codexRuntimeIds(value = []) {
  * The Codex runtime context both public forms share: the second argument says whether a missing system root refuses.
  */
 function buildCodexRuntimeContext({
-  env = process.env,
+  env,
   gid = currentProcessId("getgid"),
   home = os.homedir(),
   providerOptions = {},
@@ -151,17 +153,19 @@ function buildCodexRuntimeContext({
 
 /**
  * The Codex runtime context: its credential, environments and system root (empty when none is configured).
- * @param {object} [options]
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
  */
-function codexRuntimeContext(options = {}) {
+function codexRuntimeContext(options) {
   return buildCodexRuntimeContext(options, false);
 }
 
 /**
  * The Codex runtime context, refused with vibe64_codex_system_root_required when no system root is configured.
- * @param {object} [options]
+ * @param {object} options
+ * @param {RuntimeEnv} options.env
  */
-function codexRuntimeContextRequiringSystemRoot(options = {}) {
+function codexRuntimeContextRequiringSystemRoot(options) {
   return buildCodexRuntimeContext(options, true);
 }
 

@@ -373,7 +373,7 @@ async function createServer(options = {}) {
       app: "vibe64"
     };
   });
-  if (isLocalhostCheckBypassEnabled()) {
+  if (isLocalhostCheckBypassEnabled({ env: process.env })) {
     logOperationalEvent(app.log, "warn", {
       component: "local-request-check",
       event: "vibe64.security.localhost_check_bypassed"
@@ -501,6 +501,7 @@ async function startServer(options = {}) {
   const runtimeProfile = resolveServerRuntimeProfile(options);
   const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
   const listenTarget = resolveListenTarget({
+    env: process.env,
     options,
     runtimeEnv
   });

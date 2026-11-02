@@ -1218,7 +1218,7 @@ test("admitted practice Workspace setup finishes in original owner control after
     const { assertProjectEffectAdmission } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
     const working = path.join(root, "working");
     await mkdir(working);
-    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+    const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
     const project = createProjectService({ ...projectServiceCollaborators(), projectContext: core });
     const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),

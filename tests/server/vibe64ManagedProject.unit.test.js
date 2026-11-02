@@ -431,7 +431,7 @@ test("shared managed repository owner provisions and clones a real private pract
   await withTemporaryRoot(async root => {
     const working = path.join(root, "working");
     await mkdir(working);
-    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+    const core = createStudioProjectContext({ env: process.env, explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
     const project = createProject({ ...projectServiceCollaborators(), projectContext: core });
     const repository = createManagedProjectRepositoryService({ projectContext: core, project,

@@ -41,7 +41,7 @@ function catalogProjectSlugFromTargetRoot(targetRoot = "", options = {}) {
   const practiceSlug = String(learningSpaceRoot || "").trim()
     ? learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot)) : "";
   if (practiceSlug) return practiceSlug;
-  const resolvedProjectsRoot = path.resolve(String(projectsRoot || "").trim() || resolveStudioProjectsRoot());
+  const resolvedProjectsRoot = path.resolve(String(projectsRoot || "").trim() || resolveStudioProjectsRoot({ env: process.env }));
   if (!pathInsideOrEqual(resolvedProjectsRoot, resolvedTargetRoot)) {
     return "";
   }

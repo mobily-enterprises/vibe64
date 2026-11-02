@@ -1,3 +1,5 @@
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const PREVIEW_PROXY_PORT_START = 49100;
 const PREVIEW_PROXY_PORT_END = 49999;
 const PREVIEW_PROXY_HOST_ENV = "VIBE64_PREVIEW_PROXY_HOST";
@@ -17,13 +19,17 @@ function normalizePreviewProxyPort(value, fallback) {
     : fallback;
 }
 
-function previewProxyPortRange(env = process.env) {
+/**
+ * The port range Preview proxies listen on.
+ * @param {RuntimeEnv} env
+ */
+function previewProxyPortRange(env) {
   const start = normalizePreviewProxyPort(
-    env?.[PREVIEW_PROXY_PORT_START_ENV],
+    env[PREVIEW_PROXY_PORT_START_ENV],
     PREVIEW_PROXY_PORT_START
   );
   const end = normalizePreviewProxyPort(
-    env?.[PREVIEW_PROXY_PORT_END_ENV],
+    env[PREVIEW_PROXY_PORT_END_ENV],
     Math.max(start, PREVIEW_PROXY_PORT_END)
   );
   return {

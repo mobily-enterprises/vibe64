@@ -155,7 +155,7 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
   if (!scope && !options.modelProviderId && !loginGeneration && !toText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
     return "";
   }
-  const namespace = runtimeNamespace();
+  const namespace = runtimeNamespace({ env: process.env });
   const runtimeInstanceId = toText(options.runtimeInstanceId);
   const executionMode = codexAppServerExecutionMode(options);
   return [

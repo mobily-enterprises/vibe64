@@ -63,7 +63,7 @@ async function resolveProjectRequestContext({
   const slug = projectSlugFromRequest(request);
   const projectsRoot = String(
     projectContext.projectsRoot ||
-    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
+    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot({ env: process.env }))
   ).trim();
   const vibe64User = request.vibe64User || null;
   /**

@@ -7,7 +7,7 @@ const topicPattern = /^[a-z][a-z0-9-]{0,63}$/u;
 const maxGuideBytes = 65536;
 const maxGuideCharacters = 24000;
 
-function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppRoot(), "docs/colleague-usage") } = {}) {
+function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppRoot({ env: process.env }), "docs/colleague-usage") } = {}) {
   const warned = new Set();
 
   /**

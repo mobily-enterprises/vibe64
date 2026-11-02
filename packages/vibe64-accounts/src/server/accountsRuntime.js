@@ -19,6 +19,7 @@ const ALL_CODEX_AUTH_MODES = Object.freeze([
 
 function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
+    env: process.env,
     explicitRoot: targetRoot
   });
 }

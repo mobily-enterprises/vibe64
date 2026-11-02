@@ -150,7 +150,7 @@ test("a standalone local owner runs a project owner operation, and nobody else d
       configure(true);
       await assert.rejects(run(local), OWNER_REQUIRED, "a catalogue of projects has no local owner");
     } finally {
-      configureStudioProjectContext();
+      configureStudioProjectContext({ env: process.env });
     }
   });
 });
