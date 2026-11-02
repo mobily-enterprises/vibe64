@@ -9,33 +9,13 @@ import {
 
 import { registerApkDownloadRoutes } from "./apkDownloadRoutes.js";
 import { PUBLISHING_ACTIONS } from "./publishingActions.js";
+import { publishingStatusCode } from "./publishingError.js";
 
 /** @typedef {import("./types.js").PublishingService} PublishingService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 const PUBLISHING_BODY_LIMIT = 64 * 1024;
-const CONFLICT_CODES = new Set([
-  "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
-  "VIBE64_PUBLISH_CONFIRMATION_USED",
-  "VIBE64_PUBLISH_BASELINE_MOVED",
-  "VIBE64_PUBLISH_TAG_CONFLICT",
-  "vibe64_publishing_target_exists",
-  "vibe64_publishing_keys_exist"
-]);
-const FORBIDDEN_CODES = new Set([
-  "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
-  "VIBE64_PUBLISH_CONFIRMATION_INVALID",
-  "VIBE64_PUBLISH_CONFIRMATION_EXPIRED"
-]);
-
-function publishingStatusCode(response) {
-  if (response?.ok !== false) return 200;
-  if (CONFLICT_CODES.has(response.code)) return 409;
-  if (FORBIDDEN_CODES.has(response.code)) return 403;
-  if (/missing$/u.test(response.code || "")) return 404;
-  return 400;
-}
 
 function targetInput(request) {
   return { targetId: request.params.targetId };

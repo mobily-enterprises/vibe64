@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 
 import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
 
+import { publishingError } from "./publishingError.js";
+
 /** @typedef {import("@local/vibe64-packaging/server/types").AgeStore} AgeStore */
 /** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
 
@@ -20,7 +22,7 @@ const PROOF_FIELDS = Object.freeze([
 ]);
 
 function brokerError(message, code, params) {
-  return Object.assign(new Error(message), { code, ...(params ? { params } : {}) });
+  return publishingError(message, code, { params });
 }
 
 function accountEntryId(accountId) {

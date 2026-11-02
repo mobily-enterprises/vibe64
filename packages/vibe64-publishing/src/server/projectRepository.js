@@ -12,10 +12,12 @@ import { tagSavedCommit } from "@local/vibe64-packaging/server/tagSavedCommit";
 import { readSourceVersion } from "@local/vibe64-packaging/server/release";
 import { inspectVibe64Packaging } from "@local/vibe64-genesis/server";
 
+import { publishingError } from "./publishingError.js";
+
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 function repositoryError(message, code = "vibe64_publishing_repository_unavailable") {
-  return Object.assign(new Error(message), { code });
+  return publishingError(message, code);
 }
 
 function git(root, args, options = {}) {
