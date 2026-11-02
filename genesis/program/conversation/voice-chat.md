@@ -9,6 +9,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `packages/vibe64-voice/src/client/MercAvatar.vue`
 - `packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/MercIllustratedAvatar.vue`
+- `packages/vibe64-voice/src/client/mercAvatarMotion.css`
 - `packages/vibe64-voice/src/client/Vibe64AvatarSetting.vue`
 - `packages/vibe64-voice/src/shared/avatars.js`
 - `packages/vibe64-voice/src/shared/routes.js`
@@ -37,6 +38,7 @@ JSKIT binding without replacing the conversation.
 The voice package owns the assistant avatar artwork: `Vibe64ColleagueAvatar`
 selects Merc (blond illustrated) or Yu (blue-haired manga) and animates blink,
 gestures, expressions and mouth from the host's mouthLevel/mouthPose/state.
+Both artworks share one layout and motion stylesheet; each keeps its own colours.
 Its catalogue (`shared/avatars`) supplies the saved IDs, chooser labels and the
 per-target defaults: Merc for Colleague, Yu for project agents.
 `Vibe64AvatarSetting` is the single Avatar chooser; a host supplies its value,
