@@ -1088,6 +1088,37 @@ test("Claude renewal uses the main native history and verifies the approved fres
   assert.equal(successor.written.length, 0);
 });
 
+test("Claude seeds a hidden renewal successor that ordinary session reads refuse", async (t) => {
+  const source = { authority: "github", ref: "refs/heads/main", commit: "a".repeat(40) };
+  const handover = sessionRenewalManualHandoverTemplate({ source });
+  const handoverHash = sessionRenewalHandoverHash(handover);
+  const successor = await fixture(t);
+  const { runtime, session } = successor.context;
+  // A confirmed renewal's successor stays renewal_pending, and private, until the renewal commits.
+  await runtime.store.writeMetadataValue("test", "renewal_id", "renewal-hidden-claude");
+  await runtime.store.writeMetadataValue("test", "renewed_from", "predecessor");
+  await writeFile(runtime.store.paths("test").statusPath, "renewal_pending\n");
+  Object.assign(session, await runtime.store.readSessionForRenewal("test"));
+  runtime.getSession = (id) => runtime.store.readSession(id);
+  await assert.rejects(runtime.getSessionWithoutSource("test"), { code: "vibe64_session_renewal_private" });
+  await assert.rejects(runtime.store.conversationMessageIdExists("test", "any"), { code: "vibe64_session_renewal_private" });
+  successor.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", uuid: "ack", structured_output: {
+    schemaVersion: "vibe64.session-renewal-acknowledgement.v1", status: "ready", handoverHash, sourceCommit: source.commit, message: "Ready."
+  } });
+
+  const seeded = await successor.provider.seedSessionRenewalHandover(successor.context, {
+    operationId: "renew-hidden", source, handover, handoverHash, forbiddenThreadId: "thread-old"
+  });
+
+  assert.equal(seeded.acknowledgement.status, "ready");
+  assert.equal(seeded.freshThread, true);
+  const saved = await runtime.store.readSessionForRenewal("test");
+  assert.equal(saved.status, "renewal_pending", "seeding never exposes the successor");
+  assert.equal(saved.metadata.agent_renewal_seed_handover_hash, handoverHash);
+  assert.equal(saved.metadata.agent_briefing_delivered, "yes");
+  assert.equal(successor.written.length, 0);
+});
+
 test("Claude renewal failures allow the shared manual handover recovery without losing the old conversation", async (t) => {
   const f = await fixture(t);
   const source = { authority: "github", ref: "refs/heads/main", commit: "a".repeat(40) };

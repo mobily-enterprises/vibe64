@@ -136,6 +136,7 @@ function createVibe64SessionStore(options = {}) {
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
     conversationMessageIdExists: conversationStore.conversationMessageIdExists,
+    conversationMessageIdExistsForRenewal: conversationStore.conversationMessageIdExistsForRenewal,
     findSubmittedConversationTurn: conversationStore.findSubmittedConversationTurn,
     readConversationLogTurn: conversationStore.readConversationLogTurn,
     conversationStorage: conversationStore.conversationStorage,

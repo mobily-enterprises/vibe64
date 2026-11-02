@@ -46,10 +46,13 @@ export async function prepareCopiedScopedClaudeConversations(root) {
  * @param {typeof import("./terminalShared.js").claudeConversationError} dependencies.createError
  */
 function createClaudeConversationStorage({ createError: error }) {
+  /** A renewal successor stays hidden until its renewal commits, so only renewal-only session access reaches it. */
+  const renewalSuccessor = context => Boolean(context.session?.metadata?.renewed_from);
+
   async function metadata(context, values) {
     if (context.assistantScope) return;
     const store = context.runtime.store;
-    const renewal = Boolean(context.session?.metadata?.renewed_from);
+    const renewal = renewalSuccessor(context);
     const write = renewal ? store.writeMetadataValueForRenewal.bind(store) : store.writeMetadataValue.bind(store);
     const mutate = renewal ? store.mutateSessionForRenewal.bind(store) : store.mutateSession.bind(store);
     await mutate(context.sessionId, async () => {
@@ -168,7 +171,9 @@ function createClaudeConversationStorage({ createError: error }) {
     }
   }
 
-  const hasMessage = (ctx, messageId) => ctx.runtime.store.conversationMessageIdExists(ctx.sessionId, messageId);
+  const hasMessage = (ctx, messageId) => renewalSuccessor(ctx)
+    ? ctx.runtime.store.conversationMessageIdExistsForRenewal(ctx.sessionId, messageId)
+    : ctx.runtime.store.conversationMessageIdExists(ctx.sessionId, messageId);
 
   return Object.freeze({
     metadata,

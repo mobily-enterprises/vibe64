@@ -643,6 +643,13 @@ function createSessionConversationStore({
     }, false);
   }
 
+  /** Whether a hidden renewal successor's main transcript holds a message, read through renewal-only session access. */
+  function conversationMessageIdExistsForRenewal(sessionId, messageId) {
+    return archiveAccess.withReadableSessionPathsForRenewal(sessionId, (paths) => (
+      conversationRecordTransaction(paths, (transaction) => transaction.hasMessage(String(messageId ?? "").trim()))
+    ));
+  }
+
   function writeConversationUserMessage(scope, input) {
     return appendUserMessage(scope, { ...input, attachments: normalizeVibe64ConversationAttachments(input?.attachments) });
   }
@@ -675,6 +682,7 @@ function createSessionConversationStore({
     completeConversationStreamMessage,
     completeIntegrationSetupRequest,
     conversationMessageIdExists,
+    conversationMessageIdExistsForRenewal,
     conversationRecordJson,
     conversationStorage,
     deleteSessionConversation,
