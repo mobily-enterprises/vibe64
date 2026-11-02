@@ -59,6 +59,7 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   withRuntimePacks(t, studioRoot);
   const commandCalls = [];
   const service = createService({
+    env: process.env,
     connections: {
       async getStatus(input) {
         assert.equal(input.providerIds, undefined);
@@ -121,6 +122,7 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const service = createService({
+    env: process.env,
     connections: {
       async getStatus() {
         throw new Error("Account service unavailable.");
@@ -167,6 +169,7 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const versions = { node: "v26.12.1", git: "git version 2.53.0", codex: "codex-cli 0.163.0" };
   const service = createService({
+    env: process.env,
     connections: { getStatus: async () => ({ ok: true, connections: [
       { connected: true, id: "ai", status: "connected" },
       { connected: false, required: false, id: "github", status: "signed_out" }
@@ -214,6 +217,7 @@ test("without runtime packs a tool that is there but fails is not counted as ins
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-plain-"));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const service = createService({
+    env: process.env,
     connections: { getStatus: async () => ({ ok: true, connections: [] }) },
     project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
@@ -255,6 +259,7 @@ test("Health prioritizes a failed execution's reason ahead of incidental browser
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const service = createService({
+    env: process.env,
     connections: { getStatus: async () => ({ ok: true, connections: [] }) },
     project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {

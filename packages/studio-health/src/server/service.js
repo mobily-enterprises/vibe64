@@ -21,6 +21,7 @@ import {
 
 /** @typedef {import("@local/vibe64-accounts/server/types").ConnectionsService} ConnectionsService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const COMMAND_TIMEOUT_MS = 20_000;
 
@@ -163,8 +164,8 @@ function localToolRow(tool, { group, id = tool.id, need, explanation }) {
 /**
  * Without packs: Node, Git and one AI tool are needed; everything else is optional.
  */
-async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
-  const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, env: process.env, runCommand });
+async function inspectLocalTools({ env, nodeMajor, runCommand, studioRoot }) {
+  const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, env, runCommand });
   const byId = Object.fromEntries(tools.map((tool) => [tool.id, tool]));
   const rows = Object.entries(LOCAL_TOOL_CHECKS).map(([id, options]) => localToolRow(byId[id], { group: "Tools", ...options }));
   const node = rows[0];
@@ -380,12 +381,14 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
 /**
  * @param {object} dependencies
  * @param {ConnectionsService} dependencies.connections
+ * @param {RuntimeEnv} dependencies.env the environment the person's tools are checked with
  * @param {ProjectService} dependencies.project
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {string} dependencies.studioRoot
  */
 function createService({
   connections,
+  env,
   project,
   runCommand = runVibe64Command,
   studioRoot
@@ -450,7 +453,7 @@ function createService({
     const [workspace, accounts, local, commands] = await Promise.all([
       inspectWorkspace({ packs, project, studioRoot }),
       inspectAccounts({ connections, input, packs }),
-      packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
+      packs ? [] : inspectLocalTools({ env, nodeMajor, runCommand, studioRoot }),
       Promise.all(commandChecks)
     ]);
     // Without packs the person's own tools lead; Vibe64's own parts follow.
@@ -489,7 +492,7 @@ function createService({
    */
   async function checkTools(input) {
     const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
-    return checkLocalTools(ids, { cwd: studioRoot, env: process.env, runCommand });
+    return checkLocalTools(ids, { cwd: studioRoot, env, runCommand });
   }
 
   return Object.freeze({
