@@ -104,6 +104,10 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionRenewalSuccessor.js`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionData.js`
+- `src/composables/useVibe64SessionCreation.js`
+- `src/composables/useVibe64SelectedSessionRenewal.js`
+- `src/composables/useVibe64CurrentSessionPublication.js`
+- `src/lib/vibe64SessionListLookup.js`
 - `src/composables/useVibe64SessionDialogs.js`
 - `src/lib/vibe64SessionArchiveState.js`
 - `src/composables/useVibe64SessionSelection.js`

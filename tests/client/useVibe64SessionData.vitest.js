@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  renewedSuccessorSessionId,
   routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
-  selectedSessionIdForCurrentAlias,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
+import { selectedSessionIdForCurrentAlias } from "../../src/composables/useVibe64CurrentSessionPublication.js";
+import { renewedSuccessorSessionId } from "../../src/lib/vibe64SessionListLookup.js";
 import {
   agentTurnRealtimeOverlayFromPayload,
   latestAgentTurnRealtimeOverlay,

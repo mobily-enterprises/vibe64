@@ -35,6 +35,7 @@ work as a new PR. GitHub remains the PR store.
 - `src/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/composables/useVibe64SessionData.js`
+- `src/composables/useVibe64SessionCreation.js`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/lib/vibe64RepositoryRealtime.js`
 - `src/lib/vibe64SessionInfo.js`
