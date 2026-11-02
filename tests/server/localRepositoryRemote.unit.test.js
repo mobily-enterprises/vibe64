@@ -107,7 +107,7 @@ test("stale reviews, dirty folders, divergent pushes and merge conflicts preserv
   const f = await fixture(t);
   let state = await f.call({ action: "fetch" });
   await f.commit(f.peer, "base.txt", "theirs\n"); await git(f.peer, "push");
-  await assert.rejects(f.call({ action: "pull", review: state.review }), { code: "vibe64_remote_review_changed" });
+  await assert.rejects(f.call({ action: "pull", review: state.review }), { code: "vibe64_remote_commits_changed" });
   state = await f.call({ action: "fetch" });
   await writeFile(path.join(f.source, "dirty.txt"), "keep\n");
   await assert.rejects(f.call({ action: "pull", review: state.review }), { code: "vibe64_remote_dirty" });

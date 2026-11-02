@@ -55,7 +55,7 @@ function createProjectDevelopmentDatabase({
     if (!developmentDatabaseName) {
       throw vibe64Error(
         "The managed project database name is empty.",
-        "vibe64_managed_development_database_name_unavailable"
+        "vibe64_managed_development_database_name_empty"
       );
     }
     return developmentDatabaseName;

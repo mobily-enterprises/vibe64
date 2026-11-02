@@ -126,7 +126,7 @@ test("source map resolves the Stack package default and preserves per-repository
     await writeFile(path.join(root, "tooling/custom.mjs"), "// Custom connection fixture.\n");
     await writeFile(connectionFile, JSON.stringify(configuration));
     await assert.rejects(inspectConnectedDevelopmentInputs(input),
-      { code: "vibe64_connected_inputs_required" });
+      { code: "vibe64_connected_source_map_stale" });
     await materializeConnectedDevelopmentInputs(noDefault);
     assert.equal(JSON.parse(await readFile(mapFile, "utf8")).projects[0].type, "custom");
     assert.deepEqual(JSON.parse(await readFile(connectionFile, "utf8")), configuration);
@@ -159,7 +159,7 @@ test("connected input inspection never creates or repairs a missing or changed s
     const destination = path.join(root, input.inspection.sourcesFile);
     const excludes = path.join(root, ".git/info/exclude");
     const originalExcludes = await readFile(excludes, "utf8");
-    await assert.rejects(inspectConnectedDevelopmentInputs(input), { code: "vibe64_connected_inputs_required" });
+    await assert.rejects(inspectConnectedDevelopmentInputs(input), { code: "vibe64_connected_source_map_stale" });
     await assert.rejects(lstat(destination), { code: "ENOENT" });
     assert.equal(await readFile(excludes, "utf8"), originalExcludes);
 
@@ -171,7 +171,7 @@ test("connected input inspection never creates or repairs a missing or changed s
     mapped.projects[0].sourceRoot = root;
     const changed = JSON.stringify(mapped);
     await writeFile(destination, changed);
-    await assert.rejects(inspectConnectedDevelopmentInputs(input), { code: "vibe64_connected_inputs_required" });
+    await assert.rejects(inspectConnectedDevelopmentInputs(input), { code: "vibe64_connected_source_map_stale" });
     assert.equal(await readFile(destination, "utf8"), changed, "inspection never accepts or silently repairs a changed path");
   });
 });
@@ -183,7 +183,7 @@ test("connected inputs require matching bindings and a declared recipe; removal 
       { code: "vibe64_connected_development_required" });
     const original = input.projects[0].session.metadata.connected_contribution;
     input.projects[0].session.metadata.connected_contribution = JSON.stringify({ ...JSON.parse(original), baseCommit: "b".repeat(40) });
-    await assert.rejects(materializeConnectedDevelopmentInputs(input), { code: "vibe64_connected_sources_changed" });
+    await assert.rejects(materializeConnectedDevelopmentInputs(input), { code: "vibe64_connected_source_authorization_changed" });
     input.projects[0].session.metadata.connected_contribution = original;
     await materializeConnectedDevelopmentInputs(input);
     const destination = path.join(root, input.inspection.sourcesFile);

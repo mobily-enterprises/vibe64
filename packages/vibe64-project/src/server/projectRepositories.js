@@ -125,7 +125,13 @@ function createProjectRepositories({
     const repository = requireGithubRepository(current, "Connected contribution");
     if (current.repositoryMode !== "github") throw vibe64Error("Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
     const access = await inspectConnectedRepository(repository, input);
-    if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(`Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
+    if (access.permissions?.push !== true || access.archived || access.disabled) {
+      throw vibe64Error(`Write access to ${repository} is required to prepare its contribution.`, "vibe64_contribution_access_required", {
+        params: {
+          repository
+        }
+      });
+    }
     const integrationBranch = current.repository.defaultBranch;
     // Read only the integration branch; listing every branch made each
     // connected session start page through the whole repository.

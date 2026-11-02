@@ -30,7 +30,14 @@ function connectedPackageType(connection, inspection) {
     );
   }
   if (connectedPackageTypeUsesScript(type) && !connection.script) throw vibe64Error(`Choose a project script for custom connection ${connection.name}.`, "vibe64_connected_custom_script_required");
-  if (!connectedPackageTypeUsesScript(type) && connection.script) throw vibe64Error(`The ${type} connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid");
+  if (!connectedPackageTypeUsesScript(type) && connection.script) {
+    throw vibe64Error(`The ${type} connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid", {
+      params: {
+        type,
+        name: connection.name
+      }
+    });
+  }
   return type;
 }
 
@@ -66,10 +73,21 @@ async function readConnectedDevelopmentInputs({
         receiving.session.sourceReady !== true) {
       throw vibe64Error(
         `The authorized source for ${connection.repository} no longer matches this task. Prepare it again.`,
-        "vibe64_connected_sources_changed"
+        "vibe64_connected_source_authorization_changed",
+        {
+          params: {
+            repository: connection.repository
+          }
+        }
       );
     }
-    if (!(await lstat(receivingRoot)).isDirectory()) throw vibe64Error(`The receiving source for ${connection.repository} must be an ordinary directory.`, "vibe64_connected_source_unavailable");
+    if (!(await lstat(receivingRoot)).isDirectory()) {
+      throw vibe64Error(
+        `The receiving source for ${connection.repository} must be an ordinary directory.`,
+        "vibe64_connected_receiving_source_not_directory",
+        { params: { repository: connection.repository } }
+      );
+    }
     resolved.push({
       ...connection,
       type: connectedPackageType(connection, inspection),
@@ -182,7 +200,7 @@ async function inspectConnectedWorkspaceSetup({
     if (inspection.status !== "ready") {
       throw vibe64Error(
         "Declare Connected development in Stack to prepare this task's connected sources.",
-        "vibe64_connected_development_required"
+        "vibe64_connected_development_setup_required"
       );
     }
     const { existing } = await readConnectedSourceProjection({
@@ -231,7 +249,13 @@ async function inspectConnectedWorkspaceSetup({
         label: "Custom connection script",
         code: "vibe64_connected_custom_script"
       });
-      if (!(await lstat(script)).isFile()) throw vibe64Error(`Custom connection script must be a project file: ${connection.script}.`, "vibe64_connected_custom_script_invalid");
+      if (!(await lstat(script)).isFile()) {
+        throw vibe64Error(`Custom connection script must be a project file: ${connection.script}.`, "vibe64_connected_custom_script_not_file", {
+          params: {
+            script: connection.script
+          }
+        });
+      }
       for (const phase of ["prepare", "verify"]) {
         customSteps.push({
           ...inspection.customRunner,
@@ -288,7 +312,7 @@ async function inspectConnectedDevelopmentInputs(input = {}) {
   if (!isDeepStrictEqual(existing, value)) {
     throw vibe64Error(
       "The connected source map is missing or no longer matches this task. Prepare connected sources again before running development commands.",
-      "vibe64_connected_inputs_required"
+      "vibe64_connected_source_map_stale"
     );
   }
   return {

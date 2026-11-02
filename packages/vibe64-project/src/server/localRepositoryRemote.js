@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { access } from "node:fs/promises";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { gitFailureError, runVibe64Command } from "@local/vibe64-execution/server";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
@@ -8,10 +9,6 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 // Freshness is only a transport observation. Git owns the configuration and refs.
 const observations = new Map();
-
-function failure(message, code = "vibe64_remote_failed") {
-  return Object.assign(new Error(message), { code });
-}
 
 function safeText(value = "") {
   return String(value).replace(/(https?:\/\/)[^\s/@]+@/gu, "$1[credentials]@").slice(0, 3000);
@@ -39,10 +36,10 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
   if ((project?.repositoryMode || project?.repository?.mode) !== "local_source" ||
       !path.isAbsolute(project?.sourceRoot || "")) {
     if (action === "status") return { ok: true, supported: false };
-    throw failure("Remote controls are available only for an opened local folder.", "vibe64_remote_local_only");
+    throw vibe64Error("Remote controls are available only for an opened local folder.", "vibe64_remote_local_only");
   }
   if (!["status", "fetch", "pull", "push", "configure", "switch", "create", "init"].includes(action)) {
-    throw failure("Unknown remote operation.");
+    throw vibe64Error("Unknown remote operation.", "vibe64_remote_operation_unknown");
   }
   const root = project.sourceRoot;
   const operationId = randomUUID();
@@ -70,7 +67,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
       const gitFailure = gitFailureError(result);
       if (gitFailure) throw gitFailure;
       if (optional) return null;
-      throw failure(safeText(result?.stderr || result?.error || "Git could not complete the remote operation."));
+      throw vibe64Error(safeText(result?.stderr || result?.error || "Git could not complete the remote operation."), "vibe64_remote_failed");
     }
     return String(result.stdout ?? result.output ?? "").trim();
   }
@@ -83,7 +80,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
     const gitFailure = gitFailureError(result);
     if (gitFailure) throw gitFailure;
     if (/not a git repository/iu.test(String(result?.stderr || result?.output || ""))) return false;
-    throw failure(safeText(result?.stderr || result?.error || "Git could not read this folder."));
+    throw vibe64Error(safeText(result?.stderr || result?.error || "Git could not read this folder."), "vibe64_remote_repository_unreadable");
   }
   async function readConfig(key) {
     return await git(["config", "--get", key], { optional: true }) || "";
@@ -135,9 +132,15 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
     const commit = listed.split("\n").map((line) => line.split(/\s+/u))
       .find(([, ref]) => ref === remoteRef)?.[0] || "";
     if (!commit && !allowMissing) {
-      throw failure(
+      throw vibe64Error(
         `The upstream branch ${target.remote}/${target.branch} no longer exists. Choose an upstream in Remote settings.`,
-        "vibe64_remote_branch_missing"
+        "vibe64_remote_upstream_missing",
+        {
+          params: {
+            remote: target.remote,
+            branch: target.branch
+          }
+        }
       );
     }
     if (commit) {
@@ -208,29 +211,29 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
     };
   }
   async function assertClean(state) {
-    if (!state.branch || !state.head) throw failure("Check out a branch with at least one commit first.", "vibe64_remote_branch_required");
+    if (!state.branch || !state.head) throw vibe64Error("Check out a branch with at least one commit first.", "vibe64_remote_branch_required");
     if (await git(["status", "--porcelain", "--untracked-files=all"])) {
-      throw failure(
+      throw vibe64Error(
         "The opened project folder has uncommitted changes. Commit or stash them before changing its files.",
         "vibe64_remote_dirty"
       );
     }
     for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"]) {
       if (await git(["rev-parse", "--verify", "-q", marker], { optional: true })) {
-        throw failure("Finish or abort the Git operation in the project folder first.", "vibe64_remote_git_in_progress");
+        throw vibe64Error("Finish or abort the Git operation in the project folder first.", "vibe64_remote_git_in_progress");
       }
     }
     for (const directory of ["rebase-merge", "rebase-apply", "sequencer"]) {
       const gitPath = await git(["rev-parse", "--git-path", directory]);
       if (await access(path.resolve(root, gitPath)).then(() => true, () => false)) {
-        throw failure("Finish or abort the Git operation in the project folder first.", "vibe64_remote_git_in_progress");
+        throw vibe64Error("Finish or abort the Git operation in the project folder first.", "vibe64_remote_git_in_progress");
       }
     }
   }
   function assertReview(state) {
     if (input.review?.configId !== state.configId || input.review?.head !== state.head ||
         input.review?.branch !== state.branch) {
-      throw failure(
+      throw vibe64Error(
         "The project branch, commits or remote settings changed. Refresh and review the operation again.",
         "vibe64_remote_review_changed"
       );
@@ -238,18 +241,18 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
   }
   async function configureRemotes(state) {
     const settings = input.settings || {};
-    if (!state.branch) throw failure("Check out a local branch before configuring its remotes.");
+    if (!state.branch) throw vibe64Error("Check out a local branch before configuring its remotes.", "vibe64_remote_configure_branch_required");
     for (const [remote, branch] of [[settings.remote, settings.branch], [settings.pushRemote, settings.pushBranch]]) {
-      if (!state.remotes.some((item) => item.name === remote)) throw failure("Select an existing Git remote.");
+      if (!state.remotes.some((item) => item.name === remote)) throw vibe64Error("Select an existing Git remote.", "vibe64_remote_not_found");
       if (!branch || await git(["check-ref-format", `refs/heads/${branch}`], { optional: true }) === null) {
-        throw failure("Enter a valid Git branch name.");
+        throw vibe64Error("Enter a valid Git branch name.", "vibe64_remote_branch_invalid");
       }
     }
     // Preserve other branches' push mappings; replace only this branch's exact mapping.
     const key = `remote.${settings.pushRemote}.push`;
     const refspecs = (await git(["config", "--get-all", key], { optional: true }) || "").split("\n").filter(Boolean);
     if (refspecs.some((spec) => spec.includes("*") || spec === ":" || spec === "+:")) {
-      throw failure("This remote has wildcard push mappings. Configure this branch's push destination with Git first.");
+      throw vibe64Error("This remote has wildcard push mappings. Configure this branch's push destination with Git first.", "vibe64_remote_wildcard_push");
     }
     const ownRefs = new Set([state.branch, `refs/heads/${state.branch}`, "HEAD"]);
     const kept = refspecs.filter((spec) => !ownRefs.has(spec.replace(/^\+/u, "").split(":")[0]));
@@ -266,7 +269,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
     if (!await isRepository()) {
       if (action !== "init") {
         if (["status", "fetch"].includes(action)) return { ok: true, supported: true, repository: false };
-        throw failure("This folder isn't using Git yet. Start version control here first.", "vibe64_remote_not_repository");
+        throw vibe64Error("This folder isn't using Git yet. Start version control here first.", "vibe64_remote_not_repository");
       }
       // Only on the person's click: Vibe64 never starts version control by itself.
       await git(["init", "--initial-branch=main"]);
@@ -278,7 +281,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
       }, "Version control started in the opened folder.");
       return { ...await publicState(await readRepository()), operationId, remoteChanged: true };
     }
-    if (action === "init") throw failure("This folder already uses Git.", "vibe64_remote_already_repository");
+    if (action === "init") throw vibe64Error("This folder already uses Git.", "vibe64_remote_already_repository");
     const state = await readRepository();
     if (action === "status") return publicState(state);
     logger.info({
@@ -304,24 +307,24 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
           const branch = input.branch;
           if (typeof branch !== "string" || !branch || branch.startsWith("-") ||
               await git(["check-ref-format", `refs/heads/${branch}`], { optional: true }) === null) {
-            throw failure("Enter a valid Git branch name.", "vibe64_remote_branch_invalid");
+            throw vibe64Error("Enter a valid Git branch name.", "vibe64_remote_branch_invalid");
           }
           if (action === "switch" && !await git(["show-ref", "--verify", `refs/heads/${branch}`], { optional: true })) {
-            throw failure("Select an existing local branch.", "vibe64_remote_branch_missing");
+            throw vibe64Error("Select an existing local branch.", "vibe64_remote_branch_missing");
           }
           await git(action === "create"
             ? ["switch", "--no-track", "-c", branch, state.head]
             : ["switch", "--no-guess", branch]);
           observations.delete(root);
         } else {
-          if (!state.head || !state.branch) throw failure("Check out a branch with a commit first.");
+          if (!state.head || !state.branch) throw vibe64Error("Check out a branch with a commit first.", "vibe64_remote_head_required");
           const target = action === "pull" ? state.upstream : state.push;
-          if (!target) throw failure("Choose the remote destination in Remote settings first.", "vibe64_remote_unconfigured");
+          if (!target) throw vibe64Error("Choose the remote destination in Remote settings first.", "vibe64_remote_unconfigured");
           if (action === "pull") await assertClean(state);
           const commit = await observe(target, { allowMissing: action === "push" });
           const reviewedCommit = input.review[action === "pull" ? "upstreamCommit" : "pushCommit"];
           if (commit !== reviewedCommit) {
-            throw failure("The remote changed. Fetch and review its new commits first.", "vibe64_remote_review_changed");
+            throw vibe64Error("The remote changed. Fetch and review its new commits first.", "vibe64_remote_commits_changed");
           }
           assertReview(await readRepository());
           if (action === "pull") {
@@ -329,7 +332,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
             if (await git(["merge-base", "--is-ancestor", commit, state.head], { optional: true }) === null) {
               const fastForward = await git(["merge-base", "--is-ancestor", state.head, commit], { optional: true }) !== null;
               if (!fastForward && input.merge !== true) {
-                throw failure(
+                throw vibe64Error(
                   "Local and remote commits have diverged. Review and choose Merge remote changes.",
                   "vibe64_remote_merge_required"
                 );
@@ -337,7 +340,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
               if (!fastForward) {
                 const preview = await git(["merge-tree", "--write-tree", state.head, commit], { optional: true });
                 if (preview === null) {
-                  throw failure(
+                  throw vibe64Error(
                     "The remote changes conflict with the local project. Resolve the merge in the project folder, then refresh Vibe64. No working files were changed.",
                     "vibe64_remote_merge_conflict"
                   );
@@ -354,7 +357,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
             }
           } else {
             if (commit && await git(["merge-base", "--is-ancestor", commit, state.head], { optional: true }) === null) {
-              throw failure(
+              throw vibe64Error(
                 "The push destination has changes missing locally. Integrate them before pushing.",
                 "vibe64_remote_push_rejected"
               );
@@ -362,7 +365,7 @@ async function localRepositoryRemote(project, input = {}, options = {}) {
             await git(["push", "--porcelain", "--no-follow-tags", "--", target.url, `${state.head}:refs/heads/${target.branch}`]);
             const verified = await observe(target);
             if (verified !== state.head) {
-              throw failure(
+              throw vibe64Error(
                 "The remote changed after Push. Fetch to inspect the result before another push.",
                 "vibe64_remote_push_unconfirmed"
               );

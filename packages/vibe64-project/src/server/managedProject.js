@@ -368,7 +368,7 @@ async function verifyManagedProjectSource({
     ) {
       throw vibe64Error(
         "Pinned source files require unique relative paths and Buffer bytes of at most 1 MiB.",
-        "vibe64_managed_project_source_invalid"
+        "vibe64_managed_project_source_files_invalid"
       );
     }
     sourceBytes += file.bytes.length;
@@ -379,7 +379,7 @@ async function verifyManagedProjectSource({
     }
   }
   if (sourceBytes > maxSourceBytes) {
-    throw vibe64Error("Pinned source exceeds 32 MiB.", "vibe64_managed_project_source_invalid");
+    throw vibe64Error("Pinned source exceeds 32 MiB.", "vibe64_managed_project_source_too_large");
   }
 
   const repositoryPath = resolveProjectCanonicalRepositoryPath({ projectRuntimeRoot: runtimeRoot });
@@ -404,14 +404,14 @@ async function verifyManagedProjectSource({
   if (bare !== "true") {
     throw vibe64Error(
       "Source verification requires the canonical bare repository.",
-      "vibe64_managed_project_source_unsafe"
+      "vibe64_managed_project_source_not_bare"
     );
   }
   const commit = await runGit([
     ...gitArgs, "rev-parse", "--verify", `refs/heads/${branch}^{commit}`
   ], commandOptions);
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)) {
-    throw vibe64Error("Canonical branch did not resolve to an exact commit.", "vibe64_managed_project_source_unsafe");
+    throw vibe64Error("Canonical branch did not resolve to an exact commit.", "vibe64_managed_project_source_commit_unresolved");
   }
 
   // Inspect the resolved immutable object, never a branch that can move between
@@ -432,7 +432,7 @@ async function verifyManagedProjectSource({
   ) {
     throw vibe64Error(
       "Canonical source inventory differs from the pinned exercise; inspect the project before retrying.",
-      "vibe64_managed_project_source_mismatch"
+      "vibe64_managed_project_source_inventory_mismatch"
     );
   }
   const seen = new Set();
@@ -442,7 +442,7 @@ async function verifyManagedProjectSource({
       if (!expectedDirectories.delete(directory[2])) {
         throw vibe64Error(
           "Canonical source contains a directory outside the pinned exercise.",
-          "vibe64_managed_project_source_mismatch"
+          "vibe64_managed_project_source_directory_unexpected"
         );
       }
       continue;
@@ -463,7 +463,12 @@ async function verifyManagedProjectSource({
     if (objectId !== match[1]) {
       throw vibe64Error(
         `Canonical source bytes differ from the pinned exercise at ${match[3]}; inspect the project before retrying.`,
-        "vibe64_managed_project_source_mismatch"
+        "vibe64_managed_project_source_bytes_mismatch",
+        {
+          params: {
+            path: match[3]
+          }
+        }
       );
     }
   }

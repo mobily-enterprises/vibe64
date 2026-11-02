@@ -279,14 +279,14 @@ test("managed source proof refuses missing, extra and changed canonical bytes wi
     { path: "node_modules/declared.txt", bytes: Buffer.from("declared") }];
   const fixture = await pinnedSourceFixture(t, files);
   const before = await repositorySnapshot(fixture.repositoryPath);
-  for (const expected of [
-    files.slice(0, 1),
-    [...files, { path: "missing.txt", bytes: Buffer.from("missing") }],
-    [{ ...files[0], bytes: Buffer.from("HELLO") }, files[1]],
-    [{ ...files[0], path: "other.txt" }, files[1]]
+  for (const [expected, code] of [
+    [files.slice(0, 1), "vibe64_managed_project_source_inventory_mismatch"],
+    [[...files, { path: "missing.txt", bytes: Buffer.from("missing") }], "vibe64_managed_project_source_inventory_mismatch"],
+    [[{ ...files[0], bytes: Buffer.from("HELLO") }, files[1]], "vibe64_managed_project_source_bytes_mismatch"],
+    [[{ ...files[0], path: "other.txt" }, files[1]], "vibe64_managed_project_source_mismatch"]
   ]) {
     await assert.rejects(() => verifyManagedProjectSource({ ...fixture, files: expected, runCommand: directCommand }),
-      { code: "vibe64_managed_project_source_mismatch" });
+      { code });
     assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
   }
   // The generic proof excludes nothing. The installed reader, rather than this
@@ -313,7 +313,7 @@ test("managed source proof refuses executable, symlink, gitlink, non-UTF-8 and e
   const before = await repositorySnapshot(fixture.repositoryPath);
   await assert.rejects(() => verifyManagedProjectSource({ ...fixture,
     files: [{ path: "\uFFFD", bytes: Buffer.from("hello") }], runCommand: directCommand }),
-  { code: "vibe64_managed_project_source_mismatch" });
+  { code: "vibe64_managed_project_source_inventory_mismatch" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
   const emptyTree = await directCommand({ command: "git", args: [
     "--git-dir", fixture.repositoryPath, "mktree", "-z"
@@ -325,7 +325,7 @@ test("managed source proof refuses executable, symlink, gitlink, non-UTF-8 and e
   ));
   const emptyTreeBefore = await repositorySnapshot(fixture.repositoryPath);
   await assert.rejects(() => verifyManagedProjectSource({ ...fixture, runCommand: directCommand }),
-    { code: "vibe64_managed_project_source_mismatch" });
+    { code: "vibe64_managed_project_source_inventory_mismatch" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), emptyTreeBefore);
 });
 
@@ -340,21 +340,21 @@ test("managed source proof enforces installed-source bounds and exact path input
     { branch: "main", commit: fixture.commit });
   const before = await repositorySnapshot(fixture.repositoryPath);
   const invalid = [
-    { files: [...files, { path: "excess", bytes: Buffer.alloc(0) }] },
-    { files: [{ path: "large", bytes: Buffer.alloc(oneMiB.length + 1) }] },
-    { files: Array.from({ length: 33 }, (_, index) => ({ path: `large-${index}`, bytes: oneMiB })) },
-    { files: [{ path: "duplicate", bytes: oneMiB }, { path: "duplicate", bytes: oneMiB }] },
-    { files: [{ path: "string", bytes: "hello" }] },
-    { branch: " main " },
-    { projectRuntimeRoot: `${fixture.projectRuntimeRoot}/../runtime` },
-    ...["/absolute", "../escape", "nested/../escape", "nested//file", "./file", "nested\\file", "nul\0file"].map(filename => ({
+    [{ files: [...files, { path: "excess", bytes: Buffer.alloc(0) }] }, "vibe64_managed_project_source_invalid"],
+    [{ files: [{ path: "large", bytes: Buffer.alloc(oneMiB.length + 1) }] }, "vibe64_managed_project_source_files_invalid"],
+    [{ files: Array.from({ length: 33 }, (_, index) => ({ path: `large-${index}`, bytes: oneMiB })) }, "vibe64_managed_project_source_too_large"],
+    [{ files: [{ path: "duplicate", bytes: oneMiB }, { path: "duplicate", bytes: oneMiB }] }, "vibe64_managed_project_source_files_invalid"],
+    [{ files: [{ path: "string", bytes: "hello" }] }, "vibe64_managed_project_source_files_invalid"],
+    [{ branch: " main " }, "vibe64_managed_project_source_invalid"],
+    [{ projectRuntimeRoot: `${fixture.projectRuntimeRoot}/../runtime` }, "vibe64_managed_project_source_invalid"],
+    ...["/absolute", "../escape", "nested/../escape", "nested//file", "./file", "nested\\file", "nul\0file"].map(filename => [{
       files: [{ path: filename, bytes: Buffer.alloc(0) }]
-    }))
+    }, "vibe64_managed_project_source_files_invalid"])
   ];
-  for (const change of invalid) {
+  for (const [change, code] of invalid) {
     await assert.rejects(() => verifyManagedProjectSource({ ...fixture, ...change,
       runCommand: () => { throw new Error("Invalid input reached Git."); } }),
-    { code: "vibe64_managed_project_source_invalid" });
+    { code });
     assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
   }
 });
@@ -389,7 +389,7 @@ test("managed source proof refuses canonical storage aliases, non-bare repositor
   await execFileAsync("git", ["--git-dir", fixture.repositoryPath, "config", "core.bare", "false"]);
   const nonBareBefore = await repositorySnapshot(fixture.repositoryPath);
   await assert.rejects(() => verifyManagedProjectSource({ ...fixture, runCommand: directCommand }),
-    { code: "vibe64_managed_project_source_unsafe" });
+    { code: "vibe64_managed_project_source_not_bare" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), nonBareBefore);
   assert.deepEqual(await repositorySnapshot(preserved), before);
 });
