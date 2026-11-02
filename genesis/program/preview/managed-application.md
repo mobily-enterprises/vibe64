@@ -131,6 +131,14 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/previewLocator.js`
 - `src/components/studio/Vibe64LongRunningTerminal.vue`
 - `src/components/studio/Vibe64OutputControls.vue`
+- `src/components/studio/Vibe64OutputToolbar.vue`
+- `src/components/studio/Vibe64PreviewAddressBar.vue`
+- `src/components/studio/Vibe64PreviewIdentityMenu.vue`
+- `src/components/studio/Vibe64OutputResultsMenu.vue`
+- `src/components/studio/Vibe64PreviewIssueMenu.vue`
+- `src/components/studio/Vibe64PreviewStatus.vue`
+- `src/components/studio/Vibe64OutputOptionsDialog.vue`
+- `src/components/studio/Vibe64PreviewRouteDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/composables/useVibe64OutputControls.js`
