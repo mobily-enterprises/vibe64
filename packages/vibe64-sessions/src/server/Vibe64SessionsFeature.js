@@ -28,7 +28,9 @@ import {
   createSessionPresencePublisher,
   createSessionPresenceService
 } from "./sessionPresence.js";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").SessionsService} SessionsService */
 /** @typedef {import("./types.js").SessionRepositoryUpdates} SessionRepositoryUpdates */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
@@ -52,6 +54,7 @@ const Vibe64SessionsFeature = defineFeature({
   domain: "vibe64-sessions",
   requires: {
     accounts: "vibe64.accounts",
+    env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
@@ -72,6 +75,7 @@ const Vibe64SessionsFeature = defineFeature({
    * @param {object} capabilities
    * @param {AccountsService} capabilities.accounts
    * @param {SessionArchivePreparation | null} capabilities.archivePreparation
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
@@ -84,6 +88,7 @@ const Vibe64SessionsFeature = defineFeature({
   setup({
     accounts,
     archivePreparation,
+    env,
     events,
     http,
     logger,
@@ -94,6 +99,7 @@ const Vibe64SessionsFeature = defineFeature({
   }, { actionCatalogue }) {
     assertArchivePreparation(archivePreparation);
     assertRenewalActorResolver(renewalActorResolver);
+    const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env });
     const sessionPresence = createSessionPresenceService({
       onPublishError: (error) => {
         vibe64SessionDebugLog("server.sessions.presence.publish.error", {
@@ -106,6 +112,7 @@ const Vibe64SessionsFeature = defineFeature({
       actions: actionCatalogue,
       archivePreparation: archivePreparation ?? prepareNothingForArchive,
       initializeModelRouting: (input) => accounts.initializeModelRouting(input),
+      localhostCheckBypassed,
       logger,
       project,
       publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
@@ -119,7 +126,7 @@ const Vibe64SessionsFeature = defineFeature({
     slotReleases.set(sessions, registerApprovalCountReader(countWaitingMainChatApprovals));
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
-    registerRoutes(http, { projectContext: getStudioProjectContext() });
+    registerRoutes(http, { localhostCheckBypassed, projectContext: getStudioProjectContext() });
     return { sessions };
   },
   actions({ sessions }) {

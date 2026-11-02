@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createTrainingLearnerState, learnerIdentity } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingLearnerNotesActions } from "../../packages/vibe64-training/src/server/learnerNotesActions.js";
 import { createTrainingLearnerNotesOperations } from "../../packages/vibe64-training/src/server/learnerNotesOperations.js";
@@ -30,7 +30,7 @@ async function fixture(t) {
   const published = [];
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const auth = { user: ALICE };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const definitions = createTrainingLearnerNotesActions({ learnerNotes: createTrainingLearnerNotesOperations({ learners, publishLearnerChanged }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });

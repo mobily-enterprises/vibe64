@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_SERVICE_DATA_ROOT_ENV } from "@local/vibe64-core/server/studioRoots";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
@@ -63,7 +63,7 @@ test("the dormancy sweep reads session records only and closes an idle runtime w
   const published = [];
   const feature = Vibe64TerminalsFeature;
   const dependencies = {
-    actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }), env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
+    actionCatalogue: createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) }), env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
     events: { async publish(event) { published.push(event); return event; } },
     fastify: { addHook() {}, get() {} }, http: { router: { register() {} } },
     logger: { error() {}, info() {}, warn(...args) { published.push({ warn: args }); } },

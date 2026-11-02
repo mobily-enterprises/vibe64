@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
@@ -159,7 +159,7 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
       return { project: { path: path.join(root, slug) } };
     }
   };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions({ sourceEditor: service }).map((action) => ({
     channels: ["api"], surfaces: ["app"], ...action
   })) });

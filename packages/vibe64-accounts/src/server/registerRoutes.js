@@ -51,20 +51,22 @@ const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio
  * Accounts are reached both inside a project and outside any project, so every account route is registered in both
  * scopes.
  * @param {RuntimeHttp} http
- * @param {StudioProjectContext} projectContext resolves the project of a project-scoped request
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
+ * @param {StudioProjectContext} options.projectContext resolves the project of a project-scoped request
  */
-function createAccountRouteScopes(http, projectContext) {
+function createAccountRouteScopes(http, { localhostCheckBypassed, projectContext }) {
   return Object.freeze({
     projectRoutes: createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
       routeBase: VIBE64_PROJECT_ROUTE_BASE,
       relativePath: "vibe64/accounts",
       surface: "app",
-      wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectContext })
+      wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, localRequestMessage: LOCAL_REQUEST_MESSAGE, projectContext })
     }),
     workspaceRoutes: createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
       relativePath: "vibe64/accounts",
       surface: "app",
-      wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectScoped: false })
+      wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, localRequestMessage: LOCAL_REQUEST_MESSAGE, projectScoped: false })
     })
   });
 }
@@ -165,10 +167,11 @@ function registerAccountRoutes(routes) {
  * The account routes, in the project scope and outside any project.
  * @param {RuntimeHttp} http
  * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  */
-function registerRoutes(http, { projectContext }) {
-  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, projectContext);
+function registerRoutes(http, options) {
+  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, options);
   registerAccountRoutes(projectRoutes);
   registerAccountRoutes(workspaceRoutes);
 }
@@ -242,10 +245,11 @@ function registerScopeAiConnectionRoutes(routes) {
  * The local runtime's AI connection routes, in the project scope and outside any project.
  * @param {RuntimeHttp} http
  * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  */
-function registerLocalAiConnectionRoutes(http, { projectContext }) {
-  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, projectContext);
+function registerLocalAiConnectionRoutes(http, options) {
+  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, options);
   registerScopeAiConnectionRoutes(projectRoutes);
   registerScopeAiConnectionRoutes(workspaceRoutes);
 }

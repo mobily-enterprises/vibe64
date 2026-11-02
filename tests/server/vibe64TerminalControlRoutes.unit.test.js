@@ -19,10 +19,10 @@ import {
 
 import { createTerminalControls } from "../../packages/vibe64-terminals/src/server/terminalControls.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 
 function registerRoutes(http, options) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions(options).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action
   })) });

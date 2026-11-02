@@ -368,7 +368,8 @@ async function createServer(options = {}) {
     await closeTerminalSessionsForNamespacePrefix("");
   });
 
-  registerBrowserLifecycleWebSocketRoute(app, browserLifecycleMonitor);
+  const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env: runtimeEnv });
+  registerBrowserLifecycleWebSocketRoute(app, browserLifecycleMonitor, { localhostCheckBypassed });
 
   app.get("/api/health", async () => {
     return {
@@ -376,7 +377,7 @@ async function createServer(options = {}) {
       app: "vibe64"
     };
   });
-  if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
+  if (localhostCheckBypassed) {
     logOperationalEvent(app.log, "warn", {
       component: "local-request-check",
       event: "vibe64.security.localhost_check_bypassed"

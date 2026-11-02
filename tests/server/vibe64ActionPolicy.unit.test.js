@@ -9,7 +9,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
-  vibe64ActionPolicy,
+  createVibe64ActionPolicy,
   WORKSPACE_OPERATION,
   WORKSPACE_OWNER_OPERATION
 } from "@local/vibe64-core/server/actionContext";
@@ -37,7 +37,7 @@ function operation(id, vibe64, fields = { text: { type: "string", required: true
 
 // Runs a definition under the policy as the pipeline does, after the kernel's checks.
 function runUnderPolicy(definition, input, context = {}) {
-  return vibe64ActionPolicy.execute({
+  return createVibe64ActionPolicy({ localhostCheckBypassed: false }).execute({
     definition, input, context, run: (policyInput, policyContext) => definition.execute(policyInput, policyContext)
   });
 }
@@ -45,7 +45,7 @@ function runUnderPolicy(definition, input, context = {}) {
 const resolvedFor = (user, slug = "alpha") => ({ vibe64Action: { user, project: { slug, targetRoot: `/projects/${slug}` } } });
 
 test("the policy registers an operation without the acting user and, in a project, with its optional project slug", () => {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const withUser = { text: { type: "string", required: true }, vibe64User: { type: "object", required: false } };
   actions.register({ contributorId: "policy-test", domain: "test", actions: [
     operation("vibe64.test.project", PROJECT_OPERATION, withUser),
@@ -185,7 +185,7 @@ test("Colleague opens only the projects its thread allows, and only once team AI
 test("Vibe64ActionPolicyProvider supplies the policy to the action catalogue as runtime.actions.policy", async () => {
   let catalogue;
   const runtime = createCapabilityRuntime({
-    inputs: { "runtime.logger": silentLogger },
+    inputs: { "runtime.env": {}, "runtime.logger": silentLogger },
     providers: [EventProvider, ActionProvider, Vibe64ActionPolicyProvider, defineProvider({
       id: "policy-test.actions",
       requires: { actions: "runtime.actions" },

@@ -3,7 +3,6 @@ import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/proje
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
-import { mainBrowserAuthority } from "./mainConversationAuthority.js";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -14,6 +13,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {ReturnType<typeof import("./mainConversationAuthority.js").createMainConversationAuthority>["mainBrowserAuthority"]} MainBrowserAuthority */
 
 function messageText(input) {
   return normalizeText(input.message);
@@ -24,6 +24,7 @@ function messageText(input) {
  * the workspace owner's approval, an interrupted turn, and the integration
  * setup a turn asked for.
  * @param {object} dependencies
+ * @param {MainBrowserAuthority} dependencies.mainBrowserAuthority
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -32,6 +33,7 @@ function messageText(input) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createSessionMessages({
+  mainBrowserAuthority,
   project,
   publishProjectChanged,
   publishSessionChanged,

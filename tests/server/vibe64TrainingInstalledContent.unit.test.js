@@ -739,7 +739,7 @@ import { createTrainingOperations } from "../../packages/vibe64-training/src/ser
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 async function titleCatalogue(f, extra = {}) {
@@ -751,7 +751,7 @@ async function titleCatalogue(f, extra = {}) {
   return { catalogue, course, lock };
 }
 function titleActions(f, catalogue, content = createInstalledTrainingContent({ systemRoot: f.systemRoot })) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ operations: createTrainingOperations({ logger: silentLogger, publishLearnerChanged: async () => {}, catalogue, content,
     learners: createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot })
   }) }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });

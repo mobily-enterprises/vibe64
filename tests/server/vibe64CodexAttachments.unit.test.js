@@ -23,7 +23,7 @@ import { configureVibe64Host } from "@local/vibe64-execution/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import {
@@ -2132,7 +2132,7 @@ test("attachment download route streams bytes and restricts inline previews to r
     };
   };
   registerRoutes(app.http, { fastify: app.fastify, projectContext: explicitProjectContext(root), terminals: app.terminals, uploads: { readSingleMultipartFile() {} } });
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals: app.terminals }).map((action) => ({
     channels: ["api"], surfaces: ["app"], ...action
   })) });

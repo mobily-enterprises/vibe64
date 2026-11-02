@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { __testables, buildIntegrationSetupRequest } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
@@ -20,7 +20,7 @@ async function withIntegrationTools(run) {
     } };
     const calls = [];
     const record = (input) => calls.push({ input, context: currentProjectRequestContext() });
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions({ sourceEditor: {
       async readIntegrations(input) { record(input); return state.failure || { ok: true, configuration: state.configuration, baseHash: "a".repeat(64), sourceRoot: "/private/source" }; },
       async readIntegrationProviders(input) { record(input); return { ok: true, total: 1, nextOffset: null,

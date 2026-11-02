@@ -13,9 +13,10 @@ import { COLLEAGUE_VOICE_SOCKET_URL } from "../shared/routes.js";
 /**
  * Refuses a voice socket that does not come from a trusted Studio page.
  * @param {object} request
+ * @param {boolean} localhostCheckBypassed
  */
-function authorizeOrigin(request) {
-  if (!isTrustedStudioWebSocketRequest(request)) {
+function authorizeOrigin(request, localhostCheckBypassed) {
+  if (!isTrustedStudioWebSocketRequest(request, { localhostCheckBypassed })) {
     throw new AppError(403, "Sign in to use voice.", { code: "voice_auth_required" });
   }
 }
@@ -26,15 +27,16 @@ function authorizeOrigin(request) {
  * @param {RuntimeFastify} fastify
  * @param {object} capabilities
  * @param {ActionCatalogue} capabilities.actionCatalogue
+ * @param {boolean} capabilities.localhostCheckBypassed
  * @param {VoiceProxyConfig} capabilities.proxyConfig
  * @param {SessionsService} capabilities.sessions
  */
-function registerVoiceSocketRoutes(fastify, { actionCatalogue, proxyConfig, sessions }) {
+function registerVoiceSocketRoutes(fastify, { actionCatalogue, localhostCheckBypassed, proxyConfig, sessions }) {
   registerVoiceProxyRoute(fastify, {
     proxyConfig,
     route: "/api/app/:slug/vibe64/sessions/:sessionId/voice/ws",
     async authorize(request) {
-      authorizeOrigin(request);
+      authorizeOrigin(request, localhostCheckBypassed);
       const context = await resolveProjectRequestContext({
         projectContext: getStudioProjectContext(),
         request
@@ -50,7 +52,7 @@ function registerVoiceSocketRoutes(fastify, { actionCatalogue, proxyConfig, sess
     proxyConfig,
     route: COLLEAGUE_VOICE_SOCKET_URL,
     async authorize(request) {
-      authorizeOrigin(request);
+      authorizeOrigin(request, localhostCheckBypassed);
       await actionCatalogue.execute({
         actionId: "vibe64.colleague.state.read",
         input: {},

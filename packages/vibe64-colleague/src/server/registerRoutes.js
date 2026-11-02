@@ -24,12 +24,14 @@ const ACTION_ASSISTANT_CAPABILITIES_LIST = "vibe64.assistants.capabilities.list"
 /**
  * Colleague's HTTP routes: one action route per Colleague operation the browser calls.
  * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  */
-function registerRoutes(http) {
+function registerRoutes(http, { localhostCheckBypassed }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["vibe64-colleague"] }), {
     relativePath: "vibe64/colleague",
     surface: "app",
-    wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, projectScoped: false })
   });
   routes.actionRoute("GET", "", {
     actionId: ACTION_COLLEAGUE_STATE_READ,

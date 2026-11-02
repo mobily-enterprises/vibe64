@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { projectOnboardingRequest } from "../../packages/vibe64-project/src/shared/onboardingRequest.js";
@@ -18,7 +18,7 @@ test("onboarding tools share action authority and return bounded setup choices w
     let result = { ok: true, available: true, source: { rootKind: "session-source", sessionId: "session-a", sourceRoot: "/private/source" },
       inspection: { state: "new", nextAction: "create", templateEligible: true, diagnostics: [], projectFormat: { status: "current" },
         contents: "private-source-contents" }, templates };
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish() {} } });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: { async publish() {} } });
     actions.register({ contributorId: "onboarding", domain: "project", actions: createProjectActions({ project: {
       async readOnboarding(input) { calls.push({ input, context: currentProjectRequestContext() }); return result; },
       async applyTemplate(input) { calls.push({ input, context: currentProjectRequestContext() });

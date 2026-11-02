@@ -5,130 +5,128 @@ import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAccountsActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 import { createAiConnectionService, createManagedAiConnections } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { registerLocalAiConnectionRoutes, registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
-import { testReply, testRouteApp, findRegisteredRoute, withLocalRequestBypass } from "./vibe64RouteTestHelpers.js";
+import { testReply, testRouteApp, findRegisteredRoute } from "./vibe64RouteTestHelpers.js";
 
 test("all account operations use project-independent canonical contracts and authenticated actors", async () => {
-  await withLocalRequestBypass(async () => {
-    const owner = { username: "owner", role: "owner" };
-    let user = owner;
-    let managementAllowed = true;
-    const calls = [];
-    const events = [];
-    const requireAiManagement = ({ vibe64User }) => {
-      if (vibe64User && vibe64User.role !== "owner") {
-        throw Object.assign(new Error("Only the workspace owner can manage AI connections."), {
-          code: "vibe64_owner_required", statusCode: 403
-        });
-      }
-      return managementAllowed ? null : { ok: false, code: "management_disabled", error: "Management unavailable." };
-    };
-    const cases = [
-      ["GET", "", "read", "getStatus", { refresh: true, providerIds: ["codex"] }],
-      ["GET", "/model-routing", "model-routing.read", "readModelRouting", { setup: "nonOwner", choiceRole: "colleague", choiceSearch: "deep", choiceOffset: 20 }],
-      ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, owner: { colleague: { follows: "senior" } }, nonOwner: { fix: null } }],
-      ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, owner: {},
-        preferProvider: { setup: "nonOwner", modelProviderId: "deepseek", engineId: "claude" } }],
-      ["GET", "/codex-providers", "codex-providers.read", "readCodexProviders", {}],
-      ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
-      ["POST", "/codex-providers/remove", "codex-providers.remove", "removeCodexProvider", { modelProviderId: "deepseek", engineId: "claude" }],
-      ["POST", "/auth", "auth.start", "startAuth", { accountId: "codex", mode: "device" }],
-      ["POST", "/logout", "logout", "logout", { accountId: "codex" }],
-      ["GET", "/auth/:sessionId", "auth-session.read", "readAuthSession", {}],
-      ["DELETE", "/auth/:sessionId", "auth-session.cancel", "cancelAuthSession", {}],
-      ["POST", "/git-identity", "git-identity.save", "saveGitIdentity", { gitUserName: "Owner", gitUserEmail: "owner@example.test" }],
-      ["PATCH", "/personal-ai-profile", "personal-ai-profile.save", "savePersonalAiProfile", { preferredName: "Owner" }],
-      ["GET", "/ai-connections", "ai-connections.list", "list", {}],
-      ["GET", "/ai-connections/catalog", "ai-connections.catalog", "catalog", { modelProviderId: "deepseek", engineId: "claude" }],
-      ["PATCH", "/ai-connections/:providerId", "ai-connections.save", "save", { apiKey: "fixture-only", providerRevision: `sha256:${"a".repeat(64)}`, label: "Provider", modelProviderId: "forged-provider" }],
-      ["POST", "/ai-connections/:providerId/remove", "ai-connections.remove", "remove", {}],
-      ["PATCH", "/ai-connections/:providerId/model-access", "ai-connections.modelAccess", "modelAccess", { operation: "check-available" }]
-    ];
-    const record = (method) => async (input) => { calls.push({ method, input }); return { ok: true }; };
-    const accounts = { ...Object.fromEntries(cases.filter((entry) => !entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])])), subscribeAuthTerminal() {} };
-    const aiConnectionService = Object.fromEntries(cases.filter((entry) => entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
-    actions.register({ contributorId: "accounts", domain: "accounts", actions: [
-      ...createAccountsActions({ accounts }),
-      ...createAiConnectionActions({ managedAiConnections: createManagedAiConnections({ aiConnectionService, requireAiManagement }) })
-    ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
-    registerVibe64ActionContext(actions, { resolveUser: async () => user,
-      authorizeProject() { throw new Error("Account access must not require a project."); } });
-    const app = testRouteApp();
-    registerRoutes(app.http, { projectContext: getStudioProjectContext() });
-    registerLocalAiConnectionRoutes(app.http, { projectContext: getStudioProjectContext() });
-    assert.equal(actions.listDefinitions().length, 18);
-    for (const [method, suffix, operation, serviceMethod, data] of cases) {
-      const route = findRegisteredRoute(app, { method, path: `/api/vibe64/accounts${suffix}` });
-      assert.ok(route, operation);
-      const actionId = `vibe64.accounts.${operation}`;
-      let input;
-      const request = { params: { ...(suffix.includes(":sessionId") ? { sessionId: "login-1" } : {}),
-        ...(suffix.includes(":providerId") ? { providerId: "deepseek" } : {}) }, input: { [method === "GET" ? "query" : "body"]: data },
-        executeAction({ actionId: id, input: value }) {
-          assert.equal(id, actionId);
-          assert.equal(Object.hasOwn(value, "vibe64User"), false);
-          input = value;
-          return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
-        }
-      };
-      const reply = testReply();
-      const eventStart = events.length;
-      await route.handler(request, reply);
-      assert.equal(reply.payload.ok, true, `${operation}: ${JSON.stringify(reply.payload)}`);
-      const expected = calls.at(-1);
-      assert.equal(expected.method, serviceMethod);
-      assert.equal(expected.input.vibe64User, owner);
-      if (operation === "ai-connections.save") assert.equal(expected.input.modelProviderId, "deepseek");
-      const execute = (value = input) => actions.execute({ actionId, input: value, context: { channel: "automation", surface: "app" } });
-      const eventCount = events.length - eventStart;
-      await execute();
-      assert.deepEqual(calls.at(-1), expected, operation);
-      assert.equal(events.length - eventStart, eventCount * 2);
-      for (let index = 1; index <= eventCount; index++) {
-        const { occurredAt: httpTime, ...httpEvent } = events.at(-index - eventCount);
-        const { occurredAt: directTime, ...directEvent } = events.at(-index);
-        assert.ok(httpTime && directTime);
-        assert.deepEqual(directEvent, httpEvent);
-      }
-      assert.equal(actions.getDefinition(actionId).input.mode, "create");
-      assert.equal(actions.getDefinition(actionId).extensions.vibe64.projectScoped, false);
-      const count = calls.length;
-      await assert.rejects(execute({ ...input, vibe64User: owner }), { code: "ACTION_VALIDATION_FAILED" });
-      user = null;
-      await assert.rejects(execute(), { statusCode: 401 });
-      if (operation.startsWith("ai-connections.")) {
-        user = { username: "member", role: "member" };
-        await assert.rejects(execute(), { statusCode: 403 });
-        await route.handler(request, reply);
-        assert.equal(reply.statusCode, 403);
-        user = owner;
-        managementAllowed = false;
-        assert.equal((await execute()).statusCode, 403);
-        await route.handler(request, reply);
-        assert.equal(reply.statusCode, 403);
-        managementAllowed = true;
-      }
-      user = owner;
-      assert.equal(calls.length, count, operation);
+  const owner = { username: "owner", role: "owner" };
+  let user = owner;
+  let managementAllowed = true;
+  const calls = [];
+  const events = [];
+  const requireAiManagement = ({ vibe64User }) => {
+    if (vibe64User && vibe64User.role !== "owner") {
+      throw Object.assign(new Error("Only the workspace owner can manage AI connections."), {
+        code: "vibe64_owner_required", statusCode: 403
+      });
     }
+    return managementAllowed ? null : { ok: false, code: "management_disabled", error: "Management unavailable." };
+  };
+  const cases = [
+    ["GET", "", "read", "getStatus", { refresh: true, providerIds: ["codex"] }],
+    ["GET", "/model-routing", "model-routing.read", "readModelRouting", { setup: "nonOwner", choiceRole: "colleague", choiceSearch: "deep", choiceOffset: 20 }],
+    ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, owner: { colleague: { follows: "senior" } }, nonOwner: { fix: null } }],
+    ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, owner: {},
+      preferProvider: { setup: "nonOwner", modelProviderId: "deepseek", engineId: "claude" } }],
+    ["GET", "/codex-providers", "codex-providers.read", "readCodexProviders", {}],
+    ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
+    ["POST", "/codex-providers/remove", "codex-providers.remove", "removeCodexProvider", { modelProviderId: "deepseek", engineId: "claude" }],
+    ["POST", "/auth", "auth.start", "startAuth", { accountId: "codex", mode: "device" }],
+    ["POST", "/logout", "logout", "logout", { accountId: "codex" }],
+    ["GET", "/auth/:sessionId", "auth-session.read", "readAuthSession", {}],
+    ["DELETE", "/auth/:sessionId", "auth-session.cancel", "cancelAuthSession", {}],
+    ["POST", "/git-identity", "git-identity.save", "saveGitIdentity", { gitUserName: "Owner", gitUserEmail: "owner@example.test" }],
+    ["PATCH", "/personal-ai-profile", "personal-ai-profile.save", "savePersonalAiProfile", { preferredName: "Owner" }],
+    ["GET", "/ai-connections", "ai-connections.list", "list", {}],
+    ["GET", "/ai-connections/catalog", "ai-connections.catalog", "catalog", { modelProviderId: "deepseek", engineId: "claude" }],
+    ["PATCH", "/ai-connections/:providerId", "ai-connections.save", "save", { apiKey: "fixture-only", providerRevision: `sha256:${"a".repeat(64)}`, label: "Provider", modelProviderId: "forged-provider" }],
+    ["POST", "/ai-connections/:providerId/remove", "ai-connections.remove", "remove", {}],
+    ["PATCH", "/ai-connections/:providerId/model-access", "ai-connections.modelAccess", "modelAccess", { operation: "check-available" }]
+  ];
+  const record = (method) => async (input) => { calls.push({ method, input }); return { ok: true }; };
+  const accounts = { ...Object.fromEntries(cases.filter((entry) => !entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])])), subscribeAuthTerminal() {} };
+  const aiConnectionService = Object.fromEntries(cases.filter((entry) => entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])]));
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: { async publish(event) { events.push(event); } } });
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: [
+    ...createAccountsActions({ accounts }),
+    ...createAiConnectionActions({ managedAiConnections: createManagedAiConnections({ aiConnectionService, requireAiManagement }) })
+  ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => user,
+    authorizeProject() { throw new Error("Account access must not require a project."); } });
+  const app = testRouteApp();
+  registerRoutes(app.http, { localhostCheckBypassed: true, projectContext: getStudioProjectContext() });
+  registerLocalAiConnectionRoutes(app.http, { localhostCheckBypassed: true, projectContext: getStudioProjectContext() });
+  assert.equal(actions.listDefinitions().length, 18);
+  for (const [method, suffix, operation, serviceMethod, data] of cases) {
+    const route = findRegisteredRoute(app, { method, path: `/api/vibe64/accounts${suffix}` });
+    assert.ok(route, operation);
+    const actionId = `vibe64.accounts.${operation}`;
+    let input;
+    const request = { params: { ...(suffix.includes(":sessionId") ? { sessionId: "login-1" } : {}),
+      ...(suffix.includes(":providerId") ? { providerId: "deepseek" } : {}) }, input: { [method === "GET" ? "query" : "body"]: data },
+      executeAction({ actionId: id, input: value }) {
+        assert.equal(id, actionId);
+        assert.equal(Object.hasOwn(value, "vibe64User"), false);
+        input = value;
+        return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+      }
+    };
+    const reply = testReply();
+    const eventStart = events.length;
+    await route.handler(request, reply);
+    assert.equal(reply.payload.ok, true, `${operation}: ${JSON.stringify(reply.payload)}`);
+    const expected = calls.at(-1);
+    assert.equal(expected.method, serviceMethod);
+    assert.equal(expected.input.vibe64User, owner);
+    if (operation === "ai-connections.save") assert.equal(expected.input.modelProviderId, "deepseek");
+    const execute = (value = input) => actions.execute({ actionId, input: value, context: { channel: "automation", surface: "app" } });
+    const eventCount = events.length - eventStart;
+    await execute();
+    assert.deepEqual(calls.at(-1), expected, operation);
+    assert.equal(events.length - eventStart, eventCount * 2);
+    for (let index = 1; index <= eventCount; index++) {
+      const { occurredAt: httpTime, ...httpEvent } = events.at(-index - eventCount);
+      const { occurredAt: directTime, ...directEvent } = events.at(-index);
+      assert.ok(httpTime && directTime);
+      assert.deepEqual(directEvent, httpEvent);
+    }
+    assert.equal(actions.getDefinition(actionId).input.mode, "create");
+    assert.equal(actions.getDefinition(actionId).extensions.vibe64.projectScoped, false);
     const count = calls.length;
-    for (const [operation, input] of [
-      ["logout", {}], ["auth.start", {}], ["auth-session.read", {}], ["git-identity.save", { gitUserName: "Name" }],
-      ["model-routing.save", { owner: {} }], ["model-routing.preview", { revision: 1, orchestrators: {} }],
-      ["ai-connections.save", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
-      ["ai-connections.save", { modelProviderId: "deepseek", providerRevision: "revision" }],
-      ["ai-connections.remove", { modelProviderId: "../other" }],
-      ["ai-connections.modelAccess", { modelProviderId: "opencode", operation: "run-command" }]
-    ]) await assert.rejects(actions.execute({ actionId: `vibe64.accounts.${operation}`, input, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
-    assert.equal(calls.length, count);
-  });
+    await assert.rejects(execute({ ...input, vibe64User: owner }), { code: "ACTION_VALIDATION_FAILED" });
+    user = null;
+    await assert.rejects(execute(), { statusCode: 401 });
+    if (operation.startsWith("ai-connections.")) {
+      user = { username: "member", role: "member" };
+      await assert.rejects(execute(), { statusCode: 403 });
+      await route.handler(request, reply);
+      assert.equal(reply.statusCode, 403);
+      user = owner;
+      managementAllowed = false;
+      assert.equal((await execute()).statusCode, 403);
+      await route.handler(request, reply);
+      assert.equal(reply.statusCode, 403);
+      managementAllowed = true;
+    }
+    user = owner;
+    assert.equal(calls.length, count, operation);
+  }
+  const count = calls.length;
+  for (const [operation, input] of [
+    ["logout", {}], ["auth.start", {}], ["auth-session.read", {}], ["git-identity.save", { gitUserName: "Name" }],
+    ["model-routing.save", { owner: {} }], ["model-routing.preview", { revision: 1, orchestrators: {} }],
+    ["ai-connections.save", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
+    ["ai-connections.save", { modelProviderId: "deepseek", providerRevision: "revision" }],
+    ["ai-connections.remove", { modelProviderId: "../other" }],
+    ["ai-connections.modelAccess", { modelProviderId: "opencode", operation: "run-command" }]
+  ]) await assert.rejects(actions.execute({ actionId: `vibe64.accounts.${operation}`, input, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
+  assert.equal(calls.length, count);
 });
 
 test("Colleague reads every saved provider's readiness through the original owner without credentials or account effects", async (t) => {
@@ -147,7 +145,7 @@ test("Colleague reads every saved provider's readiness through the original owne
   let actor = owner;
   let managementAllowed = true;
   let reads = 0;
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
     managedAiConnections: createManagedAiConnections({
       aiConnectionService: { async list() { reads++; return service.list(); } },
@@ -201,7 +199,7 @@ test("Colleague reads every saved provider's readiness through the original owne
 
   const localActors = [];
   const requireLocalManagement = ({ vibe64User }) => { localActors.push(vibe64User); return null; };
-  const localActions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const localActions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   localActions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
     managedAiConnections: createManagedAiConnections({ aiConnectionService: service, requireAiManagement: requireLocalManagement })
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
@@ -247,7 +245,7 @@ test("Colleague saves the person's own stated Git name and email and returns onl
       gitIdentity: { name: input.gitUserName, email: input.gitUserEmail } } };
   } };
   const member = { username: "member", role: "member" };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish() {} } });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: { async publish() {} } });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAccountsActions({ accounts })
     .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => member,

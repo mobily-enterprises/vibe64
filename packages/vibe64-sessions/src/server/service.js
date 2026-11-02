@@ -3,7 +3,7 @@ import { currentProjectActionRequestMeta } from "@local/vibe64-core/server/proje
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createConnectedContributions } from "./connectedContributions.js";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
-import { conversationContextGrant } from "./mainConversationAuthority.js";
+import { createMainConversationAuthority } from "./mainConversationAuthority.js";
 import { createReceivingContributions } from "./receivingContributions.js";
 import { createSessionArchive } from "./sessionArchive.js";
 import { createSessionAssistant } from "./sessionAssistant.js";
@@ -42,6 +42,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {ActionCatalogue} dependencies.actions
  * @param {SessionArchivePreparation} dependencies.archivePreparation
  * @param {AccountsInitializeModelRouting} dependencies.initializeModelRouting
+ * @param {boolean} dependencies.localhostCheckBypassed
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
@@ -56,6 +57,7 @@ function createService({
   actions,
   archivePreparation,
   initializeModelRouting,
+  localhostCheckBypassed,
   logger,
   project,
   publishProjectChanged,
@@ -126,7 +128,9 @@ function createService({
     terminals,
     workspaceSetup
   });
+  const authority = createMainConversationAuthority({ localhostCheckBypassed });
   const messages = createSessionMessages({
+    mainBrowserAuthority: authority.mainBrowserAuthority,
     project,
     publishProjectChanged,
     publishSessionChanged,
@@ -215,7 +219,7 @@ function createService({
 
   const service = Object.freeze({
     browserConversations,
-    readConversationContext: conversationContextGrant,
+    readConversationContext: authority.conversationContextGrant,
 
     archiveSession: archive.archiveSession,
     resumeSessionArchives: archive.resumeSessionArchives,

@@ -1,4 +1,5 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { COLLEAGUE_NAVIGATION_PANES_TOKEN, NO_HOST_PANES } from "../shared/navigationPanes.js";
 import { createColleagueActions } from "./colleagueActions.js";
@@ -19,12 +20,14 @@ import { registerRoutes } from "./registerRoutes.js";
 /** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
 /** @typedef {import("../shared/navigationPanes.js").ColleagueNavigationPane} ColleagueNavigationPane */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const Vibe64ColleagueFeature = defineFeature({
   id: "vibe64.colleague",
   domain: "vibe64-colleague",
   requires: {
     accounts: "vibe64.accounts",
+    env: "runtime.env",
     http: "runtime.http",
     terminals: "vibe64.terminals",
     events: "runtime.events",
@@ -41,6 +44,7 @@ const Vibe64ColleagueFeature = defineFeature({
   /**
    * @param {object} capabilities
    * @param {AccountsService} capabilities.accounts
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeHttp} capabilities.http
    * @param {TerminalsService} capabilities.terminals
    * @param {RuntimeEvents} capabilities.events
@@ -50,6 +54,7 @@ const Vibe64ColleagueFeature = defineFeature({
    */
   setup({
     accounts,
+    env,
     http,
     terminals,
     events,
@@ -66,7 +71,7 @@ const Vibe64ColleagueFeature = defineFeature({
       resolveName: resolveName ?? nameColleague,
       systemRoot: getStudioProjectContext().systemRoot
     });
-    registerRoutes(http);
+    registerRoutes(http, { localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }) });
     return { colleague };
   },
   /**

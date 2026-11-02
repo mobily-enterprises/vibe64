@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
@@ -36,7 +36,7 @@ require("node:http").createServer((_request, response) => {
   const { slug } = await fixture.project.readCurrentProject();
   assert.ok(slug);
   projectContext = { slug, vibe64User: { username: "owner", role: "owner" } };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "output-lifecycle", domain: "terminals", actions:
     createTerminalActions({ terminals: fixture.terminals }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action

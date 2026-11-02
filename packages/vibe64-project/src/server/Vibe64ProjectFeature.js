@@ -12,6 +12,7 @@ import {
   PROJECT_RESOURCE_ENVIRONMENT_TOKEN,
   assertResourceEnvironmentProvider
 } from "./resourceEnvironment.js";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -64,7 +65,7 @@ const Vibe64ProjectFeature = defineFeature({
       resourceEnvironmentProvider: resourceEnvironmentProvider ?? LOCAL_PROJECT_RESOURCES,
       savedEnvValues: savedEnvValues ?? NO_SAVED_ENV_VALUES
     });
-    registerRoutes(http, { projectContext: getStudioProjectContext() });
+    registerRoutes(http, { localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }), projectContext: getStudioProjectContext() });
     return { project };
   },
   actions({ project }) {

@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("work tools retain exact review identities and project authority through HTTP and native discovery", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "owner", role: "owner" };
     let allowed = true;
     const calls = [];
@@ -36,7 +36,7 @@ test("work tools retain exact review identities and project authority through HT
       calls.push({ args: args.filter(arg => !arg?.requestMeta), actor: context.vibe64User, project: context.slug });
       return native;
     }]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "work", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });
@@ -46,7 +46,7 @@ test("work tools retain exact review identities and project authority through HT
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     for (const [method, suffix, name, , body] of cases) {
       const actionId = `vibe64.sessions.${name}`;
       const tool = toolSet.tools.find(item => item.actionId === actionId);
@@ -92,11 +92,11 @@ test("work tools retain exact review identities and project authority through HT
       if (name === "updates.apply") assert.equal((await execute({ historyReview: { baseCommit: "0".repeat(40) } })).ok, false);
       assert.equal(calls.length, count, "invalid or unauthorized inputs never reach the service");
     }
-  }));
+  });
 });
 
 test("Incoming actions share receiving authority, preserve exact reviews and keep diffs out of Colleague", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "receiver", role: "member" };
     let allowed = true;
     const calls = [];
@@ -109,7 +109,7 @@ test("Incoming actions share receiving authority, preserve exact reviews and kee
         fileCount: 1, review, files: ["private-source.js"], diff: { content: "private-source" } }], credential: "private-credential" };
     const sessions = Object.fromEntries(["inspectIncomingContributions", "changeIncomingContribution"].map(name => [name,
       async (...args) => { calls.push({ name, args, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug }); return native; }]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "incoming", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });
@@ -119,7 +119,7 @@ test("Incoming actions share receiving authority, preserve exact reviews and kee
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.repository.incoming.review"), false);
     for (const operation of ["inspect", "change"]) {
       const actionId = `vibe64.repository.incoming.${operation}`;
@@ -155,5 +155,5 @@ test("Incoming actions share receiving authority, preserve exact reviews and kee
       }
       assert.equal(calls.length, count);
     }
-  }));
+  });
 });

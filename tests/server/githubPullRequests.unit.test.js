@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, sessionConnectedContribution, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
@@ -20,7 +20,7 @@ import { createSessionSource } from "../../packages/vibe64-terminals/src/server/
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import getPlacements from "../../src/placement.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
@@ -411,14 +411,14 @@ test("GitHub races and unconfirmed writes remain explicit failures and are not r
 });
 
 test("PR mutation routes bind the action, project, number and identity to the authenticated request", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
     let received;
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project: githubOperationsDouble(GITHUB_PULL_REQUEST_METHODS,
       async (input) => { received = input; return { ok: true }; }) }).map((action) => ({ channels: ["api"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user, authorizeProject: async () => {} });
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     for (const operation of ["ready", "update-branch", "merge"]) {
       const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/pull-requests/:number/${operation}` });
       const body = { review, mergeMethod: "merge", operation: "forged", number: 999,
@@ -435,7 +435,7 @@ test("PR mutation routes bind the action, project, number and identity to the au
       assert.equal(reply.statusCode, 200);
       assert.deepEqual(received, { operation, number: 7, review, ...(operation === "merge" ? { mergeMethod: "merge" } : {}), vibe64User: user });
     }
-  }));
+  });
   for (const operation of ["ready", "update-branch", "merge"]) {
     const f = fixture([]);
     await assert.rejects(githubPullRequests(project, { operation, number: 7, review }, f.options),

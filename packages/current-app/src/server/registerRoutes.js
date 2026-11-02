@@ -15,14 +15,16 @@ import { currentAppQueryInputValidator } from "./inputSchemas.js";
 /**
  * @param {RuntimeHttp} http
  * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  */
-function registerRoutes(http, { projectContext }) {
+function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "current-app"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "studio/current-app",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Current-app Studio routes only accept loopback Studio requests.",
       projectContext
     })

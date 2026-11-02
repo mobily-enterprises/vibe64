@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { __testables as codexAppServerHelperThreadsTestables } from "@local/vibe64-runtime/server/codexAppServerHelperThreads";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
@@ -95,7 +95,7 @@ async function fixture(t) {
   };
   const steps = createTrainingStepChecks({ learners, content, checks: {}, actions: { async execute() { return { ok: true }; } },
     evidence, reviewer: createTrainingStepReviewer({ learners, terminals }) });
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const published = [];
   const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ logger: silentLogger, learners, attemptLearners: learners, content, steps,
     publishLearnerChanged: async event => { published.push(event); } }) });

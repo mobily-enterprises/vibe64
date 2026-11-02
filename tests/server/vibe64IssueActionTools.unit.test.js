@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("issue tools preserve exact requested writes, bounded reads and fresh project authority", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "owner", role: "owner" };
     let allowed = true;
     const calls = [];
@@ -33,7 +33,7 @@ test("issue tools preserve exact requested writes, bounded reads and fresh proje
       "create-label": { ok: true, label: labels[0] }, "set-labels": { ok: true, issue: { number: 7 } },
       mentions: { ok: true, users: Array.from({ length: 23 }, (_, i) => ({ login: `person-${i}`, name: `Person ${i}`, email: "private-email" })), warning: "Some collaborators could not load." }
     };
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "issues", domain: "project", actions: createProjectActions({ project: githubOperationsDouble(GITHUB_ISSUE_METHODS, async (input) => {
       calls.push({ input, actor: currentProjectRequestContext().vibe64User, slug: currentProjectRequestContext().slug });
       return results[input.operation];
@@ -44,7 +44,7 @@ test("issue tools preserve exact requested writes, bounded reads and fresh proje
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     const cases = [
       ["list", "GET", "/issues", { state: "all", search: "test", cursor: "next-list", labels: ["label-0"] }, {}],
       ["read", "GET", "/issues/:number", { cursor: "older-comments" }, { number: 7 }],
@@ -117,5 +117,5 @@ test("issue tools preserve exact requested writes, bounded reads and fresh proje
       }
       assert.equal(calls.length, count);
     }
-  }));
+  });
 });

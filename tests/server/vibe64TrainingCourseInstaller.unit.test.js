@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
@@ -244,7 +244,7 @@ test("a concurrent catalogue change is retried once against a fresh revision", a
 test("catalogue actions require a signed-in user and report install results", async (t) => {
   const f = await fixture(t);
   const auth = { user: null };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const definitions = createTrainingActions({ operations: createTrainingOperations({ logger: silentLogger, publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
     courseInstaller: f.make() }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });

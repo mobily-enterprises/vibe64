@@ -125,7 +125,7 @@ test("browser lifecycle state tells the client whether server disconnect should 
     get(_path, _options, handler) {
       connect = handler;
     }
-  }, monitor);
+  }, monitor, { localhostCheckBypassed: false });
   const localRequest = { headers: { host: "127.0.0.1:4100" }, ip: "127.0.0.1" };
   const browserWindow = () => Object.assign(new EventEmitter(), {
     send(message) {

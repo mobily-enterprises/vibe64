@@ -42,6 +42,7 @@ async function setupProvider(dependencies) {
   const actions = [];
   const actionCatalogue = { register: (contribution) => actions.push(...contribution.actions) };
   const provided = await Vibe64UsageRecordingFeature.setup({
+    env: {},
     events: { publish: async () => {} },
     logger: { warn: () => {} },
     project: {},

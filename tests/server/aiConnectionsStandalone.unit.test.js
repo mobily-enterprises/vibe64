@@ -12,11 +12,11 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestHelpers.js";
 
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 
 function registerRoutes(http, { aiConnectionService, requireAiManagement }) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const managedAiConnections = createManagedAiConnections({ aiConnectionService, requireAiManagement });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({ managedAiConnections }).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action

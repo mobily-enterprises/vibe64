@@ -344,21 +344,22 @@ PUT /api/app/:slug/vibe64/settings/prompt-hints public app - vibe64.project.prom
 function routeTable(projectContext) {
   const http = createCapabilityHttpRuntime({ fastify: { route() {} }, actions: { registerContextContributor() {} } });
   const fastify = { get() {} };
-  registerStudioHealthRoutes(http);
-  registerCurrentAppRoutes(http, { projectContext });
-  registerAccountRoutes(http, { projectContext });
-  registerColleagueRoutes(http);
-  registerDatabaseRoutes(http, { projectContext });
-  registerProjectRoutes(http, { projectContext });
-  registerPublishingRoutes(http, { projectContext, publishing: {} });
-  registerSessionRoutes(http, { projectContext });
-  registerSourceEditorRoutes(http, { projectContext, sourceEditor: { readTree() {} } });
-  registerSystemGraphRoutes(http, { projectContext });
-  registerUsageRoutes(http, { projectContext });
+  const localhostCheckBypassed = false;
+  registerStudioHealthRoutes(http, { localhostCheckBypassed });
+  registerCurrentAppRoutes(http, { localhostCheckBypassed, projectContext });
+  registerAccountRoutes(http, { localhostCheckBypassed, projectContext });
+  registerColleagueRoutes(http, { localhostCheckBypassed });
+  registerDatabaseRoutes(http, { localhostCheckBypassed, projectContext });
+  registerProjectRoutes(http, { localhostCheckBypassed, projectContext });
+  registerPublishingRoutes(http, { localhostCheckBypassed, projectContext, publishing: {} });
+  registerSessionRoutes(http, { localhostCheckBypassed, projectContext });
+  registerSourceEditorRoutes(http, { localhostCheckBypassed, projectContext, sourceEditor: { readTree() {} } });
+  registerSystemGraphRoutes(http, { localhostCheckBypassed, projectContext });
+  registerUsageRoutes(http, { localhostCheckBypassed, projectContext });
   registerTerminalRoutes(http, { fastify, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
-  registerTrainingRoutes(http);
-  registerTrainingVisualResourceRoutes(http);
-  registerUsageRecordingRoutes(http, { projectContext });
+  registerTrainingRoutes(http, { localhostCheckBypassed });
+  registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed });
+  registerUsageRecordingRoutes(http, { localhostCheckBypassed, projectContext });
   return http.router.list().map((route) => [
     route.method, route.path, route.auth, route.surface, route.bodyLimit ?? "-", route.actionId || "-"
   ].join(" ")).sort();

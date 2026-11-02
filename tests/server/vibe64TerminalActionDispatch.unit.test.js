@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createTerminalControls } from "../../packages/vibe64-terminals/src/server/terminalControls.js";
@@ -20,7 +20,7 @@ import { registerRoutes } from "../../packages/vibe64-terminals/src/server/regis
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 function catalogue(terminals, projectContext, { resolveUser, authorizeProject } = {}) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action
   })) });

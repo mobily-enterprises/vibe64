@@ -7,7 +7,7 @@ import { createMainBrowserConversations } from "../../packages/vibe64-sessions/s
 import { Vibe64ConversationsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -28,7 +28,7 @@ test("standalone Main and temporary conversations use the selected local project
     });
     configure(false);
     const app = Fastify();
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const sends = [];
     actions.register({ contributorId: "local-goals", domain: "terminals", actions:
       createTerminalActions({ terminals: {
@@ -105,7 +105,7 @@ test("standalone Main and temporary conversations use the selected local project
 });
 
 test("the existing assistant catalogue is actor-authorized without a project or session", async () => {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const user = { username: "member", role: "member" };
   const calls = [];
   let signedIn = true;
@@ -131,7 +131,7 @@ test("the existing assistant catalogue is actor-authorized without a project or 
 test("conversation HTTP handlers and automation execute the same authorized actions", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const user = { username: "member", role: "member" };
     let allowed = true;
     const calls = [];
@@ -236,7 +236,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
 test("conversation facades and subscription checks preserve real Fastify request headers", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
     const app = Fastify();
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const user = { username: "cookie-owner", uid: 42, role: "owner" };
     const cookie = "fixture-session=owner-session";
     let signedIn = true;
@@ -260,7 +260,7 @@ test("conversation facades and subscription checks preserve real Fastify request
     ]) actions.register({ contributorId, domain: "test", actions: definitions.map(definition => ({ surfaces: ["app"], ...definition })) });
     const conversations = createMainBrowserConversations({ actions, terminals });
     const { access } = await Vibe64ConversationsFeature.setup({
-      actionCatalogue: actions, sessions: { browserConversations: conversations }, http: testRouteApp().http
+      actionCatalogue: actions, env: {}, sessions: { browserConversations: conversations }, http: testRouteApp().http
     }, {});
     actions.register({ contributorId: "cookie-subscription", domain: "test", actions: [access.wrapAction({
       id: access.subscribeActionId, kind: "query", channels: ["internal"], surfaces: ["app"],
@@ -305,7 +305,7 @@ test("conversation facades and subscription checks preserve real Fastify request
 
 test("browser conversation methods retain fresh project context through delayed handle operations", async () => {
   await withLocalRequestBypass(() => withRouteProject(async ({ projectContext, slug }) => {
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     let user = { username: "owner", uid: 42, role: "owner" };
     let allowed = true;
     const calls = [];

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("all project HTTP operations share canonical actions and current authority with automation", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const owner = { username: "owner", role: "owner" };
     let user = owner;
     let allowed = true;
@@ -61,13 +61,13 @@ test("all project HTTP operations share canonical actions and current authority 
       if (["createDevelopProject", "selectProjectInMode"].includes(method)) return { ok: true, project: { slug: args[0].slug } };
       return { ok: true };
     }]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
     });
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     assert.equal(app.registeredRoutes.length, cases.length);
     assert.equal(actions.listDefinitions().length, cases.length);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
@@ -135,5 +135,5 @@ test("all project HTTP operations share canonical actions and current authority 
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.project.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
-  }));
+  });
 });

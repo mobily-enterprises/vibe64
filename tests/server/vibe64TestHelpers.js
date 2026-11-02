@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { localProjectKeyFromTargetRoot } from "@local/vibe64-core/server/studioProjectContext";
 import { EXTERNAL_PROJECT_LOCAL_ROOTS_DIR } from "@local/vibe64-core/server/projectState";
@@ -89,10 +89,11 @@ async function markHistoricalConversationRewound(store, sessionId, turnIds) {
  * @param {object} definition
  */
 function underActionPolicy(definition) {
+  const policy = createVibe64ActionPolicy({ localhostCheckBypassed: false });
   return {
     ...definition,
-    input: vibe64ActionPolicy.input(definition),
-    execute: (input, context = {}) => vibe64ActionPolicy.execute({
+    input: policy.input(definition),
+    execute: (input, context = {}) => policy.execute({
       definition, input, context, run: (policyInput, policyContext) => definition.execute(policyInput, policyContext)
     })
   };

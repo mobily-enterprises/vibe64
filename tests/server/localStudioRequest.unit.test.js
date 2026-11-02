@@ -14,6 +14,7 @@ import {
 } from "@local/vibe64-core/server/localStudioRequest";
 
 const { LOCALHOST_CHECK_BYPASS_FLAG } = __testables;
+const CHECKED = Object.freeze({ localhostCheckBypassed: false });
 
 test("localhost check bypass is enabled by the explicit CLI flag", () => {
   assert.equal(isLocalhostCheckBypassEnabled({
@@ -27,7 +28,7 @@ test("websocket origins match exact scheme, host and port through direct TLS and
     protocol: "https", headers: { host: "workspace.example:8443", origin: "https://workspace.example:8443" },
     ip: "10.0.0.8", vibe64User: { username: "owner" }
   };
-  assert.equal(isTrustedStudioWebSocketRequest(request), true);
+  assert.equal(isTrustedStudioWebSocketRequest(request, CHECKED), true);
   assert.equal(originMatchesRequest({ ...request, protocol: "http",
     headers: { ...request.headers, "x-forwarded-proto": "https" } }), true);
   assert.equal(originMatchesRequest({ ...request, protocol: undefined, socket: { encrypted: true } }), true);
@@ -35,7 +36,7 @@ test("websocket origins match exact scheme, host and port through direct TLS and
     "http://workspace.example:8443", "https://workspace.example:8443/path", "https://owner@workspace.example:8443",
     "https://workspace.example:8443#fragment", "https://workspace.example:8443,https://other.example",
     ["https://workspace.example:8443"], "file://workspace.example:8443"]) {
-    assert.equal(isTrustedStudioWebSocketRequest({ ...request, headers: { ...request.headers, origin } }), false, String(origin));
+    assert.equal(isTrustedStudioWebSocketRequest({ ...request, headers: { ...request.headers, origin } }, CHECKED), false, String(origin));
   }
   assert.equal(originMatchesRequest({ ...request, headers: { ...request.headers, host: "workspace.example:8443/path" } }), false);
   assert.equal(originMatchesRequest({ ...request, headers: { ...request.headers, host: ["workspace.example:8443"] } }), false);
@@ -43,13 +44,13 @@ test("websocket origins match exact scheme, host and port through direct TLS and
 
 test("loopback command-line websocket clients may omit Origin but local foreign pages are refused", () => {
   const request = { ip: "127.0.0.1", headers: { host: "localhost:3000" } };
-  assert.equal(isTrustedStudioWebSocketRequest(request), true);
+  assert.equal(isTrustedStudioWebSocketRequest(request, CHECKED), true);
   assert.equal(isTrustedStudioWebSocketRequest({ ...request,
-    headers: { ...request.headers, origin: "http://localhost:3000" } }), true);
+    headers: { ...request.headers, origin: "http://localhost:3000" } }, CHECKED), true);
   assert.equal(isTrustedStudioWebSocketRequest({ ...request,
-    headers: { ...request.headers, origin: "http://localhost:4000" } }), false);
+    headers: { ...request.headers, origin: "http://localhost:4000" } }, CHECKED), false);
   assert.equal(isTrustedStudioWebSocketRequest({ ...request,
-    headers: { ...request.headers, origin: "http://127.0.0.1:3000" } }), false);
+    headers: { ...request.headers, origin: "http://127.0.0.1:3000" } }, CHECKED), false);
 });
 
 test("loopback guard does not treat a DNS hostname with a 127 prefix as an IP address", () => {
@@ -60,7 +61,7 @@ test("loopback guard does not treat a DNS hostname with a 127 prefix as an IP ad
     assert.equal(isLoopbackAddress(host), false, host);
     assert.equal(isTrustedStudioWebSocketRequest({
       ip: "127.0.0.1", headers: { host, origin: `http://${host}` }
-    }), false, host);
+    }, CHECKED), false, host);
   }
 });
 
@@ -88,88 +89,48 @@ test("localhost check bypass flag is stripped before launching Vite", () => {
   ]);
 });
 
-test("local Studio request guard defaults to blocking non-loopback requests", () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  try {
-    assert.equal(isLocalStudioRequest({
-      headers: {
-        host: "example.com",
-        origin: "https://example.com"
-      },
-      ip: "10.0.0.8"
-    }), false);
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
-    }
-  }
+test("local Studio request guard blocks non-loopback requests unless the server bypassed the check", () => {
+  assert.equal(isLocalStudioRequest({
+    headers: {
+      host: "example.com",
+      origin: "https://example.com"
+    },
+    ip: "10.0.0.8"
+  }, { localhostCheckBypassed: false }), false);
 });
 
 test("local Studio request guard accepts authenticated Vibe64 requests from non-loopback hosts", () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  try {
-    assert.equal(isLocalStudioRequest({
-      headers: {
-        host: "example.com",
-        origin: "https://example.com"
-      },
-      ip: "10.0.0.8",
-      vibe64User: {
-        email: "owner@example.com"
-      }
-    }), true);
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
+  assert.equal(isLocalStudioRequest({
+    headers: {
+      host: "example.com",
+      origin: "https://example.com"
+    },
+    ip: "10.0.0.8",
+    vibe64User: {
+      email: "owner@example.com"
     }
-  }
+  }, { localhostCheckBypassed: false }), true);
 });
 
 test("local Studio request guard accepts authenticated OS-user Vibe64 requests from non-loopback hosts", () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  try {
-    assert.equal(isLocalStudioRequest({
-      headers: {
-        host: "person.users.example.test",
-        origin: "https://person.users.example.test"
-      },
-      ip: "10.0.0.8",
-      vibe64User: {
-        username: "person"
-      }
-    }), true);
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
+  assert.equal(isLocalStudioRequest({
+    headers: {
+      host: "person.users.example.test",
+      origin: "https://person.users.example.test"
+    },
+    ip: "10.0.0.8",
+    vibe64User: {
+      username: "person"
     }
-  }
+  }, { localhostCheckBypassed: false }), true);
 });
 
-test("local Studio request guard accepts non-loopback requests when bypass is explicit", () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
-  try {
-    assert.equal(isLocalStudioRequest({
-      headers: {
-        host: "example.com",
-        origin: "https://example.com"
-      },
-      ip: "10.0.0.8"
-    }), true);
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
-    }
-  }
+test("local Studio request guard accepts non-loopback requests when the server bypassed the check", () => {
+  assert.equal(isLocalStudioRequest({
+    headers: {
+      host: "example.com",
+      origin: "https://example.com"
+    },
+    ip: "10.0.0.8"
+  }, { localhostCheckBypassed: true }), true);
 });

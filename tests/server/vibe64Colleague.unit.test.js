@@ -11,7 +11,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { PROJECT_OPERATION, registerVibe64ActionContext, createVibe64ActionPolicy, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { __testables, LEARNING_MODE_PROJECT_CODE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
@@ -83,7 +83,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   if (!systemRoot) resources.roots.push(root);
   const nativeCommands = native === true ? await createControlledColleagueNativeCommands(root, responses) : native || null;
   if (nativeCommands && native !== true) await nativeCommands.enqueue(responses);
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const observations = { starts: [], summaries: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
     helperCalls: [], sent: [], conversations: {}, deniedProjects: new Set(), projectChecks: [],
     target: { ok: true, status: "inProgress", runId: "work-1", messages: [{ id: "question", role: "user", text: "What happened?" }] },

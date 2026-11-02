@@ -9,7 +9,9 @@ import { registerRoutes } from "./registerRoutes.js";
 import { createUsageRecordingActions } from "./usageRecordingActions.js";
 import { createUsageRecording } from "./usageRecordingRuntime.js";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -22,6 +24,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
   id: "vibe64.usage-recording",
   domain: "vibe64-usage-recording",
   requires: {
+    env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
@@ -38,6 +41,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
   /**
    * @param {object} capabilities
    * @param {UsageRecordingAdmission | null} capabilities.admission
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
@@ -46,6 +50,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
    */
   setup({
     admission,
+    env,
     events,
     http,
     logger,
@@ -60,7 +65,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
       project,
       terminals
     });
-    registerRoutes(http, { projectContext: getStudioProjectContext() });
+    registerRoutes(http, { localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }), projectContext: getStudioProjectContext() });
     return { usageRecording };
   },
   /**

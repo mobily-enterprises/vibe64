@@ -24,12 +24,14 @@ function authTerminalInput(request, terminalSessionId) {
  * @param {RuntimeFastify} fastify
  * @param {object} options
  * @param {AccountsService} options.accounts
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  * @param {boolean} options.projectScoped
  * @param {string} options.routePath
  */
-function registerAuthTerminalSocket(fastify, { accounts, projectContext, projectScoped, routePath }) {
+function registerAuthTerminalSocket(fastify, { accounts, localhostCheckBypassed, projectContext, projectScoped, routePath }) {
   registerTerminalWebSocketRoute(fastify, {
+    localhostCheckBypassed,
     projectContext,
     projectScoped,
     resize(service, { cols, request, rows, terminalSessionId }) {
@@ -54,17 +56,20 @@ function registerAuthTerminalSocket(fastify, { accounts, projectContext, project
  * @param {RuntimeFastify} fastify
  * @param {object} capabilities
  * @param {AccountsService} capabilities.accounts
+ * @param {boolean} capabilities.localhostCheckBypassed
  * @param {StudioProjectContext} capabilities.projectContext
  */
-function registerAuthTerminalRoutes(fastify, { accounts, projectContext }) {
+function registerAuthTerminalRoutes(fastify, { accounts, localhostCheckBypassed, projectContext }) {
   registerAuthTerminalSocket(fastify, {
     accounts,
+    localhostCheckBypassed,
     projectContext,
     projectScoped: true,
     routePath: "/api/app/:slug/vibe64/accounts/auth/:terminalSessionId/ws"
   });
   registerAuthTerminalSocket(fastify, {
     accounts,
+    localhostCheckBypassed,
     projectContext,
     projectScoped: false,
     routePath: "/api/vibe64/accounts/auth/:terminalSessionId/ws"

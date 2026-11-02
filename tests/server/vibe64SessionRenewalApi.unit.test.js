@@ -3,7 +3,7 @@ import test from "node:test";
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { assertSessionRenewalDraftVersion, assertSessionRenewalOperation, createSessionRenewalDraft } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
@@ -36,7 +36,6 @@ import {
   routeProjectParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
@@ -79,7 +78,7 @@ test("native renewal tools retain complete reviewed text and guards without leak
       if (["draft.update", "cancel", "confirm"].includes(suffix)) assertSessionRenewalDraftVersion(state, input);
       return { ok: true, available: true, renewal: state, viewerScope: "private-viewer" };
     }]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "renewal", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });
@@ -289,119 +288,118 @@ test("renewal actions use server action context identity and declare no idempote
 }));
 
 test("renewal HTTP routes expose the six state transitions without accepting body actors", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const app = testRouteApp();
-      registerRoutes(app.http, {
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app"
-      });
-      const calls = [];
-      const executeAction = async (payload) => {
-        calls.push(payload);
-        return { ok: true };
-      };
-      const params = routeProjectParams({ sessionId: "session-1" });
-      const routes = [
-        {
-          actionId: ACTION_INSPECT_SESSION_RENEWAL,
-          body: {},
-          bodyLimit: undefined,
-          bodyValidator: undefined,
-          method: "GET",
-          suffix: "/renewal"
-        },
-        {
-          actionId: ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
-          body: {
-            operationKey: "renewal:session-1:one",
-            vibe64User: { username: "spoofed" }
-          },
-          bodyLimit: 32 * 1024,
-          bodyValidator: sessionRenewalDraftRequestInputValidator,
-          method: "POST",
-          suffix: "/renewal/draft"
-        },
-        {
-          actionId: ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
-          body: {
-            draft: "Reviewed handover",
-            expectedHash: DRAFT_HASH,
-            expectedRevision: 2,
-            operationKey: "renewal:session-1:one",
-            vibe64User: { username: "spoofed" }
-          },
-          bodyLimit: 256 * 1024,
-          bodyValidator: sessionRenewalDraftUpdateInputValidator,
-          method: "PATCH",
-          suffix: "/renewal/draft"
-        },
-        {
-          actionId: ACTION_CANCEL_SESSION_RENEWAL,
-          body: {
-            expectedHash: DRAFT_HASH,
-            expectedRevision: 2,
-            operationKey: "renewal:session-1:one",
-            vibe64User: { username: "spoofed" }
-          },
-          bodyLimit: 32 * 1024,
-          bodyValidator: sessionRenewalCancelInputValidator,
-          method: "POST",
-          suffix: "/renewal/cancel"
-        },
-        {
-          actionId: ACTION_CONFIRM_SESSION_RENEWAL,
-          body: {
-            assistantSelection: ASSISTANT_SELECTION,
-            expectedHash: DRAFT_HASH,
-            expectedRevision: 2,
-            operationKey: "renewal:session-1:one",
-            vibe64User: { username: "spoofed" }
-          },
-          bodyLimit: 32 * 1024,
-          bodyValidator: sessionRenewalConfirmationInputValidator,
-          method: "POST",
-          suffix: "/renewal/confirm"
-        },
-        {
-          actionId: ACTION_RETRY_SESSION_RENEWAL,
-          body: {
-            operationKey: "renewal:session-1:one",
-            vibe64User: { username: "spoofed" }
-          },
-          bodyLimit: 32 * 1024,
-          bodyValidator: sessionRenewalRetryInputValidator,
-          method: "POST",
-          suffix: "/renewal/retry"
-        }
-      ];
-
-      for (const {
-        actionId,
-        body,
-        bodyLimit,
-        bodyValidator,
-        method,
-        suffix
-      } of routes) {
-        const route = findRegisteredRoute(app, {
-          method,
-          path: `${apiRouteBase}/vibe64/sessions/:sessionId${suffix}`
-        });
-        assert.ok(route, `Expected ${method} ${suffix}`);
-        assert.equal(route.options.body, bodyValidator);
-        assert.equal(route.options.bodyLimit, bodyLimit);
-        await route.handler({
-          executeAction,
-          input: { body },
-          params,
-          vibe64User: { username: "server-actor" }
-        }, testReply());
-        assert.equal(calls.at(-1).actionId, actionId);
-        assert.equal(calls.at(-1).input.sessionId, "session-1");
-        assert.equal(Object.hasOwn(calls.at(-1).input, "vibe64User"), false);
-      }
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = testRouteApp();
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app"
     });
+    const calls = [];
+    const executeAction = async (payload) => {
+      calls.push(payload);
+      return { ok: true };
+    };
+    const params = routeProjectParams({ sessionId: "session-1" });
+    const routes = [
+      {
+        actionId: ACTION_INSPECT_SESSION_RENEWAL,
+        body: {},
+        bodyLimit: undefined,
+        bodyValidator: undefined,
+        method: "GET",
+        suffix: "/renewal"
+      },
+      {
+        actionId: ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
+        body: {
+          operationKey: "renewal:session-1:one",
+          vibe64User: { username: "spoofed" }
+        },
+        bodyLimit: 32 * 1024,
+        bodyValidator: sessionRenewalDraftRequestInputValidator,
+        method: "POST",
+        suffix: "/renewal/draft"
+      },
+      {
+        actionId: ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
+        body: {
+          draft: "Reviewed handover",
+          expectedHash: DRAFT_HASH,
+          expectedRevision: 2,
+          operationKey: "renewal:session-1:one",
+          vibe64User: { username: "spoofed" }
+        },
+        bodyLimit: 256 * 1024,
+        bodyValidator: sessionRenewalDraftUpdateInputValidator,
+        method: "PATCH",
+        suffix: "/renewal/draft"
+      },
+      {
+        actionId: ACTION_CANCEL_SESSION_RENEWAL,
+        body: {
+          expectedHash: DRAFT_HASH,
+          expectedRevision: 2,
+          operationKey: "renewal:session-1:one",
+          vibe64User: { username: "spoofed" }
+        },
+        bodyLimit: 32 * 1024,
+        bodyValidator: sessionRenewalCancelInputValidator,
+        method: "POST",
+        suffix: "/renewal/cancel"
+      },
+      {
+        actionId: ACTION_CONFIRM_SESSION_RENEWAL,
+        body: {
+          assistantSelection: ASSISTANT_SELECTION,
+          expectedHash: DRAFT_HASH,
+          expectedRevision: 2,
+          operationKey: "renewal:session-1:one",
+          vibe64User: { username: "spoofed" }
+        },
+        bodyLimit: 32 * 1024,
+        bodyValidator: sessionRenewalConfirmationInputValidator,
+        method: "POST",
+        suffix: "/renewal/confirm"
+      },
+      {
+        actionId: ACTION_RETRY_SESSION_RENEWAL,
+        body: {
+          operationKey: "renewal:session-1:one",
+          vibe64User: { username: "spoofed" }
+        },
+        bodyLimit: 32 * 1024,
+        bodyValidator: sessionRenewalRetryInputValidator,
+        method: "POST",
+        suffix: "/renewal/retry"
+      }
+    ];
+
+    for (const {
+      actionId,
+      body,
+      bodyLimit,
+      bodyValidator,
+      method,
+      suffix
+    } of routes) {
+      const route = findRegisteredRoute(app, {
+        method,
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId${suffix}`
+      });
+      assert.ok(route, `Expected ${method} ${suffix}`);
+      assert.equal(route.options.body, bodyValidator);
+      assert.equal(route.options.bodyLimit, bodyLimit);
+      await route.handler({
+        executeAction,
+        input: { body },
+        params,
+        vibe64User: { username: "server-actor" }
+      }, testReply());
+      assert.equal(calls.at(-1).actionId, actionId);
+      assert.equal(calls.at(-1).input.sessionId, "session-1");
+      assert.equal(Object.hasOwn(calls.at(-1).input, "vibe64User"), false);
+    }
   });
 });

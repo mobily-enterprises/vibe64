@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
@@ -85,7 +85,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     }
   };
   function register(host = exercises, replacements = {}) {
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const operations = createTrainingOperations({
       logger: silentLogger,
       catalogue,
@@ -401,7 +401,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   configureStudioProjectContext({ env: process.env, explicitSystemRoot: f.systemRoot, explicitTargetRoot: f.root,
     explicitManagedSourceRoot: path.join(f.systemRoot, "managed-source") });
   t.after(() => configureStudioProjectContext({ env: process.env }));
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const server = Fastify();
   t.after(() => server.close());
   server.decorateRequest("executeAction", function ({ actionId, input }) {
@@ -518,7 +518,7 @@ test("a host's Training Feature shuts down without releasing core slots it never
   const outputs = await Vibe64TrainingFeature.setup({ actionCatalogue: {
     register() { assert.fail("a host's training registers no actions"); },
     registerContextContributor() { assert.fail("a host's training registers no authority"); }
-  }, http: { router: { register() {} } }, project: {}, sessions: {}, terminals: {}, trainingHost });
+  }, env: {}, http: { router: { register() {} } }, project: {}, sessions: {}, terminals: {}, trainingHost });
   assert.doesNotThrow(() => Vibe64TrainingFeature.shutdown({ trainingHost }, { outputs }));
 });
 
@@ -532,7 +532,7 @@ test("catalogue Training Feature retains exact supplied owners and registers no 
     register() { assert.fail("the hosted original action catalogue must not be registered twice"); },
     registerContextContributor() { assert.fail("the hosted original authority must not be registered twice"); }
   }, http: { router: { register(method, url, options, handler) { registered.push({ method, url, options, handler }); } } },
-    project: {}, sessions: {}, terminals: {}, trainingHost });
+    env: {}, project: {}, sessions: {}, terminals: {}, trainingHost });
   assert.equal(outputs.training, trainingHost);
   // Learning v2 phase 2 retired the Main teacher's presentation, practical,
   // brief, visual checkpoint and lesson-scoped visual routes.

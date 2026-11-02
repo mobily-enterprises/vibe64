@@ -1,6 +1,6 @@
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 
-import { requireLocalStudioRequest } from "./localStudioRequest.js";
+import { requireLocalStudioRequest, terminalsLocalhostCheckBypassed } from "./localStudioRequest.js";
 import {
   vibe64StatusCode,
   requestBodyObject as requestBody,
@@ -19,7 +19,7 @@ import {
 //
 //   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags }), {
 //     routeBase: VIBE64_PROJECT_ROUTE_BASE, relativePath: "vibe64", surface: "app",
-//     wrapHandler: vibe64RouteHandler({ projectContext, localRequestMessage })
+//     wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, projectContext, localRequestMessage })
 //   });
 //
 // Keep the scope options and each actionRoute's method, suffix and actionId
@@ -75,12 +75,18 @@ function routeOptions({ actionId, body, bodyLimit, meta = {}, params, query, sum
  * project request context (with its Learn, team AI and practice admission)
  * for routes under VIBE64_PROJECT_ROUTE_BASE, project errors as JSON, and the
  * route's status code for the response.
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed whether the server was started with the localhost check bypassed
+ * @param {string} [options.localRequestMessage]
+ * @param {import("./types.js").StudioProjectContext} [options.projectContext] required for a project-scoped scope
+ * @param {boolean} [options.projectScoped]
  */
 function vibe64RouteHandler({
+  localhostCheckBypassed = terminalsLocalhostCheckBypassed(),
   localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
   projectContext,
   projectScoped = true
-} = {}) {
+}) {
   if (projectScoped && !projectContext) {
     throw new TypeError("A project-scoped Vibe64 route scope requires the project context its feature resolved.");
   }
@@ -90,7 +96,7 @@ function vibe64RouteHandler({
       throw new Error(`Vibe64 route ${method} ${path} is ${projectScoped ? "" : "not "}project-scoped, so it must ${projectScoped ? "" : "not "}be under ${PROJECT_API_BASE}.`);
     }
     return async function handleVibe64Route(request, reply) {
-      if (!requireLocalStudioRequest(request, reply, { message: localRequestMessage })) {
+      if (!requireLocalStudioRequest(request, reply, { localhostCheckBypassed, message: localRequestMessage })) {
         return reply;
       }
 

@@ -1,5 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
 
 import { registerRoutes } from "./registerRoutes.js";
@@ -43,7 +44,7 @@ const StudioHealthFeature = defineFeature({
       project,
       studioRoot: resolveStudioAppRoot({ env })
     });
-    registerRoutes(http);
+    registerRoutes(http, { localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }) });
     return { studioHealth };
   },
   /**

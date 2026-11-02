@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { registerRoutes as projectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { registerRoutes as sessionRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("PR tools preserve reviewed targets and HTTP behavior with bounded native results", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "owner", role: "owner" };
     let allowed = true;
     let missingHead = false;
@@ -37,7 +37,7 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
         baseRepository: review.repository }, worktreePath: "/private/worktree" }
     };
     const record = (input) => calls.push({ input, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug });
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "pull-requests", domain: "project", actions: [
       ...createProjectActions({ project: githubOperationsDouble(GITHUB_PULL_REQUEST_METHODS, async (input) => {
         record(input);
@@ -56,8 +56,8 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
-    projectRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
-    sessionRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    projectRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    sessionRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     const cases = [
       ["list", "GET", "/pull-requests", { state: "open", search: "change", cursor: "previous-page" }],
       ["read", "GET", "/pull-requests/:number", {}],
@@ -147,5 +147,5 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
     assert.equal(calls.at(-1).input.pullRequestNumber, 7);
     assert.equal(opened.result.sessionId, "opened-pr");
     assert.equal(opened.result.workspaceSetupStatus, "running");
-  }));
+  });
 });

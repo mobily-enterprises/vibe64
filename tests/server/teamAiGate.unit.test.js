@@ -17,8 +17,8 @@ import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { VIBE64_PROJECT_ROUTE_BASE, vibe64RouteHandler, vibe64RouteHttp } from "../../packages/vibe64-core/src/server/featureRoutes.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
-import { routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { PROJECT_OPERATION, registerVibe64ActionContext, createVibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const OWNER = Object.freeze({ uid: 1, username: "tony", role: "owner" });
@@ -191,10 +191,10 @@ test("a project route answers a gated team member with the refusal and the owner
   const releaseReadiness = registerTeamAiReadiness(async () => false);
   const releaseTeam = registerWorkspaceTeamReader(async () => ({ available: true, ownerName: "Tony", memberCount: 1 }));
   t.after(() => { releaseReadiness(); releaseTeam(); });
-  await withLocalRequestBypass(() => withRouteProject(async ({ projectContext }) => {
+  await withRouteProject(async ({ projectContext }) => {
     const app = testRouteApp();
     const routes = createActionRouteScope(vibe64RouteHttp(app.http), { routeBase: VIBE64_PROJECT_ROUTE_BASE,
-      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ localRequestMessage: "Local only.", projectContext }) });
+      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ localhostCheckBypassed: true, localRequestMessage: "Local only.", projectContext }) });
     routes.actionRoute("GET", "/projects", { actionId: "unit.projects", summary: "List projects." });
     const route = app.registeredRoutes[0];
     const reply = testReply();
@@ -203,14 +203,14 @@ test("a project route answers a gated team member with the refusal and the owner
     assert.equal(reply.statusCode, 403);
     assert.deepEqual(reply.payload, { ok: false, code: "vibe64_team_ai_required", details: { ownerName: "Tony" },
       errors: [{ code: "vibe64_team_ai_required", message: "Ask Tony to set up AI for team members." }] });
-  }));
+  });
 });
 
 test("a host action contributor gates a team member's own operations, not internal work", async (t) => {
   const ready = { value: false };
   const { context } = await withWorkspace(t, ready);
   let actor = MEMBER;
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   actions.register({ contributorId: "unit", domain: "unit", actions: [Object.freeze({
     extensions: { vibe64: PROJECT_OPERATION },
     id: "unit.project.read", kind: "query", channels: ["api", "automation", "internal"], surfaces: ["app"],

@@ -4,7 +4,7 @@ import test from "node:test";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -23,7 +23,7 @@ test("session discovery pages every archived/open identity through canonical too
     status: "archived", archivedAt: "2026-09-29T00:00:00Z", private: "secret-session" }));
   const result = { ok: true, sessions, unavailableSessions: [{ sessionId: "unavailable", path: "secret-path" }] };
   let calls = 0, allowed = true;
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   registerVibe64ActionContext(actions, {
     projectContext: { currentPracticeProjectScope: () => null, projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
     resolveUser: async () => ({ uid: 42, role: "member" }),
@@ -82,6 +82,7 @@ test("project and sessions expose only named Feature capabilities", () => {
   assert.equal(Vibe64SessionsFeature.id, "vibe64.sessions");
   assert.deepEqual(Vibe64SessionsFeature.requires, {
     accounts: "vibe64.accounts",
+    env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
@@ -163,7 +164,7 @@ test("project and sessions register routes and captured actions during setup", a
   const sessionRoutes = [];
   const configurationReads = [];
   const templateObservers = [];
-  const sessionCatalogue = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const sessionCatalogue = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const sessionOutputs = await Vibe64SessionsFeature.setup({
     actionCatalogue: {
       ...sessionCatalogue,
@@ -172,6 +173,7 @@ test("project and sessions register routes and captured actions during setup", a
         return sessionCatalogue.register(contributor);
       }
     },
+    env: {},
     events: {
       async publish() {}
     },

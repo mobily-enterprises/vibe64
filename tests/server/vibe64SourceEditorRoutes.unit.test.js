@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { registerRoutes as registerSourceRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
@@ -17,14 +17,13 @@ import {
   routeProjectParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
 const localUser = { username: "local", role: "owner" };
 
 function registerRoutes(http, options, authorizeProject = async () => {}) {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: options.events });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: options.events });
   actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions(options).map((action) => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...action
   })) });
@@ -47,12 +46,12 @@ function registerRoutes(http, options, authorizeProject = async () => {}) {
 }
 
 test("symbol explanation streams retain indexed identity and authenticated actor across the HTTP boundary", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
     const server = Fastify();
     const calls = [];
     try {
-      registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
+      registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
         async readTree() { return { ok: true }; },
         async streamExplanation(input, stream) { calls.push(input); stream.emit({ type: "source-explanation.finished", ok: true }); }
       } });
@@ -68,11 +67,11 @@ test("symbol explanation streams retain indexed identity and authenticated actor
       assert.equal(calls[0].sessionId, "session-1");
       assert.equal(calls[0].vibe64User, localUser);
     } finally { await server.close(); }
-  }));
+  });
 });
 
 test("source downloads deliver original file bytes over a real HTTP connection", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiBase, apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiBase, apiRouteBase, projectContext }) => {
     const root = await mkdtemp(path.join(tmpdir(), "vibe64-download-http-"));
     const server = Fastify();
     const handles = [];
@@ -87,6 +86,7 @@ test("source downloads deliver original file bytes over a real HTTP connection",
       for (const [name, bytes] of files) await writeFile(path.join(root, name), bytes);
       const app = testRouteApp();
       registerRoutes(app.http, {
+        localhostCheckBypassed: true,
         projectContext, routeRelativePath: "vibe64", routeSurface: "app",
         sourceEditor: {
           async readTree() { return { ok: true }; },
@@ -125,15 +125,16 @@ test("source downloads deliver original file bytes over a real HTTP connection",
       await Promise.all(handles.map((handle) => handle.close()));
       await rm(root, { recursive: true, force: true });
     }
-  }));
+  });
 });
 
 test("star routes accept only trusted identity and download responses are private attachments", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const calls = [];
     const stream = Readable.from([Buffer.from([0, 255, 7])]);
     const app = testRouteApp();
     registerRoutes(app.http, {
+      localhostCheckBypassed: true,
       projectContext, routeRelativePath: "vibe64", routeSurface: "app",
       sourceEditor: {
         async readTree() { return { ok: true }; },
@@ -159,16 +160,16 @@ test("star routes accept only trusted identity and download responses are privat
     assert.equal(reply.headers["Content-Disposition"], "attachment; filename*=UTF-8''r%C3%A9sum%C3%A9%20%281%29.bin");
     assert.equal(reply.headers["Content-Type"], "application/octet-stream");
     assert.equal(reply.headers["Cache-Control"], "private, no-store");
-  }));
+  });
 });
 
 test("explanation streams validate their input before streaming and use the authenticated Vibe64 actor", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
     const server = Fastify();
     const calls = [];
     try {
-      registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
+      registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
         async readTree() { return { ok: true }; },
         async streamExplanation(input, stream) { calls.push(["explanation", input]); stream.emit({ type: "source-explanation.finished", ok: true }); },
         async streamExplanationFollowup(input, stream) { calls.push(["followup", input]); stream.emit({ type: "source-explanation.followup.finished", ok: true }); }
@@ -203,79 +204,78 @@ test("explanation streams validate their input before streaming and use the auth
         userMessageId: "msg-u", vibe64User: localUser
       }]]);
     } finally { await server.close(); }
-  }));
+  });
 });
 
 test("source file creation publishes a created refresh after the durable write", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const calls = [];
-      const created = {
-        file: { path: "src/new.js" },
-        fileChange: {
-          hash: "hash-1",
-          originId: "tab-1",
-          path: "src/new.js",
-          projectSlug: "unit_project",
-          sessionId: "session-1"
-        },
-        ok: true
-      };
-      const sourceEditor = {
-        async createFile(input) {
-          calls.push(["create", input]);
-          return created;
-        },
-        async readTree() {
-          return { ok: true, tree: [] };
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const calls = [];
+    const created = {
+      file: { path: "src/new.js" },
+      fileChange: {
+        hash: "hash-1",
+        originId: "tab-1",
+        path: "src/new.js",
+        projectSlug: "unit_project",
+        sessionId: "session-1"
+      },
+      ok: true
+    };
+    const sourceEditor = {
+      async createFile(input) {
+        calls.push(["create", input]);
+        return created;
+      },
+      async readTree() {
+        return { ok: true, tree: [] };
+      }
+    };
+    const app = testRouteApp();
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      events: {
+        async publish(event) {
+          calls.push(["publish", event.operation, event.entityId, event.realtime.event]);
         }
-      };
-      const app = testRouteApp();
-      registerRoutes(app.http, {
-        events: {
-          async publish(event) {
-            calls.push(["publish", event.operation, event.entityId, event.realtime.event]);
-          }
-        },
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        sourceEditor
-      });
-      const route = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-editor/file`
-      });
+      },
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app",
+      sourceEditor
+    });
+    const route = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-editor/file`
+    });
 
-      const reply = testReply();
-      await route.handler({
-        input: {
-          body: {
-            originId: "tab-1",
-            path: "src/new.js",
-            projectSlug: "unit_project"
-          }
-        },
-        params: routeProjectParams({ sessionId: "session-1" })
-      }, reply);
-
-      assert.equal(reply.payload, created);
-      assert.deepEqual(calls, [
-        ["create", {
+    const reply = testReply();
+    await route.handler({
+      input: {
+        body: {
           originId: "tab-1",
           path: "src/new.js",
-          projectSlug: "unit_project",
-          sessionId: "session-1",
-          vibe64User: localUser
-        }],
-        ["publish", "created", "session-1:src/new.js", "vibe64.source-editor.file.changed"]
-      ]);
-    });
+          projectSlug: "unit_project"
+        }
+      },
+      params: routeProjectParams({ sessionId: "session-1" })
+    }, reply);
+
+    assert.equal(reply.payload, created);
+    assert.deepEqual(calls, [
+      ["create", {
+        originId: "tab-1",
+        path: "src/new.js",
+        projectSlug: "unit_project",
+        sessionId: "session-1",
+        vibe64User: localUser
+      }],
+      ["publish", "created", "session-1:src/new.js", "vibe64.source-editor.file.changed"]
+    ]);
   });
 });
 
 test("source operations share validated inputs and fresh project authority across HTTP and automation", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const calls = [];
     const changes = [];
     let allowed = true;
@@ -316,6 +316,7 @@ test("source operations share validated inputs and fresh project authority acros
     }]));
     const app = testRouteApp();
     const actions = registerRoutes(app.http, {
+      localhostCheckBypassed: true,
       sourceEditor, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
       events: { async publish(event) { changes.push(event); } }
     }, async () => { if (!allowed) throw Object.assign(new Error("Project access revoked"), { statusCode: 403 }); });
@@ -352,16 +353,16 @@ test("source operations share validated inputs and fresh project authority acros
     }
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
-  }));
+  });
 });
 
 test("multipart upload passes its bounded transport reader through the authorized action", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     let allowed = true;
     const calls = [];
     const parts = [{ filename: "note.txt", file: Readable.from(["note"]) }];
     const app = testRouteApp();
-    const actions = registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
+    const actions = registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
       readTree() {},
       async uploadAreaFile(input, { readUpload }) { calls.push({ input, parts: await readUpload() }); return { ok: true }; }
     } }, async () => { if (!allowed) throw Object.assign(new Error("Revoked"), { statusCode: 403 }); });
@@ -379,15 +380,16 @@ test("multipart upload passes its bounded transport reader through the authorize
     await assert.rejects(route.handler(request, testReply()), { statusCode: 403 });
     assert.equal(readCount, 1);
     assert.equal(calls.length, 2);
-  }));
+  });
 });
 
 
 test("integration setup accepts selections only; executable, Env and session remain server-owned", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const calls = [];
     const app = testRouteApp();
     registerRoutes(app.http, {
+      localhostCheckBypassed: true,
       projectContext, routeRelativePath: "vibe64", routeSurface: "app",
       sourceEditor: {
         async readTree() { return { ok: true }; },
@@ -418,5 +420,5 @@ test("integration setup accepts selections only; executable, Env and session rem
       setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
       verificationInput: { account: "fixture" } }]);
     assert.deepEqual(reply.payload, { ok: true, status: "disconnected" });
-  }));
+  });
 });

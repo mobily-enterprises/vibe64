@@ -14,7 +14,7 @@ import { sessionRenameInputValidator } from "../../packages/vibe64-sessions/src/
 import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
@@ -47,9 +47,9 @@ test("rename HTTP uses the project/session route and validates input", async () 
     assert.ok(Object.keys(sessionRenameInputValidator.schema.create({ name }).errors).length);
   }
   assert.ok(sessionRenameInputValidator.schema.create({ name: "Valid", sessionId: "foreign" }).errors.sessionId);
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     const route = findRegisteredRoute(app, { method: "PATCH", path: `${apiRouteBase}/vibe64/sessions/:sessionId/name` });
     assert.equal(route.options.body, sessionRenameInputValidator);
     const calls = [];
@@ -57,7 +57,7 @@ test("rename HTTP uses the project/session route and validates input", async () 
       input: { body: { name: "New name", sessionId: "foreign" } }, params: routeProjectParams({ sessionId: "one" }) }, testReply());
     assert.equal(calls[0].actionId, ACTION_RENAME_SESSION);
     assert.equal(calls[0].input.sessionId, "one");
-  }));
+  });
 });
 
 function socketRequest(control, route, extra = {}) {

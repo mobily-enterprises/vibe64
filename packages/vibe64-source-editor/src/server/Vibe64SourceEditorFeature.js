@@ -4,7 +4,9 @@ import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createSourceEditorActions } from "./sourceEditorActions.js";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -16,6 +18,7 @@ const Vibe64SourceEditorFeature = defineFeature({
   id: "vibe64.source-editor",
   domain: "vibe64-source-editor",
   requires: {
+    env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
@@ -27,6 +30,7 @@ const Vibe64SourceEditorFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
@@ -34,6 +38,7 @@ const Vibe64SourceEditorFeature = defineFeature({
    * @param {TerminalsService} capabilities.terminals
    */
   setup({
+    env,
     events,
     http,
     logger,
@@ -47,6 +52,7 @@ const Vibe64SourceEditorFeature = defineFeature({
       terminals
     });
     registerRoutes(http, {
+      localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }),
       projectContext: getStudioProjectContext(),
       sourceEditor
     });

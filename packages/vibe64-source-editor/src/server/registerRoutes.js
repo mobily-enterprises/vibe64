@@ -55,10 +55,12 @@ const FILE_AREA_BODY_LIMIT = 2 * 1024 * 1024;
  * destinations; project file-area routes reach only the project's areas.
  * @param {RuntimeHttp} http
  * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  * @param {SourceEditorService} options.sourceEditor
  */
 function registerRoutes(http, {
+  localhostCheckBypassed,
   projectContext,
   sourceEditor
 }) {
@@ -67,6 +69,7 @@ function registerRoutes(http, {
     relativePath: "vibe64",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
       projectContext
     })

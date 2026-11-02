@@ -18,7 +18,6 @@ import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
@@ -115,218 +114,206 @@ test("workspace account terminal accepts authorization input without a selected 
 });
 
 test("accounts read route omits signed-in user in local editor mode", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, { projectContext });
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext });
 
-      const route = findRegisteredRoute(runtime, {
-        method: "GET",
-        path: `${apiRouteBase}/vibe64/accounts`
-      });
-      assert.ok(route);
+    const route = findRegisteredRoute(runtime, {
+      method: "GET",
+      path: `${apiRouteBase}/vibe64/accounts`
+    });
+    assert.ok(route);
 
-      let executedAction = null;
-      const reply = testReply();
-      await route.handler({
-        input: {
-          query: {}
-        },
-        params: routeProjectParams(),
-        async executeAction(action) {
-          executedAction = action;
-          return {
-            accounts: [],
-            ok: true
-          };
-        }
-      }, reply);
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      input: {
+        query: {}
+      },
+      params: routeProjectParams(),
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          accounts: [],
+          ok: true
+        };
+      }
+    }, reply);
 
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(executedAction, {
-        actionId: ACTION_READ_ACCOUNTS,
-        input: {}
-      });
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_READ_ACCOUNTS,
+      input: {}
     });
   });
 });
 
 test("accounts auth-session route preserves scoped slug params", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, { projectContext });
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext });
 
-      const route = findRegisteredRoute(runtime, {
-        method: "GET",
-        path: `${apiRouteBase}/vibe64/accounts/auth/:sessionId`
-      });
-      assert.ok(route);
+    const route = findRegisteredRoute(runtime, {
+      method: "GET",
+      path: `${apiRouteBase}/vibe64/accounts/auth/:sessionId`
+    });
+    assert.ok(route);
 
-      const paramsValidation = route.options.params.schema.patch(routeProjectParams({
+    const paramsValidation = route.options.params.schema.patch(routeProjectParams({
+      sessionId: "auth-session-1"
+    }));
+    assert.deepEqual(paramsValidation.errors, {});
+    assert.equal(paramsValidation.validatedObject.slug, "unit_project");
+    assert.equal(paramsValidation.validatedObject.sessionId, "auth-session-1");
+
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      params: routeProjectParams({
         sessionId: "auth-session-1"
-      }));
-      assert.deepEqual(paramsValidation.errors, {});
-      assert.equal(paramsValidation.validatedObject.slug, "unit_project");
-      assert.equal(paramsValidation.validatedObject.sessionId, "auth-session-1");
+      }),
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          account: {
+            id: "codex"
+          },
+          id: "auth-session-1",
+          ok: true,
+          status: "authenticating"
+        };
+      }
+    }, reply);
 
-      let executedAction = null;
-      const reply = testReply();
-      await route.handler({
-        params: routeProjectParams({
-          sessionId: "auth-session-1"
-        }),
-        async executeAction(action) {
-          executedAction = action;
-          return {
-            account: {
-              id: "codex"
-            },
-            id: "auth-session-1",
-            ok: true,
-            status: "authenticating"
-          };
-        }
-      }, reply);
-
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(executedAction, {
-        actionId: ACTION_READ_ACCOUNT_AUTH_SESSION,
-        input: {
-          sessionId: "auth-session-1"
-        }
-      });
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_READ_ACCOUNT_AUTH_SESSION,
+      input: {
+        sessionId: "auth-session-1"
+      }
     });
   });
 });
 
 test("accounts git identity route preserves scoped user input", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, { projectContext });
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext });
 
-      const route = findRegisteredRoute(runtime, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/accounts/git-identity`
-      });
-      assert.ok(route);
+    const route = findRegisteredRoute(runtime, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/accounts/git-identity`
+    });
+    assert.ok(route);
 
-      let executedAction = null;
-      const reply = testReply();
-      await route.handler({
-        body: {
-          gitUserEmail: "tony@example.test",
-          gitUserName: "Tony"
-        },
-        params: routeProjectParams(),
-        async executeAction(action) {
-          executedAction = action;
-          return {
-            ok: true
-          };
-        }
-      }, reply);
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      body: {
+        gitUserEmail: "tony@example.test",
+        gitUserName: "Tony"
+      },
+      params: routeProjectParams(),
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          ok: true
+        };
+      }
+    }, reply);
 
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(executedAction, {
-        actionId: ACTION_SAVE_GIT_IDENTITY,
-        input: {
-          gitUserEmail: "tony@example.test",
-          gitUserName: "Tony"
-        }
-      });
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_SAVE_GIT_IDENTITY,
+      input: {
+        gitUserEmail: "tony@example.test",
+        gitUserName: "Tony"
+      }
     });
   });
 });
 
 test("accounts personal profile route accepts a standalone preferred name", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, { projectContext });
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext });
 
-      const route = findRegisteredRoute(runtime, {
-        method: "PATCH",
-        path: `${apiRouteBase}/vibe64/accounts/personal-ai-profile`
-      });
-      assert.ok(route);
+    const route = findRegisteredRoute(runtime, {
+      method: "PATCH",
+      path: `${apiRouteBase}/vibe64/accounts/personal-ai-profile`
+    });
+    assert.ok(route);
 
-      let executedAction = null;
-      const reply = testReply();
-      await route.handler({
-        body: {
-          preferredName: "Ada"
-        },
-        params: routeProjectParams(),
-        async executeAction(action) {
-          executedAction = action;
-          return {
-            ok: true,
-            personalProfile: {
-              available: true,
-              preferredName: "Ada",
-              scope: "installation",
-              version: 1
-            }
-          };
-        }
-      }, reply);
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      body: {
+        preferredName: "Ada"
+      },
+      params: routeProjectParams(),
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          ok: true,
+          personalProfile: {
+            available: true,
+            preferredName: "Ada",
+            scope: "installation",
+            version: 1
+          }
+        };
+      }
+    }, reply);
 
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(executedAction, {
-        actionId: ACTION_SAVE_PERSONAL_AI_PROFILE,
-        input: {
-          preferredName: "Ada"
-        }
-      });
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_SAVE_PERSONAL_AI_PROFILE,
+      input: {
+        preferredName: "Ada"
+      }
     });
   });
 });
 
 test("curated Codex routes use trusted request identity and accept only curated provider ids", async () => {
-  await withLocalRequestBypass(async () => {
-    const runtime = testAccountRouteRuntime();
-    registerRoutes(runtime.http, { projectContext: getStudioProjectContext() });
-    for (const [method, suffix] of [["GET", ""], ["PATCH", ""], ["POST", "/remove"]]) {
-      const route = findRegisteredRoute(runtime, { method, path: `/api/vibe64/accounts/codex-providers${suffix}` });
-      assert.ok(route);
-      if (method !== "GET") {
-        assert.notDeepEqual(route.options.body.schema.patch({ modelProviderId: "https://custom.invalid" }).errors, {});
-        assert.deepEqual(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture" }).errors, {});
-        assert.equal(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } })
-          .errors.vibe64User.code, "FIELD_NOT_ALLOWED", "the request's own user is the only identity");
-      }
-      let action;
-      const member = { role: "member", username: "member" };
-      await route.handler({ vibe64User: member,
-        input: { body: { modelProviderId: "deepseek", apiKey: "fixture" } },
-        async executeAction(value) { action = value; return { ok: true, providers: [] }; }
-      }, testReply());
-      assert.deepEqual(action.input, method === "GET" ? {} : { modelProviderId: "deepseek", apiKey: "fixture" });
-      assert.ok(action.actionId);
+  const runtime = testAccountRouteRuntime();
+  registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext: getStudioProjectContext() });
+  for (const [method, suffix] of [["GET", ""], ["PATCH", ""], ["POST", "/remove"]]) {
+    const route = findRegisteredRoute(runtime, { method, path: `/api/vibe64/accounts/codex-providers${suffix}` });
+    assert.ok(route);
+    if (method !== "GET") {
+      assert.notDeepEqual(route.options.body.schema.patch({ modelProviderId: "https://custom.invalid" }).errors, {});
+      assert.deepEqual(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture" }).errors, {});
+      assert.equal(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } })
+        .errors.vibe64User.code, "FIELD_NOT_ALLOWED", "the request's own user is the only identity");
     }
-  });
+    let action;
+    const member = { role: "member", username: "member" };
+    await route.handler({ vibe64User: member,
+      input: { body: { modelProviderId: "deepseek", apiKey: "fixture" } },
+      async executeAction(value) { action = value; return { ok: true, providers: [] }; }
+    }, testReply());
+    assert.deepEqual(action.input, method === "GET" ? {} : { modelProviderId: "deepseek", apiKey: "fixture" });
+    assert.ok(action.actionId);
+  }
 });
 
 test("routing draft preview uses trusted request identity and carries both setups", async () => {
-  await withLocalRequestBypass(async () => {
-    const runtime = testAccountRouteRuntime();
-    registerRoutes(runtime.http, { projectContext: getStudioProjectContext() });
-    const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
-    assert.ok(route);
-    const body = { revision: 4, owner: { fix: { follows: "junior" } }, nonOwner: {} };
-    assert.equal(route.options.body.schema.patch({ ...body, vibe64User: { role: "owner" } }).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
-    for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
-      let action;
-      await route.handler({ vibe64User, input: { body },
-        async executeAction(value) { action = value; return { ok: true }; }
-      }, testReply());
-      assert.equal(action.actionId, ACTION_PREVIEW_MODEL_ROUTING);
-      assert.deepEqual([action.input.owner, action.input.nonOwner], [{ fix: { follows: "junior" } }, {}]);
-      assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
-    }
-  });
+  const runtime = testAccountRouteRuntime();
+  registerRoutes(runtime.http, { localhostCheckBypassed: true, projectContext: getStudioProjectContext() });
+  const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
+  assert.ok(route);
+  const body = { revision: 4, owner: { fix: { follows: "junior" } }, nonOwner: {} };
+  assert.equal(route.options.body.schema.patch({ ...body, vibe64User: { role: "owner" } }).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
+  for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
+    let action;
+    await route.handler({ vibe64User, input: { body },
+      async executeAction(value) { action = value; return { ok: true }; }
+    }, testReply());
+    assert.equal(action.actionId, ACTION_PREVIEW_MODEL_ROUTING);
+    assert.deepEqual([action.input.owner, action.input.nonOwner], [{ fix: { follows: "junior" } }, {}]);
+    assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
+  }
 });
 
 test("the per-tool workflow choices route is gone", () => {

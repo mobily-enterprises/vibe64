@@ -29,6 +29,7 @@ import {
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
@@ -66,6 +67,7 @@ function setupAccounts({
   terminals
 }) {
   warnMissingOperatorClis(env);
+  const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env });
   const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
   const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
   const projectContext = getStudioProjectContext();
@@ -114,7 +116,7 @@ function setupAccounts({
     accounts,
     terminals
   });
-  registerRoutes(http, { projectContext });
+  registerRoutes(http, { localhostCheckBypassed, projectContext });
 
   // A host-supplied account runtime also owns connection wiring. Do not
   // register a second copy of its actions/store.
@@ -144,10 +146,11 @@ function setupAccounts({
         })
       })
     });
-    registerLocalAiConnectionRoutes(http, { projectContext });
+    registerLocalAiConnectionRoutes(http, { localhostCheckBypassed, projectContext });
   }
   registerAuthTerminalRoutes(fastify, {
     accounts,
+    localhostCheckBypassed,
     projectContext
   });
 

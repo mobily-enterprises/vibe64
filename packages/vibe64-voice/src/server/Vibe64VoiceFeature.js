@@ -1,5 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { resolveVoiceProxyConfig } from "@jskit-ai/assistant-voice/server";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 import { createVoiceActions } from "./voiceActions.js";
 import { createVoice } from "./voiceRuntime.js";
 import { registerRoutes } from "./registerRoutes.js";
@@ -35,14 +36,14 @@ const Vibe64VoiceFeature = defineFeature({
     fastify,
     sessions
   }, { actionCatalogue }) {
-    const config = { ...process.env, ...env };
     const proxyConfig = resolveVoiceProxyConfig({
-      endpoint: config.VIBE64_VOICE_ENDPOINT,
-      accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE
+      endpoint: env.VIBE64_VOICE_ENDPOINT,
+      accessTokenFile: env.VIBE64_VOICE_ACCESS_TOKEN_FILE
     });
     registerRoutes(fastify, { actionCatalogue });
     registerVoiceSocketRoutes(fastify, {
       actionCatalogue,
+      localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }),
       proxyConfig,
       sessions
     });

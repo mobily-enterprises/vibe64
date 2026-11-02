@@ -3,6 +3,13 @@ import {
   isLocalhostCheckBypassEnabled
 } from "./localhostCheckBypass.js";
 
+/**
+ * How a Studio request is checked: the server computes once, from its runtime
+ * env, whether it was started with the localhost check bypassed.
+ * @typedef {object} LocalStudioRequestCheck
+ * @property {boolean} localhostCheckBypassed
+ */
+
 function normalizeHostName(value = "") {
   const host = String(value || "").trim();
   if (!host) {
@@ -67,16 +74,29 @@ function originMatchesRequest(request = {}) {
   }
 }
 
-function isTrustedStudioWebSocketRequest(request = {}) {
+/**
+ * Whether a WebSocket upgrade comes from this Studio's own page, or from a
+ * local command-line client that sends no Origin and no signed-in session.
+ * @param {object} request
+ * @param {LocalStudioRequestCheck} check
+ */
+function isTrustedStudioWebSocketRequest(request, check) {
   if (request.headers?.origin !== undefined) {
-    return originMatchesRequest(request) && isLocalStudioRequest(request);
+    return originMatchesRequest(request) && isLocalStudioRequest(request, check);
   }
   // Local command-line clients may omit Origin; signed-in cookie sessions may not.
-  return !hasAuthenticatedVibe64User(request) && isLocalStudioRequest(request);
+  return !hasAuthenticatedVibe64User(request) && isLocalStudioRequest(request, check);
 }
 
-function isLocalStudioRequest(request) {
-  if (isLocalhostCheckBypassEnabled({ env: process.env })) {
+/**
+ * Whether a request is this computer's Studio: a signed-in person's, or one
+ * whose address, host and origin are all loopback, unless the server was
+ * started with the localhost check bypassed.
+ * @param {object} request
+ * @param {LocalStudioRequestCheck} check
+ */
+function isLocalStudioRequest(request, { localhostCheckBypassed }) {
+  if (localhostCheckBypassed) {
     return true;
   }
   if (hasAuthenticatedVibe64User(request)) {
@@ -88,11 +108,17 @@ function isLocalStudioRequest(request) {
   return isLoopbackAddress(remoteAddress) && isLoopbackAddress(host) && isLoopbackAddress(originHost);
 }
 
-function requireLocalStudioRequest(request, reply, options = {}) {
-  const {
-    message = "This Studio route only accepts loopback requests."
-  } = options;
-  if (!isLocalStudioRequest(request)) {
+/**
+ * Answers 403 to a request that is not this computer's Studio.
+ * @param {object} request
+ * @param {object} reply
+ * @param {LocalStudioRequestCheck & { message?: string }} options
+ */
+function requireLocalStudioRequest(request, reply, {
+  localhostCheckBypassed,
+  message = "This Studio route only accepts loopback requests."
+}) {
+  if (!isLocalStudioRequest(request, { localhostCheckBypassed })) {
     reply.code(403).send({
       ok: false,
       errors: [
@@ -108,11 +134,17 @@ function requireLocalStudioRequest(request, reply, options = {}) {
   return true;
 }
 
+// Phase 2 removes this: only the terminals routes still omit the flag, so for them it is read from this process's env.
+function terminalsLocalhostCheckBypassed() {
+  return isLocalhostCheckBypassEnabled({ env: process.env });
+}
+
 export {
   isLocalStudioRequest,
   isLoopbackAddress,
   isTrustedStudioWebSocketRequest,
   normalizeHostName,
   originMatchesRequest,
-  requireLocalStudioRequest
+  requireLocalStudioRequest,
+  terminalsLocalhostCheckBypassed
 };

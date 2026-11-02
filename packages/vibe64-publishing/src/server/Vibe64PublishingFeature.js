@@ -5,6 +5,7 @@ import { publicationWatchSource } from "./publicationWatch.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createPublishingService } from "./service.js";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
 /** @typedef {import("./types.js").PublishingService} PublishingService */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
@@ -58,6 +59,7 @@ const Vibe64PublishingFeature = defineFeature({
       sourceEditor
     });
     registerRoutes(http, {
+      localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }),
       projectContext: getStudioProjectContext(),
       publishing
     });

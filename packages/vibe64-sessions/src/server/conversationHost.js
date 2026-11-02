@@ -38,9 +38,10 @@ const NO_COLLEAGUE_CONVERSATIONS = Object.freeze({
  * @param {object} dependencies
  * @param {ColleagueBrowserConversations | typeof NO_COLLEAGUE_CONVERSATIONS} dependencies.colleagueConversations
  * @param {RuntimeHttp} dependencies.http
+ * @param {boolean} dependencies.localhostCheckBypassed
  * @param {MainBrowserConversations} dependencies.mainConversations
  */
-function createConversationHost({ colleagueConversations, http, mainConversations }) {
+function createConversationHost({ colleagueConversations, http, localhostCheckBypassed, mainConversations }) {
   function open(input) {
     if (mainConversationTarget(input.id) || temporaryConversationTarget(input.id)) return mainConversations.open(input);
     return colleagueConversations.open(input);
@@ -48,7 +49,7 @@ function createConversationHost({ colleagueConversations, http, mainConversation
 
   function register(method, route, options, handler) {
     return http.router.register(method, route, { ...options, auth: "public" }, async (request, reply) => {
-      if (!requireLocalStudioRequest(request, reply)) return reply;
+      if (!requireLocalStudioRequest(request, reply, { localhostCheckBypassed })) return reply;
       return handler(request, reply);
     });
   }
@@ -59,7 +60,7 @@ function createConversationHost({ colleagueConversations, http, mainConversation
       ...request,
       headers: request?.headers,
       vibe64User: authenticatedVibe64User(context)
-    })) {
+    }, { localhostCheckBypassed })) {
       throw new AppError(403, "Open this conversation from this Studio's own origin.", { code: "vibe64_conversation_origin_untrusted" });
     }
   }

@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSubmissions, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
@@ -67,7 +67,7 @@ test("connected Save commits and records each receiver, resumes after failure, a
         }
       }
     });
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const service = createService({ actions,
       project: {
         createRuntime: async () => runtimeFor(currentProjectRequestContext().slug),
@@ -273,7 +273,7 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
     let allowed = true;
     let publications = 0;
     let authorizations = 0;
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const service = createService({ actions,
       project: {
         createRuntime: async () => ({

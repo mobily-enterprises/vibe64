@@ -21,52 +21,63 @@ function mainConversationRequestContext(context = {}) {
 }
 
 /**
- * The conversation access an action's context grants: its actor, project and
- * person. A standalone editor's local request for its selected project is the
- * local actor; any other request without the policy's grant is refused.
- * @param {object} _input
- * @param {object} context
+ * What a Main conversation action may reach: the access its context grants,
+ * and the authority a person's Main chat send carries.
+ * @param {import("@local/vibe64-core/server/localStudioRequest").LocalStudioRequestCheck} check
  */
-function conversationContextGrant(_input, context) {
-  if (!context.vibe64Action) {
-    const request = context.requestMeta?.request;
-    const project = currentProjectRequestContext();
-    if (getStudioProjectContext().projectCatalogEnabled !== false || !project || !request ||
-        !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }))) {
-      throw new AppError(403, "Open this conversation from the local editor for its selected project.", {
-        code: "conversation_forbidden",
-        messageCode: "vibe64_conversation_local_editor_required"
-      });
+function createMainConversationAuthority({ localhostCheckBypassed }) {
+  /**
+   * The conversation access an action's context grants: its actor, project and
+   * person. A standalone editor's local request for its selected project is the
+   * local actor; any other request without the policy's grant is refused.
+   * @param {object} _input
+   * @param {object} context
+   */
+  function conversationContextGrant(_input, context) {
+    if (!context.vibe64Action) {
+      const request = context.requestMeta?.request;
+      const project = currentProjectRequestContext();
+      if (getStudioProjectContext().projectCatalogEnabled !== false || !project || !request ||
+          !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }), { localhostCheckBypassed })) {
+        throw new AppError(403, "Open this conversation from the local editor for its selected project.", {
+          code: "conversation_forbidden",
+          messageCode: "vibe64_conversation_local_editor_required"
+        });
+      }
+      // Standalone requests already resolve the selected project in the action
+      // policy. No account or authority context contributor serves them.
+      return { actor: { id: "local" }, project, user: null };
     }
-    // Standalone requests already resolve the selected project in the action
-    // policy. No account or authority context contributor serves them.
-    return { actor: { id: "local" }, project, user: null };
+    return {
+      actor: context.actor,
+      project: context.vibe64Action.project,
+      user: authenticatedVibe64User(context)
+    };
   }
-  return {
-    actor: context.actor,
-    project: context.vibe64Action.project,
-    user: authenticatedVibe64User(context)
-  };
-}
 
-/**
- * The authority a person's Main chat send carries to the browser conversation:
- * the session, its project, the actor and the original request.
- * @param {string} sessionId
- * @param {object} context
- */
-function mainBrowserAuthority(sessionId, context) {
-  const grant = conversationContextGrant({ sessionId }, context);
-  return {
-    sessionId,
-    projectSlug: grant.project.slug,
-    actorId: grant.actor.id,
-    requestContext: mainConversationRequestContext(context)
-  };
+  /**
+   * The authority a person's Main chat send carries to the browser conversation:
+   * the session, its project, the actor and the original request.
+   * @param {string} sessionId
+   * @param {object} context
+   */
+  function mainBrowserAuthority(sessionId, context) {
+    const grant = conversationContextGrant({ sessionId }, context);
+    return {
+      sessionId,
+      projectSlug: grant.project.slug,
+      actorId: grant.actor.id,
+      requestContext: mainConversationRequestContext(context)
+    };
+  }
+
+  return Object.freeze({
+    conversationContextGrant,
+    mainBrowserAuthority
+  });
 }
 
 export {
-  conversationContextGrant,
-  mainBrowserAuthority,
+  createMainConversationAuthority,
   mainConversationRequestContext
 };

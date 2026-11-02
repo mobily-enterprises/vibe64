@@ -1,5 +1,5 @@
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
-import { conversationContextGrant, mainBrowserAuthority } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
+import { createMainConversationAuthority } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
 import { restoreStandaloneRenewalActor } from "../../packages/vibe64-sessions/src/server/sessionRenewalActors.js";
@@ -41,6 +41,7 @@ function createSessionsService(dependencies) {
   const terminals = withOperations(dependencies.terminals, NEUTRAL_TERMINAL_OPERATIONS);
   return createService({
     archivePreparation: prepareNothingForArchive,
+    localhostCheckBypassed: false,
     logger: silentLogger,
     publishProjectChanged: async () => null,
     restoreRenewalActor: restoreStandaloneRenewalActor,
@@ -61,6 +62,7 @@ function createSessionsService(dependencies) {
  * @param {object} sessions
  */
 function withMainChatOperations(sessions) {
+  const { conversationContextGrant, mainBrowserAuthority } = createMainConversationAuthority({ localhostCheckBypassed: false });
   return {
     readConversationContext: conversationContextGrant,
     sendMainChatMessage: ({ sessionId, ...message }, context) =>

@@ -11,7 +11,9 @@ import {
   createService
 } from "./service.js";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -24,6 +26,7 @@ const Vibe64DatabaseToolsFeature = defineFeature({
   id: "vibe64.database-tools",
   domain: "vibe64-database-tools",
   requires: {
+    env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
@@ -36,6 +39,7 @@ const Vibe64DatabaseToolsFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
@@ -44,6 +48,7 @@ const Vibe64DatabaseToolsFeature = defineFeature({
    * @param {TerminalsService} capabilities.terminals
    */
   setup({
+    env,
     events,
     http,
     logger,
@@ -58,7 +63,7 @@ const Vibe64DatabaseToolsFeature = defineFeature({
       sourceEditor,
       terminals
     });
-    registerRoutes(http, { projectContext: getStudioProjectContext() });
+    registerRoutes(http, { localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }), projectContext: getStudioProjectContext() });
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };

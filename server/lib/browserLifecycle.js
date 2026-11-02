@@ -144,12 +144,18 @@ function createBrowserLifecycleMonitor({
   });
 }
 
-function registerBrowserLifecycleWebSocketRoute(app, monitor) {
+/**
+ * The browser lifecycle socket, open only to this Studio's own pages.
+ * @param {{ get: Function }} app
+ * @param {ReturnType<typeof createBrowserLifecycleMonitor>} monitor
+ * @param {import("@local/vibe64-core/server/localStudioRequest").LocalStudioRequestCheck} check
+ */
+function registerBrowserLifecycleWebSocketRoute(app, monitor, { localhostCheckBypassed }) {
   app.get(
     BROWSER_LIFECYCLE_WEBSOCKET_PATH,
     { websocket: true },
     (socket, request) => {
-      if (!isTrustedStudioWebSocketRequest(request)) {
+      if (!isTrustedStudioWebSocketRequest(request, { localhostCheckBypassed })) {
         socket.close(1008, "Open this connection from its Vibe64 page.");
         return;
       }

@@ -57,12 +57,14 @@ function attemptLessonReadInput(request) {
  * HTTP only assembles canonical action inputs. Authentication, pins, revision
  * checks and effects belong to the existing Training actions and owners.
  * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  */
-function registerTrainingRoutes(http) {
+function registerTrainingRoutes(http, { localhostCheckBypassed }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-training"] }), {
     relativePath: "vibe64/training",
     surface: "app",
-    wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, projectScoped: false })
   });
   routes.actionRoute("GET", "/courses", {
     actionId: TRAINING_ACTIONS.LIST_COURSES,

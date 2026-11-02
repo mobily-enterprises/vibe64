@@ -1,6 +1,7 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { registerPracticeRequestActor } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
@@ -85,8 +86,9 @@ const Vibe64TrainingFeature = defineFeature({
     learningFacts,
     trainingHost
   }, { actionCatalogue }) {
-    registerTrainingRoutes(http);
-    registerTrainingVisualResourceRoutes(http);
+    const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env });
+    registerTrainingRoutes(http, { localhostCheckBypassed });
+    registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed });
     // A host that composes its own training passes its fact readers to that composition.
     if (trainingHost) return { training: trainingHost };
 
@@ -109,13 +111,13 @@ const Vibe64TrainingFeature = defineFeature({
       logger,
       admissionScope: "learning-only",
       projectContext,
-      resolveUser: ({ request }) => localLearnerActor(request),
+      resolveUser: ({ request }) => localLearnerActor(request, { localhostCheckBypassed }),
       authorizeProject() {
         throw new Error("Learning authority cannot authorize a working project.");
       }
     });
     // The person of a local practice project request is this computer's user.
-    const releasePracticeActor = registerPracticeRequestActor(({ request }) => localLearnerActor(request));
+    const releasePracticeActor = registerPracticeRequestActor(({ request }) => localLearnerActor(request, { localhostCheckBypassed }));
     // Learn mode: the local learner is this computer's user, whatever the request says.
     const releaseLearningMode = registerLearningModeReader(() => training.learners.readLearningMode({ actor: currentOsUser() }), {
       onReadFailure: error => logger.warn({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")

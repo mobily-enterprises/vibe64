@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
@@ -187,7 +187,7 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
 test("Colleague browser facade retains Fastify cookie headers and revalidates logout", async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-cookie-browser-"));
   const app = Fastify();
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const user = { username: "cookie-owner", uid: 42, role: "owner" };
   const cookie = "fixture-session=owner-session";
   let signedIn = true;

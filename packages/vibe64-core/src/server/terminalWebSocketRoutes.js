@@ -1,5 +1,6 @@
 import {
-  isTrustedStudioWebSocketRequest
+  isTrustedStudioWebSocketRequest,
+  terminalsLocalhostCheckBypassed
 } from "./localStudioRequest.js";
 import {
   resolveProjectRequestContext,
@@ -28,6 +29,7 @@ function publicTerminalSnapshot(session) {
 /**
  * @param {RuntimeFastify} fastify
  * @param {object} [options]
+ * @param {boolean} options.localhostCheckBypassed whether the server was started with the localhost check bypassed
  * @param {StudioProjectContext} [options.projectContext]
  * @param {boolean} [options.projectScoped]
  * @param {string} options.routePath
@@ -40,6 +42,7 @@ function publicTerminalSnapshot(session) {
 function registerTerminalWebSocketRoute(
   fastify,
   {
+    localhostCheckBypassed = terminalsLocalhostCheckBypassed(),
     projectContext,
     projectScoped = true,
     routePath,
@@ -81,7 +84,7 @@ function registerTerminalWebSocketRoute(
         socket.close(closeCode, error);
       };
 
-      if (!isTrustedStudioWebSocketRequest(request)) {
+      if (!isTrustedStudioWebSocketRequest(request, { localhostCheckBypassed })) {
         closeWithError(1008, "Open this terminal from its Vibe64 page.");
         return;
       }

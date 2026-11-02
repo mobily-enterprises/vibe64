@@ -14,199 +14,69 @@ import {
   routeProjectParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
-function projectRoutes(app, { projectContext, localRequestMessage, tags = ["studio", "unit-test"] } = {}) {
+function projectRoutes(app, { localhostCheckBypassed, projectContext, localRequestMessage, tags = ["studio", "unit-test"] } = {}) {
   return createActionRouteScope(vibe64RouteHttp(app.http, { tags }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
     surface: "app",
-    wrapHandler: vibe64RouteHandler({ localRequestMessage, projectContext })
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, localRequestMessage, projectContext })
   });
 }
 
 test("Vibe64 route scopes centralize route metadata and action dispatch", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const app = testRouteApp();
-      const routes = projectRoutes(app, { localRequestMessage: "Local only.", projectContext });
-
-      routes.actionRoute("POST", "/sessions/:sessionId/action", {
-        actionId: "unit.action",
-        body: { type: "object" },
-        bodyLimit: 123456,
-        buildInput(request) {
-          return {
-            body: requestBody(request),
-            query: requestQuery(request),
-            sessionId: request.params.sessionId
-          };
-        },
-        summary: "Run a unit action."
-      });
-
-      assert.equal(app.registeredRoutes.length, 1);
-      const route = app.registeredRoutes[0];
-      assert.equal(route.method, "POST");
-      assert.equal(route.path, `${apiRouteBase}/vibe64/sessions/:sessionId/action`);
-      assert.deepEqual(route.options, {
-        actionId: "unit.action",
-        auth: "public",
-        surface: "app",
-        meta: {
-          summary: "Run a unit action.",
-          tags: ["studio", "unit-test"]
-        },
-        body: { type: "object" },
-        bodyLimit: 123456
-      });
-
-      const reply = testReply();
-      await route.handler({
-        body: {
-          ignored: true
-        },
-        input: {
-          body: {
-            text: "from validator"
-          },
-          query: {
-            page: "2"
-          }
-        },
-        params: routeProjectParams({
-          sessionId: "session-1"
-        }),
-        async executeAction(action) {
-          return {
-            action,
-            ok: true
-          };
-        }
-      }, reply);
-
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(reply.payload.action, {
-        actionId: "unit.action",
-        input: {
-          body: {
-            text: "from validator"
-          },
-          query: {
-            page: "2"
-          },
-          sessionId: "session-1"
-        }
-      });
-    });
-  });
-});
-
-test("Vibe64 route scopes support service response status overrides", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ projectContext }) => {
-      const app = testRouteApp();
-      const routes = projectRoutes(app, { projectContext });
-
-      routes.serviceRoute("GET", "/missing", {
-        failureStatus: 404,
-        summary: "Read missing resource."
-      }, () => {
-        return {
-          ok: false
-        };
-      });
-
-      routes.serviceRoute("DELETE", "/close", {
-        statusCode: 200,
-        summary: "Close resource."
-      }, () => {
-        return {
-          ok: false
-        };
-      });
-
-      routes.serviceRoute("GET", "/forbidden", {
-        failureStatus: 404,
-        summary: "Read forbidden resource."
-      }, () => {
-        return {
-          code: "unit_forbidden",
-          ok: false,
-          statusCode: 403
-        };
-      });
-
-      routes.actionRoute("GET", "/created", {
-        actionId: "unit.created",
-        statusCode: (response) => response.created ? 201 : 200,
-        summary: "Create a resource."
-      });
-
-      routes.serviceRoute("GET", "/plain-failure", { summary: "Fail without a status." }, () => ({ ok: false }));
-
-      const missingReply = testReply();
-      await app.registeredRoutes[0].handler({
-        params: routeProjectParams()
-      }, missingReply);
-      assert.equal(missingReply.statusCode, 404);
-
-      const closeReply = testReply();
-      await app.registeredRoutes[1].handler({
-        params: routeProjectParams()
-      }, closeReply);
-      assert.equal(closeReply.statusCode, 200);
-
-      const forbiddenReply = testReply();
-      await app.registeredRoutes[2].handler({
-        params: routeProjectParams()
-      }, forbiddenReply);
-      assert.equal(forbiddenReply.statusCode, 403);
-
-      const createdReply = testReply();
-      await app.registeredRoutes[3].handler({
-        params: routeProjectParams(),
-        async executeAction() { return { ok: true, created: true }; }
-      }, createdReply);
-      assert.equal(createdReply.statusCode, 201);
-
-      const plainFailureReply = testReply();
-      await app.registeredRoutes[4].handler({ params: routeProjectParams() }, plainFailureReply);
-      assert.equal(plainFailureReply.statusCode, 400);
-
-      for (const route of app.registeredRoutes) {
-        assert.equal(Object.hasOwn(route.options, "statusCode"), false, "status options stay with the handler");
-        assert.equal(Object.hasOwn(route.options, "failureStatus"), false, "status options stay with the handler");
-      }
-    });
-  });
-});
-
-test("Vibe64 route scopes can register global routes without project params", async () => {
-  await withLocalRequestBypass(async () => {
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
-    const routes = createActionRouteScope(vibe64RouteHttp(app.http), {
-      relativePath: "vibe64/connections",
-      surface: "app",
-      wrapHandler: vibe64RouteHandler({ projectScoped: false })
-    });
+    const routes = projectRoutes(app, { localhostCheckBypassed: true, localRequestMessage: "Local only.", projectContext });
 
-    routes.actionRoute("GET", "", {
-      actionId: "unit.connections.read",
-      summary: "Read global connections."
+    routes.actionRoute("POST", "/sessions/:sessionId/action", {
+      actionId: "unit.action",
+      body: { type: "object" },
+      bodyLimit: 123456,
+      buildInput(request) {
+        return {
+          body: requestBody(request),
+          query: requestQuery(request),
+          sessionId: request.params.sessionId
+        };
+      },
+      summary: "Run a unit action."
     });
 
     assert.equal(app.registeredRoutes.length, 1);
     const route = app.registeredRoutes[0];
-    assert.equal(route.method, "GET");
-    assert.equal(route.path, "/api/vibe64/connections");
-    assert.deepEqual(route.options.meta, { tags: [], summary: "Read global connections." });
+    assert.equal(route.method, "POST");
+    assert.equal(route.path, `${apiRouteBase}/vibe64/sessions/:sessionId/action`);
+    assert.deepEqual(route.options, {
+      actionId: "unit.action",
+      auth: "public",
+      surface: "app",
+      meta: {
+        summary: "Run a unit action.",
+        tags: ["studio", "unit-test"]
+      },
+      body: { type: "object" },
+      bodyLimit: 123456
+    });
 
     const reply = testReply();
     await route.handler({
-      params: {},
+      body: {
+        ignored: true
+      },
+      input: {
+        body: {
+          text: "from validator"
+        },
+        query: {
+          page: "2"
+        }
+      },
+      params: routeProjectParams({
+        sessionId: "session-1"
+      }),
       async executeAction(action) {
         return {
           action,
@@ -217,24 +87,147 @@ test("Vibe64 route scopes can register global routes without project params", as
 
     assert.equal(reply.statusCode, 200);
     assert.deepEqual(reply.payload.action, {
-      actionId: "unit.connections.read",
-      input: {}
+      actionId: "unit.action",
+      input: {
+        body: {
+          text: "from validator"
+        },
+        query: {
+          page: "2"
+        },
+        sessionId: "session-1"
+      }
     });
+  });
+});
+
+test("Vibe64 route scopes support service response status overrides", async () => {
+  await withRouteProject(async ({ projectContext }) => {
+    const app = testRouteApp();
+    const routes = projectRoutes(app, { localhostCheckBypassed: true, projectContext });
+
+    routes.serviceRoute("GET", "/missing", {
+      failureStatus: 404,
+      summary: "Read missing resource."
+    }, () => {
+      return {
+        ok: false
+      };
+    });
+
+    routes.serviceRoute("DELETE", "/close", {
+      statusCode: 200,
+      summary: "Close resource."
+    }, () => {
+      return {
+        ok: false
+      };
+    });
+
+    routes.serviceRoute("GET", "/forbidden", {
+      failureStatus: 404,
+      summary: "Read forbidden resource."
+    }, () => {
+      return {
+        code: "unit_forbidden",
+        ok: false,
+        statusCode: 403
+      };
+    });
+
+    routes.actionRoute("GET", "/created", {
+      actionId: "unit.created",
+      statusCode: (response) => response.created ? 201 : 200,
+      summary: "Create a resource."
+    });
+
+    routes.serviceRoute("GET", "/plain-failure", { summary: "Fail without a status." }, () => ({ ok: false }));
+
+    const missingReply = testReply();
+    await app.registeredRoutes[0].handler({
+      params: routeProjectParams()
+    }, missingReply);
+    assert.equal(missingReply.statusCode, 404);
+
+    const closeReply = testReply();
+    await app.registeredRoutes[1].handler({
+      params: routeProjectParams()
+    }, closeReply);
+    assert.equal(closeReply.statusCode, 200);
+
+    const forbiddenReply = testReply();
+    await app.registeredRoutes[2].handler({
+      params: routeProjectParams()
+    }, forbiddenReply);
+    assert.equal(forbiddenReply.statusCode, 403);
+
+    const createdReply = testReply();
+    await app.registeredRoutes[3].handler({
+      params: routeProjectParams(),
+      async executeAction() { return { ok: true, created: true }; }
+    }, createdReply);
+    assert.equal(createdReply.statusCode, 201);
+
+    const plainFailureReply = testReply();
+    await app.registeredRoutes[4].handler({ params: routeProjectParams() }, plainFailureReply);
+    assert.equal(plainFailureReply.statusCode, 400);
+
+    for (const route of app.registeredRoutes) {
+      assert.equal(Object.hasOwn(route.options, "statusCode"), false, "status options stay with the handler");
+      assert.equal(Object.hasOwn(route.options, "failureStatus"), false, "status options stay with the handler");
+    }
+  });
+});
+
+test("Vibe64 route scopes can register global routes without project params", async () => {
+  const app = testRouteApp();
+  const routes = createActionRouteScope(vibe64RouteHttp(app.http), {
+    relativePath: "vibe64/connections",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed: true, projectScoped: false })
+  });
+
+  routes.actionRoute("GET", "", {
+    actionId: "unit.connections.read",
+    summary: "Read global connections."
+  });
+
+  assert.equal(app.registeredRoutes.length, 1);
+  const route = app.registeredRoutes[0];
+  assert.equal(route.method, "GET");
+  assert.equal(route.path, "/api/vibe64/connections");
+  assert.deepEqual(route.options.meta, { tags: [], summary: "Read global connections." });
+
+  const reply = testReply();
+  await route.handler({
+    params: {},
+    async executeAction(action) {
+      return {
+        action,
+        ok: true
+      };
+    }
+  }, reply);
+
+  assert.equal(reply.statusCode, 200);
+  assert.deepEqual(reply.payload.action, {
+    actionId: "unit.connections.read",
+    input: {}
   });
 });
 
 test("a Vibe64 route's project scope must match its path", async () => {
   await withRouteProject(async ({ projectContext }) => {
     const app = testRouteApp();
-    assert.throws(() => vibe64RouteHandler(), /requires the project context its feature resolved/u);
+    assert.throws(() => vibe64RouteHandler({ localhostCheckBypassed: false }), /requires the project context its feature resolved/u);
     const global = createActionRouteScope(vibe64RouteHttp(app.http), {
-      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ projectContext })
+      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ localhostCheckBypassed: false, projectContext })
     });
     assert.throws(() => global.actionRoute("GET", "/status", { actionId: "unit.status.read" }),
       /GET \/api\/vibe64\/status is project-scoped, so it must be under \/api\/app\/:slug/u);
     const project = createActionRouteScope(vibe64RouteHttp(app.http), {
       routeBase: VIBE64_PROJECT_ROUTE_BASE, relativePath: "vibe64", surface: "app",
-      wrapHandler: vibe64RouteHandler({ projectScoped: false })
+      wrapHandler: vibe64RouteHandler({ localhostCheckBypassed: false, projectScoped: false })
     });
     assert.throws(() => project.serviceRoute("GET", "/status", {}, () => ({ ok: true })),
       /\/api\/app\/:slug\/vibe64\/status is not project-scoped, so it must not be under \/api\/app\/:slug/u);
@@ -247,6 +240,7 @@ test("Vibe64 routes refuse requests that are not from this computer before runni
   const app = testRouteApp();
   let ran = 0;
   const routes = projectRoutes(app, {
+    localhostCheckBypassed: false,
     localRequestMessage: "Local only.",
     projectContext: { currentPracticeProjectScope: () => null, async readWorkspaceProject() { ran += 1; return { project: {} }; } }
   });
@@ -271,9 +265,9 @@ test("Vibe64 routes refuse requests that are not from this computer before runni
 });
 
 test("feature errors retain their JSON body while response hooks are asynchronous", async () => {
-  await withLocalRequestBypass(async () => withRouteProject(async ({ apiBase, projectContext }) => {
+  await withRouteProject(async ({ apiBase, projectContext }) => {
     const app = testRouteApp();
-    const routes = projectRoutes(app, { projectContext });
+    const routes = projectRoutes(app, { localhostCheckBypassed: true, projectContext });
     const busy = { ok: false, code: "vibe64_agent_write_mode_busy", retryable: true,
       error: "The assistant is still reconnecting. Wait until it is ready, then try again." };
     routes.serviceRoute("GET", "/busy", {}, () => busy);
@@ -303,32 +297,31 @@ test("feature errors retain their JSON body while response hooks are asynchronou
     } finally {
       await server.close();
     }
-  }));
+  });
 });
 
 test("a deleted practice project's page requests are a clean not-found with its code", async () => {
-  await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    let handled = 0;
-    const routes = projectRoutes(app, {
-      localRequestMessage: "Local only.",
-      projectContext: {
-        currentPracticeProjectScope: () => null,
-        projectCatalogEnabled: true,
-        projectsRoot: "/projects",
-        async readWorkspaceProject() {
-          throw Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
-            code: "vibe64_practice_project_deleted", statusCode: 404 });
-        }
+  const app = testRouteApp();
+  let handled = 0;
+  const routes = projectRoutes(app, {
+    localhostCheckBypassed: true,
+    localRequestMessage: "Local only.",
+    projectContext: {
+      currentPracticeProjectScope: () => null,
+      projectCatalogEnabled: true,
+      projectsRoot: "/projects",
+      async readWorkspaceProject() {
+        throw Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
+          code: "vibe64_practice_project_deleted", statusCode: 404 });
       }
-    });
-    routes.serviceRoute("GET", "/ping", { summary: "Ping." }, async () => { handled += 1; return { ok: true }; });
-    const reply = testReply();
-    await app.registeredRoutes[0].handler({ params: routeProjectParams() }, reply);
-    assert.equal(reply.statusCode, 404);
-    assert.equal(reply.payload.code, "vibe64_practice_project_deleted");
-    assert.deepEqual(reply.payload.errors, [{ code: "vibe64_practice_project_deleted",
-      message: "This practice project was deleted. Its lesson is still in Learning." }]);
-    assert.equal(handled, 0);
+    }
   });
+  routes.serviceRoute("GET", "/ping", { summary: "Ping." }, async () => { handled += 1; return { ok: true }; });
+  const reply = testReply();
+  await app.registeredRoutes[0].handler({ params: routeProjectParams() }, reply);
+  assert.equal(reply.statusCode, 404);
+  assert.equal(reply.payload.code, "vibe64_practice_project_deleted");
+  assert.deepEqual(reply.payload.errors, [{ code: "vibe64_practice_project_deleted",
+    message: "This practice project was deleted. Its lesson is still in Learning." }]);
+  assert.equal(handled, 0);
 });

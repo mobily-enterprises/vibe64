@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createCurrentAppActions } from "../../packages/current-app/src/server/currentAppActions.js";
 import { createStudioHealthActions } from "../../packages/studio-health/src/server/studioHealthActions.js";
 import { registerRoutes as registerCurrentApp } from "../../packages/current-app/src/server/registerRoutes.js";
 import { registerRoutes as registerHealth } from "../../packages/studio-health/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("current-app and Studio Health inspections resolve current actor and their different project scopes", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     let user = { uid: 42, username: "member", role: "member" };
     let allowed = true;
     let projectChecks = 0;
@@ -32,8 +32,8 @@ test("current-app and Studio Health inspections resolve current actor and their 
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
       async authorizeProject() { projectChecks += 1; if (!allowed) throw Object.assign(new Error("Project access revoked"), { statusCode: 403 }); }
     });
-    registerCurrentApp(app.http, { projectContext, routeSurface: "app", routeRelativePath: "studio/current-app" });
-    registerHealth(app.http);
+    registerCurrentApp(app.http, { localhostCheckBypassed: true, projectContext, routeSurface: "app", routeRelativePath: "studio/current-app" });
+    registerHealth(app.http, { localhostCheckBypassed: true });
     assert.ok(findRegisteredRoute(app, { method: "GET", path: "/api/studio/health/tools" }), "rows check named tools on their own route");
     const direct = (actionId, input) => actions.execute({ actionId, input, context: { channel: "automation", surface: "app" } });
     const cases = [
@@ -70,5 +70,5 @@ test("current-app and Studio Health inspections resolve current actor and their 
     // Colleague may read Health checks (Lesson 0 and setup help); current-app stays excluded.
     assert.deepEqual(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools.map(tool => tool.actionId),
       ["vibe64.studio-health.read"]);
-  }));
+  });
 });

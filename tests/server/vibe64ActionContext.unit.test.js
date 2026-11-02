@@ -12,7 +12,7 @@ import {
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
   registerVibe64ActionContext,
-  vibe64ActionPolicy,
+  createVibe64ActionPolicy,
   WORKSPACE_OPERATION
 } from "@local/vibe64-core/server/actionContext";
 import {
@@ -34,7 +34,7 @@ test("project owner actions admit the standalone local owner but not foreign req
     });
     configure(false);
     let writes = 0;
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "local-owner", domain: "test", actions: [{
       id: "vibe64.test.owner", kind: "command", channels: ["api", "automation"], surfaces: ["app"],
       input: { schema: createSchema({}), mode: "create" },
@@ -68,7 +68,7 @@ test("project owner actions admit the standalone local owner but not foreign req
 function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = false } = {}) {
   const calls = [];
   const state = { user: { username: "member", uid: 42, role: "member" }, allowed: true, deleting: false };
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const definition = {
     id: "vibe64.test.read", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
     input: { schema: createSchema({ text: { type: "string", required: true }, vibe64User: { type: "object" } }), mode: "create" },
@@ -364,7 +364,7 @@ test("a practice project action admits only its own learner, through the host co
     const practice = await projectContext.runWithPracticeProjectScope({ actor: learner, training, access: "create" },
       async () => (await projectContext.createWorkspaceProjectRecord({ slug, training })).project);
     const state = { user: learner };
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const definition = {
       id: "vibe64.test.practice", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
       input: { schema: createSchema({}), mode: "create" }, extensions: { vibe64: PROJECT_OPERATION },

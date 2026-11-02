@@ -47,14 +47,16 @@ function usageJoinInput(request) {
 /**
  * @param {RuntimeHttp} http
  * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  */
-function registerUsageRoutes(http, { projectContext }) {
+function registerUsageRoutes(http, { localhostCheckBypassed, projectContext }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Vibe64 City routes only accept loopback Studio requests.",
       projectContext
     })

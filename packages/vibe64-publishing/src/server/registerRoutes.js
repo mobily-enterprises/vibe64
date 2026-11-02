@@ -49,15 +49,17 @@ function accountInput(request) {
 /**
  * @param {RuntimeHttp} http
  * @param {object} capabilities
+ * @param {boolean} capabilities.localhostCheckBypassed
  * @param {StudioProjectContext} capabilities.projectContext
  * @param {PublishingService} capabilities.publishing
  */
-function registerRoutes(http, { projectContext, publishing }) {
+function registerRoutes(http, { localhostCheckBypassed, projectContext, publishing }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-publishing"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Vibe64 publishing routes only accept requests from this computer.",
       projectContext
     })

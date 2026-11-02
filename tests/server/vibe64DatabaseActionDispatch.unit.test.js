@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createDatabaseActions } from "../../packages/vibe64-database-tools/src/server/databaseActions.js";
 import { registerRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("all ordinary database HTTP operations execute their authorized action and retain required inputs", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const cases = [
       ["GET", "", "state.read", "readState", {}],
       ["POST", "/schema/refresh", "schema.refresh", "refreshSchema", { source: "user" }],
@@ -33,13 +33,13 @@ test("all ordinary database HTTP operations execute their authorized action and 
       calls.push({ method, input, project: currentProjectRequestContext().slug });
       return result;
     }]));
-    const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "database", domain: "database", actions: createDatabaseActions({ databaseTools })
       .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
       authorizeProject: async () => { if (!allowed) throw Object.assign(new Error("Revoked"), { statusCode: 403 }); } });
     const app = testRouteApp();
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     assert.deepEqual(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools.map(({ actionId }) => actionId).sort(), [
       "vibe64.database.query.cancel", "vibe64.database.schema.refresh", "vibe64.database.state.read"
     ], "Only database status and controls are exposed to Colleague, not SQL or row editing");
@@ -88,6 +88,6 @@ test("all ordinary database HTTP operations execute their authorized action and 
     ]) await assert.rejects(actions.execute({ actionId: "vibe64.database.query.run", input,
       context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
     assert.equal(calls.length, 27);
-  }));
+  });
 });
 

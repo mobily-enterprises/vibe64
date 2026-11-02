@@ -5,12 +5,17 @@ import { ACTION_CHECK_STUDIO_TOOLS, ACTION_READ_STUDIO_HEALTH } from "./studioHe
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
-/** @param {RuntimeHttp} http */
-function registerRoutes(http) {
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
+ */
+function registerRoutes(http, { localhostCheckBypassed }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "health"] }), {
     relativePath: "studio/health",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Studio health is available only to the local Vibe64 editor.",
       projectScoped: false
     })

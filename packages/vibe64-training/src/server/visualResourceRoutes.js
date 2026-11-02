@@ -5,12 +5,16 @@ import { TRAINING_VISUAL_RESOURCE_ACTION } from "./visualResourceActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
-/** @param {RuntimeHttp} http */
-function registerTrainingVisualResourceRoutes(http) {
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {boolean} options.localhostCheckBypassed
+ */
+function registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http), {
     relativePath: "vibe64/training",
     surface: "app",
-    wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed, projectScoped: false })
   });
   routes.serviceRoute(
     "GET",

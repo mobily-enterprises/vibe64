@@ -8,7 +8,7 @@ import { opencodeTerminalNamespace } from "../../packages/vibe64-terminals/src/s
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { registerVibe64ActionContext, createVibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
@@ -3114,7 +3114,7 @@ test("main OpenCode close retires delayed initialization without deleting a late
 });
 
 test("Main OpenCode browser facade keeps original action authority and live native state", { timeout: 30000 }, async t => {
-  const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
   const response = { pending: true, text: "Service progress" };
   const privatePublication = Promise.withResolvers();

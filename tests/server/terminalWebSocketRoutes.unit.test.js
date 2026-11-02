@@ -6,9 +6,6 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
-  LOCALHOST_CHECK_BYPASS_ENV
-} from "@local/vibe64-core/server/localhostCheckBypass";
-import {
   registerTerminalWebSocketRoute
 } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 import {
@@ -73,246 +70,228 @@ async function waitForSocketMessages(socket, count) {
 }
 
 test("terminal websocket routes register through JSKIT app ownership", async () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
-  try {
-    const calls = [];
-    let subscriptionFailure = null;
-    const service = {};
-    const fastify = {
-      registered: null,
-      get(path, options, handler) {
-        this.registered = {
-          handler,
-          options,
-          path
-        };
-      }
-    };
-    await withProjectRequestContext(async ({ projectContext, slug }) => {
-      registerTerminalWebSocketRoute(fastify, {
-        projectContext,
-        routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
-        service,
-        serviceUnavailableMessage: "Unit terminal service is unavailable.",
-        subscribe(resolvedService, { request, sessionId, subscriber, terminalSessionId }) {
-          assert.equal(resolvedService, service);
-          calls.push(["subscribe", sessionId, terminalSessionId, request.vibe64User?.email || "", currentProjectScopeKey()]);
-          if (subscriptionFailure) {
-            return subscriptionFailure;
-          }
-          subscriber({
-            line: "ready",
-            type: "terminal.output"
-          });
-          return {
-            terminalSessionId,
-            unsubscribe() {
-              calls.push(["unsubscribe"]);
-            }
-          };
-        },
-        resize(resolvedService, { cols, request, rows, sessionId, terminalSessionId }) {
-          assert.equal(resolvedService, service);
-          calls.push(["resize", sessionId, terminalSessionId, cols, rows, request.vibe64User?.email || "", currentProjectScopeKey()]);
-          return {
-            ok: true
-          };
-        },
-        write(resolvedService, { data, request, sessionId, terminalSessionId }) {
-          assert.equal(resolvedService, service);
-          calls.push(["write", sessionId, terminalSessionId, data, request.vibe64User?.email || "", currentProjectScopeKey()]);
-          return {
-            ok: true
-          };
+  const calls = [];
+  let subscriptionFailure = null;
+  const service = {};
+  const fastify = {
+    registered: null,
+    get(path, options, handler) {
+      this.registered = {
+        handler,
+        options,
+        path
+      };
+    }
+  };
+  await withProjectRequestContext(async ({ projectContext, slug }) => {
+    registerTerminalWebSocketRoute(fastify, {
+      localhostCheckBypassed: true,
+      projectContext,
+      routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
+      service,
+      serviceUnavailableMessage: "Unit terminal service is unavailable.",
+      subscribe(resolvedService, { request, sessionId, subscriber, terminalSessionId }) {
+        assert.equal(resolvedService, service);
+        calls.push(["subscribe", sessionId, terminalSessionId, request.vibe64User?.email || "", currentProjectScopeKey()]);
+        if (subscriptionFailure) {
+          return subscriptionFailure;
         }
-      });
-
-      assert.equal(fastify.registered.path, "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws");
-      assert.deepEqual(fastify.registered.options, {
-        websocket: true
-      });
-
-      const socket = testSocket();
-      fastify.registered.handler(socket, {
-        headers: { host: "example.com", origin: "http://example.com" },
-        ip: "10.0.0.8",
-        params: {
-          sessionId: "session-1",
-          slug,
-          terminalSessionId: "terminal-1"
-        },
-        vibe64User: {
-          email: "owner@example.com"
-        }
-      });
-      await waitForSocketMessages(socket, 2);
-
-      assert.deepEqual(socket.sent, [
-        {
+        subscriber({
           line: "ready",
           type: "terminal.output"
+        });
+        return {
+          terminalSessionId,
+          unsubscribe() {
+            calls.push(["unsubscribe"]);
+          }
+        };
+      },
+      resize(resolvedService, { cols, request, rows, sessionId, terminalSessionId }) {
+        assert.equal(resolvedService, service);
+        calls.push(["resize", sessionId, terminalSessionId, cols, rows, request.vibe64User?.email || "", currentProjectScopeKey()]);
+        return {
+          ok: true
+        };
+      },
+      write(resolvedService, { data, request, sessionId, terminalSessionId }) {
+        assert.equal(resolvedService, service);
+        calls.push(["write", sessionId, terminalSessionId, data, request.vibe64User?.email || "", currentProjectScopeKey()]);
+        return {
+          ok: true
+        };
+      }
+    });
+
+    assert.equal(fastify.registered.path, "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws");
+    assert.deepEqual(fastify.registered.options, {
+      websocket: true
+    });
+
+    const socket = testSocket();
+    fastify.registered.handler(socket, {
+      headers: { host: "example.com", origin: "http://example.com" },
+      ip: "10.0.0.8",
+      params: {
+        sessionId: "session-1",
+        slug,
+        terminalSessionId: "terminal-1"
+      },
+      vibe64User: {
+        email: "owner@example.com"
+      }
+    });
+    await waitForSocketMessages(socket, 2);
+
+    assert.deepEqual(socket.sent, [
+      {
+        line: "ready",
+        type: "terminal.output"
+      },
+      {
+        session: {
+          terminalSessionId: "terminal-1"
         },
-        {
-          session: {
-            terminalSessionId: "terminal-1"
-          },
-          type: "snapshot"
-        }
-      ]);
+        type: "snapshot"
+      }
+    ]);
 
-      await socket.handlers.message(Buffer.from(JSON.stringify({
-        data: "hello",
-        type: "input"
-      })));
-      await socket.handlers.message(Buffer.from(JSON.stringify({
-        cols: 120,
-        rows: 40,
-        type: "resize"
-      })));
-      socket.handlers.close();
+    await socket.handlers.message(Buffer.from(JSON.stringify({
+      data: "hello",
+      type: "input"
+    })));
+    await socket.handlers.message(Buffer.from(JSON.stringify({
+      cols: 120,
+      rows: 40,
+      type: "resize"
+    })));
+    socket.handlers.close();
 
-      assert.deepEqual(calls, [
-        ["subscribe", "session-1", "terminal-1", "owner@example.com", `project:${slug}`],
-        ["write", "session-1", "terminal-1", "hello", "owner@example.com", `project:${slug}`],
-        ["resize", "session-1", "terminal-1", 120, 40, "owner@example.com", `project:${slug}`],
-        ["unsubscribe"]
-      ]);
+    assert.deepEqual(calls, [
+      ["subscribe", "session-1", "terminal-1", "owner@example.com", `project:${slug}`],
+      ["write", "session-1", "terminal-1", "hello", "owner@example.com", `project:${slug}`],
+      ["resize", "session-1", "terminal-1", 120, 40, "owner@example.com", `project:${slug}`],
+      ["unsubscribe"]
+    ]);
 
-      subscriptionFailure = {
+    subscriptionFailure = {
+      code: "terminal_session_not_found",
+      error: "Terminal session not found.",
+      ok: false
+    };
+    const missing = testSocket();
+    fastify.registered.handler(missing, {
+      headers: { host: "example.com", origin: "http://example.com" },
+      ip: "10.0.0.8",
+      params: {
+        sessionId: "session-1",
+        slug,
+        terminalSessionId: "terminal-missing"
+      },
+      vibe64User: {
+        email: "owner@example.com"
+      }
+    });
+    await waitForSocketMessages(missing, 1);
+    assert.deepEqual(missing.sent, [
+      {
         code: "terminal_session_not_found",
         error: "Terminal session not found.",
-        ok: false
-      };
-      const missing = testSocket();
-      fastify.registered.handler(missing, {
-        headers: { host: "example.com", origin: "http://example.com" },
-        ip: "10.0.0.8",
-        params: {
-          sessionId: "session-1",
-          slug,
-          terminalSessionId: "terminal-missing"
-        },
-        vibe64User: {
-          email: "owner@example.com"
-        }
-      });
-      await waitForSocketMessages(missing, 1);
-      assert.deepEqual(missing.sent, [
-        {
-          code: "terminal_session_not_found",
-          error: "Terminal session not found.",
-          type: "error"
-        }
-      ]);
-      assert.equal(missing.closed.code, 1008);
-    });
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
-    }
-  }
+        type: "error"
+      }
+    ]);
+    assert.equal(missing.closed.code, 1008);
+  });
 });
 
 test("terminal websocket guard requires authenticated same-origin requests for signed-in terminals", async () => {
-  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  try {
-    const fastify = {
-      registered: null,
-      get(path, options, handler) {
-        this.registered = {
-          handler,
-          options,
-          path
+  const fastify = {
+    registered: null,
+    get(path, options, handler) {
+      this.registered = {
+        handler,
+        options,
+        path
+      };
+    }
+  };
+  const service = {};
+
+  await withProjectRequestContext(async ({ projectContext, slug }) => {
+    registerTerminalWebSocketRoute(fastify, {
+      localhostCheckBypassed: false,
+      projectContext,
+      routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
+      service,
+      serviceUnavailableMessage: "Unit terminal service is unavailable.",
+      subscribe(_service, { terminalSessionId }) {
+        return {
+          terminalSessionId,
+          unsubscribe() {}
+        };
+      },
+      write() {
+        return {
+          ok: true
         };
       }
-    };
-    const service = {};
+    });
 
-    await withProjectRequestContext(async ({ projectContext, slug }) => {
-      registerTerminalWebSocketRoute(fastify, {
-        projectContext,
-        routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
-        service,
-        serviceUnavailableMessage: "Unit terminal service is unavailable.",
-        subscribe(_service, { terminalSessionId }) {
-          return {
-            terminalSessionId,
-            unsubscribe() {}
-          };
-        },
-        write() {
-          return {
-            ok: true
-          };
-        }
-      });
-
-      const rejected = testSocket();
-      fastify.registered.handler(rejected, {
-        headers: {
-          host: "example.com",
-          origin: "https://example.com"
-        },
-        ip: "10.0.0.8",
-        params: {
-          sessionId: "session-1",
-          slug,
-          terminalSessionId: "terminal-1"
-        }
-      });
-      assert.equal(rejected.closed.code, 1008);
-
-      const accepted = testSocket();
-      fastify.registered.handler(accepted, {
-        protocol: "https",
-        headers: {
-          host: "example.com",
-          origin: "https://example.com"
-        },
-        ip: "10.0.0.8",
-        params: {
-          sessionId: "session-1",
-          slug,
-          terminalSessionId: "terminal-1"
-        },
-        vibe64User: {
-          email: "owner@example.com"
-        }
-      });
-      await waitForSocketMessages(accepted, 1);
-
-      assert.equal(accepted.closed, null);
-      assert.deepEqual(accepted.sent, [
-        {
-          session: {
-            terminalSessionId: "terminal-1"
-          },
-          type: "snapshot"
-        }
-      ]);
-      for (const origin of [undefined, "null", "https://attacker.example", "https://example.com:444"]) {
-        const foreign = testSocket();
-        fastify.registered.handler(foreign, {
-          protocol: "https",
-          headers: { host: "example.com", ...(origin === undefined ? {} : { origin }) },
-          ip: "10.0.0.8", vibe64User: { email: "owner@example.com" }
-        });
-        assert.equal(foreign.closed.code, 1008, String(origin));
-        assert.equal(foreign.handlers.message, undefined, "rejected sockets cannot write terminal input");
-        assert.equal(foreign.sent.length, 1);
+    const rejected = testSocket();
+    fastify.registered.handler(rejected, {
+      headers: {
+        host: "example.com",
+        origin: "https://example.com"
+      },
+      ip: "10.0.0.8",
+      params: {
+        sessionId: "session-1",
+        slug,
+        terminalSessionId: "terminal-1"
       }
     });
-  } finally {
-    if (previousBypass == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
+    assert.equal(rejected.closed.code, 1008);
+
+    const accepted = testSocket();
+    fastify.registered.handler(accepted, {
+      protocol: "https",
+      headers: {
+        host: "example.com",
+        origin: "https://example.com"
+      },
+      ip: "10.0.0.8",
+      params: {
+        sessionId: "session-1",
+        slug,
+        terminalSessionId: "terminal-1"
+      },
+      vibe64User: {
+        email: "owner@example.com"
+      }
+    });
+    await waitForSocketMessages(accepted, 1);
+
+    assert.equal(accepted.closed, null);
+    assert.deepEqual(accepted.sent, [
+      {
+        session: {
+          terminalSessionId: "terminal-1"
+        },
+        type: "snapshot"
+      }
+    ]);
+    for (const origin of [undefined, "null", "https://attacker.example", "https://example.com:444"]) {
+      const foreign = testSocket();
+      fastify.registered.handler(foreign, {
+        protocol: "https",
+        headers: { host: "example.com", ...(origin === undefined ? {} : { origin }) },
+        ip: "10.0.0.8", vibe64User: { email: "owner@example.com" }
+      });
+      assert.equal(foreign.closed.code, 1008, String(origin));
+      assert.equal(foreign.handlers.message, undefined, "rejected sockets cannot write terminal input");
+      assert.equal(foreign.sent.length, 1);
     }
-  }
+  });
 });
 
 test("terminal websocket preserves rapid input order across delayed writes and a failed write", async () => {
@@ -327,6 +306,7 @@ test("terminal websocket preserves rapid input order across delayed writes and a
   registerTerminalWebSocketRoute({
     get(_path, _options, routeHandler) { handler = routeHandler; }
   }, {
+    localhostCheckBypassed: false,
     projectScoped: false,
     routePath: "/terminal/ws",
     service,
@@ -387,7 +367,7 @@ test("terminal websocket close during original project authority read never atta
     let handler;
     let subscriptions = 0;
     registerTerminalWebSocketRoute({ get(_path, _options, callback) { handler = callback; } }, {
-      projectContext: delayedProject, routePath: "/terminal/ws", service: {},
+      localhostCheckBypassed: false, projectContext: delayedProject, routePath: "/terminal/ws", service: {},
       subscribe() { subscriptions += 1; return { unsubscribe() {} }; }, write() {}
     });
     const socket = testSocket();
@@ -414,7 +394,7 @@ test("terminal websocket releases a late observer exactly once without snapshot 
   let releases = 0;
   let writes = 0;
   registerTerminalWebSocketRoute({ get(_path, _options, callback) { handler = callback; } }, {
-    projectScoped: false, routePath: "/terminal/ws", service: {},
+    localhostCheckBypassed: false, projectScoped: false, routePath: "/terminal/ws", service: {},
     async subscribe(_service, context) {
       subscriber = context.subscriber; isClosed = context.isClosed; enter(); await blocked;
       return { terminalSessionId: "terminal-1", unsubscribe() { releases += 1; } };

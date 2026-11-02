@@ -110,8 +110,9 @@ function vibe64ActionInput(definition) {
  * Transport input never supplies the acting user; project selection is
  * resolved before entering the service.
  * @param {ActionPolicyExecution} execution
+ * @param {import("./localStudioRequest.js").LocalStudioRequestCheck} check
  */
-async function executeVibe64Action({ definition, input, context, run }) {
+async function executeVibe64Action({ definition, input, context, run }, { localhostCheckBypassed }) {
   const scope = definition.extensions.vibe64;
   if (!scope) return run(input, context);
   const { projectScoped, ownerRequired, allowDeleting } = scope;
@@ -119,7 +120,7 @@ async function executeVibe64Action({ definition, input, context, run }) {
   const request = context.requestMeta?.request;
   const localOwner = ownerRequired && projectScoped && !user && !context.vibe64Action && request &&
     getStudioProjectContext().projectCatalogEnabled === false &&
-    isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }));
+    isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }), { localhostCheckBypassed });
   if (ownerRequired && user?.role !== "owner" && !localOwner) {
     throw ownerRequiredError();
   }
@@ -161,12 +162,20 @@ async function executeVibe64Action({ definition, input, context, run }) {
  * The one rule every Vibe64 operation runs under, supplied to JSKIT as the
  * `runtime.actions.policy` capability. Actions without `extensions.vibe64`
  * are registered and run as declared.
- * @type {ActionPolicy}
+ * @param {import("./localStudioRequest.js").LocalStudioRequestCheck} check
+ * @returns {ActionPolicy}
  */
-const vibe64ActionPolicy = Object.freeze({
-  input: vibe64ActionInput,
-  execute: executeVibe64Action
-});
+function createVibe64ActionPolicy({ localhostCheckBypassed }) {
+  /** @param {ActionPolicyExecution} execution */
+  function execute(execution) {
+    return executeVibe64Action(execution, { localhostCheckBypassed });
+  }
+
+  return Object.freeze({
+    input: vibe64ActionInput,
+    execute
+  });
+}
 
 /**
  * Hosts supply authentication and project access through JSKIT's existing
@@ -271,8 +280,8 @@ export {
   NOT_A_TOOL,
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
+  createVibe64ActionPolicy,
   registerVibe64ActionContext,
-  vibe64ActionPolicy,
   WORKSPACE_OPERATION,
   WORKSPACE_OWNER_OPERATION
 };
