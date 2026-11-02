@@ -58,7 +58,7 @@ function requestStudio(url, options) {
  * @param {LearningPageFocus} collaborators.pageFocus
  * @param {LearningPageActivity} collaborators.pageActivity
  * @param {LearningRouter} collaborators.router
- * @param {LearningRequest} [collaborators.request]
+ * @param {LearningRequest} collaborators.request the studio's HTTP request (`requestStudio`)
  * @param {LearningGuideRunner} [collaborators.runGuide]
  * @param {() => number} [collaborators.now]
  */
@@ -69,7 +69,7 @@ function createVibe64Learning({
   pageFocus,
   pageActivity,
   router,
-  request = requestStudio,
+  request,
   runGuide = runTrainingGuideCommand,
   now = Date.now
 }) {
@@ -371,6 +371,7 @@ export {
   createVibe64Learning,
   openLessonLink,
   orientationSelection,
+  requestStudio,
   reviewNote,
   revealCurrentStep,
   stepStatus
