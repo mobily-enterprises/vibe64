@@ -3,6 +3,7 @@ import { createRenderer, markRaw, nextTick, reactive, ref, shallowRef } from "vu
 import { MessageChannel } from "node:worker_threads";
 import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createVibe64Learning } from "../../src/lib/vibe64Learning.js";
+import { learningHostParts } from "./helpers/learningHostParts.js";
 
 const surfaceHost = vi.hoisted(() => ({ outputs: null, projectSlug: null }));
 vi.mock("@/composables/useVibe64OutputControls.js", async original => ({
@@ -1011,7 +1012,7 @@ async function mountLearningSurface(read = lessonRead()) {
     if (url.endsWith("/learning-mode")) return { ok: true, learningMode: { on: true, currentAttemptId: attemptId, practiceSlug: "practice" } };
     return options.method === "POST" ? { ok: true, stepId: "try-the-app", outcome: "passed", recorded: true } : structuredClone(read);
   });
-  const learning = createVibe64Learning({ request });
+  const learning = createVibe64Learning({ ...learningHostParts(), request });
   learning.setViewer("member");
   await learning.show({ attemptId, stepId: "try-the-app" });
   learning.minimise();

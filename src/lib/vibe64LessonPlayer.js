@@ -25,14 +25,17 @@ const POINT_SETTLE_MS = 1500;
 // How long a do beat's confirmation shows before the next beat.
 const CONFIRM_MS = 1500;
 
+/** @typedef {import("./vibe64LearningModel.js").LearningState} LearningState */
+/** @typedef {import("./vibe64LearningModel.js").LearningPageActivity} LearningPageActivity */
+
 const showDuration = text => Math.min(SHOW_MAX_MS, Math.max(SHOW_MIN_MS, SHOW_MIN_MS + SHOW_PER_CHARACTER_MS * String(text || "").length));
 
 function reducedMotion() {
-  try { return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches); } catch { return false; }
+  return globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function documentHidden() {
-  return globalThis.document?.visibilityState === "hidden";
+  return globalThis.document.visibilityState === "hidden";
 }
 
 // The same beat of the lesson: a step result re-reads the lesson, which
@@ -48,18 +51,52 @@ function beatEvent(beat) {
   return learningVocabulary.activity(beat.target)?.event || learningVocabulary.place(beat.target)?.event || "";
 }
 
-// state: the controller's reactive state (stepId, beat, beatPaused, open);
-// steps/currentStep: its computed lesson steps; active():
-// the step bar shows the current lesson's step; selectStep(id, beat) and
-// remember() are the controller's own. focus(): the page focus (null when the
-// host has none); activity: the page activity channel; practiceSlug(): the
-// lesson's practice project; allDone(stepId): every do beat of that step was
-// detected (the controller then records a self-checked step as done);
-// passed(stepId): that step has passed, so its do beats need nothing more.
-function createLessonPlayer({ state, steps, currentStep, active, selectStep, remember,
-  focus = () => null, activity = null, practiceSlug = () => "", allDone = () => {}, passed = () => false,
-  showGuide = showTrainingGuide, clearGuide = clearTrainingGuide, shownGuide = () => trainingGuide.value?.id || "",
-  motionReduced = reducedMotion, hidden = documentHidden } = {}) {
+/**
+ * The id of the guide on screen, or "".
+ */
+function shownTrainingGuide() {
+  return trainingGuide.value?.id || "";
+}
+
+/**
+ * The step bar's beat player over the Learning controller's state.
+ * @param {object} collaborators
+ * @param {LearningState} collaborators.state the controller's reactive state (stepId, beat, beatPaused, open)
+ * @param {import("vue").ComputedRef<Array<object>>} collaborators.steps the current lesson's steps
+ * @param {import("vue").ComputedRef<object | null>} collaborators.currentStep its selected step
+ * @param {() => boolean} collaborators.active the step bar shows the current lesson's step
+ * @param {(stepId: string, beat?: number) => void} collaborators.selectStep the controller's step selection
+ * @param {() => void} collaborators.remember saves this tab's place
+ * @param {() => object | null} collaborators.focus the page focus (null when the host has written none)
+ * @param {LearningPageActivity} collaborators.activity the page activity channel
+ * @param {() => string} collaborators.practiceSlug the lesson's practice project
+ * @param {(stepId: string) => void} collaborators.allDone every do beat of that step was detected (the controller
+ *   then records a self-checked step as done)
+ * @param {(stepId: string) => boolean} collaborators.passed that step has passed, so its do beats need nothing more
+ * @param {typeof showTrainingGuide} [collaborators.showGuide]
+ * @param {typeof clearTrainingGuide} [collaborators.clearGuide]
+ * @param {() => string} [collaborators.shownGuide]
+ * @param {() => boolean} [collaborators.motionReduced]
+ * @param {() => boolean} [collaborators.hidden]
+ */
+function createLessonPlayer({
+  state,
+  steps,
+  currentStep,
+  active,
+  selectStep,
+  remember,
+  focus,
+  activity,
+  practiceSlug,
+  allDone,
+  passed,
+  showGuide = showTrainingGuide,
+  clearGuide = clearTrainingGuide,
+  shownGuide = shownTrainingGuide,
+  motionReduced = reducedMotion,
+  hidden = documentHidden
+}) {
   // confirmed: the do beat's confirmation line while it shows.
   const local = reactive({ remaining: 0, duration: 0, held: false, ring: "", confirmed: "" });
   // The do beats detected in this tab (stepId:index); never saved.
@@ -182,7 +219,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
   watch(() => beat.value?.kind === "do" && active() && !local.confirmed && placeShown(beat.value), shown => {
     if (shown) confirm(beat.value);
   });
-  activity?.subscribe(event => {
+  activity.subscribe(event => {
     if (practiceSlug() && event.projectSlug && event.projectSlug !== practiceSlug()) return;
     const history = stepActivity();
     history.events.push(event);

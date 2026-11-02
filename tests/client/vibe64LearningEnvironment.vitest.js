@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
 import * as ProjectScope from "../../src/lib/vibe64ProjectScope.js";
 import { createPageActivity } from "../../src/lib/vibe64PageActivity.js";
+import { learningHostParts, learningLayout } from "./helpers/learningHostParts.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 
@@ -38,6 +39,9 @@ let saved;
 beforeEach(() => {
   saved = new Map();
   vi.stubGlobal("window", { sessionStorage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) } });
+  // A visible page that allows motion, as the step bar's player reads it.
+  vi.stubGlobal("document", { visibilityState: "visible" });
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
@@ -57,7 +61,7 @@ function controller({ reads = () => lessonResult(), posts = () => ({ ok: true })
     calls.push({ url, method, body });
     return method === "GET" ? reads(url, calls) : posts(url, body, calls);
   });
-  return { learning: createVibe64Learning({ request, ...options }), calls, modeCalls, request };
+  return { learning: createVibe64Learning({ ...learningHostParts(), request, ...options }), calls, modeCalls, request };
 }
 const flush = async () => { for (let i = 0; i < 4; i += 1) { await Promise.resolve(); await Vue.nextTick(); } };
 
@@ -173,7 +177,7 @@ describe("useVibe64Learning controller", () => {
     learning.setViewer("someone-else");
     expect([learning.learnMode, learning.mode]).toEqual([false, null]);
 
-    const failing = createVibe64Learning({ request: async () => { throw new Error("offline"); } });
+    const failing = createVibe64Learning({ ...learningHostParts(), request: async () => { throw new Error("offline"); } });
     failing.setViewer("member");
     await flush();
     expect([failing.learnMode, failing.state.modeRead]).toEqual([false, true]);
@@ -241,7 +245,7 @@ describe("useVibe64Learning controller", () => {
     // A studio lesson docks its Lesson pane on the studio page showing a stage frame.
     const studioRoute = { path: "/app/studio-page", fullPath: "/app/studio-page" };
     const studioRouter = { currentRoute: { value: studioRoute }, push: vi.fn(async target => { studioRoute.fullPath = target; }) };
-    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonShown: false });
+    const layout = learningLayout({ studio: true, projectSlug: "", lessonShown: false });
     const studio = controller({ router: studioRouter, layout, mode: () => ({ ...LEARN, practiceSlug: "", lessonStage: "studio" }) });
     studio.learning.setViewer("member");
     await flush();
@@ -253,7 +257,7 @@ describe("useVibe64Learning controller", () => {
     // leaving the project for the studio home.
     const deployRoute = { path: "/app/project/training-abc/dashboard/deploy", fullPath: "/app/project/training-abc/dashboard/deploy" };
     const deployRouter = { currentRoute: { value: deployRoute }, push: vi.fn(async target => { deployRoute.fullPath = target; }) };
-    const projectLayout = Vue.shallowRef({ studio: false, projectSlug: "training-abc", lessonShown: false });
+    const projectLayout = learningLayout({ studio: false, projectSlug: "training-abc", lessonShown: false });
     const practice = controller({ router: deployRouter, layout: projectLayout,
       mode: () => ({ ...LEARN, practiceSlug: "training-abc", lessonStage: "studio" }) });
     practice.learning.setViewer("member");
@@ -429,7 +433,7 @@ describe("useVibe64Learning controller", () => {
       if (url === VIBE64_LEARNING_ROUTES.practice) return { ok: true, current: null, archived: [] };
       return lessonResult();
     });
-    const learning = createVibe64Learning({ request, router });
+    const learning = createVibe64Learning({ ...learningHostParts(), request, router });
     learning.setViewer("member");
     await flush();
     await learning.show();
@@ -454,7 +458,7 @@ describe("useVibe64Learning controller", () => {
 
   it("shows the project side on a phone whenever a lesson opens, also when its address is already the Lesson pane", async () => {
     const router = { currentRoute: { value: { fullPath: "/app/project/practice-one?lesson=1" } }, push: vi.fn() };
-    const layout = Vue.shallowRef({ showProject: vi.fn() });
+    const layout = learningLayout({ showProject: vi.fn() });
     const { learning } = controller({ router, layout });
     learning.setViewer("member");
     await flush();
@@ -863,7 +867,8 @@ function compiledUi(filename, imports) {
 }
 function uiRenderer() {
   return Vue.createRenderer({
-    createElement: tag => ({ tag, props: {}, style: {}, children: [] }),
+    // An element finds nothing in its rendered children; a test gives one its own querySelector.
+    createElement: tag => ({ tag, props: {}, style: {}, children: [], querySelector: () => null }),
     createText: text => ({ text, children: [] }), createComment: text => ({ comment: text, children: [] }),
     insert(node, parent, anchor) { if (node.parent) node.parent.children.splice(node.parent.children.indexOf(node), 1);
       node.parent = parent; const at = anchor ? parent.children.indexOf(anchor) : -1;
@@ -1898,7 +1903,7 @@ describe("Lesson step bar", () => {
 
   it("offers the Lesson toggle on a studio page's step bar: pressed while shown, pressing it again hides the lesson", async () => {
     const hideLesson = vi.fn();
-    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonShown: false, hideLesson, showProject: vi.fn() });
+    const layout = learningLayout({ studio: true, projectSlug: "", lessonShown: false, hideLesson, showProject: vi.fn() });
     const router = { currentRoute: Vue.ref({ path: "/app/manage/projects", fullPath: "/app/manage/projects" }), push: vi.fn(async () => {}) };
     const { learning } = controller({ layout, router, mode: () => ({ ...LEARN, lessonStage: "studio" }) });
     learning.setViewer("member");
