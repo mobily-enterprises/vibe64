@@ -2,6 +2,7 @@ import {
   captureProjectRequestContext,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -109,19 +110,18 @@ function createSessionWorkspaceSetup({
   async function retryWorkspaceSetup(sessionId, input) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
-        const error = new Error("Workspace preparation is already running.");
-        error.code = "vibe64_workspace_setup_running";
-        throw error;
+        throw vibe64Error("Workspace preparation is already running.", "vibe64_workspace_setup_running", {
+          messageCode: "vibe64_workspace_setup_already_running"
+        });
       }
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(sessionId);
       const status = normalizeText(session.workspaceSetup?.status);
       if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
-        const error = new Error(
-          "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice."
+        throw vibe64Error(
+          "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice.",
+          "vibe64_workspace_setup_retry_not_available"
         );
-        error.code = "vibe64_workspace_setup_retry_not_available";
-        throw error;
       }
       const setup = await setupRunner.start({
         retry: true,
