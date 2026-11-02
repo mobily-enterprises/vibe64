@@ -105,6 +105,11 @@ function commandRunsHostPath(wrapperHostDir = "") {
 const commandServers = createSessionCommandServers({
   routePrefix: "/agent-session-command",
   routes: {
+    "/agent-session-command/list-project": {
+      handle: ({ commandService, input, sessionId }) => commandService.listProject(sessionId, input),
+      status: vibe64StatusCode,
+      token: "controlToken"
+    },
     "/agent-session-command/message-project": {
       handle: ({ commandService, input, sessionId }) => commandService.messageProject(sessionId, input),
       status: vibe64StatusCode,
@@ -170,6 +175,7 @@ const commandServers = createSessionCommandServers({
 
 /**
  * @param {object} dependencies
+ * @param {(request: object) => Promise<object>} dependencies.listProjectSessions
  * @param {(request: object) => Promise<object>} dependencies.sendProjectMessage
  * @param {(request: object) => Promise<object>} dependencies.readProjectPreview
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
@@ -182,6 +188,7 @@ const commandServers = createSessionCommandServers({
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
  */
 function createAgentSessionCommandService({
+  listProjectSessions,
   sendProjectMessage,
   readProjectPreview,
   reportWorkflowOutcome,
@@ -272,6 +279,17 @@ function createAgentSessionCommandService({
   async function requestActor(store, sessionId, binding) {
     const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
     return routing?.submittedBy || binding.actor;
+  }
+
+  async function listProject(sessionId, input) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      return listProjectSessions({
+        projectSlug: toText(input.projectSlug),
+        sourceProject: binding.projectSlug,
+        sourceSession: sessionId,
+        actor: await requestActor(store, sessionId, binding)
+      });
+    });
   }
 
   async function messageProject(sessionId, input) {
@@ -630,6 +648,7 @@ function createAgentSessionCommandService({
     bindSession,
     closeAllForSession,
     renameSession,
+    listProject,
     messageProject,
     projectPreview,
     sessionStatus,

@@ -1,7 +1,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
-import { readProjectPreview, sendProjectMessage } from "./projectMessage.js";
+import { listProjectSessions, readProjectPreview, sendProjectMessage } from "./projectMessage.js";
 import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
@@ -141,6 +141,11 @@ function createServiceCommandServices({
 
   const agentSessionCommand = createAgentSessionCommandService({
     retryWorkspaceSetup: sessionId => workspacePreparation.prepareWorkspaceSetup(sessionId, { publish: true, retry: true }),
+    listProjectSessions: input => listProjectSessions(input, {
+      project,
+      authorize: authorizeProjectMessage,
+      assertOpen: assertProjectOpen
+    }),
     readProjectPreview: input => readProjectPreview(input, {
       project,
       authorize: authorizeProjectMessage,

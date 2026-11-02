@@ -392,10 +392,11 @@ test("Genesis accepts fully enabled main and temporary instructions with maximum
       });
       assert.ok(output.includes(hostGuidance));
       assert.match(output, /vibe64-helper session message-project/u);
-      assert.match(output, /\[--session <id>\]/u);
+      assert.match(output, /\[--session <id-or-name>\]/u);
       assert.match(output, /Reply to the exact source session/u);
       assert.match(output, /Without --session, the pinned\/selected session receives it/u);
-      assert.match(output, /Use a known ID for a specific colleague; ask if unclear/u);
+      assert.match(output, /first run `vibe64-helper session list-project <project>`/u);
+      assert.match(output, /If exactly one other active session is listed, use it; ask only when several could be meant/u);
     }
   });
 });

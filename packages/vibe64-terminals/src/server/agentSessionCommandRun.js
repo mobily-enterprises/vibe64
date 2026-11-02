@@ -123,13 +123,22 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id: letters, digits, _ or -] | project-preview <project> [--session <session-id>]';
+const usage = [
+  'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | list-project <project> [--json]',
+  "  | message-project <project> [--session <session-id-or-name>] <message> [message-id: letters, digits, _ or -]",
+  "  | project-preview <project> [--session <session-id-or-name>]",
+  "Without --session, the project's selected session is addressed; in your own project that is often your own session.",
+  "To reach another session (by name, or \\"the other session\\"), first run list-project <project>, then pass its ID or name to --session.",
+  "If exactly one other active session is listed, use it; ask the person only when several could be meant."
+].join("\\n");
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
 }
 const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
 const setupRetry = args[0] === "setup" && args[1] === "retry" && args.length === 2;
+const listProject = args[0] === "list-project" && args[1]?.trim() &&
+  (args.length === 2 || args.length === 3 && args[2] === "--json");
 const explicitSession = ["message-project", "project-preview"].includes(args[0]) && args[2] === "--session";
 const messageIndex = explicitSession ? 4 : 2;
 const messageProject = args[0] === "message-project" &&
@@ -137,23 +146,25 @@ const messageProject = args[0] === "message-project" &&
   args[1]?.trim() && args[messageIndex]?.trim() && (!explicitSession || args[3]?.trim());
 const projectPreview = args[0] === "project-preview" && args.length === (explicitSession ? 4 : 2) &&
   args[1]?.trim() && (!explicitSession || args[3]?.trim());
-if (!status && !setupRetry && !messageProject && !projectPreview && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+if (!status && !setupRetry && !listProject && !messageProject && !projectPreview && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
 }
+const route = listProject ? "list-project" : messageProject ? "message-project" : projectPreview ? "project-preview" : status ? "status" : setupRetry ? "setup-retry" : "rename";
 try {
   const control = JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null");
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
     throw new Error("Session control is unavailable. Reconnect the assistant.");
   }
   const body = JSON.stringify({
-    name: args[1], projectSlug: args[1], message: args[messageIndex], messageId: args[messageIndex + 1],
+    name: args[1], projectSlug: args[1],
+    ...(messageProject ? { message: args[messageIndex], messageId: args[messageIndex + 1] } : {}),
     ...(explicitSession ? { destinationSessionId: args[3] } : {}),
     token: control.token, sessionId: control.sessionId, generationId: control.generationId
   });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
-      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : projectPreview ? "/agent-session-command/project-preview" : status ? "/agent-session-command/status" : setupRetry ? "/agent-session-command/setup-retry" : "/agent-session-command/rename", timeout: 15000,
+      socketPath: control.socketPath, method: "POST", path: "/agent-session-command/" + route, timeout: 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -167,7 +178,18 @@ try {
     request.end(body);
   });
   if (result.ok !== true) throw new Error(result.error || "The session command failed.");
-  console.log(projectPreview ? result.url : JSON.stringify(status || setupRetry || messageProject ? result : { sessionName: result.sessionName }));
+  if (listProject && args[2] !== "--json") {
+    for (const session of result.sessions) {
+      const marks = [session.own ? "your session" : "", session.selected ? "selected" : ""].filter(Boolean).join(", ");
+      console.log([session.sessionId, session.sessionName === session.sessionId ? "" : session.sessionName, marks ? "(" + marks + ")" : ""]
+        .filter(Boolean).join("  "));
+    }
+    if (!result.sessions.some((session) => !session.own)) {
+      console.log("No other active session of " + result.projectSlug + " can receive a message.");
+    }
+  } else {
+    console.log(projectPreview ? result.url : JSON.stringify(status || setupRetry || messageProject || listProject ? result : { sessionName: result.sessionName }));
+  }
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

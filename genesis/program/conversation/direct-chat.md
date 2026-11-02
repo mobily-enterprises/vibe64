@@ -4308,20 +4308,44 @@ which routing keeps with the request (as it keeps `projectMessage`) and every
 engine binding stores on the user turn; the conversation log shows **Sent by
 the lesson** under it. It changes no admission, routing or ownership.
 
-`vibe64-helper session message-project <project> [--session <id>] <message> [message-id]` uses the
+`vibe64-helper session message-project <project> [--session <id-or-name>] <message> [message-id]` uses the
 existing bound session command socket. `agentSessionCommand.js` supplies the
 server-owned source project/session and admitted actor; `projectMessage.js`
-resolves the explicit active destination session or, when omitted, the current
+resolves the explicit destination session or, when omitted, the current
 selected session, and sends through ordinary
 Main admission/steering in the background. There is no separate inbox or queue for
 closed projects. Learning sessions cannot use this command. Self-delivery is
 rejected before assistant preparation or receipt writes, as is a message ID that
 the recipient conversation would refuse (anything but letters, digits, `_` and `-`,
-up to 128 characters). Explicit addressing never
+up to 128 characters). The self-delivery refusal tells the assistant to list the
+project's sessions and send again with `--session <id-or-name>`, using the one
+other active session when exactly one is listed. Explicit addressing never
 changes selection or substitutes a missing/inactive destination; preparation
 rechecks the addressed session rather than requiring it to be selected.
 
-`vibe64-helper session project-preview <project> [--session <id>]` uses the same
+`addressedSession` resolves a `--session` value against the project's open
+session list (`listSessionSummaries({ statusGroup: "open" })`, which already
+omits hidden renewal sessions): an open session with that exact ID wins;
+otherwise exactly one active, non-closing session whose name matches, ignoring
+case and surrounding spaces. Several matches fail with
+`vibe64_project_session_ambiguous` and none with
+`vibe64_project_session_not_found`; both list the candidate IDs and names in the
+message and in `details.candidates`, and neither falls back to the selected
+session. An exact ID of a blocked or renewing session still reaches the
+inactive-session refusal.
+
+`vibe64-helper session list-project <project> [--json]` uses the same socket,
+actor and access check. `listProjectSessions` refuses a closed project, then
+lists the active, non-closing sessions with their names, marking the caller's
+own session (`own`) and the selected one (`selected`). It reads only: it never
+selects, renews, closes or recovers archives. The helper prints one `ID  name`
+line per session, and a closing line when no other session can receive a
+message. Agent instructions and the helper usage tell the assistant to list
+before addressing another session by name or as “the other session”, to use the
+one other active session when exactly one is listed, and to ask only when
+several could be meant.
+
+`vibe64-helper session project-preview <project> [--session <id-or-name>]` uses the same
 socket, actor and access check (`authorizeProjectMessage`). `readProjectPreview`
 in `projectMessage.js` resolves the destination session as messaging does and
 returns that session's current Preview proxy URL from `launchStatus`, re-read on

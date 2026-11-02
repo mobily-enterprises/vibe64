@@ -823,7 +823,7 @@ named in the result, and is logged as the operational warning
 `vibe64.project_runtime.dormant_close_failed` with the project and session IDs.
 A session whose source was never created ran no assistant, so idle cleanup,
 project Close and archive skip its assistant checks and shutdown. Daemon shutdown retains its original teardown path. Unpinning is
-explicit and never saves or publishes work. Cross-project messages still target
+explicit and never saves or publishes work. Cross-project messages without `--session` still target
 the server-selected session, which is the pinned source while pinned.
 
 The Sessions action and route own authorized pin changes; the pin button beside

@@ -13,19 +13,48 @@ vibe64-helper session message-project jskit-ai "Review the changes, then ping my
 ```
 
 Without `--session`, the destination's **currently selected session** receives the
-message in Main. To address a particular session, including another session in
-this same project, copy its ID from **Session info** and use:
+message in Main. In your own project that is often the session you are talking to,
+so to reach another session, including another session in this same project, ask
+by its name or simply as “the other session”. You never need to find an ID. For
+example: “Send this to new owners jobs.” The coding assistant first lists the
+project's sessions:
 
 ```sh
-vibe64-helper session message-project compas-next --session 2026-10-11_14-18-36 "Please review the shared controller change."
+vibe64-helper session list-project compas
 ```
 
-The exact session receives the message even if a different session is selected or
+```text
+2026-10-13_23-38-44  Geoff  (your session, selected)
+2026-10-21_06-04-48  new owners jobs
+```
+
+Each line shows a session's ID and name, marking the assistant's own session and
+the project's selected one. Only active sessions are listed; blocked, closing and
+renewing sessions cannot receive messages. `--json` prints the same list as JSON.
+Listing uses the same access checks as messaging and never selects, opens or
+changes a session. When only the assistant's own session is active, the list says
+that no other session can receive a message.
+
+The assistant then addresses the session by its ID or its name:
+
+```sh
+vibe64-helper session message-project compas --session "new owners jobs" "Please pick up the owners jobs."
+```
+
+An exact session ID always wins. Otherwise the name must match exactly one active
+session, ignoring upper and lower case and surrounding spaces. A name shared by
+several active sessions, or one that matches none, fails and lists the sessions
+that could be meant, with their IDs and names; nothing is sent and no other
+session is chosen instead. When you ask for “the other session” and exactly one
+other active session is listed, the assistant uses it. It asks you only when
+several sessions could be meant.
+
+The addressed session receives the message even if a different session is selected or
 pinned. It must be active and have an available assistant; the project must remain
 open. This command does not switch tabs or change the project's selection.
-Sending to your own session fails with a clear error before delivery or a sent
-receipt is created. Choose the other session explicitly; if no other recipient
-exists, report the limitation to the person instead of repeating the command.
+Sending to your own session fails before delivery or a sent receipt is created.
+The error tells the assistant to list the project's sessions and send again with
+`--session` and the other session's ID or name.
 New messages appear as bubbles with a robot avatar outside, the source project's name
 and a link to its session, on a neutral background distinct from human messages.
 They share the human message width limit on desktop and mobile. Markdown paragraphs,
@@ -69,8 +98,9 @@ message reference/history before resending; do not assume delivery failed.
 
 An optional final message ID can correlate retries in the same destination
 session. Without `--session`, a changed selection means a different recipient;
-check it before retrying. Use a known session ID for a specific colleague.
-If the recipient is unclear, ask instead of guessing.
+check it before retrying. To reach a specific colleague, list the project's
+sessions and address that one by ID or name. If several sessions could be meant,
+ask instead of guessing.
 Keep tracking IDs in that argument rather than at the start of visible messages.
 Write naturally in Markdown: lead with the result or request, use short paragraphs
 and useful bullets, and format commands and paths as code. Include essential
@@ -117,9 +147,11 @@ vibe64-helper session project-preview mercbot
 ```
 
 The command prints that project's current Preview address, which the assistant
-opens in its managed browser. Add `--session <id>` to choose a session other
-than the selected one. Access follows the same rule as messages: you must be
-able to use that project, and it must be open with an active session.
+opens in its managed browser. Add `--session <id-or-name>` to choose a session
+other than the selected one; it is resolved exactly as for messages, and
+`vibe64-helper session list-project mercbot` lists the choices. Access follows
+the same rule as messages: you must be able to use that project, and it must be
+open with an active session.
 
 The address can change when that Preview restarts, for example after new
 packages are installed. The assistant runs the command again instead of reusing
