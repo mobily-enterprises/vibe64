@@ -431,7 +431,7 @@ test("missing Genesis Stack leaves Outputs and workspace setup unconfigured", as
     status: "unconfigured",
     targets: []
   });
-  assert.deepEqual(await inspectVibe64WorkspaceSetupForContext(context, { inspect }), {
+  assert.deepEqual(await inspectVibe64WorkspaceSetupForContext({ ...context, project: { inspectWorkspaceSetup: inspect } }), {
     recipeHash: "",
     status: "unconfigured",
     steps: []
@@ -465,8 +465,7 @@ test("a pending workspace recipe remains runnable so the request can prepare it"
   const context = await outputContext(t);
   context.session.workspaceSetup = { status: "unconfigured" };
 
-  assert.deepEqual(await listOutputTargets(context, {
-    inspectOutputs: () => outputsInspection([webOutputTarget()]),
+  context.project = {
     inspectWorkspaceSetup: () => ({
       recipeHash: "sha256:install",
       status: "ready",
@@ -477,6 +476,10 @@ test("a pending workspace recipe remains runnable so the request can prepare it"
         workdir: "."
       }]
     })
+  };
+
+  assert.deepEqual(await listOutputTargets(context, {
+    inspectOutputs: () => outputsInspection([webOutputTarget()])
   }), [outputTargetView()]);
 });
 

@@ -543,6 +543,7 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
         return runtime;
       },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+      inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
       currentProjectSlug: () => "",
       currentServiceDataRoot() {
         return path.join(root, "service");

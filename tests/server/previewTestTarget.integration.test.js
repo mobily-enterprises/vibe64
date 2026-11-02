@@ -153,6 +153,7 @@ process.stdout.write(JSON.stringify({
     runInProjectContext: (_slug, operation) => operation(),
     async createRuntime() { return runtime; },
     createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
     currentTargetRoot() { return sourceRoot; },
     currentServiceDataRoot() { return root; },
     async projectExecutionEnvironment() { return {}; },

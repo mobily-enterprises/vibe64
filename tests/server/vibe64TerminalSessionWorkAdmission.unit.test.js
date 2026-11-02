@@ -204,6 +204,7 @@ async function terminalServiceFixture(t, lock, {
       return runtime;
     },
     createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
     currentTargetRoot() {
       return projectContextRoot;
     },
@@ -1180,6 +1181,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
       return runtime;
     },
     createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
     currentTargetRoot() {
       return projectContextRoot;
     },
@@ -1354,6 +1356,7 @@ test("renewal workspace setup privately resumes a pending successor while public
       return runtime;
     },
     createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
     currentTargetRoot() {
       return projectContextRoot;
     },

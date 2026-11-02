@@ -1,5 +1,5 @@
 import { finishVibe64Workflow, runVibe64Command } from "@local/vibe64-execution/server";
-import { inspectGenesisProjectFormat, inspectVibe64WorkspaceSetup } from "@local/vibe64-genesis/server";
+import { inspectGenesisProjectFormat } from "@local/vibe64-genesis/server";
 
 import { startResourceWorkflow } from "./resourceWorkflow.js";
 import { createWorkspaceSetupRunnerState } from "./workspaceSetupRunnerState.js";
@@ -14,16 +14,14 @@ import { createWorkspaceSetupStatus } from "./workspaceSetupStatus.js";
  * A project's workspace setup runner. Each concern is built once, in
  * dependency order, and the runner offers its functions by name.
  * @param {object} dependencies
- * @param {(request: object) => Promise<object>} [dependencies.inspect]
  * @param {typeof inspectGenesisProjectFormat} [dependencies.inspectProjectFormat]
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
- * @param {ProjectService} dependencies.project
+ * @param {ProjectService} dependencies.project inspects each session's workspace setup
  * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
 function createWorkspaceSetupRunner({
-  inspect: suppliedInspect = null,
   inspectProjectFormat = inspectGenesisProjectFormat,
   connectedPreparation,
   project,
@@ -31,8 +29,7 @@ function createWorkspaceSetupRunner({
   finishWorkflow = finishVibe64Workflow,
   runCommand = runVibe64Command
 }) {
-  const inspect = suppliedInspect || project.inspectWorkspaceSetup?.bind(project) || inspectVibe64WorkspaceSetup;
-  const runnerState = createWorkspaceSetupRunnerState({ inspect });
+  const runnerState = createWorkspaceSetupRunnerState({ inspect: project.inspectWorkspaceSetup });
   const setupExecution = createWorkspaceSetupExecution({
     connectedPreparation,
     finishWorkflow,
