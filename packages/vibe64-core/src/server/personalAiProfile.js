@@ -15,15 +15,15 @@ function normalizePreferredName(value = "") {
     .normalize("NFC")
     .replace(/\s+/gu, " ")
     .trim();
+  // 422 is the status Online's account routes answer these with; the Accounts envelope answers by code.
   if (/\p{Cc}/u.test(preferredName)) {
-    const error = new Error("Preferred name cannot contain control characters.");
-    error.code = "vibe64_preferred_name_invalid";
-    throw error;
+    throw vibe64Error("Preferred name cannot contain control characters.", "vibe64_preferred_name_invalid", { status: 422 });
   }
   if ([...preferredName].length > MAX_PREFERRED_NAME_LENGTH) {
-    const error = new Error(`Preferred name cannot exceed ${MAX_PREFERRED_NAME_LENGTH} characters.`);
-    error.code = "vibe64_preferred_name_too_long";
-    throw error;
+    throw vibe64Error(`Preferred name cannot exceed ${MAX_PREFERRED_NAME_LENGTH} characters.`, "vibe64_preferred_name_too_long", {
+      status: 422,
+      params: { limit: MAX_PREFERRED_NAME_LENGTH }
+    });
   }
   return preferredName;
 }

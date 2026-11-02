@@ -1,6 +1,7 @@
 // A Preview's access and managed app identities: its auth, identity capability and selection, and the
 // identity command runner for its launch terminal.
 
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext, currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import {
   normalizePreviewAuthKind,
@@ -113,9 +114,7 @@ function previewIdentitySelection(input = {}, {
 } = {}) {
   const mode = String(input.mode || "identity").trim();
   if (!["identity", "guest"].includes(mode)) {
-    const error = new Error("Preview identity mode is invalid.");
-    error.code = "vibe64_preview_identity_mode_invalid";
-    throw error;
+    throw vibe64Error("Preview identity mode is invalid.", "vibe64_preview_identity_mode_invalid");
   }
   if (mode === "guest") {
     return {
@@ -132,16 +131,14 @@ function previewIdentitySelection(input = {}, {
     ? identities.find((entry) => entry.name === requestedName)
     : identities[0];
   if (!identity) {
-    const availableNames = identities.map((entry) => entry.name);
-    const error = new Error(
-      requestedName && availableNames.length > 0
-        ? `Unknown managed app identity ${requestedName}. Choose one of: ${availableNames.join(", ")}.`
-        : "No managed app identity is configured for this project."
-    );
-    error.code = requestedName
-      ? "vibe64_preview_identity_name_unknown"
-      : "vibe64_preview_identity_not_configured";
-    throw error;
+    const availableNames = identities.map((entry) => entry.name).join(", ");
+    throw requestedName && availableNames
+      ? vibe64Error(
+        `Unknown managed app identity ${requestedName}. Choose one of: ${availableNames}.`,
+        "vibe64_preview_identity_name_unknown",
+        { params: { identityName: requestedName, availableNames } }
+      )
+      : vibe64Error("No managed app identity is configured for this project.", "vibe64_preview_identity_not_configured");
   }
   const selector = {
     type: identity.type,

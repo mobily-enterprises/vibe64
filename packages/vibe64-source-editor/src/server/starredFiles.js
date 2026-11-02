@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sourceEditorError } from "./sourceEditorPaths.js";
 
 const pendingWrites = new Map();
 const MAX_STARRED_FILES = 100;
@@ -46,7 +47,9 @@ async function writeStarredFile(filePath, relativePath, starred) {
       ? [...new Set([...paths, relativePath])]
       : paths.filter((value) => value !== relativePath);
     if (next.length > MAX_STARRED_FILES) {
-      throw new Error(`You can star up to ${MAX_STARRED_FILES} files per project.`);
+      throw sourceEditorError(`You can star up to ${MAX_STARRED_FILES} files per project.`, "vibe64_source_editor_star_limit", {}, 400, {
+        params: { limit: MAX_STARRED_FILES }
+      });
     }
     await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
     const temporaryPath = `${filePath}.${randomUUID()}.tmp`;

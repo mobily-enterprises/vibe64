@@ -7,7 +7,7 @@ import { splitStepBeats } from "../shared/beats.js";
 import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
 import { acceptEvery } from "@local/vibe64-core/shared/acceptEvery";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
-import { conflictFailure } from "./errors.js";
+import { conflictFailure, trainingFailure } from "./errors.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -406,7 +406,12 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
     }
     const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
     const resource = lesson.visuals.find(item => item.id === visualId);
-    if (!resource) throw new Error(`Visual ${visualId} is not declared in this pinned lesson.`);
+    if (!resource) {
+      throw trainingFailure(`Visual ${visualId} is not declared in this pinned lesson.`, "VIBE64_TRAINING_VISUAL_UNDECLARED", {
+        statusCode: 400,
+        params: { visualId }
+      });
+    }
     const base = path.dirname(resource.descriptorPath);
     const svg = await lessonFile(lesson, base, resource.visual.svg);
     const controller = await lessonFile(lesson, base, resource.visual.controller);

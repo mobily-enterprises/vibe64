@@ -43,7 +43,8 @@ test("only the curated DeepSeek and GLM routes can receive a saved key", async (
   assert.deepEqual(rows[0].configuredEngines, ["codex"]);
   assert.equal(f.requests.length, 1, "connecting Codex must not probe Claude");
   await assert.rejects(f.store.change("unknown", { apiKey: "fixture-secret" }), /supported Codex or Claude Code provider/);
-  await assert.rejects(f.store.change("deepseek", { apiKey: "bad\nkey" }), /valid provider API key/);
+  await assert.rejects(f.store.change("deepseek", { apiKey: "bad\nkey" }),
+    { code: "vibe64_invalid_provider_api_key", message: "Enter a valid provider API key.", status: 400 });
   assert.equal(f.requests.length, 1);
   const locations = codexProviderPaths(f.root, "deepseek");
   assert.equal((await stat(locations.connectionPath)).mode & 0o777, 0o600);

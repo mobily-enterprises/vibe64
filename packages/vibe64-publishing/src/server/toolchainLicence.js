@@ -8,12 +8,13 @@ import {
   installJdk
 } from "@local/vibe64-packaging/server/toolchains";
 
+import { publishingError } from "./publishingError.js";
 import { readJsonFile, writeJsonFile } from "./state/jsonFile.js";
 
 const LICENCES_CONTRACT = "vibe64.publishing-licences.v1";
 
 function licenceError(message, code = "vibe64_publishing_licence_invalid") {
-  return Object.assign(new Error(message), { code });
+  return publishingError(message, code);
 }
 
 /**

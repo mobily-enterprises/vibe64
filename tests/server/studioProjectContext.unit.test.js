@@ -227,7 +227,8 @@ test("Studio project context treats local mode as a single selected folder", asy
         }
       }),
       {
-        code: "vibe64_project_route_unavailable"
+        code: "vibe64_project_route_unavailable",
+        statusCode: 404
       }
     );
     await assert.rejects(

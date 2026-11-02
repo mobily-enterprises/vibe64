@@ -1,11 +1,13 @@
 import { prepareReleaseChange } from "@local/vibe64-packaging/server/release";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+import { publishingError } from "./publishingError.js";
+
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 
 function writerError(message, code = "vibe64_publishing_prepare_failed") {
-  return Object.assign(new Error(message), { code });
+  return publishingError(message, code);
 }
 
 /**

@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
+import { vibe64Error } from "./core.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "../shared/curatedCodexProviders.js";
 import { doNothing } from "../shared/doNothing.js";
 import { codexAuthMarkerPath, clearCodexAuthStatus, markCodexAuthReconnecting, readCodexAuthStatus } from "./codexAuthState.js";
@@ -155,7 +156,7 @@ function createCodexProviderConnectionStore({
       if (!removing) {
         if (!key || key.length > 16384 || /\s/u.test(key) ||
             [...key].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
-          throw new Error("Enter a valid provider API key.");
+          throw vibe64Error("Enter a valid provider API key.", "vibe64_invalid_provider_api_key");
         }
         const checks = { codex: verifyCodexProviderKey, claude: verifyClaudeProviderKey };
         await checks[engineId](provider, key, fetchImpl);

@@ -3,6 +3,7 @@ import {
   createPreviewIdentityGrant,
   previewAuthIdentityAvailable
 } from "@local/vibe64-core/server/previewAuth";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64Result } from "./terminalShared.js";
 import { inspectVibe64OutputsForContext, normalizedRuntimeRequirements } from "./vibe64OutputTargets.js";
 import { listOutputResults } from "./outputResults.js";
@@ -92,18 +93,20 @@ function createOutputTargetLaunchStatus({
         return unavailable;
       }
       if (!["ready", "stale"].includes(String(status.preview?.state || ""))) {
-        const error = new Error(status.preview?.message || "Run the preview before selecting an identity.");
-        error.code = "vibe64_preview_identity_preview_not_ready";
-        throw error;
+        throw vibe64Error(
+          status.preview?.message || "Run the preview before selecting an identity.",
+          "vibe64_preview_identity_preview_not_ready"
+        );
       }
       const previewAuth = previewAuthForLaunchTerminal(status.activeTerminal || {}, {
         sessionId,
         targetHref: status.preview.targetHref
       });
       if (!previewAuthIdentityAvailable(previewAuth || {})) {
-        const error = new Error("This preview does not support application identity switching.");
-        error.code = "vibe64_preview_identity_unsupported";
-        throw error;
+        throw vibe64Error(
+          "This preview does not support application identity switching.",
+          "vibe64_preview_application_identity_unsupported"
+        );
       }
       const identity = previewIdentitySelection(input, {
         identities: status.previewIdentity?.identities || []

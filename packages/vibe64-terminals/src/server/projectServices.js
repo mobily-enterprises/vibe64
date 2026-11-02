@@ -1,5 +1,7 @@
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { inspectVibe64ProjectServices } from "@local/vibe64-genesis/server";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
   inspectVibe64Service,
@@ -56,7 +58,9 @@ function createProjectServices({
   function opened(context) {
     const project = projectState(context);
     if (project.status === "closing") {
-      throw new Error("Project cleanup is unfinished. Wait for Close or retry the failed Close before reopening.");
+      throw new AppError(409, "Project cleanup is unfinished. Wait for Close or retry the failed Close before reopening.", {
+        code: "vibe64_project_cleanup_unfinished"
+      });
     }
     project.status = "open";
   }
@@ -66,7 +70,7 @@ function createProjectServices({
     const sessionId = String(context.session?.sessionId || "").trim();
     return exclusive(project, async () => {
       if (project.status !== "open" || project.closingSessions.has(sessionId)) {
-        throw new Error("Project or session is closing; its services cannot start.");
+        throw vibe64Error("Project or session is closing; its services cannot start.", "vibe64_project_services_closing");
       }
       const source = context.sessionSourceRoot;
       const baseEnv = await context.runtime.resolvePromptEnvironment();
@@ -89,7 +93,11 @@ function createProjectServices({
         if (previous.sessionId && previous.sessionId !== sessionId && !changedScope) continue;
         const removed = !declared || changedScope;
         if (removed && (await inspectExecution(previous.executionId)).scopeEmpty !== true) {
-          throw new Error(`Project service ${previous.id} was removed or changed scope. Close and reopen the project before starting it.`);
+          throw vibe64Error(
+            `Project service ${previous.id} was removed or changed scope. Close and reopen the project before starting it.`,
+            "vibe64_project_service_scope_changed",
+            { params: { serviceId: previous.id } }
+          );
         }
       }
       for (const service of declaration.services) {
@@ -101,13 +109,17 @@ function createProjectServices({
           const state = await inspectExecution(previous.executionId);
           if (state.scopeEmpty !== true) {
             if (identity !== previous.identity) {
-              throw new Error(`Project service ${service.id} changed. Close and reopen the project before starting it.`);
+              throw vibe64Error(
+                `Project service ${service.id} changed. Close and reopen the project before starting it.`,
+                "vibe64_project_service_changed",
+                { params: { serviceId: service.id } }
+              );
             }
             continue;
           }
         }
         if (project.status !== "open" || project.closingSessions.has(sessionId)) {
-          throw new Error("Project or session is closing; its services cannot start.");
+          throw vibe64Error("Project or session is closing; its services cannot start.", "vibe64_project_services_closing");
         }
         const runtime = vibe64RuntimePacks(service.runtimeRequirements);
         if (!runtime.available) throw new Error(runtime.disabledReason);
@@ -203,7 +215,10 @@ function createProjectServices({
   }
   function assertOpen(context) {
     if (projectState(context).status !== "open") {
-      throw new Error("The destination project is closing or closed. Reopen it before sending.");
+      throw vibe64Error(
+        "The destination project is closing or closed. Reopen it before sending.",
+        "vibe64_project_message_destination_closing"
+      );
     }
   }
   return Object.freeze({

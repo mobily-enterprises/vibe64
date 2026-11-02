@@ -1,3 +1,4 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { cachedRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
@@ -9,9 +10,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 function requiredIncomingSessionId(value = "") {
   const sessionId = normalizeText(value);
   if (!sessionId) {
-    const error = new Error("Select a session before reviewing incoming changes.");
-    error.code = "vibe64_incoming_changes_session_required";
-    throw error;
+    throw vibe64Error("Select a session before reviewing incoming changes.", "vibe64_incoming_changes_session_required");
   }
   return sessionId;
 }

@@ -15,7 +15,7 @@ import {
   readMainConversationHistory,
   MAIN_CONVERSATION_PRESENTATION
 } from "./mainConversationBinding.js";
-import { requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
+import { conversationClosingRefusal, requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
@@ -228,9 +228,7 @@ function createTemporaryConversationTurns({
   async function routingContext(ctx, conversationId, options = {}) {
     const { cleanup = false } = options;
     const record = await chatRecords.recordFor(ctx, conversationId);
-    if (record.state === "closing" && !cleanup) {
-      throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
-    }
+    if (record.state === "closing" && !cleanup) throw conversationClosingRefusal();
     const selected = chatRecords.selectedContext(ctx, record);
     const metadata = selected.session.metadata;
     const store = ctx.runtime.store;
@@ -244,8 +242,9 @@ function createTemporaryConversationTurns({
        */
       writeMetadataValue: async (_id, key, value) => store.mutateSession(ctx.session.sessionId, async () => {
         const current = await chatRecords.recordFor(ctx, conversationId);
+        // Its own code: deleting a chat tolerates vibe64_conversation_closing from its cancel, not this write.
         if (current.state === "closing" && !(cleanup && key === "assistant_routing_request")) {
-          throw new Error("This conversation is closing.");
+          throw new AppError(409, "This conversation is closing.", { code: "vibe64_conversation_routing_closing" });
         }
         const routingMetadata = { ...current.routingMetadata, [key]: value };
         const patch = { routingMetadata };
@@ -347,7 +346,7 @@ function createTemporaryConversationTurns({
 
   async function startInsideWrite(sessionId, input, ctx) {
     const record = await chatRecords.recordFor(ctx, input.conversationId);
-    if (record.state === "closing") throw new Error("This conversation is closing.");
+    if (record.state === "closing") throw conversationClosingRefusal();
     return conversationRuntime.startPersistentConversationTurn({
       ...persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record),
       sessionId,

@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -30,10 +31,11 @@ const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 50;
 const HISTORY_TIMEOUT_MS = 30_000;
 
+/**
+ * A version history refusal or Git failure; the session result envelope answers each with its message and code.
+ */
 function repositoryError(message, code = "vibe64_repository_history_failed") {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+  return vibe64Error(message, code);
 }
 
 function commitObjectId(value = "", errorCode = "vibe64_repository_history_commit_invalid") {
@@ -200,7 +202,7 @@ async function resolveSnapshot(context, cursor, runCommand) {
   const candidate = decoded?.snapshot || context.snapshotRef;
   const snapshot = await gitText(context, ["rev-parse", "--verify", `${candidate}^{commit}`], { runCommand });
   if (!/^[a-f0-9]{40,64}$/u.test(snapshot)) {
-    throw repositoryError("Version history could not pin a repository version.", "vibe64_repository_history_snapshot_invalid");
+    throw repositoryError("Version history could not pin a repository version.", "vibe64_repository_history_snapshot_unresolved");
   }
   return { offset: decoded?.offset || 0, snapshot };
 }

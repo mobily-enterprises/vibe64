@@ -3,6 +3,7 @@ import {
   parseSessionConnectedContribution,
   sessionConnectedContribution
 } from "@local/vibe64-core/server/projectRepository";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
@@ -59,10 +60,11 @@ function createReceivingContributions({
       if (visited.has(session.sessionId)) break;
       visited.add(session.sessionId);
       if (!isDeepStrictEqual(sessionConnectedContribution(session), contribution)) {
-        throw Object.assign(new Error("The receiving source binding changed. Preserve its checkout and review the connection."), {
-          code: "vibe64_contribution_authority_changed",
-          details: { sessionId: session.sessionId }
-        });
+        throw vibe64Error(
+          "The receiving source binding changed. Preserve its checkout and review the connection.",
+          "vibe64_contribution_authority_changed",
+          { details: { sessionId: session.sessionId }, messageCode: "vibe64_connected_receiving_binding_changed" }
+        );
       }
       const successorId = normalizeText(session.metadata?.renewed_to);
       if (vibe64SessionStatusIsOpen(session.status) && !successorId) return session;
@@ -76,12 +78,14 @@ function createReceivingContributions({
       if (successor?.metadata?.renewed_from !== session.sessionId) break;
       session = successor;
     }
-    throw Object.assign(new Error(
-      "This contribution's current session is unavailable. Complete its renewal or recover its source in the receiving project."
-    ), {
-      code: "vibe64_connected_source_unavailable",
-      details: { sessionId: session?.sessionId || contribution.id }
-    });
+    throw vibe64Error(
+      "This contribution's current session is unavailable. Complete its renewal or recover its source in the receiving project.",
+      "vibe64_connected_source_unavailable",
+      {
+        details: { sessionId: session?.sessionId || contribution.id },
+        messageCode: "vibe64_connected_receiving_session_unavailable"
+      }
+    );
   }
 
   /**
@@ -95,9 +99,11 @@ function createReceivingContributions({
     const source = await project.connectedContributionSource(input);
     const runtime = await project.createRuntimeWithoutSource();
     if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
-      throw Object.assign(new Error("The receiving source binding changed. Preserve its checkout and review the connection."), {
-        code: "vibe64_contribution_authority_changed"
-      });
+      throw vibe64Error(
+        "The receiving source binding changed. Preserve its checkout and review the connection.",
+        "vibe64_contribution_authority_changed",
+        { messageCode: "vibe64_connected_receiving_binding_changed" }
+      );
     }
     const session = await resolveConnectedSession(
       runtime,
@@ -116,12 +122,11 @@ function createReceivingContributions({
   function contributionWorkResult(result, session) {
     if (result.ok === false) return { ...result, details: { ...result.details, sessionId: session.sessionId } };
     if (result.operation?.status === "failed" && result.operation.code === "vibe64_session_save_publication_unknown") {
-      throw Object.assign(new Error(
-        result.operation.error || "Whether the connected Save was pushed is still unknown. Inspect work before retrying."
-      ), {
-        code: result.operation.code,
-        details: { sessionId: session.sessionId }
-      });
+      throw vibe64Error(
+        result.operation.error || "Whether the connected Save was pushed is still unknown. Inspect work before retrying.",
+        "vibe64_session_save_publication_unknown",
+        { details: { sessionId: session.sessionId } }
+      );
     }
     return { ...result, sessionId: session.sessionId };
   }
@@ -250,9 +255,11 @@ function createReceivingContributions({
       if (!contribution) throw new TypeError("Contribution allocation requires an exact saved binding.");
       const source = await project.connectedContributionSource(input);
       if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
-        throw Object.assign(new Error("The receiving repository or integration target changed. Review the source binding."), {
-          code: "vibe64_contribution_authority_changed"
-        });
+        throw vibe64Error(
+          "The receiving repository or integration target changed. Review the source binding.",
+          "vibe64_contribution_authority_changed",
+          { messageCode: "vibe64_connected_receiving_target_changed" }
+        );
       }
       const runtime = await project.createRuntimeWithoutSource();
       let predecessor;
@@ -260,11 +267,11 @@ function createReceivingContributions({
         predecessor = await runtime.getSessionWithoutSource(contribution.replaces);
         const saved = sessionConnectedContribution(predecessor);
         if (!saved || saved.repository !== contribution.repository || saved.integrationBranch !== contribution.integrationBranch) {
-          throw Object.assign(new Error(
-            "The replacement's original source binding changed. Preserve both sources and review the connection."
-          ), {
-            code: "vibe64_contribution_authority_changed"
-          });
+          throw vibe64Error(
+            "The replacement's original source binding changed. Preserve both sources and review the connection.",
+            "vibe64_contribution_authority_changed",
+            { messageCode: "vibe64_connected_replacement_binding_changed" }
+          );
         }
       }
       /**
@@ -304,11 +311,11 @@ function createReceivingContributions({
         const incoming = await repositoryReads.inspectIncomingContributions(predecessor.sessionId, { id: contribution.replaces });
         const entry = incoming.contributions?.find(item => item.id === contribution.replaces);
         if (incoming.ok !== true || entry?.activeHead || entry?.discardedHead !== contribution.baseCommit) {
-          throw Object.assign(new Error(
-            "The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch."
-          ), {
-            code: "vibe64_connected_replacement_changed"
-          });
+          throw vibe64Error(
+            "The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch.",
+            "vibe64_connected_replacement_changed",
+            { messageCode: "vibe64_connected_replacement_source_changed" }
+          );
         }
       }
       return named(await creation.createSession({ vibe64User: trustedAssistantUser(input) }, {

@@ -159,7 +159,12 @@ test("managed app identities normalize named app-owned selectors without a Vibe6
       type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
       value: "merc"
     }
-  ]), /invalid name/u);
+  ]), {
+    code: "vibe64_invalid_application_identities_config",
+    message: /invalid name/u,
+    messageCode: "vibe64_application_identity_name_invalid",
+    messageParams: { position: 1 }
+  });
   assert.throws(() => normalizePreviewApplicationIdentities([
     {
       name: "admin",

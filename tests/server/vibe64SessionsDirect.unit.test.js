@@ -2725,6 +2725,7 @@ test("live workspace preparation prevents retry and archive races", async () => 
   const retried = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(retried.ok, false);
   assert.equal(retried.code, "vibe64_workspace_setup_running");
+  assert.equal(retried.messageCode, "vibe64_workspace_setup_already_running");
 });
 
 test("archiving retains main and temporary routing cleanup records", async () => {

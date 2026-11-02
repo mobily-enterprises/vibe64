@@ -232,7 +232,10 @@ function createOpenCodeHostPreparation({
       vibe64User: options.vibe64User
     }), connection.providerId);
     if (selected.apiKey !== connection.apiKey || (selected.canonicalUrl || "") !== (connection.baseURL || "")) {
-      throw new Error("The selected OpenCode connection changed. Resolve the current authorized connection before continuing.");
+      throw openCodeError(
+        "vibe64_opencode_connection_changed",
+        "The selected OpenCode connection changed. Resolve the current authorized connection before continuing."
+      );
     }
     const roots = sharedRoots();
     return {

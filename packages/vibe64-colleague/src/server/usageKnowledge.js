@@ -3,6 +3,8 @@ import { open, readdir } from "node:fs/promises";
 import path from "node:path";
 import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
 
+import { failure } from "./colleagueFailure.js";
+
 const topicPattern = /^[a-z][a-z0-9-]{0,63}$/u;
 const maxGuideBytes = 65536;
 const maxGuideCharacters = 24000;
@@ -14,7 +16,9 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
    * measured receives the guide's size as it is read, for the topic list's warning.
    */
   async function readGuide(topicId, measured = {}) {
-    if (!topicPattern.test(topicId)) throw new Error("Choose a topic ID returned by the usage topic list.");
+    if (!topicPattern.test(topicId)) {
+      throw failure("Choose a topic ID returned by the usage topic list.", "vibe64_colleague_usage_topic_invalid", 400);
+    }
     let file;
     try {
       file = await open(path.join(directory, `${topicId}.md`), constants.O_RDONLY | constants.O_NOFOLLOW);

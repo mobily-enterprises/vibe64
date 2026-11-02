@@ -609,6 +609,24 @@ test("concurrent stars do not lose updates and reject excluded paths and symlink
   assert.equal((await service.setStarredFile({ ...input, path: "src/app.js", starred: "yes" })).ok, false);
 });
 
+test("a star beyond the per-project limit is a coded refusal that keeps the saved stars", async (t) => {
+  const { root, service } = await createSourceEditorFixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const stars = path.join(root, "state/source-editor/stars");
+  const record = path.join(stars, `${crypto.createHash("sha256").update("ada").digest("hex")}.json`);
+  const paths = Array.from({ length: 100 }, (_, index) => `src/starred-${index}.js`);
+  await mkdir(stars, { recursive: true });
+  await writeFile(record, JSON.stringify({ paths }));
+  const input = { sessionId: "session-1", vibe64User: { username: "ada" }, path: "src/app.js", starred: true };
+  const refused = await service.setStarredFile(input);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, "vibe64_source_editor_star_limit");
+  assert.equal(refused.error, "You can star up to 100 files per project.");
+  assert.equal(refused.statusCode, 400);
+  assert.deepEqual(refused.params, { limit: 100 });
+  assert.deepEqual(JSON.parse(await readFile(record, "utf8")).paths, paths);
+});
+
 test("downloads preserve binary bytes and allow files larger than the text editor limit", async (t) => {
   const { root, sourceRoot, service } = await createSourceEditorFixture();
   t.after(() => rm(root, { recursive: true, force: true }));

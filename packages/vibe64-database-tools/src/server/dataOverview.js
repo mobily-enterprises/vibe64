@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, validateDataOverview } from "../shared/dataOverview.js";
+import { databaseError } from "./databaseError.js";
 
 /**
  * MySQL's schema qualifier is the selected database, unlike PostgreSQL's
@@ -12,7 +13,11 @@ import { DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, validateDataOverview } fro
 export function dataOverviewReference(schema, reference) {
   if (schema.engine !== "mysql") return reference;
   const prefix = `${schema.database}.`;
-  if (!reference.startsWith(prefix)) throw new Error(`Data overview: ${reference} is outside the selected database.`);
+  if (!reference.startsWith(prefix)) {
+    throw databaseError(`Data overview: ${reference} is outside the selected database.`, "vibe64_database_overview_reference_outside", {}, {
+      params: { reference }
+    });
+  }
   return reference.slice(prefix.length);
 }
 
@@ -31,7 +36,7 @@ function convertedDataOverview(schema, definition, qualified) {
   const reference = (value) => (qualified ? qualifiedDataOverviewReference(schema, value) : dataOverviewReference(schema, value));
   const tableReference = (value) => {
     if (qualified && schema.engine === "mysql" && value.includes(".")) {
-      throw new Error("Data overview: MySQL table references must omit the database name.");
+      throw databaseError("Data overview: MySQL table references must omit the database name.", "vibe64_database_overview_table_qualified");
     }
     return reference(value);
   };

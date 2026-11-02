@@ -290,7 +290,9 @@ async function createSessionConversationBinding(provider, sessionId, options = {
       const latest = await runtime.getSessionWithoutSource(sessionId);
       requireCompletedConversationRewind(latest);
       if (vibe64AssistantSelectionFromMetadata(latest.metadata).engineId !== "codex") {
-        throw new Error("The selected assistant changed. Open its current conversation.");
+        throw new AppError(409, "The selected assistant changed. Open its current conversation.", {
+          code: "vibe64_main_assistant_changed"
+        });
       }
     },
     async read(current, representation, nativeResult) {

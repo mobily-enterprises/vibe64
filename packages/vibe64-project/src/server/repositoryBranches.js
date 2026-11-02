@@ -1,5 +1,6 @@
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { validRepositoryBranch } from "@local/vibe64-core/server/projectRepository";
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
@@ -20,7 +21,10 @@ async function repositoryBranches(project, input = {}, {
 }) {
   const mode = project.repositoryMode || project.repository?.mode;
   if (!["github", "managed_git"].includes(mode)) {
-    throw new Error("Use the local Git controls to switch the opened folder before creating a session.");
+    throw vibe64Error(
+      "Use the local Git controls to switch the opened folder before creating a session.",
+      "vibe64_repository_branches_local_folder"
+    );
   }
   const api = mode === "github" ? githubApi(input, { env, runCommand, feature: "Branches", failureCode: "vibe64_github_branches_failed" }) : null;
   const repository = api ? requireGithubRepository(project, "Branches") : "";
@@ -78,14 +82,19 @@ async function repositoryBranches(project, input = {}, {
     }
     const { name, fromBranch, expectedCommit } = input.selection;
     if (!validRepositoryBranch(name) || (fromBranch && !validRepositoryBranch(fromBranch))) {
-      throw new Error("Choose a valid repository branch.");
+      throw vibe64Error("Choose a valid repository branch.", "vibe64_repository_branch_name_invalid");
     }
     const source = branches.find((branch) => branch.name === (fromBranch || name));
     if (!source || !/^[a-f0-9]{40,64}$/u.test(expectedCommit || "") || source.commit !== expectedCommit) {
-      throw new Error("The source branch changed. Refresh the branch list and review it again.");
+      throw vibe64Error(
+        "The source branch changed. Refresh the branch list and review it again.",
+        "vibe64_repository_branch_source_changed"
+      );
     }
     if (fromBranch) {
-      if (branches.some((branch) => branch.name === name)) throw new Error("That branch already exists. Open it as a session instead.");
+      if (branches.some((branch) => branch.name === name)) {
+        throw vibe64Error("That branch already exists. Open it as a session instead.", "vibe64_repository_branch_exists");
+      }
       if (api) {
         await api(`repos/${repository}/git/refs`, { ref: `refs/heads/${name}`, sha: source.commit });
       } else {

@@ -9,6 +9,7 @@ import {
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   teamTemporaryModesRefusal,
+  temporaryAutoModeRefusal,
   presentation,
   recentChatContext,
   numberedConversations,
@@ -65,9 +66,7 @@ function createTemporaryConversationLifecycle({
       }
       const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
         : input.assistantRouting || inheritedPreferences;
-      if (requestedPreferences.mode === "auto") {
-        throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-      }
+      if (requestedPreferences.mode === "auto") throw temporaryAutoModeRefusal();
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
       const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false });
       const initialPresentation = presentation(input.presentation);

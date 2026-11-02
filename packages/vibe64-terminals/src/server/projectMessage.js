@@ -205,7 +205,10 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
             }
           }
           if (previous && previous.metadata?.projectMessage?.body !== input.message) {
-            throw new Error("This project message ID already identifies different text. Use a new ID.");
+            throw vibe64Error(
+              "This project message ID already identifies different text. Use a new ID.",
+              "vibe64_project_message_id_reused"
+            );
           }
           if (previous && (status === "accepted" || previous.metadata?.projectMessage?.status === "delivered")) return null;
           const id = previous?.turnId || await transaction.nextTurnId();

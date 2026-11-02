@@ -320,7 +320,10 @@ test("visual reads require a declared ID and exact trusted published lesson pin"
   for (const visualId of [undefined, "../diagram.svg", "/absolute", "flow/controller.js", 1]) {
     await assert.rejects(() => f.reader.readVisual({ ...request, visualId }), /declared visual ID/u);
   }
-  await assert.rejects(() => f.reader.readVisual({ ...request, visualId: "unknown" }), /not declared in this pinned lesson/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, visualId: "unknown" }), {
+    statusCode: 400, code: "VIBE64_TRAINING_VISUAL_UNDECLARED", params: { visualId: "unknown" },
+    message: "Visual unknown is not declared in this pinned lesson."
+  });
   await assert.rejects(() => f.reader.readVisual({ ...request, topicHash: undefined }), /trusted 64-character topic hash/u);
   await assert.rejects(() => f.reader.readVisual({ ...request, topicHash: "f".repeat(64) }), /trusted course or attempt pin/u);
   await assert.rejects(() => f.reader.readVisual({ ...request, topicId: "../elsewhere" }), /valid topic ID/u);

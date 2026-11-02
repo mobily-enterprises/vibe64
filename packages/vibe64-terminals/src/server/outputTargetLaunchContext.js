@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { managedPreviewTarget } from "@local/studio-terminal-core/shared";
 import { assertSourceInspectionHealthy } from "@local/vibe64-runtime/server/sessionSourceInspection";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { currentProjectSlug } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
@@ -174,8 +175,8 @@ function previewTargetError(target, outputTargetId) {
   if (target && target.available !== false && target.presentation?.kind === "web") {
     return null;
   }
-  return Object.assign(new Error(`Preview target ${outputTargetId} must be an available declared web target.`), {
-    code: "vibe64_preview_target_unavailable"
+  return vibe64Error(`Preview target ${outputTargetId} must be an available declared web target.`, "vibe64_preview_target_unavailable", {
+    params: { outputTargetId }
   });
 }
 

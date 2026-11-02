@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { closeTerminalSessionsForNamespace } from "@local/vibe64-execution/server/terminalSessions";
 import { browserTestNeedsCleanup, drainBrowserTestExecutions } from "./browserTestCleanup.js";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
@@ -56,9 +57,7 @@ function createOutputTargetPreviewTests({
     const previous = await launchCoordination.withLaunchStartLock(sessionId, async () => {
       signal?.throwIfAborted();
       if (state.previewTestRuns.has(sessionId)) {
-        throw Object.assign(new Error("Browser tests already own this session's Preview. Wait for them to finish."), {
-          code: "vibe64_preview_test_busy"
-        });
+        throw vibe64Error("Browser tests already own this session's Preview. Wait for them to finish.", "vibe64_preview_test_busy");
       }
       const context = await readLaunchContext(project, sessionId);
       testRun.projectSlug = context.projectSlug;
@@ -109,7 +108,7 @@ function createOutputTargetPreviewTests({
       await ensureTargetReady(outputTargetId);
       signal?.throwIfAborted();
       if (testRun.closing) {
-        throw new Error("The session closed before browser tests could start.");
+        throw vibe64Error("The session closed before browser tests could start.", "vibe64_preview_test_session_closed");
       }
       changeState("running");
       result = await operation(testRun.token);

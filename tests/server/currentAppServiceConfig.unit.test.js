@@ -227,3 +227,26 @@ test("unexpected Genesis inspection errors remain visible", async () => {
     assert.match(response.error, /Cannot read Stack/u);
   });
 });
+
+test("a session without source answers with the shared code and its own message code", async () => {
+  await withTemporaryRoot(async (root) => {
+    const service = createService({
+      env: process.env,
+      inspectOutputs() {
+        assert.fail("A session without source is never inspected.");
+      },
+      project: project(root)
+    });
+
+    const response = await service.inspectCurrentApp({
+      sessionId: "session-1"
+    });
+
+    assert.equal(response.ok, false);
+    assert.equal(response.code, "vibe64_session_source_required");
+    assert.equal(response.messageCode, "vibe64_current_app_session_source_required");
+    assert.equal(response.error, "The selected session does not have a source directory.");
+    assert.equal(response.sessionId, "session-1");
+    assert.deepEqual(response.details, { code: "vibe64_session_source_required", sessionId: "session-1" });
+  });
+});

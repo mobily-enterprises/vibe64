@@ -1588,6 +1588,7 @@ test("reserved Vibe64 Env names require an explicit Genesis Stack declaration", 
 
     assert.equal(response.ok, false);
     assert.equal(response.errors[0].code, "vibe64_env_reserved_key");
+    assert.deepEqual(response.params, { key: "VIBE64_INTERNAL_OVERRIDE" });
   });
 });
 
@@ -2491,6 +2492,8 @@ test("managed app identity validation rejects ambiguous names", async () => {
     assert.equal(response.ok, false);
     assert.equal(response.errors[0].code, "vibe64_invalid_application_identities_config");
     assert.match(response.errors[0].message, /duplicated/u);
+    assert.equal(response.messageCode, "vibe64_application_identity_name_duplicated");
+    assert.deepEqual(response.messageParams, { name: "admin" });
   });
 });
 

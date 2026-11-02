@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import {
   assertSessionRepositoryReview,
@@ -81,9 +82,11 @@ function createServiceSessionWork({
       const workflow = await project.readRepositoryWorkflow();
       if (workflow.requirePullRequest && !sessionConnectedContribution(session) && !context.creatingPullRequest &&
           !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
-        const error = new Error("This project requires a pull request. Create or open a pull request before saving this session.");
-        error.code = "vibe64_pull_request_required";
-        throw error;
+        throw vibe64Error(
+          "This project requires a pull request. Create or open a pull request before saving this session.",
+          "vibe64_pull_request_required",
+          { messageCode: "vibe64_project_pull_request_required" }
+        );
       }
     };
     await assertWorkflow();
@@ -390,7 +393,10 @@ function createServiceSessionWork({
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)) ||
       (input.draft != null && typeof input.draft !== "boolean")
     ) {
-      throw new Error("Enter a pull request title and a description of up to 65,536 characters.");
+      throw vibe64Error(
+        "Enter a pull request title and a description of up to 65,536 characters.",
+        "vibe64_session_pull_request_input_invalid"
+      );
     }
     return runSessionRepositoryWrite(sessionId, input, { operation: "create-pull-request" }, async (context) => {
       const { runtime } = context;

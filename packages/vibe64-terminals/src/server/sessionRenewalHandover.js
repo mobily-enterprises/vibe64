@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -56,16 +57,18 @@ function normalizeSessionRenewalHandoverDraft(value = "") {
 function sessionRenewalProtocolError(code, message, details = {}, options = {}) {
   const {
     retryable = false,
-    ...messageFields
+    messageCode,
+    messageParams
   } = options;
-  const error = new Error(message);
-  error.code = code;
-  error.details = {
-    ...details,
-    retryable
-  };
+  const error = new AppError(409, message, {
+    code,
+    details: {
+      ...details,
+      retryable
+    },
+    ...(messageCode ? { messageCode, messageParams } : {})
+  });
   error.retryable = retryable;
-  Object.assign(error, messageFields);
   return error;
 }
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import {
   assistantGoalObjective,
@@ -61,6 +62,26 @@ const logIntentClearFailure = (logger, sessionId, error) => logOperationalEvent(
   error: error?.message
 }, "A stopped goal's intent could not be cleared; its stop request stays recorded.");
 
+// Goal-control refusals the caller sees: a state conflict (409) unless named.
+const GOAL_REFUSALS = Object.freeze({
+  vibe64_goal_settings_busy: "Goal continuation settings are busy. Try the control again.",
+  vibe64_goal_command_attachment_pending:
+    "The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying.",
+  vibe64_goal_changed_before_preparation: "Goal continuation was stopped or changed before preparation.",
+  vibe64_goal_server_stopping: "The server is stopping. The goal will be available after restart.",
+  vibe64_goal_stopped_during_preparation: "Goal continuation was stopped during preparation.",
+  vibe64_goal_settings_saving:
+    "The goal started, but its settings are still being saved. Pause it before retrying the settings change."
+});
+
+/**
+ * @param {keyof typeof GOAL_REFUSALS} code
+ * @param {number} [status]
+ */
+function goalRefusal(code, status = 409) {
+  return new AppError(status, GOAL_REFUSALS[code], { code });
+}
+
 function readGoalIntent(session) {
   const intent = JSON.parse(session.metadata?.assistant_goal_intent || "null");
   if (intent && (intent.version !== 1 || typeof intent.active !== "boolean" || !intent.id)) {
@@ -80,7 +101,7 @@ async function changeGoalIntent(sessionId, context, change) {
     if (changed) await store.writeMetadataValue(sessionId, "assistant_goal_intent", JSON.stringify(changed));
     if (stopRequested) await store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST, "null");
   }, { operation: "save-goal-continuation", waitMs: 10_000 });
-  if (!result.acquired) throw new Error("Goal continuation settings are busy. Try the control again.");
+  if (!result.acquired) throw goalRefusal("vibe64_goal_settings_busy");
 }
 
 /**
@@ -147,9 +168,7 @@ function createServiceGoals({
       if (!latest?.active || latest.id !== intent.id) return null;
       if (latest.pending?.messageId && latest.selection?.engineId === "claude" &&
           result.goalCommandId !== claudeNativeMessageId(latest.pending.messageId)) {
-        throw new Error(
-          "The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying."
-        );
+        throw goalRefusal("vibe64_goal_command_attachment_pending");
       }
       const segment = latest.pending?.expectedSegmentId;
       const prefix = `${latest.selection?.engineId}:`;
@@ -424,7 +443,7 @@ function createServiceGoals({
             goalAdmissions.set(intent.id, admission);
             await changeGoalIntent(sessionId, context, latest => {
               if (latest?.id !== previousIntent?.id || latest?.active !== previousIntent?.active) {
-                throw new Error("Goal continuation was stopped or changed before preparation.");
+                throw goalRefusal("vibe64_goal_changed_before_preparation");
               }
               return intent;
             });
@@ -437,7 +456,7 @@ function createServiceGoals({
           if (restartIntentId && previousIntent.connectionIdentity !== (connectionIdentity ?? null)) {
             throw new Error("The goal's AI connection changed. Resume it explicitly with the intended account.");
           }
-          if (state.lifecycle.closing) throw new Error("The server is stopping. The goal will be available after restart.");
+          if (state.lifecycle.closing) throw goalRefusal("vibe64_goal_server_stopping", 503);
           if (intent) {
             const actor = await state.assistantRuntime.resolveAssistantUser(
               context.vibe64User || currentProjectRequestContext()?.vibe64User
@@ -462,7 +481,7 @@ function createServiceGoals({
               };
             }
             await changeGoalIntent(sessionId, context, latest => {
-              if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");
+              if (!latest?.active || latest.id !== intent.id) throw goalRefusal("vibe64_goal_stopped_during_preparation");
               return {
                 ...latest,
                 actor: actor ? { username: actor.username, role: actor.role } : null,
@@ -499,7 +518,7 @@ function createServiceGoals({
                 { operation: "apply-started-goal-settings", waitMs: 10_000 }
               );
               if (!committed.acquired) {
-                throw new Error("The goal started, but its settings are still being saved. Pause it before retrying the settings change.");
+                throw goalRefusal("vibe64_goal_settings_saving");
               }
             }
             await completeGoalIntent(sessionId, context, intent, result);

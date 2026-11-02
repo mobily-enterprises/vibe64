@@ -1,3 +1,4 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -78,8 +79,9 @@ function createService({
     const session = await runtime.getSessionWithoutSource(sessionId);
     const root = sessionSourcePath(session);
     if (!root) {
-      const error = new Error("The selected session does not have a source directory.");
-      error.code = "vibe64_session_source_required";
+      const error = vibe64Error("The selected session does not have a source directory.", "vibe64_session_source_required", {
+        messageCode: "vibe64_current_app_session_source_required"
+      });
       error.sessionId = sessionId;
       throw error;
     }
