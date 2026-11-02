@@ -78,17 +78,23 @@ function pypiSettings(target) {
   const custom = Boolean(settings.repository || settings.index);
   const instance = settings.instance ?? (custom ? null : "pypi");
   if (instance !== null && !INSTANCES[instance]) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The PyPI instance is pypi or testpypi.");
+    throw publishError("VIBE64_PUBLISH_PYPI_INSTANCE_UNKNOWN", "The PyPI instance is pypi or testpypi.");
   }
   if (instance && custom) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "Give either a PyPI instance or repository and index addresses, not both.");
+    throw publishError(
+      "VIBE64_PUBLISH_PYPI_ADDRESSES_CONFLICT",
+      "Give either a PyPI instance or repository and index addresses, not both."
+    );
   }
   if (!instance && !(settings.repository && settings.index)) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "A private Python index needs both its upload and its simple index address.");
+    throw publishError(
+      "VIBE64_PUBLISH_PYPI_ADDRESSES_INCOMPLETE",
+      "A private Python index needs both its upload and its simple index address."
+    );
   }
   const username = settings.username ?? "__token__";
   if (typeof username !== "string" || !/^[\x21-\x7e]{1,128}$/u.test(username)) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The PyPI user name must be one word.");
+    throw publishError("VIBE64_PUBLISH_PYPI_USERNAME_INVALID", "The PyPI user name must be one word.");
   }
   return {
     instance,
@@ -108,11 +114,11 @@ function distributions(artifacts, version) {
   const projects = new Set(files.map((file) => file.project));
   const versions = new Set(files.map((file) => file.version));
   if (!files.length || files.some((file) => !file.kind) || projects.size !== 1 || versions.size !== 1) {
-    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "PyPI publishes the sdist and wheels of exactly one release.");
+    throw publishError("VIBE64_PUBLISH_PYPI_RELEASE_COUNT", "PyPI publishes the sdist and wheels of exactly one release.");
   }
   const [built] = versions;
   if (version && built !== pep440FromSemver(version)) {
-    throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The distributions are version ${built}, not ${pep440FromSemver(version)}.`);
+    throw publishError("VIBE64_PUBLISH_PYPI_VERSION_MISMATCH", `The distributions are version ${built}, not ${pep440FromSemver(version)}.`);
   }
   return { files, project: [...projects][0], version: built };
 }
@@ -146,7 +152,7 @@ async function readIndex({ index, project }) {
     accept: `${SIMPLE_JSON}, text/html;q=0.1`
   });
   if (response.status === 404) return [];
-  if (!response.ok) throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `The Python index answered ${response.status} for ${project}.`);
+  if (!response.ok) throw publishError("VIBE64_PUBLISH_PYPI_INDEX_FAILED", `The Python index answered ${response.status} for ${project}.`);
   return indexFiles(response);
 }
 
@@ -187,7 +193,7 @@ async function readBack({ target, version, artifacts }) {
 /**
  * twine reads the token only from a private config file in a throwaway home.
  */
-async function runTwine(settings, args, { token = "", failureMessage }) {
+async function runTwine(settings, args, { token = "", baseEnvironment, failureCode, failureMessage }) {
   return withToolHome(async (home) => {
     const argv = [...settings.twine, ...args];
     if (token) {
@@ -207,9 +213,13 @@ async function runTwine(settings, args, { token = "", failureMessage }) {
     return runTool({
       argv,
       cwd: home,
-      env: toolEnvironment({ home, extra: { PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring", PYTHONDONTWRITEBYTECODE: "1" } }),
+      env: toolEnvironment({
+        home,
+        baseEnvironment,
+        extra: { PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring", PYTHONDONTWRITEBYTECODE: "1" }
+      }),
       secrets: [token],
-      failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED",
+      failureCode,
       failureMessage
     });
   });
@@ -220,16 +230,18 @@ async function credentialToken(credentials) {
   return file ? readCredentialText(file, CREDENTIAL.label) : "";
 }
 
-async function upload({ target, version, artifacts, credentials }) {
+async function upload({ target, version, artifacts, credentials, baseEnvironment }) {
   const settings = pypiSettings(target);
   const release = distributions(artifacts, version);
   const token = await credentialToken(credentials);
-  if (!token) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "PyPI publishing needs a PyPI token.");
+  if (!token) throw publishError("VIBE64_PUBLISH_PYPI_TOKEN_ABSENT", "PyPI publishing needs a PyPI token.");
   // Resuming after a partial upload sends only the files the index does not list yet.
   const listed = new Set((await readIndex({ index: settings.index, project: release.project })).map((file) => file.name));
   const pending = release.files.filter((file) => !listed.has(file.name));
   const result = await runTwine(settings, ["upload", "--non-interactive", "--disable-progress-bar", ...pending.map((file) => file.path)], {
     token,
+    baseEnvironment,
+    failureCode: "VIBE64_PUBLISH_PYPI_UPLOAD_FAILED",
     failureMessage: `twine did not upload ${release.project} ${release.version}.`
   });
   return { files: pending.map((file) => file.name), output: result.output.slice(-2000) };
@@ -238,10 +250,12 @@ async function upload({ target, version, artifacts, credentials }) {
 /**
  * `twine check --strict` on the exact files, and what the index already holds.
  */
-async function dryRun({ target, version, artifacts }) {
+async function dryRun({ target, version, artifacts, baseEnvironment }) {
   const settings = pypiSettings(target);
   const release = distributions(artifacts, version);
   const check = await runTwine(settings, ["check", "--strict", ...release.files.map((file) => file.path)], {
+    baseEnvironment,
+    failureCode: "VIBE64_PUBLISH_PYPI_CHECK_REFUSED",
     failureMessage: `twine check refused ${release.project} ${release.version}.`
   });
   const listed = await readIndex({ index: settings.index, project: release.project });

@@ -60,7 +60,7 @@ function codexStartupScript(codexThreadId = "", options = {}) {
   const normalizedRemoteEndpoint = normalizeText(remoteEndpoint);
   const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);
   const codexCommand = codexInteractiveArguments({
-    command: operatorCliCommand("codex"),
+    command: operatorCliCommand("codex", { env: process.env }),
     threadId: normalizedThreadId,
     remoteEndpoint: normalizedRemoteEndpoint,
     model: effectiveSettings.model,

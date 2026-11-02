@@ -39,6 +39,7 @@ test("GitHub local actor uses the daemon runner real home", () => {
 test("GitHub user actor uses OS username and real home, not email", () => {
   const result = resolveGithubHomeForActor({
     accountMode: GITHUB_ACCOUNT_MODE_USER,
+    env: {},
     vibe64User: {
       home: "/home/ada",
       gid: 1001,
@@ -59,6 +60,7 @@ test("GitHub user actor uses OS username and real home, not email", () => {
 test("GitHub user actor fails without OS username and home", () => {
   const result = resolveGithubHomeForActor({
     accountMode: GITHUB_ACCOUNT_MODE_USER,
+    env: {},
     vibe64User: {
       email: "ada@example.com"
     }
@@ -90,6 +92,7 @@ test("GitHub actor mode reads from env", () => {
 test("stored GitHub actor resolves OS facts live by username", async () => {
   const result = await resolveGithubHomeForStoredActor({
     accountMode: GITHUB_ACCOUNT_MODE_USER,
+    env: {},
     ownerUserKey: "ada",
     osUserResolver: async (username) => ({
       gid: 1003,

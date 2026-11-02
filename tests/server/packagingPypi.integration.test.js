@@ -11,7 +11,7 @@ import { inspectVibe64Packaging } from "../../packages/vibe64-genesis/src/server
 import { pypiDestination } from "../../packages/vibe64-packaging/src/server/destinations/pypi/index.js";
 import { createPublishPlan } from "../../packages/vibe64-packaging/src/server/plan.js";
 import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
-import { applyReleaseChange, prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
+import { prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
 import { publishTarget, withStageCredentials } from "../../packages/vibe64-packaging/src/server/stages.js";
 import { commitFiles, gitProject, startPypiServer, temporaryFolder } from "./packagingRegistryTestTools.js";
 
@@ -82,19 +82,19 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const verified = await credentialed((credentials) => pypiDestination.verifyCredential({ target, credentials }));
   assert.deepEqual([verified.ok, verified.verified], [true, false]);
 
-  const dry = await pypiDestination.dryRun({ target, version: "0.1.0", artifacts: built.artifacts });
+  const dry = await pypiDestination.dryRun({ baseEnvironment: process.env, target, version: "0.1.0", artifacts: built.artifacts });
   assert.equal(dry.alreadyPublished, false);
   assert.match(dry.report, /PASSED/u);
   assert.equal((await pypiDestination.readBack({ target, version: "0.1.0", artifacts: built.artifacts })).published, false);
 
-  const published = await publishTarget({ destination: pypiDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const published = await publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(published.status, "proven");
   assert.equal(published.alreadyPublished, false);
   assert.deepEqual(published.proof.files.map(({ name, sha256 }) => [name, sha256]), built.artifacts.manifest.files
     .map((file) => [path.posix.basename(file.path), file.sha256])
     .sort(([left], [right]) => left.localeCompare(right)));
 
-  const rerun = await publishTarget({ destination: pypiDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const rerun = await publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(rerun.alreadyPublished, true);
   assert.equal(rerun.checksum, published.checksum);
 
@@ -102,7 +102,7 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const changed = await commitFiles(project.root, { "client/vibe64_canary/__init__.py": "ANSWER = 43\n" }, "Change without a version bump");
   const mismatched = await buildPackage({ projectRoot: project.root, commit: changed.commit, packaging, packageId: "client", version: "0.1.0", resultStore: store, baseEnvironment });
   await assert.rejects(
-    publishTarget({ destination: pypiDestination, target, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
+    publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
     (error) => error.code === "VIBE64_PUBLISH_VERSION_CONFLICT"
   );
 
@@ -110,13 +110,12 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const change = await prepareReleaseChange({ projectRoot: project.root, entry: packaging.packages[0], version: "0.2.0-rc.1", notes: "- The answer changed.", date: "2026-10-23" });
   assert.equal(change.sourceVersion, "0.2.0rc1");
   assert.deepEqual(change.files.map(({ path: file }) => file), ["client/pyproject.toml", "client/CHANGELOG.md"]);
-  await applyReleaseChange({ projectRoot: project.root, change });
+  const next = await commitFiles(project.root, Object.fromEntries(change.files.map((file) => [file.path, file.after])), "Release 0.2.0-rc.1");
   assert.match(await readFile(path.join(project.root, "client/pyproject.toml"), "utf8"), /^version = "0\.2\.0rc1"$/mu);
-  const next = await commitFiles(project.root, {}, "Release 0.2.0-rc.1");
   const nextBuilt = await buildPackage({ projectRoot: project.root, commit: next.commit, packaging, packageId: "client", version: "0.2.0-rc.1", resultStore: store, baseEnvironment });
-  const nextPublished = await publishTarget({ destination: pypiDestination, target, version: "0.2.0-rc.1", artifacts: nextBuilt.artifacts, obtainCredential });
+  const nextPublished = await publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.2.0-rc.1", artifacts: nextBuilt.artifacts, obtainCredential });
   assert.equal(nextPublished.proof.version, "0.2.0rc1");
-  const nextDry = await pypiDestination.dryRun({ target, version: "0.2.0-rc.1", artifacts: nextBuilt.artifacts });
+  const nextDry = await pypiDestination.dryRun({ baseEnvironment: process.env, target, version: "0.2.0-rc.1", artifacts: nextBuilt.artifacts });
   assert.deepEqual(nextDry.publishedVersions, ["0.1.0", "0.2.0rc1"]);
   assert.equal(nextDry.alreadyPublished, true);
 
@@ -125,8 +124,8 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const third = await buildPackage({ projectRoot: project.root, commit: wrongBuilt.commit, packaging, packageId: "client", version: "0.3.0", resultStore: store, baseEnvironment });
   const wrongToken = "wrong-token-value-123456";
   await assert.rejects(
-    publishTarget({ destination: pypiDestination, target, version: "0.3.0", artifacts: third.artifacts, obtainCredential: async () => wrongToken }),
-    (error) => error.code === "VIBE64_PUBLISH_UPLOAD_FAILED" && !JSON.stringify(error.details).includes(wrongToken)
+    publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.3.0", artifacts: third.artifacts, obtainCredential: async () => wrongToken }),
+    (error) => error.code === "VIBE64_PUBLISH_PYPI_UPLOAD_FAILED" && !JSON.stringify(error.details).includes(wrongToken)
   );
   assert.equal((await pypiDestination.readBack({ target, version: "0.3.0", artifacts: third.artifacts })).published, false);
 });

@@ -44,6 +44,8 @@ import {
   envRecord
 } from "../normalize.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const BASE_ENV_POLICY_NAMES = new Set([
   ...DATABASE_ENV_NAMES,
   GIT_AUTHOR_EMAIL_ENV,
@@ -118,10 +120,10 @@ function databaseEnvRecordsForPolicy(baseEnv = {}, request = {}) {
 
 function commandEnvWithoutGitIdentity({
   actor = {},
-  baseEnv = process.env,
+  baseEnv,
   localPath = "",
   request = {}
-} = {}) {
+}) {
   const declaredRuntimes = Array.isArray(request.runtimes)
     ? request.runtimes.join(":")
     : "";
@@ -166,9 +168,9 @@ function commandEnvWithoutGitIdentity({
  */
 function gitIdentityInput({
   actor = {},
-  baseEnv = process.env,
+  baseEnv,
   request = {}
-} = {}, commandEnv = {}) {
+}, commandEnv) {
   return {
     actor,
     env: baseEnv,
@@ -181,10 +183,20 @@ function gitIdentityInput({
 }
 
 /**
+ * @typedef {object} CommandEnvOptions
+ * @property {RuntimeEnv} baseEnv the environment the command starts from
+ * @property {object} [actor]
+ * @property {string} [localPath]
+ * @property {object} [request]
+ * @property {Record<string, string>} [resolvedGitIdentityEnv]
+ */
+
+/**
  * The command env, awaiting the person's Git identity without holding the
  * server's thread. The execution gateway resolves every command with this.
+ * @param {CommandEnvOptions} options
  */
-async function resolveCommandEnvAsync(options = {}) {
+async function resolveCommandEnvAsync(options) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
   return { ...commandEnv, ...await gitIdentityEnv(gitIdentityInput(options, commandEnv)) };
 }
@@ -194,8 +206,9 @@ async function resolveCommandEnvAsync(options = {}) {
  * context). With `resolvedGitIdentityEnv` it applies that identity, as the
  * gateway's per-terminal env factory does; without it, it reads Git's config
  * while the caller waits.
+ * @param {CommandEnvOptions} options
  */
-function resolveCommandEnv(options = {}) {
+function resolveCommandEnv(options) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
   return {
     ...commandEnv,

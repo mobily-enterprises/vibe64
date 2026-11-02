@@ -18,6 +18,9 @@ const INSPECTION_FALLBACK_MS = 30_000;
 // still exists, that is not an exit: retry a bounded number of times first.
 const INSPECTION_FAILURE_LIMIT = 3;
 
+/** A conversation whose caller has nothing to do when its process starts. */
+function noStartStep() {}
+
 function processExists(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
@@ -56,7 +59,7 @@ export function createVibe64ConversationExecution({
   operationId = "conversation",
   label = "Assistant",
   logPath,
-  onStarted
+  onStarted = noStartStep
 }) {
   const entries = new Map();
   async function stop(id, options = {}) {
@@ -200,7 +203,7 @@ export function createVibe64ConversationExecution({
       entry.exit.promise.catch(() => {});
       entries.set(id, entry);
       void observe(id, entry);
-      await onStarted?.(id);
+      await onStarted(id);
       if (stream) {
         const deadline = Date.now() + 30_000;
         while (!entry.socket) {

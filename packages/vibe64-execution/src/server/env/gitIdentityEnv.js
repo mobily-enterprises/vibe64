@@ -10,6 +10,8 @@ import {
   recordValue
 } from "../normalize.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const GIT_AUTHOR_NAME_ENV = "GIT_AUTHOR_NAME";
 const GIT_AUTHOR_EMAIL_ENV = "GIT_AUTHOR_EMAIL";
 const GIT_COMMITTER_NAME_ENV = "GIT_COMMITTER_NAME";
@@ -313,11 +315,11 @@ function isFallbackGitIdentityEmail(email = "") {
  * connected GitHub account, then a clearly marked stand-in.
  */
 function explicitGitIdentity({
-  env = process.env,
+  env,
   personGitIdentity = null,
   project = {},
   session = {}
-} = {}) {
+}) {
   const metadata = recordValue(session.metadata);
   return configuredGitIdentity(
     project.gitIdentity,
@@ -334,11 +336,11 @@ function explicitGitIdentity({
 
 function accountOrFallbackGitIdentity({
   actor = {},
-  env = process.env,
+  env,
   project = {},
   session = {},
   userKey = ""
-} = {}) {
+}) {
   const metadata = recordValue(session.metadata);
   return githubGitIdentity(project.githubUser || session.githubUser || metadata.github_user) ||
     fallbackGitIdentity({
@@ -355,13 +357,13 @@ function accountOrFallbackGitIdentity({
     });
 }
 
-async function resolveGitIdentity(options = {}) {
+async function resolveGitIdentity(options) {
   return explicitGitIdentity(options) ||
     await personGitConfigIdentity(options.gitConfig || {}) ||
     accountOrFallbackGitIdentity(options);
 }
 
-function resolveGitIdentitySync(options = {}) {
+function resolveGitIdentitySync(options) {
   return explicitGitIdentity(options) ||
     personGitConfigIdentitySync(options.gitConfig || {}) ||
     accountOrFallbackGitIdentity(options);
@@ -376,33 +378,21 @@ function identityEnv(identity) {
   };
 }
 
-async function gitIdentityEnv(options = {}) {
+/**
+ * The GIT_AUTHOR_* and GIT_COMMITTER_* names for one command.
+ * @param {{ env: RuntimeEnv, actor?: object, gitConfig?: object, personGitIdentity?: object | null, project?: object, session?: object, userKey?: string }} options
+ *   env is the command's base environment: its VIBE64_GIT_USER_* names and workspace
+ */
+async function gitIdentityEnv(options) {
   return identityEnv(await resolveGitIdentity(options));
 }
 
-function gitIdentityEnvSync(options = {}) {
-  return identityEnv(resolveGitIdentitySync(options));
-}
-
 /**
- * Nothing is blocked on a stand-in identity; the person is told how to set theirs.
+ * gitIdentityEnv for a caller that must stay synchronous.
+ * @param {Parameters<typeof gitIdentityEnv>[0]} options
  */
-async function gitIdentityReadiness(options = {}) {
-  const identity = await resolveGitIdentity(options);
-  const fallback = identity.source === "fallback";
-  return {
-    email: identity.authorEmail,
-    env: identityEnv(identity),
-    explanation: fallback
-      ? "Commits use a stand-in name because Git doesn't know your name and email yet."
-      : "Commits use your name and email.",
-    identity,
-    name: identity.authorName,
-    observed: `${identity.authorName} <${identity.authorEmail}>`,
-    ok: true,
-    source: identity.source,
-    status: fallback ? "warn" : "pass"
-  };
+function gitIdentityEnvSync(options) {
+  return identityEnv(resolveGitIdentitySync(options));
 }
 
 export {
@@ -411,13 +401,7 @@ export {
   GIT_AUTHOR_NAME_ENV,
   GIT_COMMITTER_EMAIL_ENV,
   GIT_COMMITTER_NAME_ENV,
-  fallbackGitIdentity,
   gitIdentityEnv,
   gitIdentityEnvSync,
-  gitIdentityReadiness,
-  isFallbackGitIdentityEmail,
-  personGitConfigIdentity,
-  personGitConfigIdentitySync,
-  resolveGitIdentity,
-  sanitizeEmailLabel
+  isFallbackGitIdentityEmail
 };

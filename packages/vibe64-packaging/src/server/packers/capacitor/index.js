@@ -5,9 +5,8 @@ import { open } from "node:fs/promises";
 import path from "node:path";
 
 import { publishError } from "../../errors.js";
-import { describeJdk } from "../../toolchains/jdk.js";
 import { capacitorRecipe } from "./buildApk.js";
-import { CAPACITOR_SHELL_TEMPLATE, shellTemplateRecord } from "./shellTemplate/index.js";
+import { shellTemplateRecord } from "./shellTemplate/index.js";
 
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -33,23 +32,14 @@ const capacitorPacker = Object.freeze({
   checkArtifacts: async ({ artifacts }) => {
     const files = artifacts.manifest.files;
     if (files.length !== 1 || !files[0].path.endsWith("-unsigned.apk")) {
-      throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "An Android build must produce exactly one unsigned APK.");
+      throw publishError("VIBE64_PUBLISH_CAPACITOR_APK_COUNT", "An Android build must produce exactly one unsigned APK.");
     }
     if (!await startsWithZipMagic(path.join(artifacts.directory, "files", files[0].path))) {
-      throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `${files[0].path} is not an APK.`);
+      throw publishError("VIBE64_PUBLISH_CAPACITOR_NOT_APK", `${files[0].path} is not an APK.`);
     }
     return { files: [files[0].path], apk: files[0].path, sha256: files[0].sha256 };
   },
-  templates: () => shellTemplateRecord(),
-  toolVersions: async ({ toolchains = {} } = {}) => {
-    const jdk = await describeJdk({ javaHome: toolchains.javaHome });
-    return {
-      java: jdk.ok ? jdk.version : "missing",
-      "android-build-tools": CAPACITOR_SHELL_TEMPLATE.buildTools,
-      "android-platform": CAPACITOR_SHELL_TEMPLATE.platform,
-      node: process.versions.node
-    };
-  }
+  templates: () => shellTemplateRecord()
 });
 
 export { capacitorPacker };

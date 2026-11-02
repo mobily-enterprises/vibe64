@@ -18,10 +18,6 @@ const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const CAPACITOR_PLATFORM_PACKAGES = new Set(["@capacitor/android", "@capacitor/ios", "@capacitor/cli", "@capacitor/core"]);
 const MAX_VERSION_CODE = 2_100_000_000;
 
-function shellError(message, details) {
-  return publishError("VIBE64_PUBLISH_BUILD_INVALID", message, details);
-}
-
 async function readJson(file) {
   try {
     return JSON.parse(await readFile(file, "utf8"));
@@ -36,7 +32,9 @@ async function readJson(file) {
  */
 async function readContentDependencies({ sourceRoot, content }) {
   const root = path.resolve(sourceRoot, content.workdir || ".");
-  if (!pathWithin(sourceRoot, root, { allowRoot: true })) throw shellError(`Package ${content.id} Workdir leaves the project.`);
+  if (!pathWithin(sourceRoot, root, { allowRoot: true })) {
+    throw publishError("VIBE64_PUBLISH_SHELL_WORKDIR_OUTSIDE", `Package ${content.id} Workdir leaves the project.`);
+  }
   const manifest = await readJson(path.join(root, "package.json"));
   let lockDirectory = root;
   let lockfile = null;
@@ -116,14 +114,20 @@ function nativePlugins({ manifest, lockfile, workspaceKey = "" }) {
 function nextVersionCode(previous = null) {
   if (previous === null || previous === undefined) return 1;
   if (!Number.isInteger(previous) || previous < 1 || previous >= MAX_VERSION_CODE) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The previous Android build number must be a whole number below 2,100,000,000.");
+    throw publishError(
+      "VIBE64_PUBLISH_BUILD_NUMBER_INVALID",
+      "The previous Android build number must be a whole number below 2,100,000,000."
+    );
   }
   return previous + 1;
 }
 
 function assertVersionCode(versionCode) {
   if (!Number.isInteger(versionCode) || versionCode < 1 || versionCode > MAX_VERSION_CODE) {
-    throw shellError("An Android build needs its build number (versionCode), a whole number from 1 to 2,100,000,000.");
+    throw publishError(
+      "VIBE64_PUBLISH_SHELL_VERSION_CODE_INVALID",
+      "An Android build needs its build number (versionCode), a whole number from 1 to 2,100,000,000."
+    );
   }
 }
 
@@ -132,7 +136,9 @@ function assertVersionCode(versionCode) {
  */
 function shellFiles({ entry, plugins, version, versionCode }) {
   assertVersionCode(versionCode);
-  if (!EXACT_VERSION.test(version || "")) throw shellError(`Package ${entry.id} needs its release version, such as 1.5.0.`);
+  if (!EXACT_VERSION.test(version || "")) {
+    throw publishError("VIBE64_PUBLISH_SHELL_VERSION_REQUIRED", `Package ${entry.id} needs its release version, such as 1.5.0.`);
+  }
   const pinned = CAPACITOR_SHELL_TEMPLATE.capacitor;
   const dependencies = Object.fromEntries([
     ...SHELL_RUNTIME_PACKAGES.map((name) => [name, pinned]),
@@ -175,13 +181,19 @@ function shellFiles({ entry, plugins, version, versionCode }) {
  * Reads the source facts, refuses problems, and returns the shell files.
  */
 async function generateShell({ sourceRoot, entry, content, version, versionCode }) {
-  if (entry?.packer !== "capacitor") throw shellError("Only a capacitor package has a native shell.");
+  if (entry?.packer !== "capacitor") {
+    throw publishError("VIBE64_PUBLISH_SHELL_NOT_CAPACITOR", "Only a capacitor package has a native shell.");
+  }
   if (content?.packer !== "web-bundle" || content.id !== entry.content) {
-    throw shellError(`Package ${entry.id} needs its web-bundle Content package.`);
+    throw publishError("VIBE64_PUBLISH_SHELL_CONTENT_REQUIRED", `Package ${entry.id} needs its web-bundle Content package.`);
   }
   const found = nativePlugins(await readContentDependencies({ sourceRoot, content }));
   if (found.problems.length) {
-    throw shellError(found.problems.map(({ message }) => message).join(" "), { problems: found.problems });
+    throw publishError(
+      "VIBE64_PUBLISH_SHELL_PLUGINS_INVALID",
+      found.problems.map(({ message }) => message).join(" "),
+      { problems: found.problems }
+    );
   }
   return { files: shellFiles({ entry, plugins: found.plugins, version, versionCode }), plugins: found.plugins, core: found.core };
 }
@@ -200,7 +212,6 @@ async function writeShell({ shellRoot, files, webRoot, iconFile }) {
 const __testables = Object.freeze({ shellFiles });
 
 export {
-  SHELL_SPEC_FILE,
   generateShell,
   nativePlugins,
   nextVersionCode,

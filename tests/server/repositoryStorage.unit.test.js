@@ -7,8 +7,7 @@ import { promisify } from "node:util";
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 
 import {
-  CANONICAL_REPOSITORY_PUSH_OPTION,
-  canonicalRepositoryBackupPath,
+  __testables,
   canonicalRepositoryInitializeScript,
   canonicalRepositoryInstallRefScript,
   githubMirrorRefreshInvocation
@@ -16,6 +15,8 @@ import {
 import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const { CANONICAL_REPOSITORY_PUSH_OPTION, canonicalRepositoryBackupPath } = __testables;
 
 const execFileAsync = promisify(execFile);
 

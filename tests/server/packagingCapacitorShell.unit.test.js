@@ -92,7 +92,7 @@ test("a lockfile that disagrees with package.json, or none at all, blocks the sh
     await writeTree(source, files);
     await assert.rejects(
       generateShell({ sourceRoot: source, entry: app, content: web, version: "1.4.2", versionCode: 1 }),
-      (error) => error.code === "VIBE64_PUBLISH_BUILD_INVALID" && pattern.test(error.message),
+      (error) => error.code === "VIBE64_PUBLISH_SHELL_PLUGINS_INVALID" && pattern.test(error.message),
       pattern.source
     );
   };
@@ -187,6 +187,7 @@ test("an app build runs Stage 1 once per package, in throwaway folders, without 
     return { ok: true, exitCode: 0, stdout: "", stderr: "" };
   };
   const build = async (store) => buildPackage({
+    baseEnvironment: process.env,
     projectRoot: project.root,
     commit: project.commit,
     packaging,

@@ -41,7 +41,8 @@ function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode =
  * @param {string | null} [request.planHash]
  * @param {string} request.resultStore
  * @param {string} [request.workRoot]
- * @param {Record<string, string | undefined>} [request.baseEnvironment]
+ * @param {import("../stages.js").BaseEnvironment} request.baseEnvironment the environment the process started with;
+ *   its PATH and locale reach the build
  * @param {string} [request.cacheDirectory]
  * @param {number | null} [request.versionCode]
  * @param {object} [request.toolchains] the local toolchains the packer's recipe uses
@@ -62,7 +63,7 @@ async function buildPackage({
   planHash = null,
   resultStore,
   workRoot = os.tmpdir(),
-  baseEnvironment = process.env,
+  baseEnvironment,
   cacheDirectory = "",
   // readable-check: allow dependency-default - data: an Android version code, none for other packers
   versionCode = null,
@@ -73,7 +74,7 @@ async function buildPackage({
   signal
 }, { runCommand } = {}) {
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
-  if (!entry) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Packaging declares no package ${packageId}.`);
+  if (!entry) throw publishError("VIBE64_PUBLISH_PACKAGE_UNKNOWN", `Packaging declares no package ${packageId}.`);
   const packer = vibe64Packer(entry.packer);
   // readable-check: allow method-probe - optional operation: a packer definition has templates() only when it builds from a template
   const template = typeof packer.templates === "function" ? packer.templates() : null;
@@ -92,7 +93,7 @@ async function buildPackage({
   const content = entry.content ? packaging.packages.find((candidate) => candidate.id === entry.content) : null;
   if (entry.content && !content) {
     throw publishError(
-      "VIBE64_PUBLISH_BUILD_INVALID",
+      "VIBE64_PUBLISH_CONTENT_UNKNOWN",
       `Package ${entry.id} names Content ${entry.content}, which Packaging does not declare.`
     );
   }
@@ -129,6 +130,7 @@ async function buildPackage({
       contentArtifacts: builtContent,
       versionCode,
       toolchains,
+      baseEnvironment,
       cacheDirectory
     });
     const artifacts = await runBuildStage({

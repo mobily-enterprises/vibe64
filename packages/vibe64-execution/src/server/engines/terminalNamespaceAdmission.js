@@ -128,9 +128,6 @@ function thawTerminalNamespaceAdmission(namespace = "default", options = {}) {
 export {
   beginTerminalNamespaceOperation,
   freezeTerminalNamespaceAdmission,
-  namespaceAdmissions,
-  namespaceOperationCounts,
-  terminalNamespaceAdmission,
   terminalNamespaceAdmissionFailure,
   thawTerminalNamespaceAdmission
 };

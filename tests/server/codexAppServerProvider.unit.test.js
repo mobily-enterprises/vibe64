@@ -3049,7 +3049,7 @@ test("without runtime packs the resume command runs the person's own Codex", () 
       endpoint: "unix:///tmp/vibe64/codex-app-server/app-server.sock",
       threadId: "019e865d-8108-7740-912b-42ece83a5c73"
     });
-    assert.equal(argv[0], operatorCliCommand("codex"));
+    assert.equal(argv[0], operatorCliCommand("codex", { env: process.env }));
     assert.notEqual(argv[0], MANAGED_CODEX_COMMAND);
   } finally {
     configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT, sharedGroupAccess: true });

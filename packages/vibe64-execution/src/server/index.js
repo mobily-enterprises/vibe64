@@ -1,11 +1,9 @@
 export {
-  NON_LOGIN_SHELLS,
   assertSafeOsUsername,
   currentOsUser,
   listOsUsers,
   normalizeOsUsername,
   osUserEligibility,
-  parsePasswdLine,
   resolveOsUser
 } from "./osUserIdentity.js";
 export {
@@ -17,7 +15,6 @@ export {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   codexCredentialContext,
   composeGithubTerminalHome,
-  credentialHomeRequiredError,
   githubCredentialContext,
   logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,
@@ -29,9 +26,7 @@ export {
   homeEnvForUser
 } from "./actor/userIdentity.js";
 export {
-  EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
   helperOperationForRequest,
-  helperPayload,
   normalizedHelperPayload,
   runHelperCommand
 } from "./engines/helperClient.js";
@@ -59,11 +54,6 @@ export {
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
 export {
-  VIBE64_EXECUTION_KINDS,
-  VIBE64_EXECUTION_LIFECYCLES,
-  normalizeExecutionDescriptor
-} from "./request.js";
-export {
   checkpointRefRoot,
   checkpointRefs,
   createGitTurnCheckpoint,
@@ -74,62 +64,31 @@ export {
   resolveCommandEnv
 } from "./env/resolveCommandEnv.js";
 export {
-  ISOLATED_PROCESS_BASE_ENV_NAMES,
   isolatedProcessEnv
 } from "./env/isolatedProcessEnv.js";
-export {
-  GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
-  absoluteUniqueGitPaths,
-  applyGitConfigEntriesToEnv,
-  applyGitSafeDirectoriesToEnv,
-  gitSafeDirectoryEntries,
-  githubCredentialHelperGitEnv,
-  githubGitNonInteractiveEnv,
-  githubHttpsGitTransportEnv
-} from "./env/gitConfigEnv.js";
 export {
   githubGitAuthScript
 } from "./env/githubGitAuthShell.js";
 export {
-  VIBE64_GIT_AUTH_TOKEN_ENV
-} from "./env/gitEnv.js";
-export {
-  DATABASE_ENV_NAMES,
-  databaseEnv
-} from "./env/databaseEnv.js";
-export {
-  RESERVED_CALLER_ENV_NAMES,
   commandCallerEnv,
   rejectCallerEnvPolicy
 } from "./env/callerEnv.js";
 export {
-  NPM_CONFIG_PREFIX_ENV,
-  npmToolBinDirs,
-  npmToolEnv
+  NPM_CONFIG_PREFIX_ENV
 } from "./env/npmToolEnv.js";
 export {
-  GIT_AUTHOR_EMAIL_ENV,
-  GIT_AUTHOR_NAME_ENV,
-  GIT_COMMITTER_EMAIL_ENV,
-  GIT_COMMITTER_NAME_ENV,
   GIT_IDENTITY_COMMANDS,
-  gitIdentityEnv,
-  isFallbackGitIdentityEmail,
-  resolveGitIdentity
+  isFallbackGitIdentityEmail
 } from "./env/gitIdentityEnv.js";
 export {
-  gitFailureError,
-  gitInstallCommand
+  gitFailureError
 } from "./gitFailure.js";
 export {
   shellQuote,
   stableHash
 } from "./shellText.js";
 export {
-  CANONICAL_REPOSITORY_BACKUP_NAME,
-  CANONICAL_REPOSITORY_PUSH_OPTION,
   GITHUB_MIRROR_REFRESH_SCRIPT,
-  canonicalRepositoryBackupPath,
   canonicalRepositoryInitializeScript,
   canonicalRepositoryInstallRefScript,
   githubMirrorRefreshInvocation
@@ -143,11 +102,7 @@ export {
 } from "./normalize.js";
 export {
   PLAYWRIGHT_BROWSERS_PATH_ENV,
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
-  VIBE64_PLAYWRIGHT_VERSION_ENV,
-  VIBE64_SHARED_CACHE_ROOT_ENV,
-  resolveManagedPlaywrightVersion,
-  sharedToolEnv
+  VIBE64_SHARED_CACHE_ROOT_ENV
 } from "./env/sharedToolEnv.js";
 export {
   configureVibe64Host,
@@ -158,18 +113,14 @@ export {
 export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
-  managedCommandRuntimeEntries,
   runtimePackBinPaths,
-  runtimePackGuardBinPaths,
   runtimePackPolicyBinPaths,
   runtimePackRoot
 } from "./runtime/runtimePacks.js";
 export {
   isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightRuntimeOutput,
-  playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
-  playwrightRuntimeVersionCheckScript,
   playwrightRuntimeVersionCommandArgs,
   summarizePlaywrightBrowserLaunchOutput,
   summarizePlaywrightRuntimeOutput
@@ -192,12 +143,6 @@ export {
 } from "./runtime/agentEnvWrapperSource.js";
 export { createVibe64ConversationExecution } from "./conversationExecution.js";
 export {
-  CHECKED_ON,
-  LOCAL_TOOLS,
-  SUDO_NOTE,
-  localToolFamily,
-  localToolGuideUrl,
-  localToolIds,
   localToolInstall,
   thisComputerToolFamily
 } from "./runtime/localTools.js";

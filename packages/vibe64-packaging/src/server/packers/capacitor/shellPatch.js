@@ -20,14 +20,26 @@ function templateChanged(file, anchor) {
   return new Error(`The Capacitor Android template changed: ${file} has no ${anchor}. Update the Vibe64 shell patch before building.`);
 }
 
-function replaceOnce(text, pattern, replacement, file, anchor) {
+/**
+ * Replaces the template's single match of pattern with what replace returns for it.
+ * @param {string} text
+ * @param {RegExp} pattern
+ * @param {(match: string) => string} replace
+ * @param {string} file
+ * @param {string} anchor
+ */
+function replaceMatchOnce(text, pattern, replace, file, anchor) {
   let count = 0;
-  const result = text.replace(pattern, (...match) => {
+  const result = text.replace(pattern, (match) => {
     count += 1;
-    return typeof replacement === "function" ? replacement(...match) : replacement;
+    return replace(match);
   });
   if (count !== 1) throw templateChanged(file, anchor);
   return result;
+}
+
+function replaceOnce(text, pattern, replacement, file, anchor) {
+  return replaceMatchOnce(text, pattern, () => replacement, file, anchor);
 }
 
 function xmlText(value) {
@@ -126,7 +138,7 @@ function patchManifest(text, spec) {
   );
   const filters = linkFilters(spec);
   if (filters.length) {
-    result = replaceOnce(
+    result = replaceMatchOnce(
       result,
       /(<category android:name="android\.intent\.category\.LAUNCHER" \/>\s*<\/intent-filter>)/u,
       (match) => `${match}\n\n${filters.join("\n\n")}`,
@@ -145,14 +157,16 @@ function patchWrapperProperties(text) {
   return `${result.trimEnd()}\ndistributionSha256Sum=${distributionSha256Sum}\n`;
 }
 
+/** The template's own Java compatibility must be the shell's; the file is kept as it is. */
 function patchCapacitorBuildGradle(text) {
   const file = "app/capacitor.build.gradle";
-  return replaceOnce(text, /JavaVersion\.VERSION_(\d+)\s+targetCompatibility JavaVersion\.VERSION_(\d+)/u, (match, source, target) => {
-    if (Number(source) !== CAPACITOR_SHELL_TEMPLATE.java || Number(target) !== CAPACITOR_SHELL_TEMPLATE.java) {
-      throw templateChanged(file, `Java ${CAPACITOR_SHELL_TEMPLATE.java}`);
-    }
-    return match;
-  }, file, "Java compatibility");
+  const compatibility = text.match(/JavaVersion\.VERSION_(\d+)\s+targetCompatibility JavaVersion\.VERSION_(\d+)/u);
+  if (!compatibility) throw templateChanged(file, "Java compatibility");
+  const [, source, target] = compatibility;
+  if (Number(source) !== CAPACITOR_SHELL_TEMPLATE.java || Number(target) !== CAPACITOR_SHELL_TEMPLATE.java) {
+    throw templateChanged(file, `Java ${CAPACITOR_SHELL_TEMPLATE.java}`);
+  }
+  return text;
 }
 
 async function readSpec(shellRoot) {
@@ -209,8 +223,5 @@ const __testables = Object.freeze({
 });
 
 export {
-  applyShellPatch,
-  collectApk,
-  patchCapacitorBuildGradle,
   __testables
 };

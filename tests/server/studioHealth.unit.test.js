@@ -11,7 +11,7 @@ import {
 import { configureVibe64Host } from "@local/vibe64-execution/server";
 import {
   isValidPlaywrightBrowserLaunchOutput,
-  playwrightBrowserLaunchCheckScript
+  playwrightBrowserLaunchCommandArgs
 } from "../../packages/vibe64-execution/src/server/runtime/browserRuntime.js";
 
 function successfulCommandResult(command = "", args = []) {
@@ -234,7 +234,8 @@ test("without runtime packs a tool that is there but fails is not counted as ins
 
 test("the browser health probe launches pinned headless Chromium within the health deadline", (t) => {
   withRuntimePacks(t, os.tmpdir());
-  const script = playwrightBrowserLaunchCheckScript();
+  const [shell, flag, script] = playwrightBrowserLaunchCommandArgs();
+  assert.deepEqual([shell, flag], ["bash", "-c"]);
   assert.match(script, /browser="\$headless_shell"/u);
   assert.match(script, /timeout 15s/u);
   assert.ok(script.indexOf('headless_shell_version=') < script.indexOf('browser="$headless_shell"'));

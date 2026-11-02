@@ -4,11 +4,10 @@ import test from "node:test";
 
 import {
   __testables,
-  applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv
 } from "../../packages/vibe64-execution/src/server/env/gitConfigEnv.js";
 
-const { gitSafeDirectoryArgs, githubSshToHttpsGitEnv } = __testables;
+const { applyGitConfigEntriesToEnv, gitSafeDirectoryArgs, githubSshToHttpsGitEnv } = __testables;
 
 test("Git config environment entries append without replacing existing entries", () => {
   const env = applyGitConfigEntriesToEnv({

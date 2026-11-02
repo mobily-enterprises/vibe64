@@ -14,7 +14,7 @@ import {
   describeAndroidSdk,
   installAndroidSdk
 } from "../../packages/vibe64-packaging/src/server/toolchains/androidSdk.js";
-import { downloadVerified, extractZip } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
+import { downloadVerified, unpackInto } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
 import { describeJdk, findJdk } from "../../packages/vibe64-packaging/src/server/toolchains/jdk.js";
 import { fakeToolchains } from "./packagingAndroidTestTools.js";
 import { temporaryFolder } from "./packagingRegistryTestTools.js";
@@ -50,21 +50,22 @@ test("installing the SDK refuses without the person's acceptance of the current 
   const directory = await temporaryFolder(t, "vibe64-sdk-");
   const javaHome = (await fakeToolchains(await temporaryFolder(t, "vibe64-fake-tools-"))).javaHome;
   const { hash } = licenceFromRepository(REPOSITORY);
-  const attempt = async (acceptance) => {
+  const attempt = async (acceptance, code) => {
     const seen = [];
     await assert.rejects(
-      installAndroidSdk({ directory, javaHome, acceptance, repositoryUrl: "https://repo.invalid/r.xml" }, {
+      installAndroidSdk({ baseEnvironment: process.env, directory, javaHome, acceptance, repositoryUrl: "https://repo.invalid/r.xml" }, {
         fetchImpl: fetchStub({ "https://repo.invalid/r.xml": REPOSITORY }, seen),
         runCommand: async () => { throw new Error("no tool may run"); }
       }),
-      (error) => error.code === "VIBE64_PUBLISH_LICENCE_NOT_ACCEPTED"
+      (error) => error.code === code
     );
     assert.deepEqual(seen, ["https://repo.invalid/r.xml"], "only the licence was fetched");
   };
-  await attempt(undefined);
-  await attempt({ id: "android-sdk-license", hash: "sha256:" + "0".repeat(64), acceptedBy: "ada", acceptedAt: "2026-10-23T00:00:00Z" });
-  await attempt({ id: "android-sdk-preview-license", hash, acceptedBy: "ada", acceptedAt: "2026-10-23T00:00:00Z" });
-  await attempt({ id: "android-sdk-license", hash, acceptedBy: "", acceptedAt: "2026-10-23T00:00:00Z" });
+  const notAccepted = "VIBE64_PUBLISH_LICENCE_NOT_ACCEPTED";
+  await attempt(undefined, notAccepted);
+  await attempt({ id: "android-sdk-license", hash: "sha256:" + "0".repeat(64), acceptedBy: "ada", acceptedAt: "2026-10-23T00:00:00Z" }, notAccepted);
+  await attempt({ id: "android-sdk-preview-license", hash, acceptedBy: "ada", acceptedAt: "2026-10-23T00:00:00Z" }, notAccepted);
+  await attempt({ id: "android-sdk-license", hash, acceptedBy: "", acceptedAt: "2026-10-23T00:00:00Z" }, "VIBE64_PUBLISH_LICENCE_ACCEPTANCE_INCOMPLETE");
   assert.deepEqual(await readdir(directory), []);
 });
 
@@ -75,7 +76,7 @@ test("downloads land only when their pinned checksum matches", async (t) => {
   const fetchImpl = fetchStub({ "https://dl.invalid/tool.zip": bytes });
   await assert.rejects(
     downloadVerified({ url: "https://dl.invalid/tool.zip", file: "tool.zip", sha256: "f".repeat(64) }, directory, { fetchImpl }),
-    (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_FAILED" && /does not match its pinned checksum/u.test(error.message)
+    (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_CHECKSUM_MISMATCH" && /does not match its pinned checksum/u.test(error.message)
   );
   assert.deepEqual(await readdir(directory), []);
   await assert.rejects(
@@ -91,8 +92,8 @@ test("downloads land only when their pinned checksum matches", async (t) => {
 
 test("toolchain descriptions say what is missing", async (t) => {
   const { javaHome, androidHome } = await fakeToolchains(await temporaryFolder(t, "vibe64-fake-tools-"));
-  assert.deepEqual(await describeJdk({ javaHome }), { ok: true, javaHome, version: "21.0.9", major: 21, message: "Java 21.0.9." });
-  assert.equal((await describeJdk({ javaHome: path.join(javaHome, "missing") })).ok, false);
+  assert.deepEqual(await describeJdk({ baseEnvironment: process.env, javaHome }), { ok: true, javaHome, version: "21.0.9", major: 21, message: "Java 21.0.9." });
+  assert.equal((await describeJdk({ baseEnvironment: process.env, javaHome: path.join(javaHome, "missing") })).ok, false);
   assert.equal((await findJdk({ directory: null, baseEnvironment: { JAVA_HOME: javaHome, PATH: "/nonexistent" } })).javaHome, javaHome);
   assert.equal((await describeAndroidSdk({ androidHome })).ok, true);
   const empty = await describeAndroidSdk({ androidHome: path.join(androidHome, "none") });
@@ -147,15 +148,21 @@ test("zips unpack without a system unzip, keeping executable bits and inner link
     { name: "cmdline-tools/bin/current", data: "sdkmanager", mode: 0o120777 }
   ]));
   const out = path.join(root, "out");
-  await extractZip(archive, out);
-  assert.equal(await readFile(path.join(out, "cmdline-tools", "bin", "sdkmanager"), "utf8"), "#!/bin/sh\necho sdk\n");
-  assert.equal((await stat(path.join(out, "cmdline-tools", "bin", "sdkmanager"))).mode & 0o777, 0o755);
-  assert.equal((await readFile(path.join(out, "cmdline-tools", "lib", "README"), "utf8")).length, 5000);
-  assert.equal(await readlink(path.join(out, "cmdline-tools", "bin", "current")), "sdkmanager");
+  await unpackInto(archive, out, { inner: "cmdline-tools", kind: "zip", baseEnvironment: process.env });
+  assert.equal(await readFile(path.join(out, "bin", "sdkmanager"), "utf8"), "#!/bin/sh\necho sdk\n");
+  assert.equal((await stat(path.join(out, "bin", "sdkmanager"))).mode & 0o777, 0o755);
+  assert.equal((await readFile(path.join(out, "lib", "README"), "utf8")).length, 5000);
+  assert.equal(await readlink(path.join(out, "bin", "current")), "sdkmanager");
 
-  for (const [name, entry] of [["escape.zip", { name: "../evil", data: "x" }], ["link.zip", { name: "evil", data: "/etc/passwd", mode: 0o120777 }]]) {
+  for (const [name, entry, code] of [
+    ["escape.zip", { name: "../evil", data: "x" }, "VIBE64_PUBLISH_TOOLCHAIN_ENTRY_OUTSIDE"],
+    ["link.zip", { name: "evil", data: "/etc/passwd", mode: 0o120777 }, "VIBE64_PUBLISH_TOOLCHAIN_LINK_OUTSIDE"]
+  ]) {
     await writeFile(path.join(root, name), zipOf([entry]));
-    await assert.rejects(extractZip(path.join(root, name), path.join(root, `out-${name}`)), (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_FAILED");
+    await assert.rejects(
+      unpackInto(path.join(root, name), path.join(root, `out-${name}`), { inner: "cmdline-tools", kind: "zip", baseEnvironment: process.env }),
+      (error) => error.code === code && /outside its folder/u.test(error.message)
+    );
   }
   assert.equal(await stat(path.join(root, "evil")).catch(() => null), null);
 });

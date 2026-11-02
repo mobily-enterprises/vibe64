@@ -54,6 +54,5 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
 }
 
 export {
-  credentialEnv,
-  pathIsHomeDirectory
+  credentialEnv
 };

@@ -36,7 +36,7 @@ test("retrying an unfinished release of the same commit and version keeps its bu
 
 test("build numbers stop at Android's upper bound", () => {
   const releases = [{ kind: "release", status: "succeeded", savedCommit: "b".repeat(40), buildNumbers: { app: 2_100_000_000 } }];
-  assert.throws(() => nextBuildNumbers({ releases, packages: [app], savedCommit: COMMIT }), { code: "VIBE64_PUBLISH_TARGET_INVALID" });
+  assert.throws(() => nextBuildNumbers({ releases, packages: [app], savedCommit: COMMIT }), { code: "VIBE64_PUBLISH_BUILD_NUMBER_INVALID" });
 });
 
 test("destinations own their registry addresses", () => {

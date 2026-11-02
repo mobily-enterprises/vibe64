@@ -18,8 +18,8 @@ import { iconProblems, iconStep } from "./icons.js";
 
 const SHELL_PATCH = fileURLToPath(new URL("./shellPatch.js", import.meta.url));
 
-async function requireToolchains(toolchains = {}) {
-  const jdk = await describeJdk({ javaHome: toolchains.javaHome });
+async function requireToolchains(toolchains, baseEnvironment) {
+  const jdk = await describeJdk({ javaHome: toolchains.javaHome, baseEnvironment });
   const sdk = await describeAndroidSdk({ androidHome: toolchains.androidHome });
   if (!jdk.ok || !sdk.ok) {
     throw publishError(
@@ -38,7 +38,7 @@ async function requireToolchains(toolchains = {}) {
 /**
  * context: { sourceRoot, entry, content (its web-bundle entry), contentArtifacts
  * (that package's Stage 1 result), version, versionCode, toolchains: { javaHome,
- * androidHome }, cacheDirectory }.
+ * androidHome }, baseEnvironment (PATH and locale for the Java check), cacheDirectory }.
  */
 async function capacitorRecipe({
   sourceRoot,
@@ -48,26 +48,29 @@ async function capacitorRecipe({
   version = null,
   versionCode,
   toolchains,
+  baseEnvironment,
   cacheDirectory = ""
-} = {}) {
+}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The capacitor packer needs the exported source folder.");
+    throw publishError("VIBE64_PUBLISH_CAPACITOR_SOURCE_REQUIRED", "The capacitor packer needs the exported source folder.");
   }
   if (!entry.platforms.includes("android")) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} builds no Android app.`);
+    throw publishError("VIBE64_PUBLISH_CAPACITOR_NO_ANDROID", `Package ${entry.id} builds no Android app.`);
   }
   if (!contentArtifacts) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} needs its ${entry.content} content built first.`);
+    throw publishError("VIBE64_PUBLISH_CAPACITOR_CONTENT_NOT_BUILT", `Package ${entry.id} needs its ${entry.content} content built first.`);
   }
-  const { javaHome, androidHome } = await requireToolchains(toolchains);
+  const { javaHome, androidHome } = await requireToolchains(toolchains, baseEnvironment);
   const icon = path.join(sourceRoot, entry.application.icon);
   if (!pathWithin(sourceRoot, icon, { allowRoot: false })) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The app icon must be inside the project.");
+    throw publishError("VIBE64_PUBLISH_APP_ICON_OUTSIDE_PROJECT", "The app icon must be inside the project.");
   }
   const iconBytes = await readFile(icon).catch(() => null);
-  if (!iconBytes) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `The app icon ${entry.application.icon} is not in the saved commit.`);
+  if (!iconBytes) {
+    throw publishError("VIBE64_PUBLISH_APP_ICON_NOT_SAVED", `The app icon ${entry.application.icon} is not in the saved commit.`);
+  }
   const problems = iconProblems(iconBytes);
-  if (problems.length) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", problems.join(" "));
+  if (problems.length) throw publishError("VIBE64_PUBLISH_APP_ICON_INVALID", problems.join(" "));
 
   const shellRoot = path.join(path.dirname(sourceRoot), "shell");
   const appVersion = version || await readSourceVersion({ projectRoot: sourceRoot, entry });
@@ -117,4 +120,4 @@ async function capacitorRecipe({
   };
 }
 
-export { capacitorRecipe, requireToolchains };
+export { capacitorRecipe };

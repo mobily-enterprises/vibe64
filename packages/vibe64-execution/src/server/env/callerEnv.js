@@ -72,8 +72,6 @@ function commandCallerEnv(env = {}, options = {}) {
 }
 
 export {
-  POLICY_OWNED_CALLER_ENV_NAMES,
-  RESERVED_CALLER_ENV_NAMES,
   commandCallerEnv,
   rejectCallerEnvPolicy
 };

@@ -442,7 +442,7 @@ function codexAppServerRuntimeHost(options = {}) {
   const parameters = {
     accountIdentitySignature: options.accountIdentitySignature,
     authStateSignature: options.authStateSignature,
-    codexCommand: options.codexCommand === undefined ? operatorCliCommand("codex") : options.codexCommand,
+    codexCommand: options.codexCommand === undefined ? operatorCliCommand("codex", { env: process.env }) : options.codexCommand,
     env: options.env,
     executionRoot: options.executionRoot,
     executionMode: options.executionMode,
@@ -550,7 +550,7 @@ async function assertCodexAuthPreflightReady(providerOptions = {}, options = {})
 function codexCliResumeCommand(options = {}) {
   return nativeCodexCliResumeCommand({
     ...options,
-    codexCommand: toText(options.codexCommand) || operatorCliCommand("codex")
+    codexCommand: toText(options.codexCommand) || operatorCliCommand("codex", { env: process.env })
   });
 }
 

@@ -54,4 +54,4 @@ function iconStep({ javaHome, icon, resourceRoot, cwd }) {
 
 const __testables = Object.freeze({ inspectPng });
 
-export { ICON_PROGRAM, ICON_SIZE, iconProblems, iconStep, __testables };
+export { iconProblems, iconStep, __testables };

@@ -63,10 +63,7 @@ function sessionUsesDetachedCleanup(session = {}) {
   return isRunningSession(session) || session.status === "exited";
 }
 
-function terminalSessionMatchesFilter(session = {}, filter = null) {
-  if (typeof filter !== "function") {
-    return true;
-  }
+function terminalSessionMatchesFilter(session, filter) {
   try {
     return filter(terminalSessionResponse(session)) === true;
   } catch {
@@ -275,33 +272,17 @@ export {
   DEFAULT_TERMINAL_COLS,
   DEFAULT_TERMINAL_ROWS,
   detachedIdleForMs,
-  detachedIdleStartedAtMs,
   isRunningSession,
-  MAX_DETACHED_IDLE_TIMEOUT_MS,
-  MAX_QUIET_THRESHOLD_MS,
-  MAX_TERMINAL_BUFFER_LENGTH,
-  MAX_TERMINAL_BUFFER_ROWS,
-  MAX_TERMINAL_COLS,
-  MAX_TERMINAL_ROWS,
-  MIN_TERMINAL_COLS,
-  MIN_TERMINAL_ROWS,
   NO_SESSIONS,
   normalizeDetachedIdleTimeoutMs,
   normalizeNamespace,
-  normalizeOutputLimit,
-  normalizeQuietThresholdMs,
-  normalizeTerminalDimension,
   normalizeTerminalSize,
   sessionUsesDetachedCleanup,
-  TERMINAL_KEY_INPUTS,
   terminalKeyInput,
-  terminalMovementState,
   terminalSessionContainsText,
   terminalSessionControlSnapshot,
   terminalSessionMatchesFilter,
   terminalSessionNotFound,
-  terminalSessionOutput,
   terminalSessionResponse,
-  timestampMs,
   trimBuffer
 };

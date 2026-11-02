@@ -164,7 +164,7 @@ function localToolRow(tool, { group, id = tool.id, need, explanation }) {
  * Without packs: Node, Git and one AI tool are needed; everything else is optional.
  */
 async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
-  const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, runCommand });
+  const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, env: process.env, runCommand });
   const byId = Object.fromEntries(tools.map((tool) => [tool.id, tool]));
   const rows = Object.entries(LOCAL_TOOL_CHECKS).map(([id, options]) => localToolRow(byId[id], { group: "Tools", ...options }));
   const node = rows[0];
@@ -489,7 +489,7 @@ function createService({
    */
   async function checkTools(input) {
     const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
-    return checkLocalTools(ids, { cwd: studioRoot, runCommand });
+    return checkLocalTools(ids, { cwd: studioRoot, env: process.env, runCommand });
   }
 
   return Object.freeze({

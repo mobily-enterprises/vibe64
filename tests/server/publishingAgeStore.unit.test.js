@@ -8,8 +8,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { ageDecrypt, ageEncrypt } from "../../packages/vibe64-packaging/src/server/keys/age.js";
 import {
-  ageDecrypt, ageEncrypt, createAgeStore, createRecoveryKit, recoveryKitCovers, restoreRecoveryKit
+  createAgeStore, createRecoveryKit, recoveryKitCovers, restoreRecoveryKit
 } from "../../packages/vibe64-packaging/src/server/keys/index.js";
 
 const PASSPHRASE = "correct horse battery staple";

@@ -13,6 +13,8 @@ import {
   commandErrorResult
 } from "./result.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 let installedProvider = null;
 const VIBE64_MANAGED_EXECUTION_REQUIRED_ENV = "VIBE64_MANAGED_EXECUTION_REQUIRED";
 
@@ -41,15 +43,24 @@ function vibe64ManagedExecutionProvider() {
   return installedProvider;
 }
 
-function vibe64ManagedExecutionRequired(env = process.env) {
-  return ["1", "true"].includes(String(env?.[VIBE64_MANAGED_EXECUTION_REQUIRED_ENV] || "")
+/**
+ * Whether this host must run commands through a managed execution provider.
+ * @param {RuntimeEnv} env
+ */
+function vibe64ManagedExecutionRequired(env) {
+  return ["1", "true"].includes(String(env[VIBE64_MANAGED_EXECUTION_REQUIRED_ENV] || "")
     .trim()
     .toLowerCase());
 }
 
-async function startVibe64Workflow(input = {}) {
+/**
+ * Starts a managed workflow; without a provider, only a host that requires one refuses.
+ * @param {object} input the workflow the provider starts
+ * @param {RuntimeEnv} env says whether this host requires managed execution
+ */
+async function startVibe64Workflow(input, env) {
   if (!installedProvider) {
-    if (vibe64ManagedExecutionRequired()) throw new Error("The managed workflow provider is unavailable.");
+    if (vibe64ManagedExecutionRequired(env)) throw new Error("The managed workflow provider is unavailable.");
     return { ok: true, workflow: null };
   }
   // readable-check: allow method-probe - optional operation: a managed execution provider without workflows refuses them

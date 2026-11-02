@@ -1,6 +1,8 @@
 // Destinations receive the exact Stage 1 artifacts. Each entry declares the
 // credentials it needs ({ id, label, delivery: "file" | "stdin" }) and implements
 // dryRun, upload (Stage 2) and readBack (Stage 3, `{ published, checksum }`).
+// dryRun and upload also receive `baseEnvironment`, the environment the process
+// started with, whose PATH and locale reach the tools they run.
 import { publishError } from "../errors.js";
 import { androidSideloadDestination } from "./androidSideload/index.js";
 import { githubReleasesDestination } from "./githubReleases/index.js";

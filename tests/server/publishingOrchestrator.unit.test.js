@@ -110,7 +110,8 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
     credentials,
     logger: silentLogger,
     sourceWriter: { prepareAndWrite: async ({ entry, version }) => ({ package: entry.id, previousVersion: "1.1.0", version, files: [{ path: "package.json" }, { path: "CHANGELOG.md" }] }) },
-    packaging
+    packaging,
+    baseEnvironment: {}
   });
   if (app) {
     await targets.add({ destination: "github-releases", package: "app", channel: "latest", account: "github-main", settings: { repository: "ada/notes" } });

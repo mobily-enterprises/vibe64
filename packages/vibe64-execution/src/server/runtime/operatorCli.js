@@ -1,10 +1,11 @@
 import { accessSync, constants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import process from "node:process";
 
 import { LOCAL_TOOLS } from "./localTools.js";
 import { runtimePackRoot } from "./runtimePacks.js";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 // The AI tools Vibe64 runs, with their install lines from the shared table.
 const OPERATOR_CLIS = Object.freeze(Object.fromEntries(["claude", "codex", "opencode"].map((tool) => {
@@ -29,7 +30,7 @@ function executable(file = "") {
  * PATH plus the official installers' own locations: a server started outside
  * a login shell may lack these on PATH.
  */
-function operatorCliSearchDirs(env = process.env) {
+function operatorCliSearchDirs(env) {
   const home = String(env.HOME || os.homedir() || "");
   const homeDirs = home ? [".local/bin", ".claude/local", ".opencode/bin"].map((dir) => path.join(home, dir)) : [];
   const dirs = [...String(env.PATH || "").split(path.delimiter), ...homeDirs, "/opt/homebrew/bin", "/usr/local/bin"]
@@ -42,9 +43,11 @@ function operatorCliSearchDirs(env = process.env) {
  * runtime packs uses its pinned launchers; otherwise the person's own
  * installation (and its existing login) is found again on every call, so
  * "Check again" sees a CLI installed a moment ago.
+ * @param {string} tool
+ * @param {{ env: RuntimeEnv }} options env is the running server's environment: its
+ *   VIBE64_CLAUDE_COMMAND, HOME and PATH
  */
-function resolveOperatorCli(tool = "", options = {}) {
-  const { env = process.env } = options;
+function resolveOperatorCli(tool, { env }) {
   if (!Object.hasOwn(OPERATOR_CLIS, tool)) throw new TypeError(`Unknown operator CLI: ${tool}`);
   const override = tool === "claude" ? String(env.VIBE64_CLAUDE_COMMAND || "").trim() : "";
   const root = runtimePackRoot();
@@ -70,7 +73,11 @@ function operatorCliStartFailed(result) {
   return [126, 127].includes(result?.exitCode) || /\bspawn \S+ (?:ENOENT|EACCES)\b/u.test(String(result?.error || ""));
 }
 
-function operatorCliCommand(tool = "", options = {}) {
+/**
+ * @param {string} tool
+ * @param {{ env: RuntimeEnv }} options
+ */
+function operatorCliCommand(tool, options) {
   return resolveOperatorCli(tool, options).command;
 }
 

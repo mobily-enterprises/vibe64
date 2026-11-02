@@ -118,6 +118,6 @@ test("refuses malformed release tags and inputs before touching Git", async (t) 
   for (const tags of [[], ["1.5.0"], ["v1.5"], ["App@1.5.0"], ["v1.5.0", "v1.5.0"], ["v1.5.0;rm"]]) {
     await assert.rejects(f.tag({ tags }, { runCommand: never }), (error) => error.code === "VIBE64_PUBLISH_TAG_INVALID", JSON.stringify(tags));
   }
-  await assert.rejects(f.tag({ expectedCommit: "abc" }, { runCommand: never }), (error) => error.code === "VIBE64_PUBLISH_TAG_INVALID");
-  await assert.rejects(f.tag({ repositoryRoot: "relative" }, { runCommand: never }), (error) => error.code === "VIBE64_PUBLISH_TAG_INVALID");
+  await assert.rejects(f.tag({ expectedCommit: "abc" }, { runCommand: never }), (error) => error.code === "VIBE64_PUBLISH_TAG_COMMIT_INVALID");
+  await assert.rejects(f.tag({ repositoryRoot: "relative" }, { runCommand: never }), (error) => error.code === "VIBE64_PUBLISH_TAG_ROOT_INVALID");
 });

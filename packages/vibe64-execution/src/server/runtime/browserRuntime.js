@@ -248,9 +248,7 @@ function summarizePlaywrightRuntimeOutput(output = "") {
 export {
   isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightRuntimeOutput,
-  playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
-  playwrightRuntimeVersionCheckScript,
   playwrightRuntimeVersionCommandArgs,
   summarizePlaywrightBrowserLaunchOutput,
   summarizePlaywrightRuntimeOutput

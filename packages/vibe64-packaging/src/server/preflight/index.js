@@ -15,6 +15,7 @@ function definePreflightCheck({
   applies = () => true,
   run
 } = {}) {
+  // readable-check: allow method-probe - input validation: a check definition from any package names its run()
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(id || "") || !label || !PREFLIGHT_SEVERITIES.includes(severity) || typeof run !== "function") {
     throw new TypeError("A preflight check needs an id, a label, a severity of block, warn or ack, and run().");
   }

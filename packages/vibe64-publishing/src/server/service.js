@@ -66,6 +66,7 @@ async function publishingResult(operation) {
       ok: false,
       code: String(error?.code || "vibe64_publishing_failed"),
       error: String(error?.message || "Publishing failed."),
+      ...(error?.messageCode ? { messageCode: String(error.messageCode) } : {}),
       ...(error?.details && typeof error.details === "object" ? { details: error.details } : {})
     };
   }
@@ -173,6 +174,7 @@ function createPublishingService({
   const baseToolchains = createToolchainManager({
     personalRoot,
     toolchainsRoot,
+    baseEnvironment: env,
     now
   });
   const toolchains = createPublishingToolchains({ baseToolchains, pythonTools });
@@ -180,6 +182,7 @@ function createPublishingService({
   const broker = createCredentialBroker({
     keys,
     packaging,
+    baseEnvironment: env,
     now
   });
   const lanShare = createLanShare();
@@ -215,6 +218,7 @@ function createPublishingService({
         credentials: broker,
         sourceWriter: writer,
         packaging,
+        baseEnvironment: env,
         logger,
         now
       });

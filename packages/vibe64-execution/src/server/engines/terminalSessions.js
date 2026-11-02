@@ -8,12 +8,9 @@ import {
   DEFAULT_TERMINAL_COLS,
   DEFAULT_TERMINAL_ROWS,
   isRunningSession,
-  MAX_TERMINAL_BUFFER_LENGTH,
-  MAX_TERMINAL_BUFFER_ROWS,
   normalizeDetachedIdleTimeoutMs,
   normalizeTerminalSize,
   terminalKeyInput,
-  terminalMovementState,
   terminalSessionContainsText,
   terminalSessionControlSnapshot,
   terminalSessionMatchesFilter,
@@ -41,7 +38,6 @@ import {
   thawTerminalNamespaceAdmission
 } from "./terminalNamespaceAdmission.js";
 import {
-  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
@@ -54,22 +50,15 @@ import {
   startedSessionsForNamespace
 } from "./terminalSessionRegistry.js";
 
-/** A stop or close hook for a terminal with nothing to do then. */
+/** A stop, close or output hook for a terminal with nothing to do then. */
 function noTerminalHook() {}
 
-const requirePty = createRequire(import.meta.url);
-
-function readTerminalSessionControlState(id, options = {}) {
-  const {
-    namespace = "default",
-    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-  } = options;
-  return terminalSessionControlSnapshot(readTerminalSession(id, {
-    namespace
-  }), {
-    quietThresholdMs
-  });
+/** The running limit of a terminal whose caller does not narrow it counts every running terminal. */
+function everyTerminal() {
+  return true;
 }
+
+const requirePty = createRequire(import.meta.url);
 
 async function writeTerminalSessionText(id, text = "", options = {}) {
   const {
@@ -83,29 +72,10 @@ async function writeTerminalSessionText(id, text = "", options = {}) {
   });
 }
 
-function writeTerminalSessionKey(id, key = "", options = {}) {
-  const {
-    namespace = "default",
-    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-  } = options;
-  const input = terminalKeyInput(key);
-  if (!input) {
-    return {
-      ok: false,
-      error: `Unsupported terminal key: ${String(key || "")}`
-    };
-  }
-  return terminalSessionControlSnapshot(writeTerminalSession(id, input, {
-    namespace
-  }), {
-    quietThresholdMs
-  });
-}
-
 function countRunningTerminalSessions({
-  filter = null,
-  namespacePrefix = ""
-} = {}) {
+  filter,
+  namespacePrefix
+}) {
   return listStoredSessions({
     namespacePrefix,
     runningOnly: true
@@ -135,14 +105,16 @@ function startTerminalSession({
   command,
   commandPreview,
   cwd = process.cwd(),
+  // readable-check: allow dependency-default - input validation: a terminal's env is a record or a function of the terminal input; none is empty
   env = {},
   maxRunning = 0,
-  metadata = null,
+  // readable-check: allow dependency-default - input validation: terminal metadata is a record or a function of the terminal input; none is empty
+  metadata = {},
   namespace = "default",
   namespaceLimitPrefix = "",
-  runningLimitFilter = null,
+  runningLimitFilter = everyTerminal,
   onClose = noTerminalHook,
-  onOutput = null,
+  onOutput = noTerminalHook,
   onStop = noTerminalHook,
   reuseRunning = false,
   detachedIdleTimeoutMs = 0
@@ -153,6 +125,7 @@ function startTerminalSession({
   }
   const sessions = sessionsForNamespace(namespace);
   const id = crypto.randomUUID();
+  // readable-check: allow method-probe - input validation: reuse is a yes or no, or a function of a running terminal
   const canReuseRunningSession = typeof reuseRunning === "function"
     ? reuseRunning
     : () => Boolean(reuseRunning);
@@ -176,12 +149,14 @@ function startTerminalSession({
     };
   }
 
+  // readable-check: allow method-probe - input validation: a terminal's env is a record or a function of the terminal input
   const resolvedEnv = typeof env === "function"
     ? env({
       id,
       namespace
     })
     : env;
+  // readable-check: allow method-probe - input validation: arguments are a list or a function of the terminal input
   const resolvedArgs = typeof args === "function"
     ? args({
       env: resolvedEnv,
@@ -189,6 +164,7 @@ function startTerminalSession({
       namespace
     })
     : args;
+  // readable-check: allow method-probe - input validation: a command preview is text or a function of the terminal input
   const resolvedCommandPreview = typeof commandPreview === "function"
     ? commandPreview({
       args: resolvedArgs,
@@ -197,6 +173,7 @@ function startTerminalSession({
       namespace
     })
     : commandPreview;
+  // readable-check: allow method-probe - input validation: terminal metadata is a record or a function of the terminal input
   const resolvedMetadata = typeof metadata === "function"
     ? metadata({
       args: resolvedArgs,
@@ -272,23 +249,21 @@ function startTerminalSession({
       outputVersion: session.outputVersion,
       type: "output"
     });
-    if (typeof onOutput === "function") {
-      try {
-        onOutput({
-          chunk: data,
-          output: session.output,
-          session: terminalSessionResponse(session),
-          updateMetadata(nextMetadata) {
-            return applySessionMetadata(session, nextMetadata);
-          }
-        });
-      } catch (error) {
-        const message = String(error?.message || error || "Terminal output hook failed.");
-        sendToSubscribers(session, {
-          error: message,
-          type: "error"
-        });
-      }
+    try {
+      onOutput({
+        chunk: data,
+        output: session.output,
+        session: terminalSessionResponse(session),
+        updateMetadata(nextMetadata) {
+          return applySessionMetadata(session, nextMetadata);
+        }
+      });
+    } catch (error) {
+      const message = String(error?.message || error || "Terminal output hook failed.");
+      sendToSubscribers(session, {
+        error: message,
+        type: "error"
+      });
     }
     scheduleDetachedCleanup(session, namespace);
   });
@@ -343,6 +318,7 @@ function subscribeTerminalSession(id, subscriber, options = {}) {
   if (!session) {
     return terminalSessionNotFound();
   }
+  // readable-check: allow method-probe - input validation: a subscriber is a function that receives terminal messages
   if (typeof subscriber !== "function") {
     return {
       ok: false,
@@ -431,21 +407,6 @@ function resizeTerminalSession(id, size = {}, options = {}) {
   return terminalSessionResponse(session);
 }
 
-function stopTerminalSession(id, options = {}) {
-  const { namespace = "default" } = options;
-  const sessions = sessionsForNamespace(namespace);
-  const session = sessions.get(id);
-  if (!session) {
-    return terminalSessionNotFound();
-  }
-
-  if (session.status === "running") {
-    void beginTerminalStop(session, "stop");
-  }
-
-  return terminalSessionResponse(session);
-}
-
 async function stopTerminalSessionAndWait(id, options = {}) {
   const { namespace = "default" } = options;
   const session = sessionsForNamespace(namespace).get(id);
@@ -461,31 +422,23 @@ async function stopTerminalSessionAndWait(id, options = {}) {
 
 export {
   beginTerminalNamespaceOperation,
-  MAX_TERMINAL_BUFFER_LENGTH,
-  MAX_TERMINAL_BUFFER_ROWS,
-  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
-  countRunningTerminalSessions,
   listTerminalSessions,
   readTerminalSession,
   freezeTerminalNamespaceAdmission,
   resizeTerminalSession,
   startTerminalSession,
-  stopTerminalSession,
   stopTerminalSessionAndWait,
   subscribeTerminalSession,
   terminalKeyInput,
-  terminalMovementState,
   terminalSessionContainsText,
   terminalSessionControlSnapshot,
   terminalNamespaceAdmissionFailure,
   thawTerminalNamespaceAdmission,
   updateTerminalSessionMetadata,
-  readTerminalSessionControlState,
   writeTerminalSession,
-  writeTerminalSessionKey,
   writeTerminalSessionText
 };

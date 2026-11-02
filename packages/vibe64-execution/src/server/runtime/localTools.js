@@ -4,17 +4,18 @@ import process from "node:process";
 
 import { DEFAULT_SYSTEM_PATH } from "./resolveRuntimePath.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /**
  * Install lines for the tools a person supplies on their own computer, keyed
  * by the Stack runtime ids and the AI tool ids. Only lines for Debian/Ubuntu
  * (apt), macOS (Homebrew) and mise live here; every other way is behind the
- * tool's "Other ways" link. Each line was checked on CHECKED_ON.
+ * tool's "Other ways" link. Each line was checked on 2026-10-23.
  *
  * `run` lists the commands that prove the tool works: each group needs one
  * entry that runs `--version` (or the tool's own `version` argument).
  * Language runtimes install with mise, which needs no administrator password.
  */
-const CHECKED_ON = "2026-10-23";
 const SUDO_NOTE = "You'll be asked for your computer password. Nothing shows while you type.";
 const MISE_INSTALL = "curl -fsSL https://mise.run | sh";
 // The step-by-step guides for this computer, per operating system. Tools with
@@ -127,17 +128,10 @@ const LOCAL_TOOLS = Object.freeze({
 
 // Runtime ids that share another tool's line, and ids Vibe64 itself satisfies.
 const LOCAL_TOOL_ALIASES = Object.freeze({ composer: "php" });
-const SATISFIED_BY_VIBE64 = new Set(["node26", "nodejs", "operator-clis", "playwright-runtime", "bubblewrap"]);
 
 function localToolId(id = "") {
   const value = String(id || "").trim();
   return LOCAL_TOOL_ALIASES[value] || value;
-}
-
-/** The tool ids worth a row for a list of Stack runtime ids, without duplicates. */
-function localToolIds(runtimes = []) {
-  return [...new Set((Array.isArray(runtimes) ? runtimes : []).map(localToolId))]
-    .filter((id) => !SATISFIED_BY_VIBE64.has(id) && Object.hasOwn(LOCAL_TOOLS, id));
 }
 
 /** "apt" on Debian, Ubuntu and WSL, "brew" on macOS, otherwise "". */
@@ -150,13 +144,17 @@ function localToolFamily({ platform = process.platform, aptGet = false } = {}) {
  * Commands run with the system folders after the person's PATH, so apt-get is
  * looked up the same way.
  */
-function aptGetOnPath(env = process.env, systemPath = DEFAULT_SYSTEM_PATH) {
+function aptGetOnPath(env, systemPath = DEFAULT_SYSTEM_PATH) {
   return [...String(env.PATH || "").split(path.delimiter), ...String(systemPath || "").split(path.delimiter)]
     .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));
 }
 
-/** This computer's install-line family: "apt", "brew" or "". */
-function thisComputerToolFamily({ env = process.env, platform = process.platform, systemPath } = {}) {
+/**
+ * This computer's install-line family: "apt", "brew" or "".
+ * @param {{ env: RuntimeEnv, platform?: string, systemPath?: string }} machine
+ *   env is the running server's environment, whose PATH finds apt-get
+ */
+function thisComputerToolFamily({ env, platform = process.platform, systemPath }) {
   return localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env, systemPath) });
 }
 
@@ -190,14 +188,13 @@ function localToolGuideUrl(id = "", options = {}) {
   return `${SETUP_GUIDES[platform === "darwin" ? "darwin" : "linux"]}#${tool.setup}`;
 }
 
+const __testables = Object.freeze({ SUDO_NOTE, localToolFamily });
+
 export {
-  CHECKED_ON,
   LOCAL_TOOLS,
-  SUDO_NOTE,
-  localToolFamily,
   localToolGuideUrl,
   localToolId,
-  localToolIds,
   localToolInstall,
-  thisComputerToolFamily
+  thisComputerToolFamily,
+  __testables
 };

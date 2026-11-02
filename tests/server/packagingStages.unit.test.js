@@ -97,7 +97,7 @@ test("Stage 1 refuses credential-shaped build Environment and paths outside its 
   );
   await assert.rejects(
     runBuildStage(buildInput(paths, { outputs: [path.join(paths.root, "elsewhere.tgz")] }), { runCommand: never }),
-    (error) => error.code === "VIBE64_PUBLISH_STAGE_INVALID"
+    (error) => error.code === "VIBE64_PUBLISH_STAGE_PATH_OUTSIDE"
   );
   await assert.rejects(
     runBuildStage(buildInput(paths), { runCommand: async () => ({ ok: false, exitCode: 1, stderr: "boom" }) }),
@@ -186,7 +186,7 @@ test("publishing is proven by read-back, idempotent for identical bytes, and ref
   const obtainCredential = async () => "token-file";
 
   const { destination, state } = fakeDestination();
-  const proven = await publishTarget({ destination, target, version: "1.0.0", artifacts, obtainCredential, tempRoot: paths.root });
+  const proven = await publishTarget({ baseEnvironment: process.env, destination, target, version: "1.0.0", artifacts, obtainCredential, tempRoot: paths.root });
   assert.equal(proven.status, "proven");
   assert.equal(proven.alreadyPublished, false);
   assert.equal(proven.checksum, artifacts.digest);
@@ -194,18 +194,18 @@ test("publishing is proven by read-back, idempotent for identical bytes, and ref
   assert.equal(state.uploads, 1);
 
   // Resuming with the recorded result does nothing at all.
-  const resumed = await publishTarget({ destination, target, version: "1.0.0", artifacts, previous: proven, obtainCredential: async () => assert.fail("no credential needed") });
+  const resumed = await publishTarget({ baseEnvironment: process.env, destination, target, version: "1.0.0", artifacts, previous: proven, obtainCredential: async () => assert.fail("no credential needed") });
   assert.equal(resumed, proven);
 
   // A fresh run against a registry that already has these exact bytes succeeds without uploading.
-  const again = await publishTarget({ destination, target, version: "1.0.0", artifacts, obtainCredential: async () => assert.fail("no credential needed") });
+  const again = await publishTarget({ baseEnvironment: process.env, destination, target, version: "1.0.0", artifacts, obtainCredential: async () => assert.fail("no credential needed") });
   assert.equal(again.status, "proven");
   assert.equal(again.alreadyPublished, true);
   assert.equal(state.uploads, 1);
 
   const conflicting = fakeDestination({ published: `sha256:${"d".repeat(64)}` });
   await assert.rejects(
-    publishTarget({ destination: conflicting.destination, target, version: "1.0.0", artifacts, obtainCredential }),
+    publishTarget({ baseEnvironment: process.env, destination: conflicting.destination, target, version: "1.0.0", artifacts, obtainCredential }),
     (error) => error.code === "VIBE64_PUBLISH_VERSION_CONFLICT" && error.details.expected === artifacts.digest
   );
   assert.equal(conflicting.state.uploads, 0);
@@ -213,7 +213,7 @@ test("publishing is proven by read-back, idempotent for identical bytes, and ref
   const silent = fakeDestination();
   silent.destination.upload = async () => ({ ok: true });
   await assert.rejects(
-    publishTarget({ destination: silent.destination, target, version: "1.0.0", artifacts, obtainCredential, tempRoot: paths.root }),
+    publishTarget({ baseEnvironment: process.env, destination: silent.destination, target, version: "1.0.0", artifacts, obtainCredential, tempRoot: paths.root }),
     (error) => error.code === "VIBE64_PUBLISH_NOT_PROVEN"
   );
 
@@ -221,7 +221,7 @@ test("publishing is proven by read-back, idempotent for identical bytes, and ref
   await chmod(stored, 0o644);
   await writeFile(stored, "swapped");
   await assert.rejects(
-    publishTarget({ destination: fakeDestination().destination, target, version: "1.0.0", artifacts, obtainCredential }),
+    publishTarget({ baseEnvironment: process.env, destination: fakeDestination().destination, target, version: "1.0.0", artifacts, obtainCredential }),
     (error) => error.code === "VIBE64_PUBLISH_ARTIFACT_CHANGED"
   );
 });

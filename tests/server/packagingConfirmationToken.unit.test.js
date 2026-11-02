@@ -11,17 +11,28 @@ const OTHER_PLAN = `sha256:${"2".repeat(64)}`;
 const PERSON = { kind: "person", id: "user-7" };
 const NOW = Date.parse("2026-10-23T10:00:00Z");
 
-function refused(run, code) {
-  assert.throws(run, (error) => error.code === code, code);
+function refused(run, code, messageCode) {
+  assert.throws(run, (error) => error.code === code && error.messageCode === messageCode, `${code} ${messageCode}`);
 }
 
 test("an assistant can neither issue nor redeem a publish confirmation", () => {
   for (const actor of [{ kind: "assistant", id: "colleague" }, { kind: "automation", id: "x" }, { id: "user-7" }, null]) {
-    refused(() => issuePublishConfirmation({ planHash: PLAN, actor, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+    refused(
+      () => issuePublishConfirmation({ planHash: PLAN, actor, now: NOW }),
+      "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+      "VIBE64_PUBLISH_CONFIRMATION_ASSISTANT"
+    );
   }
+  refused(
+    () => issuePublishConfirmation({ planHash: PLAN, actor: { kind: "person", id: " " }, now: NOW }),
+    "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+    "VIBE64_PUBLISH_CONFIRMATION_PERSON_REQUIRED"
+  );
   const { token, record } = issuePublishConfirmation({ planHash: PLAN, actor: PERSON, now: NOW });
-  refused(() => redeemPublishConfirmation({ token, planHash: PLAN, actor: { kind: "assistant", id: "user-7" }, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
-  refused(() => redeemPublishConfirmation({ token, planHash: PLAN, actor: { kind: "person", id: "user-8" }, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+  refused(() => redeemPublishConfirmation({ token, planHash: PLAN, actor: { kind: "assistant", id: "user-7" }, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+    "VIBE64_PUBLISH_CONFIRMATION_ASSISTANT");
+  refused(() => redeemPublishConfirmation({ token, planHash: PLAN, actor: { kind: "person", id: "user-8" }, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+    "VIBE64_PUBLISH_CONFIRMATION_OTHER_PERSON");
 });
 
 test("the record stores only a token hash, bound to the plan and person", () => {
@@ -42,12 +53,16 @@ test("the record stores only a token hash, bound to the plan and person", () => 
 
 test("a wrong token, a changed plan or an expired confirmation is refused", () => {
   const { token, record } = issuePublishConfirmation({ planHash: PLAN, actor: PERSON, now: NOW, ttlMs: 60_000 });
-  refused(() => redeemPublishConfirmation({ token: `${token}x`, planHash: PLAN, actor: PERSON, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID");
-  refused(() => redeemPublishConfirmation({ token: "", planHash: PLAN, actor: PERSON, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+  refused(() => redeemPublishConfirmation({ token: `${token}x`, planHash: PLAN, actor: PERSON, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+    "VIBE64_PUBLISH_CONFIRMATION_TOKEN_INVALID");
+  refused(() => redeemPublishConfirmation({ token: "", planHash: PLAN, actor: PERSON, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+    "VIBE64_PUBLISH_CONFIRMATION_TOKEN_INVALID");
   refused(() => redeemPublishConfirmation({ token, planHash: OTHER_PLAN, actor: PERSON, record, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED");
   refused(() => redeemPublishConfirmation({ token, planHash: PLAN, actor: PERSON, record, now: NOW + 60_000 }), "VIBE64_PUBLISH_CONFIRMATION_EXPIRED");
-  refused(() => issuePublishConfirmation({ planHash: "plan", actor: PERSON, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID");
-  refused(() => issuePublishConfirmation({ planHash: PLAN, actor: PERSON, now: NOW, ttlMs: 2 * 60 * 60 * 1000 }), "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+  refused(() => issuePublishConfirmation({ planHash: "plan", actor: PERSON, now: NOW }), "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+    "VIBE64_PUBLISH_CONFIRMATION_PLAN_HASH_REQUIRED");
+  refused(() => issuePublishConfirmation({ planHash: PLAN, actor: PERSON, now: NOW, ttlMs: 2 * 60 * 60 * 1000 }), "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+    "VIBE64_PUBLISH_CONFIRMATION_TTL_TOO_LONG");
 });
 
 test("a confirmation is one-shot", () => {

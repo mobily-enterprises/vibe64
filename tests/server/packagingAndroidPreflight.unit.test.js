@@ -42,7 +42,7 @@ test("a ready Android app passes every Block and shows the developer-verificatio
   const packaging = packagingFor();
   const toolchains = await fakeToolchains(await temporaryFolder(t, "vibe64-fake-tools-"));
   const sourceRoot = await sourceWith(t, canaryFiles());
-  const android = await gatherAndroidFacts({ sourceRoot, packaging, toolchains });
+  const android = await gatherAndroidFacts({ baseEnvironment: process.env, sourceRoot, packaging, packageIds: ["app"], toolchains });
   const result = runPreflight(VIBE64_ANDROID_PREFLIGHT_CHECKS, context(packaging, android));
   assert.deepEqual(failed(result), ["android-developer-verification"]);
   assert.deepEqual(result.warnings, ["android-developer-verification"]);
@@ -62,7 +62,7 @@ test("bad icons, unknown permissions, stale lockfiles, old Capacitor and missing
     dependencies: { "@capacitor/core": "7.4.0", "@capacitor/haptics": "8.0.3" },
     locked: { "@capacitor/haptics": "8.0.2" }
   }));
-  const android = await gatherAndroidFacts({ sourceRoot, packaging, toolchains: {} });
+  const android = await gatherAndroidFacts({ baseEnvironment: process.env, sourceRoot, packaging, packageIds: ["app"], toolchains: {} });
   const result = runPreflight(VIBE64_ANDROID_PREFLIGHT_CHECKS, context(packaging, android));
   assert.equal(result.blocked, true);
   assert.deepEqual(failed(result).sort(), [
@@ -82,7 +82,7 @@ test("bad icons, unknown permissions, stale lockfiles, old Capacitor and missing
 
 test("Android checks do not apply to releases without an app package", async (t) => {
   const packaging = packagingFor(["### Package `sdk`: SDK", "- Packer: `npm`", "- Version from: `package.json`"]);
-  assert.equal(await gatherAndroidFacts({ sourceRoot: await sourceWith(t, {}), packaging }), null);
+  assert.equal(await gatherAndroidFacts({ baseEnvironment: process.env, sourceRoot: await sourceWith(t, {}), packaging, packageIds: ["sdk"] }), null);
   const { plan } = createPublishPlan({
     savedCommit: COMMIT,
     packaging,

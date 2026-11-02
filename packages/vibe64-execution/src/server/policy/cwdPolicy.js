@@ -41,6 +41,5 @@ function assertCwdAllowed(cwd = "", options = {}) {
 }
 
 export {
-  assertCwdAllowed,
-  resolveCommandCwd
+  assertCwdAllowed
 };

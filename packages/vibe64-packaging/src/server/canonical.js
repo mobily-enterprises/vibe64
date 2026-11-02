@@ -16,4 +16,4 @@ function sha256(value) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
-export { canonicalJson, sha256, stable };
+export { canonicalJson, sha256 };

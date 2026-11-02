@@ -24,7 +24,10 @@ function artifactFiles(artifacts) {
   const names = new Set();
   for (const file of files) {
     if (names.has(file.name)) {
-      throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", `Two built files are both named ${file.name}; uploads need distinct names.`);
+      throw publishError(
+        "VIBE64_PUBLISH_ARTIFACT_NAME_DUPLICATE",
+        `Two built files are both named ${file.name}; uploads need distinct names.`
+      );
     }
     names.add(file.name);
   }
@@ -53,10 +56,10 @@ function httpUrl(value, label) {
   try {
     url = new URL(value);
   } catch {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${label} must be an http or https address.`);
+    throw publishError("VIBE64_PUBLISH_TARGET_ADDRESS_INVALID", `${label} must be an http or https address.`);
   }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${label} must be an http or https address without a user name.`);
+    throw publishError("VIBE64_PUBLISH_TARGET_ADDRESS_HAS_USER", `${label} must be an http or https address without a user name.`);
   }
   return url.href.endsWith("/") ? url.href : `${url.href}/`;
 }
@@ -64,7 +67,7 @@ function httpUrl(value, label) {
 function commandPrefix(value, fallback, label) {
   const argv = value === undefined ? fallback : value;
   if (!Array.isArray(argv) || !argv.length || argv.some((part) => typeof part !== "string" || !part)) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${label} must be a non-empty argv list.`);
+    throw publishError("VIBE64_PUBLISH_TARGET_COMMAND_INVALID", `${label} must be a non-empty argv list.`);
   }
   return argv;
 }
@@ -72,8 +75,9 @@ function commandPrefix(value, fallback, label) {
 /**
  * Publishing tools see PATH and locale, a private HOME, and nothing they could
  * mistake for an ambient login.
+ * @param {{ home: string, baseEnvironment: import("../stages.js").BaseEnvironment, extra?: Record<string, string> }} input
  */
-function toolEnvironment({ home, baseEnvironment = process.env, extra = {} }) {
+function toolEnvironment({ home, baseEnvironment, extra = {} }) {
   return {
     ...passthroughEnvironment(baseEnvironment),
     HOME: home,
@@ -117,7 +121,7 @@ async function runTool({ argv, cwd, env, stdin = null, secrets = [], failureCode
 
 async function readCredentialText(file, label) {
   const value = (await readFile(file, "utf8")).trim();
-  if (!value) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", `${label} is empty.`);
+  if (!value) throw publishError("VIBE64_PUBLISH_CREDENTIAL_EMPTY", `${label} is empty.`);
   return value;
 }
 
@@ -171,7 +175,6 @@ export {
   namedFilesChecksum,
   noReadBackCredentials,
   readCredentialText,
-  redact,
   runTool,
   settingsOf,
   toolEnvironment,

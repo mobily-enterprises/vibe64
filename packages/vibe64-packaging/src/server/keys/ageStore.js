@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { publishError } from "../errors.js";
 import { DEFAULT_WORK_FACTOR, ageDecrypt, ageEncrypt } from "./age.js";
 
 const KEYS_CONTRACT = "vibe64.publishing-keys.v1";
@@ -9,10 +10,6 @@ const INDEX_CONTRACT = "vibe64.publishing-keys-index.v1";
 const ENTRY_ID = /^[a-z0-9][a-z0-9:._-]{0,127}$/u;
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_WINDOW_MS = 8 * 60 * 60 * 1000;
-
-function storeError(message, code) {
-  return Object.assign(new Error(message), { code });
-}
 
 function publicFacts(meta) {
   const facts = {};
@@ -79,7 +76,7 @@ function createAgeStore({
 
   function requireUnlocked() {
     const state = current();
-    if (!state) throw storeError("Unlock your publishing keys first.", "vibe64_publishing_keys_locked");
+    if (!state) throw publishError("vibe64_publishing_keys_locked", "Unlock your publishing keys first.");
     return state;
   }
 
@@ -93,11 +90,13 @@ function createAgeStore({
       value = JSON.parse(await readFile(indexFile, "utf8"));
     } catch (error) {
       if (error?.code === "ENOENT") return { contract: INDEX_CONTRACT, entries: [], recoveryKit: null };
-      if (error instanceof SyntaxError) throw storeError("The publishing key index is not valid JSON.", "vibe64_publishing_state_invalid");
+      if (error instanceof SyntaxError) {
+        throw publishError("vibe64_publishing_key_index_unreadable", "The publishing key index is not valid JSON.");
+      }
       throw error;
     }
     if (value?.contract !== INDEX_CONTRACT) {
-      throw storeError("The publishing key index is not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+      throw publishError("vibe64_publishing_key_index_unsupported", "The publishing key index is not in a format this Vibe64 reads.");
     }
     return value;
   }
@@ -138,7 +137,7 @@ function createAgeStore({
     try {
       const value = JSON.parse(decrypted.toString("utf8"));
       if (value?.contract !== KEYS_CONTRACT) {
-        throw storeError("These publishing keys are not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+        throw publishError("vibe64_publishing_keys_unsupported", "These publishing keys are not in a format this Vibe64 reads.");
       }
       return new Map(Object.entries(value.entries).map(([id, encoded]) => [id, Buffer.from(encoded, "base64")]));
     } finally {
@@ -149,7 +148,7 @@ function createAgeStore({
   function windowOf(windowMs) {
     const value = windowMs === undefined || windowMs === null ? defaultWindowMs : Number(windowMs);
     if (!Number.isInteger(value) || value < 1000 || value > MAX_WINDOW_MS) {
-      throw storeError("Keys unlock for between a second and eight hours.", "vibe64_publishing_keys_window_invalid");
+      throw publishError("vibe64_publishing_keys_window_invalid", "Keys unlock for between a second and eight hours.");
     }
     return value;
   }
@@ -168,7 +167,7 @@ function createAgeStore({
 
   function create({ passphrase, windowMs } = {}) {
     return exclusive(async () => {
-      if (await exists()) throw storeError("Your publishing keys already exist. Unlock them instead.", "vibe64_publishing_keys_exist");
+      if (await exists()) throw publishError("vibe64_publishing_keys_exist", "Your publishing keys already exist. Unlock them instead.");
       zero();
       const state = { entries: new Map(), passphrase: Buffer.from(String(passphrase ?? ""), "utf8"), until: now() + windowOf(windowMs) };
       try {
@@ -185,7 +184,7 @@ function createAgeStore({
 
   function unlock({ passphrase, windowMs } = {}) {
     return exclusive(async () => {
-      if (!await exists()) throw storeError("Create your publishing keys first.", "vibe64_publishing_keys_missing");
+      if (!await exists()) throw publishError("vibe64_publishing_keys_missing", "Create your publishing keys first.");
       const entries = await open(passphrase);
       zero();
       unlocked = { entries, passphrase: Buffer.from(String(passphrase), "utf8"), until: now() + windowOf(windowMs) };
@@ -209,7 +208,7 @@ function createAgeStore({
   function read(id) {
     const state = requireUnlocked();
     const value = state.entries.get(id);
-    if (!value) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
+    if (!value) throw publishError("vibe64_publishing_key_missing", `Your publishing keys hold no ${id}.`);
     return Buffer.from(value);
   }
 
@@ -220,10 +219,10 @@ function createAgeStore({
   function put(id, options = {}) {
     const { value, kind, label, meta = {} } = options;
     return exclusive(async () => {
-      if (!ENTRY_ID.test(id || "")) throw storeError("That key name is not valid.", "vibe64_publishing_key_invalid");
+      if (!ENTRY_ID.test(id || "")) throw publishError("vibe64_publishing_key_name_invalid", "That key name is not valid.");
       const state = requireUnlocked();
       const bytes = Buffer.isBuffer(value) ? Buffer.from(value) : Buffer.from(String(value ?? ""), "utf8");
-      if (!bytes.length) throw storeError("There is nothing to store.", "vibe64_publishing_key_invalid");
+      if (!bytes.length) throw publishError("vibe64_publishing_key_value_empty", "There is nothing to store.");
       const previous = state.entries.get(id);
       state.entries.set(id, bytes);
       try {
@@ -254,7 +253,7 @@ function createAgeStore({
     return exclusive(async () => {
       const state = requireUnlocked();
       const previous = state.entries.get(id);
-      if (!previous) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
+      if (!previous) throw publishError("vibe64_publishing_key_missing", `Your publishing keys hold no ${id}.`);
       state.entries.delete(id);
       await seal(state);
       previous.fill(0);

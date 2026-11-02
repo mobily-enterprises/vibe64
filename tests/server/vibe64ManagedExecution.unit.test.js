@@ -15,7 +15,7 @@ import {
   vibe64CapacityRejectedResult
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import {
-  normalizeExecutionDescriptor,
+  __testables as requestTestables,
   normalizeVibe64CommandRequest
 } from "../../packages/vibe64-execution/src/server/request.js";
 import {
@@ -24,6 +24,8 @@ import {
 import { managedExecutionRuntimeBase } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import { managedExecutionControllerLeaseName } from "../../packages/vibe64-execution/src/host/managedExecution.js";
+
+const { normalizeExecutionDescriptor } = requestTestables;
 
 const execFileAsync = promisify(execFile);
 const EXEC_HELPER = path.resolve("packages/vibe64-execution/src/host/execHelper.js");

@@ -6,16 +6,15 @@ import test from "node:test";
 
 import {
   OPERATOR_CLIS,
-  SUDO_NOTE,
   checkLocalTools,
   configureVibe64Host,
-  localToolFamily,
-  localToolGuideUrl,
-  localToolIds,
   localToolInstall,
   operatorCliInstall
 } from "@local/vibe64-execution/server";
+import { __testables, localToolGuideUrl } from "../../packages/vibe64-execution/src/server/runtime/localTools.js";
 import { resolveRuntimePath } from "../../packages/vibe64-execution/src/server/runtime/resolveRuntimePath.js";
+
+const { SUDO_NOTE, localToolFamily } = __testables;
 
 async function withHome(t) {
   const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-local-tools-"));
@@ -42,9 +41,7 @@ async function tool(dir, name, body) {
   return file;
 }
 
-test("Stack runtime ids map to rows only for tools the person supplies", () => {
-  assert.deepEqual(localToolIds(["node26", "ruby", "cpp", "composer", "php", "nodejs", "unknown"]), ["ruby", "cpp", "php"]);
-  assert.deepEqual(localToolIds([]), []);
+test("the install-line family is Homebrew on macOS and apt only where apt-get exists", () => {
   assert.equal(localToolFamily({ platform: "darwin" }), "brew");
   assert.equal(localToolFamily({ platform: "linux", aptGet: true }), "apt");
   assert.equal(localToolFamily({ platform: "linux", aptGet: false }), "");
@@ -93,7 +90,7 @@ test("a tool counts as ready only when it runs; the person's own installs come f
   await tool(path.join(home, ".local/bin"), "rustc", "echo 'rustc 1.90.0 (abc 2026-01-01)'");
   await tool(path.join(home, ".local/bin"), "cargo", "echo 'cargo 1.90.0'");
 
-  const result = await checkLocalTools(["python", "ruby", "rust", "kotlin", "node26"], { cwd: home });
+  const result = await checkLocalTools(["python", "ruby", "rust", "kotlin", "node26"], { cwd: home, env: process.env });
   assert.equal(result.managed, false);
   const byId = Object.fromEntries(result.tools.map((entry) => [entry.id, entry]));
   assert.deepEqual(Object.keys(byId), ["python", "ruby", "rust", "kotlin"]);
@@ -114,20 +111,20 @@ test("a tool counts as ready only when it runs; the person's own installs come f
 
 test("the tool PATH puts ~/.local/bin and mise shims before the inherited PATH", async (t) => {
   const home = await withHome(t);
-  assert.doesNotMatch(resolveRuntimePath({ inheritedPath: "/usr/bin" }), new RegExp(home, "u"), "absent folders are left out");
+  assert.doesNotMatch(resolveRuntimePath({ env: process.env, inheritedPath: "/usr/bin" }), new RegExp(home, "u"), "absent folders are left out");
   await mkdir(path.join(home, ".local/bin"), { recursive: true });
   await mkdir(path.join(home, ".local/share/mise/shims"), { recursive: true });
-  const parts = resolveRuntimePath({ existingPath: "/caller/bin", inheritedPath: "/usr/bin:/bin" }).split(":");
+  const parts = resolveRuntimePath({ env: process.env, existingPath: "/caller/bin", inheritedPath: "/usr/bin:/bin" }).split(":");
   assert.deepEqual(parts.slice(0, 4),
     ["/caller/bin", path.join(home, ".local/bin"), path.join(home, ".local/share/mise/shims"), "/usr/bin"],
     "a caller's own entries stay first; the person's installs beat the inherited PATH");
   await mkdir(path.join(home, ".opencode/bin"), { recursive: true });
-  assert.ok(resolveRuntimePath({ inheritedPath: "/usr/bin" }).split(":").includes(path.join(home, ".opencode/bin")),
+  assert.ok(resolveRuntimePath({ env: process.env, inheritedPath: "/usr/bin" }).split(":").includes(path.join(home, ".opencode/bin")),
     "a fresh opencode install is found without a new shell");
 
   configureVibe64Host({ runtimePackRoot: path.join(home, "packs") });
-  assert.doesNotMatch(resolveRuntimePath({ inheritedPath: "/usr/bin" }), /\.local/u, "packs keep their own PATH");
-  assert.deepEqual(await checkLocalTools(["python"], { cwd: home }), { ok: true, managed: true, tools: [] });
+  assert.doesNotMatch(resolveRuntimePath({ env: process.env, inheritedPath: "/usr/bin" }), /\.local/u, "packs keep their own PATH");
+  assert.deepEqual(await checkLocalTools(["python"], { cwd: home, env: process.env }), { ok: true, managed: true, tools: [] });
 });
 
 test("the terminal stays quiet when an AI tool is there; one plain message when none is", async (t) => {
@@ -135,10 +132,10 @@ test("the terminal stays quiet when an AI tool is there; one plain message when 
   const { warnMissingOperatorClis } = await import("../../packages/vibe64-accounts/src/server/operatorCliWarning.js");
   const lines = [];
   configureVibe64Host({ runtimePackRoot: path.join(home, "packs") });
-  warnMissingOperatorClis((text) => lines.push(text));
+  warnMissingOperatorClis(process.env, (text) => lines.push(text));
   assert.deepEqual(lines, [], "a host with packs always has its tools");
   configureVibe64Host(null);
   await tool(path.join(home, ".local/bin"), "claude", "echo 2.1.0");
-  warnMissingOperatorClis((text) => lines.push(text));
+  warnMissingOperatorClis(process.env, (text) => lines.push(text));
   assert.deepEqual(lines, [], "Claude alone is enough: no nagging about Codex or opencode");
 });

@@ -39,14 +39,16 @@ const CHANNELS = Object.freeze(["draft", "prerelease", "latest"]);
 function releaseSettings(target, version) {
   const settings = settingsOf(target);
   if (!REPOSITORY.test(settings.repository || "")) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "GitHub Releases needs the repository as owner/name.");
+    throw publishError("VIBE64_PUBLISH_GITHUB_REPOSITORY_INVALID", "GitHub Releases needs the repository as owner/name.");
   }
   const channel = target?.channel || "latest";
-  if (!CHANNELS.includes(channel)) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `GitHub Releases has no channel ${channel}.`);
+  if (!CHANNELS.includes(channel)) {
+    throw publishError("VIBE64_PUBLISH_GITHUB_CHANNEL_UNKNOWN", `GitHub Releases has no channel ${channel}.`);
+  }
   const tag = target?.tag || `v${version}`;
-  if (!TAG.test(tag) || tag.includes("..")) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${tag} is not a release tag.`);
+  if (!TAG.test(tag) || tag.includes("..")) throw publishError("VIBE64_PUBLISH_GITHUB_TAG_INVALID", `${tag} is not a release tag.`);
   const notes = target?.notes ?? `Release ${tag}.`;
-  if (typeof notes !== "string") throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "Release notes must be text.");
+  if (typeof notes !== "string") throw publishError("VIBE64_PUBLISH_GITHUB_NOTES_INVALID", "Release notes must be text.");
   return {
     repository: settings.repository,
     api: httpUrl(settings.api || "https://api.github.com/", "The GitHub API address"),
@@ -59,7 +61,7 @@ function releaseSettings(target, version) {
 
 async function credentialToken(credentials) {
   const file = credentials?.files?.[CREDENTIAL.id];
-  if (!file) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "GitHub Releases needs a GitHub sign-in.");
+  if (!file) throw publishError("VIBE64_PUBLISH_GITHUB_SIGN_IN_ABSENT", "GitHub Releases needs a GitHub sign-in.");
   return readCredentialText(file, CREDENTIAL.label);
 }
 
@@ -77,10 +79,10 @@ async function findRelease({ api, repository, tag, token }) {
       headers: apiHeaders(token)
     });
     if (response.status === 404) {
-      throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `GitHub has no repository ${repository} this sign-in can see.`);
+      throw publishError("VIBE64_PUBLISH_GITHUB_REPOSITORY_NOT_VISIBLE", `GitHub has no repository ${repository} this sign-in can see.`);
     }
     if (!response.ok || !Array.isArray(response.json)) {
-      throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `GitHub answered ${response.status} listing releases of ${repository}.`);
+      throw publishError("VIBE64_PUBLISH_GITHUB_RELEASES_FAILED", `GitHub answered ${response.status} listing releases of ${repository}.`);
     }
     const found = response.json.find((release) => release.tag_name === tag);
     if (found || response.json.length < 100) return found || null;
@@ -94,7 +96,9 @@ async function findRelease({ api, repository, tag, token }) {
 async function assetDigest(asset, token) {
   if (/^sha256:[0-9a-f]{64}$/u.test(asset.digest || "")) return asset.digest;
   const response = await httpRequest(asset.url, { accept: "application/octet-stream", headers: apiHeaders(token) });
-  if (!response.ok) throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `GitHub did not return asset ${asset.name} (${response.status}).`);
+  if (!response.ok) {
+    throw publishError("VIBE64_PUBLISH_GITHUB_ASSET_FAILED", `GitHub did not return asset ${asset.name} (${response.status}).`);
+  }
   return `sha256:${createHash("sha256").update(Buffer.from(await response.arrayBuffer())).digest("hex")}`;
 }
 
@@ -146,12 +150,13 @@ async function readBack({ target, version, artifacts, credentials }) {
   };
 }
 
-async function runGh(settings, args, { token, home, failureMessage }) {
+async function runGh(settings, args, { token, home, baseEnvironment, failureCode, failureMessage }) {
   return runTool({
     argv: [...settings.gh, ...args],
     cwd: home,
     env: toolEnvironment({
       home,
+      baseEnvironment,
       extra: {
         GH_TOKEN: token,
         GH_CONFIG_DIR: path.join(home, "gh"),
@@ -161,7 +166,7 @@ async function runGh(settings, args, { token, home, failureMessage }) {
       }
     }),
     secrets: [token],
-    failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED",
+    failureCode,
     failureMessage
   });
 }
@@ -176,7 +181,7 @@ function channelFlags(channel) {
  * Creates the release on the existing tag with every file, or, resuming, attaches
  * only the files it still lacks (never `--clobber`).
  */
-async function upload({ target, version, artifacts, credentials }) {
+async function upload({ target, version, artifacts, credentials, baseEnvironment }) {
   const settings = releaseSettings(target, version);
   const token = await credentialToken(credentials);
   const files = artifactFiles(artifacts);
@@ -189,6 +194,8 @@ async function upload({ target, version, artifacts, credentials }) {
         await runGh(settings, ["release", "upload", settings.tag, ...pending.map((file) => file.path), "--repo", settings.repository], {
           token,
           home,
+          baseEnvironment,
+          failureCode: "VIBE64_PUBLISH_GITHUB_ATTACH_FAILED",
           failureMessage: `gh did not attach the files to ${settings.tag}.`
         });
       }
@@ -199,7 +206,13 @@ async function upload({ target, version, artifacts, credentials }) {
     await runGh(settings, [
       "release", "create", settings.tag, ...files.map((file) => file.path),
       "--repo", settings.repository, "--verify-tag", "--title", settings.tag, "--notes-file", notes, ...channelFlags(settings.channel)
-    ], { token, home, failureMessage: `gh did not create the ${settings.tag} release.` });
+    ], {
+      token,
+      home,
+      baseEnvironment,
+      failureCode: "VIBE64_PUBLISH_GITHUB_RELEASE_CREATE_FAILED",
+      failureMessage: `gh did not create the ${settings.tag} release.`
+    });
     return { files: files.map((file) => file.name) };
   });
 }

@@ -17,9 +17,6 @@ function pngVisualMetrics(pngBytes, inflatePng, options = {}) {
     darkPixelThreshold = 0.1,
     maximumSampledPixels = 250_000
   } = options;
-  if (typeof inflatePng !== "function") {
-    throw new Error("Managed preview screenshot PNG inflater is unavailable.");
-  }
   const paethPredictor = (left, above, upperLeft) => {
     const estimate = left + above - upperLeft;
     const leftDistance = Math.abs(estimate - left);
