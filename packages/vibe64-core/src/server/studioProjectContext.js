@@ -339,7 +339,7 @@ function configureStudioProjectContext(options) {
 
 function getStudioProjectContext() {
   if (!configuredContext) {
-    configuredContext = createStudioProjectContext({ env: process.env });
+    throw new Error("The Studio project context was read before the server configured it.");
   }
   return configuredContext;
 }

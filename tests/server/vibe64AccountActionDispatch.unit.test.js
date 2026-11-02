@@ -10,9 +10,13 @@ import { createAccountsActions, createAiConnectionActions } from "../../packages
 import { createAiConnectionService, createManagedAiConnections } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { registerLocalAiConnectionRoutes, registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
-import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { configureStudioProjectContext, getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { testReply, testRouteApp, findRegisteredRoute } from "./vibe64RouteTestHelpers.js";
+import process from "node:process";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 test("all account operations use project-independent canonical contracts and authenticated actors", async () => {
   const owner = { username: "owner", role: "owner" };

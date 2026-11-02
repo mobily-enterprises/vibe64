@@ -13,13 +13,17 @@ import {
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { registerAuthTerminalRoutes } from "../../packages/vibe64-accounts/src/server/authTerminalRoutes.js";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
-import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { configureStudioProjectContext, getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+import process from "node:process";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 function testAccountRouteRuntime() {
   const registeredRoutes = [];

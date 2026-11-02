@@ -26,6 +26,11 @@ import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/s
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/projectRuntimeDormancy.js";
 import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/previewPublicOrigin.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-terminals-provider-"));

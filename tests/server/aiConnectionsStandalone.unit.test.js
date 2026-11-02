@@ -8,12 +8,16 @@ import { createAiConnectionRuntime, configureAiConnectionRuntime } from "../../p
 import { createAiConnectionService, createManagedAiConnections } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createConnections } from "../../packages/vibe64-accounts/src/server/connections.js";
 import { registerLocalAiConnectionRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
-import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { configureStudioProjectContext, getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestHelpers.js";
 
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
+import process from "node:process";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 function registerRoutes(http, { aiConnectionService, requireAiManagement }) {
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });

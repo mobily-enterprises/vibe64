@@ -76,6 +76,10 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { configureVibe64Host, GITHUB_ACCOUNT_MODE_USER } from "@local/vibe64-execution/server";
+import process from "node:process";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 // These tests describe a host with runtime packs.
 const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-test-packs-"));

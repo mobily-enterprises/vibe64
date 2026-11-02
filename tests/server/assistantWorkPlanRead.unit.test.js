@@ -8,6 +8,11 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { __testables, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const { workPlanPath } = __testables;
 

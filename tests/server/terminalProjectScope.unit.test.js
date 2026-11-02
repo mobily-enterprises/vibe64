@@ -16,6 +16,11 @@ import {
   globalCodexTerminalNamespace,
   outputTargetTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 test("Vibe64 terminal namespaces include the active project scope", async () => {
   const globalNamespace = codexTerminalNamespace("session-1");

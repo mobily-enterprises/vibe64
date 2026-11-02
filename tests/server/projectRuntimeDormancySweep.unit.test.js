@@ -9,6 +9,11 @@ import { VIBE64_SERVICE_DATA_ROOT_ENV } from "@local/vibe64-core/server/studioRo
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",
   variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` });

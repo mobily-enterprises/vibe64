@@ -54,6 +54,7 @@ import {
   createService as createProjectService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
+  configureStudioProjectContext,
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
@@ -76,6 +77,9 @@ import {
   withTemporaryRoot,
   projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const execFileAsync = promisify(execFile);
 const PREDECESSOR_ID = "renewal-resource-predecessor";

@@ -17,6 +17,11 @@ import {
 import {
   Vibe64SessionsFeature
 } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 test("session discovery pages every archived/open identity through canonical tools while native lists stay complete", async () => {
   const sessions = Array.from({ length: 127 }, (_, i) => ({ sessionId: `session-${i}`, sessionName: `History ${i}`,

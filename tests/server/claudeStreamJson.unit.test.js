@@ -35,6 +35,11 @@ import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/co
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
 import { agentTurnRealtimeOverlayFromPayload } from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const { claudeCodeArguments } = claudeCodeProcessTestables;
 const { sessionRenewalHandoverHash } = sessionRenewalHandoverTestables;

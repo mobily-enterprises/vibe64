@@ -16,6 +16,11 @@ import {
   sourceEditorFileSavedEvent
 } from "../../packages/vibe64-source-editor/src/server/events.js";
 import { Vibe64SystemGraphFeature } from "../../packages/vibe64-system-graph/src/server/Vibe64SystemGraphFeature.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 function projectApi() {
   return Object.freeze({

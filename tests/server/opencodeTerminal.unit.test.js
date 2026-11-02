@@ -41,6 +41,11 @@ import {
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const { resolveOpenCodeHelperExecutionProfile } = opencodeSessionAgentProviderTestables;
 const { sessionRenewalHandoverHash } = sessionRenewalHandoverTestables;

@@ -31,6 +31,11 @@ import {
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 import { NO_ACTIONS } from "../fixtures/terminalsServiceCollaborators.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);

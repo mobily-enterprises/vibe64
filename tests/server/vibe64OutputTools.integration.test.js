@@ -9,6 +9,11 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createPreviewPreparationFixture } from "../fixtures/previewPreparation.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 test("native output tools inspect, launch, restart, stop and close a real declared preview", { timeout: 20_000 }, async (t) => {
   const fixture = await createPreviewPreparationFixture();

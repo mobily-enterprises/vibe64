@@ -48,6 +48,11 @@ import {
   inspectVibe64WorkspaceSetup,
   inspectGenesisSkills
 } from "../../packages/vibe64-genesis/src/server/index.js";
+import process from "node:process";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+
+// The server configures the Studio project context before any feature reads it.
+configureStudioProjectContext({ env: process.env });
 
 const execFileAsync = promisify(execFile);
 const CODEX_SELECTION = { engineId: "codex", agentId: "codex", modelProviderId: "openai",
