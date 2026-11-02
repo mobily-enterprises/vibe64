@@ -2923,12 +2923,15 @@ include the full wrapper path and control kind, keeping projects and sessions
 separate without placing a long workspace path in the socket address. The shared
 path builder checks the OS byte limit before binding; an oversized configured
 temporary root reports `vibe64_agent_control_path_too_long` with a repair action.
+A command socket answers a refusal with the refusal's own status, such as 400
+for invalid JSON and 413 for oversized input; other failures keep their code's status.
 The command helpers those sockets serve (the session shell wrapper and runner,
 Git, Env, Preview, Playwright and Helper commands) and pending uploads are live
 session state, not temporary files: an agent keeps their paths for its whole life.
 `codexAttachmentPaths.js` owns their root, `<system root>/attachments`, which the
-server fixes for the process at startup so every caller resolves the same root
-whatever environment it passes. Helpers are rewritten idempotently whenever an
+server names at startup. The terminals feature passes it in every caller's
+environment, startup preparation included, so every caller resolves the same
+root; an environment that names none uses the local state root. Helpers are rewritten idempotently whenever an
 assistant starts or reconnects. Only the listening sockets stay in temporary space.
 A session's final close (its archive, in the stopping phase, or the discard of a
 renewal successor that never went live, just before its record is removed)
