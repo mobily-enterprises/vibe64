@@ -462,7 +462,7 @@ test("setup rejects results when configuration changes during the application co
           status: "connected", verifiedAt: "2026-09-11T08:00:00.000Z"
         }) };
       }
-    }), { code: "vibe64_integration_configuration_changed", statusCode: 409 });
+    }), { code: "vibe64_integration_configuration_changed_during_setup", statusCode: 409 });
     assert.equal(calls, 1, "a changed configuration must not automatically repeat connection side effects");
   }
 });

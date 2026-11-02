@@ -4,15 +4,24 @@ import path from "node:path";
 import { pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
+// A session source path the editor may use: relative, inside the source and
+// never through a symbolic link, with the editor's coded errors.
+
 /**
- * A session source path the editor may use: relative, inside the source and
- * never through a symbolic link, with the editor's coded errors.
+ * The editor's coded refusal: an AppError at the given status that carries
+ * its details, and the values or per-sentence code a client translates.
+ * @param {string} message
+ * @param {string} code
+ * @param {Record<string, unknown>} [details]
+ * @param {number} [status]
+ * @param {{ params?: Record<string, unknown>, messageCode?: string, messageParams?: Record<string, unknown> }} [messageFields]
  */
-function sourceEditorError(message, code, details = {}, statusCode = 400) {
-  const error = vibe64Error(message, code);
-  error.details = details;
-  error.statusCode = statusCode;
-  return error;
+function sourceEditorError(message, code, details = {}, status = 400, messageFields = {}) {
+  return vibe64Error(message, code, {
+    ...messageFields,
+    details,
+    status
+  });
 }
 
 function normalizeSourceEditorRelativePath(value = "") {
@@ -21,7 +30,7 @@ function normalizeSourceEditorRelativePath(value = "") {
     return "";
   }
   if (raw.startsWith("/") || /^[A-Za-z]:\//u.test(raw)) {
-    throw sourceEditorError("Source editor paths must be relative to the session source.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Source editor paths must be relative to the session source.", "vibe64_invalid_source_editor_absolute_path");
   }
   const normalized = path.posix.normalize(raw).replace(/^\.\/+/u, "");
   if (!normalized || normalized === "." || normalized === ".." || normalized.startsWith("../")) {

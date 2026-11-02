@@ -230,7 +230,7 @@ async function runApplicationIntegrationSetup({
   if (current.baseHash !== checked.baseHash) {
     throw sourceEditorError(
       "Integration configuration changed during setup. Reload it and check the application's connection before retrying.",
-      "vibe64_integration_configuration_changed",
+      "vibe64_integration_configuration_changed_during_setup",
       {},
       409
     );
@@ -304,7 +304,9 @@ function createIntegrationOperations({
       if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) &&
           input.vibe64User &&
           input.vibe64User.role !== "owner") {
-        throw sourceEditorError("Only the workspace owner can manage project payments or advertising.", "vibe64_owner_required", {}, 403);
+        throw sourceEditorError("Only the workspace owner can manage project payments or advertising.", "vibe64_owner_required", {}, 403, {
+          messageCode: "vibe64_integration_commerce_owner_required"
+        });
       }
       const preflight = await runSourceEditorWriteExclusive(input, async (context) => {
         await inspectIntegrationSetupRequest(context, input);
@@ -363,7 +365,9 @@ function createIntegrationOperations({
   async function registerOAuthIntegration(input) {
     return runSourceEditorOperation(async () => {
       if (input.vibe64User && input.vibe64User.role !== "owner") {
-        throw sourceEditorError("Only the workspace owner can register a project OAuth client.", "vibe64_owner_required", {}, 403);
+        throw sourceEditorError("Only the workspace owner can register a project OAuth client.", "vibe64_owner_required", {}, 403, {
+          messageCode: "vibe64_integration_oauth_owner_required"
+        });
       }
       const draft = structuredClone(input.configuration);
       const candidate = draft?.integrations?.[input.integrationId];
@@ -398,7 +402,7 @@ function createIntegrationOperations({
           !/^[A-Z_][A-Z0-9_]*$/u.test(clientIdKey)) {
         throw sourceEditorError(
           "Use distinct Env references for this client's secret, callback and recovery client ID.",
-          "vibe64_integration_registration_invalid",
+          "vibe64_integration_registration_references_shared",
           {},
           422
         );
@@ -511,7 +515,7 @@ function createIntegrationOperations({
   async function saveIntegrations(input) {
     return runSourceEditorOperation(async () => {
       if (Object.hasOwn(input, "configuration") === Object.hasOwn(input, "changes")) {
-        throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_invalid", {}, 422);
+        throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_ambiguous", {}, 422);
       }
       if (input.baseHash !== null && !/^[a-f0-9]{64}$/u.test(String(input.baseHash || ""))) {
         throw sourceEditorError("Reload the integration configuration before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);

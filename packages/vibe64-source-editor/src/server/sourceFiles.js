@@ -407,21 +407,21 @@ async function runRipgrepLines(args = [], options = {}) {
 function normalizeNewSourceEditorFilePath(value = "") {
   const raw = toText(value).replaceAll("\\", "/");
   if (/\/$/u.test(raw)) {
-    throw sourceEditorError("Choose a file path, not a directory path.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose a file path, not a directory path.", "vibe64_invalid_source_editor_file_path");
   }
   if (raw.split("/").some((segment) => segment === "." || segment === "..")) {
     throw sourceEditorError(
       "New source file paths cannot include current- or parent-directory segments.",
-      "vibe64_invalid_source_editor_path"
+      "vibe64_invalid_source_editor_path_segment"
     );
   }
   const relativePath = normalizeSourceEditorRelativePath(raw);
   if (!relativePath || relativePath.endsWith("/")) {
-    throw sourceEditorError("Choose a file path before creating a file.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose a file path before creating a file.", "vibe64_invalid_source_editor_new_path");
   }
   const basename = path.posix.basename(relativePath);
   if (!basename || basename === "." || basename === "..") {
-    throw sourceEditorError("Choose a valid file name before creating a file.", "vibe64_invalid_source_editor_path", {
+    throw sourceEditorError("Choose a valid file name before creating a file.", "vibe64_invalid_source_editor_file_name", {
       path: relativePath
     });
   }
@@ -441,12 +441,12 @@ async function ensureSourceEditorParentDirectory(context = {}, parentRelativePat
     try {
       const stats = await lstat(currentPath);
       if (stats.isSymbolicLink()) {
-        throw sourceEditorError("Source editor does not write through symbolic links.", "vibe64_source_editor_symlink", {
+        throw sourceEditorError("Source editor does not write through symbolic links.", "vibe64_source_editor_symlink_write", {
           path: parentPath
         }, 403);
       }
       if (!stats.isDirectory()) {
-        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_directory", {
           path: parentPath
         });
       }
@@ -457,7 +457,7 @@ async function ensureSourceEditorParentDirectory(context = {}, parentRelativePat
       await mkdir(currentPath);
       const stats = await lstat(currentPath);
       if (!stats.isDirectory() || stats.isSymbolicLink()) {
-        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_directory", {
           path: parentPath
         });
       }
@@ -470,7 +470,9 @@ async function createSourceEditorFile(context = {}, input = {}) {
   const relativePath = normalizeNewSourceEditorFilePath(input.path);
   const content = Buffer.from(String(input.text ?? ""), "utf8");
   if (content.byteLength > context.policy.maxFileBytes) {
-    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large", {}, 413);
+    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large", {}, 413, {
+      messageCode: "vibe64_source_editor_new_file_too_large"
+    });
   }
   assertTextBuffer(content, relativePath);
   if (sourceEditorPathExcluded(context.policy, relativePath)) {
@@ -499,7 +501,7 @@ async function createSourceEditorFile(context = {}, input = {}) {
   const savedBuffer = await readFile(absolutePath);
   const savedStats = await lstat(absolutePath);
   if (!savedStats.isFile() || savedStats.isSymbolicLink()) {
-    throw sourceEditorError("Source editor created path is not a regular file.", "vibe64_invalid_source_editor_path", {
+    throw sourceEditorError("Source editor created path is not a regular file.", "vibe64_invalid_source_editor_created_path", {
       path: relativePath
     });
   }
@@ -512,7 +514,7 @@ async function sourceEditorExistingFile(context = {}, relativePathValue = "", op
   } = options;
   const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
   if (!relativePath) {
-    throw sourceEditorError("Choose a file before editing.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose a file before editing.", "vibe64_invalid_source_editor_edit_path");
   }
   if (sourceEditorPathExcluded(context.policy, relativePath)) {
     throw sourceEditorError("The selected file is excluded from source editing.", "vibe64_source_editor_file_excluded", {
@@ -523,7 +525,7 @@ async function sourceEditorExistingFile(context = {}, relativePathValue = "", op
   const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
   const stats = await sourceEditorPathStats(context.sourceRoot, relativePath);
   if (!stats.isFile()) {
-    throw sourceEditorError("Choose a source file, not a directory.", "vibe64_invalid_source_editor_path", {
+    throw sourceEditorError("Choose a source file, not a directory.", "vibe64_invalid_source_editor_not_file", {
       path: relativePath
     });
   }
@@ -532,7 +534,9 @@ async function sourceEditorExistingFile(context = {}, relativePathValue = "", op
       maxFileBytes: context.policy.maxFileBytes,
       path: relativePath,
       size: stats.size
-    }, 413);
+    }, 413, {
+      messageCode: "vibe64_source_editor_selected_file_too_large"
+    });
   }
   return {
     absolutePath,
@@ -568,7 +572,9 @@ async function saveSourceEditorFile(context = {}, input = {}) {
       maxFileBytes: context.policy.maxFileBytes,
       path: file.relativePath,
       size: nextBuffer.byteLength
-    }, 413);
+    }, 413, {
+      messageCode: "vibe64_source_editor_edited_file_too_large"
+    });
   }
   assertTextBuffer(nextBuffer, file.relativePath);
   await writeSourceEditorTextFile(context, file.absolutePath, nextText);
@@ -596,7 +602,9 @@ function assertTextBuffer(buffer, relativePath = "") {
   if (buffer.includes(0)) {
     throw sourceEditorError("The selected file appears to be binary.", "vibe64_source_editor_binary_file", {
       path: relativePath
-    }, 415);
+    }, 415, {
+      messageCode: "vibe64_source_editor_selected_file_binary"
+    });
   }
 }
 
@@ -615,7 +623,7 @@ function sourceEditorTempRoot(temporaryRoot = "", sessionId = "") {
 async function writeSourceEditorTextFile(context = {}, absolutePath = "", text = "") {
   const tempRoot = toText(context.sourceEditorTempRoot);
   if (!tempRoot) {
-    throw sourceEditorError("Source editor save requires runtime temp storage.", "vibe64_source_editor_temp_root_missing", {}, 500);
+    throw sourceEditorError("Source editor save requires runtime temp storage.", "vibe64_source_editor_temp_storage_missing", {}, 500);
   }
   await mkdir(tempRoot, {
     recursive: true

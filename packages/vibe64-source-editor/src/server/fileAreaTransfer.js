@@ -77,7 +77,12 @@ async function transferPlan(itemAt, itemPath, stats, policy, action = "moved or 
       const child = joinRelative(relative, name);
       const label = `${itemPath}/${child}`;
       if (sourceEditorPathExcluded(policy, label)) {
-        throw sourceEditorError(`“${label}” is protected and cannot be ${action}.`, "vibe64_files_protected_entry", { path: label }, 403);
+        throw sourceEditorError(`“${label}” is protected and cannot be ${action}.`, "vibe64_files_protected_transfer", { path: label }, 403, {
+          params: {
+            path: label,
+            action
+          }
+        });
       }
       const childStats = await lstat(folder.at(name));
       if (!childStats.isFile() && !childStats.isDirectory()) {
@@ -89,7 +94,11 @@ async function transferPlan(itemAt, itemPath, stats, policy, action = "moved or 
         );
       }
       if (entries.push({ relative: child, directory: childStats.isDirectory(), stats: childStats }) > TRANSFER_MAX_ENTRIES) {
-        throw sourceEditorError(`This folder has too many items to be ${action} at once.`, "vibe64_files_transfer_too_large", {}, 413);
+        throw sourceEditorError(`This folder has too many items to be ${action} at once.`, "vibe64_files_transfer_too_many_items", {}, 413, {
+          params: {
+            action
+          }
+        });
       }
       if (childStats.isDirectory()) await visit(folder.at(name), child, childStats);
     }
@@ -172,18 +181,23 @@ async function transferEntry(from, to, input, mode) {
   await sourceEditorPathStats(from.sourceRoot);
   await sourceEditorPathStats(to.sourceRoot);
   const sourcePath = normalizeSourceEditorRelativePath(input.path);
-  if (!sourcePath) throw sourceEditorError("Choose an item to move or copy.", "vibe64_invalid_source_editor_path");
+  if (!sourcePath) throw sourceEditorError("Choose an item to move or copy.", "vibe64_invalid_source_editor_transfer_item");
   if (sourceEditorPathExcluded(from.policy, sourcePath)) {
     throw sourceEditorError(
       `“${sourcePath}” is protected and cannot be moved or copied.`,
-      "vibe64_files_protected_entry",
+      "vibe64_files_protected_source",
       { path: sourcePath },
-      403
+      403,
+      {
+        params: {
+          path: sourcePath
+        }
+      }
     );
   }
   const folder = normalizeSourceEditorRelativePath(input.targetPath);
   if (folder && sourceEditorPathExcluded(to.policy, folder)) {
-    throw sourceEditorError("That folder is protected.", "vibe64_files_protected_entry", { path: folder }, 403);
+    throw sourceEditorError("That folder is protected.", "vibe64_files_protected_folder", { path: folder }, 403);
   }
   // The item is named through its open folder and arrives through the open
   // destination folder, so neither can be redirected outside its area.
@@ -200,10 +214,10 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
   const sourceStats = await lstat(sourceAt);
   const sameRoot = path.resolve(from.sourceRoot) === path.resolve(to.sourceRoot);
   if (sameRoot && sourceStats.isDirectory() && (folder === sourcePath || folder.startsWith(`${sourcePath}/`))) {
-    throw sourceEditorError("A folder cannot be moved or copied into itself.", "vibe64_files_invalid_destination");
+    throw sourceEditorError("A folder cannot be moved or copied into itself.", "vibe64_files_destination_inside_item");
   }
   if (sameRoot && mode === "move" && folderOf(sourcePath) === folder) {
-    throw sourceEditorError("It is already in this folder.", "vibe64_files_invalid_destination");
+    throw sourceEditorError("It is already in this folder.", "vibe64_files_destination_unchanged");
   }
   const entries = await transferPlan(sourceAt, sourcePath, sourceStats, from.policy);
   if (mode === "copy") assertTransferSize(entries);
@@ -212,7 +226,7 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
   // Replacing deletes what is there: never the item itself or a folder holding it.
   const sourceAbsolute = absoluteSourceEditorPath(from.sourceRoot, sourcePath);
   if (target.replace && pathInsideOrEqual(absoluteSourceEditorPath(to.sourceRoot, target.relativePath), sourceAbsolute)) {
-    throw sourceEditorError("An item cannot replace itself or a folder that contains it.", "vibe64_files_invalid_destination");
+    throw sourceEditorError("An item cannot replace itself or a folder that contains it.", "vibe64_files_replace_own_item");
   }
   for (const entry of entries) {
     const arriving = joinRelative(target.relativePath, entry.relative);

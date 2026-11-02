@@ -35,7 +35,7 @@ async function sourceEditorDirectoryPage(context = {}, options = {}) {
   if (relativePath) {
     const stats = await sourceEditorPathStats(sourceRoot, relativePath);
     if (!stats.isDirectory()) {
-      throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+      throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_directory", {
         path: relativePath
       });
     }

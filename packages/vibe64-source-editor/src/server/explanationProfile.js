@@ -144,7 +144,7 @@ async function resolveSourceEditorAgentExecutionProfile(terminals, context = {})
   if (executionProfile.providerId !== toText(context.agentProviderId)) {
     throw sourceEditorError(
       "The selected assistant provider returned a low-cost profile for a different provider.",
-      "vibe64_source_explanation_execution_profile_missing",
+      "vibe64_source_explanation_execution_profile_mismatch",
       {},
       503
     );

@@ -511,7 +511,7 @@ test("Replace refuses to delete the item's own source or a folder holding it", a
     for (const mode of ["copy", "move"]) {
       const refused = await call("transfer", { area, path: source, mode, targetArea: area, targetPath: "", conflict: "replace" });
       assert.equal(refused.statusCode, 400, `${area} ${mode}`);
-      assert.equal(refused.code, "vibe64_files_invalid_destination");
+      assert.equal(refused.code, "vibe64_files_replace_own_item");
     }
   }
   assert.equal(await readFile(path.join(p.dropZoneRoot, "docs", "sub", "docs", "a.txt"), "utf8"), "a");
@@ -529,7 +529,7 @@ test("Replace into Repo never deletes a folder holding protected content", async
   await writeFile(path.join(p.dropZoneRoot, "lib", "new.js"), "new");
   const refused = await call("transfer", { path: "lib", mode: "copy", targetArea: "repo", targetPath: "src", conflict: "replace" });
   assert.equal(refused.statusCode, 403);
-  assert.equal(refused.code, "vibe64_files_protected_entry");
+  assert.equal(refused.code, "vibe64_files_protected_transfer");
   assert.equal(await readFile(path.join(p.repo, "src", "lib", ".git", "HEAD"), "utf8"), "ref: refs/heads/main\n");
   assert.equal(await readFile(path.join(p.repo, "src", "lib", "util.js"), "utf8"), "one util");
   assert.deepEqual(await leftovers(p.repoStaging), []);
@@ -693,7 +693,7 @@ test("a cross-filesystem move never removes a file that changed while it was cop
   // Whether the change landed during or just after the copy, the original stays.
   assert.equal((await lstat(source)).size, size + 8, JSON.stringify(result));
   if (!result.ok) {
-    assert.equal(result.code, "vibe64_source_editor_file_changed");
+    assert.equal(result.code, "vibe64_files_item_changed");
     await assert.rejects(lstat(path.join(p.repo, "src", "big.bin")), { code: "ENOENT" });
   }
   assert.deepEqual(await readdir(p.repoStaging), []);
