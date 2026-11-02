@@ -18,3 +18,27 @@ export function learningHostParts() {
 export function learningLayout(fields) {
   return shallowRef({ showProject() {}, hideLesson() {}, showChat() {}, ...fields });
 }
+
+// The shell's Learning controller once it has read Develop, with no lesson and
+// nobody signed in to Learning: what every page and view sees before a learner starts one.
+export function idleLearning(fields) {
+  return {
+    state: { actorKey: "", modeBusy: "", modeRead: true },
+    learnMode: false,
+    lessonShown: false,
+    lessonAttemptId: "",
+    lessonTitle: "",
+    mode: null,
+    lesson: shallowRef(null),
+    toggleMode() {},
+    toggleLesson() {},
+    openCourses() {},
+    modePlace: () => "/app",
+    prepareExercise() {},
+    exerciseStep: () => null,
+    beginExercise: () => null,
+    exerciseCurrent: () => false,
+    finishExercise: async () => null,
+    ...fields
+  };
+}

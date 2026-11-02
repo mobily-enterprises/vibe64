@@ -22,15 +22,15 @@ import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 // mode, colours the app bar in Learn mode, and mounts the one global teacher
 // guide overlay of that host.
 const learning = useVibe64Learning();
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, null);
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY);
 const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
-watch(actorKey, value => learning?.setViewer(value), { immediate: true });
-onBeforeUnmount(() => learning?.setViewer(""));
+watch(actorKey, value => learning.setViewer(value), { immediate: true });
+onBeforeUnmount(() => learning.setViewer(""));
 
 // In Learn mode every app bar of this host is Learning yellow
 // (vibe64-m3.css styles body.vibe64-learn-mode).
 const LEARN_MODE_CLASS = "vibe64-learn-mode";
-watch(() => Boolean(learning?.learnMode), value => globalThis.document?.body?.classList.toggle(LEARN_MODE_CLASS, value),
+watch(() => learning.learnMode, value => globalThis.document?.body?.classList.toggle(LEARN_MODE_CLASS, value),
   { immediate: true });
 onBeforeUnmount(() => globalThis.document?.body?.classList.remove(LEARN_MODE_CLASS));
 
@@ -42,8 +42,8 @@ onBeforeUnmount(() => globalThis.document?.body?.classList.remove(LEARN_MODE_CLA
 // instead of cancelling it.
 const route = useRoute();
 const router = useRouter();
-watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value, previous) => {
-  if (!route || !router || !learning || learning.state.modeBusy) return;
+watch(() => [learning.mode, route.fullPath, learning.state.modeBusy], (_value, previous) => {
+  if (learning.state.modeBusy) return;
   const target = modeRedirect({ mode: learning.mode, slug: projectSlugFromRoute(route), path: route.path });
   if (!target || target.path === route.path) return;
   const modeChanged = Boolean(previous?.[0]) && previous[0] !== learning.mode;
@@ -53,14 +53,14 @@ watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value
   void router.replace(learning.state.finished && learning.mode?.on ? withLesson(target.path) : target.path);
 }, { immediate: true });
 // A mode's note goes when L switches to the other mode.
-watch(() => learning?.mode?.on, (_on, wasOn) => {
+watch(() => learning.mode?.on, (_on, wasOn) => {
   if (typeof wasOn === "boolean") learning.clearNotice();
 });
 function noticeShown(value) {
   if (!value) learning.clearNotice();
 }
 
-const open = computed(() => Boolean(learning?.state.open));
+const open = computed(() => learning.state.open);
 // Built on first open and kept while minimised, so its place stays as it was.
 const built = ref(false);
 watch(open, value => { if (value) built.value = true; }, { immediate: true });
@@ -71,13 +71,13 @@ watch(open, async value => {
   if (!value) return;
   await nextTick();
   const element = layer.value;
-  if (typeof element?.focus === "function" && !element.contains?.(globalThis.document?.activeElement)) element.focus({ preventScroll: true });
+  if (element && !element.contains(globalThis.document.activeElement)) element.focus({ preventScroll: true });
 });
 
 // Courses' reads also serve a Take the tour request while Courses stays closed.
-const orientationRequested = computed(() => Boolean(learning?.orientationRequested));
+const orientationRequested = computed(() => learning.orientationRequested);
 const courses = useVibe64LearningCourses({ active: computed(() => open.value || orientationRequested.value) });
-const surface = computed(() => learning?.state.surface || "courses");
+const surface = computed(() => learning.state.surface);
 const tabs = Object.freeze([
   { id: "courses", label: "Courses" },
   { id: "progress", label: "In progress" },
@@ -88,7 +88,7 @@ useRealtimeEvent({
   event: VIBE64_TRAINING_LEARNER_CHANGED_EVENT,
   enabled: computed(() => Boolean(actorKey.value)),
   onEvent: ({ payload } = {}) => {
-    void learning?.learnerChanged(payload || {});
+    void learning.learnerChanged(payload || {});
     // A notes change touches no course, attempt or practice project.
     if (open.value && payload?.reason !== "notes") void courses.learningResource.reload();
   }
@@ -118,7 +118,7 @@ async function takeOrientation() {
 }
 
 // One confirmation before a start archives a different lesson in progress.
-const confirm = computed(() => learning?.confirmArchive || null);
+const confirm = computed(() => learning.confirmArchive);
 async function archiveAndStart() {
   try { await learning.confirmArchiveAndStart(); }
   catch (cause) { learning.showNotice(String(cause?.message || "The lesson did not start. Try again from Courses.")); }
@@ -129,7 +129,7 @@ function keepCurrent() {
   learning.orientationAnswered();
 }
 // Continue lesson: the current lesson (not a finished one's screen), shown where it runs.
-const continueOffered = computed(() => Boolean(learning?.mode?.on && learning.lessonAttemptId && !learning.state.finished));
+const continueOffered = computed(() => Boolean(learning.mode?.on && learning.lessonAttemptId && !learning.state.finished));
 function continueLesson() {
   void learning.openLesson().catch(cause => learning.showNotice(String(cause?.message || "The lesson could not open. Try again.")));
 }
@@ -144,7 +144,7 @@ function keydown(event) {
 <template>
   <TrainingGuideOverlay />
   <div
-    v-if="learning && actorKey && built"
+    v-if="actorKey && built"
     v-show="open"
     class="vibe64-learning"
     role="dialog"
@@ -198,7 +198,7 @@ function keydown(event) {
   <!-- Above Courses (2400) by style: Vuetify stacks a dialog 10 above the topmost
        open overlay, such as the start refusal's toast (2000), ignoring z-index. -->
   <v-dialog
-    v-if="learning && actorKey"
+    v-if="actorKey"
     :model-value="Boolean(confirm)"
     max-width="28rem"
     style="z-index: 2410"
@@ -219,7 +219,7 @@ function keydown(event) {
     </v-card>
   </v-dialog>
   <v-snackbar
-    v-if="learning && actorKey"
+    v-if="actorKey"
     :model-value="Boolean(learning.notice)"
     :timeout="8000"
     location="bottom"

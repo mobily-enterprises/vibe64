@@ -158,7 +158,7 @@ describe("project page deleted notice", () => {
     await button.props.onClick();
     expect(openCourses).toHaveBeenCalledTimes(1);
     expect(texts(nodes).join(" ")).toContain("Courses → Archived");
-    expect(script.content).toMatch(/learning\?\.openCourses\(\)/u);
+    expect(script.content).toMatch(/learning\.openCourses\(\)/u);
   });
 
   it("leaves other load errors on the ordinary error notice", () => {

@@ -46,8 +46,11 @@ pageActivity, router, request?, runGuide?, now? })` returns one frozen
 controller. Its host parts are required: `Vibe64AssistantShellContext` creates
 each one (the refs a mounted page or view publishes into, the page activity
 channel and the router) and provides the controller under
-`VIBE64_LEARNING_KEY`; `request` defaults to the studio's HTTP client; public `App.vue` (and a host's own authenticated shell)
-mount `Vibe64LearningOverlay` once, and the **L** button
+`VIBE64_LEARNING_KEY`; `request` defaults to the studio's HTTP client.
+`useVibe64Learning()` returns that controller to every page, view and
+composable of the shell, which call it directly (there is no shell without
+it). Public `App.vue` (and a host's own authenticated shell) mount
+`Vibe64LearningOverlay` once, and the **L** button
 (`Vibe64LearningButton`, anchor `data-vibe64-guide="learning"`) sits first in
 `StudioAppShellLayout` and the management `ShellLayout` headers. Stacking is
 guide overlay 3000 above L 2400 above Colleague.

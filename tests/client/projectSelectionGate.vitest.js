@@ -35,6 +35,8 @@ vi.mock("../../src/lib/vibe64AccountConnectionsDialog.js", () => ({
 
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
 import { TEAM_AI_REQUIRED_CODE, useProjectSelectionGate } from "../../src/composables/useProjectSelectionGate.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { idleLearning } from "./helpers/learningHostParts.js";
 
 const gated = (ownerName = "Tony") => Object.assign(new Error(`Ask ${ownerName || "the workspace owner"} to set up AI for team members.`), {
   status: 403, code: "vibe64_team_ai_required", details: { ownerName } });
@@ -55,6 +57,7 @@ function mountGate(next, props = {}) {
   const gate = Vue.ref();
   const app = renderer.createApp({ render: () => Vue.h({ ...ProjectSelectionGate, render: () => null }, { ...props, ref: gate }) });
   app.provide(ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   app.mount({});
   return { state: gate.value.$.setupState, unmount: () => app.unmount() };
 }
@@ -63,6 +66,7 @@ async function renderGate(next, props = {}) {
   mocks.next = next;
   const app = Vue.createSSRApp({ render: () => Vue.h(ProjectSelectionGate, props, { default: () => Vue.h("p", "Project workspace") }) });
   app.use(createVuetify());
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   return renderToString(app);
 }
 

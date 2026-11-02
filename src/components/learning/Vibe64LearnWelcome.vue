@@ -23,7 +23,7 @@ const learning = useVibe64Learning();
       rounded="pill"
       size="large"
       variant="flat"
-      @click="learning?.openCourses('courses')"
+      @click="learning.openCourses('courses')"
     >
       Choose a lesson
     </v-btn>

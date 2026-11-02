@@ -22,7 +22,7 @@ const learning = useVibe64Learning();
 const route = useRoute();
 const router = useRouter();
 const { smAndDown } = useDisplay();
-const available = computed(() => Boolean(props.studio && learning?.learnMode && learning.lessonAttemptId));
+const available = computed(() => Boolean(props.studio && learning.learnMode && learning.lessonAttemptId));
 const lessonShown = computed(() => available.value && lessonShownIn(route.query));
 
 function hideLesson() {
@@ -40,7 +40,7 @@ watch(() => [route.path, lessonShownIn(route.query)], ([path, shown], [previousP
 
 // A studio page owns the Learn layout while it shows: no project, no chat
 // column, the page (or the lesson over it) always visible.
-const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY);
 const owner = {
   studio: true,
   projectSlug: "",
@@ -53,7 +53,7 @@ const owner = {
   showProject() {},
   showChat() {}
 };
-if (props.studio && layout) {
+if (props.studio) {
   watch(() => props.studio, () => { layout.value = owner; }, { immediate: true });
   onBeforeUnmount(() => { if (layout.value === owner) layout.value = null; });
 }

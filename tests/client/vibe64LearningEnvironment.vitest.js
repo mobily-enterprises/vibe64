@@ -35,13 +35,16 @@ const lessonResult = (overrides = {}) => ({
   results: [], ...overrides
 });
 
+// The page this file's controllers live in: visible and allowing motion, as
+// the step bar's player reads it. It stays for the whole file (a test's stub
+// restores it), because a controller's show-beat timer can outlive its test.
+Object.assign(globalThis, { document: { visibilityState: "visible" }, matchMedia: () => ({ matches: false }),
+  addEventListener() {}, removeEventListener() {} });
+
 let saved;
 beforeEach(() => {
   saved = new Map();
   vi.stubGlobal("window", { sessionStorage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) } });
-  // A visible page that allows motion, as the step bar's player reads it.
-  vi.stubGlobal("document", { visibilityState: "visible" });
-  vi.stubGlobal("matchMedia", () => ({ matches: false }));
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
@@ -868,7 +871,7 @@ function compiledUi(filename, imports) {
 function uiRenderer() {
   return Vue.createRenderer({
     // An element finds nothing in its rendered children; a test gives one its own querySelector.
-    createElement: tag => ({ tag, props: {}, style: {}, children: [], querySelector: () => null }),
+    createElement: tag => ({ tag, props: {}, style: {}, children: [], querySelector: () => null, contains: () => false, focus() {} }),
     createText: text => ({ text, children: [] }), createComment: text => ({ comment: text, children: [] }),
     insert(node, parent, anchor) { if (node.parent) node.parent.children.splice(node.parent.children.indexOf(node), 1);
       node.parent = parent; const at = anchor ? parent.children.indexOf(anchor) : -1;
@@ -885,7 +888,7 @@ const byTest = (root, id) => nodes(root).find(node => node.props?.["data-test"] 
 const textOf = node => [node.text || "", ...node.children.map(textOf)].join("");
 
 // The shared step view (the lesson reader) with a bounded diagram player.
-function stepUi(players) {
+function stepUi(players, readVisual) {
   const player = Vue.defineComponent({ props: ["resource", "attemptId"], setup(props, { expose }) {
     const instance = { restores: [], commands: [] };
     players.push(instance);
@@ -894,7 +897,7 @@ function stepUi(players) {
   } });
   return compiledUi(path.resolve("src/components/learning/Vibe64LearningStep.vue"), {
     vue: Vue,
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => { throw new Error("stubbed"); } },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: url => readVisual(url) }) },
     "@local/vibe64-training/client/visual-player": { default: player },
     "@/lib/studioUrls.js": { resolveStudioRequestUrl: url => url },
     "@/lib/vibe64Learning.js": LearningLib,
@@ -911,11 +914,11 @@ async function mountReader(learning, extraProps = {}) {
     vue: Vue, "vue-router": { useRouter: () => ({ push: vi.fn() }) },
     "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
     "@/lib/vibe64Learning.js": LearningLib,
-    "./Vibe64LearningStep.vue": { default: stepUi(players) },
+    "./Vibe64LearningStep.vue": { default: stepUi(players, readVisual) },
     "./Vibe64LearningMarkdown.vue": { default: { props: ["text"], setup: props => () => Vue.h("section", { "data-markdown": props.text }) } }
   });
   const root = { children: [] };
-  const app = uiRenderer().createApp({ render: () => Vue.h(reader, { learning, learningRevision: 3, readVisual, ...extraProps }) });
+  const app = uiRenderer().createApp({ render: () => Vue.h(reader, { learning, learningRevision: 3, ...extraProps }) });
   for (const tag of WIDGETS) app.component(tag, widget);
   app.mount(root);
   await flush();

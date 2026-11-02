@@ -1,8 +1,10 @@
 import { renderToString } from "@vue/server-renderer";
-import { createSSRApp, defineComponent, h } from "vue";
+import { createSSRApp, defineComponent, h, reactive } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import getPlacements from "../../src/placement.js";
 import placementTopology from "../../src/placementTopology.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { idleLearning } from "./helpers/learningHostParts.js";
 
 function vuetifySlotHost(name) {
   return defineComponent({
@@ -93,6 +95,7 @@ async function renderCustomShell(topRightTestId) {
     name: "VSpacer",
     render: () => h("span", { "data-test": "shell-spacer" })
   }));
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   return renderToString(app);
 }
 
@@ -108,6 +111,7 @@ async function renderPackageShell(topRightTestId = "") {
       });
     }
   });
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   return renderToString(app);
 }
 
@@ -165,9 +169,7 @@ describe("Vibe64 custom shell status placement", () => {
 
 // Learning uses the same shell. These additions do not replace the original
 // placement assertions above.
-import { reactive } from "vue";
 import { createVuetify } from "vuetify";
-import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import Vibe64LearningCoursesItem from "../../src/components/learning/Vibe64LearningCoursesItem.vue";
 
 async function renderLearningShell(environment = { actorKey: "local" }, learnMode = false) {
@@ -181,7 +183,7 @@ async function renderLearningShell(environment = { actorKey: "local" }, learnMod
     }
   });
   app.use(createVuetify());
-  if (environment) app.provide(VIBE64_LEARNING_KEY, reactive({ state: environment, learnMode, lessonTitle: "", toggleMode() {}, openCourses() {} }));
+  app.provide(VIBE64_LEARNING_KEY, reactive({ state: environment, learnMode, lessonTitle: "", toggleMode() {}, openCourses() {} }));
   return renderToString(app);
 }
 
@@ -231,7 +233,6 @@ describe("controlled Learning shell", () => {
   });
 
   it("does not expose L without a signed-in Learning environment", async () => {
-    expect(await renderLearningShell(null)).not.toContain('aria-label="Learn mode"');
     expect(await renderLearningShell({ actorKey: "" })).not.toContain('aria-label="Learn mode"');
   });
 

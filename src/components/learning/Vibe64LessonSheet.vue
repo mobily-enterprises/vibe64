@@ -11,7 +11,7 @@ const learning = useVibe64Learning();
 </script>
 
 <template>
-  <div v-if="learning" class="vibe64-lesson-sheet" data-test="lesson-sheet">
+  <div class="vibe64-lesson-sheet" data-test="lesson-sheet">
     <header class="vibe64-lesson-sheet__header">
       <v-icon :icon="mdiSchoolOutline" size="18" />
       <span class="vibe64-lesson-sheet__title">Lesson</span>

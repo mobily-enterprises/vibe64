@@ -58,6 +58,8 @@ vi.mock("vuetify/components/VTextField", () => ({ VTextField: passthrough("input
 import { useVibe64AppPage } from "../../src/composables/useVibe64AppPage.js";
 import { useVibe64Issues } from "../../src/composables/useVibe64Issues.js";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { idleLearning } from "./helpers/learningHostParts.js";
 
 const filename = new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url).pathname;
 const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
@@ -128,6 +130,7 @@ async function mountPage(path = "/app/project/dogandgroom") {
     "v-text-field": "input", "v-form": "form", "v-sheet": "section"
   })) app.component(name, passthrough(tag));
   app.provide(Vue.ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   const root = { children: [] };
   app.mount(root);
   dispose.push(() => app.unmount());

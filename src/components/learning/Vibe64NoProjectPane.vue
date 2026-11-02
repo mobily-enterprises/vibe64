@@ -24,8 +24,8 @@ defineProps({
 defineEmits(["select"]);
 
 const learning = useVibe64Learning();
-const noLesson = computed(() => Boolean(learning?.mode) && !learning.lessonAttemptId);
-const lesson = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
+const noLesson = computed(() => Boolean(learning.mode) && !learning.lessonAttemptId);
+const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttemptId));
 </script>
 
 <template>

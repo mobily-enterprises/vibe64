@@ -20,13 +20,13 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 // tab) returned first is dropped, so the project never opens again on an error
 // from the mode it was left in.
 const learning = useVibe64Learning();
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, null);
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY);
 const route = useRoute();
 const queryClient = useQueryClient();
 const held = computed(() => {
   const slug = projectSlugFromRoute(route);
   const actorKey = String(toValue(viewer)?.actorKey || "");
-  if (!learning || !actorKey || !slug) return false;
+  if (!actorKey || !slug) return false;
   return learning.state.actorKey !== actorKey || !learning.state.modeRead || learning.state.modeBusy === "set" ||
     Boolean(modeRedirect({ mode: learning.mode, slug, path: route.path }));
 });

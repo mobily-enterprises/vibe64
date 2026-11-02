@@ -10,12 +10,12 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 // there, as it was). It sits beside Preview | Dash on a practice project and
 // on the step bar of a studio page or a phone.
 const learning = useVibe64Learning();
-const shown = computed(() => Boolean(learning?.lessonShown));
+const shown = computed(() => learning.lessonShown);
 const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
 </script>
 
 <template>
-  <v-tooltip v-if="learning" :text="action" location="bottom">
+  <v-tooltip :text="action" location="bottom">
     <template #activator="{ props: tooltipProps }">
       <button
         v-bind="tooltipProps"

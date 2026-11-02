@@ -35,7 +35,6 @@
           @click="redoOnboarding"
         />
         <v-list-item
-          v-if="learning"
           :prepend-icon="mdiMapMarkerPath"
           subtitle="A short lesson on the screens around you"
           title="Take the tour"

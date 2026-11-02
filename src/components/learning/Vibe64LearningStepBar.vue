@@ -25,21 +25,21 @@ import Vibe64LessonToggle from "./Vibe64LessonToggle.vue";
 // practice project could not be prepared without one), the line says so
 // instead and offers Set up your AI.
 const learning = useVibe64Learning();
-const lesson = computed(() => learning?.lesson.value || null);
+const lesson = computed(() => learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
-const step = computed(() => learning?.currentStep.value || null);
-const player = computed(() => learning?.player || null);
+const step = computed(() => learning.currentStep.value);
+const player = learning.player;
 const index = computed(() => steps.value.findIndex(value => value.id === step.value?.id));
-const visible = computed(() => Boolean(learning?.stepBarVisible));
+const visible = computed(() => learning.stepBarVisible);
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
-const aiRequired = computed(() => Boolean(learning?.aiRequired));
-const busy = computed(() => learning?.state.busy || "");
+const aiRequired = computed(() => learning.aiRequired);
+const busy = computed(() => learning.state.busy);
 const status = computed(() => step.value ? learning.stepStatus(step.value.id) : "not-started");
-const beats = computed(() => player.value?.beats.value || []);
-const beat = computed(() => player.value?.beat.value || null);
-const beatIndex = computed(() => player.value?.index.value || 0);
+const beats = computed(() => player.beats.value);
+const beat = computed(() => player.beat.value);
+const beatIndex = computed(() => player.index.value);
 // A step without beats is in its final state at once (its verdict control shows).
-const final = computed(() => beats.value.length ? Boolean(player.value?.final) : true);
+const final = computed(() => beats.value.length ? player.final : true);
 const kind = computed(() => step.value?.check?.kind || "none");
 // The step's own verdict control in its final beat state (its check beat, or after its last beat).
 const verdict = computed(() => {
@@ -55,7 +55,7 @@ const verdict = computed(() => {
   return null;
 });
 const beatText = computed(() => {
-  if (player.value?.confirmed) return player.value.confirmed;
+  if (player.confirmed) return player.confirmed;
   if (reviewing.value) return "Checking your work with your AI…";
   if (final.value && status.value === "passed" && kind.value === "review") return learning.reviewNote(learning.savedReview(step.value.id)) || "Passed ✓";
   // A review check's line is the step's rubric.
@@ -94,14 +94,14 @@ async function showMe() {
   } catch (cause) { note.value = String(cause?.message || "That place could not be shown."); }
 }
 // I'm stuck: Colleague helps on a do beat, or with a step its own check decides.
-const stuckOffered = computed(() => Boolean(!ended.value && status.value !== "passed" && !player.value?.confirmed &&
+const stuckOffered = computed(() => Boolean(!ended.value && status.value !== "passed" && !player.confirmed &&
   (beat.value?.kind === "do" || (final.value && ["auto", "review"].includes(kind.value)))));
 function askStuck() {
   note.value = "";
   try { learning.stuck(step.value.id); } catch (cause) { note.value = String(cause?.message || "Colleague could not be asked."); }
 }
 // A do beat the page can do for the learner (not Save, which it only points at).
-const canDoIt = computed(() => Boolean(beat.value?.kind === "do" && !player.value?.confirmed && !ended.value &&
+const canDoIt = computed(() => Boolean(beat.value?.kind === "do" && !player.confirmed && !ended.value &&
   learning.doItForMeKind(beat.value)));
 const doing = ref(false);
 async function doItForMe() {
@@ -123,29 +123,29 @@ const go = offset => {
   if (next) learning.selectStep(next.id);
 };
 const partLabel = computed(() => `This step: part ${Math.min(beatIndex.value + 1, beats.value.length)} of ${beats.value.length}`);
-const back = () => beats.value.length ? player.value.back() : go(-1);
-const atStart = computed(() => beats.value.length ? Boolean(player.value?.atStart) : index.value <= 0);
+const back = () => beats.value.length ? player.back() : go(-1);
+const atStart = computed(() => beats.value.length ? player.atStart : index.value <= 0);
 const lastStep = computed(() => index.value >= steps.value.length - 1);
 // The one forward button: its label is exactly what it does.
 const forwardAction = computed(() => {
-  if (beats.value.length && !player.value?.final) return { label: "Next", run: () => player.value.next() };
-  if (!lastStep.value) return { label: "Next step", run: () => beats.value.length ? player.value.next() : go(1) };
-  return learning?.complete && !ended.value ? { label: "Finish", run: () => learning.showFinished() } : null;
+  if (beats.value.length && !player.final) return { label: "Next", run: () => player.next() };
+  if (!lastStep.value) return { label: "Next step", run: () => beats.value.length ? player.next() : go(1) };
+  return learning.complete && !ended.value ? { label: "Finish", run: () => learning.showFinished() } : null;
 });
 // Away from the lesson's practice project (another page of this Vibe64): the way back to it.
 const route = useRoute();
 const router = useRouter();
-const practiceSlug = computed(() => learning?.mode?.practiceSlug || lesson.value?.practiceProjectSlug || "");
+const practiceSlug = computed(() => learning.mode?.practiceSlug || lesson.value?.practiceProjectSlug || "");
 const practiceAway = computed(() => Boolean(practiceSlug.value && !ended.value &&
-  projectSlugFromPathname(String(route?.path || "")) !== practiceSlug.value));
-const openPractice = () => router?.push(projectAppPath(practiceSlug.value));
+  projectSlugFromPathname(route.path) !== practiceSlug.value));
+const openPractice = () => router.push(projectAppPath(practiceSlug.value));
 </script>
 
 <template>
   <div
     v-if="visible" class="vibe64-learning-step-bar-host"
-    @pointerenter="player?.hold(true)" @pointerleave="player?.hold(false)"
-    @focusin="player?.hold(true)" @focusout="player?.hold(false)"
+    @pointerenter="player.hold(true)" @pointerleave="player.hold(false)"
+    @focusin="player.hold(true)" @focusout="player.hold(false)"
   >
     <section
       class="vibe64-learning-step-bar"

@@ -22,6 +22,8 @@ import {
   previewUsageEntryForFile
 } from "../../src/lib/vibe64PreviewPick.js";
 import { useVibe64OutputControlsSurface } from "../../src/composables/useVibe64OutputControlsSurface.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { idleLearning } from "./helpers/learningHostParts.js";
 
 // Click in Preview from the editor's side: Pick asks the bridge, turns the
 // picked component into a usage entry, and forwards recorded interactions.
@@ -82,6 +84,7 @@ function mountPick({ entries = ENTRIES, recording = null, readFails = false, rea
   const app = renderer.createApp({ setup() {
     state = useVibe64OutputControlsSurface(props, usage); return () => null;
   } });
+  app.provide(VIBE64_LEARNING_KEY, idleLearning());
   app.mount({});
   const posts = [];
   const frame = markRaw({ dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },

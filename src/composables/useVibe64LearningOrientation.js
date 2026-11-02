@@ -1,4 +1,4 @@
-import { onBeforeMount, onBeforeUnmount, unref, watch } from "vue";
+import { onBeforeMount, onBeforeUnmount, watch } from "vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 
@@ -41,11 +41,6 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
   const reportActivity = usePageActivity();
   let orientation = null;
 
-  function learningOwner() {
-    const owner = unref(learning);
-    return typeof owner?.beginExercise === "function" && typeof owner.finishExercise === "function" ? owner : null;
-  }
-
   function frameCurrent(channel) {
     const current = preview();
     return orientation === channel && Boolean(current) && current.frame === channel.frame &&
@@ -69,8 +64,7 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
   }
 
   function interactionCurrent(channel, pending) {
-    return channel.pending === pending && channelVisible(channel) && learningOwner() === pending.owner &&
-      pending.owner.exerciseCurrent(pending.ticket);
+    return channel.pending === pending && channelVisible(channel) && learning.exerciseCurrent(pending.ticket);
   }
 
   function handlePacket(channel, input) {
@@ -91,9 +85,8 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
     if (input.type === "button" && exactFields(input, [...PACKET_FIELDS, "interactionId"]) && orientationUuid(input.interactionId)) {
       retireInteraction(channel);
       reportActivity("app-pressed", { projectSlug: channel.projectSlug, sessionId: channel.sessionId });
-      const owner = learningOwner();
-      const ticket = owner?.beginExercise(channel.projectSlug);
-      if (ticket) channel.pending = { owner, ticket, interactionId: input.interactionId, phase: "button" };
+      const ticket = learning.beginExercise(channel.projectSlug);
+      if (ticket) channel.pending = { ticket, interactionId: input.interactionId, phase: "button" };
       return;
     }
     const pending = channel.pending;
@@ -110,7 +103,7 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
     if (input.type === "response-displayed" && pending.phase === "request" && orientationUuid(input.requestId) &&
         typeof input.message === "string" && exactFields(input, [...PACKET_FIELDS, "interactionId", "requestId", "message"])) {
       retireInteraction(channel);
-      void pending.owner.finishExercise(pending.ticket, { sessionId: channel.sessionId,
+      void learning.finishExercise(pending.ticket, { sessionId: channel.sessionId,
         instanceId: channel.instanceId, interactionId: pending.interactionId, requestId: input.requestId });
       return;
     }
@@ -136,13 +129,12 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
 
   // An admitted announcement from the displayed frame's window and origin.
   function announce(event) {
-    const owner = learningOwner();
     const current = preview();
-    if (!owner || !exactFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
+    if (!exactFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
         event.data.protocolVersion !== ORIENTATION_PROTOCOL_VERSION || !orientationUuid(event.data.instanceId) ||
         event.ports?.length || !current?.frameRequestId || !current.projectSlug || !current.sessionId ||
         !current.terminalSessionId) return;
-    void owner.prepareExercise?.(current.projectSlug);
+    void learning.prepareExercise(current.projectSlug);
     if (orientation && frameCurrent(orientation) && orientation.instanceId === event.data.instanceId) return;
     close();
     orientation = { frame: current.frame, window: event.source, origin: event.origin,
@@ -162,7 +154,7 @@ function useVibe64LearningOrientation({ preview, frameVisible }) {
   watch(() => {
     const current = preview();
     return [current?.frame, current?.frameRequestId, current?.loaded, current?.displayed, current?.projectSlug,
-      current?.sessionId, current?.terminalSessionId, learningOwner()?.exerciseStep(current?.projectSlug)];
+      current?.sessionId, current?.terminalSessionId, learning.exerciseStep(current?.projectSlug)];
   }, () => {
     if (orientation && !frameCurrent(orientation)) {
       close();
