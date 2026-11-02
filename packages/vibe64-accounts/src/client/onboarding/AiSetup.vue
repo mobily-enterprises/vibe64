@@ -107,7 +107,7 @@ const setupCards = provideAiSetupCards(useAiSetupCards({
   setup, manager, wasSetUp, xs, active: computed(() => props.open && props.canConfigure)
 }));
 const {
-  cardRows, cards, cardTool, checkingTools, checkTools, currentMarks, currentNames, expandedId, mainAi, mainCard, noToolHere,
+  cards, cardTool, checkingTools, checkTools, currentMarks, currentNames, expandedId, mainAi, mainCard, noToolHere,
   orderedCards, otherRows, ownerRoles, ownerSenior, readyHere
 } = setupCards;
 const learning = inject(VIBE64_LEARNING_KEY, null);
@@ -334,7 +334,7 @@ async function useAsMain() {
 watch(busy, (value) => emit("busy", value));
 
 const { openProvider } = useAiSetupProviderLinks({
-  inline: toRef(props, "inline"), canConfigure: toRef(props, "canConfigure"), manager, cards, cardRows, openManage, connect
+  inline: toRef(props, "inline"), canConfigure: toRef(props, "canConfigure"), manager, setupCards, openManage, connect
 });
 
 // The shell's top bar and phone dock follow the stage.

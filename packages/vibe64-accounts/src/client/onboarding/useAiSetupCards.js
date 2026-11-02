@@ -140,13 +140,22 @@ function useAiSetupCards({ setup, manager, wasSetUp, xs, active }) {
   };
 }
 
-/** The setup's cards, provided for its card parts. */
+/** @typedef {ReturnType<typeof useAiSetupCards>} AiSetupCards */
+
+/**
+ * The setup's cards, provided for its card parts.
+ * @param {AiSetupCards} setupCards
+ * @returns {AiSetupCards}
+ */
 function provideAiSetupCards(setupCards) {
   provide(AI_SETUP_CARDS_KEY, setupCards);
   return setupCards;
 }
 
-/** The cards its setup provided. */
+/**
+ * The cards its setup provided.
+ * @returns {AiSetupCards}
+ */
 function injectAiSetupCards() {
   return inject(AI_SETUP_CARDS_KEY);
 }

@@ -8,8 +8,16 @@ import { useRoute } from "vue-router";
  * editor, provider picker or Add a connection. Inline, a route naming a
  * provider without a catalogue revision opens its card once connections are
  * read (the manager opens revision-bearing ones).
+ * @param {{
+ *   inline: import("vue").Ref<boolean>,
+ *   canConfigure: import("vue").Ref<boolean>,
+ *   manager: ReturnType<typeof import("../composables/useAiConnectionManager.js").useAiConnectionManager>,
+ *   setupCards: import("./useAiSetupCards.js").AiSetupCards,
+ *   openManage: (card: object) => void,
+ *   connect: (card: object, step: string) => void
+ * }} options
  */
-function useAiSetupProviderLinks({ inline, canConfigure, manager, cards, cardRows, openManage, connect }) {
+function useAiSetupProviderLinks({ inline, canConfigure, manager, setupCards: { cards, cardRows }, openManage, connect }) {
   const route = useRoute();
   let routedProviderId = "";
 
