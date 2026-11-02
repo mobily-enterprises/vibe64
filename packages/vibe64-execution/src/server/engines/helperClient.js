@@ -3,6 +3,8 @@ import {
 } from "./capture.js";
 import { vibe64Host } from "../hostProfile.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const EXEC_HELPER_PAYLOAD_SCHEMA = "vibe64.exec-helper.payload";
 const EXEC_HELPER_PAYLOAD_SCHEMA_VERSION = 1;
 
@@ -107,15 +109,27 @@ function helperOperationForRequest(request = {}) {
   return "vibe64-command";
 }
 
+/**
+ * Sends one payload to the host's execution helper through sudo.
+ * @param {object} payload
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the environment sudo itself starts with
+ * @param {string} [options.helperPath]
+ * @param {number} [options.maxBuffer]
+ * @param {string} [options.outputEncoding]
+ * @param {typeof runCaptureCommand} [options.runCapture]
+ * @param {AbortSignal | null} [options.signal]
+ * @param {number} [options.timeout]
+ */
 async function runHelperCommand(payload = {}, {
-  env = process.env,
+  env,
   helperPath = "",
   maxBuffer = undefined,
   outputEncoding = "utf8",
   runCapture = runCaptureCommand,
   signal = null,
   timeout = 15_000
-} = {}) {
+}) {
   const options = {
     env,
     input: `${JSON.stringify(payload)}\n`,

@@ -122,8 +122,9 @@ async function describeAndroidSdk({ androidHome } = {}) {
 
 /**
  * The first complete SDK: Vibe64's install in `directory`, then ANDROID_HOME / ANDROID_SDK_ROOT.
+ * @param {{ directory?: string | null, baseEnvironment: import("../stages.js").BaseEnvironment }} input
  */
-async function findAndroidSdk({ directory = null, baseEnvironment = process.env } = {}) {
+async function findAndroidSdk({ directory = null, baseEnvironment }) {
   const candidates = [
     directory,
     baseEnvironment.ANDROID_HOME,
@@ -140,16 +141,18 @@ async function findAndroidSdk({ directory = null, baseEnvironment = process.env 
 /**
  * Installs command-line tools and SDK_PACKAGES into `directory` after checking
  * the acceptance against the licence Google publishes right now.
+ * @param {object} input
+ * @param {import("../stages.js").BaseEnvironment} input.baseEnvironment PATH and locale for unpacking and sdkmanager
  */
 async function installAndroidSdk({
   directory,
   acceptance,
   javaHome,
   platform = `${process.platform}-${process.arch}`,
-  baseEnvironment = process.env,
+  baseEnvironment,
   repositoryUrl,
   signal
-} = {}, options = {}) {
+}, options = {}) {
   const { fetchImpl = fetch, runCommand = spawnCommand } = options;
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
     throw toolchainError("The Android SDK needs an absolute install folder.");

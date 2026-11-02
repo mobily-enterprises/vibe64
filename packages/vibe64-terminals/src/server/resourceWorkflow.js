@@ -181,7 +181,7 @@ async function startResourceWorkflow({
   label,
   env = process.env
 }) {
-  if (!vibe64ManagedExecutionProvider() && !vibe64ManagedExecutionRequired()) return { ok: true, workflow: null };
+  if (!vibe64ManagedExecutionProvider() && !vibe64ManagedExecutionRequired(env)) return { ok: true, workflow: null };
   const project = currentProjectRequestContext();
   if (!project?.slug || !session?.sessionId) throw new Error("Managed resource accounting requires the resolved project and session.");
   return startVibe64Workflow({
@@ -195,7 +195,7 @@ async function startResourceWorkflow({
     estimates,
     mode: configuration?.mode || "finite",
     ...await resourceWorkflowIdentity({ sourceRoot, operation, runtimes, steps, configuration, env })
-  });
+  }, env);
 }
 
 export { resourceWorkflowIdentity, startResourceWorkflow };

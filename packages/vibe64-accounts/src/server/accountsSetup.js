@@ -65,7 +65,7 @@ function setupAccounts({
   project,
   terminals
 }) {
-  warnMissingOperatorClis();
+  warnMissingOperatorClis(env);
   const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
   const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
   const projectContext = getStudioProjectContext();

@@ -38,8 +38,10 @@ function hostPlatform(platform = process.platform, arch = process.arch) {
 
 /**
  * `java -version` of one Java home: { ok, javaHome, version, major, message }.
+ * @param {{ javaHome?: string | null, baseEnvironment: import("../stages.js").BaseEnvironment }} input
+ * @param {{ runCommand?: typeof spawnCommand }} [commands]
  */
-async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
+async function describeJdk({ javaHome, baseEnvironment }, { runCommand = spawnCommand } = {}) {
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) return { ok: false, javaHome: null, message: "No Java home given." };
   const java = path.join(javaHome, "bin", "java");
   if (!await exists(java)) return { ok: false, javaHome, message: `${javaHome} has no bin/java.` };
@@ -63,7 +65,7 @@ async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { r
 /**
  * The Java home of `java` on PATH, read from the JVM itself.
  */
-async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
+async function javaHomeOnPath({ baseEnvironment }, { runCommand = spawnCommand } = {}) {
   const result = await runCommand({
     command: "java",
     args: ["-XshowSettings:properties", "-version"],
@@ -76,8 +78,11 @@ async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runComma
 
 /**
  * The first usable JDK: Vibe64's own install in `directory`, then JAVA_HOME, then PATH.
+ * @param {{ directory?: string | null, baseEnvironment: import("../stages.js").BaseEnvironment, platform?: string }} input
+ *   baseEnvironment supplies JAVA_HOME and the PATH `java` is looked up on
+ * @param {{ runCommand?: typeof spawnCommand }} [commands]
  */
-async function findJdk({ directory = null, baseEnvironment = process.env, platform = hostPlatform() } = {}, { runCommand } = {}) {
+async function findJdk({ directory = null, baseEnvironment, platform = hostPlatform() }, { runCommand } = {}) {
   const candidates = [];
   const pinned = PINNED_JDKS[platform];
   if (directory && pinned) candidates.push(path.join(directory, pinned.folder));
@@ -100,9 +105,11 @@ async function findJdk({ directory = null, baseEnvironment = process.env, platfo
 
 /**
  * Installs the pinned Temurin JDK into `directory` (idempotent) and returns it.
+ * @param {{ directory: string, platform?: string, baseEnvironment: import("../stages.js").BaseEnvironment, signal?: AbortSignal }} input
+ * @param {{ fetchImpl?: typeof fetch, runCommand?: typeof spawnCommand }} [commands]
  */
 async function installJdk(
-  { directory, platform = hostPlatform(), baseEnvironment = process.env, signal } = {},
+  { directory, platform = hostPlatform(), baseEnvironment, signal },
   { fetchImpl, runCommand } = {}
 ) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) throw toolchainError("The JDK needs an absolute install folder.");

@@ -55,8 +55,8 @@ test("an APK is built without credentials, signed with the sideload key, verifie
   timeout: 1_800_000
 }, async (t) => {
   const before = await leftovers();
-  const { javaHome } = await installJdk({ directory: TOOLCHAINS });
-  const sdk = await findAndroidSdk({ directory: process.env.VIBE64_TEST_ANDROID_HOME || path.join(TOOLCHAINS, "android-sdk") });
+  const { javaHome } = await installJdk({ baseEnvironment: process.env, directory: TOOLCHAINS });
+  const sdk = await findAndroidSdk({ baseEnvironment: process.env, directory: process.env.VIBE64_TEST_ANDROID_HOME || path.join(TOOLCHAINS, "android-sdk") });
   assert.ok(sdk.ok, `${sdk.message} Set VIBE64_TEST_ANDROID_HOME to an SDK installed after accepting its licence.`);
   const toolchains = { javaHome, androidHome: sdk.androidHome };
   const project = await canaryProject(t);
@@ -88,6 +88,7 @@ test("an APK is built without credentials, signed with the sideload key, verifie
   const store = await temporaryFolder(t, "vibe64-android-results-");
   const started = Date.now();
   const built = await buildPackage({
+    baseEnvironment: process.env,
     projectRoot: project.root,
     commit: project.commit,
     packaging,
@@ -109,6 +110,7 @@ test("an APK is built without credentials, signed with the sideload key, verifie
   const target = { id: "phone", destination: "android-sideload", package: "app", settings: { certificateSha256: key.certificateSha256 } };
   const credentialsFor = (name) => async (spec) => readFile(spec.id === "android-sideload-keystore" ? keys[name].keystore : keys[name].password);
   const published = await publishTarget({
+    baseEnvironment: process.env,
     destination: androidSideloadDestination,
     target,
     version: "1.4.2",
@@ -131,6 +133,7 @@ test("an APK is built without credentials, signed with the sideload key, verifie
   t.diagnostic(`signed APK ${published.proof.fileName}: ${published.proof.size} bytes, ${published.proof.sha256}`);
 
   const again = await publishTarget({
+    baseEnvironment: process.env,
     destination: androidSideloadDestination,
     target,
     version: "1.4.2",
@@ -143,6 +146,7 @@ test("an APK is built without credentials, signed with the sideload key, verifie
 
   await keyFor("other");
   await assert.rejects(publishTarget({
+    baseEnvironment: process.env,
     destination: androidSideloadDestination,
     target: { ...target, id: "phone-other-key" },
     version: "1.4.2",

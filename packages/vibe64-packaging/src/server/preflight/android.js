@@ -21,9 +21,12 @@ function major(version) {
  * facts.android: { packages: [{ id, targetSdk, icon: [problem], permissions:
  * [problem], plugins: [problem] }], toolchain: { java, androidSdk },
  * developerVerification: "registered" | null }. packageIds names the packages
- * this release builds; only its app packages are read.
+ * this release builds; only its app packages are read. baseEnvironment gives the
+ * Java check its PATH and locale.
+ * @param {object} input
+ * @param {import("../stages.js").BaseEnvironment} input.baseEnvironment
  */
-async function gatherAndroidFacts({ sourceRoot, packaging, packageIds, toolchains = {}, developerVerification = null }) {
+async function gatherAndroidFacts({ sourceRoot, packaging, packageIds, toolchains = {}, baseEnvironment, developerVerification = null }) {
   const apps = packaging.packages.filter((entry) => entry.packer === "capacitor" && packageIds.includes(entry.id));
   if (!apps.length) return null;
   const packages = [];
@@ -54,7 +57,7 @@ async function gatherAndroidFacts({ sourceRoot, packaging, packageIds, toolchain
       plugins
     });
   }
-  const java = await describeJdk({ javaHome: toolchains.javaHome });
+  const java = await describeJdk({ javaHome: toolchains.javaHome, baseEnvironment });
   const androidSdk = await describeAndroidSdk({ androidHome: toolchains.androidHome });
   return {
     packages,

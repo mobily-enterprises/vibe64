@@ -119,6 +119,8 @@ async function runLocalVibe64Command(request, options = {}) {
       input: request.input,
       operation: helperOperationForRequest(request)
     }), {
+      // sudo itself starts with the server's own environment; the command's is in the payload.
+      env: process.env,
       maxBuffer: request.maxBuffer,
       outputEncoding: request.outputEncoding,
       signal: request.signal,

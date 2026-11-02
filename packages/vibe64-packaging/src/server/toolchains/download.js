@@ -65,7 +65,11 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
   }
 }
 
-function toolchainEnvironment(baseEnvironment = process.env, extra = {}) {
+/**
+ * @param {import("../stages.js").BaseEnvironment} baseEnvironment
+ * @param {Record<string, string>} [extra]
+ */
+function toolchainEnvironment(baseEnvironment, extra = {}) {
   return { ...passthroughEnvironment(baseEnvironment), ...extra };
 }
 
@@ -130,9 +134,13 @@ async function extractZip(archiveFile, directory) {
 
 /**
  * Unpacks an archive into `<destination>` atomically; `inner` names the one top
- * folder of the archive whose contents become the destination.
+ * folder of the archive whose contents become the destination. A tar archive is
+ * unpacked by tar, with `baseEnvironment`'s PATH and locale.
+ * @param {string} archiveFile
+ * @param {string} destination
+ * @param {{ inner: string, kind: "zip" | "tar", baseEnvironment: import("../stages.js").BaseEnvironment, runCommand?: Function }} options
  */
-async function unpackInto(archiveFile, destination, options = {}) {
+async function unpackInto(archiveFile, destination, options) {
   const { inner, kind, baseEnvironment, runCommand } = options;
   if (await exists(destination)) return destination;
   const staging = `${destination}.staging-${randomUUID()}`;

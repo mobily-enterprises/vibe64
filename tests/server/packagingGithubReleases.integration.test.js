@@ -68,27 +68,27 @@ test("a canary is released to a throwaway private repository's GitHub Releases",
   const packaging = await inspectVibe64Packaging({ projectRoot: project.root });
   const { plan, planHash } = createPublishPlan({ savedCommit: project.commit, packaging, versions: { sdk: "0.1.0" }, targets: [target] });
   const releaseTarget = { ...target, tag: plan.packages[0].tag, notes: "- First canary." };
-  const built = await buildPackage({ projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
+  const built = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
 
   const verified = await credentialed((credentials) => githubReleasesDestination.verifyCredential({ target: releaseTarget, credentials }));
   assert.equal(verified.ok, true, verified.message);
-  const dry = await credentialed((credentials) => githubReleasesDestination.dryRun({ target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, credentials }));
+  const dry = await credentialed((credentials) => githubReleasesDestination.dryRun({ baseEnvironment: process.env, target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, credentials }));
   assert.deepEqual([dry.tag, dry.tagPushed, dry.releaseExists, dry.alreadyPublished], ["v0.1.0", true, false, false]);
 
-  const published = await publishTarget({ destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const published = await publishTarget({ baseEnvironment: process.env, destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(published.status, "proven");
   assert.equal(published.alreadyPublished, false);
   assert.equal(published.proof.channel, "latest");
   assert.deepEqual(published.proof.assets.map(({ name, sha256 }) => [name, sha256]), [["vibe64-canary-sdk-0.1.0.tgz", built.artifacts.manifest.files[0].sha256]]);
 
-  const rerun = await publishTarget({ destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const rerun = await publishTarget({ baseEnvironment: process.env, destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(rerun.alreadyPublished, true);
 
   // A different file under a published asset's name is refused, never replaced.
   const changed = await commitFiles(project.root, { "index.js": "export const answer = 43;\n" }, "Change without a version bump");
-  const mismatched = await buildPackage({ projectRoot: project.root, commit: changed.commit, packaging, packageId: "sdk", version: "0.1.0", resultStore: store });
+  const mismatched = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: changed.commit, packaging, packageId: "sdk", version: "0.1.0", resultStore: store });
   await assert.rejects(
-    publishTarget({ destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
+    publishTarget({ baseEnvironment: process.env, destination: githubReleasesDestination, target: releaseTarget, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
     { code: "VIBE64_PUBLISH_VERSION_CONFLICT" }
   );
 
@@ -96,8 +96,9 @@ test("a canary is released to a throwaway private repository's GitHub Releases",
   const next = await commitFiles(project.root, { "package.json": manifest("0.2.0") }, "Release 0.2.0");
   await run("git", ["-C", project.root, "tag", "v0.2.0", next.commit]);
   await push("main", "v0.2.0");
-  const nextBuilt = await buildPackage({ projectRoot: project.root, commit: next.commit, packaging, packageId: "sdk", version: "0.2.0", resultStore: store });
+  const nextBuilt = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: next.commit, packaging, packageId: "sdk", version: "0.2.0", resultStore: store });
   const nextPublished = await publishTarget({
+    baseEnvironment: process.env,
     destination: githubReleasesDestination,
     target: { ...target, tag: "v0.2.0" },
     version: "0.2.0",

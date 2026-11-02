@@ -18,6 +18,12 @@ import { pathWithin } from "./paths.js";
 import { runStageCommand } from "./projectCommands.js";
 import { tail } from "./tail.js";
 
+/**
+ * The environment the process started with. Only BUILD_ENVIRONMENT_PASSTHROUGH
+ * names (PATH and locale) reach the tools Vibe64 runs.
+ * @typedef {Readonly<Record<string, string | undefined>>} BaseEnvironment
+ */
+
 const VIBE64_PUBLISH_ARTIFACTS_CONTRACT = "vibe64.publish-artifacts.v1";
 const BUILD_ENVIRONMENT_PASSTHROUGH = Object.freeze(["PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM"]);
 const CREDENTIAL_NAME = /(?:TOKEN|SECRET|PASSWORD|PASSPHRASE|PRIVATE_KEY|API_KEY|CREDENTIAL|_AUTH)/iu;
@@ -33,8 +39,9 @@ function absolute(value, label) {
 
 /**
  * The fixed variables every Vibe64-run tool inherits from its base environment.
+ * @param {BaseEnvironment} baseEnvironment
  */
-function passthroughEnvironment(baseEnvironment = process.env) {
+function passthroughEnvironment(baseEnvironment) {
   const environment = {};
   for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
     if (typeof baseEnvironment[name] === "string") environment[name] = baseEnvironment[name];
@@ -45,8 +52,9 @@ function passthroughEnvironment(baseEnvironment = process.env) {
 /**
  * Stage 1 environment: a fixed passthrough (PATH and locale), a fresh credential-free
  * HOME, and the package's declared non-secret build Environment. Nothing else.
+ * @param {{ baseEnvironment: BaseEnvironment, declared?: { name: string, value: string }[], home: string, cacheDirectory?: string }} input
  */
-function buildStageEnvironment({ baseEnvironment = process.env, declared = [], home, cacheDirectory = "" } = {}) {
+function buildStageEnvironment({ baseEnvironment, declared = [], home, cacheDirectory = "" }) {
   const environment = passthroughEnvironment(baseEnvironment);
   Object.assign(environment, {
     HOME: home,
@@ -168,6 +176,12 @@ async function storedArtifacts({ resultStore, planHash, packageId }) {
   return { ...await verifyArtifacts(await readArtifacts(directory)), reused: true };
 }
 
+/**
+ * Stage 1: the build steps in a credential-free environment, then the declared
+ * outputs snapshotted with checksums into the result store.
+ * @param {object} input
+ * @param {BaseEnvironment} input.baseEnvironment PATH and locale for the build steps
+ */
 async function runBuildStage({
   planHash,
   packageId,
@@ -176,11 +190,11 @@ async function runBuildStage({
   environment = [],
   resultStore,
   allowedRoots = [],
-  baseEnvironment = process.env,
+  baseEnvironment,
   cacheDirectory = "",
   projectSlug = "",
   signal
-} = {}, {
+}, {
   runCommand = runStageCommand
 } = {}) {
   // Resumable: a completed build for this plan and package is reused after verification.
@@ -326,6 +340,9 @@ async function readBackTarget({ destination, target, version, artifacts, obtainC
 /**
  * Stage 2 + 3 for one target, resumable and idempotent: the same version and
  * checksum already published is success; a different checksum is an error.
+ * `baseEnvironment` gives the destination's upload tools their PATH and locale.
+ * @param {object} input
+ * @param {BaseEnvironment} input.baseEnvironment
  */
 async function publishTarget({
   destination,
@@ -335,9 +352,10 @@ async function publishTarget({
   previous = null,
   obtainCredential,
   tempRoot,
+  baseEnvironment,
   toolchains = {},
   now = () => new Date().toISOString()
-} = {}) {
+}) {
   const startedAt = now();
   await verifyArtifacts(artifacts);
   const checksum = expectedChecksum(destination, artifacts);
@@ -359,7 +377,7 @@ async function publishTarget({
     credentials: destination.credentials,
     obtainCredential,
     tempRoot
-  }, (credentials) => destination.upload({ target, version, artifacts, credentials, toolchains }));
+  }, (credentials) => destination.upload({ target, version, artifacts, credentials, baseEnvironment, toolchains }));
   const after = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains });
   if (!after.published) {
     throw publishError("VIBE64_PUBLISH_NOT_PROVEN", `${destination.label} accepted the upload but does not show ${version} yet.`, {

@@ -12,6 +12,8 @@ import {
 } from "./localTools.js";
 import { RUNTIME_PACKS, runtimePackRoot } from "./runtimePacks.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const CHECK_TIMEOUT_MS = 5_000;
 
 // Finds the first listed command on the tool PATH and runs it with its version
@@ -61,13 +63,19 @@ async function probe(commands, { cwd, runCommand, runtimes, skipStubs, version =
  * seconds, never because a file exists. Checks run only for the ids asked
  * for, every time they are asked (so "Check again" sees a fresh install).
  * A host with runtime packs supplies its own tools, so nothing is checked.
+ * @param {string[]} ids
+ * @param {object} options
+ * @param {RuntimeEnv} options.env the running server's environment, whose PATH finds apt-get
+ * @param {string} [options.cwd]
+ * @param {string} [options.platform]
+ * @param {typeof runVibe64Command} [options.runCommand]
  */
-async function checkLocalTools(ids = [], {
+async function checkLocalTools(ids, {
   cwd = os.homedir(),
-  env = process.env,
+  env,
   platform = process.platform,
   runCommand = runVibe64Command
-} = {}) {
+}) {
   const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(localToolId))]
     .filter((id) => LOCAL_TOOLS[id]?.run);
   if (runtimePackRoot()) return { ok: true, managed: true, tools: [] };

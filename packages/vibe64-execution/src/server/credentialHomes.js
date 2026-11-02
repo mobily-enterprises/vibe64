@@ -7,6 +7,7 @@ import {
 } from "./osUserIdentity.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const APP_CREDENTIAL_SCOPE = "app";
@@ -181,13 +182,19 @@ function githubCredentialContext(input, options = {}) {
   };
 }
 
+/**
+ * @param {object} input
+ * @param {string} [input.accountMode]
+ * @param {RuntimeEnv} input.env names the account mode when the caller does not
+ * @param {object | null} [input.vibe64User]
+ */
 function resolveGithubHomeForActor({
   accountMode = "",
-  env = process.env,
+  env,
   vibe64User = null
-} = {}) {
+}) {
   const resolvedAccountMode = normalizeGithubAccountMode(
-    accountMode || env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    accountMode || env[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
     GITHUB_ACCOUNT_MODE_LOCAL
   );
   const context = githubCredentialContext({
@@ -215,14 +222,21 @@ function resolveGithubHomeForActor({
   };
 }
 
+/**
+ * @param {object} input
+ * @param {string} [input.accountMode]
+ * @param {RuntimeEnv} input.env names the account mode when the caller does not
+ * @param {string} [input.ownerUserKey]
+ * @param {typeof resolveOsUser} [input.osUserResolver]
+ */
 async function resolveGithubHomeForStoredActor({
   accountMode = "",
-  env = process.env,
+  env,
   ownerUserKey = "",
   osUserResolver = resolveOsUser
-} = {}) {
+}) {
   const resolvedAccountMode = normalizeGithubAccountMode(
-    accountMode || env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    accountMode || env[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
     GITHUB_ACCOUNT_MODE_LOCAL
   );
   if (resolvedAccountMode === GITHUB_ACCOUNT_MODE_LOCAL) {

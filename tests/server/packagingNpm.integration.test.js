@@ -74,12 +74,12 @@ test("an npm library is built once, dry-run, published, read back and re-release
   assert.deepEqual(plan.targets[0].settings, { registry: registry.url });
   assert.deepEqual(plan.tags, ["v0.1.0"]);
 
-  const built = await buildPackage({ projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
+  const built = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
   assert.equal(built.check.packageName, "vibe64-canary-sdk");
   assert.deepEqual(built.artifacts.manifest.files.map(({ path: file }) => file), ["vibe64-canary-sdk-0.1.0.tgz"]);
   const tarballChecksum = built.artifacts.manifest.files[0].sha256;
   // The Prepare step ran in the exported commit, so its output is in the tarball.
-  const again = await buildPackage({ projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
+  const again = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: project.commit, packaging, packageId: "sdk", version: "0.1.0", planHash, resultStore: store });
   assert.equal(again.artifacts.reused, true);
 
   // A working sign-in is proven read-only before anything is published.
@@ -92,11 +92,13 @@ test("an npm library is built once, dry-run, published, read back and re-release
   const npmCli = path.join(path.dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js");
   const dryTarget = { ...target, settings: { ...target.settings, npm: [process.execPath, npmCli] } };
   const dry = await withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
+    baseEnvironment: process.env,
     target: dryTarget, version: "0.1.0", artifacts: built.artifacts, credentials
   }));
   assert.equal(dry.alreadyPublished, false);
   assert.equal(dry.previousVersion, null);
   await assert.rejects(withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
+    baseEnvironment: process.env,
     target: { ...target, settings: { ...target.settings, npm: [process.execPath, "-e", "process.exit(3)"] } }, version: "0.1.0", artifacts: built.artifacts, credentials
   })), /dry run refused/u, "the host's npm command is the one that runs");
   assert.deepEqual(dry.files.map(({ path: file }) => file), ["index.js", "package.json", "README.md", "stamp.txt"]);
@@ -105,24 +107,24 @@ test("an npm library is built once, dry-run, published, read back and re-release
   assert.equal(before.published, false);
 
   // Publish, proven by the registry's own integrity value.
-  const published = await publishTarget({ destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const published = await publishTarget({ baseEnvironment: process.env, destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(published.status, "proven");
   assert.equal(published.alreadyPublished, false);
   assert.equal(published.proof.integrity, dry.integrity);
   assert.equal(published.proof.channelVersion, "0.1.0");
 
   // Idempotent: re-running finds the same bytes already published.
-  const rerun = await publishTarget({ destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
+  const rerun = await publishTarget({ baseEnvironment: process.env, destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, obtainCredential });
   assert.equal(rerun.alreadyPublished, true);
   assert.equal(rerun.checksum, published.checksum);
-  assert.equal(await publishTarget({ destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, previous: published, obtainCredential }), published);
+  assert.equal(await publishTarget({ baseEnvironment: process.env, destination: npmDestination, target, version: "0.1.0", artifacts: built.artifacts, previous: published, obtainCredential }), published);
 
   // Different contents under the same version are refused, never overwritten.
   const changed = await commitFiles(project.root, { "index.js": "export const answer = 43;\n" }, "Change without a version bump");
   const changedPackaging = await inspectVibe64Packaging({ projectRoot: project.root });
-  const mismatched = await buildPackage({ projectRoot: project.root, commit: changed.commit, packaging: changedPackaging, packageId: "sdk", version: "0.1.0", resultStore: store });
+  const mismatched = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: changed.commit, packaging: changedPackaging, packageId: "sdk", version: "0.1.0", resultStore: store });
   await assert.rejects(
-    publishTarget({ destination: npmDestination, target, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
+    publishTarget({ baseEnvironment: process.env, destination: npmDestination, target, version: "0.1.0", artifacts: mismatched.artifacts, obtainCredential }),
     (error) => error.code === "VIBE64_PUBLISH_VERSION_CONFLICT" && /different contents/u.test(error.message)
   );
 
@@ -131,13 +133,14 @@ test("an npm library is built once, dry-run, published, read back and re-release
   const change = await prepareReleaseChange({ projectRoot: project.root, entry, version: "0.2.0", notes: "- The answer changed.", date: "2026-10-23" });
   assert.deepEqual(change.files.map(({ path: file }) => file), ["package.json", "CHANGELOG.md"]);
   const next = await commitFiles(project.root, Object.fromEntries(change.files.map((file) => [file.path, file.after])), "Release 0.2.0");
-  const nextBuilt = await buildPackage({ projectRoot: project.root, commit: next.commit, packaging: changedPackaging, packageId: "sdk", version: "0.2.0", resultStore: store });
+  const nextBuilt = await buildPackage({ baseEnvironment: process.env, projectRoot: project.root, commit: next.commit, packaging: changedPackaging, packageId: "sdk", version: "0.2.0", resultStore: store });
   const nextDry = await withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
+    baseEnvironment: process.env,
     target, version: "0.2.0", artifacts: nextBuilt.artifacts, credentials
   }));
   assert.equal(nextDry.previousVersion, "0.1.0");
   assert.deepEqual(nextDry.diff, { added: [], removed: [], changed: ["index.js", "package.json"] });
-  const nextPublished = await publishTarget({ destination: npmDestination, target, version: "0.2.0", artifacts: nextBuilt.artifacts, obtainCredential });
+  const nextPublished = await publishTarget({ baseEnvironment: process.env, destination: npmDestination, target, version: "0.2.0", artifacts: nextBuilt.artifacts, obtainCredential });
   assert.equal(nextPublished.proof.channelVersion, "0.2.0");
 
   // The CLI, outside the editor, builds the same tarball bytes from the same commit.

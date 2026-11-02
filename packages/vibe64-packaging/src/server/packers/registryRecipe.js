@@ -1,11 +1,5 @@
 // Recipe pieces shared by the registry packers (npm, python-dist).
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { publishError } from "../errors.js";
-import { passthroughEnvironment } from "../stages.js";
-
-const run = promisify(execFile);
 
 /**
  * The package's declared Prepare then Build argv, run in its Workdir.
@@ -29,17 +23,4 @@ function sourceDateEnvironment(entry, commitTime) {
   return environment;
 }
 
-/**
- * A tool's version for the plan's toolchain record, or "missing".
- */
-async function toolVersion(argv, baseEnvironment = process.env) {
-  try {
-    const { stdout, stderr } = await run(argv[0], argv.slice(1), { env: passthroughEnvironment(baseEnvironment), timeout: 30_000 });
-    const match = /(\d+\.\d+(?:\.\d+)?(?:[0-9A-Za-z.+_-]*)?)/u.exec(`${stdout} ${stderr}`);
-    return match ? match[1] : "unknown";
-  } catch {
-    return "missing";
-  }
-}
-
-export { recipeSteps, sourceDateEnvironment, toolVersion };
+export { recipeSteps, sourceDateEnvironment };

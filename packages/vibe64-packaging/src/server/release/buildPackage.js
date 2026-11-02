@@ -41,7 +41,7 @@ function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode =
  * @param {string | null} [request.planHash]
  * @param {string} request.resultStore
  * @param {string} [request.workRoot]
- * @param {Record<string, string | undefined>} [request.baseEnvironment]
+ * @param {import("../stages.js").BaseEnvironment} request.baseEnvironment the environment the process started with; its PATH and locale reach the build
  * @param {string} [request.cacheDirectory]
  * @param {number | null} [request.versionCode]
  * @param {object} [request.toolchains] the local toolchains the packer's recipe uses
@@ -62,7 +62,7 @@ async function buildPackage({
   planHash = null,
   resultStore,
   workRoot = os.tmpdir(),
-  baseEnvironment = process.env,
+  baseEnvironment,
   cacheDirectory = "",
   // readable-check: allow dependency-default - data: an Android version code, none for other packers
   versionCode = null,
@@ -129,6 +129,7 @@ async function buildPackage({
       contentArtifacts: builtContent,
       versionCode,
       toolchains,
+      baseEnvironment,
       cacheDirectory
     });
     const artifacts = await runBuildStage({

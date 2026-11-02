@@ -14,6 +14,8 @@ import {
   runtimePackRoot
 } from "./runtimePacks.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 const DEFAULT_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 function pathParts(value = "") {
@@ -48,7 +50,7 @@ function versionedEntries(directory = "", pattern = /^$/u) {
  * use, so `mise use -g python@3.13` beats the system's /usr/bin/python3 and a
  * fresh install is found even when no shell profile activated it yet.
  */
-function installedToolFront(env = process.env) {
+function installedToolFront(env) {
   if (runtimePackRoot()) return [];
   const home = String(env.HOME || os.homedir() || "");
   if (!path.isAbsolute(home)) return [];
@@ -83,14 +85,20 @@ function installedToolPath() {
 /**
  * Order: session shims, packs, the caller's own PATH entries, the person's
  * own installs (no packs), then the inherited PATH and the system folders.
+ * @param {object} input
+ * @param {RuntimeEnv} input.env the command's env, whose PATH is used when no other is given
+ * @param {string} [input.existingPath]
+ * @param {string} [input.inheritedPath]
+ * @param {string[]} [input.runtimes]
+ * @param {string[]} [input.shimDirs]
  */
 function resolveRuntimePath({
-  env = process.env,
+  env,
   existingPath = "",
   inheritedPath = "",
   runtimes = [],
   shimDirs = []
-} = {}) {
+}) {
   return uniqueStrings([
     ...pathParts(shimDirs.join(":")),
     ...runtimePackPolicyBinPaths(),

@@ -5,8 +5,9 @@ import { localToolInstall, thisComputerToolFamily } from "./runtime/localTools.j
 
 /**
  * The install line is the same one Health shows for Git.
+ * @param {Parameters<typeof thisComputerToolFamily>[0]} machine
  */
-function gitInstallCommand({ env, platform, systemPath } = {}) {
+function gitInstallCommand({ env, platform, systemPath }) {
   return localToolInstall("git", { family: thisComputerToolFamily({ env, platform, systemPath }) })?.command || "";
 }
 
@@ -14,10 +15,14 @@ function failureText(result = {}) {
   return [result.error, result.stderr, result.output].filter(Boolean).join("\n");
 }
 
-function describeGitFailure(result = {}, options = {}) {
+/**
+ * @param {object} result a git command's result
+ * @param {Parameters<typeof thisComputerToolFamily>[0]} machine the computer git ran on
+ */
+function describeGitFailure(result, machine) {
   const text = failureText(result);
   if (/spawn(?:Sync)? git ENOENT|(?:^|\s)git: (?:command )?not found/mu.test(text)) {
-    const installCommand = gitInstallCommand(options);
+    const installCommand = gitInstallCommand(machine);
     return {
       code: "vibe64_git_missing",
       installCommand,
@@ -29,7 +34,7 @@ function describeGitFailure(result = {}, options = {}) {
   if (/unknown option [`']initial-branch/u.test(text)) {
     return {
       code: "vibe64_git_too_old",
-      installCommand: gitInstallCommand(options),
+      installCommand: gitInstallCommand(machine),
       message: "This Git is too old for Vibe64. Update Git to version 2.28 or newer, then try again."
     };
   }
@@ -48,10 +53,12 @@ function describeGitFailure(result = {}, options = {}) {
 
 /**
  * The same failure as an error a route can return; the install command travels
- * in details so a screen can offer it with a copy button.
+ * in details so a screen can offer it with a copy button. Git ran on this
+ * computer with the server's own environment, so its install line reads the same.
+ * @param {object} result a git command's result
  */
-function gitFailureError(result = {}, options = {}) {
-  const failure = describeGitFailure(result, options);
+function gitFailureError(result) {
+  const failure = describeGitFailure(result, { env: process.env });
   if (!failure) return null;
   return Object.assign(new Error(failure.message), {
     code: failure.code,

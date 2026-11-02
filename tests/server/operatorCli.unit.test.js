@@ -122,5 +122,5 @@ test("a missing or failing CLI is described plainly, with its official installer
   assert.equal(failed.status, "unavailable");
   assert.equal(failed.title, "Codex didn't start");
   assert.equal(failed.message, "Codex is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.");
-  assert.throws(() => resolveOperatorCli("gemini"), TypeError);
+  assert.throws(() => resolveOperatorCli("gemini", { env: {} }), TypeError);
 });

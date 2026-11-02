@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { listNpmTarball, npmTarballManifest } from "../../destinations/npm/tarball.js";
 import { publishError } from "../../errors.js";
-import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
+import { recipeSteps, sourceDateEnvironment } from "../registryRecipe.js";
 
 /**
  * npm's own tarball name: `@scope/name` 1.2.0 -> scope-name-1.2.0.tgz.
@@ -86,11 +86,7 @@ const npmPacker = Object.freeze({
       throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The tarball is version ${manifest.version}, not ${version}.`);
     }
     return { packageName: manifest.name, version: manifest.version, files: [files[0].path] };
-  },
-  toolVersions: async ({ baseEnvironment = process.env } = {}) => ({
-    node: process.versions.node,
-    npm: await toolVersion(["npm", "--version"], baseEnvironment)
-  })
+  }
 });
 
 export { npmPacker };

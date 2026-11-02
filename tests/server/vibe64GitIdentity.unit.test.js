@@ -363,8 +363,8 @@ test("Git failures a person can fix read as one plain sentence", async (t) => {
   assert.equal(old.code, "vibe64_git_too_old");
   assert.doesNotMatch(old.message, /usage|unknown option/u);
 
-  const signing = describeGitFailure({ stderr: "error: gpg failed to sign the data\nfatal: failed to write commit object" });
+  const signing = describeGitFailure({ stderr: "error: gpg failed to sign the data\nfatal: failed to write commit object" }, apt);
   assert.equal(signing.code, "vibe64_git_signing_failed");
 
-  assert.equal(describeGitFailure({ stderr: "fatal: refusing to merge unrelated histories" }), null);
+  assert.equal(describeGitFailure({ stderr: "fatal: refusing to merge unrelated histories" }, apt), null);
 });

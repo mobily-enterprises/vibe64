@@ -72,8 +72,9 @@ function commandPrefix(value, fallback, label) {
 /**
  * Publishing tools see PATH and locale, a private HOME, and nothing they could
  * mistake for an ambient login.
+ * @param {{ home: string, baseEnvironment: import("../stages.js").BaseEnvironment, extra?: Record<string, string> }} input
  */
-function toolEnvironment({ home, baseEnvironment = process.env, extra = {} }) {
+function toolEnvironment({ home, baseEnvironment, extra = {} }) {
   return {
     ...passthroughEnvironment(baseEnvironment),
     HOME: home,

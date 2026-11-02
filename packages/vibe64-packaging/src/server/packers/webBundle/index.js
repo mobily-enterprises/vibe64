@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { publishError } from "../../errors.js";
 import { pathWithin } from "../../paths.js";
-import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
+import { recipeSteps, sourceDateEnvironment } from "../registryRecipe.js";
 
 /**
  * context: { sourceRoot: the exported saved commit, entry, commitTime }.
@@ -43,11 +43,7 @@ const webBundlePacker = Object.freeze({
   label: "Static web bundle",
   produces: Object.freeze(["static client build"]),
   buildRecipe,
-  checkArtifacts: async ({ artifacts }) => ({ root: webRoot(artifacts).name, files: artifacts.manifest.files.map((file) => file.path) }),
-  toolVersions: async ({ baseEnvironment = process.env } = {}) => ({
-    node: process.versions.node,
-    npm: await toolVersion(["npm", "--version"], baseEnvironment)
-  })
+  checkArtifacts: async ({ artifacts }) => ({ root: webRoot(artifacts).name, files: artifacts.manifest.files.map((file) => file.path) })
 });
 
 export { webBundlePacker, webRoot };

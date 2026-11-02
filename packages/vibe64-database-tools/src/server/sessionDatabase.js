@@ -180,7 +180,7 @@ function createSessionDatabase({
     const session = await store.readSession(sessionId);
     const servers = await project.localDatabaseServers({ session, sessionId });
     if (servers.managed) return { ok: true, managed: true, databases: [] };
-    const family = thisComputerToolFamily();
+    const family = thisComputerToolFamily({ env: process.env });
     const databases = await Promise.all(servers.databases.map(async ({ endpoint, ...database }) => ({
       ...database,
       check: await checkDatabaseServer({ endpoint, kind: database.kind })

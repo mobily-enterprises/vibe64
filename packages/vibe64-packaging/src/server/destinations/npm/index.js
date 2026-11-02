@@ -126,12 +126,13 @@ async function credentialToken(credentials, registry) {
  * Runs the npm CLI with only the given user config, a private cache and no
  */
 // global or project config, from an empty folder.
-async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], failureMessage }) {
+async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], baseEnvironment, failureMessage }) {
   return withToolHome(async (home) => {
     const empty = path.join(home, "empty.npmrc");
     await writeFile(empty, "", { mode: 0o600 });
     const env = toolEnvironment({
       home,
+      baseEnvironment,
       extra: {
         npm_config_userconfig: userconfig || empty,
         npm_config_globalconfig: empty,
@@ -170,7 +171,7 @@ async function readBack({ target, version, artifacts, credentials }) {
   };
 }
 
-async function upload({ target, version, artifacts, credentials }) {
+async function upload({ target, version, artifacts, credentials, baseEnvironment }) {
   const { registry, access, channel, npm } = npmSettings(target);
   const { file, manifest } = await tarballDetails(artifacts);
   assertVersion(manifest, version);
@@ -182,6 +183,7 @@ async function upload({ target, version, artifacts, credentials }) {
     npm,
     userconfig,
     secrets: [token],
+    baseEnvironment,
     failureMessage: `npm did not publish ${manifest.name}@${manifest.version}.`
   });
   return { output: result.output.slice(-2000) };
@@ -191,7 +193,7 @@ async function upload({ target, version, artifacts, credentials }) {
  * `npm publish --dry-run` on the exact tarball, plus what changes compared with
  * the version the channel serves today.
  */
-async function dryRun({ target, version, artifacts, credentials }) {
+async function dryRun({ target, version, artifacts, credentials, baseEnvironment }) {
   const { registry, access, channel, npm } = npmSettings(target);
   const { file, bytes, entries, manifest } = await tarballDetails(artifacts);
   assertVersion(manifest, version);
@@ -207,6 +209,7 @@ async function dryRun({ target, version, artifacts, credentials }) {
       npm,
       userconfig,
       secrets: [token],
+      baseEnvironment,
       failureMessage: `npm's dry run refused ${manifest.name}@${manifest.version}.`
     })).output.slice(-4000);
   }

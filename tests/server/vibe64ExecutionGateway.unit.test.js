@@ -2052,6 +2052,7 @@ test("execution helper client preserves captured stdout and stderr", async () =>
     operation: "github-workflow-command"
   });
   const result = await runHelperCommand(payload, {
+    env: {},
     helperPath: "/tmp/vibe64-exec-helper",
     runCapture() {
       return {

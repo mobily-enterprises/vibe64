@@ -187,6 +187,7 @@ test("an app build runs Stage 1 once per package, in throwaway folders, without 
     return { ok: true, exitCode: 0, stdout: "", stderr: "" };
   };
   const build = async (store) => buildPackage({
+    baseEnvironment: process.env,
     projectRoot: project.root,
     commit: project.commit,
     packaging,

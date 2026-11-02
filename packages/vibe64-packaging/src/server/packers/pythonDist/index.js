@@ -7,7 +7,7 @@ import path from "node:path";
 import { publishError } from "../../errors.js";
 import { readSourceVersion } from "../../release/prepareChange.js";
 import { pep440FromSemver } from "../../release/version.js";
-import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
+import { recipeSteps, sourceDateEnvironment } from "../registryRecipe.js";
 
 /**
  * PEP 503 normalized project name, and the file-name form of it (PEP 625/427).
@@ -98,10 +98,7 @@ const pythonDistPacker = Object.freeze({
   checkArtifacts: async ({ artifacts, version = null }) => checkPythonDistributions(
     artifacts.manifest.files.map((file) => path.posix.basename(file.path)),
     { version }
-  ),
-  toolVersions: async ({ baseEnvironment = process.env } = {}) => ({
-    python: await toolVersion(["python3", "--version"], baseEnvironment)
-  })
+  )
 });
 
 export { distributionFileVersion, normalizeProjectName, pythonDistPacker };

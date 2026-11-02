@@ -114,7 +114,7 @@ test("workflow lifecycle delegates to the same installed execution owner", async
   });
   t.after(release);
   const input = { projectSlug: "example", sessionId: "session", operation: { kind: "output", targetId: "app" } };
-  assert.equal((await startVibe64Workflow(input)).workflow.id, id);
+  assert.equal((await startVibe64Workflow(input, {})).workflow.id, id);
   await setVibe64WorkflowPhase(id, "running");
   await finishVibe64Workflow(id, { outcome: "stopped" });
   assert.deepEqual(calls, [["start", input], ["phase", id, "running"], ["finish", id, { outcome: "stopped" }]]);
@@ -123,23 +123,16 @@ test("workflow lifecycle delegates to the same installed execution owner", async
 test("an installed provider without workflow support cannot silently bypass accounting", async (t) => {
   const release = installVibe64ManagedExecutionProvider({ runCommand() {}, stopExecution() {} });
   t.after(release);
-  await assert.rejects(startVibe64Workflow({}), /does not support workflows/u);
+  await assert.rejects(startVibe64Workflow({}, {}), /does not support workflows/u);
   await assert.rejects(setVibe64WorkflowPhase(randomUUID(), "running"), /unavailable/u);
   await assert.rejects(finishVibe64Workflow(randomUUID()), /unavailable/u);
 });
 
-test("standalone execution remains usable but required managed accounting fails closed", async (t) => {
-  const previous = process.env.VIBE64_MANAGED_EXECUTION_REQUIRED;
-  t.after(() => {
-    if (previous === undefined) delete process.env.VIBE64_MANAGED_EXECUTION_REQUIRED;
-    else process.env.VIBE64_MANAGED_EXECUTION_REQUIRED = previous;
-  });
-  delete process.env.VIBE64_MANAGED_EXECUTION_REQUIRED;
-  assert.deepEqual(await startVibe64Workflow({}), { ok: true, workflow: null });
+test("standalone execution remains usable but required managed accounting fails closed", async () => {
+  assert.deepEqual(await startVibe64Workflow({}, {}), { ok: true, workflow: null });
   await setVibe64WorkflowPhase(null, "running");
   await finishVibe64Workflow(null);
-  process.env.VIBE64_MANAGED_EXECUTION_REQUIRED = "1";
-  await assert.rejects(startVibe64Workflow({}), /unavailable/u);
+  await assert.rejects(startVibe64Workflow({}, { VIBE64_MANAGED_EXECUTION_REQUIRED: "1" }), /unavailable/u);
 });
 
 const hostOwner = process.env.VIBE64_WORKFLOW_TEST_OWNER;

@@ -55,7 +55,7 @@ function fail(message, code = 2) {
   process.exitCode = code;
 }
 
-function parseArguments(argv) {
+function parseArguments(argv, env) {
   const options = {
     project: process.cwd(),
     commit: "HEAD",
@@ -64,10 +64,12 @@ function parseArguments(argv) {
     buildNumbers: {},
     settings: {},
     credentials: {},
-    resultStore: path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-results"),
-    cache: path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-cache"),
-    javaHome: process.env.JAVA_HOME ? path.resolve(process.env.JAVA_HOME) : null,
-    androidHome: process.env.ANDROID_HOME ? path.resolve(process.env.ANDROID_HOME) : null,
+    resultStore: path.join(env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-results"),
+    cache: path.join(env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-cache"),
+    javaHome: env.JAVA_HOME ? path.resolve(env.JAVA_HOME) : null,
+    androidHome: env.ANDROID_HOME ? path.resolve(env.ANDROID_HOME) : null,
+    // The tools this command runs get this terminal's PATH and locale.
+    baseEnvironment: env,
     out: null,
     positional: []
   };
@@ -172,6 +174,7 @@ async function build(options, packageId) {
     versionCode: options.buildNumbers[packageId] ?? null,
     resultStore: options.resultStore,
     cacheDirectory: options.cache,
+    baseEnvironment: options.baseEnvironment,
     toolchains: toolchains(options)
   });
   print(options, {
@@ -260,6 +263,7 @@ async function publish(options) {
       planHash,
       resultStore: options.resultStore,
       cacheDirectory: options.cache,
+      baseEnvironment: options.baseEnvironment,
       toolchains: toolchains(options)
     }));
   }
@@ -278,6 +282,7 @@ async function publish(options) {
           version: entry.version,
           artifacts: built.get(entry.id).artifacts,
           credentials,
+          baseEnvironment: options.baseEnvironment,
           toolchains: toolchains(options)
         }))
       });
@@ -299,6 +304,7 @@ async function publish(options) {
       version: entry.version,
       artifacts: built.get(entry.id).artifacts,
       obtainCredential,
+      baseEnvironment: options.baseEnvironment,
       toolchains: toolchains(options)
     }));
   }
@@ -308,7 +314,7 @@ async function publish(options) {
 async function main(argv) {
   let options;
   try {
-    options = parseArguments(argv);
+    options = parseArguments(argv, process.env);
   } catch (error) {
     fail(`${error.message}\n\n${USAGE}`);
     return;

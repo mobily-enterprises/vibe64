@@ -146,12 +146,13 @@ async function readBack({ target, version, artifacts, credentials }) {
   };
 }
 
-async function runGh(settings, args, { token, home, failureMessage }) {
+async function runGh(settings, args, { token, home, baseEnvironment, failureMessage }) {
   return runTool({
     argv: [...settings.gh, ...args],
     cwd: home,
     env: toolEnvironment({
       home,
+      baseEnvironment,
       extra: {
         GH_TOKEN: token,
         GH_CONFIG_DIR: path.join(home, "gh"),
@@ -176,7 +177,7 @@ function channelFlags(channel) {
  * Creates the release on the existing tag with every file, or, resuming, attaches
  * only the files it still lacks (never `--clobber`).
  */
-async function upload({ target, version, artifacts, credentials }) {
+async function upload({ target, version, artifacts, credentials, baseEnvironment }) {
   const settings = releaseSettings(target, version);
   const token = await credentialToken(credentials);
   const files = artifactFiles(artifacts);
@@ -189,6 +190,7 @@ async function upload({ target, version, artifacts, credentials }) {
         await runGh(settings, ["release", "upload", settings.tag, ...pending.map((file) => file.path), "--repo", settings.repository], {
           token,
           home,
+          baseEnvironment,
           failureMessage: `gh did not attach the files to ${settings.tag}.`
         });
       }
@@ -199,7 +201,7 @@ async function upload({ target, version, artifacts, credentials }) {
     await runGh(settings, [
       "release", "create", settings.tag, ...files.map((file) => file.path),
       "--repo", settings.repository, "--verify-tag", "--title", settings.tag, "--notes-file", notes, ...channelFlags(settings.channel)
-    ], { token, home, failureMessage: `gh did not create the ${settings.tag} release.` });
+    ], { token, home, baseEnvironment, failureMessage: `gh did not create the ${settings.tag} release.` });
     return { files: files.map((file) => file.name) };
   });
 }

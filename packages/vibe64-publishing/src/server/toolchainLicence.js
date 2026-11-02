@@ -25,6 +25,7 @@ function licenceError(message, code = "vibe64_publishing_licence_invalid") {
  * @param {object} dependencies
  * @param {string} dependencies.personalRoot
  * @param {string} dependencies.toolchainsRoot
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment JAVA_HOME, ANDROID_HOME and the PATH the tools are found on
  * @param {() => string} [dependencies.now]
  * @param {typeof androidSdkLicence} [dependencies.fetchLicence]
  * @param {{ installJdk: typeof installJdk, installAndroidSdk: typeof installAndroidSdk }} [dependencies.installers]
@@ -33,6 +34,7 @@ function licenceError(message, code = "vibe64_publishing_licence_invalid") {
 function createToolchainManager({
   personalRoot,
   toolchainsRoot,
+  baseEnvironment,
   now = () => new Date().toISOString(),
   fetchLicence = androidSdkLicence,
   installers = { installJdk, installAndroidSdk },
@@ -58,8 +60,8 @@ function createToolchainManager({
 
   async function status() {
     const [jdk, sdk, accepted] = await Promise.all([
-      finders.findJdk({ directory: toolchainsRoot }),
-      finders.findAndroidSdk({ directory: androidHome }),
+      finders.findJdk({ directory: toolchainsRoot, baseEnvironment }),
+      finders.findAndroidSdk({ directory: androidHome, baseEnvironment }),
       acceptances()
     ]);
     return {
@@ -103,9 +105,9 @@ function createToolchainManager({
     install = { startedAt: now(), status: "running", message: "Downloading Java and the Android build tools…" };
     (async () => {
       try {
-        const jdk = await installers.installJdk({ directory: toolchainsRoot });
+        const jdk = await installers.installJdk({ directory: toolchainsRoot, baseEnvironment });
         install = { ...install, message: "Downloading the Android SDK…" };
-        await installers.installAndroidSdk({ directory: androidHome, acceptance: recorded, javaHome: jdk.javaHome });
+        await installers.installAndroidSdk({ directory: androidHome, acceptance: recorded, javaHome: jdk.javaHome, baseEnvironment });
         install = { ...install, status: "done", finishedAt: now(), message: "Android build tools are ready." };
       } catch (error) {
         install = { ...install, status: "failed", finishedAt: now(), message: error?.message || "The download failed." };

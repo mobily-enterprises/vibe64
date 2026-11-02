@@ -92,7 +92,7 @@ test("commands use the person's own tools without pinned-pack settings", async (
 test("without packs the runtime path keeps the server's PATH and Homebrew on macOS", (t) => {
   configureVibe64Host(null);
   withPlatform(t, "darwin");
-  const parts = resolveRuntimePath({ existingPath: "/caller/bin", runtimes: ["node26", "git"] }).split(":");
+  const parts = resolveRuntimePath({ env: {}, existingPath: "/caller/bin", runtimes: ["node26", "git"] }).split(":");
   assert.equal(parts[0], "/caller/bin");
   assert.ok(parts.includes("/opt/homebrew/bin"));
   assert.ok(!parts.some((part) => part.includes("node26")));
@@ -101,7 +101,7 @@ test("without packs the runtime path keeps the server's PATH and Homebrew on mac
 test("pinned packs and an explicit option take precedence over the person's tools", (t) => {
   configureVibe64Host({ runtimePackRoot: "/srv/packs", sharedCacheRoot: "/srv/cache" });
   t.after(() => configureVibe64Host(null));
-  const parts = resolveRuntimePath({ existingPath: "/caller/bin", runtimes: ["node26"] }).split(":");
+  const parts = resolveRuntimePath({ env: {}, existingPath: "/caller/bin", runtimes: ["node26"] }).split(":");
   assert.deepEqual(parts.slice(0, 4), ["/srv/packs/policy-bin", "/srv/packs/node26/bin", "/srv/packs/guard-bin", "/caller/bin"]);
   assert.ok(!parts.includes("/opt/homebrew/bin"));
   assert.deepEqual(sharedToolEnv(), {
@@ -115,7 +115,7 @@ test("pinned packs and an explicit option take precedence over the person's tool
 
 test("running a command as another user needs the host's helper", async () => {
   configureVibe64Host(null);
-  await assert.rejects(runHelperCommand({}, { runCapture: () => ({ ok: true }) }), {
+  await assert.rejects(runHelperCommand({}, { env: {}, runCapture: () => ({ ok: true }) }), {
     code: "vibe64_exec_helper_unavailable"
   });
 });

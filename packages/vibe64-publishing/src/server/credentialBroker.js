@@ -49,12 +49,14 @@ function plainProof(proof) {
  * @param {object} dependencies
  * @param {AgeStore} dependencies.keys
  * @param {PublishingPackaging} dependencies.packaging
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for a destination's dry-run tools
  * @param {() => string} [dependencies.now]
  * @param {string} [dependencies.ghCommand]
  */
 function createCredentialBroker({
   keys,
   packaging,
+  baseEnvironment,
   now = () => new Date().toISOString(),
   ghCommand = "gh"
 }) {
@@ -147,7 +149,7 @@ function createCredentialBroker({
         credentials: destination.credentials,
         obtainCredential: obtainFor(target)
       },
-      (credentials) => destination.dryRun({ target, version, artifacts, credentials, toolchains })
+      (credentials) => destination.dryRun({ target, version, artifacts, credentials, baseEnvironment, toolchains })
     );
   }
 

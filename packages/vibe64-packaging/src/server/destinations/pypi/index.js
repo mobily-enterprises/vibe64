@@ -187,7 +187,7 @@ async function readBack({ target, version, artifacts }) {
 /**
  * twine reads the token only from a private config file in a throwaway home.
  */
-async function runTwine(settings, args, { token = "", failureMessage }) {
+async function runTwine(settings, args, { token = "", baseEnvironment, failureMessage }) {
   return withToolHome(async (home) => {
     const argv = [...settings.twine, ...args];
     if (token) {
@@ -207,7 +207,7 @@ async function runTwine(settings, args, { token = "", failureMessage }) {
     return runTool({
       argv,
       cwd: home,
-      env: toolEnvironment({ home, extra: { PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring", PYTHONDONTWRITEBYTECODE: "1" } }),
+      env: toolEnvironment({ home, baseEnvironment, extra: { PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring", PYTHONDONTWRITEBYTECODE: "1" } }),
       secrets: [token],
       failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED",
       failureMessage
@@ -220,7 +220,7 @@ async function credentialToken(credentials) {
   return file ? readCredentialText(file, CREDENTIAL.label) : "";
 }
 
-async function upload({ target, version, artifacts, credentials }) {
+async function upload({ target, version, artifacts, credentials, baseEnvironment }) {
   const settings = pypiSettings(target);
   const release = distributions(artifacts, version);
   const token = await credentialToken(credentials);
@@ -230,6 +230,7 @@ async function upload({ target, version, artifacts, credentials }) {
   const pending = release.files.filter((file) => !listed.has(file.name));
   const result = await runTwine(settings, ["upload", "--non-interactive", "--disable-progress-bar", ...pending.map((file) => file.path)], {
     token,
+    baseEnvironment,
     failureMessage: `twine did not upload ${release.project} ${release.version}.`
   });
   return { files: pending.map((file) => file.name), output: result.output.slice(-2000) };
@@ -238,10 +239,11 @@ async function upload({ target, version, artifacts, credentials }) {
 /**
  * `twine check --strict` on the exact files, and what the index already holds.
  */
-async function dryRun({ target, version, artifacts }) {
+async function dryRun({ target, version, artifacts, baseEnvironment }) {
   const settings = pypiSettings(target);
   const release = distributions(artifacts, version);
   const check = await runTwine(settings, ["check", "--strict", ...release.files.map((file) => file.path)], {
+    baseEnvironment,
     failureMessage: `twine check refused ${release.project} ${release.version}.`
   });
   const listed = await readIndex({ index: settings.index, project: release.project });

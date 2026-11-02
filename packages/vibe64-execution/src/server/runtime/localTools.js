@@ -4,6 +4,8 @@ import process from "node:process";
 
 import { DEFAULT_SYSTEM_PATH } from "./resolveRuntimePath.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 /**
  * Install lines for the tools a person supplies on their own computer, keyed
  * by the Stack runtime ids and the AI tool ids. Only lines for Debian/Ubuntu
@@ -142,13 +144,17 @@ function localToolFamily({ platform = process.platform, aptGet = false } = {}) {
  * Commands run with the system folders after the person's PATH, so apt-get is
  * looked up the same way.
  */
-function aptGetOnPath(env = process.env, systemPath = DEFAULT_SYSTEM_PATH) {
+function aptGetOnPath(env, systemPath = DEFAULT_SYSTEM_PATH) {
   return [...String(env.PATH || "").split(path.delimiter), ...String(systemPath || "").split(path.delimiter)]
     .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));
 }
 
-/** This computer's install-line family: "apt", "brew" or "". */
-function thisComputerToolFamily({ env = process.env, platform = process.platform, systemPath } = {}) {
+/**
+ * This computer's install-line family: "apt", "brew" or "".
+ * @param {{ env: RuntimeEnv, platform?: string, systemPath?: string }} machine
+ *   env is the running server's environment, whose PATH finds apt-get
+ */
+function thisComputerToolFamily({ env, platform = process.platform, systemPath }) {
   return localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env, systemPath) });
 }
 
