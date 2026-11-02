@@ -301,7 +301,7 @@ test("a browser watch is authorized as an action and released with its connectio
   let allowed = true;
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   registerVibe64ActionContext(actions, {
-    projectContext: { projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
+    projectContext: { currentPracticeProjectScope: () => null, projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
     resolveUser: async () => ({ uid: 42, role: "member" }),
     authorizeProject() { if (!allowed) throw Object.assign(new Error("Denied"), { statusCode: 403 }); }
   });

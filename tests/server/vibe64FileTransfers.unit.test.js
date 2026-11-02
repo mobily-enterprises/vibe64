@@ -389,6 +389,7 @@ test("HTTP project routes, transfers and inline image previews keep trusted iden
   });
   const app = testRouteApp();
   const projectContext = {
+    currentPracticeProjectScope: () => null,
     projectsRoot: root,
     async readWorkspaceProject({ slug }) {
       if (!["one", "two"].includes(slug)) throw Object.assign(new Error("Missing project"), { code: "vibe64_project_route_unavailable" });

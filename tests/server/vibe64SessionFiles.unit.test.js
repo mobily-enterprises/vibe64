@@ -152,6 +152,7 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
   });
   const app = testRouteApp();
   const projectContext = {
+    currentPracticeProjectScope: () => null,
     projectsRoot: root,
     async readWorkspaceProject({ slug }) {
       if (!["one", "two"].includes(slug)) throw Object.assign(new Error("Missing project"), { code: "vibe64_project_route_unavailable" });

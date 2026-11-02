@@ -248,7 +248,7 @@ test("Vibe64 routes refuse requests that are not from this computer before runni
   let ran = 0;
   const routes = projectRoutes(app, {
     localRequestMessage: "Local only.",
-    projectContext: { async readWorkspaceProject() { ran += 1; return { project: {} }; } }
+    projectContext: { currentPracticeProjectScope: () => null, async readWorkspaceProject() { ran += 1; return { project: {} }; } }
   });
   routes.actionRoute("GET", "/state", { actionId: "unit.state.read", summary: "Read state." });
   const reply = testReply();
@@ -313,6 +313,7 @@ test("a deleted practice project's page requests are a clean not-found with its 
     const routes = projectRoutes(app, {
       localRequestMessage: "Local only.",
       projectContext: {
+        currentPracticeProjectScope: () => null,
         projectCatalogEnabled: true,
         projectsRoot: "/projects",
         async readWorkspaceProject() {

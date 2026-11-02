@@ -83,6 +83,9 @@ async function withRouteProject(operation) {
       apiRouteBase: "/api/app/:slug",
       projectContext: {
         projectsRoot,
+        currentPracticeProjectScope() {
+          return null;
+        },
         async readWorkspaceProject({ slug } = {}) {
           return {
             project: {

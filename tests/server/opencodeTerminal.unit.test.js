@@ -3131,6 +3131,7 @@ test("Main OpenCode browser facade keeps original action authority and live nati
   });
   registerVibe64ActionContext(actions, {
     projectContext: {
+      currentPracticeProjectScope: () => null,
       projectsRoot: path.dirname(f.runtime.projectContextRoot),
       async readWorkspaceProject() {
         return { project: { projectRoot: f.runtime.projectContextRoot, projectRuntimeRoot: f.runtime.stateRoot } };

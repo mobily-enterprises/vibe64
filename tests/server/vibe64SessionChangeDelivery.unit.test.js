@@ -146,7 +146,7 @@ test("pages receive only the changes of the projects and sessions they watch", {
       setup(values) {
         events = values.events;
         registerVibe64ActionContext(values.actions, {
-          projectContext: { projectsRoot: "/fixture", readWorkspaceProject: async ({ slug }) => ({ project: { path: `/fixture/${slug}` } }) },
+          projectContext: { currentPracticeProjectScope: () => null, projectsRoot: "/fixture", readWorkspaceProject: async ({ slug }) => ({ project: { path: `/fixture/${slug}` } }) },
           resolveUser: async () => ({ uid: 1, role: "owner" }),
           authorizeProject() {}
         });

@@ -12118,6 +12118,7 @@ test("Main browser facade uses the original native owner and action authority wi
   await withAgentMessageController(async ({ captures, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     registerVibe64ActionContext(actions, {
       projectContext: {
+        currentPracticeProjectScope: () => null,
         projectsRoot: path.dirname(runtime.projectContextRoot),
         async readWorkspaceProject() {
           return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };
@@ -12495,7 +12496,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
     }, 0);
     await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior" }));
     registerVibe64ActionContext(actions, {
-      projectContext: { projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
+      projectContext: { currentPracticeProjectScope: () => null, projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
         return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };
       } },
       resolveUser: async () => options.vibe64User,
@@ -13574,7 +13575,8 @@ test("Main browser fresh authorization for a local practice project opened as an
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
     // The learning space holds this learner's practice project (its marker
     // names learner "42"); the local transport supplies the person.
-    const projectContext = { projectCatalogEnabled: false, projectsRoot: path.dirname(runtime.projectContextRoot),
+    const projectContext = { currentPracticeProjectScope: () => null, projectCatalogEnabled: false,
+      projectsRoot: path.dirname(runtime.projectContextRoot),
       readLearningSpaceProject: async requested => requested === slug ? { slug, learnerKey: Buffer.from("42").toString("base64url"),
         practiceId: "839fb16d-3aed-40c8-8b26-cb4ec8fe1229", training: {} } : null,
       runWithPracticeProjectScope: (input, operation) => runWithPracticeProjectContext(owner, { slug,

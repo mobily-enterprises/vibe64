@@ -84,6 +84,7 @@ function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = 
   actions.register({ contributorId: "test", domain: "vibe64-test", actions: [definition] });
   registerVibe64ActionContext(actions, {
     projectContext: {
+      currentPracticeProjectScope: () => null,
       projectsRoot: "/test/projects",
       async readWorkspaceProject({ slug, allowDeleting }) {
         if (state.deleting && !allowDeleting) throw Object.assign(new Error("Deleting"), { code: "vibe64_project_deleting" });
@@ -309,7 +310,7 @@ test("conversation authority diagnostics separate slow phases without retaining 
     env, logger: { warn(record) { logs.push(record); } },
     resolveUser() { lookups++; clock += slow ? 20 : 0; return user; },
     authorizeProject() { clock += slow ? 30 : 0; if (!allowed) throw new Error("private-project-error"); },
-    projectContext: { projectsRoot: "/test/projects", readWorkspaceProject({ slug }) {
+    projectContext: { currentPracticeProjectScope: () => null, projectsRoot: "/test/projects", readWorkspaceProject({ slug }) {
       clock += slow ? 60 : 0; return { project: { path: `/test/projects/${slug}` } };
     } }
   });

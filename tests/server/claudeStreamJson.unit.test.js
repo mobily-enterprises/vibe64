@@ -2452,7 +2452,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const originalGoalRequest = { headers: { cookie: "fixture-session" } };
   let requireGoalRequest = false;
   registerVibe64ActionContext(actions, {
-    projectContext: { projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
+    projectContext: { currentPracticeProjectScope: () => null, projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
       return { project: { projectRoot: f.root, projectRuntimeRoot: runtime.stateRoot } };
     } },
     resolveUser: async ({ request, context }) => typeof context.resolveAssistantUser === "function"
