@@ -18,6 +18,8 @@ test('payment configuration persists and catalogue publication requires review',
     const service = createService({
       temporaryRoot: path.join(root, "temporary"),
       project: { createRuntime: async () => ({
+        // Configuration saves take the session's write lock, so the runtime double owns a store that grants it.
+        store: { runSessionExclusive: async (_id, _lock, work) => ({ acquired: true, value: await work() }) },
         stateRoot: path.join(root, "state"),
         getSession: async (sessionId) => ({ sessionId, metadata: {
           source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source"

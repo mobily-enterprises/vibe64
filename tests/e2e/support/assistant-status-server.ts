@@ -45,7 +45,6 @@ import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
   readyProjectSelectionPayload, WORKSPACE_SLUG
 } from "./base-shell-data.ts";
-import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 type Handler = (response: ServerResponse, request: IncomingMessage) => void | Promise<void>;
 type GoalView = { status: string; goal: Record<string, unknown> | null;

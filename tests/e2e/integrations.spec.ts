@@ -371,7 +371,8 @@ for (const { viewport, providerBatch } of [
         readEnv: async () => ({ ok: true, env: { records: [] } }),
         saveEnvUserValues: async (request) => { registrationEnv.push(request); return { ok: true }; },
         createRuntime: async () => ({
-        ...(["amplitude", "atlassian", "confidence", "sanity", "sentry", "granola", "hex", "heygen"].includes(providerBatch) ? { store: { runSessionExclusive: async (_id, _lock, work) => ({ acquired: true, value: await work() }) } } : {}),
+        // Every configuration save takes the session's write lock, so each runtime double owns a store that grants it.
+        store: { runSessionExclusive: async (_id, _lock, work) => ({ acquired: true, value: await work() }) },
         stateRoot: path.join(root, "state"),
         getSession: async (sessionId) => ({ sessionId, metadata: {
           source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source"
