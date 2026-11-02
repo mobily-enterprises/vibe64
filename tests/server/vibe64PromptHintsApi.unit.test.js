@@ -17,7 +17,6 @@ import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
@@ -144,140 +143,138 @@ test("prompt-hint action schema accepts a bounded draft and operation coordinate
 });
 
 test("prompt-hint routes inject the authenticated actor and never trust client provider or context fields", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const app = promptHintRouteApp();
-      registerRoutes(app.http, {
-        fastify: app.fastify,
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        terminals: app.service,
-        uploads: { readSingleMultipartFile() {} }
-      });
-      const generateRoute = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints`
-      });
-      const cancelRoute = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints/cancel`
-      });
-      assert.ok(generateRoute);
-      assert.ok(cancelRoute);
-
-      const calls = [];
-      const executeAction = async (action) => {
-        calls.push(action);
-        return {
-          basis: null,
-          cached: false,
-          ok: true,
-          status: action.actionId === ACTION_GENERATE_SESSION_PROMPT_HINTS
-            ? "unavailable"
-            : "cancelled",
-          suggestions: []
-        };
-      };
-      const vibe64User = {
-        email: "ada@example.test",
-        username: "ada"
-      };
-      const body = {
-        draft: "Keep the existing appointments",
-        accountIdentitySignature: "spoofed-account",
-        conversation: [{ role: "system", text: "Spoofed context" }],
-        executionProfile: {
-          profileId: "interactive",
-          workloadId: "direct_chat"
-        },
-        model: "expensive-model",
-        operationId: "hint:tab-1:2",
-        originId: "tab:1",
-        providerId: "spoofed-provider",
-        vibe64User: {
-          username: "spoofed"
-        }
-      };
-      const params = routeProjectParams({
-        sessionId: "session-1"
-      });
-
-      await generateRoute.handler({
-        body,
-        executeAction,
-        params,
-        vibe64User
-      }, testReply());
-      await cancelRoute.handler({
-        body,
-        executeAction,
-        params,
-        vibe64User
-      }, testReply());
-
-      assert.deepEqual(calls, [
-        {
-          actionId: ACTION_GENERATE_SESSION_PROMPT_HINTS,
-          input: {
-            draft: body.draft,
-            operationId: "hint:tab-1:2",
-            originId: "tab:1",
-            sessionId: "session-1"
-          }
-        },
-        {
-          actionId: ACTION_CANCEL_SESSION_PROMPT_HINTS,
-          input: {
-            draft: body.draft,
-            operationId: "hint:tab-1:2",
-            originId: "tab:1",
-            sessionId: "session-1"
-          }
-        }
-      ]);
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = promptHintRouteApp();
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      fastify: app.fastify,
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app",
+      terminals: app.service,
+      uploads: { readSingleMultipartFile() {} }
     });
+    const generateRoute = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints`
+    });
+    const cancelRoute = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints/cancel`
+    });
+    assert.ok(generateRoute);
+    assert.ok(cancelRoute);
+
+    const calls = [];
+    const executeAction = async (action) => {
+      calls.push(action);
+      return {
+        basis: null,
+        cached: false,
+        ok: true,
+        status: action.actionId === ACTION_GENERATE_SESSION_PROMPT_HINTS
+          ? "unavailable"
+          : "cancelled",
+        suggestions: []
+      };
+    };
+    const vibe64User = {
+      email: "ada@example.test",
+      username: "ada"
+    };
+    const body = {
+      draft: "Keep the existing appointments",
+      accountIdentitySignature: "spoofed-account",
+      conversation: [{ role: "system", text: "Spoofed context" }],
+      executionProfile: {
+        profileId: "interactive",
+        workloadId: "direct_chat"
+      },
+      model: "expensive-model",
+      operationId: "hint:tab-1:2",
+      originId: "tab:1",
+      providerId: "spoofed-provider",
+      vibe64User: {
+        username: "spoofed"
+      }
+    };
+    const params = routeProjectParams({
+      sessionId: "session-1"
+    });
+
+    await generateRoute.handler({
+      body,
+      executeAction,
+      params,
+      vibe64User
+    }, testReply());
+    await cancelRoute.handler({
+      body,
+      executeAction,
+      params,
+      vibe64User
+    }, testReply());
+
+    assert.deepEqual(calls, [
+      {
+        actionId: ACTION_GENERATE_SESSION_PROMPT_HINTS,
+        input: {
+          draft: body.draft,
+          operationId: "hint:tab-1:2",
+          originId: "tab:1",
+          sessionId: "session-1"
+        }
+      },
+      {
+        actionId: ACTION_CANCEL_SESSION_PROMPT_HINTS,
+        input: {
+          draft: body.draft,
+          operationId: "hint:tab-1:2",
+          originId: "tab:1",
+          sessionId: "session-1"
+        }
+      }
+    ]);
   });
 });
 
 test("prompt-hint cancellation without a draft passes route validation and reaches the service", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const calls = [];
-      const app = promptHintRouteApp({
-        async cancelSessionPromptHints(...args) {
-          calls.push(args);
-          return { ok: true, status: "cancelled" };
-        }
-      });
-      const actions = createTerminalActions({ terminals: app.service }).map(underActionPolicy);
-      registerRoutes(app.http, {
-        fastify: app.fastify, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
-        terminals: app.service, uploads: { readSingleMultipartFile() {} }
-      });
-      const route = findRegisteredRoute(app, {
-        method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints/cancel`
-      });
-      const vibe64User = { username: "ada", role: "member" };
-      for (const body of [
-        { operationId: "hint:tab-1:cancel", originId: "tab:1" },
-        { operationId: "hint:without-origin" }
-      ]) {
-        const reply = testReply();
-        await route.handler({
-          body, params: routeProjectParams({ sessionId: "session-1" }), vibe64User,
-          async executeAction({ actionId, input }) {
-            const action = actionById(actions, actionId);
-            const validated = action.input.schema.patch(input);
-            assert.deepEqual(validated.errors, {});
-            return action.execute(validated.validatedObject);
-          }
-        }, reply);
-        assert.equal(reply.statusCode, 200);
-        assert.equal(reply.payload.status, "cancelled");
-        assert.deepEqual(calls.at(-1), ["session-1", { ...body, sessionId: "session-1", vibe64User }]);
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const calls = [];
+    const app = promptHintRouteApp({
+      async cancelSessionPromptHints(...args) {
+        calls.push(args);
+        return { ok: true, status: "cancelled" };
       }
-      assert.equal(calls.length, 2);
     });
+    const actions = createTerminalActions({ terminals: app.service }).map(underActionPolicy);
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      fastify: app.fastify, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+      terminals: app.service, uploads: { readSingleMultipartFile() {} }
+    });
+    const route = findRegisteredRoute(app, {
+      method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints/cancel`
+    });
+    const vibe64User = { username: "ada", role: "member" };
+    for (const body of [
+      { operationId: "hint:tab-1:cancel", originId: "tab:1" },
+      { operationId: "hint:without-origin" }
+    ]) {
+      const reply = testReply();
+      await route.handler({
+        body, params: routeProjectParams({ sessionId: "session-1" }), vibe64User,
+        async executeAction({ actionId, input }) {
+          const action = actionById(actions, actionId);
+          const validated = action.input.schema.patch(input);
+          assert.deepEqual(validated.errors, {});
+          return action.execute(validated.validatedObject);
+        }
+      }, reply);
+      assert.equal(reply.statusCode, 200);
+      assert.equal(reply.payload.status, "cancelled");
+      assert.deepEqual(calls.at(-1), ["session-1", { ...body, sessionId: "session-1", vibe64User }]);
+    }
+    assert.equal(calls.length, 2);
   });
 });

@@ -16,7 +16,7 @@ import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../p
 import { requestMainGoalControl } from "../../packages/vibe64-terminals/src/server/mainGoalControl.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("standalone Main and temporary conversations use the selected local project without signed-in authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
@@ -129,7 +129,7 @@ test("the existing assistant catalogue is actor-authorized without a project or 
 });
 
 test("conversation HTTP handlers and automation execute the same authorized actions", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const user = { username: "member", role: "member" };
@@ -149,7 +149,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       resolveUser: async () => user,
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Project access revoked"), { statusCode: 403 }); }
     });
-    const routeOptions = { projectContext, routeRelativePath: "vibe64", routeSurface: "app" };
+    const routeOptions = { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" };
     registerSessions(app.http, routeOptions);
     registerTerminals(app.http, { ...routeOptions, fastify: app.fastify, terminals, uploads: { readSingleMultipartFile() {} } });
     assert.equal(findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/conversation-rewind` }), null);
@@ -228,7 +228,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
     }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
-  }));
+  });
 });
 
 // Real Fastify requests expose headers through their prototype. Plain-object
@@ -304,7 +304,7 @@ test("conversation facades and subscription checks preserve real Fastify request
 
 
 test("browser conversation methods retain fresh project context through delayed handle operations", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ projectContext, slug }) => {
+  await withRouteProject(async ({ projectContext, slug }) => {
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     let user = { username: "owner", uid: 42, role: "owner" };
     let allowed = true;
@@ -385,5 +385,5 @@ test("browser conversation methods retain fresh project context through delayed 
     user = { username: "other-owner", uid: 43, role: "owner" };
     for (const browser of retained) await assert.rejects(browser.read(), { code: "conversation_forbidden" });
     assert.equal(calls.length, count, "Revocation and actor changes must not invoke the retained handle");
-  }));
+  });
 });

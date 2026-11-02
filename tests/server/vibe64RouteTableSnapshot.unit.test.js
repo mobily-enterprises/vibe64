@@ -356,7 +356,7 @@ function routeTable(projectContext) {
   registerSourceEditorRoutes(http, { localhostCheckBypassed, projectContext, sourceEditor: { readTree() {} } });
   registerSystemGraphRoutes(http, { localhostCheckBypassed, projectContext });
   registerUsageRoutes(http, { localhostCheckBypassed, projectContext });
-  registerTerminalRoutes(http, { fastify, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
+  registerTerminalRoutes(http, { fastify, localhostCheckBypassed, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
   registerTrainingRoutes(http, { localhostCheckBypassed });
   registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed });
   registerUsageRecordingRoutes(http, { localhostCheckBypassed, projectContext });

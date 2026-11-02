@@ -17,7 +17,7 @@ import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 function catalogue(terminals, projectContext, { resolveUser, authorizeProject } = {}) {
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
@@ -32,7 +32,7 @@ function catalogue(terminals, projectContext, { resolveUser, authorizeProject } 
 }
 
 test("terminal and output HTTP operations share validated actions and fresh authority with automation", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const owner = { username: "owner", role: "owner" };
     let allowed = true;
     const calls = [];
@@ -86,7 +86,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
     });
     const app = testRouteApp();
-    registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
+    registerRoutes(app.http, { localhostCheckBypassed: true, fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
     assert.deepEqual(actions.listDefinitions().map(({ id }) => id).sort(), [
       "agent-attachment.delete", "agent-attachment.read", "agent-attachment.upload", "agent-goal.canonical.read",
       "agent-goal.canonical.update", "agent-goal.read", "agent-goal.update", "agent-plan-usage.read",
@@ -171,7 +171,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.terminals.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
-  }));
+  });
 });
 
 test("Colleague reads a Main goal and closes a project on request, but never changes a goal", () => {
@@ -198,7 +198,7 @@ test("Colleague's temporary-chat tools offer every routing choice with the team-
 });
 
 test("output and attachment action downloads stream exact bytes and close their handles", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, apiBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, apiBase, projectContext, slug }) => {
     const root = await mkdtemp(path.join(tmpdir(), "vibe64-terminal-download-"));
     const server = Fastify();
     let allowed = true;
@@ -221,7 +221,7 @@ test("output and attachment action downloads stream exact bytes and close their 
       if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 });
     } });
     const app = testRouteApp();
-    registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
+    registerRoutes(app.http, { localhostCheckBypassed: true, fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
     server.addHook("onRequest", async (request) => {
       request.executeAction = ({ actionId, input }) => actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
     });
@@ -259,7 +259,7 @@ test("output and attachment action downloads stream exact bytes and close their 
       await Promise.all(handles.map(({ fileHandle }) => fileHandle.close()));
       await rm(root, { recursive: true, force: true });
     }
-  }));
+  });
 });
 
 test("canonical Main goals reuse internal terminal actions with fresh authority and fixed service representation", async () => {

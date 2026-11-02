@@ -1,8 +1,4 @@
 import { isIP } from "node:net";
-import {
-  isLocalhostCheckBypassEnabled
-} from "./localhostCheckBypass.js";
-
 /**
  * How a Studio request is checked: the server computes once, from its runtime
  * env, whether it was started with the localhost check bypassed.
@@ -134,17 +130,11 @@ function requireLocalStudioRequest(request, reply, {
   return true;
 }
 
-// Phase 2 removes this: only the terminals routes still omit the flag, so for them it is read from this process's env.
-function terminalsLocalhostCheckBypassed() {
-  return isLocalhostCheckBypassEnabled({ env: process.env });
-}
-
 export {
   isLocalStudioRequest,
   isLoopbackAddress,
   isTrustedStudioWebSocketRequest,
   normalizeHostName,
   originMatchesRequest,
-  requireLocalStudioRequest,
-  terminalsLocalhostCheckBypassed
+  requireLocalStudioRequest
 };

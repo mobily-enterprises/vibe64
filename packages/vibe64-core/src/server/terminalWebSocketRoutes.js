@@ -1,6 +1,5 @@
 import {
-  isTrustedStudioWebSocketRequest,
-  terminalsLocalhostCheckBypassed
+  isTrustedStudioWebSocketRequest
 } from "./localStudioRequest.js";
 import {
   resolveProjectRequestContext,
@@ -42,7 +41,7 @@ function publicTerminalSnapshot(session) {
 function registerTerminalWebSocketRoute(
   fastify,
   {
-    localhostCheckBypassed = terminalsLocalhostCheckBypassed(),
+    localhostCheckBypassed,
     projectContext,
     projectScoped = true,
     routePath,

@@ -109,15 +109,17 @@ const GLOBAL_TERMINAL_ROUTES = Object.freeze({
  * @param {RuntimeHttp} http
  * @param {object} options
  * @param {RuntimeFastify} options.fastify
+ * @param {boolean} options.localhostCheckBypassed
  * @param {StudioProjectContext} options.projectContext
  * @param {TerminalsService} options.terminals
  */
-function registerRoutes(http, { fastify, projectContext, terminals }) {
+function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext, terminals }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-terminals"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
     surface: "app",
     wrapHandler: vibe64RouteHandler({
+      localhostCheckBypassed,
       localRequestMessage: "Vibe64 terminal routes only accept loopback Studio requests.",
       projectContext
     })
@@ -357,7 +359,7 @@ function registerRoutes(http, { fastify, projectContext, terminals }) {
     }
   }
 
-  registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext });
+  registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { localhostCheckBypassed, projectContext });
 }
 
 function bodyWithSessionId(request) {
@@ -438,8 +440,9 @@ function globalTerminalRouteInput(request) {
   return { terminalSessionId: request.params.terminalSessionId };
 }
 
-function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext }) {
+function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { localhostCheckBypassed, projectContext }) {
   registerTerminalWebSocketRoute(fastify, {
+    localhostCheckBypassed,
     projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
     service: terminals,
@@ -460,6 +463,7 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { pro
   });
 
   registerTerminalWebSocketRoute(fastify, {
+    localhostCheckBypassed,
     projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/agent-terminal/:terminalSessionId/ws`,
     service: terminals,
@@ -479,6 +483,7 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { pro
   });
 
   registerTerminalWebSocketRoute(fastify, {
+    localhostCheckBypassed,
     projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/output-runs/:terminalSessionId/terminal/ws`,
     service: terminals,

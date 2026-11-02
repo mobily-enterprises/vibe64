@@ -2,8 +2,6 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { LOCALHOST_CHECK_BYPASS_ENV } from "@local/vibe64-core/server/localhostCheckBypass";
-
 const TEST_PROJECT_SLUG = "unit_project";
 
 function testRouteApp() {
@@ -58,20 +56,6 @@ function testReply() {
   };
 }
 
-async function withLocalRequestBypass(operation) {
-  const previousValue = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
-  try {
-    await operation();
-  } finally {
-    if (previousValue == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousValue;
-    }
-  }
-}
-
 async function withRouteProject(operation) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-route-projects-"));
   await mkdir(path.join(projectsRoot, TEST_PROJECT_SLUG), {
@@ -117,6 +101,5 @@ export {
   routeProjectParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass,
   withRouteProject
 };

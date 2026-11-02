@@ -1,6 +1,6 @@
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 
-import { requireLocalStudioRequest, terminalsLocalhostCheckBypassed } from "./localStudioRequest.js";
+import { requireLocalStudioRequest } from "./localStudioRequest.js";
 import {
   vibe64StatusCode,
   requestBodyObject as requestBody,
@@ -82,7 +82,7 @@ function routeOptions({ actionId, body, bodyLimit, meta = {}, params, query, sum
  * @param {boolean} [options.projectScoped]
  */
 function vibe64RouteHandler({
-  localhostCheckBypassed = terminalsLocalhostCheckBypassed(),
+  localhostCheckBypassed,
   localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
   projectContext,
   projectScoped = true

@@ -6,11 +6,11 @@ import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vi
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 test("output tools share HTTP ownership and bounded state without grants, paths or commands", async () => {
-  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "owner", role: "owner" };
     let allowed = true;
     const calls = [];
@@ -49,7 +49,7 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
-    registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
+    registerRoutes(app.http, { localhostCheckBypassed: true, fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
     for (const [method, suffix, operation, , data, native] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const tool = toolSet.tools.find(tool => tool.actionId === actionId);
@@ -110,7 +110,7 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
     }
     for (const id of ["preview-identity.select", "output-result.read", "agent-terminal.start", "global-terminal.start"])
       assert.equal(toolSet.tools.some(tool => tool.actionId === `vibe64.terminals.${id}`), false, id);
-  }));
+  });
 });
 
 test("output definitions keep no lesson access; a practice project's output is an ordinary project's", async () => {

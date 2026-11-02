@@ -13,7 +13,6 @@ import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
-  withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
@@ -92,270 +91,267 @@ async function runRoute(app, {
 }
 
 test("terminal control routes expose snapshot, text checks, exact text, and narrow keys", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const writes = [];
-      let output = "ready prompt";
-      const createdAt = new Date(Date.now() - 4000).toISOString();
-      const service = {
-        closeAgentTerminal() {
-          return {
-            closed: true,
-            ok: true
-          };
-        },
-        async readAgentTerminal(_sessionId, terminalSessionId) {
-          return {
-            commandPreview: "codex",
-            createdAt,
-            id: terminalSessionId,
-            inputVersion: writes.length,
-            lastInputAt: "",
-            lastOutputAt: createdAt,
-            ok: true,
-            output,
-            outputVersion: 1,
-            status: "running"
-          };
-        },
-        async writeAgentTerminal(_sessionId, terminalSessionId, data) {
-          writes.push({
-            data,
-            terminalSessionId
-          });
-          output += data;
-          return this.readAgentTerminal(_sessionId, terminalSessionId);
-        }
-      };
-      Object.assign(service, createTerminalControls({
-        readAgentScreen: (...args) => service.readAgentTerminal(...args),
-        writeAgentInput: (...args) => service.writeAgentTerminal(...args)
-      }));
-      const app = terminalControlRouteApp(service);
-      registerRoutes(app.http, {
-        fastify: app.fastify,
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        terminals: app.service,
-        uploads: { readSingleMultipartFile() {} }
-      });
-      assert.equal(findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
-      }), null);
-      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId`;
-      const params = routeProjectParams({
-        sessionId: "session-1",
-        terminalSessionId: "terminal-1"
-      });
-
-    const quiet = await runRoute(app, {
-      method: "GET",
-      params,
-      path: `${path}/control/quiet`
-    });
-    assert.equal(quiet.statusCode, 200);
-    assert.equal(quiet.payload.quiet, true);
-    assert.equal(quiet.payload.quietThresholdMs, 3000);
-
-    const check = await runRoute(app, {
-      body: {
-        text: "ready prompt"
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const writes = [];
+    let output = "ready prompt";
+    const createdAt = new Date(Date.now() - 4000).toISOString();
+    const service = {
+      closeAgentTerminal() {
+        return {
+          closed: true,
+          ok: true
+        };
       },
-      method: "POST",
-      params,
-      path: `${path}/control/check-text`
-    });
-    assert.equal(check.statusCode, 200);
-    assert.equal(check.payload.containsText, true);
-    assert.equal(check.payload.checkedTextLength, "ready prompt".length);
-
-    const text = await runRoute(app, {
-      body: {
-        text: "echo hi\n"
+      async readAgentTerminal(_sessionId, terminalSessionId) {
+        return {
+          commandPreview: "codex",
+          createdAt,
+          id: terminalSessionId,
+          inputVersion: writes.length,
+          lastInputAt: "",
+          lastOutputAt: createdAt,
+          ok: true,
+          output,
+          outputVersion: 1,
+          status: "running"
+        };
       },
-      method: "POST",
-      params,
-      path: `${path}/control/text`
+      async writeAgentTerminal(_sessionId, terminalSessionId, data) {
+        writes.push({
+          data,
+          terminalSessionId
+        });
+        output += data;
+        return this.readAgentTerminal(_sessionId, terminalSessionId);
+      }
+    };
+    Object.assign(service, createTerminalControls({
+      readAgentScreen: (...args) => service.readAgentTerminal(...args),
+      writeAgentInput: (...args) => service.writeAgentTerminal(...args)
+    }));
+    const app = terminalControlRouteApp(service);
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      fastify: app.fastify,
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app",
+      terminals: app.service,
+      uploads: { readSingleMultipartFile() {} }
     });
-    assert.equal(text.statusCode, 200);
-    assert.deepEqual(writes.at(-1), {
-      data: "echo hi\n",
+    assert.equal(findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
+    }), null);
+    const path = `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId`;
+    const params = routeProjectParams({
+      sessionId: "session-1",
       terminalSessionId: "terminal-1"
     });
 
-    const key = await runRoute(app, {
-      body: {
-        key: "escape"
-      },
-      method: "POST",
-      params,
-      path: `${path}/control/key`
-    });
-    assert.equal(key.statusCode, 200);
-    assert.deepEqual(writes.at(-1), {
-      data: "\u001b",
-      terminalSessionId: "terminal-1"
-    });
-    });
+  const quiet = await runRoute(app, {
+    method: "GET",
+    params,
+    path: `${path}/control/quiet`
+  });
+  assert.equal(quiet.statusCode, 200);
+  assert.equal(quiet.payload.quiet, true);
+  assert.equal(quiet.payload.quietThresholdMs, 3000);
+
+  const check = await runRoute(app, {
+    body: {
+      text: "ready prompt"
+    },
+    method: "POST",
+    params,
+    path: `${path}/control/check-text`
+  });
+  assert.equal(check.statusCode, 200);
+  assert.equal(check.payload.containsText, true);
+  assert.equal(check.payload.checkedTextLength, "ready prompt".length);
+
+  const text = await runRoute(app, {
+    body: {
+      text: "echo hi\n"
+    },
+    method: "POST",
+    params,
+    path: `${path}/control/text`
+  });
+  assert.equal(text.statusCode, 200);
+  assert.deepEqual(writes.at(-1), {
+    data: "echo hi\n",
+    terminalSessionId: "terminal-1"
+  });
+
+  const key = await runRoute(app, {
+    body: {
+      key: "escape"
+    },
+    method: "POST",
+    params,
+    path: `${path}/control/key`
+  });
+  assert.equal(key.statusCode, 200);
+  assert.deepEqual(writes.at(-1), {
+    data: "\u001b",
+    terminalSessionId: "terminal-1"
+  });
   });
 });
 
 test("assistant terminal control text uses the server Vibe64 user instead of body spoofing", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const calls = [];
-      const service = {
-        async writeAgentTerminal(sessionId, terminalSessionId, data, input) {
-          calls.push({
-            data,
-            input,
-            sessionId,
-            terminalSessionId
-          });
-          return {
-            id: terminalSessionId,
-            ok: true,
-            output: data,
-            status: "running"
-          };
-        }
-      };
-      Object.assign(service, createTerminalControls({
-        writeAgentInput: (...args) => service.writeAgentTerminal(...args)
-      }));
-      const app = terminalControlRouteApp(service);
-      registerRoutes(app.http, {
-        fastify: app.fastify,
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        terminals: app.service,
-        uploads: { readSingleMultipartFile() {} }
-      });
-
-      const serverUser = {
-        email: "owner@example.com"
-      };
-      const route = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/text`
-      });
-      assert.ok(route, "Expected assistant terminal text route");
-      const reply = testReply();
-
-      await route.handler({
-        input: {
-          body: {
-            attachmentIds: ["11111111-1111-4111-8111-111111111111"],
-            originId: "tab:owner",
-            text: "Please push.\r",
-            vibe64User: {
-              email: "spoof@example.com"
-            }
-          }
-        },
-        params: routeProjectParams({
-          sessionId: "session-1",
-          terminalSessionId: "terminal-1"
-        }),
-        vibe64User: serverUser
-      }, reply);
-
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(calls, [
-        {
-          data: "Please push.\r",
-          input: {
-            attachmentIds: ["11111111-1111-4111-8111-111111111111"],
-            originId: "tab:owner",
-            sessionId: "session-1",
-            terminalSessionId: "terminal-1",
-            trackGitActor: true,
-            vibe64User: serverUser
-          },
-          sessionId: "session-1",
-          terminalSessionId: "terminal-1"
-        }
-      ]);
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const calls = [];
+    const service = {
+      async writeAgentTerminal(sessionId, terminalSessionId, data, input) {
+        calls.push({
+          data,
+          input,
+          sessionId,
+          terminalSessionId
+        });
+        return {
+          id: terminalSessionId,
+          ok: true,
+          output: data,
+          status: "running"
+        };
+      }
+    };
+    Object.assign(service, createTerminalControls({
+      writeAgentInput: (...args) => service.writeAgentTerminal(...args)
+    }));
+    const app = terminalControlRouteApp(service);
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      fastify: app.fastify,
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app",
+      terminals: app.service,
+      uploads: { readSingleMultipartFile() {} }
     });
+
+    const serverUser = {
+      email: "owner@example.com"
+    };
+    const route = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/text`
+    });
+    assert.ok(route, "Expected assistant terminal text route");
+    const reply = testReply();
+
+    await route.handler({
+      input: {
+        body: {
+          attachmentIds: ["11111111-1111-4111-8111-111111111111"],
+          originId: "tab:owner",
+          text: "Please push.\r",
+          vibe64User: {
+            email: "spoof@example.com"
+          }
+        }
+      },
+      params: routeProjectParams({
+        sessionId: "session-1",
+        terminalSessionId: "terminal-1"
+      }),
+      vibe64User: serverUser
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(calls, [
+      {
+        data: "Please push.\r",
+        input: {
+          attachmentIds: ["11111111-1111-4111-8111-111111111111"],
+          originId: "tab:owner",
+          sessionId: "session-1",
+          terminalSessionId: "terminal-1",
+          trackGitActor: true,
+          vibe64User: serverUser
+        },
+        sessionId: "session-1",
+        terminalSessionId: "terminal-1"
+      }
+    ]);
   });
 });
 
 test("temporary AI creation and turns use the authenticated Vibe64 actor", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const app = terminalControlRouteApp({});
-      registerRoutes(app.http, {
-        fastify: app.fastify,
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        terminals: app.service,
-        uploads: { readSingleMultipartFile() {} }
-      });
-      const vibe64User = {
-        displayName: "Ada Account",
-        preferredName: "Ada",
-        username: "ada"
-      };
-      const calls = [];
-      const executeAction = async (action) => {
-        calls.push(action);
-        return { ok: true };
-      };
-      const createRoute = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations`
-      });
-      const turnRoute = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns`
-      });
-      assert.ok(createRoute);
-      assert.ok(turnRoute);
-
-      await createRoute.handler({
-        body: {
-          vibe64User: { username: "spoofed" }
-        },
-        executeAction,
-        params: routeProjectParams({ sessionId: "session-1" }),
-        vibe64User
-      }, testReply());
-      await turnRoute.handler({
-        body: {
-          attachmentIds: ["22222222-2222-4222-8222-222222222222"],
-          message: "Explain the failure.",
-          vibe64User: { username: "spoofed" }
-        },
-        executeAction,
-        params: routeProjectParams({
-          conversationId: "conversation-1",
-          sessionId: "session-1"
-        }),
-        vibe64User
-      }, testReply());
-
-      assert.deepEqual(calls, [
-        {
-          actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
-          input: {
-            sessionId: "session-1"
-          }
-        },
-        {
-          actionId: ACTION_START_TEMPORARY_CONVERSATION_TURN,
-          input: {
-            attachmentIds: ["22222222-2222-4222-8222-222222222222"],
-            conversationId: "conversation-1",
-            message: "Explain the failure.",
-            sessionId: "session-1"
-          }
-        }
-      ]);
+  await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = terminalControlRouteApp({});
+    registerRoutes(app.http, {
+      localhostCheckBypassed: true,
+      fastify: app.fastify,
+      projectContext,
+      routeRelativePath: "vibe64",
+      routeSurface: "app",
+      terminals: app.service,
+      uploads: { readSingleMultipartFile() {} }
     });
+    const vibe64User = {
+      displayName: "Ada Account",
+      preferredName: "Ada",
+      username: "ada"
+    };
+    const calls = [];
+    const executeAction = async (action) => {
+      calls.push(action);
+      return { ok: true };
+    };
+    const createRoute = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations`
+    });
+    const turnRoute = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns`
+    });
+    assert.ok(createRoute);
+    assert.ok(turnRoute);
+
+    await createRoute.handler({
+      body: {
+        vibe64User: { username: "spoofed" }
+      },
+      executeAction,
+      params: routeProjectParams({ sessionId: "session-1" }),
+      vibe64User
+    }, testReply());
+    await turnRoute.handler({
+      body: {
+        attachmentIds: ["22222222-2222-4222-8222-222222222222"],
+        message: "Explain the failure.",
+        vibe64User: { username: "spoofed" }
+      },
+      executeAction,
+      params: routeProjectParams({
+        conversationId: "conversation-1",
+        sessionId: "session-1"
+      }),
+      vibe64User
+    }, testReply());
+
+    assert.deepEqual(calls, [
+      {
+        actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
+        input: {
+          sessionId: "session-1"
+        }
+      },
+      {
+        actionId: ACTION_START_TEMPORARY_CONVERSATION_TURN,
+        input: {
+          attachmentIds: ["22222222-2222-4222-8222-222222222222"],
+          conversationId: "conversation-1",
+          message: "Explain the failure.",
+          sessionId: "session-1"
+        }
+      }
+    ]);
   });
 });
 

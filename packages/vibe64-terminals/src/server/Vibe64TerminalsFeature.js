@@ -10,6 +10,7 @@ import {
   createTerminalSessionChangedPublishers
 } from "./events.js";
 import { registerRoutes } from "./registerRoutes.js";
+import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
@@ -98,6 +99,7 @@ const Vibe64TerminalsFeature = defineFeature({
     });
     registerRoutes(http, {
       fastify,
+      localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }),
       projectContext,
       terminals
     });
