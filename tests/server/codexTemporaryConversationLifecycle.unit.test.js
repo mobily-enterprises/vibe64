@@ -2458,7 +2458,7 @@ test("archive retires the session's open temporary chats while an ordinary sessi
       assert.equal((await terminals.closeSessionTerminals(sessionId)).ok, true);
       await handle.subscribe(() => {});
       assert.equal((await terminals.closeSessionTerminals(sessionId, { forgetConversationBinding: true })).ok, true);
-      await assert.rejects(handle.subscribe(() => {}), { code: "conversation_closed" });
+      await assert.rejects(handle.subscribe(() => {}), { code: "conversation_handle_closed" });
     });
   }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
 });
@@ -2578,7 +2578,7 @@ test("the common Codex entry uses the original main journal, receipt files and c
     assert.equal((await conversation.read()).segmentId, null);
     assert.equal((await conversation.replace(replacement)).duplicate, true, "replacement retry retains the saved original operation after identity release");
     await assert.rejects(conversation.updateGoal({ action: "set", expectedSegmentId: null, expectedGoalId: null, objective: "Continue" }),
-      { code: "conversation_replacement_briefing_pending" });
+      { code: "conversation_briefing_before_goal" });
     await conversation.dispose();
     assert.ok(captures.stopRuntimes > 0, "dispose uses the original shared runtime cleanup owner");
     assert.equal((await runtime.getSession(sessionId)).metadata.runtime, undefined);

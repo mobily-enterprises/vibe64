@@ -3070,7 +3070,7 @@ test("main OpenCode closes its retained native owner when the session is unreada
     assert.equal(closed.ok, true, JSON.stringify(closed));
     assert.equal(closed.processExitProof.exited, true);
     assert.equal(f.processStops.length, 1, "the original native cleanup still stops its process");
-    await assert.rejects(handle.read(), { code: "conversation_closed" });
+    await assert.rejects(handle.read(), { code: "conversation_handle_closed" });
     assert.equal((await f.manager.closeSession(f.context.sessionId, { ...f.context, session: null })).ok, true,
       "an absent common entry falls back to the original idempotent resource close");
   }
@@ -3103,11 +3103,11 @@ test("main OpenCode close retires delayed initialization without deleting a late
     if (outcome === "resolve") release.resolve(await readSession("session-1"));
     else release.reject(new Error("The retired initialization read failed."));
     await assert.rejects(opening, outcome === "resolve"
-      ? { code: "conversation_closed" } : /retired initialization read failed/);
+      ? { code: "conversation_handle_disposed" } : /retired initialization read failed/);
     f.runtime.getSession = async () => { throw new Error("Do not reopen the replacement to close it."); };
     f.runtime.getSessionWithoutSource = f.runtime.getSession;
     assert.equal((await f.manager.closeSession(f.context.sessionId, f.context)).ok, true);
-    await assert.rejects(replacement.read(), { code: "conversation_closed" },
+    await assert.rejects(replacement.read(), { code: "conversation_handle_closed" },
       "the late retired initializer must not remove the replacement from the retained map");
     assert.equal(f.processStarts.length, 0, "passive binding and cleanup never start native work");
   }

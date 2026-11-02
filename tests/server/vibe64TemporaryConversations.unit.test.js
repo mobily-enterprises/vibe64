@@ -945,11 +945,11 @@ test("Close and archive retire a temporary chat's open runtime entry and its old
 
       assert.equal((await service.deleteTemporaryConversation("one", { conversationId: "closed-chat" })).ok, true);
       assert.ok(closingEvents.length > 0, "the clear-stream event reaches the chat's view before it retires");
-      await assert.rejects(closing.subscribe(() => {}), { code: "conversation_closed" });
+      await assert.rejects(closing.subscribe(() => {}), { code: "conversation_handle_closed" });
       assert.ok(await kept.read(), "another chat's entry stays open");
 
       assert.deepEqual(await service.retireTemporaryConversations("one"), { ok: true });
-      await assert.rejects(kept.subscribe(() => {}), { code: "conversation_closed" });
+      await assert.rejects(kept.subscribe(() => {}), { code: "conversation_handle_closed" });
       assert.ok(await f.store.readSessionConversation("one", "kept-chat"), "archive keeps the chat's saved record");
     } finally {
       await common.close();
