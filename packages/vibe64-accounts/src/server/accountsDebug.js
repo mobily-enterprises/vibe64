@@ -9,19 +9,21 @@ const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 
 const AUTH_DEBUG_ENV = "VIBE64_ACCOUNTS_DEBUG";
 
-/** @typedef {(event: string, fields?: object) => void} AuthDebug */
-
 /**
  * This server's accounts debug trail: on while its runtime env sets the
  * accounts debug flag or debug logging.
  * @param {RuntimeEnv} env
- * @returns {AuthDebug}
  */
 function createAuthDebug(env) {
   const enabled = isVibe64DebugLoggingEnabled({
     env,
     flagName: AUTH_DEBUG_ENV
   });
+  /**
+   * Logs one step of the trail while it is on.
+   * @param {string} event
+   * @param {object} [fields]
+   */
   return function authDebug(event, fields = {}) {
     if (!enabled) {
       return;
@@ -35,6 +37,8 @@ function createAuthDebug(env) {
     console.info(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify(payload)}`);
   };
 }
+
+/** @typedef {ReturnType<typeof createAuthDebug>} AuthDebug */
 
 function accountDebugSummary(account) {
   return {
