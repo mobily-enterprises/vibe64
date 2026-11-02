@@ -194,7 +194,7 @@ test("curated provider settings keep credential runtimes separate and cannot ret
   const previous = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "curated-unit";
   t.after(() => { if (previous === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE; else process.env.VIBE64_RUNTIME_NAMESPACE = previous; });
-  const base = { env: { VIBE64_AGENT_RUNTIME_DIR: "/tmp/codex-provider-fixture" } };
+  const base = { runtimeRoot: "/tmp/codex-provider-fixture" };
   const dirs = ["", "deepseek", "zai-coding-plan"].map((modelProviderId) => codexAppServerRuntimeDir({ ...base, modelProviderId }));
   assert.equal(new Set(dirs).size, 3);
   let metadata = {};

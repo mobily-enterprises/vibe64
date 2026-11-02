@@ -10,7 +10,7 @@ import test from "node:test";
 import { createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";
 import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server/accountsRuntime.js";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
-import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5_000 });

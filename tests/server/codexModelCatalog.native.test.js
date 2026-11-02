@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
-import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 
 const leader = fileURLToPath(new URL("../../packages/vibe64-runtime/src/server/codexAppServerProcess.js", import.meta.url));

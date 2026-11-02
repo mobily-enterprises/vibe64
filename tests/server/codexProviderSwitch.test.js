@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
-import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 
 test("native provider switches preserve history without restarting, and cold recovery restores the provider", {
   skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false,

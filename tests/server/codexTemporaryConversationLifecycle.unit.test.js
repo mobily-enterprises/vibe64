@@ -48,9 +48,9 @@ import {
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  codexAppServerRuntimeDir,
-  createCodexAppServerAgentProvider
+  codexAppServerRuntimeDir
 } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import {
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
@@ -5740,7 +5740,7 @@ test("closing a session without recorded Codex ownership leaves the shared runti
     VIBE64_WORKSPACE: "test"
   };
   const sharedRuntimeDir = codexAppServerRuntimeDir({
-    env: providerEnv
+    runtimeRoot: agentRuntimeRoot
   });
   await mkdir(sharedRuntimeDir, {
     recursive: true

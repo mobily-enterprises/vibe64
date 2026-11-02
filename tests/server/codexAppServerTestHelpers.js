@@ -9,6 +9,7 @@ import {
 } from "@jskit-ai/assistant-core/server/codex-provider";
 import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
+  codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost
 } from "@local/vibe64-runtime/server/codexAppServerAgent";
@@ -31,9 +32,14 @@ function inTestProcessEnv(options) {
   return { env: process.env, ...options };
 }
 
+// The agent runtime root a test's runtime sits below: its env's, as the server's runtimes sit below the server's.
+function testRuntimeRoot(options) {
+  return codexAppServerRuntimeBaseDir(inTestProcessEnv(options));
+}
+
 async function ensureCodexAppServerRuntime(options = {}) {
   const { runtime, parameters } = codexAppServerRuntimeHost(inTestProcessEnv(options));
-  return runtime.ensure({ ...parameters, runtimeDir: options.runtimeDir || codexAppServerRuntimeDir(options) });
+  return runtime.ensure({ ...parameters, runtimeDir: options.runtimeDir || codexAppServerRuntimeDir({ runtimeRoot: testRuntimeRoot(options), ...options }) });
 }
 
 async function startCodexAppServerProcess(options = {}) {
@@ -41,8 +47,8 @@ async function startCodexAppServerProcess(options = {}) {
   return runtime.start({
     ...parameters,
     runtimeDir: options.runtimeDir === undefined ? codexAppServerRuntimeDir({
-      env: options.env,
       executionRoot: options.executionRoot,
+      runtimeRoot: testRuntimeRoot(options),
       runtimeInstanceId: options.runtimeInstanceId,
       workdir: options.workdir
     }) : options.runtimeDir

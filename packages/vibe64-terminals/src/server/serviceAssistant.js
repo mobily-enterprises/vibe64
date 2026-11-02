@@ -163,6 +163,7 @@ function createServiceAssistant({
     async function prepareCodexHost({ providerId }) {
       // Same account/runtime scope as main chat. The conversation's workdir
       // and command environment belong to its thread, not this service.
+      const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
       const options = {
         ...codexProviderOptions,
         ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
@@ -170,8 +171,9 @@ function createServiceAssistant({
         executionRoot: "",
         workdir: "",
         project: {},
+        runtimeRoot,
         session: {},
-        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })),
+        terminalEnv: await vibe64HostContextEnvironment(runtimeRoot),
         userKey: ""
       };
       options.runtimeDir ||= codexAppServerRuntimeDir(options);

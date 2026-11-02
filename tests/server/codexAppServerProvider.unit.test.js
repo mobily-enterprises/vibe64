@@ -25,9 +25,9 @@ import {
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
-  createCodexAppServerAgentProvider,
   readCodexSelectedAccountAccess
 } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import {
   codexAppServerMetadataIsLive,
   currentCodexAccountIdentitySignature,
@@ -754,16 +754,14 @@ test("codex provider runtime base uses the env's XDG runtime directory", () => {
 });
 
 test("codex provider scopes default runtime directory by target root", () => {
-  const env = {
-    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
-  };
+  const runtimeRoot = "/tmp/vibe64-agent-runtime";
   const first = codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     targetRoot: "/home/workspace/vibe64/beepollen",
     workdir: "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source"
   });
   const second = codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     targetRoot: "/home/workspace/vibe64/dogandgroom",
     workdir: "/home/workspace/.local/share/vibe64-local-editor/state/projects/dogandgroom-test/sessions/active/one/source"
   });
@@ -774,25 +772,23 @@ test("codex provider scopes default runtime directory by target root", () => {
 });
 
 test("codex provider scopes app-server runtime directories by runtime instance", () => {
-  const env = {
-    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
-  };
+  const runtimeRoot = "/tmp/vibe64-agent-runtime";
   const targetRoot = "/home/workspace/vibe64/beepollen";
   const workdir = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source";
   const first = codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     runtimeInstanceId: "session-one",
     targetRoot,
     workdir
   });
   const firstAgain = codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     runtimeInstanceId: "session-one",
     targetRoot,
     workdir
   });
   const second = codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     runtimeInstanceId: "session-two",
     targetRoot,
     workdir
@@ -804,26 +800,24 @@ test("codex provider scopes app-server runtime directories by runtime instance",
 });
 
 test("codex provider scopes runtime directories by explicit runtime namespace", async () => {
-  const env = {
-    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
-  };
+  const runtimeRoot = "/tmp/vibe64-agent-runtime";
   const targetRoot = "/home/workspace/vibe64/beepollen";
   const workdir = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source";
   await assert.rejects(
     () => withRuntimeNamespace("", () => codexAppServerRuntimeDir({
-      env,
+      runtimeRoot,
       targetRoot,
       workdir
     })),
     /VIBE64_RUNTIME_NAMESPACE is required/u
   );
   const namespaceADir = await withRuntimeNamespace("namespace-a", () => codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     targetRoot,
     workdir
   }));
   const namespaceBDir = await withRuntimeNamespace("namespace-b", () => codexAppServerRuntimeDir({
-    env,
+    runtimeRoot,
     targetRoot,
     workdir
   }));
@@ -834,15 +828,15 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
 });
 
 test("scope-free Codex runtimes share within a namespace and isolate separate applications", async () => {
-  const env = { VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime" };
+  const runtimeRoot = "/tmp/vibe64-agent-runtime";
   const first = await withRuntimeNamespace("example-first", () => codexAppServerRuntimeDir({
-    env, session: { sessionId: "first-conversation" }
+    runtimeRoot, session: { sessionId: "first-conversation" }
   }));
   const sameApplication = await withRuntimeNamespace("example-first", () => codexAppServerRuntimeDir({
-    env, session: { sessionId: "second-conversation" }
+    runtimeRoot, session: { sessionId: "second-conversation" }
   }));
-  const otherApplication = await withRuntimeNamespace("example-second", () => codexAppServerRuntimeDir({ env }));
-  const legacy = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({ env }));
+  const otherApplication = await withRuntimeNamespace("example-second", () => codexAppServerRuntimeDir({ runtimeRoot }));
+  const legacy = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({ runtimeRoot }));
 
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
   assert.equal(sameApplication, first, "conversations retain one shared application runtime");
@@ -2361,8 +2355,8 @@ test("codex provider starts distinct app-server processes for distinct runtime i
       recursive: true
     });
     const runtimeDirFor = (runtimeInstanceId) => codexAppServerRuntimeDir({
-      env,
       runtimeInstanceId,
+      runtimeRoot,
       targetRoot,
       workdir
     });
