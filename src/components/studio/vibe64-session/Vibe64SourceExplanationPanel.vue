@@ -1,19 +1,15 @@
 <template>
-  <section v-if="embedded" class="source-explanation-document" :aria-busy="busy || closing" aria-label="Generated explanation">
-    <LongTextPreviewBlocks v-if="documentBody" :blocks="documentBlocks" @link-click="handleExplanationLinkClick" />
-    <div v-if="busy || closing" class="source-explanation-document__progress" role="status">
-      <span>{{ closing ? 'Stopping…' : 'Generating explanation…' }}</span>
-      <v-btn v-if="!closing" size="small" min-height="44" variant="text" @click="emit('stop')">Stop</v-btn>
-    </div>
-    <details v-if="busy && documentProgress" class="source-explanation-document__activity" open>
-      <summary>Progress</summary>
-      <LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(documentProgress)" @link-click="handleExplanationLinkClick" />
-    </details>
-    <div v-else-if="!busy && !closing && ['failed', 'stopped'].includes(explanation.status)" class="source-explanation-document__progress" role="status">
-      <span>{{ explanation.status === 'stopped' ? 'Generation stopped.' : documentFailure || 'Generation failed.' }}</span>
-      <v-btn size="small" min-height="44" variant="text" :disabled="!assistantAvailable" @click="emit('retry')">Retry</v-btn>
-    </div>
-  </section>
+  <Vibe64SourceExplanationDocument
+    v-if="embedded"
+    :assistant-available="assistantAvailable"
+    :busy="busy"
+    :closing="closing"
+    :explanation="explanation"
+    :saved-body="savedBody"
+    @link-click="handleExplanationLinkClick"
+    @retry="emit('retry')"
+    @stop="emit('stop')"
+  />
   <aside
     v-else
     :aria-busy="busy || closing ? 'true' : 'false'"
@@ -248,12 +244,19 @@ import {
 
 import { useScrollToBottom } from "@jskit-ai/assistant-core/client/conversation-scroll";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
+import Vibe64SourceExplanationDocument from "@/components/studio/vibe64-session/Vibe64SourceExplanationDocument.vue";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import {
   scrollElementNearBottom,
   parseLongTextReviewBlocks
 } from "@jskit-ai/assistant-core/shared/conversation";
-import { normalizeSourceEditorPath, sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
+import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
+import {
+  sourceExplanationMessages,
+  sourceRangeDisplayLabel,
+  sourceRangeLineSuffix,
+  sourceRangePathDisplayLabel
+} from "@/lib/vibe64SourceExplanationDisplay.js";
 
 const props = defineProps({
   embedded: Boolean,
@@ -315,30 +318,12 @@ const assistantLabel = computed(() => {
   return vibe64AssistantSelectionLabel({ engineId: profile.providerId, modelId: profile.model, variantId: profile.thinking });
 });
 
-const chatMessages = computed(() => (
-  Array.isArray(props.explanation?.messages) && props.explanation.messages.length
-    ? props.explanation.messages
-    : [
-        ...(props.explanation?.body
-          ? [{
-              id: "body",
-              role: "assistant",
-              text: props.explanation.body
-            }]
-          : []),
-        ...(Array.isArray(props.explanation?.followups) ? props.explanation.followups : [])
-      ]
-).map((message) => ({
+const chatMessages = computed(() => sourceExplanationMessages(props.explanation).map((message) => ({
   ...message,
   blocks: parseLongTextReviewBlocks(message.text || "", {
     preserveParagraphLineBreaks: message.role === "user"
   })
 })));
-// The document reader uses the saved answer, not the conversation transcript.
-const documentBody = computed(() => props.explanation?.body || props.savedBody || chatMessages.value.findLast(message => message.role === 'assistant' && message.status === 'complete')?.text || '');
-const documentBlocks = computed(() => parseLongTextReviewBlocks(documentBody.value));
-const documentProgress = computed(() => chatMessages.value.findLast(message => message.role === 'assistant' && message.status === 'thinking')?.text || '');
-const documentFailure = computed(() => chatMessages.value.findLast(message => message.role === 'assistant' && message.status === 'failed')?.text || '');
 const followupAvailable = computed(() => Boolean(
   props.explanation?.status !== "failed" &&
   (props.explanation?.agentThreadId || props.explanation?.engine === "agent-cache") && (
@@ -369,47 +354,6 @@ const {
   scrollAnchorIntoView: false,
   target: threadElement
 });
-
-function sourceRangeLineSuffix({
-  endLine,
-  startLine
-} = {}) {
-  const start = Number(startLine);
-  const end = Number(endLine);
-  if (!Number.isFinite(start) || start < 1) {
-    return "";
-  }
-  if (!Number.isFinite(end) || end < 1 || end === start) {
-    return `:${start}`;
-  }
-  return `:${start}-${end}`;
-}
-
-function compactSourcePath(path = "", {
-  maxLength = 36
-} = {}) {
-  const normalized = normalizeSourceEditorPath(path);
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `...${normalized.slice(-maxLength)}`;
-}
-
-function sourceRangePathDisplayLabel(range = {}) {
-  const path = normalizeSourceEditorPath(range?.path);
-  if (!path) {
-    return "Source";
-  }
-  return compactSourcePath(path);
-}
-
-function sourceRangeDisplayLabel(range = {}) {
-  const path = normalizeSourceEditorPath(range?.path);
-  if (!path) {
-    return "Source";
-  }
-  return `${path}${sourceRangeLineSuffix(range)}`;
-}
 
 function submitFollowup() {
   if (
@@ -473,13 +417,6 @@ watch(threadScrollKey, (value, previous) => {
 </script>
 
 <style scoped>
-.source-explanation-document { min-width: 0; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
-.source-explanation-document :deep(p), .source-explanation-document :deep(ul), .source-explanation-document :deep(ol) { margin: 0 0 .7em; }
-.source-explanation-document :deep(h2), .source-explanation-document :deep(h3), .source-explanation-document :deep(h4) { font-size: 14px; margin: 1em 0 .3em; }
-.source-explanation-document :deep(pre) { overflow: auto; font-size: 12px; line-height: 1.65; }
-.source-explanation-document__progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: rgba(var(--v-theme-on-surface), .72); }
-.source-explanation-document__activity { font-size: 12px; color: rgba(var(--v-theme-on-surface), .72); }
-.source-explanation-document__activity summary { cursor: pointer; }
 .vibe64-source-explanation {
   block-size: 100%;
   border-left: 1px solid rgba(var(--v-border-color), 0.28);

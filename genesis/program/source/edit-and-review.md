@@ -91,6 +91,8 @@ from saved project work, and inspect one exact file change at a time.
 - `src/lib/vibe64SourceFilePaths.js`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceExplanationDocument.vue`
+- `src/lib/vibe64SourceExplanationDisplay.js`
 - `src/composables/useVibe64RepositoryWorkspace.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionToolPane.js`
@@ -950,7 +952,9 @@ Interface/Code, whose presentation their host records.
   `useVibe64SourceEditor()` composes, owns the selected explanation,
   request generation, streamed messages and acknowledged Close state;
   `Vibe64SourceExplanationPanel` presents the answer, follow-up, cancellation
-  and recovery controls. An answered cache record does not need a thread id to
+  and recovery controls; inside a file's Interface it shows the answer through
+  `Vibe64SourceExplanationDocument`, which reads it as a document with progress,
+  Stop and Retry. An answered cache record does not need a thread id to
   enable its first follow-up. Each explanation owns its manager scope and uses
   the exact captured selection, connection identity and branded execution profile.
   Its cleanup ledger stores scope/native identifiers and profile snapshots, not
