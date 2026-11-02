@@ -54,7 +54,8 @@ function requireSessionSourceRoot(session = {}) {
     const sessionId = toText(session.sessionId) || "(unknown)";
     throw vibe64Error(
       `Session ${sessionId} has no usable source checkout. Create or select a session with source before using this operation.`,
-      "vibe64_session_source_required"
+      "vibe64_session_source_required",
+      { params: { sessionId } }
     );
   }
   return sourceRoot;

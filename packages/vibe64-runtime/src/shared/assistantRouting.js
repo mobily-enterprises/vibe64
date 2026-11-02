@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { defineVibe64AssistantSelection, sameVibe64AssistantSelection } from "./assistantSelection.js";
 import { vibe64AssistantSelectionLabel } from "./assistantLabels.js";
 
@@ -93,8 +94,15 @@ function assistantModeLabel(mode) {
     ASSISTANT_ROUTING_ROLE_DEFINITIONS.find(({ id }) => id === mode)?.label || "";
 }
 
-function routingError(message, code = "vibe64_assistant_routing_invalid") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+/**
+ * A routing refusal the caller sees: a 409 with its own code. `options`
+ * carries a per-sentence messageCode where several sentences keep one code.
+ * @param {string} message
+ * @param {string} code
+ * @param {{ messageCode?: string, messageParams?: Record<string, unknown> }} [options]
+ */
+function routingError(message, code, options = {}) {
+  return new AppError(409, message, { ...options, code });
 }
 
 const upgradeRequired = () => routingError(
@@ -110,10 +118,10 @@ const choosesAutomation = (mode) => !["custom", "fix"].includes(mode);
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
       ![...ASSISTANT_MODES, ASSISTANT_FIX_MODE].some(({ id }) => id === value.mode)) {
-    throw routingError("Choose Custom, Senior, Junior, or Auto.");
+    throw routingError("Choose Custom, Senior, Junior, or Auto.", "vibe64_assistant_mode_invalid");
   }
   if (Object.hasOwn(value, "workflowEngineId")) throw upgradeRequired();
-  if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
+  if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.", "vibe64_assistant_custom_model_required");
   // review controls optional Deslop (Auto review is mandatory); autoSave runs
   // Save after Auto completes a plan.
   return {
@@ -151,10 +159,7 @@ function assistantRoutingGoalFromMetadata(metadata) {
   } catch { /* Refused below. */ }
   if (goal === null) return null;
   if (!goal || typeof goal !== "object" || Array.isArray(goal)) {
-    throw Object.assign(
-      new Error("Saved goal is unreadable. Inspect it before continuing."),
-      { code: "vibe64_assistant_goal_invalid", statusCode: 409 }
-    );
+    throw routingError("Saved goal is unreadable. Inspect it before continuing.", "vibe64_assistant_goal_invalid");
   }
   return goal;
 }
@@ -273,12 +278,13 @@ function parseRoutingDecision(text) {
     result = JSON.parse(String(text).trim());
   } catch {
     throw routingError(
-      "Routing returned an unreadable decision. Retry routing or choose Senior."
+      "Routing returned an unreadable decision. Retry routing or choose Senior.",
+      "vibe64_assistant_routing_decision_unreadable"
     );
   }
   if (!result || !["senior", "junior"].includes(result.mode) || !ROUTING_REASONS.includes(result.reason) ||
       Object.keys(result).some((key) => !["mode", "reason"].includes(key))) {
-    throw routingError("Routing returned an invalid decision. Retry routing or choose Senior.");
+    throw routingError("Routing returned an invalid decision. Retry routing or choose Senior.", "vibe64_assistant_routing_invalid");
   }
   return { mode: result.mode, reason: result.reason };
 }
@@ -305,7 +311,10 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   const recent = messages.slice(-3);
   if (recent.length) input.messages = [recent.at(-1)];
   if (Array.from(render()).length > maxCharacters) {
-    throw routingError("This request and its latest context are too long for routing. Choose Senior or Junior directly.");
+    throw routingError(
+      "This request and its latest context are too long for routing. Choose Senior or Junior directly.",
+      "vibe64_assistant_routing_context_too_long"
+    );
   }
   for (let index = recent.length - 2; index >= 0; index -= 1) {
     input.messages.unshift(recent[index]);
@@ -348,7 +357,7 @@ function assistantModePrompt(mode, message, options = {}) {
       "Do not Save, push or invent new product requirements. For substantial necessary rework within the agreed outcome, update the technical plan and hand back to Junior through the workflow outcome command. Junior implementation will receive another Senior review and any enabled Deslop."
     ].join(" ")
   };
-  if (!instructions[mode]) throw routingError("Unknown assistant mode.");
+  if (!instructions[mode]) throw routingError("Unknown assistant mode.", "vibe64_assistant_mode_unknown");
   let instruction = instructions[intent] || instructions[mode];
   switch (intent) {
     case "conversation":

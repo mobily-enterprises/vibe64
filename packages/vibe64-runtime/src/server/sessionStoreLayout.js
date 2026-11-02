@@ -234,7 +234,7 @@ function resolveVibe64SessionPaths({
   const normalizedProjectContextRoot = normalizeTargetRoot(projectContextRoot);
   const resolvedStateRoot = projectRuntimeRoot ? path.resolve(projectRuntimeRoot) : "";
   if (!resolvedStateRoot) {
-    throw vibe64Error("Vibe64 session paths require projectRuntimeRoot.", "vibe64_project_runtime_root_required");
+    throw vibe64Error("Vibe64 session paths require projectRuntimeRoot.", "vibe64_session_paths_runtime_root_required");
   }
   const sessionsRoot = path.join(resolvedStateRoot, "sessions");
   const sourceSessionsRoot = projectSessionSourceRoot

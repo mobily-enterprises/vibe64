@@ -65,7 +65,8 @@ function createSessionRenewalTransitions({
           if (currentQuiescedId && currentQuiescedId !== normalizedRenewalId) {
             throw vibe64Error(
               `Session is quiesced for another renewal: ${normalizedSourceSessionId}`,
-              "vibe64_session_renewal_conflict"
+              "vibe64_session_renewal_conflict",
+              { params: { sessionId: normalizedSourceSessionId } }
             );
           }
           const normalizedQuiescedAt = toText(metadata.renewal_quiesced_at) ||
@@ -157,7 +158,8 @@ function createSessionRenewalTransitions({
         ) {
           throw vibe64Error(
             `Session cannot be restored from renewal ${normalizedRenewalId}: ${normalizedSourceSessionId}`,
-            "vibe64_session_renewal_transition_invalid"
+            "vibe64_session_renewal_restore_invalid",
+            { params: { renewalId: normalizedRenewalId, sessionId: normalizedSourceSessionId } }
           );
         }
         const normalizedRestoredAt = toText(metadata.renewal_restored_at) ||
@@ -238,7 +240,8 @@ function createSessionRenewalTransitions({
           ) {
             throw vibe64Error(
               `Renewal successor does not match renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-              "vibe64_session_renewal_link_mismatch"
+              "vibe64_session_renewal_link_mismatch",
+              { params: { renewalId: normalizedRenewalId, sessionId: normalizedSuccessorSessionId } }
             );
           }
           if (!toText(successorMetadata.renewal_actor_id)) {
@@ -262,7 +265,8 @@ function createSessionRenewalTransitions({
           if (!validTransition) {
             throw vibe64Error(
               `Invalid renewal transition ${sourceStatus} -> ${successorStatus}.`,
-              "vibe64_session_renewal_transition_invalid"
+              "vibe64_session_renewal_status_pair_invalid",
+              { params: { sourceStatus, successorStatus } }
             );
           }
 
@@ -346,7 +350,8 @@ function createSessionRenewalTransitions({
           if (!toText(metadata.renewal_activation_prepared_at)) {
             throw vibe64Error(
               `Prepared renewal successor has no activation proof: ${normalizedSuccessorSessionId}`,
-              "vibe64_session_renewal_transition_invalid"
+              "vibe64_session_renewal_activation_proof_missing",
+              { params: { sessionId: normalizedSuccessorSessionId } }
             );
           }
           return recordFiles.readSessionFromPaths(successorPaths);
@@ -354,7 +359,8 @@ function createSessionRenewalTransitions({
         if (status !== VIBE64_SESSION_STATUS.RENEWAL_PENDING) {
           throw vibe64Error(
             `Renewal successor cannot be activated from status ${status}: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_transition_invalid"
+            "vibe64_session_renewal_activation_status_invalid",
+            { params: { status, sessionId: normalizedSuccessorSessionId } }
           );
         }
         const normalizedPreparedAt = toText(metadata.renewal_activation_prepared_at) ||
@@ -401,7 +407,8 @@ function createSessionRenewalTransitions({
         if (status !== VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING) {
           throw vibe64Error(
             `Renewal successor activation cannot be rolled back from status ${status}: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_transition_invalid"
+            "vibe64_session_renewal_rollback_status_invalid",
+            { params: { status, sessionId: normalizedSuccessorSessionId } }
           );
         }
         await writeTextFile(
@@ -450,7 +457,8 @@ function createSessionRenewalTransitions({
           if (toText(metadata.renewal_activated_at) !== normalizedCommittedAt) {
             throw vibe64Error(
               `Active renewal successor has a different commit marker: ${normalizedSuccessorSessionId}`,
-              "vibe64_session_renewal_transition_invalid"
+              "vibe64_session_renewal_commit_marker_mismatch",
+              { params: { sessionId: normalizedSuccessorSessionId } }
             );
           }
           return recordFiles.readSessionFromPaths(successorPaths);
@@ -461,7 +469,8 @@ function createSessionRenewalTransitions({
         ) {
           throw vibe64Error(
             `Renewal successor is not prepared for commit: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_transition_invalid"
+            "vibe64_session_renewal_commit_not_prepared",
+            { params: { sessionId: normalizedSuccessorSessionId } }
           );
         }
         await writeTextFile(
@@ -491,7 +500,8 @@ function createSessionRenewalTransitions({
           if (await archiveRecords.readSessionArchiveRecord(normalizedSessionId)) {
             throw vibe64Error(
               `An archived session cannot be removed as a pending renewal successor: ${normalizedSessionId}`,
-              "vibe64_session_renewal_transition_invalid"
+              "vibe64_session_renewal_archived_successor_removal",
+              { params: { sessionId: normalizedSessionId } }
             );
           }
           return {
@@ -510,7 +520,8 @@ function createSessionRenewalTransitions({
         ) {
           throw vibe64Error(
             `Session is not the pending successor for renewal ${normalizedRenewalId}: ${normalizedSessionId}`,
-            "vibe64_session_renewal_transition_invalid"
+            "vibe64_session_renewal_transition_invalid",
+            { params: { renewalId: normalizedRenewalId, sessionId: normalizedSessionId } }
           );
         }
         const rootPaths = storePaths.paths();

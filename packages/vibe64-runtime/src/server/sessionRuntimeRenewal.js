@@ -54,7 +54,7 @@ async function createRenewalSession(runtime, {
   if (!runtime.projectSessionSourceRoot) {
     throw vibe64Error(
       "Renewal session creation requires projectSessionSourceRoot.",
-      "vibe64_project_session_source_root_required"
+      "vibe64_session_renewal_source_root_required"
     );
   }
   const predecessor = await runtime.store.readSessionForRenewal(renewedFrom);
@@ -89,7 +89,7 @@ async function createRenewalSession(runtime, {
   if (recordedSourcePath && path.resolve(recordedSourcePath) !== expectedSourcePath) {
     throw vibe64Error(
       "Renewal session source does not match its managed source path.",
-      "vibe64_session_source_not_attached"
+      "vibe64_session_renewal_source_path_mismatch"
     );
   }
   try {
@@ -97,7 +97,7 @@ async function createRenewalSession(runtime, {
     if (sourceRoot && sourceRoot !== expectedSourcePath) {
       throw vibe64Error(
         "Renewal session source does not match its managed source path.",
-        "vibe64_session_source_not_attached"
+        "vibe64_session_renewal_source_path_mismatch"
       );
     }
     if (!sourceRoot || !await pathExists(sourceRoot)) {
@@ -133,7 +133,7 @@ async function createRenewalSession(runtime, {
     ) {
       throw vibe64Error(
         "Renewal session source creation completed without attaching a source directory.",
-        "vibe64_session_source_not_attached"
+        "vibe64_session_renewal_source_not_attached"
       );
     }
   } catch (error) {
@@ -166,7 +166,8 @@ async function discardRenewalSession(runtime, sessionId, options) {
   ) {
     throw vibe64Error(
       `Session is not the pending successor for renewal ${toText(renewalId) || "(empty)"}: ${toText(sessionId)}`,
-      "vibe64_session_renewal_transition_invalid"
+      "vibe64_session_renewal_transition_invalid",
+      { params: { renewalId: toText(renewalId), sessionId: toText(sessionId) } }
     );
   }
   const expectedSourcePath = managedSessionSourcePath(
@@ -177,7 +178,7 @@ async function discardRenewalSession(runtime, sessionId, options) {
   if (sourceRoot && sourceRoot !== expectedSourcePath) {
     throw vibe64Error(
       "Renewal session source does not match its managed source path.",
-      "vibe64_session_source_not_attached"
+      "vibe64_session_renewal_source_path_mismatch"
     );
   }
   await rm(path.dirname(expectedSourcePath), {
@@ -209,7 +210,8 @@ async function prepareSessionSourceForRenewal(runtime, sessionId, options) {
     ) {
       throw vibe64Error(
         `Only the exact quiesced session source can be prepared for renewal: ${toText(sessionId)}`,
-        "vibe64_session_renewal_source_not_quiesced"
+        "vibe64_session_renewal_source_prepare_not_quiesced",
+        { params: { sessionId: toText(sessionId) } }
       );
     }
     return prepareRenewalSessionSource({
@@ -239,7 +241,8 @@ async function stagePreparedSessionSourceForRenewal(runtime, sessionId, options)
     ) {
       throw vibe64Error(
         `Only the exact quiesced session source can enter its committed renewal stage: ${toText(sessionId)}`,
-        "vibe64_session_renewal_source_not_quiesced"
+        "vibe64_session_renewal_source_stage_not_quiesced",
+        { params: { sessionId: toText(sessionId) } }
       );
     }
     return stagePreparedRenewalSessionSource({
@@ -292,7 +295,8 @@ async function commitRenewalSessionSourceRemoval(runtime, sessionId, options) {
     if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
       throw vibe64Error(
         `Renewal source removal requires an archived predecessor: ${toText(sessionId)}`,
-        "vibe64_session_renewal_source_commit_status_invalid"
+        "vibe64_session_renewal_source_commit_status_invalid",
+        { params: { sessionId: toText(sessionId) } }
       );
     }
     if (
@@ -301,7 +305,8 @@ async function commitRenewalSessionSourceRemoval(runtime, sessionId, options) {
     ) {
       throw vibe64Error(
         `Archived predecessor does not belong to renewal ${toText(renewalId) || "(empty)"}: ${toText(sessionId)}`,
-        "vibe64_session_renewal_link_mismatch"
+        "vibe64_session_renewal_archived_predecessor_mismatch",
+        { params: { renewalId: toText(renewalId), sessionId: toText(sessionId) } }
       );
     }
     return commitRenewalSessionSourceStage({

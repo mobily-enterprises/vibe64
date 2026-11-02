@@ -96,9 +96,11 @@ function sameResolvedPath(left = "", right = "") {
 function renewalSourceStagePath(session = {}, renewalId = "") {
   const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
+    const sessionId = toText(session.sessionId) || "(unknown)";
     throw vibe64Error(
-      `Session ${toText(session.sessionId) || "(unknown)"} has no managed source to stage for renewal.`,
-      "vibe64_session_source_required"
+      `Session ${sessionId} has no managed source to stage for renewal.`,
+      "vibe64_session_source_required",
+      { messageCode: "vibe64_session_source_renewal_stage_required", messageParams: { sessionId } }
     );
   }
   return `${path.resolve(worktreePath)}.renewal-${assertSessionRenewalId(renewalId)}`;

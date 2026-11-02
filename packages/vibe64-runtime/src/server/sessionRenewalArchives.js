@@ -72,7 +72,8 @@ function createSessionRenewalArchives({
     ) {
       throw vibe64Error(
         `Renewal predecessor does not belong to renewal ${normalizedRenewalId}: ${normalizedSessionId}`,
-        "vibe64_session_renewal_link_mismatch"
+        "vibe64_session_renewal_predecessor_mismatch",
+        { params: { renewalId: normalizedRenewalId, sessionId: normalizedSessionId } }
       );
     }
     const selectedBeforeArchive = toText(metadata[RENEWAL_ARCHIVE_SELECTION_METADATA]);
@@ -106,7 +107,8 @@ function createSessionRenewalArchives({
     if (!archiveRecord) {
       throw vibe64Error(
         `Renewal predecessor has a partially published archive: ${normalizedSessionId}`,
-        "vibe64_session_renewal_archive_published"
+        "vibe64_session_renewal_archive_partially_published",
+        { params: { sessionId: normalizedSessionId } }
       );
     }
     if (
@@ -115,7 +117,8 @@ function createSessionRenewalArchives({
     ) {
       throw vibe64Error(
         `Published predecessor archive belongs to another renewal: ${normalizedSessionId}`,
-        "vibe64_session_renewal_link_mismatch"
+        "vibe64_session_renewal_published_archive_mismatch",
+        { params: { sessionId: normalizedSessionId } }
       );
     }
     return archiveRecord;
@@ -133,7 +136,8 @@ function createSessionRenewalArchives({
     if (!archiveRecord) {
       throw vibe64Error(
         `Renewal predecessor has no prepared archive: ${normalizedSourceSessionId}`,
-        "vibe64_session_renewal_archive_required"
+        "vibe64_session_renewal_prepared_archive_required",
+        { params: { sessionId: normalizedSourceSessionId } }
       );
     }
     await archiveRecords.validateSessionArchive(archiveRecord.archivePath);
@@ -143,7 +147,8 @@ function createSessionRenewalArchives({
     ) {
       throw vibe64Error(
         `Prepared predecessor archive belongs to another renewal: ${normalizedSourceSessionId}`,
-        "vibe64_session_renewal_link_mismatch"
+        "vibe64_session_renewal_prepared_archive_mismatch",
+        { params: { sessionId: normalizedSourceSessionId } }
       );
     }
     return archiveRecord;
@@ -162,7 +167,8 @@ function createSessionRenewalArchives({
     if (await sessionArchiveRecordExists(rootPaths, normalizedSourceSessionId)) {
       throw vibe64Error(
         `Renewal predecessor was published before its durable commit: ${normalizedSourceSessionId}`,
-        "vibe64_session_renewal_archive_published"
+        "vibe64_session_renewal_archive_published_early",
+        { params: { sessionId: normalizedSourceSessionId } }
       );
     }
     const buildRoot = buildingRenewalArchiveRoot(rootPaths, normalizedSourceSessionId);
@@ -193,7 +199,8 @@ function createSessionRenewalArchives({
     ) {
       throw vibe64Error(
         `Renewal archive cannot be prepared from ${sourceStatus} -> ${successorStatus}.`,
-        "vibe64_session_renewal_transition_invalid"
+        "vibe64_session_renewal_archive_status_pair_invalid",
+        { params: { sourceStatus, successorStatus } }
       );
     }
     const selectedSessionId = rootPaths.currentSessionAliasPath
@@ -258,7 +265,7 @@ function createSessionRenewalArchives({
         throw archiveCommandError(
           tarResult,
           `Cannot prepare renewal archive ${normalizedSourceSessionId}: ${tarResult.output}`,
-          "vibe64_session_archive_write_failed"
+          "vibe64_session_renewal_archive_write_failed"
         );
       }
       await archiveRecords.validateSessionArchive(stagedArchivePath);
@@ -289,7 +296,8 @@ function createSessionRenewalArchives({
         ) {
           throw vibe64Error(
             `Cannot prepare renewal archive during an active mutation: ${sourcePaths.sessionId}`,
-            "vibe64_session_archive_during_mutation"
+            "vibe64_session_renewal_archive_during_mutation",
+            { params: { sessionId: sourcePaths.sessionId } }
           );
         }
         return locks.withQueuedSessionLock(mutationKey, sourcePaths, "mutation", {
@@ -338,7 +346,8 @@ function createSessionRenewalArchives({
         if (activeExists && closingExists) {
           throw vibe64Error(
             `Vibe64 session exists in both active and closing state: ${normalizedSourceSessionId}`,
-            "vibe64_session_archive_state_conflict"
+            "vibe64_session_closing_state_conflict",
+            { params: { sessionId: normalizedSourceSessionId } }
           );
         }
         if (
@@ -347,7 +356,8 @@ function createSessionRenewalArchives({
         ) {
           throw vibe64Error(
             `A committed predecessor archive cannot be restored: ${normalizedSourceSessionId}`,
-            "vibe64_session_renewal_archive_published"
+            "vibe64_session_renewal_archive_published",
+            { params: { sessionId: normalizedSourceSessionId } }
           );
         }
         if (!activeExists) {
@@ -363,7 +373,8 @@ function createSessionRenewalArchives({
         ) {
           throw vibe64Error(
             `Renewal predecessor cannot be restored from status ${status}: ${normalizedSourceSessionId}`,
-            "vibe64_session_renewal_archive_status_invalid"
+            "vibe64_session_renewal_archive_status_invalid",
+            { params: { status, sessionId: normalizedSourceSessionId } }
           );
         }
         let selectedBeforeArchive = RENEWAL_ARCHIVE_SELECTION_NONE;
@@ -444,7 +455,8 @@ function createSessionRenewalArchives({
         if (activeExists && closingExists) {
           throw vibe64Error(
             `Vibe64 session exists in both active and archiving state: ${normalizedSourceSessionId}`,
-            "vibe64_session_archive_state_conflict"
+            "vibe64_session_archive_state_conflict",
+            { params: { sessionId: normalizedSourceSessionId } }
           );
         }
         if (activeExists) {
@@ -458,7 +470,8 @@ function createSessionRenewalArchives({
           ) {
             throw vibe64Error(
               `Renewal predecessor cannot be committed from status ${status}: ${normalizedSourceSessionId}`,
-              "vibe64_session_renewal_archive_status_invalid"
+              "vibe64_session_renewal_archive_commit_status_invalid",
+              { params: { status, sessionId: normalizedSourceSessionId } }
             );
           }
           await archivePublishing.moveActiveSessionToClosing(activePaths, closingPaths);
@@ -482,7 +495,8 @@ function createSessionRenewalArchives({
           ) {
             throw vibe64Error(
               `Renewal predecessor closing ownership is invalid: ${normalizedSourceSessionId}`,
-              "vibe64_session_renewal_archive_status_invalid"
+              "vibe64_session_renewal_closing_owner_invalid",
+              { params: { sessionId: normalizedSourceSessionId } }
             );
           }
           for (const name of RENEWAL_ARCHIVE_RESET_METADATA_NAMES) {
@@ -521,7 +535,8 @@ function createSessionRenewalArchives({
         } else {
           throw vibe64Error(
             `Renewal predecessor closing status is invalid: ${normalizedSourceSessionId}`,
-            "vibe64_session_renewal_archive_status_invalid"
+            "vibe64_session_renewal_closing_status_invalid",
+            { params: { sessionId: normalizedSourceSessionId } }
           );
         }
 
@@ -588,7 +603,8 @@ function createSessionRenewalArchives({
     if (!published) {
       throw vibe64Error(
         `Renewal predecessor has no published archive: ${normalizedSourceSessionId}`,
-        "vibe64_session_renewal_archive_required"
+        "vibe64_session_renewal_archive_required",
+        { params: { sessionId: normalizedSourceSessionId } }
       );
     }
     const finalized = await locks.runSessionArchiveExclusive(

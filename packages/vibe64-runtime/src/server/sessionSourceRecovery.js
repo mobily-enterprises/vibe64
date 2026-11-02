@@ -420,14 +420,16 @@ async function validateRecoveryBundle({
   if (artifact !== expectedArtifact) {
     throw vibe64Error(
       `Renewal recovery references an unexpected artifact: ${artifact}`,
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_artifact_unexpected",
+      { params: { artifact } }
     );
   }
   const artifactPath = path.join(session.artifactsRoot, artifact);
   if (!await pathExists(artifactPath)) {
     throw vibe64Error(
       `Renewal recovery artifact is missing: ${artifact}`,
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_artifact_missing",
+      { params: { artifact } }
     );
   }
   const verification = await runGit(worktreePath, ["bundle", "verify", artifactPath], {
@@ -437,7 +439,8 @@ async function validateRecoveryBundle({
   if (!verification.ok) {
     throw vibe64Error(
       `Renewal recovery artifact is invalid: ${artifact}: ${verification.output}`,
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_invalid",
+      { params: { artifact } }
     );
   }
 }

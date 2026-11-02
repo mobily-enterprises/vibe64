@@ -52,10 +52,7 @@ async function updateVibe64CurrentSessionAlias({
   const normalizedSessionId = toText(sessionId);
   const aliasStat = await lstatIfExists(resolvedAliasPath);
   if (aliasStat && !aliasStat.isSymbolicLink()) {
-    throw vibe64Error(
-      `Cannot manage current Vibe64 session alias because ${resolvedAliasPath} is not a symbolic link.`,
-      "vibe64_current_session_alias_conflict"
-    );
+    throw new Error(`Cannot manage current Vibe64 session alias because ${resolvedAliasPath} is not a symbolic link.`);
   }
   if (!normalizedSessionId) {
     if (aliasStat) {
@@ -116,10 +113,7 @@ async function readVibe64CurrentSessionAlias({
     return "";
   }
   if (!aliasStat.isSymbolicLink()) {
-    throw vibe64Error(
-      `Cannot read current Vibe64 session because ${resolvedAliasPath} is not a symbolic link.`,
-      "vibe64_current_session_alias_conflict"
-    );
+    throw new Error(`Cannot read current Vibe64 session because ${resolvedAliasPath} is not a symbolic link.`);
   }
   const target = await readlink(resolvedAliasPath);
   const normalizedTarget = path.normalize(target);

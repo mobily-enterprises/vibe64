@@ -87,7 +87,8 @@ function createSessionArchivePublishing({
     ) {
       throw vibe64Error(
         `Cannot archive Vibe64 session during an active mutation: ${activePaths.sessionId}`,
-        "vibe64_session_archive_during_mutation"
+        "vibe64_session_archive_during_mutation",
+        { params: { sessionId: activePaths.sessionId } }
       );
     }
     return locks.withQueuedSessionLock(mutationKey, activePaths, "mutation", {
@@ -101,7 +102,8 @@ function createSessionArchivePublishing({
       if (activeExists && closingExists) {
         throw vibe64Error(
           `Vibe64 session exists in both active and archiving state: ${activePaths.sessionId}`,
-          "vibe64_session_archive_state_conflict"
+          "vibe64_session_archive_state_conflict",
+          { params: { sessionId: activePaths.sessionId } }
         );
       }
       if (closingExists) {

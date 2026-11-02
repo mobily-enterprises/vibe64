@@ -137,7 +137,7 @@ async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
   if (!normalizedSourceRoot) {
     throw vibe64Error(
       "Cannot dissociate session source Git alternates without a source root.",
-      "vibe64_session_source_root_required"
+      "vibe64_session_source_dissociate_root_required"
     );
   }
   const alternatesPath = await sessionSourceGitAlternatesPath(normalizedSourceRoot);

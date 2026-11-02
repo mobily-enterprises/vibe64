@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_ASSISTANT_ENGINE_IDS = Object.freeze({
@@ -27,12 +28,15 @@ const VIBE64_ASSISTANT_SELECTION_ERROR_CODES = Object.freeze({
   UNAVAILABLE: "vibe64_assistant_selection_unavailable"
 });
 
+/**
+ * A selection refusal the caller sees: a 409 whose details name the field or
+ * catalogue revision it concerns.
+ * @param {string} code
+ * @param {string} message
+ * @param {Record<string, unknown>} [details]
+ */
 function selectionError(code, message, details = {}) {
-  const error = new Error(message);
-  error.code = code;
-  error.details = Object.freeze({ ...details });
-  error.statusCode = 409;
-  return error;
+  return new AppError(409, message, { code, details: Object.freeze({ ...details }) });
 }
 
 function containsControlCharacter(value = "") {

@@ -95,10 +95,10 @@ class Vibe64SessionRuntime {
   } = {}) {
     this.learningScope = validateLearningSessionScope(learningScope);
     if (this.learningScope?.noExercise && (projectSessionSourceRoot || createSessionSource)) {
-      throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
+      throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_source_forbidden");
     }
     if (store && !isDeepStrictEqual(store.learningScope ?? null, this.learningScope)) {
-      throw vibe64Error("The supplied session store must retain the exact admitted learning scope.", "vibe64_learning_scope_invalid");
+      throw vibe64Error("The supplied session store must retain the exact admitted learning scope.", "vibe64_learning_scope_store_mismatch");
     }
     this.inspectSourceByDefault = inspectSourceByDefault;
     this.createSessionSource = createSessionSource;
@@ -112,7 +112,7 @@ class Vibe64SessionRuntime {
     if (!this.stateRoot && !store) {
       throw vibe64Error(
         "Vibe64 session runtime requires projectRuntimeRoot.",
-        "vibe64_project_runtime_root_required"
+        "vibe64_session_runtime_root_required"
       );
     }
     this.store = store || createVibe64SessionStore({
@@ -342,7 +342,7 @@ class Vibe64SessionRuntime {
     const learning = learningSessionBinding(session.metadata, this.learningScope, session.sessionId);
     if (learning) {
       if (session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
-        throw vibe64Error("Historical or inactive learning sessions cannot admit work.", "vibe64_learning_session_inactive");
+        throw vibe64Error("Historical or inactive learning sessions cannot admit work.", "vibe64_learning_session_work_closed");
       }
       if (learning.noExercise) return { prompt: toText(request) };
     }

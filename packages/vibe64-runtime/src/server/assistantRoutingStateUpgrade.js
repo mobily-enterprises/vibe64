@@ -25,19 +25,13 @@ const V4_PURPOSES = ["custom", "senior", "junior", "helper", "review", "deslop",
 
 function currentPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !["custom", "senior", "junior", "auto"].includes(value.mode)) {
-    throw Object.assign(new Error("Choose Custom, Senior, Junior, or Auto."), {
-      code: "vibe64_assistant_routing_invalid",
-      statusCode: 409
-    });
+    throw new Error("Choose Custom, Senior, Junior, or Auto.");
   }
   if (value.workflowEngineId !== undefined && !engines.has(value.workflowEngineId)) {
-    throw Object.assign(new Error("Choose a supported workflow orchestrator."), {
-      code: "vibe64_assistant_routing_invalid",
-      statusCode: 409
-    });
+    throw new Error("Choose a supported workflow orchestrator.");
   }
   if (value.mode === "custom" && !value.override) {
-    throw Object.assign(new Error("Choose a custom model first."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+    throw new Error("Choose a custom model first.");
   }
   if (value.override && value.mode !== "auto") defineVibe64AssistantSelection(value.override);
   return value;
@@ -109,13 +103,10 @@ function validateAssistantRoutingUpgradeRecord(value, options = {}) {
  */
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !modes.has(value.mode)) {
-    throw Object.assign(new Error("Choose Plan, Code, Economy, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+    throw new Error("Choose Plan, Code, Economy, or Auto.");
   }
   if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
-    throw Object.assign(new Error("Choose a supported workflow orchestrator."), {
-      code: "vibe64_assistant_routing_invalid",
-      statusCode: 409
-    });
+    throw new Error("Choose a supported workflow orchestrator.");
   }
   return {
     mode: value.mode,

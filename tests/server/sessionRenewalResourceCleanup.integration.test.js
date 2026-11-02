@@ -661,7 +661,7 @@ test("completed renewal removes every predecessor process, command, attachment, 
       await assert.rejects(context.runtime.store.claimIntegrationContinuation(successor.sessionId, {
         ...integrationRequest, continuationMessageId: oldRequest.continuationMessageId,
         engineId: "codex", threadId: "successor-thread"
-      }), { code: "vibe64_integration_setup_request_changed" });
+      }), { code: "vibe64_integration_completion_changed" });
 
     } finally {
       await closeHarness(context);

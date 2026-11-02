@@ -52,7 +52,7 @@ function createCurrentSessionRecords({
   async function updatePinnedSession(sessionId, pinned) {
     const rootPaths = storePaths.paths();
     if (!rootPaths.currentSessionAliasPath || state.admittedLearningScope) {
-      throw vibe64Error("Only a project source session can be pinned.", "vibe64_session_pin_unavailable");
+      throw vibe64Error("Only a project source session can be pinned.", "vibe64_session_pin_source_required");
     }
     const id = assertValidVibe64SessionId(sessionId);
     return enqueueSessionMutation(rootPaths.currentSessionAliasPath, async () => {
@@ -142,7 +142,8 @@ function createCurrentSessionRecords({
       ) {
         throw vibe64Error(
           `Renewal successor is not prepared for renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-          "vibe64_session_renewal_link_mismatch"
+          "vibe64_session_renewal_successor_not_prepared",
+          { params: { renewalId: normalizedRenewalId, sessionId: normalizedSuccessorSessionId } }
         );
       }
       const selectedSessionId = await readVibe64CurrentSessionAlias({
@@ -194,7 +195,8 @@ function createCurrentSessionRecords({
       ) {
         throw vibe64Error(
           `Renewal successor is not committed for renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-          "vibe64_session_renewal_link_mismatch"
+          "vibe64_session_renewal_successor_not_committed",
+          { params: { renewalId: normalizedRenewalId, sessionId: normalizedSuccessorSessionId } }
         );
       }
       const selectedSessionId = await readVibe64CurrentSessionAlias({

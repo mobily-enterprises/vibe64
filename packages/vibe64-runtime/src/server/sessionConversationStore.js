@@ -235,7 +235,7 @@ function createSessionConversationStore({
           saved.continuationMessageId !== continuationMessageId) {
         throw vibe64Error(
           "This integration completion has changed or no longer exists.",
-          "vibe64_integration_setup_request_changed"
+          "vibe64_integration_completion_changed"
         );
       }
       if (saved.continuation.status !== "pending" &&
@@ -329,7 +329,8 @@ function createSessionConversationStore({
       if (error instanceof SyntaxError) {
         throw vibe64Error(
           `Conversation turn ${turnId} metadata is not valid JSON.`,
-          "vibe64_invalid_conversation_turn_metadata"
+          "vibe64_invalid_conversation_turn_metadata_json",
+          { params: { turnId } }
         );
       }
       throw error;
@@ -375,7 +376,7 @@ function createSessionConversationStore({
           typeof value.summary.throughTurnId !== "string"))) {
       throw vibe64Error(
         "Conversation storage has an unsupported or damaged format. Restore it before continuing.",
-        "vibe64_invalid_conversation_storage"
+        "vibe64_invalid_conversation_storage_format"
       );
     }
     return {
