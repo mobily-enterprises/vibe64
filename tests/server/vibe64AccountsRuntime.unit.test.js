@@ -601,6 +601,9 @@ test("accounts feature reports connection readiness with the AI connection in pl
     const feature = await startAccountsFeature({
       env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
       project: {
+        currentTargetRoot() {
+          return "";
+        },
         async readCurrentProject() {
           return { repository: { mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT } };
         }
