@@ -159,9 +159,10 @@ function registerBrowserLifecycleWebSocketRoute(app, monitor) {
   );
 }
 
+const __testables = Object.freeze({ BROWSER_LIFECYCLE_WEBSOCKET_PATH });
+
 export {
-  BROWSER_LIFECYCLE_WEBSOCKET_PATH,
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute,
-  sendBrowserLifecycleState
+  __testables
 };

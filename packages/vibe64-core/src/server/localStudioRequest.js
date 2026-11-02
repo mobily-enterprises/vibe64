@@ -109,7 +109,6 @@ function requireLocalStudioRequest(request, reply, options = {}) {
 }
 
 export {
-  hasAuthenticatedVibe64User,
   isLocalStudioRequest,
   isLoopbackAddress,
   isTrustedStudioWebSocketRequest,

@@ -27,9 +27,9 @@ import {
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
-  PREVIEW_IDENTITY_SELECTOR_EMAIL,
   createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
+import { PREVIEW_IDENTITY_SELECTOR_EMAIL } from "../../packages/vibe64-core/src/shared/previewIdentity.js";
 import {
   PREVIEW_PROXY_PORT_END,
   PREVIEW_PROXY_PORT_START,

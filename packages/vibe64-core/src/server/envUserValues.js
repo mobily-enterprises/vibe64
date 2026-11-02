@@ -168,10 +168,6 @@ function applyEnvUserValues(state, environment, values) {
 
 export {
   ENV_USER_VALUE_SOURCE,
-  ENV_USER_VALUES_FILE,
-  emptyEnvUserValuesState,
   readEnvUserValues,
-  envUserRecordsFromState,
-  envUserValuesPath,
   saveEnvUserValues
 };

@@ -62,12 +62,7 @@ function writeSessionUiSyncPreviewState(previewState) {
   });
 }
 
-function clearSessionUiSyncState() {
-  sessionUiSyncStates.clear();
-}
-
 export {
-  clearSessionUiSyncState,
   readSessionUiSyncStateForSession,
   writeSessionUiSyncPreviewState
 };

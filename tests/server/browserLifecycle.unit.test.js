@@ -5,7 +5,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 import {
   createBrowserLifecycleMonitor,
-  sendBrowserLifecycleState
+  registerBrowserLifecycleWebSocketRoute
 } from "../../server/lib/browserLifecycle.js";
 
 test("browser lifecycle monitor shuts down after the last client disconnects", async () => {
@@ -120,15 +120,22 @@ test("browser lifecycle monitor is passive until shutdown is enabled", async () 
 test("browser lifecycle state tells the client whether server disconnect should close the browser", () => {
   const sentMessages = [];
   const monitor = createBrowserLifecycleMonitor({ logger: silentLogger });
-  const socket = {
+  let connect = null;
+  registerBrowserLifecycleWebSocketRoute({
+    get(_path, _options, handler) {
+      connect = handler;
+    }
+  }, monitor);
+  const localRequest = { headers: { host: "127.0.0.1:4100" }, ip: "127.0.0.1" };
+  const browserWindow = () => Object.assign(new EventEmitter(), {
     send(message) {
       sentMessages.push(JSON.parse(message));
     }
-  };
+  });
 
-  sendBrowserLifecycleState(socket, monitor);
+  connect(browserWindow(), localRequest);
   monitor.enableShutdown(async () => {});
-  sendBrowserLifecycleState(socket, monitor);
+  connect(browserWindow(), localRequest);
 
   assert.deepEqual(sentMessages, [
     {

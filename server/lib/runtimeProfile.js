@@ -26,18 +26,6 @@ function createVibe64RuntimeProfile({
   });
 }
 
-function publicRuntimeProfile(profile = {}) {
-  return {
-    capabilities: {
-      githubRequired: profile.githubRequired !== false,
-      studioSetupEnabled: true
-    },
-    local: true,
-    mode: VIBE64_RUNTIME_MODE_LOCAL,
-    singleTargetRoot: String(profile.singleTargetRoot || "")
-  };
-}
-
 function assertSafeLocalModeListenTarget(profile = {}, listenTarget = {}, options = {}) {
   const {
     env = process.env
@@ -65,10 +53,7 @@ function isLocalhostHost(host = "") {
 }
 
 export {
-  VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV,
   VIBE64_RUNTIME_MODE_LOCAL,
   assertSafeLocalModeListenTarget,
-  createVibe64RuntimeProfile,
-  normalizeRuntimeMode,
-  publicRuntimeProfile
+  createVibe64RuntimeProfile
 };

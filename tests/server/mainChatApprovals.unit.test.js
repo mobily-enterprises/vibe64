@@ -19,7 +19,7 @@ import {
   countWaitingMainChatApprovals
 } from "../../packages/vibe64-sessions/src/server/mainChatApprovals.js";
 import { registerWorkspaceTeamReader } from "../../packages/vibe64-core/src/server/workspaceTeam.js";
-import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/practiceContext.js";
 
 const { MAIN_CHAT_APPROVALS_METADATA } = __testables;
 

@@ -4,10 +4,6 @@ import process from "node:process";
 import { isPlainObject } from "./isPlainObject.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-function plainClone(value) {
-  return JSON.parse(JSON.stringify(value ?? null));
-}
-
 function normalizeTargetRoot(targetRoot = process.cwd()) {
   return path.resolve(toText(targetRoot) || process.cwd());
 }
@@ -63,7 +59,6 @@ export {
   isPlainObject,
   isMissingPathError,
   normalizeTargetRoot,
-  plainClone,
   pathExists,
   pathInside,
   pathInsideOrEqual,

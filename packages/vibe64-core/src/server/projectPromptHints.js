@@ -71,7 +71,6 @@ async function saveProjectPromptHints({
 const __testables = Object.freeze({ normalizeProjectPromptHints, projectPromptHintsPath });
 
 export {
-  PROJECT_PROMPT_HINTS_FILE,
   readProjectPromptHints,
   saveProjectPromptHints,
   __testables

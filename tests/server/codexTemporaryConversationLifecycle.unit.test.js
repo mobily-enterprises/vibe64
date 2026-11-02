@@ -13562,9 +13562,9 @@ test("Main browser fresh authorization for a local practice project opened as an
   // ordinary write grant and an ordinary projectSlug browser authority. The
   // retained grant keeps write (it no longer expires to CONTROL); publication
   // must still read fresh authority and revocation must still suppress it.
-  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
-    assertProjectEffectAdmission, registerPracticeRequestActor, resolveProjectRequestContext,
-    captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const { currentProjectRequestContext, assertProjectEffectAdmission, registerPracticeRequestActor,
+    resolveProjectRequestContext, captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const { runWithPracticeProjectContext, currentPracticeProjectScope } = await import("../../packages/vibe64-core/src/server/practiceContext.js");
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
   const slug = "training-839fb16d3aed40c88b26cb4ec8fe1229";

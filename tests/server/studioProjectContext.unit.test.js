@@ -10,14 +10,13 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  PROJECT_SLUG_MAX_LENGTH,
   createStudioProjectContext,
   normalizeProjectSlug,
   projectSlugFromName,
   resolveProjectContextRoot,
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
-  PROJECT_SLUG_MAX_LENGTH as SHARED_PROJECT_SLUG_MAX_LENGTH,
+  PROJECT_SLUG_MAX_LENGTH,
   PROJECT_SLUG_PATTERN
 } from "../../packages/vibe64-core/src/shared/projectSlug.js";
 import {
@@ -724,7 +723,6 @@ test("project slug contract resolves only canonical Vibe64 project roots", async
     }), path.join(projectsRoot, "app_1-alpha"));
 
     // Browser forms check names against the same shared rule the server enforces.
-    assert.equal(SHARED_PROJECT_SLUG_MAX_LENGTH, PROJECT_SLUG_MAX_LENGTH);
     assert.equal(PROJECT_SLUG_PATTERN.test("app_1-alpha"), true);
     assert.equal(PROJECT_SLUG_PATTERN.test("-dash"), false);
     assert.equal(normalizeProjectSlug("a".repeat(PROJECT_SLUG_MAX_LENGTH)), "a".repeat(PROJECT_SLUG_MAX_LENGTH));

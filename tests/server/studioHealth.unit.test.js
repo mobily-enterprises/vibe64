@@ -5,7 +5,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  commandCheck,
   createService
 } from "../../packages/studio-health/src/server/service.js";
 import { configureVibe64Host } from "@local/vibe64-execution/server";
@@ -250,18 +249,22 @@ test("the browser health probe launches pinned headless Chromium within the heal
   ), false);
 });
 
-test("Health prioritizes a failed execution's reason ahead of incidental browser stderr", async () => {
-  const check = await commandCheck({
-    command: "bash",
-    id: "playwright-browser",
-    label: "Pinned browser",
-    runCommand: async () => ({
-      ok: false,
-      error: "The browser check timed out.",
-      output: Array(5).fill("[chromium] DBus unavailable").join("\n")
-    }),
-    studioRoot: "/tmp"
+test("Health prioritizes a failed execution's reason ahead of incidental browser stderr", async (t) => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-browser-"));
+  await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
+  withRuntimePacks(t, studioRoot);
+  const service = createService({
+    connections: { getStatus: async () => ({ ok: true, connections: [] }) },
+    project: { listProjects: async () => ({ ok: true, projects: [] }) },
+    async runCommand({ args, command }) {
+      return args.join(" ").includes("Playwright browser launched:")
+        ? { ok: false, error: "The browser check timed out.", output: Array(5).fill("[chromium] DBus unavailable").join("\n") }
+        : successfulCommandResult(command, args);
+    },
+    studioRoot
   });
+  const { checks } = await service.inspect();
+  const check = checks.find((entry) => entry.id === "playwright-browser");
   assert.equal(check.status, "fail");
   assert.match(check.observed, /^The browser check timed out\./u);
 });

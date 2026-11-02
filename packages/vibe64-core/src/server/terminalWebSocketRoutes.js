@@ -212,7 +212,5 @@ function registerTerminalWebSocketRoute(
 }
 
 export {
-  publicTerminalSnapshot,
-  registerTerminalWebSocketRoute,
-  sendSocketJson
+  registerTerminalWebSocketRoute
 };

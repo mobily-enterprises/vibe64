@@ -7,9 +7,9 @@ import test from "node:test";
 import {
   listOsUsers,
   osUserEligibility,
-  parsePasswdLine,
   resolveOsUser
 } from "../../packages/vibe64-core/src/server/osUserIdentity.js";
+import { parsePasswdLine } from "@local/vibe64-execution/server";
 
 test("OS user identity parses passwd records without inventing Vibe64 identity", () => {
   assert.deepEqual(parsePasswdLine("ada:x:1001:1001:Ada Lovelace:/home/ada:/bin/bash"), {

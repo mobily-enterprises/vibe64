@@ -9,7 +9,6 @@ import {
   getStudioProjectContext,
   localProjectKeyFromTargetRoot,
   normalizeProjectSlug,
-  projectSlugFromName,
   resolveStudioProjectsRoot
 } from "./studioProjectContext.js";
 import { pathInsideOrEqual } from "./core.js";
@@ -114,30 +113,9 @@ function targetRuntimeIdentity(targetRoot = "") {
   return `local-project:${localProjectKey || localProjectKeyFromTargetRoot(resolvedTargetRoot)}`;
 }
 
-function targetRuntimeProjectSlug(targetRoot = "") {
-  const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
-  const projectContext = currentProjectRequestContext();
-  const contextSlug = String(projectContext?.slug || "").trim();
-  const contextTargetRoot = String(projectContext?.targetRoot || "").trim();
-  if (
-    contextSlug &&
-    (!contextTargetRoot || pathInsideOrEqual(contextTargetRoot, resolvedTargetRoot))
-  ) {
-    return normalizeProjectSlug(contextSlug);
-  }
-
-  const catalogSlug = catalogProjectSlugFromTargetRoot(resolvedTargetRoot);
-  if (catalogSlug) {
-    return catalogSlug;
-  }
-
-  return normalizeProjectSlug(projectSlugFromName(path.basename(resolvedTargetRoot)));
-}
-
 const __testables = Object.freeze({ catalogProjectSlugFromTargetRoot });
 
 export {
-  targetRuntimeProjectSlug,
   targetRuntimeIdentity,
   projectRuntimeIdentity,
   __testables

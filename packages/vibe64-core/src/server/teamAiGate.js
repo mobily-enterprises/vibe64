@@ -53,4 +53,4 @@ async function assertTeamAiAllowsProject({ actor = null } = {}) {
   });
 }
 
-export { TEAM_AI_REQUIRED_CODE, assertTeamAiAllowsProject, readTeamAiReady, readTeamAiStatus, registerTeamAiReadiness };
+export { TEAM_AI_REQUIRED_CODE, assertTeamAiAllowsProject, readTeamAiStatus, registerTeamAiReadiness };

@@ -70,10 +70,8 @@ import {
 import {
   runVibe64AgentWriteExclusive
 } from "../../packages/vibe64-runtime/src/server/agentWriteLock.js";
-import {
-  runWithPracticeProjectContext,
-  runWithProjectRequestContext
-} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/practiceContext.js";
 import {
   createVibe64SessionStore
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";

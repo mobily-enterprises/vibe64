@@ -8,7 +8,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAccountsRuntime } from "@local/vibe64-accounts/server/accountsRuntime";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
-import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/practiceContext.js";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import {
   __testables,

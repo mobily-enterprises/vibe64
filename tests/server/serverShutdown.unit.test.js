@@ -15,7 +15,9 @@ import {
   readTerminalSession,
   startTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
-import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
+import { __testables as browserLifecycleTestables } from "../../server/lib/browserLifecycle.js";
+
+const { BROWSER_LIFECYCLE_WEBSOCKET_PATH } = browserLifecycleTestables;
 
 test("signal shutdown exits cleanly after Fastify closes", async () => {
   const events = [];

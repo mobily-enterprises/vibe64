@@ -3397,8 +3397,9 @@ test("Claude records one execution when the managed wrapper later lends its star
 
 
 test("Claude delayed practice events retain only original control after admission callback ends", async (t) => {
-  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
-    assertProjectEffectAdmission } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const { currentProjectRequestContext, assertProjectEffectAdmission } =
+    await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const { runWithPracticeProjectContext, currentPracticeProjectScope } = await import("../../packages/vibe64-core/src/server/practiceContext.js");
   const f = await fixture(t);
   const owner = {};
   const practice = { access: "write", slug: "training-test", vibe64User: { uid: 42 },
@@ -3445,8 +3446,8 @@ test("Claude delayed practice events retain only original control after admissio
 });
 
 test("Claude delayed practice failure proves native stop then publishes original inactive owner", async (t) => {
-  const { runWithPracticeProjectContext, currentPracticeProjectScope, assertProjectEffectAdmission } =
-    await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const { assertProjectEffectAdmission } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const { runWithPracticeProjectContext, currentPracticeProjectScope } = await import("../../packages/vibe64-core/src/server/practiceContext.js");
   const f = await fixture(t);
   const owner = {};
   const practice = { access: "write", slug: "training-test", vibe64User: { uid: 42 },

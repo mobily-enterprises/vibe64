@@ -235,15 +235,9 @@ const __testables = Object.freeze({ operationalLogFields });
 export {
   createVibe64FastifyLoggerOptions,
   createStreamingLogSanitizer,
-  DEFAULT_VIBE64_LOG_LEVEL,
   logOperationalEvent,
-  redactLogValue,
   sanitizeLogText,
   sanitizeOperationText,
   shouldRedactLogField,
-  VIBE64_LOG_REDACT_PATHS,
-  VIBE64_LOG_REDACTED_VALUE,
-  VIBE64_LOG_SECRET_ASSIGNMENT_PATTERN,
-  VIBE64_LOG_SECRET_FIELD_PATTERN,
   __testables
 };

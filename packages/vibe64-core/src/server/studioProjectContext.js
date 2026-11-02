@@ -11,7 +11,6 @@ import {
 } from "./studioRoots.js";
 import {
   normalizeProjectSlug,
-  PROJECT_SLUG_MAX_LENGTH,
   listProjectRuntimeRoots
 } from "./projectState.js";
 
@@ -324,7 +323,6 @@ function getStudioProjectContext() {
 }
 
 export {
-  PROJECT_SLUG_MAX_LENGTH,
   configureStudioProjectContext,
   createStudioProjectContext,
   getStudioProjectContext,
