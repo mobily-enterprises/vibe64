@@ -8,10 +8,10 @@ import {
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { activeUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
-import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   commandInvocation,
   ensureTerminalSessionSourceGitSelfContained,
+  sessionSourceRepairExclusive,
   vibe64Result,
   outputTargetTerminalNamespace
 } from "./terminalShared.js";
@@ -239,15 +239,7 @@ function createOutputTargetLaunchStart({
           return refuseStart("missing_target_root", "Vibe64 output target root is not available.");
         }
         await ensureTerminalSessionSourceGitSelfContained({
-          runExclusive: async (operation) => {
-            const result = await runVibe64AgentWriteExclusive(context.runtime, sessionId, operation, {
-              operation: "prepare-preview-source"
-            });
-            if (!result.acquired) {
-              throw Object.assign(new Error(result.value.error), result.value);
-            }
-            return result.value;
-          },
+          runExclusive: sessionSourceRepairExclusive(context.runtime, sessionId, "prepare-preview-source"),
           session: context.session,
           workdir: cwd
         });

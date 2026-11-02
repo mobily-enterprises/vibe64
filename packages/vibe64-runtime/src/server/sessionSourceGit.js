@@ -130,9 +130,32 @@ async function inspectSessionSourceMergeState(sourceRoot = "") {
   return merge;
 }
 
-async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
-  runExclusive = null
-} = {}) {
+/**
+ * Where the session source's Git alternates file is, and whether it borrows objects; a borrowing file must lie
+ * inside the source.
+ * @param {string} sourceRoot a resolved session source root
+ */
+async function inspectSessionSourceAlternates(sourceRoot) {
+  const alternatesPath = await sessionSourceGitAlternatesPath(sourceRoot);
+  const borrowing = Boolean(alternatesPath) && await fileHasContent(alternatesPath);
+  if (borrowing && !pathInsideOrEqual(sourceRoot, alternatesPath)) {
+    throw vibe64Error(
+      `Session source Git alternates file is outside the session source: ${alternatesPath}`,
+      "vibe64_session_source_git_alternates_outside_source"
+    );
+  }
+  return { alternatesPath, borrowing };
+}
+
+/**
+ * Makes a session source's Git storage self-contained: when it borrows objects through Git alternates, it
+ * repacks every object locally and removes the alternates file. The repair runs under the caller's source lock,
+ * where the source is inspected again before Git storage changes.
+ * @param {string} sourceRoot
+ * @param {object} options
+ * @param {<T>(operation: () => Promise<T>) => Promise<T>} options.runExclusive runs the repair under the session's source lock
+ */
+async function ensureSessionSourceGitAlternatesDissociated(sourceRoot, { runExclusive }) {
   const normalizedSourceRoot = toText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     throw vibe64Error(
@@ -140,47 +163,42 @@ async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
       "vibe64_session_source_dissociate_root_required"
     );
   }
-  const alternatesPath = await sessionSourceGitAlternatesPath(normalizedSourceRoot);
-  if (!alternatesPath || !await fileHasContent(alternatesPath)) {
+  const inspected = await inspectSessionSourceAlternates(normalizedSourceRoot);
+  if (!inspected.borrowing) {
     return {
-      alternatesPath,
+      alternatesPath: inspected.alternatesPath,
       ok: true,
       repaired: false,
       sourceRoot: normalizedSourceRoot
     };
   }
-  if (!pathInsideOrEqual(normalizedSourceRoot, alternatesPath)) {
-    throw vibe64Error(
-      `Session source Git alternates file is outside the session source: ${alternatesPath}`,
-      "vibe64_session_source_git_alternates_outside_source"
-    );
-  }
-  if (typeof runExclusive === "function") {
-    // Reinspect under the caller's source lock before changing Git storage.
-    return runExclusive(() => ensureSessionSourceGitAlternatesDissociated(normalizedSourceRoot));
-  }
-  const repackResult = await runGit(normalizedSourceRoot, [
-    "repack",
-    "-a",
-    "-d"
-  ], {
-    timeout: GIT_REPACK_TIMEOUT_MS
+  return runExclusive(async () => {
+    const { alternatesPath, borrowing } = await inspectSessionSourceAlternates(normalizedSourceRoot);
+    if (borrowing) {
+      const repackResult = await runGit(normalizedSourceRoot, [
+        "repack",
+        "-a",
+        "-d"
+      ], {
+        timeout: GIT_REPACK_TIMEOUT_MS
+      });
+      if (!repackResult.ok) {
+        throw vibe64Error(
+          `Cannot dissociate session source from Git alternates: ${repackResult.output}`,
+          "vibe64_session_source_git_alternates_dissociate_failed"
+        );
+      }
+      await rm(alternatesPath, {
+        force: true
+      });
+    }
+    return {
+      alternatesPath,
+      ok: true,
+      repaired: borrowing,
+      sourceRoot: normalizedSourceRoot
+    };
   });
-  if (!repackResult.ok) {
-    throw vibe64Error(
-      `Cannot dissociate session source from Git alternates: ${repackResult.output}`,
-      "vibe64_session_source_git_alternates_dissociate_failed"
-    );
-  }
-  await rm(alternatesPath, {
-    force: true
-  });
-  return {
-    alternatesPath,
-    ok: true,
-    repaired: true,
-    sourceRoot: normalizedSourceRoot
-  };
 }
 
 export {

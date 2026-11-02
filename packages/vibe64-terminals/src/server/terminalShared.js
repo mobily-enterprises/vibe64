@@ -15,11 +15,13 @@ import {
 import {
   ensureSessionSourceGitAlternatesDissociated
 } from "@local/vibe64-runtime/server/sessionSourceGit";
+import { agentWriteBusyError, runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   shellQuote
 } from "@local/vibe64-execution/server";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 
@@ -176,11 +178,35 @@ async function directoryExists(filePath = "") {
   }
 }
 
+/**
+ * Runs a session source repair under the session's agent-write lock, so no assistant turn writes the source while
+ * its Git storage changes. A held lock refuses with the retryable busy conflict.
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {string} operation the lock holder's name in busy diagnostics
+ */
+function sessionSourceRepairExclusive(runtime, sessionId, operation) {
+  return async function runSessionSourceRepair(repair) {
+    const result = await runVibe64AgentWriteExclusive(runtime, sessionId, repair, { operation });
+    if (!result.acquired) {
+      throw agentWriteBusyError(result.value);
+    }
+    return result.value;
+  };
+}
+
+/**
+ * Makes the session's source Git storage self-contained before a terminal runs in it; another workdir is skipped.
+ * @param {object} input
+ * @param {ReturnType<typeof sessionSourceRepairExclusive>} input.runExclusive the session's source repair lock
+ * @param {object} input.session
+ * @param {string} input.workdir
+ */
 async function ensureTerminalSessionSourceGitSelfContained({
-  runExclusive = null,
-  session = {},
-  workdir = ""
-} = {}) {
+  runExclusive,
+  session,
+  workdir
+}) {
   const worktreePath = sessionSourcePath(session);
   if (!worktreePath || !workdir || path.resolve(worktreePath) !== path.resolve(workdir)) {
     return {
@@ -212,5 +238,6 @@ export {
   opencodeTerminalNamespace,
   outputTargetTerminalNamespace,
   ensureTerminalSessionSourceGitSelfContained,
+  sessionSourceRepairExclusive,
   terminalNamespace
 };

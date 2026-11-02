@@ -14,6 +14,7 @@ import {
   ensureTerminalSessionSourceGitSelfContained,
   globalCodexTerminalNamespace,
   nonRetryableTerminalFailure,
+  sessionSourceRepairExclusive,
   vibe64Result
 } from "./terminalShared.js";
 import { codexAppServerEndpointForTarget } from "@local/vibe64-runtime/server/codexAppServerAgent";
@@ -167,6 +168,7 @@ function createCodexInteractiveTerminals({
       );
     }
     await ensureTerminalSessionSourceGitSelfContained({
+      runExclusive: sessionSourceRepairExclusive(runtime, sessionId, "prepare-codex-terminal-source"),
       session,
       workdir
     });
