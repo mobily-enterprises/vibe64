@@ -256,5 +256,5 @@ test("legacy projects without dependency files or resource estimates can start w
 });
 
 test("standalone operation does not require managed resource metadata or a resource store", async () => {
-  assert.deepEqual(await startResourceWorkflow({}), { ok: true, workflow: null });
+  assert.deepEqual(await startResourceWorkflow({ env: {} }), { ok: true, workflow: null });
 });
