@@ -1,8 +1,10 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { isPlainObject } from "./isPlainObject.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { isPlainObject } from "./isPlainObject.js";
+import { vibe64StatusCode } from "./serverResponses.js";
 
 function plainClone(value) {
   return JSON.parse(JSON.stringify(value ?? null));
@@ -12,10 +14,17 @@ function normalizeTargetRoot(targetRoot = process.cwd()) {
   return path.resolve(toText(targetRoot) || process.cwd());
 }
 
-function vibe64Error(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+/**
+ * A refusal the caller sees: an AppError with its own code, at the status
+ * Vibe64's response envelope gives that code unless `status` names another.
+ * `params` carries the values the sentence interpolates.
+ * @param {string} message
+ * @param {string} code
+ * @param {{ status?: number, params?: Record<string, unknown>, messageCode?: string, messageParams?: Record<string, unknown>, details?: Record<string, unknown> }} [options]
+ */
+function vibe64Error(message, code, options = {}) {
+  const { status = vibe64StatusCode({ ok: false, code }), ...appErrorOptions } = options;
+  return new AppError(status, message, { ...appErrorOptions, code });
 }
 
 function isMissingPathError(error) {

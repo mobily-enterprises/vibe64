@@ -17,11 +17,23 @@ function vibe64ErrorResponse(error, options = {}) {
       }
     ],
     ok: false,
+    ...messageFields(error),
     ...(error?.retryable === true ? { retryable: true } : {}),
     operationOutcome: String(error?.operationOutcome || ""),
     refreshRecommended: error?.refreshRecommended === true,
     sessionId: error?.sessionId || "",
     revision: error?.revision ?? null
+  };
+}
+
+/**
+ * The values a coded sentence interpolates, and the per-sentence code of a
+ * refusal that keeps a shared code, so a client can show it in the user's language.
+ */
+function messageFields(error) {
+  return {
+    ...(error?.params && Object.keys(error.params).length > 0 ? { params: error.params } : {}),
+    ...(error?.messageCode ? { messageCode: error.messageCode, messageParams: error.messageParams } : {})
   };
 }
 
