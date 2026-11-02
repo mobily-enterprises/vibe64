@@ -20,9 +20,11 @@ import {
   serializeVibe64AssistantSelection
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
+  SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
   readSessionRenewalState
 } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
+import { createSessionArchive, prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
 import {
   createSessionRenewalController
 } from "../../packages/vibe64-sessions/src/server/sessionRenewal.js";
@@ -340,7 +342,8 @@ async function relaunchPredecessorResources(context, predecessor, targetRoot) {
 
 async function renewalHarness(targetRoot, {
   loseFirstAttachmentReleaseResponse = false,
-  failSuccessorCreation = false
+  failSuccessorCreation = false,
+  seedError = null
 } = {}) {
   const projectSessionSourceRoot = managedSessionSourceRoot(targetRoot);
   const predecessorSource = sourcePath(targetRoot, PREDECESSOR_ID);
@@ -515,6 +518,7 @@ async function renewalHarness(targetRoot, {
       return result;
     },
     async seedSessionRenewalHandover(_sessionId, input) {
+      if (seedError) throw seedError;
       return {
         acknowledgement: {
           handoverHash: input.handoverHash,
@@ -731,6 +735,63 @@ test("an injected pre-commit clone failure restores the predecessor, its attachm
       ));
       assert.equal(runtimeProof.processState, "stopped");
       assert.ok(runtimeProof.processExitVerifiedAt);
+    } finally {
+      await closeHarness(context);
+    }
+  });
+});
+
+test("a renewal that failed at seeding is cancelled, discarding its hidden successor, and its original session archives", {
+  timeout: 60_000
+}, async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const context = await renewalHarness(targetRoot, {
+      seedError: Object.assign(new Error("Vibe64 session is reserved for an in-progress renewal."), {
+        code: "vibe64_session_renewal_private"
+      })
+    });
+    try {
+      const review = await requestAndConfirmRenewal(context, "renewal:cancel-then-archive");
+      const failed = await eventually(
+        () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+        (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+      );
+      assert.equal(failed.stage, SESSION_RENEWAL_STAGE.SUCCESSOR_SEEDING);
+      const successorId = failed.successor.sessionId;
+      assert.equal((await context.runtime.getSessionForRenewalWithoutSource(successorId)).status, "renewal_pending");
+      const archive = createSessionArchive({
+        archivePreparation: prepareNothingForArchive,
+        project: {
+          async createRuntimeWithoutSource() { return context.runtime; },
+          async releaseSessionResources() { return { ok: true }; }
+        },
+        publishSessionChanged: async () => null,
+        setupRunner: { isRunning: () => false },
+        terminals: {
+          closeSessionTerminals: (...args) => context.terminals.closeSessionTerminals(...args),
+          // This harness's project service has no output-target launch context to read.
+          async removeOutputResultsForSession() {},
+          removeSessionCommandHelpers: (...args) => context.terminals.removeSessionCommandHelpers(...args)
+        }
+      });
+
+      const blocked = await archive.archiveSession(PREDECESSOR_ID, {});
+      assert.equal(blocked.code, "vibe64_session_renewal_blocks_archive");
+      assert.match(blocked.error, /Retry/u);
+      assert.match(blocked.error, /Cancel renewal/u);
+
+      const cancelled = await context.controller.cancelSessionRenewal(PREDECESSOR_ID, {
+        operationKey: review.operationKey
+      });
+      assert.equal(cancelled.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
+      await assert.rejects(context.runtime.getSessionForRenewalWithoutSource(successorId), {
+        code: "vibe64_session_not_found"
+      });
+      assert.equal((await context.runtime.getSessionWithoutSource(PREDECESSOR_ID)).status, "active");
+
+      const archived = await archive.archiveSession(PREDECESSOR_ID, {});
+      assert.equal(archived.ok, true, archived.error);
+      assert.equal((await context.runtime.getSessionForRenewalWithoutSource(PREDECESSOR_ID)).archived, true);
     } finally {
       await closeHarness(context);
     }

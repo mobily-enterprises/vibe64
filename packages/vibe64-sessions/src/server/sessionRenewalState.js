@@ -19,6 +19,7 @@ const SESSION_RENEWAL_SCHEMA_VERSION = 1;
 
 const SESSION_RENEWAL_STAGE = Object.freeze({
   CANCELLED: "cancelled",
+  CANCELLING: "cancelling",
   COMPLETED: "completed",
   DRAFT_GENERATING: "draft_generating",
   DRAFT_READY: "draft_ready",

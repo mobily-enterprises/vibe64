@@ -89,7 +89,9 @@ function createRenewalScheduler({
       ? Math.max(0, Number(state.maintenance?.attempt) || 0)
       : state.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING
         ? Math.max(0, Number(state.completionRetry?.attempt) || 0)
-        : 0;
+        : state.stage === SESSION_RENEWAL_STAGE.CANCELLING
+          ? Math.max(0, Number(state.cancellation?.attempt) || 0)
+          : 0;
     const retryDelayMs = completionRetryAttempt > 0
       ? Math.min(
         workflowLockRetryDelayMs * (2 ** Math.min(completionRetryAttempt - 1, 10)),
@@ -144,7 +146,10 @@ function createRenewalScheduler({
           if (!renewalNeedsWorkflow(current)) {
             return current;
           }
-          if (current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
+          if ([
+            SESSION_RENEWAL_STAGE.CANCELLING,
+            SESSION_RENEWAL_STAGE.FAILURE_RESTORING
+          ].includes(current.stage)) {
             return workflow.resumeConfirmedRenewal(sessionId, input);
           }
           if (current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING) {
@@ -195,6 +200,17 @@ function createRenewalScheduler({
       await renewalAccess.publish(sessionId, "session-renewal-failed", input.originId);
       return failed;
     }
+  }
+
+  /** Run a renewal's workflow now and return the state it leaves; a later run retries what it leaves unfinished. */
+  async function run(state, input = {}) {
+    if (!admission.isOpen() || !renewalNeedsWorkflow(state)) {
+      return state;
+    }
+    return admission.runOnce(
+      state,
+      () => runPersistedRenewalWorkflow(state.sessionId, input)
+    );
   }
 
   async function schedule(state, input = {}) {
@@ -283,6 +299,7 @@ function createRenewalScheduler({
     clearWorkflowLockRetry,
     closeSessionRenewalWork,
     resumeSessionRenewals,
+    run,
     schedule
   });
 }

@@ -20,8 +20,8 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 /**
- * A failed renewal: its recorded failure, and the predecessor made writable
- * again while the renewal has not been acknowledged.
+ * A failed or cancelled renewal: its recorded failure, and the predecessor made
+ * writable again while the renewal has not been acknowledged.
  * @param {object} dependencies
  * @param {RenewalPredecessorSession} dependencies.predecessorSession
  * @param {RenewalSessionAccess} dependencies.renewalAccess
@@ -206,6 +206,39 @@ function createRenewalRestoration({
     }));
   }
 
+  /**
+   * Finish cancelling a renewal that failed before acknowledgement: the
+   * original session made writable again, then the fresh successor discarded.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   */
+  async function completeCancellation(runtime, state) {
+    const cancelledStage = toText(state.cancellation?.stage);
+    if (
+      state.stage !== SESSION_RENEWAL_STAGE.CANCELLING ||
+      !SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(cancelledStage)
+    ) {
+      throw renewalError(
+        "Session renewal cancellation has invalid durable ownership.",
+        "vibe64_session_renewal_state_invalid",
+        { retryable: true, statusCode: 500 }
+      );
+    }
+    const cancelling = {
+      ...state,
+      stage: cancelledStage
+    };
+    await restorePreAcknowledgementSource(runtime, cancelling);
+    await successorSession.cleanupRenewalSuccessor(runtime, cancelling);
+    const cancelled = await mutateSessionRenewalState(runtime, state.sessionId, (current) => statePatch(current, {
+      error: null,
+      stage: SESSION_RENEWAL_STAGE.CANCELLED,
+      status: SESSION_RENEWAL_STATUS.CANCELLED
+    }));
+    await renewalAccess.publish(state.sessionId, "session-renewal-cancelled");
+    return cancelled;
+  }
+
   async function fail(runtime, sessionId, error) {
     const failureError = renewalFailure(error);
     const failed = await mutateSessionRenewalState(runtime, sessionId, (current) => {
@@ -219,6 +252,18 @@ function createRenewalRestoration({
         return statePatch(current, {
           error: failureError,
           status: SESSION_RENEWAL_STATUS.FAILED
+        });
+      }
+      if (current.stage === SESSION_RENEWAL_STAGE.CANCELLING) {
+        // An accepted cancellation never fails back to a retryable renewal.
+        return statePatch(current, {
+          cancellation: {
+            ...current.cancellation,
+            attempt: Math.max(0, Number(current.cancellation?.attempt) || 0) + 1,
+            lastFailedAt: timestamp()
+          },
+          error: failureError,
+          status: SESSION_RENEWAL_STATUS.RUNNING
         });
       }
       if (
@@ -268,6 +313,7 @@ function createRenewalRestoration({
 
   return Object.freeze({
     restorePreAcknowledgementSource,
+    completeCancellation,
     completeFailureRestoration,
     fail
   });

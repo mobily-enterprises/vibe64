@@ -153,26 +153,6 @@ and end lessons through Learning → **Courses** and Colleague. Colleague can
 explain this; it cannot grant access or repair saved identities. These rules
 apply on desktop and mobile.
 
-## Keep the fresh session's link after renewal
-
-When a completed renewal selects its confirmed fresh session, the address bar
-follows that session, including when a background refresh selects it before the
-renewal dialog opens it. Reloading or bookmarking the updated link opens the fresh
-conversation, including after another renewal. Your chat and project-view choices
-in the link stay unchanged. This works on desktop and mobile.
-
-The renewal dialog offers the same main AI as **Start an AI session**: the
-owner's Senior, or its recommendation when Senior has no saved choice. Like that
-dialog, it shows a saved choice without waiting for each AI tool's model list,
-and opening a session reads none either; only opening **Models** does. Keeping
-that AI leaves the fresh chat on the main AI; picking a different model makes
-it Custom.
-
-If you choose another session or navigate away while the link is opening,
-Vibe64 keeps your newer choice. Ordinary session-tab selection keeps its existing
-behavior. Colleague can explain renewal and inspect the saved result; opening a
-fresh session does not authorize further coding work.
-
 ## Archive a session
 
 Select the session, choose **Archive session**, and confirm **Archive session**
@@ -194,7 +174,11 @@ You do not need to send the pending request or change AI accounts to close it.
 If routing cleanup takes longer than 30 seconds, the session stays available
 with a retryable cleanup error; choose **Archive session** again. A new request
 arriving during cancellation can also require another Close attempt. Pinning,
-renewal and active workspace preparation still prevent archival.
+renewal and active workspace preparation still prevent archival. While a
+renewal is unfinished, Archive says so and names both ways out: open the renewal
+and choose **Retry** to finish it, or **Cancel renewal** to discard its fresh
+session (see [Cancel a failed renewal](session-renewal.md#cancel-a-failed-renewal)). Once the
+renewal is cancelled, **Archive session** works as usual.
 Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
 If a local editor ends uncleanly (a crash, a closed terminal or a forced

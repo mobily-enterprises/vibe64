@@ -44,7 +44,7 @@ import {
   sessionPresenceActionInputValidator,
   sessionPreviewStateInputValidator,
   sessionRenewalConfirmationActionInputValidator,
-  sessionRenewalDraftGuardActionInputValidator,
+  sessionRenewalCancelActionInputValidator,
   sessionRenewalDraftRequestActionInputValidator,
   sessionRenewalDraftUpdateActionInputValidator,
   sessionRenewalInspectActionInputValidator,
@@ -284,11 +284,11 @@ function createSessionActions({ sessions }) {
       },
       execute: (input) => sessions.updateSessionRenewalDraft(input.sessionId, input)
     }),
-    // A repeated cancel finds the renewal already cancelled and returns it.
+    // A repeated cancel finds the renewal cancelled, or still cancelling, and returns it.
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_CANCEL_SESSION_RENEWAL,
-      input: { ...sessionRenewalDraftGuardActionInputValidator, mode: "create" },
+      input: { ...sessionRenewalCancelActionInputValidator, mode: "create" },
       extensions: {
         assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.cancelSessionRenewal),
         vibe64: PROJECT_OPERATION

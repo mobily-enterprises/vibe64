@@ -91,6 +91,11 @@ acknowledgement failed retains that delivery error; it is not reported as a vali
 acknowledgement. Colleague can inspect and explain the saved renewal state and,
 after your request, retry that same operation under its normal permissions.
 
+If a renewal cannot recover, choose **Cancel renewal** in its dialog instead of
+**Retry**. Vibe64 discards the fresh session and keeps the old one, which you can
+then keep using, renew again or archive (see
+[Cancel a failed renewal](session-renewal.md#cancel-a-failed-renewal)).
+
 If Codex reports that an expected editing tool is unavailable, stop the work
 and review any edits already made before continuing. Report the model and the
 error to the workspace operator, who can check the installed Codex version and

@@ -7,7 +7,7 @@ import {
   agentTurnInterruptInputValidator,
   assistantModelAccessUpdateInputValidator,
   assistantSelectionUpdateInputValidator,
-  sessionRenewalDraftGuardInputValidator,
+  sessionRenewalCancelInputValidator,
   sessionRenewalConfirmationInputValidator,
   sessionRenewalDraftRequestInputValidator,
   sessionRenewalDraftUpdateInputValidator,
@@ -209,10 +209,10 @@ function registerRoutes(http, { projectContext }) {
 
   routes.actionRoute("POST", "/sessions/:sessionId/renewal/cancel", {
     actionId: ACTION_CANCEL_SESSION_RENEWAL,
-    body: sessionRenewalDraftGuardInputValidator,
+    body: sessionRenewalCancelInputValidator,
     bodyLimit: 32 * 1024,
     buildInput: sessionBodyWithoutUserInput,
-    summary: "Cancel an unconfirmed Vibe64 session renewal."
+    summary: "Cancel a Vibe64 session renewal under review, or one that failed before its fresh session took over."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/renewal/confirm", {

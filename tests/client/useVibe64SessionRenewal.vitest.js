@@ -624,6 +624,46 @@ describe("useVibe64SessionRenewal", () => {
     scope.stop();
   });
 
+  it("cancels a failed renewal by its operation alone and closes once the server agrees", async () => {
+    const failed = renewalState({
+      error: { message: "Vibe64 session is reserved for an in-progress renewal.", retryable: true },
+      stage: "successor_seeding",
+      status: "failed"
+    });
+    renewalHarness.endpoint.data.value = {
+      ok: true,
+      viewerScope: VIEWER_SCOPE,
+      renewal: failed
+    };
+    renewalHarness.postRun.mockResolvedValue({
+      ok: true,
+      viewerScope: VIEWER_SCOPE,
+      renewal: {
+        ...failed,
+        error: null,
+        revision: failed.revision + 2,
+        stage: "cancelled",
+        status: "cancelled",
+        updatedAt: "2026-08-24T01:03:00.000Z"
+      }
+    });
+    const { controller, scope, selectSession } = mountRenewal();
+    controller.request();
+    expect(controller.phase.value).toBe("failed");
+
+    const cancelled = await controller.cancel();
+
+    expect(renewalHarness.postRun).toHaveBeenCalledWith(expect.objectContaining({
+      body: { operationKey: failed.operationKey },
+      path: expect.stringMatching(/\/renewal\/cancel$/u)
+    }));
+    expect(cancelled.status).toBe("cancelled");
+    expect(controller.open.value).toBe(false);
+    expect(selectSession).not.toHaveBeenCalled();
+
+    scope.stop();
+  });
+
   it("refreshes the list and selects only the acknowledged completed successor", async () => {
     const refreshSessionData = vi.fn(async () => null);
     const selectSession = vi.fn();

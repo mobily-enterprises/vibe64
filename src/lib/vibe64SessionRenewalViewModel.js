@@ -45,6 +45,14 @@ const SESSION_RENEWAL_RESTORE_PROGRESS = Object.freeze([
   })
 ]);
 
+const SESSION_RENEWAL_CANCEL_PROGRESS = Object.freeze([
+  Object.freeze({
+    id: "cancel",
+    label: "Keep the old session and discard the fresh one",
+    state: "active"
+  })
+]);
+
 function sessionRenewalText(value = "") {
   return String(value ?? "")
     .replaceAll("\r\n", "\n")
@@ -86,6 +94,9 @@ function sessionRenewalStageProgress(stage = "") {
   if (currentStage === "failure_restoring") {
     return SESSION_RENEWAL_RESTORE_PROGRESS.map((step) => ({ ...step }));
   }
+  if (currentStage === "cancelling") {
+    return SESSION_RENEWAL_CANCEL_PROGRESS.map((step) => ({ ...step }));
+  }
   const activeIndex = SESSION_RENEWAL_PROGRESS_STAGES.findIndex((step) => (
     step.stages.has(currentStage)
   ));
@@ -102,6 +113,7 @@ function sessionRenewalStageProgress(stage = "") {
 
 function sessionRenewalStageLabel(stage = "") {
   return ({
+    cancelling: "Cancelling the renewal…",
     draft_generating: "Preparing the handover…",
     failure_restoring: "Restoring the old session…",
     old_archiving: "Archiving the old session…",
@@ -118,9 +130,9 @@ function sessionRenewalStageLabel(stage = "") {
 function sessionRenewalFailureSupportingMessage(renewal = null) {
   let message = "";
   if (String(renewal?.error?.code || "").trim() === "vibe64_session_renewal_restore_failed") {
-    message = "The old session and its recovery state are retained, but it is not writable yet. Retry to finish restoring it safely.";
+    message = "The old session and its recovery state are retained, but it is not writable yet. Retry to finish restoring it safely, or Cancel renewal to keep the old session without the fresh one.";
   } else {
-    message = "The old session remains available. Fix the reported condition, then retry the same saved renewal.";
+    message = "The old session remains available. Fix the reported condition, then retry the same saved renewal, or Cancel renewal to keep the old session and discard the fresh one.";
   }
   return String(renewal?.error?.message || "").trim() === message ? "" : message;
 }

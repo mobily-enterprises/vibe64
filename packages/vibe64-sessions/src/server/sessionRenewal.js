@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { runVibe64AgentWriteExclusive, runVibe64RenewalAgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -41,6 +42,24 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").SessionArchivePrepareArchive} SessionArchivePrepareArchive */
 /** @typedef {import("./types.js").RenewalActorRestoration} RenewalActorRestoration */
+
+/**
+ * The stage a failed renewal stopped at, including one whose restoration of
+ * the original session failed too.
+ */
+function failedRenewalStage(state) {
+  return state.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING
+    ? toText(state.failure?.stage)
+    : state.stage;
+}
+
+/** A failed renewal that never reached its forward-only commit, so cancelling it keeps the original session. */
+function renewalFailedBeforeAcknowledgement(state) {
+  const stage = failedRenewalStage(state);
+  return state.status === SESSION_RENEWAL_STATUS.FAILED &&
+    !state.commit &&
+    (stage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING || SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(stage));
+}
 
 /**
  * @param {object} dependencies
@@ -116,19 +135,46 @@ function createSessionRenewalController({
     workflowLockRetryMs
   });
 
+  /**
+   * A handover under review, or a renewal that failed before acknowledgement,
+   * ends cancelled. A failed renewal's fresh successor is discarded and its
+   * original session made writable again; a cancellation that cannot finish
+   * at once stays accepted and retries until it does.
+   */
   async function cancelSessionRenewal(sessionId, input) {
     const runtime = await renewalAccess.runtimeForRenewal();
-    const state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
+    let state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
       assertSessionRenewalOperation(current, input.operationKey);
-      if (current.status === SESSION_RENEWAL_STATUS.CANCELLED) {
+      if ([
+        SESSION_RENEWAL_STAGE.CANCELLED,
+        SESSION_RENEWAL_STAGE.CANCELLING
+      ].includes(current.stage)) {
         return undefined;
+      }
+      if (renewalFailedBeforeAcknowledgement(current)) {
+        const failedStage = failedRenewalStage(current);
+        return statePatch(current, failedStage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING
+          ? {
+              error: null,
+              stage: SESSION_RENEWAL_STAGE.CANCELLED,
+              status: SESSION_RENEWAL_STATUS.CANCELLED
+            }
+          : {
+              cancellation: {
+                attempt: 0,
+                stage: failedStage
+              },
+              error: null,
+              failure: null,
+              stage: SESSION_RENEWAL_STAGE.CANCELLING,
+              status: SESSION_RENEWAL_STATUS.RUNNING
+            });
       }
       assertSessionRenewalDraftVersion(current, input);
       if (current.status !== SESSION_RENEWAL_STATUS.REVIEW) {
-        throw renewalError(
-          "Only a handover awaiting review can be cancelled.",
-          "vibe64_session_renewal_cancel_not_available"
-        );
+        throw new AppError(409, "Only a handover awaiting review, or a renewal that failed, can be cancelled.", {
+          code: "vibe64_session_renewal_cancel_not_available"
+        });
       }
       return statePatch(current, {
         error: null,
@@ -136,8 +182,13 @@ function createSessionRenewalController({
         status: SESSION_RENEWAL_STATUS.CANCELLED
       });
     });
-    scheduler.clearWorkflowLockRetry(state?.renewalId);
-    await renewalAccess.publish(sessionId, "session-renewal-cancelled", input.originId);
+    if (state.stage === SESSION_RENEWAL_STAGE.CANCELLING) {
+      await renewalAccess.publish(sessionId, "session-renewal-cancelling", input.originId);
+      state = await scheduler.run(state, input);
+    } else {
+      scheduler.clearWorkflowLockRetry(state.renewalId);
+      await renewalAccess.publish(sessionId, "session-renewal-cancelled", input.originId);
+    }
     return publicRenewalResult(state, {}, input.vibe64User);
   }
 

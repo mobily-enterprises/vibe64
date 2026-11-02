@@ -81,6 +81,16 @@ describe("session renewal view model", () => {
     ]);
   });
 
+  it("labels an accepted cancellation as its own single step", () => {
+    expect(sessionRenewalStageLabel("cancelling")).toBe("Cancelling the renewal…");
+    expect(sessionRenewalStageProgress("cancelling")).toEqual([{
+      id: "cancel",
+      label: "Keep the old session and discard the fresh one",
+      state: "active"
+    }]);
+    expect(sessionRenewalFailureSupportingMessage({ error: { message: "Failed." } })).toContain("Cancel renewal");
+  });
+
   it("does not repeat a failure explanation already supplied by the server", () => {
     const renewal = {
       error: { message: "A specific setup check failed.", retryable: true }

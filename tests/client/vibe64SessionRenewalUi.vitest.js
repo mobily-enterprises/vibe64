@@ -552,6 +552,36 @@ describe("session renewal dialog", () => {
     expect(model.retry).toHaveBeenCalledOnce();
   });
 
+  it("offers Cancel renewal beside Retry for a failed renewal", async () => {
+    const model = renewalModel({
+      phase: "failed",
+      renewal: {
+        stage: "successor_seeding",
+        status: "failed",
+        error: { message: "Vibe64 session is reserved for an in-progress renewal.", retryable: true }
+      }
+    });
+    const html = await renderRenewal(model);
+
+    expect(html).toContain("Cancel renewal to keep the old session and discard the fresh one");
+    const cancel = renewalUiHarness.buttons.find((button) => button.onClick === model.cancel);
+    expect(cancel.disabled).toBe(false);
+    expect(html).toMatch(/data-vibe64-session-renewal-cancel="failed"[^>]*>(?:<[^>]+>)*\s*Cancel renewal\s*</u);
+    expect(html).not.toContain("data-vibe64-session-renewal-close=\"footer\"");
+    cancel.onClick();
+    expect(model.cancel).toHaveBeenCalledOnce();
+
+    const pending = await renderRenewal(renewalModel({
+      actionLabel: "Cancelling…",
+      busy: true,
+      pendingAction: "cancel",
+      phase: "failed",
+      renewal: { stage: "successor_seeding", status: "failed", error: { message: "Failed." } }
+    }));
+    expect(pending).toContain("Cancelling…");
+    expect(pending).toMatch(/<button autofocus[^>]*>[\s\S]*?Retry[\s\S]*?<\/button>/u);
+  });
+
   it("keeps opening a completed successor actionable after automatic navigation fails", async () => {
     const html = await renderRenewal(renewalModel({
       phase: "completed",

@@ -2659,6 +2659,139 @@ test("a provider error before handover admission cannot archive the predecessor"
   );
 });
 
+async function failedConfirmedRenewal(context, operationKey) {
+  const reviewed = await reviewedRenewal(context, operationKey);
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  return eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+}
+
+test("cancel ends a renewal that failed at seeding, discarding its successor and keeping the predecessor", async () => {
+  const seedError = new Error("Vibe64 session is reserved for an in-progress renewal: renewal-hidden");
+  seedError.code = "vibe64_session_renewal_private";
+  const context = fixture({ seedErrors: [seedError] });
+  const failed = await failedConfirmedRenewal(context, "renewal:cancel-failed-seed");
+  assert.equal(failed.stage, SESSION_RENEWAL_STAGE.SUCCESSOR_SEEDING);
+  const successorId = failed.successor.sessionId;
+  assert.equal(context.sessions.get(successorId).status, "renewal_pending");
+
+  const cancelled = await context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  assert.equal(cancelled.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
+  assert.equal(cancelled.renewal.stage, SESSION_RENEWAL_STAGE.CANCELLED);
+  assert.equal(cancelled.renewal.error, null);
+  assert.equal(context.sessions.has(successorId), false);
+  assert.equal(context.calls.discard, 1);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+  assert.equal(context.currentSessionId, OLD_SESSION_ID);
+  assert.ok(context.events.some((event) => event.reason === "session-renewal-cancelled"));
+
+  const replayed = await context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  assert.equal(replayed.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
+  assert.equal(context.calls.discard, 1);
+  const restarted = await context.controller.requestSessionRenewalDraft(OLD_SESSION_ID, {
+    operationKey: "renewal:after-failed-cancel"
+  });
+  assert.notEqual(restarted.renewal.renewalId, failed.renewalId);
+});
+
+test("cancel makes a predecessor whose failure restoration failed writable again", async () => {
+  const restoreError = new Error("Writable restoration unavailable");
+  restoreError.code = "restore_unavailable";
+  const context = fixture({ restoreWritableErrors: [restoreError], setupStatus: "failed" });
+  const failed = await failedConfirmedRenewal(context, "renewal:cancel-failed-restore");
+  assert.equal(failed.stage, SESSION_RENEWAL_STAGE.FAILURE_RESTORING);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "renewal_quiesced");
+
+  const cancelled = await context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  assert.equal(cancelled.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+  assert.equal(context.sessions.has(failed.successor.sessionId), false);
+});
+
+test("cancel ends a failed draft without a draft guard", async () => {
+  const providerFailure = new Error("Provider turn failed");
+  providerFailure.code = "provider_failed";
+  const context = fixture({ generationError: providerFailure });
+  await context.controller.requestSessionRenewalDraft(OLD_SESSION_ID, { operationKey: "renewal:cancel-failed-draft" });
+  const failed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+  assert.equal(failed.stage, SESSION_RENEWAL_STAGE.DRAFT_GENERATING);
+  const cancelled = await context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  assert.equal(cancelled.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+});
+
+test("an accepted cancellation whose successor cleanup fails stays cancelling and finishes on its own retry", async () => {
+  const seedError = new Error("Provider request was not admitted");
+  seedError.code = "vibe64_session_renewal_turn_failed";
+  const closeError = (label) => Object.assign(new Error(`Successor terminals unavailable ${label}`), { code: "terminal_close_failed" });
+  const context = fixture({
+    seedErrors: [seedError],
+    successorCloseErrors: [closeError("once"), closeError("twice")],
+    workflowLockRetryMs: 5
+  });
+  const failed = await failedConfirmedRenewal(context, "renewal:cancel-cleanup-retry");
+
+  const accepted = await context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  assert.equal(accepted.renewal.status, SESSION_RENEWAL_STATUS.RUNNING);
+  assert.equal(accepted.renewal.stage, SESSION_RENEWAL_STAGE.CANCELLING);
+  assert.equal(accepted.renewal.error.code, "vibe64_session_renewal_successor_discard_failed");
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+
+  const cancelled = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.CANCELLED,
+    200,
+    5
+  );
+  assert.equal(cancelled.stage, SESSION_RENEWAL_STAGE.CANCELLED);
+  assert.equal(context.sessions.has(failed.successor.sessionId), false);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+});
+
+test("cancel still refuses a running renewal", async () => {
+  const gate = workflowBarrier();
+  const context = fixture({ seedBarrier: gate.barrier });
+  const reviewed = await reviewedRenewal(context, "renewal:cancel-running");
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  await gate.started;
+  await assert.rejects(
+    context.controller.cancelSessionRenewal(OLD_SESSION_ID, {
+      expectedHash: reviewed.draft.hash,
+      expectedRevision: reviewed.draft.revision,
+      operationKey: reviewed.operationKey
+    }),
+    { code: "vibe64_session_renewal_cancel_not_available", statusCode: 409 }
+  );
+  gate.release();
+  await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+  );
+});
+
 test("persistently non-fresh successors consume one durable replacement allowance per user action", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const wrongThread = () => {

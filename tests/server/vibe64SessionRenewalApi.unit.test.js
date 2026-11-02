@@ -20,8 +20,8 @@ import {
 import {
   sessionRenewalConfirmationActionInputValidator,
   sessionRenewalConfirmationInputValidator,
-  sessionRenewalDraftGuardInputValidator,
-  sessionRenewalDraftGuardActionInputValidator,
+  sessionRenewalCancelInputValidator,
+  sessionRenewalCancelActionInputValidator,
   sessionRenewalDraftRequestInputValidator,
   sessionRenewalDraftRequestActionInputValidator,
   sessionRenewalDraftUpdateInputValidator,
@@ -145,7 +145,7 @@ test("renewal inputs require durable operation and optimistic draft guards", () 
     sessionId: "session-1"
   });
 
-  const guarded = sessionRenewalDraftGuardActionInputValidator.schema.create({
+  const guarded = sessionRenewalCancelActionInputValidator.schema.create({
     expectedHash: DRAFT_HASH,
     expectedRevision: 3,
     operationKey: "renewal:session-1:one",
@@ -159,16 +159,18 @@ test("renewal inputs require durable operation and optimistic draft guards", () 
     sessionId: "session-1"
   });
 
-  const missingGuard = sessionRenewalDraftGuardActionInputValidator.schema.create({
+  // A failed renewal has no handover under review, so its cancel names only the operation.
+  const failedCancel = sessionRenewalCancelActionInputValidator.schema.create({
     operationKey: "renewal:session-1:one",
     sessionId: "session-1"
   });
-  assert.deepEqual(Object.keys(missingGuard.errors).sort(), [
-    "expectedHash",
-    "expectedRevision"
-  ]);
+  assert.deepEqual(failedCancel.errors, {});
+  assert.deepEqual(failedCancel.validatedObject, {
+    operationKey: "renewal:session-1:one",
+    sessionId: "session-1"
+  });
 
-  const malformedGuard = sessionRenewalDraftGuardActionInputValidator.schema.create({
+  const malformedGuard = sessionRenewalCancelActionInputValidator.schema.create({
     expectedHash: "not-a-draft-hash",
     expectedRevision: 0,
     operationKey: "contains spaces",
@@ -344,7 +346,7 @@ test("renewal HTTP routes expose the six state transitions without accepting bod
             vibe64User: { username: "spoofed" }
           },
           bodyLimit: 32 * 1024,
-          bodyValidator: sessionRenewalDraftGuardInputValidator,
+          bodyValidator: sessionRenewalCancelInputValidator,
           method: "POST",
           suffix: "/renewal/cancel"
         },

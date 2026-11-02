@@ -661,12 +661,14 @@ function useVibe64SessionRenewal({
     }
   }
 
+  /** Cancel a handover under review, or a failed renewal: its fresh session is discarded and this one kept. */
   async function cancel() {
-    if (phase.value !== "review" || draftConflict.value || busy.value) {
+    const reviewing = phase.value === "review";
+    if ((!reviewing && phase.value !== "failed") || (reviewing && draftConflict.value) || busy.value) {
       return null;
     }
     const result = await runAction("cancel", "Cancelling…", () => postCommand.run({
-      body: draftGuard(),
+      body: reviewing ? draftGuard() : { operationKey: currentOperationKey() },
       path: `${renewalPath.value}/cancel`
     }));
     if (result?.status === "cancelled") {

@@ -690,10 +690,22 @@ from the saved stage and rechecks its current prerequisites; an error flag does
 not permanently remove that action. Unsaved or outdated source remains blocked
 until Save or Update resolves it. A provider quota failure during generation
 then reaches the existing editable manual handover and successor AI selection.
+Every failed renewal also exposes **Cancel renewal**, through the same cancel
+action as a handover under review; a failed renewal's cancel names only its
+operation. Every failure precedes the forward-only commit, so the controller
+always accepts it: a failed draft ends cancelled at once, and any other failure
+records a `cancelling` stage that remembers the failed stage. Its workflow makes
+the predecessor writable again as failure restoration does, discards the hidden
+successor through the exact successor cleanup, then ends cancelled. A cleanup
+failure keeps the accepted cancellation running and retries with bounded backoff;
+it never returns the renewal to Retry. Running renewals and committed renewals
+still cannot be cancelled.
 Ordinary Archive checks private renewal reservations under the predecessor's
 agent-write lock before stopping tools or releasing resources. A pending or
-activating successor keeps its predecessor visible and returns a Retry instruction;
-archiving cannot leave a hidden successor as the project's only reserved session.
+activating successor keeps its predecessor visible and refuses with a message
+naming both ways out, Retry or Cancel renewal; once cancellation discards the
+successor, Archive proceeds normally. Archiving cannot leave a hidden successor
+as the project's only reserved session.
 Before removing source, archive restores the checkpoint bundle into a temporary
 repository and compares every checkpoint name and commit in one Git read. A
 failed verification command is reported separately from a ref mismatch; both

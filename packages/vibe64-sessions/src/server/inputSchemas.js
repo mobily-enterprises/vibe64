@@ -48,6 +48,14 @@ const renewalDraftGuardFields = {
   }
 };
 
+// A failed renewal has no handover under review, so only a review's cancel
+// names the draft it saw.
+const renewalCancelFields = {
+  ...renewalOperationFields,
+  expectedHash: { ...renewalDraftGuardFields.expectedHash, required: false },
+  expectedRevision: { ...renewalDraftGuardFields.expectedRevision, required: false }
+};
+
 const renewalDraftFields = {
   ...renewalDraftGuardFields,
   draft: {
@@ -476,8 +484,8 @@ const sessionRenewalDraftRequestActionInputValidator = actionInput(withSessionId
 const sessionRenewalDraftUpdateInputValidator = requiredInputSchema(renewalDraftFields);
 const sessionRenewalDraftUpdateActionInputValidator = actionInput(withSessionId(renewalDraftFields));
 
-const sessionRenewalDraftGuardInputValidator = requiredInputSchema(renewalDraftGuardFields);
-const sessionRenewalDraftGuardActionInputValidator = actionInput(withSessionId(renewalDraftGuardFields));
+const sessionRenewalCancelInputValidator = requiredInputSchema(renewalCancelFields);
+const sessionRenewalCancelActionInputValidator = actionInput(withSessionId(renewalCancelFields));
 
 const sessionRenewalConfirmationInputValidator = requiredInputSchema(
   renewalConfirmationFields
@@ -600,8 +608,8 @@ export {
   sessionInspectInputValidator,
   sessionRenewalConfirmationActionInputValidator,
   sessionRenewalConfirmationInputValidator,
-  sessionRenewalDraftGuardActionInputValidator,
-  sessionRenewalDraftGuardInputValidator,
+  sessionRenewalCancelActionInputValidator,
+  sessionRenewalCancelInputValidator,
   sessionRenewalDraftRequestActionInputValidator,
   sessionRenewalDraftRequestInputValidator,
   sessionRenewalDraftUpdateActionInputValidator,

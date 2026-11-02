@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { publicSession, sessionResult } from "./sessionResults.js";
@@ -141,9 +142,11 @@ function createSessionArchive({
             normalizeText(session.metadata?.renewed_from) === sessionId
           ));
           if (reservedSuccessor) {
-            const error = new Error("Finish the session renewal using Retry before archiving its original session.");
-            error.code = "vibe64_session_renewal_blocks_archive";
-            throw error;
+            throw new AppError(
+              409,
+              "This session has an unfinished renewal. Open its renewal and choose Retry to finish it, or Cancel renewal to discard its fresh session, before archiving this session.",
+              { code: "vibe64_session_renewal_blocks_archive" }
+            );
           }
           const routingToCancel = routingRequests.filter(({ conversationId, request }) => request?.helper ||
             assistantRoutingStatusIsPending(request) && (!routingCancelled || !request.stopped ||

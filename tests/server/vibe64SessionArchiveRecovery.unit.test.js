@@ -62,13 +62,15 @@ test("ordinary archive preserves the visible predecessor of a failed renewal", a
   assert.equal(blocked.ok, false);
   assert.equal(blocked.code, "vibe64_session_renewal_blocks_archive");
   assert.match(blocked.error, /Retry/u);
+  assert.match(blocked.error, /Cancel renewal/u);
   assert.deepEqual(f.calls, []);
   assert.deepEqual(f.events, []);
   assert.equal(f.session.status, "active");
   assert.deepEqual(f.session.metadata, {});
   assert.equal(successor.status, "renewal_pending");
 
-  successor.status = "active";
+  // Cancelling the renewal discards its private successor.
+  f.runtime.store.listSessionsForRenewal = async () => [f.session];
   assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
 });
 

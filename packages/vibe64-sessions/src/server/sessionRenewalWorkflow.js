@@ -363,6 +363,9 @@ function createRenewalWorkflow({
     if (state.commit?.committedAt) {
       return completion.finalizeCommittedRenewal(runtime, state, input);
     }
+    if (state.stage === SESSION_RENEWAL_STAGE.CANCELLING) {
+      return restoration.completeCancellation(runtime, state);
+    }
     if (state.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
       state = await restoration.completeFailureRestoration(runtime, state);
       admission.assertWorkflowAdmissionOpen();

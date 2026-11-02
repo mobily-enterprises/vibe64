@@ -321,6 +321,19 @@
           {{ renewal.pendingAction === "cancel" ? renewal.actionLabel : renewal.draftDirty ? "Discard edits and cancel" : "Cancel renewal" }}
         </v-btn>
         <v-btn
+          v-else-if="renewal.phase === 'failed'"
+          :aria-busy="renewal.pendingAction === 'cancel' ? 'true' : undefined"
+          class="studio-session-renewal__action"
+          data-vibe64-session-renewal-cancel="failed"
+          :disabled="dialogBusy"
+          height="48"
+          type="button"
+          variant="text"
+          @click="renewal.cancel"
+        >
+          {{ renewal.pendingAction === "cancel" ? renewal.actionLabel : "Cancel renewal" }}
+        </v-btn>
+        <v-btn
           v-else
           class="studio-session-renewal__action"
           data-vibe64-session-renewal-close="footer"
@@ -402,7 +415,7 @@
           variant="flat"
           @click="renewal.retry"
         >
-          {{ renewal.actionLabel || "Retry" }}
+          {{ renewal.pendingAction === "retry" ? renewal.actionLabel : "Retry" }}
         </v-btn>
         <template v-else-if="renewal.phase === 'completed'">
           <v-btn
