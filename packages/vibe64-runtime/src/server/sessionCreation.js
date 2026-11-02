@@ -32,6 +32,14 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {ReturnType<typeof import("./sessionListing.js").createSessionListing>} SessionListing */
 
 /**
+ * The created session as it is: creation with nothing to initialize.
+ * @param {object} session
+ */
+function keepCreatedSession(session) {
+  return session;
+}
+
+/**
  * Creates a session, and a renewal's pending successor.
  * @param {object} dependencies
  * @param {SessionStoreState} dependencies.state
@@ -52,7 +60,7 @@ function createSessionCreation({
     runtimeKind = "",
     sessionId = "",
     status = VIBE64_SESSION_STATUS.ACTIVE
-  } = {}, initialize = null) {
+  }, initialize) {
     if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) {
       throw vibe64Error(
         "Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
@@ -157,14 +165,14 @@ function createSessionCreation({
       });
       // Source initialization uses ordinary queued metadata mutations. Keep the
       // creation lock, but release the publication queue before invoking it.
-      return initialize ? await initialize(session) : session;
+      return await initialize(session);
     } finally {
       await release();
     }
   }
 
-  async function createSession(options = {}, initialize = null) {
-    if (initialize !== null && typeof initialize !== "function") {
+  async function createSession(options = {}, initialize = keepCreatedSession) {
+    if (typeof initialize !== "function") {
       throw new TypeError("Session initialization must be a function.");
     }
     const status = assertVibe64SessionStatus(options.status);
@@ -294,7 +302,7 @@ function createSessionCreation({
         runtimeKind,
         sessionId: successorSessionId,
         status: VIBE64_SESSION_STATUS.RENEWAL_PENDING
-      });
+      }, keepCreatedSession);
     });
   }
 

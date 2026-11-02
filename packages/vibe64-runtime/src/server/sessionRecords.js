@@ -7,6 +7,7 @@ import {
 } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { writeJsonFile, writeTextFile } from "./sessionFiles.js";
 import { sessionLockPath } from "./sessionLocks.js";
 import {
@@ -188,7 +189,7 @@ function createSessionRecords({
           value: null
         }
       };
-    }, operation, renewal ? null : async () => {
+    }, operation, renewal ? doNothing : async () => {
       assertNormalSessionIsMutable({
         sessionId: sessionPaths.sessionId,
         status: await recordFiles.readStatusFromPaths(sessionPaths)

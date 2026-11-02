@@ -286,11 +286,11 @@ function systemClock() {
   return new Date();
 }
 
+/**
+ * @param {() => Date | string | number} clock
+ */
 function createClockNow(clock) {
-  if (typeof clock === "function") {
-    return () => toDate(clock());
-  }
-  return () => new Date();
+  return () => toDate(clock());
 }
 
 async function createAvailableSessionId(rootPaths, now) {
