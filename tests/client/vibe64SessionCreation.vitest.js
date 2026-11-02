@@ -108,10 +108,8 @@ import {
   useVibe64SessionData
 } from "../../src/composables/useVibe64SessionData.js";
 import { useVibe64SessionPanel } from "../../src/composables/useVibe64SessionPanel.js";
-import {
-  SESSION_RENEWAL_BACKGROUND_POLL_INTERVAL_MS,
-  useVibe64SessionRenewal
-} from "../../src/composables/useVibe64SessionRenewal.js";
+import { useVibe64SessionRenewal } from "../../src/composables/useVibe64SessionRenewal.js";
+import { SESSION_RENEWAL_BACKGROUND_POLL_INTERVAL_MS } from "../../src/composables/useVibe64SessionRenewalPolling.js";
 
 function deferred() {
   let reject;

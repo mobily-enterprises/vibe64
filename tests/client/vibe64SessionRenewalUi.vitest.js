@@ -98,6 +98,9 @@ const dialogPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64SessionRenewalDialog.vue"
 );
 const dialogSource = fs.readFileSync(dialogPath, "utf8");
+const progressSource = fs.readFileSync(path.resolve(
+  "src/components/studio/vibe64-session/Vibe64SessionRenewalProgress.vue"
+), "utf8");
 const autopilotSource = fs.readFileSync(path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
 ), "utf8");
@@ -375,12 +378,13 @@ describe("session renewal dialog", () => {
   });
 
   it("uses public component seams and removes motion instead of slowing it", () => {
-    expect(dialogSource).not.toContain(":deep(");
-    expect(dialogSource).not.toContain("@media (max-width:");
-    expect(dialogSource).toContain(":fullscreen=\"smAndDown\"");
-    expect(dialogSource).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(dialogSource).toMatch(/prefers-reduced-motion:[\s\S]*?__progress-line[\s\S]*?display: none/u);
-    expect(dialogSource).not.toContain("animation-duration:");
+    const renewalSource = [dialogSource, progressSource].join("\n");
+    expect(renewalSource).not.toContain(":deep(");
+    expect(renewalSource).not.toContain("@media (max-width:");
+    expect(renewalSource).toContain(":fullscreen=\"smAndDown\"");
+    expect(renewalSource).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(renewalSource).toMatch(/prefers-reduced-motion:[\s\S]*?__progress-line[\s\S]*?display: none/u);
+    expect(renewalSource).not.toContain("animation-duration:");
   });
 
   it("keeps pending labels on the action that owns them", async () => {
