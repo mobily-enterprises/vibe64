@@ -29,7 +29,7 @@ function helperPayload({
   command = "",
   cwd = "",
   env = {},
-  input = undefined,
+  input,
   operation = "vibe64-command",
   args = []
 } = {}) {
@@ -134,8 +134,6 @@ async function runHelperCommand(payload = {}, {
 }
 
 export {
-  EXEC_HELPER_PAYLOAD_SCHEMA,
-  EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
   execHelperPath,
   helperOperationForRequest,
   helperPayload,

@@ -15,7 +15,7 @@ import { sharedToolEnv } from "../../packages/vibe64-execution/src/server/env/sh
 import { runHelperCommand } from "../../packages/vibe64-execution/src/server/engines/helperClient.js";
 import {
   isValidPlaywrightRuntimeOutput,
-  playwrightRuntimeVersionCheckScript
+  playwrightRuntimeVersionCommandArgs
 } from "../../packages/vibe64-execution/src/server/runtime/browserRuntime.js";
 import {
   resolveDefaultLocalEditorSystemRoot,
@@ -122,7 +122,8 @@ test("running a command as another user needs the host's helper", async () => {
 
 test("the Playwright check names the installed command without packs", () => {
   configureVibe64Host(null);
-  const script = playwrightRuntimeVersionCheckScript();
+  const [shell, flag, script] = playwrightRuntimeVersionCommandArgs();
+  assert.deepEqual([shell, flag], ["bash", "-c"]);
   assert.match(script, /command -v playwright/u);
   assert.doesNotMatch(script, /runtime\.env|PLAYWRIGHT_BROWSERS_PATH:\?/u);
   assert.equal(isValidPlaywrightRuntimeOutput("Playwright runtime ready: Version 1.50.1; command /usr/local/bin/playwright"), true);

@@ -120,4 +120,4 @@ async function installJdk(
   return { ...description, licence: TEMURIN_LICENCE };
 }
 
-export { PINNED_JDKS, REQUIRED_JAVA, TEMURIN_LICENCE, describeJdk, findJdk, hostPlatform, installJdk };
+export { describeJdk, findJdk, installJdk };

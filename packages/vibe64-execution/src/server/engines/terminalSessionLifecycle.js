@@ -296,22 +296,18 @@ function terminalSessionCloseFailure(reason, { id, namespace }) {
 }
 
 export {
-  appendTerminalFailure,
   applySessionMetadata,
   attachTerminalWriteErrorHandler,
   beginTerminalCloseHook,
   beginTerminalScopeDrain,
   beginTerminalStop,
-  beginTerminalStopHook,
   markTerminalExited,
   recordTerminalInput,
   recordTerminalOutput,
   reportTerminalLifecycleFailure,
   reportTerminalWriteError,
-  runLifecycleHook,
   sendToSubscribers,
   settleTerminalExitStatus,
   terminalCloseAggregateFailure,
-  terminalErrorDetails,
   terminalSessionCloseFailure
 };

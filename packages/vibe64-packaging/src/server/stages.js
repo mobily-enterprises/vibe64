@@ -247,7 +247,9 @@ async function runBuildStage({
  * zeroed whatever happens.
  */
 async function withStageCredentials({ credentials = [], obtainCredential, tempRoot = os.tmpdir() }, operation) {
+  // readable-check: allow method-probe - input validation: the publishing caller hands over the operation that uses the credentials
   if (typeof operation !== "function") throw new TypeError("withStageCredentials requires an operation.");
+  // readable-check: allow method-probe - input validation: a destination with credentials needs the caller's credential source
   if (credentials.length && typeof obtainCredential !== "function") {
     throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "This destination needs credentials and none were supplied.");
   }

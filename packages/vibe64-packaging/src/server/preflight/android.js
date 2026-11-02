@@ -20,11 +20,11 @@ function major(version) {
 /**
  * facts.android: { packages: [{ id, targetSdk, icon: [problem], permissions:
  * [problem], plugins: [problem] }], toolchain: { java, androidSdk },
- * developerVerification: "registered" | null }
+ * developerVerification: "registered" | null }. packageIds names the packages
+ * this release builds; only its app packages are read.
  */
-async function gatherAndroidFacts({ sourceRoot, packaging, packageIds = null, toolchains = {}, developerVerification = null } = {}) {
-  const apps = (packaging?.packages || []).filter((entry) =>
-    entry.packer === "capacitor" && (!packageIds || packageIds.includes(entry.id)));
+async function gatherAndroidFacts({ sourceRoot, packaging, packageIds, toolchains = {}, developerVerification = null }) {
+  const apps = packaging.packages.filter((entry) => entry.packer === "capacitor" && packageIds.includes(entry.id));
   if (!apps.length) return null;
   const packages = [];
   for (const entry of apps) {
@@ -158,4 +158,4 @@ const ANDROID_CHECKS = Object.freeze([
 ]);
 const VIBE64_ANDROID_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...ANDROID_CHECKS]);
 
-export { ANDROID_CHECKS, REQUIRED_TARGET_SDK, VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts };
+export { ANDROID_CHECKS, VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts };

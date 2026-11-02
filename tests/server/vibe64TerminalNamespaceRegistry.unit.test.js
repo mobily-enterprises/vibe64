@@ -7,7 +7,7 @@ import {
   closeTerminalSessionsForNamespace,
   listTerminalSessions,
   readTerminalSession,
-  stopTerminalSession,
+  stopTerminalSessionAndWait,
   subscribeTerminalSession,
   updateTerminalSessionMetadata
 } from "@local/vibe64-execution/server/terminalSessions";
@@ -31,7 +31,7 @@ test("reading, stopping and closing a session's terminal namespaces retains noth
       readTerminalSession("missing", { namespace });
       updateTerminalSessionMetadata("missing", {}, { namespace });
       subscribeTerminalSession("missing", () => {}, { namespace });
-      stopTerminalSession("missing", { namespace });
+      await stopTerminalSessionAndWait("missing", { namespace });
       await closeTerminalSessionsForNamespace(namespace);
     }
   };

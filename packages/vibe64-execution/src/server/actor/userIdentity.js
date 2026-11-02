@@ -59,6 +59,5 @@ export {
   currentActorUser,
   currentProcessIdentity,
   homeEnvForUser,
-  normalizeActorUser,
   resolvedActorUser
 };

@@ -171,7 +171,6 @@ export {
   namedFilesChecksum,
   noReadBackCredentials,
   readCredentialText,
-  redact,
   runTool,
   settingsOf,
   toolEnvironment,

@@ -83,7 +83,7 @@ function currentOsUser({
   homedir = os.homedir,
   userInfo = os.userInfo
 } = {}) {
-  const info = typeof userInfo === "function" ? userInfo() : {};
+  const info = userInfo();
   const username = normalizeText(info?.username || process.env.USER || process.env.LOGNAME);
   const home = path.resolve(String(info?.homedir || homedir() || ""));
   return {
@@ -175,13 +175,14 @@ function osUserEligibility(user = {}, options = {}) {
   };
 }
 
+const __testables = Object.freeze({ parsePasswdLine });
+
 export {
-  NON_LOGIN_SHELLS,
   assertSafeOsUsername,
   currentOsUser,
   listOsUsers,
   normalizeText as normalizeOsUsername,
   osUserEligibility,
-  parsePasswdLine,
-  resolveOsUser
+  resolveOsUser,
+  __testables
 };

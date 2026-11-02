@@ -303,7 +303,6 @@ export {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   codexCredentialContext,
   composeGithubTerminalHome,
-  credentialHomeRequiredError,
   githubCredentialContext,
   logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,

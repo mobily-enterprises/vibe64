@@ -37,7 +37,6 @@ function npmToolBinDirs(options = {}) {
 
 export {
   NPM_CONFIG_PREFIX_ENV,
-  npmConfigPrefix,
   npmToolBinDirs,
   npmToolEnv
 };

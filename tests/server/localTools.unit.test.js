@@ -6,16 +6,15 @@ import test from "node:test";
 
 import {
   OPERATOR_CLIS,
-  SUDO_NOTE,
   checkLocalTools,
   configureVibe64Host,
-  localToolFamily,
-  localToolGuideUrl,
-  localToolIds,
   localToolInstall,
   operatorCliInstall
 } from "@local/vibe64-execution/server";
+import { __testables, localToolGuideUrl } from "../../packages/vibe64-execution/src/server/runtime/localTools.js";
 import { resolveRuntimePath } from "../../packages/vibe64-execution/src/server/runtime/resolveRuntimePath.js";
+
+const { SUDO_NOTE, localToolFamily } = __testables;
 
 async function withHome(t) {
   const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-local-tools-"));
@@ -42,9 +41,7 @@ async function tool(dir, name, body) {
   return file;
 }
 
-test("Stack runtime ids map to rows only for tools the person supplies", () => {
-  assert.deepEqual(localToolIds(["node26", "ruby", "cpp", "composer", "php", "nodejs", "unknown"]), ["ruby", "cpp", "php"]);
-  assert.deepEqual(localToolIds([]), []);
+test("the install-line family is Homebrew on macOS and apt only where apt-get exists", () => {
   assert.equal(localToolFamily({ platform: "darwin" }), "brew");
   assert.equal(localToolFamily({ platform: "linux", aptGet: true }), "apt");
   assert.equal(localToolFamily({ platform: "linux", aptGet: false }), "");

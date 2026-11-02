@@ -200,7 +200,6 @@ async function writeShell({ shellRoot, files, webRoot, iconFile }) {
 const __testables = Object.freeze({ shellFiles });
 
 export {
-  SHELL_SPEC_FILE,
   generateShell,
   nativePlugins,
   nextVersionCode,

@@ -10,6 +10,5 @@ function tryAcquireExclusiveFileLock(lockPath = "", options = {}) {
 }
 
 export {
-  FILE_LOCK_ERROR_CODE,
   tryAcquireExclusiveFileLock
 };

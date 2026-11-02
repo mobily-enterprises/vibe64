@@ -11,7 +11,7 @@ import { inspectVibe64Packaging } from "../../packages/vibe64-genesis/src/server
 import { pypiDestination } from "../../packages/vibe64-packaging/src/server/destinations/pypi/index.js";
 import { createPublishPlan } from "../../packages/vibe64-packaging/src/server/plan.js";
 import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
-import { applyReleaseChange, prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
+import { prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
 import { publishTarget, withStageCredentials } from "../../packages/vibe64-packaging/src/server/stages.js";
 import { commitFiles, gitProject, startPypiServer, temporaryFolder } from "./packagingRegistryTestTools.js";
 
@@ -110,9 +110,8 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const change = await prepareReleaseChange({ projectRoot: project.root, entry: packaging.packages[0], version: "0.2.0-rc.1", notes: "- The answer changed.", date: "2026-10-23" });
   assert.equal(change.sourceVersion, "0.2.0rc1");
   assert.deepEqual(change.files.map(({ path: file }) => file), ["client/pyproject.toml", "client/CHANGELOG.md"]);
-  await applyReleaseChange({ projectRoot: project.root, change });
+  const next = await commitFiles(project.root, Object.fromEntries(change.files.map((file) => [file.path, file.after])), "Release 0.2.0-rc.1");
   assert.match(await readFile(path.join(project.root, "client/pyproject.toml"), "utf8"), /^version = "0\.2\.0rc1"$/mu);
-  const next = await commitFiles(project.root, {}, "Release 0.2.0-rc.1");
   const nextBuilt = await buildPackage({ projectRoot: project.root, commit: next.commit, packaging, packageId: "client", version: "0.2.0-rc.1", resultStore: store, baseEnvironment });
   const nextPublished = await publishTarget({ destination: pypiDestination, target, version: "0.2.0-rc.1", artifacts: nextBuilt.artifacts, obtainCredential });
   assert.equal(nextPublished.proof.version, "0.2.0rc1");

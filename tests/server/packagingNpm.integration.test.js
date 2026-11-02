@@ -14,7 +14,7 @@ import { inspectVibe64Packaging } from "../../packages/vibe64-genesis/src/server
 import { npmDestination, npmTokenUserconfig } from "../../packages/vibe64-packaging/src/server/destinations/npm/index.js";
 import { createPublishPlan } from "../../packages/vibe64-packaging/src/server/plan.js";
 import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
-import { applyReleaseChange, prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
+import { prepareReleaseChange } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
 import { publishTarget, withStageCredentials } from "../../packages/vibe64-packaging/src/server/stages.js";
 import { commitFiles, gitProject, startVerdaccio, temporaryFolder } from "./packagingRegistryTestTools.js";
 
@@ -130,8 +130,7 @@ test("an npm library is built once, dry-run, published, read back and re-release
   const entry = changedPackaging.packages[0];
   const change = await prepareReleaseChange({ projectRoot: project.root, entry, version: "0.2.0", notes: "- The answer changed.", date: "2026-10-23" });
   assert.deepEqual(change.files.map(({ path: file }) => file), ["package.json", "CHANGELOG.md"]);
-  await applyReleaseChange({ projectRoot: project.root, change });
-  const next = await commitFiles(project.root, {}, "Release 0.2.0");
+  const next = await commitFiles(project.root, Object.fromEntries(change.files.map((file) => [file.path, file.after])), "Release 0.2.0");
   const nextBuilt = await buildPackage({ projectRoot: project.root, commit: next.commit, packaging: changedPackaging, packageId: "sdk", version: "0.2.0", resultStore: store });
   const nextDry = await withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
     target, version: "0.2.0", artifacts: nextBuilt.artifacts, credentials

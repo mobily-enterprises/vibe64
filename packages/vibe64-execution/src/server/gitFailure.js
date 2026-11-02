@@ -63,6 +63,5 @@ const __testables = Object.freeze({ describeGitFailure });
 
 export {
   gitFailureError,
-  gitInstallCommand,
   __testables
 };

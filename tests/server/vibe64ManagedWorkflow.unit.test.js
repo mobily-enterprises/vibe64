@@ -13,7 +13,9 @@ import {
   finishVibe64Workflow, installVibe64ManagedExecutionProvider,
   setVibe64WorkflowPhase, startVibe64Workflow
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
-import { normalizeExecutionDescriptor } from "../../packages/vibe64-execution/src/server/request.js";
+import { __testables as requestTestables } from "../../packages/vibe64-execution/src/server/request.js";
+
+const { normalizeExecutionDescriptor } = requestTestables;
 
 const MIB = 1024 * 1024;
 const HELPER = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url).pathname;

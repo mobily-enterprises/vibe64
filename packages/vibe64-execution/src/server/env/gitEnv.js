@@ -37,6 +37,5 @@ function gitEnv({ request = {} } = {}) {
 }
 
 export {
-  VIBE64_GIT_AUTH_TOKEN_ENV,
   gitEnv
 };

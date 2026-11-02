@@ -7,7 +7,7 @@
 // the caller names (always user-space) with Google's own `sdkmanager`; nothing
 // is redistributed and nothing is written to the real home folder.
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -137,14 +137,6 @@ async function findAndroidSdk({ directory = null, baseEnvironment = process.env 
   return last || { ok: false, androidHome: null, missing: [...SDK_PACKAGES], message: "No Android SDK found." };
 }
 
-async function readAcceptance(directory) {
-  try {
-    return JSON.parse(await readFile(path.join(directory, ACCEPTANCE_FILE), "utf8"));
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Installs command-line tools and SDK_PACKAGES into `directory` after checking
  * the acceptance against the licence Google publishes right now.
@@ -205,16 +197,10 @@ async function installAndroidSdk({
 const __testables = Object.freeze({ licenceFromRepository });
 
 export {
-  ANDROID_LICENCE_ID,
-  ANDROID_REPOSITORY_URL,
   ANDROID_TERMS_URL,
-  PINNED_COMMAND_LINE_TOOLS,
-  SDK_PACKAGES,
   androidSdkLicence,
-  buildToolsOf,
   describeAndroidSdk,
   findAndroidSdk,
   installAndroidSdk,
-  readAcceptance,
   __testables
 };

@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { DAEMON_USERNAME_PREFIX, helperChildEnv, usageRecordingNodeOptions as helperNodeOptions } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
-import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
+import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/usageRecordingPreload.js";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
 
 // Where the checking code and the recorder runtime may sit: the source tree's
@@ -72,7 +72,7 @@ test("an unmanaged launch applies the same preload check before setting NODE_OPT
   assert.equal(localNodeOptions(preload), `--import=${preload}`);
   for (const layout of ["source", "application"]) {
     const { allowed, helper, refused } = await installation(t, layout);
-    const checker = path.join(path.dirname(path.dirname(helper)), "server/runVibe64Command.js");
+    const checker = path.join(path.dirname(path.dirname(helper)), "server/usageRecordingPreload.js");
     assert.equal(localNodeOptions(allowed, checker), `--import=${allowed}`, layout);
     for (const preload of refused) {
       assert.throws(() => localNodeOptions(preload, checker), { code: "vibe64_usage_recording_preload_invalid" }, `${layout}: ${preload}`);

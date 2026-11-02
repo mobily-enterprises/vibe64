@@ -104,4 +104,4 @@ const pythonDistPacker = Object.freeze({
   })
 });
 
-export { checkPythonDistributions, distributionFileVersion, normalizeProjectName, pythonDistPacker };
+export { distributionFileVersion, normalizeProjectName, pythonDistPacker };

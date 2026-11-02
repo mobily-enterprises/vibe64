@@ -294,7 +294,6 @@ const androidSideloadDestination = Object.freeze({
 export {
   KEYSTORE as ANDROID_SIDELOAD_KEYSTORE,
   KEY_PASSWORD as ANDROID_SIDELOAD_KEY_PASSWORD,
-  SIDELOAD_PROOF_CONTRACT,
   androidSideloadDestination,
   generateSideloadKey
 };

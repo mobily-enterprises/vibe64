@@ -14,7 +14,7 @@ import {
   describeAndroidSdk,
   installAndroidSdk
 } from "../../packages/vibe64-packaging/src/server/toolchains/androidSdk.js";
-import { downloadVerified, extractZip } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
+import { downloadVerified, unpackInto } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
 import { describeJdk, findJdk } from "../../packages/vibe64-packaging/src/server/toolchains/jdk.js";
 import { fakeToolchains } from "./packagingAndroidTestTools.js";
 import { temporaryFolder } from "./packagingRegistryTestTools.js";
@@ -147,15 +147,18 @@ test("zips unpack without a system unzip, keeping executable bits and inner link
     { name: "cmdline-tools/bin/current", data: "sdkmanager", mode: 0o120777 }
   ]));
   const out = path.join(root, "out");
-  await extractZip(archive, out);
-  assert.equal(await readFile(path.join(out, "cmdline-tools", "bin", "sdkmanager"), "utf8"), "#!/bin/sh\necho sdk\n");
-  assert.equal((await stat(path.join(out, "cmdline-tools", "bin", "sdkmanager"))).mode & 0o777, 0o755);
-  assert.equal((await readFile(path.join(out, "cmdline-tools", "lib", "README"), "utf8")).length, 5000);
-  assert.equal(await readlink(path.join(out, "cmdline-tools", "bin", "current")), "sdkmanager");
+  await unpackInto(archive, out, { inner: "cmdline-tools", kind: "zip" });
+  assert.equal(await readFile(path.join(out, "bin", "sdkmanager"), "utf8"), "#!/bin/sh\necho sdk\n");
+  assert.equal((await stat(path.join(out, "bin", "sdkmanager"))).mode & 0o777, 0o755);
+  assert.equal((await readFile(path.join(out, "lib", "README"), "utf8")).length, 5000);
+  assert.equal(await readlink(path.join(out, "bin", "current")), "sdkmanager");
 
   for (const [name, entry] of [["escape.zip", { name: "../evil", data: "x" }], ["link.zip", { name: "evil", data: "/etc/passwd", mode: 0o120777 }]]) {
     await writeFile(path.join(root, name), zipOf([entry]));
-    await assert.rejects(extractZip(path.join(root, name), path.join(root, `out-${name}`)), (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_FAILED");
+    await assert.rejects(
+      unpackInto(path.join(root, name), path.join(root, `out-${name}`), { inner: "cmdline-tools", kind: "zip" }),
+      (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_FAILED" && /outside its folder/u.test(error.message)
+    );
   }
   assert.equal(await stat(path.join(root, "evil")).catch(() => null), null);
 });

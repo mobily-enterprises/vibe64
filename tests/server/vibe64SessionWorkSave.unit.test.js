@@ -37,12 +37,14 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionIncomingContributions.js";
 import { safeChangePath } from "../../packages/vibe64-terminals/src/server/gitRecords.js";
 import {
-  canonicalRepositoryBackupPath,
+  __testables as repositoryStorageTestables,
   canonicalRepositoryInitializeScript,
   canonicalRepositoryInstallRefScript
 } from "../../packages/vibe64-execution/src/server/repositoryStorage.js";
 import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
+
+const { canonicalRepositoryBackupPath } = repositoryStorageTestables;
 
 const execFileAsync = promisify(execFile);
 

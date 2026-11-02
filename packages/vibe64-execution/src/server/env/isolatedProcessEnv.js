@@ -74,7 +74,5 @@ function isolatedProcessEnv(baseEnv = {}, options = {}) {
 }
 
 export {
-  ISOLATED_PROCESS_BASE_ENV_NAMES,
-  ISOLATED_PROCESS_RESERVED_ENV_NAMES,
   isolatedProcessEnv
 };

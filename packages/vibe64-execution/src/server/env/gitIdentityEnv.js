@@ -384,40 +384,13 @@ function gitIdentityEnvSync(options = {}) {
   return identityEnv(resolveGitIdentitySync(options));
 }
 
-/**
- * Nothing is blocked on a stand-in identity; the person is told how to set theirs.
- */
-async function gitIdentityReadiness(options = {}) {
-  const identity = await resolveGitIdentity(options);
-  const fallback = identity.source === "fallback";
-  return {
-    email: identity.authorEmail,
-    env: identityEnv(identity),
-    explanation: fallback
-      ? "Commits use a stand-in name because Git doesn't know your name and email yet."
-      : "Commits use your name and email.",
-    identity,
-    name: identity.authorName,
-    observed: `${identity.authorName} <${identity.authorEmail}>`,
-    ok: true,
-    source: identity.source,
-    status: fallback ? "warn" : "pass"
-  };
-}
-
 export {
   GIT_IDENTITY_COMMANDS,
   GIT_AUTHOR_EMAIL_ENV,
   GIT_AUTHOR_NAME_ENV,
   GIT_COMMITTER_EMAIL_ENV,
   GIT_COMMITTER_NAME_ENV,
-  fallbackGitIdentity,
   gitIdentityEnv,
   gitIdentityEnvSync,
-  gitIdentityReadiness,
-  isFallbackGitIdentityEmail,
-  personGitConfigIdentity,
-  personGitConfigIdentitySync,
-  resolveGitIdentity,
-  sanitizeEmailLabel
+  isFallbackGitIdentityEmail
 };

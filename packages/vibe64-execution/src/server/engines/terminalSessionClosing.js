@@ -144,42 +144,24 @@ async function closeTerminalSessionTargets(targets = []) {
   return closed;
 }
 
-async function closeDetachedTerminalSessions({
-  idleMs = null,
-  namespace = "",
-  namespacePrefix = "",
-  now = Date.now()
-} = {}) {
-  let closed = 0;
-  for (const { namespace: currentNamespace, session } of listStoredSessions({
-    namespace,
-    namespacePrefix
-  })) {
+/** Closes the namespace's detached terminals whose own idle timeout has passed, and reschedules the rest. */
+async function closeDetachedTerminalSessions({ namespace }) {
+  for (const { namespace: currentNamespace, session } of listStoredSessions({ namespace })) {
     if (!sessionUsesDetachedCleanup(session) || session.subscribers?.size) {
       continue;
     }
-    const timeoutMs = idleMs == null
-      ? normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs)
-      : normalizeDetachedIdleTimeoutMs(idleMs);
-    if (timeoutMs < 1 && idleMs == null) {
+    const timeoutMs = normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs);
+    if (timeoutMs < 1) {
       continue;
     }
-    if (detachedIdleForMs(session, now) < timeoutMs) {
+    if (detachedIdleForMs(session) < timeoutMs) {
       scheduleDetachedCleanup(session, currentNamespace);
       continue;
     }
-    const result = await closeTerminalSession(session.id, {
+    await closeTerminalSession(session.id, {
       namespace: currentNamespace
     });
-    if (result.closed) {
-      closed += 1;
-    }
   }
-
-  return {
-    ok: true,
-    closed
-  };
 }
 
 async function closeTerminalSessionsForNamespace(namespace = "default") {
@@ -238,7 +220,6 @@ async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
 }
 
 export {
-  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,

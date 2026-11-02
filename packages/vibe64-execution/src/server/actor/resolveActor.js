@@ -51,6 +51,5 @@ async function resolveVibe64CommandActor(request = {}) {
 }
 
 export {
-  actorUsernameFromRequest,
   resolveVibe64CommandActor
 };

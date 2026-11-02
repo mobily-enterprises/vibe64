@@ -185,4 +185,4 @@ async function ageDecrypt(ciphertext, passphrase) {
   }
 }
 
-export { DEFAULT_WORK_FACTOR, MIN_PASSPHRASE, ageDecrypt, ageEncrypt };
+export { DEFAULT_WORK_FACTOR, ageDecrypt, ageEncrypt };

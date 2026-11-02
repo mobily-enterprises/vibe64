@@ -244,27 +244,11 @@ function runtimePackManagedCommands(runtime = "") {
   return [...(RUNTIME_PACKS[packName]?.managedCommands || [])];
 }
 
-function managedCommandRuntimeEntries() {
-  const entries = new Map();
-  for (const [runtime, pack] of Object.entries(RUNTIME_PACKS)) {
-    for (const command of pack.managedCommands || []) {
-      const runtimes = entries.get(command) || [];
-      runtimes.push(runtime);
-      entries.set(command, runtimes);
-    }
-  }
-  return [...entries.entries()].map(([command, runtimes]) => ({
-    command,
-    runtimes
-  }));
-}
-
 const __testables = Object.freeze({ runtimePackManagedCommands });
 
 export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
-  managedCommandRuntimeEntries,
   runtimePackBinPaths,
   runtimePackGuardBinPaths,
   runtimePackPolicyBinPaths,

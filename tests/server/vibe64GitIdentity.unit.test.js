@@ -10,14 +10,42 @@ import { promisify } from "node:util";
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 
 import {
-  gitIdentityReadiness,
-  isFallbackGitIdentityEmail,
-  personGitConfigIdentity,
-  personGitConfigIdentitySync,
-  resolveGitIdentity
+  gitIdentityEnv,
+  gitIdentityEnvSync,
+  isFallbackGitIdentityEmail
 } from "../../packages/vibe64-execution/src/server/env/gitIdentityEnv.js";
 
 const execFileAsync = promisify(execFile);
+
+/** The commit identity in a command env the public builders made. */
+function identityOf(env) {
+  return {
+    authorEmail: env.GIT_AUTHOR_EMAIL,
+    authorName: env.GIT_AUTHOR_NAME,
+    committerEmail: env.GIT_COMMITTER_EMAIL,
+    committerName: env.GIT_COMMITTER_NAME
+  };
+}
+
+/** The identity a command gets from these options, with no explicit identity in its env. */
+async function resolveIdentity(options) {
+  return identityOf(await gitIdentityEnv({ env: {}, ...options }));
+}
+
+/** The person's own Git identity as a command sees it, or null when the command falls back to the stand-in. */
+function personIdentity(identity) {
+  return isFallbackGitIdentityEmail(identity.authorEmail) ? null : identity;
+}
+
+/** The person's Git config identity read the way asynchronous command envs read it. */
+async function readPersonIdentity(gitConfig) {
+  return personIdentity(await resolveIdentity({ gitConfig }));
+}
+
+/** The person's Git config identity read the way synchronous command envs read it. */
+function readPersonIdentitySync(gitConfig) {
+  return personIdentity(identityOf(gitIdentityEnvSync({ env: {}, gitConfig })));
+}
 const REAL_GIT = (await execFileAsync("sh", ["-c", "command -v git"], { encoding: "utf8" })).stdout.trim();
 
 // A fresh home with only git on PATH; the system config is ignored so the
@@ -40,23 +68,19 @@ async function freshHome(t) {
   return { env, gitConfig, home, root };
 }
 
-test("an unconfigured person gets the marked stand-in identity and a warning", async (t) => {
+test("an unconfigured person gets the marked stand-in identity", async (t) => {
   const { env } = await freshHome(t);
-  assert.equal(await personGitConfigIdentity({ env }), null);
-  const readiness = await gitIdentityReadiness({ env: {}, gitConfig: { env }, project: { workspace: "local" }, userKey: "ana" });
-  assert.equal(readiness.source, "fallback");
-  assert.equal(readiness.status, "warn");
-  assert.equal(readiness.email, "ana@local.users.vibe64.invalid");
-  assert.equal(isFallbackGitIdentityEmail(readiness.email), true);
-  assert.match(readiness.explanation, /stand-in/u);
+  assert.equal(await readPersonIdentity({ env }), null);
+  const identity = await resolveIdentity({ gitConfig: { env }, project: { workspace: "local" }, userKey: "ana" });
+  assert.equal(identity.authorEmail, "ana@local.users.vibe64.invalid");
+  assert.equal(isFallbackGitIdentityEmail(identity.authorEmail), true);
 });
 
 test("the person's global Git identity is used before GitHub and the stand-in", async (t) => {
   const { env, gitConfig } = await freshHome(t);
   await gitConfig(["--global", "user.name", "Ana Diaz"]);
   await gitConfig(["--global", "user.email", "ana@example.test"]);
-  const identity = await resolveGitIdentity({
-    env: {},
+  const identity = await resolveIdentity({
     gitConfig: { env },
     project: { githubUser: { email: "octo@example.test", login: "octocat" } }
   });
@@ -64,12 +88,9 @@ test("the person's global Git identity is used before GitHub and the stand-in", 
     authorEmail: "ana@example.test",
     authorName: "Ana Diaz",
     committerEmail: "ana@example.test",
-    committerName: "Ana Diaz",
-    source: "git-config"
+    committerName: "Ana Diaz"
   });
-  const readiness = await gitIdentityReadiness({ env: {}, gitConfig: { env } });
-  assert.equal(readiness.status, "pass");
-  assert.equal(isFallbackGitIdentityEmail(readiness.email), false);
+  assert.equal(isFallbackGitIdentityEmail((await resolveIdentity({ gitConfig: { env } })).authorEmail), false);
 });
 
 test("Git's XDG config location and includes are honoured", async (t) => {
@@ -77,7 +98,7 @@ test("Git's XDG config location and includes are honoured", async (t) => {
   await mkdir(path.join(home, ".config", "git"), { recursive: true });
   await writeFile(path.join(home, "identity.inc"), "[user]\n\temail = xdg@example.test\n");
   await writeFile(path.join(home, ".config", "git", "config"), `[include]\n\tpath = ${path.join(home, "identity.inc")}\n[user]\n\tname = Xdg Person\n`);
-  for (const read of [personGitConfigIdentity, personGitConfigIdentitySync]) {
+  for (const read of [readPersonIdentity, readPersonIdentitySync]) {
     assert.equal((await read({ env }))?.authorName, "Xdg Person");
     assert.equal((await read({ env }))?.authorEmail, "xdg@example.test");
   }
@@ -91,7 +112,7 @@ test("a repository's own identity wins over the global one for commands run ther
   await mkdir(repository);
   await execFileAsync(REAL_GIT, ["init", "-q", repository], { env });
   await gitConfig(["user.email", "work@example.test"], { cwd: repository });
-  for (const read of [personGitConfigIdentity, personGitConfigIdentitySync]) {
+  for (const read of [readPersonIdentity, readPersonIdentitySync]) {
     assert.equal((await read({ cwd: repository, env })).authorEmail, "work@example.test");
     assert.equal((await read({ cwd: repository, env })).authorName, "Global Name");
     assert.equal((await read({ env })).authorEmail, "global@example.test");
@@ -101,32 +122,30 @@ test("a repository's own identity wins over the global one for commands run ther
 test("a half or empty identity is not used", async (t) => {
   const { env, gitConfig } = await freshHome(t);
   await gitConfig(["--global", "user.name", "Only A Name"]);
-  assert.equal(await personGitConfigIdentity({ env }), null);
+  assert.equal(await readPersonIdentity({ env }), null);
   await gitConfig(["--global", "user.email", ""]);
-  assert.equal(await personGitConfigIdentity({ env }), null);
+  assert.equal(await readPersonIdentity({ env }), null);
 });
 
 test("explicit project identity still wins over the person's Git config", async (t) => {
   const { env, gitConfig } = await freshHome(t);
   await gitConfig(["--global", "user.name", "Ana Diaz"]);
   await gitConfig(["--global", "user.email", "ana@example.test"]);
-  const identity = await resolveGitIdentity({
-    env: {},
+  const identity = await resolveIdentity({
     gitConfig: { env },
     project: { gitIdentity: { email: "bot@example.test", name: "Project Bot" } }
   });
-  assert.equal(identity.source, "configured");
+  assert.equal(identity.authorName, "Project Bot");
   assert.equal(identity.authorEmail, "bot@example.test");
 });
 
 test("without git on PATH the lookup quietly finds nothing", async (t) => {
   const { env, root } = await freshHome(t);
-  const identity = await resolveGitIdentity({
-    env: {},
+  const identity = await resolveIdentity({
     gitConfig: { env: { ...env, PATH: path.join(root, "empty") } },
     userKey: "ana"
   });
-  assert.equal(identity.source, "fallback");
+  assert.equal(isFallbackGitIdentityEmail(identity.authorEmail), true);
 });
 
 // Incident 2026-10-24: an agent's PATH starts with Vibe64's git shim,
@@ -141,7 +160,7 @@ test("the identity read never runs a git shim that leads the command's PATH", as
   await mkdir(shimDir, { recursive: true });
   await writeFile(path.join(shimDir, "git"), `#!/bin/sh\ntouch '${marker}'\nsleep 5\nexit 1\n`, { mode: 0o755 });
   const started = Date.now();
-  const identity = await personGitConfigIdentity({ env: { ...env, PATH: `${shimDir}:${env.PATH}` } });
+  const identity = await readPersonIdentity({ env: { ...env, PATH: `${shimDir}:${env.PATH}` } });
   assert.ok(Date.now() - started < 1_500, "the read waited on the shim");
   assert.equal(identity?.authorName, "Ana Shim");
   assert.equal(await stat(marker).then(() => true, () => false), false, "the shim ran");
@@ -247,7 +266,7 @@ test("env overrides of Git config keep their effect and their own memo entry", a
   await gitConfig(["--global", "user.name", "Ana Diaz"]);
   await gitConfig(["--global", "user.email", "ana@example.test"]);
   const overridden = { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "user.email", GIT_CONFIG_VALUE_0: "override@example.test" };
-  for (const read of [personGitConfigIdentity, personGitConfigIdentitySync]) {
+  for (const read of [readPersonIdentity, readPersonIdentitySync]) {
     assert.equal((await read({ env })).authorEmail, "ana@example.test");
     assert.equal((await read({ env: overridden })).authorEmail, "override@example.test");
     assert.equal((await read({ env })).authorEmail, "ana@example.test");
@@ -261,12 +280,12 @@ test("a change Git's global file can't show is picked up once the memo ends", as
   await writeFile(include, "[user]\n\temail = first@example.test\n");
   await writeFile(path.join(home, ".gitconfig"), `[include]\n\tpath = ${include}\n[user]\n\tname = Ana Diaz\n`);
   t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
-  assert.equal((await personGitConfigIdentity({ env })).authorEmail, "first@example.test");
+  assert.equal((await readPersonIdentity({ env })).authorEmail, "first@example.test");
   await writeFile(include, "[user]\n\temail = second@example.test\n");
   t.mock.timers.tick(29_000);
-  assert.equal((await personGitConfigIdentity({ env })).authorEmail, "first@example.test");
+  assert.equal((await readPersonIdentity({ env })).authorEmail, "first@example.test");
   t.mock.timers.tick(1_001);
-  assert.equal((await personGitConfigIdentity({ env })).authorEmail, "second@example.test");
+  assert.equal((await readPersonIdentity({ env })).authorEmail, "second@example.test");
   assert.equal(await git.reads(), 2);
 });
 
@@ -283,9 +302,9 @@ test("a read that never finished is not remembered", async (t) => {
   const previousPath = process.env.PATH;
   process.env.PATH = `${bin}:${previousPath}`;
   t.after(() => { process.env.PATH = previousPath; });
-  assert.equal(await personGitConfigIdentity({ env }), null);
+  assert.equal(await readPersonIdentity({ env }), null);
   await rm(hanging);
-  assert.equal((await personGitConfigIdentity({ env })).authorEmail, "ana@example.test");
+  assert.equal((await readPersonIdentity({ env })).authorEmail, "ana@example.test");
 });
 
 test("connecting GitHub keeps the person's Git identity and never writes empty values", async (t) => {
@@ -315,7 +334,8 @@ test("connecting GitHub keeps the person's Git identity and never writes empty v
 });
 
 test("Git failures a person can fix read as one plain sentence", async (t) => {
-  const { __testables: { describeGitFailure }, gitInstallCommand } = await import("../../packages/vibe64-execution/src/server/gitFailure.js");
+  const { __testables: { describeGitFailure } } = await import("../../packages/vibe64-execution/src/server/gitFailure.js");
+  const gitInstallCommand = (machine) => describeGitFailure({ error: "spawn git ENOENT" }, machine).installCommand;
   const { root } = await freshHome(t);
   const aptBin = path.join(root, "apt-bin");
   await mkdir(aptBin);

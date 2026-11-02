@@ -6,31 +6,29 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  MAX_TERMINAL_BUFFER_LENGTH,
-  MAX_TERMINAL_BUFFER_ROWS,
   beginTerminalNamespaceOperation,
-  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
-  countRunningTerminalSessions,
   freezeTerminalNamespaceAdmission,
   listTerminalSessions,
   readTerminalSession,
-  readTerminalSessionControlState,
   resizeTerminalSession,
   startTerminalSession,
-  stopTerminalSession,
   stopTerminalSessionAndWait,
   subscribeTerminalSession,
   terminalKeyInput,
-  terminalMovementState,
   terminalSessionContainsText,
+  terminalSessionControlSnapshot,
   thawTerminalNamespaceAdmission,
   writeTerminalSession,
-  writeTerminalSessionKey,
   writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
+
+/** How many terminals run in the namespaces under a prefix, or in one namespace, optionally narrowed by a filter. */
+function runningTerminalCount(scope, filter = () => true) {
+  return listTerminalSessions({ ...scope, runningOnly: true }).filter(filter).length;
+}
 
 function longRunningNodeArgs() {
   return [
@@ -70,15 +68,39 @@ test("terminal session callbacks receive resolved env", async () => {
   }
 });
 
-test("terminal sessions retain a bounded output buffer", () => {
-  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 256 * 1024);
-  assert.equal(MAX_TERMINAL_BUFFER_ROWS, 300);
+test("terminal sessions retain only the latest 256 KiB of output", async () => {
+  const namespace = `terminal-output-length-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdout.write(`${\"a\".repeat(300 * 1024)}tail-marker`);"
+    ],
+    command: process.execPath,
+    commandPreview: "node long line",
+    namespace
+  });
+
+  try {
+    await waitFor(() => readTerminalSession(session.id, {
+      namespace
+    }).status === "exited", { timeoutMs: 10000 });
+    const output = readTerminalSession(session.id, {
+      namespace
+    }).output;
+
+    assert.equal(output.length, 256 * 1024);
+    assert.ok(output.endsWith("tail-marker"));
+  } finally {
+    await closeTerminalSession(session.id, {
+      namespace
+    });
+  }
 });
 
 test("terminal sessions retain only the latest 300 output rows", async () => {
   const namespace = `terminal-output-rows-${crypto.randomUUID()}`;
   const lines = Array.from({
-    length: MAX_TERMINAL_BUFFER_ROWS + 20
+    length: 320
   }, (_value, index) => `line-${index + 1}`);
   const session = startTerminalSession({
     args: [
@@ -101,7 +123,7 @@ test("terminal sessions retain only the latest 300 output rows", async () => {
     assert.doesNotMatch(output, /line-20\r?\n/u);
     assert.match(output, /line-21\r?\n/u);
     assert.match(output, /line-320/u);
-    assert.ok(output.split(/\r?\n/u).length <= MAX_TERMINAL_BUFFER_ROWS);
+    assert.ok(output.split(/\r?\n/u).length <= 300);
   } finally {
     await closeTerminalSession(session.id, {
       namespace
@@ -191,19 +213,19 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
     const first = start(`${prefix}one`);
     assert.equal(first.ok, true);
     assert.equal(first.metadata.url, "http://127.0.0.1:4100/");
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 1);
+    assert.equal(runningTerminalCount({ namespacePrefix: prefix }), 1);
 
     const reused = start(`${prefix}one`);
     assert.equal(reused.ok, true);
     assert.equal(reused.id, first.id);
     assert.equal(reused.metadata.url, first.metadata.url);
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 1);
+    assert.equal(runningTerminalCount({ namespacePrefix: prefix }), 1);
 
     const second = start(`${prefix}two`);
     const third = start(`${prefix}three`);
     assert.equal(second.ok, true);
     assert.equal(third.ok, true);
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 3);
+    assert.equal(runningTerminalCount({ namespacePrefix: prefix }), 3);
 
     const blocked = start(`${prefix}four`);
     assert.equal(blocked.ok, false);
@@ -214,7 +236,7 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
     });
     assert.equal(closed.closed, true);
     assert.deepEqual(closedTerminalIds, [first.id]);
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 2);
+    assert.equal(runningTerminalCount({ namespacePrefix: prefix }), 2);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(prefix);
   }
@@ -240,17 +262,11 @@ test("terminal session running cap can be scoped by metadata", async () => {
   try {
     const firstOwner = start("first");
     assert.equal(firstOwner.ok, true);
-    assert.equal(countRunningTerminalSessions({
-      filter: (session) => session.metadata?.owner === "first",
-      namespacePrefix: namespace
-    }), 1);
+    assert.equal(runningTerminalCount({ namespacePrefix: namespace }, (session) => session.metadata.owner === "first"), 1);
 
     const secondOwner = start("second");
     assert.equal(secondOwner.ok, true);
-    assert.equal(countRunningTerminalSessions({
-      filter: (session) => session.metadata?.owner === "second",
-      namespacePrefix: namespace
-    }), 1);
+    assert.equal(runningTerminalCount({ namespacePrefix: namespace }, (session) => session.metadata.owner === "second"), 1);
 
     const blockedFirstOwner = start("first");
     assert.equal(blockedFirstOwner.ok, false);
@@ -279,7 +295,7 @@ test("terminal session running cap defaults to the current namespace", async () 
     assert.equal(start(namespaceOne).ok, true);
     assert.equal(start(namespaceOne).ok, true);
     assert.equal(start(namespaceOne).ok, true);
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: namespaceOne }), 3);
+    assert.equal(runningTerminalCount({ namespacePrefix: namespaceOne }), 3);
 
     const blockedInSameNamespace = start(namespaceOne);
     assert.equal(blockedInSameNamespace.ok, false);
@@ -287,7 +303,7 @@ test("terminal session running cap defaults to the current namespace", async () 
 
     const allowedInAnotherNamespace = start(namespaceTwo);
     assert.equal(allowedInAnotherNamespace.ok, true);
-    assert.equal(countRunningTerminalSessions({ namespacePrefix: namespaceTwo }), 1);
+    assert.equal(runningTerminalCount({ namespacePrefix: namespaceTwo }), 1);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(prefix);
   }
@@ -541,7 +557,7 @@ test("terminal close stops its process tree but stays pending until stop cleanup
     const pending = readTerminalSession(session.id, { namespace });
     assert.equal(pending.status, "closing");
     assert.equal(pending.closeError, "");
-    assert.equal(countRunningTerminalSessions({ namespace }), 1);
+    assert.equal(runningTerminalCount({ namespace }), 1);
 
     releaseStopHook();
     assert.deepEqual(await closing, { closed: true, ok: true });
@@ -601,7 +617,7 @@ test("terminal close stays pending until finalization completes, with no elapsed
     const pending = readTerminalSession(session.id, { namespace });
     assert.equal(pending.status, "closing");
     assert.equal(pending.closeError, "");
-    assert.equal(countRunningTerminalSessions({ namespace }), 1);
+    assert.equal(runningTerminalCount({ namespace }), 1);
 
     releaseCloseHook();
     assert.deepEqual(await closing, { closed: true, ok: true });
@@ -699,31 +715,15 @@ test("terminal sessions close detached terminals after the idle threshold", asyn
     args: longRunningNodeArgs(),
     command: process.execPath,
     commandPreview: "node detached",
+    detachedIdleTimeoutMs: 400,
     namespace
   });
 
   try {
-    const retained = await closeDetachedTerminalSessions({
-      idleMs: 1000,
-      namespace,
-      now: Date.now()
-    });
-    assert.deepEqual(retained, {
-      ok: true,
-      closed: 0
-    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(readTerminalSession(session.id, { namespace }).ok, true);
 
-    const closed = await closeDetachedTerminalSessions({
-      idleMs: 0,
-      namespace,
-      now: Date.now()
-    });
-    assert.deepEqual(closed, {
-      ok: true,
-      closed: 1
-    });
-    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
+    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
@@ -735,6 +735,7 @@ test("terminal sessions do not close subscribed terminals during detached cleanu
     args: longRunningNodeArgs(),
     command: process.execPath,
     commandPreview: "node subscribed",
+    detachedIdleTimeoutMs: 25,
     namespace
   });
 
@@ -744,17 +745,10 @@ test("terminal sessions do not close subscribed terminals during detached cleanu
     });
     assert.equal(subscription.ok, true);
 
-    const closed = await closeDetachedTerminalSessions({
-      idleMs: 0,
-      namespace,
-      now: Date.now()
-    });
-    assert.deepEqual(closed, {
-      ok: true,
-      closed: 0
-    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
     assert.equal(readTerminalSession(session.id, { namespace }).ok, true);
     subscription.unsubscribe();
+    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
@@ -806,15 +800,7 @@ test("terminal sessions prune exited records after detached idle cleanup", async
 
     unsubscribe();
     unsubscribe = () => null;
-    const cleaned = await closeDetachedTerminalSessions({
-      namespace,
-      now: Date.now() + 100
-    });
-    assert.deepEqual(cleaned, {
-      ok: true,
-      closed: 1
-    });
-    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
+    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
   } finally {
     unsubscribe();
     await closeTerminalSessionsForNamespacePrefix(namespace);
@@ -845,15 +831,15 @@ test("terminal session control helpers send exact text, narrow keys, and expose 
     assert.equal(written.inputVersion, 1);
 
     await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("echo:hello"));
-    const snapshot = readTerminalSessionControlState(session.id, {
+    const snapshot = terminalSessionControlSnapshot(readTerminalSession(session.id, {
       namespace
-    });
+    }));
     assert.equal(snapshot.ok, true);
     assert.equal(snapshot.lastMovementDirection, "output");
     assert.equal(terminalSessionContainsText(snapshot, "echo:hello").containsText, true);
     assert.equal(terminalSessionContainsText(snapshot, "missing").containsText, false);
 
-    const keyWritten = writeTerminalSessionKey(session.id, "enter", {
+    const keyWritten = writeTerminalSession(session.id, terminalKeyInput("enter"), {
       namespace
     });
     assert.equal(keyWritten.ok, true);
@@ -906,14 +892,27 @@ test("terminal movement state treats input and output as activity for quiet chec
   const oldTimestamp = new Date(now - 4000).toISOString();
   const freshTimestamp = new Date(now - 500).toISOString();
 
-  assert.deepEqual(terminalMovementState({
+  const {
+    idleForMs,
+    lastMovementAt,
+    lastMovementDirection,
+    quiet,
+    quietThresholdMs
+  } = terminalSessionControlSnapshot({
     createdAt: oldTimestamp,
     lastInputAt: "",
     lastOutputAt: ""
   }, {
     now,
     quietThresholdMs: 3000
-  }), {
+  });
+  assert.deepEqual({
+    idleForMs,
+    lastMovementAt,
+    lastMovementDirection,
+    quiet,
+    quietThresholdMs
+  }, {
     idleForMs: 4000,
     lastMovementAt: oldTimestamp,
     lastMovementDirection: "created",
@@ -921,7 +920,7 @@ test("terminal movement state treats input and output as activity for quiet chec
     quietThresholdMs: 3000
   });
 
-  const activeState = terminalMovementState({
+  const activeState = terminalSessionControlSnapshot({
     createdAt: oldTimestamp,
     lastInputAt: freshTimestamp,
     lastOutputAt: oldTimestamp
@@ -1091,10 +1090,11 @@ test("terminal sessions can stop a process without deleting its log", async () =
 
     await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("terminal log kept"));
 
-    const stopped = stopTerminalSession(session.id, { namespace });
-    assert.equal(stopped.ok, true);
-    assert.equal(stopped.status, "closing");
+    const stopping = stopTerminalSessionAndWait(session.id, { namespace });
+    assert.equal(readTerminalSession(session.id, { namespace }).status, "closing");
     assert.equal(listTerminalSessions({ namespace }).some((item) => item.id === session.id), true);
+    const stopped = await stopping;
+    assert.equal(stopped.ok, true);
 
     await waitFor(() => stopReasons.includes("stop"));
     await waitFor(() => messages.some((message) =>

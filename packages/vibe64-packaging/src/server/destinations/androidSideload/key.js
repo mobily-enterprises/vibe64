@@ -74,6 +74,7 @@ async function exportCertificateSha256({ javaHome, keystore, alias, password, cw
  */
 async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, options = {}) {
   const { runCommand = spawnCommand } = options;
+  // readable-check: allow method-probe - input validation: the publishing caller hands over the sink that keeps the new key
   if (typeof sink !== "function") throw keyError("Creating a key needs a sink that keeps it.");
   const directory = await mkdtemp(path.join(tempRoot, "vibe64-sideload-key-"));
   const password = Buffer.from(randomBytes(32).toString("base64url"), "utf8");

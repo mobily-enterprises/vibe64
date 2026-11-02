@@ -89,4 +89,4 @@ function pep440FromSemver(version) {
   return `${release}${suffix}${Number(number)}`;
 }
 
-export { RELEASE_TAG, compareSemver, isReleaseVersion, isSemver, parseSemver, pep440FromSemver };
+export { RELEASE_TAG, compareSemver, isReleaseVersion, isSemver, pep440FromSemver };

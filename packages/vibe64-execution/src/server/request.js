@@ -101,6 +101,7 @@ function normalizeCommandArgs(args = [], options = {}) {
   const {
     mode = "capture"
   } = options;
+  // readable-check: allow method-probe - input validation: arguments are a list or a function of the command input
   if (typeof args === "function") {
     if (mode !== "pty") {
       throw commandRequestError(
@@ -117,6 +118,7 @@ function normalizeCommandEnv(envInput = {}, options = {}) {
   const {
     mode = "capture"
   } = options;
+  // readable-check: allow method-probe - input validation: a command's env is a record or a function of the command input
   if (typeof envInput === "function") {
     if (mode !== "pty") {
       throw commandRequestError(
@@ -427,15 +429,10 @@ function normalizeVibe64CommandRequest(input = {}) {
   };
 }
 
+const __testables = Object.freeze({ normalizeExecutionDescriptor });
+
 export {
   DEFAULT_COMMAND_MAX_BUFFER_BYTES,
-  VIBE64_COMMAND_ACTORS,
-  VIBE64_COMMAND_ENV_POLICIES,
-  VIBE64_COMMAND_GIT_TRANSPORTS,
-  VIBE64_COMMAND_MODES,
-  VIBE64_COMMAND_PURPOSES,
-  VIBE64_EXECUTION_KINDS,
-  VIBE64_EXECUTION_LIFECYCLES,
-  normalizeExecutionDescriptor,
-  normalizeVibe64CommandRequest
+  normalizeVibe64CommandRequest,
+  __testables
 };

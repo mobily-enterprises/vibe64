@@ -94,4 +94,4 @@ function recoveryKitCovers(status, entryId) {
   return Boolean(kit && entry && kit.entryIds.includes(entryId) && kit.createdAt >= entry.createdAt);
 }
 
-export { KIT_CONTRACT, createRecoveryKit, recoveryKitCovers, restoreRecoveryKit };
+export { createRecoveryKit, recoveryKitCovers, restoreRecoveryKit };

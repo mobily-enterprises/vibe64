@@ -2,11 +2,10 @@
 // CHANGELOG.md entry, which the person reviews and Saves like any other change.
 // Releasing later only tags that saved commit. `Version from: external` packages
 // (Changesets, release-please and the like) are only ever read, never written.
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { publishError } from "../errors.js";
-import { pathWithin } from "../paths.js";
 import { compareSemver, isSemver, pep440FromSemver } from "./version.js";
 
 const CHANGELOG = "CHANGELOG.md";
@@ -197,23 +196,6 @@ async function prepareReleaseChange({ projectRoot, entry, version, notes, date =
   return { package: entry.id, previousVersion: current, version, sourceVersion: spelled, date, files };
 }
 
-/**
- * Writes a prepared change only if every file still holds what it was prepared from.
- */
-async function applyReleaseChange({ projectRoot, change } = {}) {
-  if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) throw prepareError("The project root must be an absolute path.");
-  const resolved = change.files.map((file) => {
-    const absolute = path.resolve(projectRoot, file.path);
-    if (!pathWithin(projectRoot, absolute, { allowRoot: false })) throw prepareError(`${file.path} is outside the project.`);
-    return { ...file, absolute };
-  });
-  for (const file of resolved) {
-    if (await readOptional(file.absolute) !== file.before) {
-      throw publishError("VIBE64_PUBLISH_PREPARE_STALE", `${file.path} changed after the release was prepared. Prepare it again.`);
-    }
-  }
-  for (const file of resolved) await writeFile(file.absolute, file.after, "utf8");
-  return { paths: resolved.map((file) => file.path) };
-}
+const __testables = Object.freeze({ nextChangelog });
 
-export { applyReleaseChange, nextChangelog, prepareReleaseChange, readSourceVersion };
+export { prepareReleaseChange, readSourceVersion, __testables };

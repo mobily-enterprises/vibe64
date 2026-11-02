@@ -43,7 +43,7 @@ function ptyHelperPayloadPath(root = "") {
  * A terminal gets the env its caller resolved; only an env factory goes through
  * the gateway's resolver, once per terminal id, with the execution id stamp.
  */
-function terminalSessionInputForRequest(request = {}, options = {}) {
+function terminalSessionInputForRequest(request, options) {
   const {
     actor,
     cwd,
@@ -72,6 +72,7 @@ function terminalSessionInputForRequest(request = {}, options = {}) {
         args: payloadArgs,
         command: request.command,
         cwd,
+        // readable-check: allow method-probe - input validation: a terminal's env is a record or a function of the terminal input
         env: typeof env === "function" ? env(input) : env,
         input: request.input,
         operation: helperOperationForRequest(request)

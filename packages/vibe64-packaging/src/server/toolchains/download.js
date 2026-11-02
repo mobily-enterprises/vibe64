@@ -159,4 +159,4 @@ async function unpackInto(archiveFile, destination, options = {}) {
   }
 }
 
-export { downloadVerified, exists, extractZip, runOrFail, toolchainEnvironment, toolchainError, unpackInto };
+export { downloadVerified, exists, runOrFail, toolchainEnvironment, toolchainError, unpackInto };

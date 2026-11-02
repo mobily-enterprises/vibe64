@@ -5,12 +5,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  applyReleaseChange,
-  nextChangelog,
+  __testables,
   prepareReleaseChange,
   readSourceVersion
 } from "../../packages/vibe64-packaging/src/server/release/prepareChange.js";
 import { compareSemver, pep440FromSemver } from "../../packages/vibe64-packaging/src/server/release/version.js";
+
+const { nextChangelog } = __testables;
 
 const npmEntry = { id: "sdk", packer: "npm", workdir: "packages/sdk", versionFrom: "package.json" };
 const pythonEntry = { id: "client", packer: "python-dist", workdir: "python", versionFrom: "pyproject.toml" };
@@ -42,22 +43,10 @@ test("an npm release is a version bump, lockfile and changelog change computed w
   // Nothing was written yet.
   assert.equal(await readFile(path.join(root, "packages/sdk/package.json"), "utf8"), PACKAGE_JSON);
 
-  await applyReleaseChange({ projectRoot: root, change });
+  for (const file of change.files) await writeFile(path.join(root, file.path), file.after, "utf8");
   assert.match(await readFile(path.join(root, "packages/sdk/package.json"), "utf8"), /"version": "1\.5\.0"/u);
   assert.match(await readFile(path.join(root, "packages/sdk/CHANGELOG.md"), "utf8"), /## 1\.5\.0 - 2026-10-23/u);
   assert.equal(await readSourceVersion({ projectRoot: root, entry: npmEntry }), "1.5.0");
-});
-
-test("a prepared change is refused once any file moved on", async (t) => {
-  const root = await project(t, { "packages/sdk/package.json": PACKAGE_JSON });
-  const change = await prepareReleaseChange({ projectRoot: root, entry: npmEntry, version: "1.5.0", notes: "- Faster.", date: "2026-10-23" });
-  await writeFile(path.join(root, "packages/sdk/CHANGELOG.md"), "# Changelog\n");
-  await assert.rejects(applyReleaseChange({ projectRoot: root, change }), { code: "VIBE64_PUBLISH_PREPARE_STALE" });
-  assert.equal(await readFile(path.join(root, "packages/sdk/package.json"), "utf8"), PACKAGE_JSON);
-  await assert.rejects(
-    applyReleaseChange({ projectRoot: root, change: { files: [{ path: "../outside.txt", before: null, after: "x" }] } }),
-    /outside the project/u
-  );
 });
 
 test("versions must move forward and notes stay below the changelog's entry headings", async (t) => {

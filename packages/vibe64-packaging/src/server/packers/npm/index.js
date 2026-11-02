@@ -93,4 +93,4 @@ const npmPacker = Object.freeze({
   })
 });
 
-export { npmPacker, npmTarballName };
+export { npmPacker };

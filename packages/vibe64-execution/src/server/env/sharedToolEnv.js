@@ -67,6 +67,5 @@ export {
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
   VIBE64_PLAYWRIGHT_VERSION_ENV,
   VIBE64_SHARED_CACHE_ROOT_ENV,
-  resolveManagedPlaywrightVersion,
   sharedToolEnv
 };

@@ -117,4 +117,4 @@ async function capacitorRecipe({
   };
 }
 
-export { capacitorRecipe, requireToolchains };
+export { capacitorRecipe };
