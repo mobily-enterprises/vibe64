@@ -7,7 +7,7 @@ import {
   resolveStudioProjectsRoot,
   resolveProjectContextRoot
 } from "./studioProjectContext.js";
-import { pathExists } from "./core.js";
+import { pathExists, vibe64Error } from "./core.js";
 import {
   PRACTICE_PROJECT_DELETED_CODE,
   admitPracticeProject,
@@ -129,9 +129,7 @@ async function resolveProjectRequestContext({
     });
   }
   if (projectContext.projectCatalogEnabled === false) {
-    const error = new Error("Local editor mode only serves the selected project.");
-    error.code = "vibe64_project_route_unavailable";
-    throw error;
+    throw vibe64Error("Local editor mode only serves the selected project.", "vibe64_project_route_unavailable", { status: 404 });
   }
   let result;
   try {

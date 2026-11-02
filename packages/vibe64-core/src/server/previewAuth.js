@@ -73,10 +73,15 @@ function normalizePreviewIdentityTypes(value = []) {
     .filter((entry) => PREVIEW_IDENTITY_SELECTOR_TYPES.includes(entry)))];
 }
 
-function previewApplicationIdentitiesError(message = "") {
-  const error = new Error(message || "Managed app identities are invalid.");
-  error.code = "vibe64_invalid_application_identities_config";
-  return error;
+/**
+ * An invalid managed app identity list. Every sentence keeps the code callers
+ * branch on and names itself with its own messageCode.
+ * @param {string} message
+ * @param {string} messageCode
+ * @param {Record<string, unknown>} [messageParams]
+ */
+function previewApplicationIdentitiesError(message, messageCode, messageParams = {}) {
+  return previewIdentityError(message, "vibe64_invalid_application_identities_config", { messageCode, messageParams });
 }
 
 function previewApplicationIdentityEntries(value = []) {
@@ -96,7 +101,8 @@ function previewApplicationIdentityEntries(value = []) {
     // Report the same field-level validation error as every other invalid shape.
   }
   throw previewApplicationIdentitiesError(
-    "Managed app identities must be a list of names, selector types, and application values."
+    "Managed app identities must be a list of names, selector types, and application values.",
+    "vibe64_application_identities_not_list"
   );
 }
 
@@ -104,7 +110,9 @@ function normalizePreviewApplicationIdentities(value = []) {
   const entries = previewApplicationIdentityEntries(value);
   if (entries.length > PREVIEW_APPLICATION_IDENTITY_LIMIT) {
     throw previewApplicationIdentitiesError(
-      `Managed app identities cannot contain more than ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries.`
+      `Managed app identities cannot contain more than ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries.`,
+      "vibe64_application_identities_too_many",
+      { limit: PREVIEW_APPLICATION_IDENTITY_LIMIT }
     );
   }
   const names = new Set();
@@ -116,7 +124,9 @@ function normalizePreviewApplicationIdentities(value = []) {
       Object.keys(entry).some((key) => !PREVIEW_APPLICATION_IDENTITY_FIELDS.has(key))
     ) {
       throw previewApplicationIdentitiesError(
-        `Managed app identity ${index + 1} must contain only name, type, and value.`
+        `Managed app identity ${index + 1} must contain only name, type, and value.`,
+        "vibe64_application_identity_fields_unsupported",
+        { position: index + 1 }
       );
     }
     const name = String(entry.name || "").trim().toLowerCase();
@@ -125,7 +135,9 @@ function normalizePreviewApplicationIdentities(value = []) {
       PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES.has(name)
     ) {
       throw previewApplicationIdentitiesError(
-        `Managed app identity ${index + 1} has an invalid name. Use a short name such as admin or user.`
+        `Managed app identity ${index + 1} has an invalid name. Use a short name such as admin or user.`,
+        "vibe64_application_identity_name_invalid",
+        { position: index + 1 }
       );
     }
     let selector;
@@ -136,12 +148,16 @@ function normalizePreviewApplicationIdentities(value = []) {
       });
     } catch {
       throw previewApplicationIdentitiesError(
-        `Managed app identity ${name} has an invalid application selector.`
+        `Managed app identity ${name} has an invalid application selector.`,
+        "vibe64_application_identity_selector_invalid",
+        { name }
       );
     }
     if (names.has(name)) {
       throw previewApplicationIdentitiesError(
-        `Managed app identity name ${name} is duplicated.`
+        `Managed app identity name ${name} is duplicated.`,
+        "vibe64_application_identity_name_duplicated",
+        { name }
       );
     }
     names.add(name);

@@ -41,11 +41,11 @@ test("personal AI profile validates preferred-name content by Unicode character"
   await assert.doesNotReject(store.write({ preferredName: "😀".repeat(80), version: 1 }));
   await assert.rejects(
     store.write({ preferredName: "😀".repeat(81), version: 1 }),
-    { code: "vibe64_preferred_name_too_long" }
+    { code: "vibe64_preferred_name_too_long", statusCode: 422, params: { limit: 80 } }
   );
   await assert.rejects(
     store.write({ preferredName: "Ada\u0000", version: 1 }),
-    { code: "vibe64_preferred_name_invalid" }
+    { code: "vibe64_preferred_name_invalid", statusCode: 422 }
   );
   await assert.rejects(
     store.write({ preferredName: "Ada", version: 2 }),
