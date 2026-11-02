@@ -23,6 +23,7 @@ import { changelogSection, failureLog } from "./releaseRecords.js";
  * @param {CredentialBroker} dependencies.credentials
  * @param {PublishingPackaging} dependencies.packaging
  * @param {RuntimeLogger} dependencies.logger
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for the builds
  * @param {() => string} dependencies.now
  */
 function createReleaseRuns({
@@ -34,6 +35,7 @@ function createReleaseRuns({
   repository,
   credentials,
   packaging,
+  baseEnvironment,
   logger,
   now
 }) {
@@ -131,7 +133,8 @@ function createReleaseRuns({
         resultStore,
         cacheDirectory,
         versionCode: entry.buildNumber ?? null,
-        toolchains: current.androidTools || {}
+        toolchains: current.androidTools || {},
+        baseEnvironment
       });
       built[entry.id] = result.artifacts;
       await history.update(recordId, (record) => {

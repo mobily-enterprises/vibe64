@@ -52,6 +52,7 @@ import { createReleaseRuns } from "./releaseRuns.js";
  * @param {CredentialBroker} dependencies.credentials
  * @param {SessionReleaseWriter} dependencies.sourceWriter
  * @param {PublishingPackaging} dependencies.packaging
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for builds and the Android checks
  * @param {RuntimeLogger} dependencies.logger
  * @param {() => string} [dependencies.now]
  */
@@ -69,6 +70,7 @@ function createReleaseOrchestrator({
   credentials,
   sourceWriter,
   packaging,
+  baseEnvironment,
   logger,
   now = () => new Date().toISOString()
 }) {
@@ -81,6 +83,7 @@ function createReleaseOrchestrator({
     repository,
     credentials,
     packaging,
+    baseEnvironment,
     logger,
     now
   });
@@ -308,7 +311,8 @@ function createReleaseOrchestrator({
         sourceRoot: root,
         packaging: release.packaging,
         packageIds: built.filter((entry) => entry.packer === "capacitor").map(({ id }) => id),
-        toolchains: androidTools || {}
+        toolchains: androidTools || {},
+        baseEnvironment
       }))
       : null;
     const context = {

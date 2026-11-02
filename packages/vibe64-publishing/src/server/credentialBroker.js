@@ -49,7 +49,7 @@ function plainProof(proof) {
  * @param {object} dependencies
  * @param {AgeStore} dependencies.keys
  * @param {PublishingPackaging} dependencies.packaging
- * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for a destination's dry-run tools
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for a destination's dry-run and upload tools
  * @param {() => string} [dependencies.now]
  * @param {string} [dependencies.ghCommand]
  */
@@ -161,6 +161,7 @@ function createCredentialBroker({
       artifacts,
       previous: previous?.status === "proven" ? previous : null,
       obtainCredential: obtainFor(target),
+      baseEnvironment,
       toolchains,
       now
     });

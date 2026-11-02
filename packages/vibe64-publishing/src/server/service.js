@@ -132,34 +132,17 @@ function createPublishingToolchains({ baseToolchains, pythonTools }) {
 }
 
 /**
- * The packaging operations releases use, from @local/vibe64-packaging. Builds,
- * Android checks and uploads run their tools with `baseEnvironment`'s PATH and locale.
- * @param {RuntimeEnv} baseEnvironment
+ * The packaging operations releases use, from @local/vibe64-packaging.
  */
-function createPublishingPackaging(baseEnvironment) {
-  /** @param {Omit<Parameters<typeof buildPackage>[0], "baseEnvironment">} input */
-  function buildReleasePackage(input) {
-    return buildPackage({ ...input, baseEnvironment });
-  }
-
-  /** @param {Omit<Parameters<typeof gatherAndroidFacts>[0], "baseEnvironment">} input */
-  function gatherReleaseAndroidFacts(input) {
-    return gatherAndroidFacts({ ...input, baseEnvironment });
-  }
-
-  /** @param {Omit<Parameters<typeof publishTarget>[0], "baseEnvironment">} input */
-  function publishReleaseTarget(input) {
-    return publishTarget({ ...input, baseEnvironment });
-  }
-
+function createPublishingPackaging() {
   return Object.freeze({
     androidTemplate: CAPACITOR_SHELL_TEMPLATE,
-    buildPackage: buildReleasePackage,
-    gatherAndroidFacts: gatherReleaseAndroidFacts,
+    buildPackage,
+    gatherAndroidFacts,
     gatherCredentialFacts,
     generateSideloadKey,
     npmTokenUserconfig,
-    publishTarget: publishReleaseTarget,
+    publishTarget,
     vibe64Destination,
     withStageCredentials
   });
@@ -194,7 +177,7 @@ function createPublishingService({
     now
   });
   const toolchains = createPublishingToolchains({ baseToolchains, pythonTools });
-  const packaging = createPublishingPackaging(env);
+  const packaging = createPublishingPackaging();
   const broker = createCredentialBroker({
     keys,
     packaging,
@@ -234,6 +217,7 @@ function createPublishingService({
         credentials: broker,
         sourceWriter: writer,
         packaging,
+        baseEnvironment: env,
         logger,
         now
       });
