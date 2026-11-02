@@ -142,9 +142,7 @@ function createProjectArchiveService({
       throw practiceScopeRequired(slug);
     }
     if (!projectContext.projectsRoot || !pathInsideOrEqual(projectsRoot, projectContextRoot)) {
-      const error = new Error("Project folder must be inside the Vibe64 projects root.");
-      error.code = "vibe64_project_outside_projects_root";
-      throw error;
+      throw new AppError(409, "Project folder must be inside the Vibe64 projects root.", { code: "vibe64_project_outside_projects_root" });
     }
     return { practice: false, projectContextRoot };
   }
@@ -507,7 +505,7 @@ function createProjectArchiveService({
       await removalPreflight(input);
       return { ok: true };
     } catch (error) {
-      if (error.statusCode && error.statusCode < 500) return { ok: false, reason: error.message };
+      if (error.statusCode < 500) return { ok: false, code: error.code, reason: error.message };
       throw error;
     }
   }

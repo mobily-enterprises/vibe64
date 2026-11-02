@@ -7,6 +7,7 @@ import {
   rejectCallerEnvPolicy
 } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { codedError } from "./codedError.js";
 
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
@@ -108,7 +109,7 @@ function assertSafeResourceEnvironmentName(name = "") {
   const key = toText(name);
   rejectCallerEnvPolicy({ [key]: "value" });
   if (runtimeConfigKeyIsVibe64Reserved(key) || FORBIDDEN_RESOURCE_ENVIRONMENT_NAMES.has(key)) {
-    throw codedError(
+    throw vibe64Error(
       `Managed resource binding cannot target reserved environment variable ${key}.`,
       "vibe64_resource_environment_name_reserved"
     );
@@ -118,10 +119,10 @@ function assertSafeResourceEnvironmentName(name = "") {
 function validateVoiceResource(resource, bindings, values) {
   if (resource.kind !== "voice") return;
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(resource.id || "")) {
-    throw codedError("A voice resource id must use letters, numbers, underscores or hyphens.", "vibe64_voice_resource_id_invalid");
+    throw vibe64Error("A voice resource id must use letters, numbers, underscores or hyphens.", "vibe64_voice_resource_id_invalid");
   }
   if (Object.keys(bindings || {}).sort().join(",") !== "accessTokenFile,endpoint" || Object.keys(resource.optionalBindings || {}).length) {
-    throw codedError(
+    throw vibe64Error(
       "A voice resource requires endpoint and accessTokenFile bindings.",
       "vibe64_voice_resource_bindings_invalid"
     );
@@ -133,7 +134,7 @@ function validateVoiceResource(resource, bindings, values) {
   } catch { /* Report the same safe setup error below. */ }
   if (!endpoint || !["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
       !path.isAbsolute(values.accessTokenFile || "") || /[\0\r\n]/u.test(values.accessTokenFile)) {
-    throw codedError(
+    throw vibe64Error(
       "Voice requires a ws:// or wss:// endpoint without credentials and an absolute accessTokenFile path.",
       "vibe64_voice_resource_values_invalid"
     );
@@ -146,7 +147,7 @@ function preferredAlternative(resource = {}) {
     : [];
   const preferred = alternatives.filter((alternative) => alternative?.preferred === true);
   if (preferred.length !== 1 || !objectRecord(preferred[0].bindings)) {
-    throw codedError(
+    throw vibe64Error(
       `Genesis resource ${toText(resource.id) || "(unknown)"} has no unambiguous preferred semantic binding.`,
       "vibe64_resource_bindings_required"
     );
@@ -256,7 +257,7 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
     port > 65535 ||
     Object.keys(endpoint).some((name) => !["database", "host", "password", "port", "username"].includes(name))
   ) {
-    throw codedError(
+    throw vibe64Error(
       `The ${kind || "database"} tool connection is incomplete.`,
       "vibe64_database_tool_connection_incomplete"
     );
@@ -429,7 +430,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
   }
 
   if (managedDatabases.length > 1) {
-    throw codedError(
+    throw vibe64Error(
       "The session declares more than one managed database.",
       "vibe64_managed_database_ambiguous"
     );
@@ -544,20 +545,20 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
     DATABASE_RESOURCE_KINDS.has(resource?.kind)
   ));
   if (databases.length !== 1) {
-    throw codedError(
+    throw vibe64Error(
       databases.length > 1
         ? "The session declares more than one database."
         : "The session Stack does not declare a supported database.",
       databases.length > 1
-        ? "vibe64_managed_database_ambiguous"
-        : "vibe64_session_database_unavailable"
+        ? "vibe64_session_database_ambiguous"
+        : "vibe64_session_database_undeclared"
     );
   }
   const { resource } = databases[0];
   const alternative = satisfiedAlternative(resource, environment);
   if (!alternative) {
     preferredAlternative(resource);
-    throw codedError(
+    throw vibe64Error(
       "The session database environment is incomplete.",
       "vibe64_session_database_environment_incomplete"
     );
@@ -569,7 +570,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
   const unsupported = Object.keys(values).filter((semantic) => !DATABASE_CONNECTION_SEMANTICS.has(semantic));
   let endpoint;
   if (unsupported.length > 0) {
-    throw codedError(
+    throw vibe64Error(
       `The database tool does not support connection semantics: ${unsupported.join(", ")}.`,
       "vibe64_database_tool_semantics_unsupported"
     );
@@ -578,7 +579,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
     const database = toText(values.database);
     if (!database || database === ":memory:" || Object.keys(values).some((key) => key !== "database") ||
         (!path.isAbsolute(database) && !path.isAbsolute(sourceRoot))) {
-      throw codedError("SQLite database browsing requires a declared persistent database file.", "vibe64_session_database_file_required");
+      throw vibe64Error("SQLite database browsing requires a declared persistent database file.", "vibe64_session_database_file_required");
     }
     const filename = path.resolve(sourceRoot, database);
     return normalizeDatabaseToolEnvironment({

@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { vibe64Error } from "./core.js";
 import { assertProjectEffectAdmission } from "./practiceContext.js";
 
 import {
@@ -249,11 +250,7 @@ function createStudioProjectContext({
   }
 
   function requireSelectedTargetRoot() {
-    if (!selectedTargetRoot) {
-      const error = new Error("Choose a project before using project tools.");
-      error.code = "vibe64_project_not_selected";
-      throw error;
-    }
+    if (!selectedTargetRoot) throw vibe64Error("Choose a project before using project tools.", "vibe64_project_not_selected");
     return selectedTargetRoot;
   }
 

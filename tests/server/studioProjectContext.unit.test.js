@@ -869,7 +869,7 @@ for (const selectionSource of ["workspace", "explicit"]) {
       assert.equal(context.selectionSource, "");
       assert.equal(context.selectedProject, null);
       assert.equal(context.hasSelection(), false);
-      assert.throws(() => context.requireSelectedTargetRoot(), { code: "vibe64_project_not_selected" });
+      assert.throws(() => context.requireSelectedTargetRoot(), { code: "vibe64_project_not_selected", status: 409 });
       await access(staleSessionPath);
       assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), [slug]);
       await assert.rejects(() => access(runtimeRoot), { code: "ENOENT" });

@@ -80,6 +80,7 @@ function vibe64StatusCode(response, options = {}) {
     code === "vibe64_agent_attachment_session_unavailable" ||
     code === "vibe64_project_not_selected" ||
     code === "vibe64_project_not_ready" ||
+    code === "vibe64_project_source_lock_timeout" ||
     code === "vibe64_development_database_scope_busy" ||
     code === "vibe64_project_session_policy_lock_timeout" ||
     code === "vibe64_session_creation_limit" ||

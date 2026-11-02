@@ -9,6 +9,7 @@ import {
   stat
 } from "node:fs/promises";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { codedError } from "./codedError.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -106,10 +107,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
       }
     }
   }
-  throw codedError(
-    timeoutErrorMessage,
-    timeoutErrorCode
-  );
+  throw vibe64Error(timeoutErrorMessage, timeoutErrorCode);
 }
 
 async function acquireProjectSourceMutationLock(projectRuntimeRoot, options = {}) {

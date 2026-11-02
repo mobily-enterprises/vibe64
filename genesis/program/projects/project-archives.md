@@ -105,7 +105,7 @@ steps, for practice projects only: a catalogue project is refused with
 without an archive. Use Delete project instead."), so a normal project keeps
 archive-only deletion. A pinned session refuses it ("Unpin session … before
 deleting this practice project."). `canRemoveProject` returns the same refusals
-as `{ok: false, reason}` and writes nothing. `projectExists` is true while a
+as `{ok: false, code, reason}` and writes nothing. `projectExists` is true while a
 record or any storage remains, so an interrupted removal stays listed for the
 retry; a completed removal replays as `{ok: true, removed: false}`.
 

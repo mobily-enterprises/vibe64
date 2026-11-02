@@ -521,7 +521,7 @@ test("a pinned session blocks light practice deletion before deletion state chan
       { code: "vibe64_project_pinned", statusCode: 409, message: "Unpin session main-session before deleting this practice project." });
     assert.deepEqual((await inScope(() => projectContext.readWorkspaceProjectState({ slug }))).metadata, before.metadata);
     assert.deepEqual(await inScope(() => service.canRemoveProject({ slug })),
-      { ok: false, reason: "Unpin session main-session before deleting this practice project." });
+      { ok: false, code: "vibe64_project_pinned", reason: "Unpin session main-session before deleting this practice project." });
     assert.deepEqual((await inScope(() => projectContext.readWorkspaceProjectState({ slug }))).metadata, before.metadata,
       "the preflight writes nothing");
   });
@@ -534,7 +534,8 @@ test("light deletion refuses a catalogue project, which keeps archive-only delet
     const service = createProjectArchiveService({ projectContext,
       closeProjectRuntime: async () => { throw new Error("must not close"); } });
     await assert.rejects(service.removeProject({ slug: "ordinary" }), { code: "vibe64_project_not_practice", statusCode: 409 });
-    assert.equal((await service.canRemoveProject({ slug: "ordinary" })).ok, false);
+    assert.deepEqual(await service.canRemoveProject({ slug: "ordinary" }), { ok: false, code: "vibe64_project_not_practice",
+      reason: "Only practice projects can be deleted without an archive. Use Delete project instead." });
     assert.deepEqual((await projectContext.readWorkspaceProjectState({ slug: "ordinary" })).metadata, before.metadata);
     await access(path.join(projectContext.projectsRoot, "ordinary"));
   });

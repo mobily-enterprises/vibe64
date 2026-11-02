@@ -27,6 +27,10 @@ test("requests that conflict with current operational state return conflict", ()
     ok: false
   }), 409);
   assert.equal(vibe64StatusCode({
+    code: "vibe64_project_source_lock_timeout",
+    ok: false
+  }), 409);
+  assert.equal(vibe64StatusCode({
     code: "vibe64_session_creation_limit",
     ok: false
   }), 409);
