@@ -22,7 +22,6 @@ import { createService } from "./service.js";
 import { createProjectServices } from "./projectServices.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDormancy.js";
 
-/** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -34,131 +33,111 @@ import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDorm
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 
-/**
- * @param {object} dependencies
- * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
- * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
- * @param {ProjectServices | null} [dependencies.projectServices]
- */
-function createVibe64TerminalsFeature({
-  // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
-  codexTerminalController = {},
-  // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
-  opencodeTerminalController = {},
-  // readable-check: allow dependency-default - optional operation: without supplied project services the terminals service creates its own
-  projectServices = null
-} = {}) {
-  const cleanupSchedules = new WeakMap();
-  return defineFeature({
-    id: "vibe64.terminals",
-    domain: "vibe64-terminals",
-    requires: {
-      env: "runtime.env",
-      events: "runtime.events",
-      fastify: "runtime.fastify",
-      http: "runtime.http",
-      logger: "runtime.logger",
-      // Its provider registers the multipart parser that the attachment routes read.
-      uploads: "runtime.uploads",
-      project: "vibe64.project"
-    },
-    // A composed host's production Env and saved values for the agent Env command.
-    optional: {
-      productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
-      savedEnvValueLinks: TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN
-    },
-    provides: {
-      terminals: "vibe64.terminals"
-    },
-    /**
-     * @param {object} capabilities
-     * @param {RuntimeEnv} capabilities.env
-     * @param {RuntimeEvents} capabilities.events
-     * @param {RuntimeFastify} capabilities.fastify
-     * @param {RuntimeHttp} capabilities.http
-     * @param {RuntimeLogger} capabilities.logger
-     * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
-     * @param {ProjectService} capabilities.project
-     * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
-     * @param {FeatureSetupContext} context
-     */
-    setup({
-      env,
-      events,
-      fastify,
-      http,
+// Each terminals service's idle-project sweep, started in setup and stopped at shutdown.
+const cleanupSchedules = new WeakMap();
+
+const Vibe64TerminalsFeature = defineFeature({
+  id: "vibe64.terminals",
+  domain: "vibe64-terminals",
+  requires: {
+    env: "runtime.env",
+    events: "runtime.events",
+    fastify: "runtime.fastify",
+    http: "runtime.http",
+    logger: "runtime.logger",
+    // Its provider registers the multipart parser that the attachment routes read.
+    uploads: "runtime.uploads",
+    project: "vibe64.project"
+  },
+  // A composed host's production Env and saved values for the agent Env command.
+  optional: {
+    productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
+    savedEnvValueLinks: TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN
+  },
+  provides: {
+    terminals: "vibe64.terminals"
+  },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeFastify} capabilities.fastify
+   * @param {RuntimeHttp} capabilities.http
+   * @param {RuntimeLogger} capabilities.logger
+   * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
+   * @param {ProjectService} capabilities.project
+   * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
+   * @param {FeatureSetupContext} context
+   */
+  setup({
+    env,
+    events,
+    fastify,
+    http,
+    logger,
+    productionEnvironmentProvider,
+    project,
+    savedEnvValueLinks
+  }, { actionCatalogue }) {
+    assertProductionEnvironmentProvider(productionEnvironmentProvider);
+    assertSavedEnvValueLinks(savedEnvValueLinks);
+    const terminals = createService({
+      actions: actionCatalogue,
+      env: terminalsProviderEnv(env, process.env),
+      hostEnv: process.env,
       logger,
-      productionEnvironmentProvider,
+      productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
+      projectServices: createProjectServices(),
       project,
-      savedEnvValueLinks
-    }, { actionCatalogue }) {
-      assertProductionEnvironmentProvider(productionEnvironmentProvider);
-      assertSavedEnvValueLinks(savedEnvValueLinks);
-      const terminals = createService({
-        actions: actionCatalogue,
-        codexTerminalController,
-        env: terminalsProviderEnv(env, process.env),
-        hostEnv: process.env,
-        logger,
-        opencodeTerminalController,
-        productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
-        projectServices: projectServices ?? createProjectServices(),
-        project,
-        publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
-        publishSessionChanged: createTerminalSessionChangedPublishers(events),
-        savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS
-      });
-      registerRoutes(http, {
-        fastify,
-        projectContext: getStudioProjectContext(),
-        terminals
-      });
-      // The idle-project sweep's timer runs from setup, so shutdown stops it even when boot never ran.
-      cleanupSchedules.set(terminals, startProjectRuntimeDormancyCleanupSchedule({
-        logger,
-        serviceFactory: () => terminals
+      publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
+      publishSessionChanged: createTerminalSessionChangedPublishers(events),
+      savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS
+    });
+    registerRoutes(http, {
+      fastify,
+      projectContext: getStudioProjectContext(),
+      terminals
+    });
+    // The idle-project sweep's timer runs from setup, so shutdown stops it even when boot never ran.
+    cleanupSchedules.set(terminals, startProjectRuntimeDormancyCleanupSchedule({
+      logger,
+      serviceFactory: () => terminals
+    }));
+    fastify.addHook("onReady", async () => {
+      // Every feature's boot hooks, including execution and sign-in configuration,
+      // have completed before recovery can admit work.
+      setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.agent_goal",
+          event: "vibe64.agent_goal.recovery_failed",
+          code: error.code,
+          error: error.message
+        }, "Active goals could not be recovered after server restart.");
       }));
-      fastify.addHook("onReady", async () => {
-        // Every feature's boot hooks, including execution and sign-in configuration,
-        // have completed before recovery can admit work.
-        setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
-          logOperationalEvent(logger, "warn", {
-            component: "vibe64.agent_goal",
-            event: "vibe64.agent_goal.recovery_failed",
-            code: error.code,
-            error: error.message
-          }, "Active goals could not be recovered after server restart.");
-        }));
-      });
-      return { terminals };
-    },
-    actions({ terminals }) {
-      return createTerminalActions({ terminals });
-    },
-    /**
-     * @param {object} capabilities
-     * @param {RuntimeEnv} capabilities.env
-     * @param {{ outputs: { terminals: TerminalsService } }} context
-     */
-    async boot({ env }, { outputs }) {
-      await prepareCodexAttachmentStorage({ env: terminalsProviderEnv(env, process.env) });
-      await cleanupSchedules.get(outputs.terminals).runNow();
-    },
-    /**
-     * @param {object} _dependencies
-     * @param {{ outputs: { terminals: TerminalsService } }} context
-     */
-    async shutdown(_dependencies, { outputs }) {
-      cleanupSchedules.get(outputs.terminals).stop();
-      cleanupSchedules.delete(outputs.terminals);
-      await outputs.terminals.close();
-    }
-  });
-}
+    });
+    return { terminals };
+  },
+  actions({ terminals }) {
+    return createTerminalActions({ terminals });
+  },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
+   * @param {{ outputs: { terminals: TerminalsService } }} context
+   */
+  async boot({ env }, { outputs }) {
+    await prepareCodexAttachmentStorage({ env: terminalsProviderEnv(env, process.env) });
+    await cleanupSchedules.get(outputs.terminals).runNow();
+  },
+  /**
+   * @param {object} _dependencies
+   * @param {{ outputs: { terminals: TerminalsService } }} context
+   */
+  async shutdown(_dependencies, { outputs }) {
+    cleanupSchedules.get(outputs.terminals).stop();
+    cleanupSchedules.delete(outputs.terminals);
+    await outputs.terminals.close();
+  }
+});
 
-const Vibe64TerminalsFeature = createVibe64TerminalsFeature();
-
-export {
-  Vibe64TerminalsFeature,
-  createVibe64TerminalsFeature
-};
+export { Vibe64TerminalsFeature };
