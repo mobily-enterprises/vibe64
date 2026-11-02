@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { portNumbers } from "get-port";
 import { vibe64SharedModes } from "@local/vibe64-execution/server";
-import { resolveRuntimeEnv } from "./runtimeEnv.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
@@ -51,20 +50,18 @@ function defaultListenSocketPath({ env }) {
 /**
  * Where the server listens: a TCP port when one is requested, otherwise a socket.
  * @param {object} input
- * @param {RuntimeEnv} input.env the process environment, for the default socket path
+ * @param {RuntimeEnv} input.env the server's runtime env: its PORT and HOST, and XDG_RUNTIME_DIR for the default
+ *   socket path
  * @param {object} [input.options]
- * @param {ReturnType<typeof resolveRuntimeEnv>} [input.runtimeEnv]
  */
 function resolveListenTarget({
   env,
-  options = {},
-  runtimeEnv = resolveRuntimeEnv()
+  options = {}
 }) {
-  const portRequested = hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true;
-  if (portRequested) {
-    const port = Number(explicitOptionValue(options, "port") ?? runtimeEnv.PORT);
+  if (hasExplicitPortOption(options) || env.PORT !== "") {
+    const port = Number(explicitOptionValue(options, "port") ?? env.PORT);
     return {
-      host: String(explicitOptionValue(options, "host") || runtimeEnv.HOST).trim() || "127.0.0.1",
+      host: String(explicitOptionValue(options, "host") || env.HOST).trim() || "127.0.0.1",
       port: Number.isFinite(port) ? port : 3000,
       transport: "tcp"
     };

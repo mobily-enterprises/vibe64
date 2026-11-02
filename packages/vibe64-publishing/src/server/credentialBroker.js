@@ -47,7 +47,7 @@ function plainProof(proof) {
  * @param {object} dependencies
  * @param {AgeStore} dependencies.keys
  * @param {PublishingPackaging} dependencies.packaging
- * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH and locale for a destination's dry-run and upload tools
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.baseEnvironment PATH, home and locale for the GitHub CLI and a destination's dry-run and upload tools
  * @param {() => string} [dependencies.now]
  * @param {string} [dependencies.ghCommand]
  */
@@ -105,7 +105,7 @@ function createCredentialBroker({
    */
   async function githubCliToken() {
     try {
-      const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: "1" } });
+      const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...baseEnvironment, GH_PROMPT_DISABLED: "1" } });
       return stdout.trim();
     } catch {
       throw publishingError("The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.", "vibe64_publishing_github_cli_missing");

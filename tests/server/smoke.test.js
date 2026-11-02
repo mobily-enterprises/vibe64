@@ -24,8 +24,8 @@ test("server defaults to loopback host", () => {
   delete process.env.PORT;
   try {
     assert.equal(resolveRuntimeEnv().HOST, "127.0.0.1");
-    assert.equal(resolveRuntimeEnv().PORT, null);
-    assert.equal(resolveListenTarget({ env: process.env }).transport, "socket");
+    assert.equal(resolveRuntimeEnv().PORT, "");
+    assert.equal(resolveListenTarget({ env: resolveRuntimeEnv() }).transport, "socket");
   } finally {
     if (previousHost == null) {
       delete process.env.HOST;
@@ -53,7 +53,7 @@ test("runtime env carries the Learning catalogue repository the Training provide
   }
 });
 
-test("runtime env files load broadly while runtime config stays explicit", async () => {
+test("runtime env files load into the one runtime env, with the server's own settings resolved", async () => {
   const keys = [
     "HOST",
     "PORT",
@@ -93,10 +93,12 @@ test("runtime env files load broadly while runtime config stays explicit", async
 
     const runtimeEnv = resolveRuntimeEnv();
     assert.equal(runtimeEnv.HOST, "0.0.0.0");
-    assert.equal(runtimeEnv.PORT, 3939);
+    assert.equal(runtimeEnv.PORT, "3939");
     assert.equal(runtimeEnv[VIBE64_PROJECTS_ROOT_ENV], "/tmp/vibe64-file-projects-root");
     assert.equal(runtimeEnv[VIBE64_SYSTEM_ROOT_ENV], undefined);
-    assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
+    // Every process variable reaches the features, PATH included.
+    assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, "/tmp/vibe64-file.sock");
+    assert.equal(runtimeEnv.PATH, process.env.PATH);
     assert.equal(runtimeEnv.JSKIT_REALTIME_DEBUG, "1");
     process.env.JSKIT_REALTIME_DEBUG = "0";
     assert.equal(resolveRuntimeEnv().JSKIT_REALTIME_DEBUG, "0");

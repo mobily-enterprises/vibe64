@@ -10,6 +10,7 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@local/vibe64-colleague/server/types").ColleagueService} ColleagueService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -23,6 +24,7 @@ const Vibe64PublishingFeature = defineFeature({
   domain: "vibe64-publishing",
   requires: {
     colleague: "vibe64.colleague",
+    env: "runtime.env",
     http: "runtime.http",
     logger: "runtime.logger",
     project: "vibe64.project",
@@ -34,6 +36,7 @@ const Vibe64PublishingFeature = defineFeature({
   /**
    * @param {object} capabilities
    * @param {ColleagueService} capabilities.colleague
+   * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
    * @param {ProjectService} capabilities.project
@@ -42,13 +45,14 @@ const Vibe64PublishingFeature = defineFeature({
    */
   setup({
     colleague,
+    env,
     http,
     logger,
     project,
     sourceEditor
   }, { actionCatalogue }) {
     const publishing = createPublishingService({
-      env: process.env,
+      env,
       logger,
       project,
       sourceEditor

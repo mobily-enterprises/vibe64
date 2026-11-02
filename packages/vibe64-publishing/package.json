@@ -19,6 +19,7 @@
       ],
       "requires": [
         "runtime.actions",
+        "runtime.env",
         "runtime.http",
         "runtime.logger",
         "vibe64.colleague",

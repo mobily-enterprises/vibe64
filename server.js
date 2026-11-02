@@ -48,7 +48,10 @@ import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import { configureCodexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
+import {
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
+  configureCodexAttachmentHostRoot
+} from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
   BASELINE_LEDGER_EXISTS,
   BASELINE_STATE_WITHOUT_LEDGER,
@@ -289,7 +292,7 @@ function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
   const loggerOptions = createVibe64FastifyLoggerOptions({
-    env: process.env,
+    env: runtimeEnv,
     level: options.logLevel
   });
   const runtimeProfile = resolveServerRuntimeProfile(options);
@@ -352,7 +355,7 @@ async function createServer(options = {}) {
   });
   // Live session state (agent command helpers, pending uploads) lives below the
   // system root for the life of the process, so every caller resolves it alike.
-  configureCodexAttachmentHostRoot(systemRoot, process.env);
+  const attachmentsRoot = configureCodexAttachmentHostRoot(systemRoot, process.env);
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,
@@ -373,7 +376,7 @@ async function createServer(options = {}) {
       app: "vibe64"
     };
   });
-  if (isLocalhostCheckBypassEnabled({ env: process.env })) {
+  if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
     logOperationalEvent(app.log, "warn", {
       component: "local-request-check",
       event: "vibe64.security.localhost_check_bypassed"
@@ -405,16 +408,18 @@ async function createServer(options = {}) {
   const distRoot = path.resolve(appRoot, "dist");
   const indexFile = path.resolve(distRoot, SPA_INDEX_FILE);
   const hasWebBuild = existsSync(indexFile);
+  // The one env every feature receives as runtime.env: the runtime env with the roots this server settled on.
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
+    [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentsRoot,
     [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: normalizeGithubAccountMode(
       options.githubAccountMode,
       GITHUB_ACCOUNT_MODE_LOCAL
     ),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
-    ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
+    [VIBE64_TARGET_ROOT_ENV]: targetRoot || undefined
   };
   const { createInstalledRuntime: createRuntime = createInstalledRuntime } = options;
   const runtime = await withProcessEnv({
@@ -501,14 +506,13 @@ async function startServer(options = {}) {
   const runtimeProfile = resolveServerRuntimeProfile(options);
   const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
   const listenTarget = resolveListenTarget({
-    env: process.env,
-    options,
-    runtimeEnv
+    env: runtimeEnv,
+    options
   });
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget);
   const strictPort = options.strictPort ?? (
     listenTarget.transport === "tcp" &&
-    (hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true)
+    (hasExplicitPortOption(options) || runtimeEnv.PORT !== "")
   );
   const app = await createServer({
     appRoot: options.appRoot,

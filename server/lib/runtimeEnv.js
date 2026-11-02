@@ -26,6 +26,13 @@ function isTruthyEnvValue(value = "") {
   return Boolean(normalized) && !["0", "false", "no", "off"].includes(normalized);
 }
 
+/**
+ * The one environment the server composes from: the process environment, with
+ * .env loaded and the server's own settings resolved. Every value stays a
+ * string, as the kernel's RuntimeEnv says; PORT is "" when none is configured,
+ * and the system root is honored only for a self-targeting server.
+ * @returns {import("@jskit-ai/kernel/server/types").RuntimeEnv}
+ */
 function resolveRuntimeEnv() {
   loadEnvFile();
   const serverSurface = surfaceRuntime.normalizeSurfaceMode(
@@ -35,7 +42,8 @@ function resolveRuntimeEnv() {
   const selfTargetSystemRoot = isTruthyEnvValue(process.env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV])
     ? String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()
     : "";
-  return {
+  return Object.freeze({
+    ...process.env,
     [VIBE64_RUNTIME_NAMESPACE_ENV]: runtimeNamespace({
       env: process.env
     }),
@@ -45,11 +53,9 @@ function resolveRuntimeEnv() {
     // The official Learning catalogue's repository (owner/name); unset uses the default.
     VIBE64_LEARNING_CATALOG_REPOSITORY: String(process.env.VIBE64_LEARNING_CATALOG_REPOSITORY || "").trim() || undefined,
     SERVER_SURFACE: serverSurface,
-    JSKIT_REALTIME_DEBUG: process.env.JSKIT_REALTIME_DEBUG,
-    PORT: rawPort ? toPort(rawPort) : null,
-    PORT_CONFIGURED: Boolean(rawPort),
+    PORT: rawPort ? String(toPort(rawPort)) : "",
     HOST: String(process.env.HOST || "").trim() || "127.0.0.1"
-  };
+  });
 }
 
 export {
