@@ -97,7 +97,7 @@ test("Stage 1 refuses credential-shaped build Environment and paths outside its 
   );
   await assert.rejects(
     runBuildStage(buildInput(paths, { outputs: [path.join(paths.root, "elsewhere.tgz")] }), { runCommand: never }),
-    (error) => error.code === "VIBE64_PUBLISH_STAGE_INVALID"
+    (error) => error.code === "VIBE64_PUBLISH_STAGE_PATH_OUTSIDE"
   );
   await assert.rejects(
     runBuildStage(buildInput(paths), { runCommand: async () => ({ ok: false, exitCode: 1, stderr: "boom" }) }),

@@ -125,7 +125,7 @@ test("a Python library is built once, checked, uploaded, read back and re-releas
   const wrongToken = "wrong-token-value-123456";
   await assert.rejects(
     publishTarget({ baseEnvironment: process.env, destination: pypiDestination, target, version: "0.3.0", artifacts: third.artifacts, obtainCredential: async () => wrongToken }),
-    (error) => error.code === "VIBE64_PUBLISH_UPLOAD_FAILED" && !JSON.stringify(error.details).includes(wrongToken)
+    (error) => error.code === "VIBE64_PUBLISH_PYPI_UPLOAD_FAILED" && !JSON.stringify(error.details).includes(wrongToken)
   );
   assert.equal((await pypiDestination.readBack({ target, version: "0.3.0", artifacts: third.artifacts })).published, false);
 });

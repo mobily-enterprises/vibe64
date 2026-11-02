@@ -4,8 +4,9 @@
 // build into the folder its caller names (always a user-space folder).
 import path from "node:path";
 
+import { publishError } from "../errors.js";
 import { spawnCommand } from "../stages.js";
-import { downloadVerified, exists, toolchainEnvironment, toolchainError, unpackInto } from "./download.js";
+import { downloadVerified, exists, toolchainEnvironment, unpackInto } from "./download.js";
 
 const REQUIRED_JAVA = 21;
 const TEMURIN_LICENCE = Object.freeze({
@@ -112,9 +113,16 @@ async function installJdk(
   { directory, platform = hostPlatform(), baseEnvironment, signal },
   { fetchImpl, runCommand } = {}
 ) {
-  if (typeof directory !== "string" || !path.isAbsolute(directory)) throw toolchainError("The JDK needs an absolute install folder.");
+  if (typeof directory !== "string" || !path.isAbsolute(directory)) {
+    throw publishError("VIBE64_PUBLISH_JDK_FOLDER_INVALID", "The JDK needs an absolute install folder.");
+  }
   const pinned = PINNED_JDKS[platform];
-  if (!pinned) throw toolchainError(`Vibe64 has no pinned JDK for ${platform}; install Java ${REQUIRED_JAVA} and set JAVA_HOME.`);
+  if (!pinned) {
+    throw publishError(
+      "VIBE64_PUBLISH_JDK_PLATFORM_UNSUPPORTED",
+      `Vibe64 has no pinned JDK for ${platform}; install Java ${REQUIRED_JAVA} and set JAVA_HOME.`
+    );
+  }
   const archive = await downloadVerified(pinned, path.join(directory, "downloads"), { fetchImpl, signal });
   const javaHome = await unpackInto(archive, path.join(directory, pinned.folder), {
     inner: pinned.folder,
@@ -123,7 +131,7 @@ async function installJdk(
     runCommand
   });
   const description = await describeJdk({ javaHome, baseEnvironment }, { runCommand });
-  if (!description.ok) throw toolchainError(description.message);
+  if (!description.ok) throw publishError("VIBE64_PUBLISH_JDK_INSTALL_INVALID", description.message);
   return { ...description, licence: TEMURIN_LICENCE };
 }
 

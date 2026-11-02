@@ -13,10 +13,6 @@ import { inflateRawSync } from "node:zlib";
 import { publishError } from "../errors.js";
 import { passthroughEnvironment, spawnCommand } from "../stages.js";
 
-function toolchainError(message, details) {
-  return publishError("VIBE64_PUBLISH_TOOLCHAIN_FAILED", message, details);
-}
-
 async function exists(file) {
   return Boolean(await stat(file).catch(() => null));
 }
@@ -28,7 +24,7 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
   const algorithm = archive.sha256 ? "sha256" : "sha1";
   const expected = archive.sha256 || archive.sha1;
   if (!/^[0-9a-f]{40,64}$/u.test(expected || "") || !archive.file || !archive.url) {
-    throw toolchainError("A toolchain archive needs a pinned URL, file name and checksum.");
+    throw publishError("VIBE64_PUBLISH_TOOLCHAIN_PIN_INVALID", "A toolchain archive needs a pinned URL, file name and checksum.");
   }
   await mkdir(directory, { recursive: true });
   const target = path.join(directory, archive.file);
@@ -38,16 +34,23 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
   try {
     response = await fetchImpl(archive.url, { redirect: "follow", signal });
   } catch (error) {
-    throw toolchainError(`Could not download ${archive.file}: ${error?.cause?.code || error?.name || "network error"}.`);
+    throw publishError(
+      "VIBE64_PUBLISH_TOOLCHAIN_DOWNLOAD_UNREACHABLE",
+      `Could not download ${archive.file}: ${error?.cause?.code || error?.name || "network error"}.`
+    );
   }
-  if (!response.ok || !response.body) throw toolchainError(`Downloading ${archive.file} failed with HTTP ${response.status}.`);
+  if (!response.ok || !response.body) {
+    throw publishError("VIBE64_PUBLISH_TOOLCHAIN_DOWNLOAD_FAILED", `Downloading ${archive.file} failed with HTTP ${response.status}.`);
+  }
   const hash = createHash(algorithm);
   let size = 0;
   const limit = archive.size ? archive.size : 2 * 1024 * 1024 * 1024;
   const meter = new Transform({
     transform(chunk, _encoding, callback) {
       size += chunk.length;
-      if (size > limit) return callback(toolchainError(`${archive.file} is larger than expected.`));
+      if (size > limit) {
+        return callback(publishError("VIBE64_PUBLISH_TOOLCHAIN_DOWNLOAD_TOO_LARGE", `${archive.file} is larger than expected.`));
+      }
       hash.update(chunk);
       return callback(null, chunk);
     }
@@ -56,7 +59,11 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
     await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(partial, { mode: 0o644 }));
     const actual = hash.digest("hex");
     if (actual !== expected || (archive.size && size !== archive.size)) {
-      throw toolchainError(`${archive.file} does not match its pinned checksum; nothing was installed.`, { expected, actual, size });
+      throw publishError(
+        "VIBE64_PUBLISH_TOOLCHAIN_CHECKSUM_MISMATCH",
+        `${archive.file} does not match its pinned checksum; nothing was installed.`,
+        { expected, actual, size }
+      );
     }
     await rename(partial, target);
     return target;
@@ -76,7 +83,8 @@ function toolchainEnvironment(baseEnvironment, extra = {}) {
 async function runOrFail(argv, { cwd, env, label, runCommand = spawnCommand }) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env });
   if (result?.ok !== true) {
-    throw toolchainError(`${label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`, {
+    const exit = result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`;
+    throw publishError("VIBE64_PUBLISH_TOOLCHAIN_COMMAND_FAILED", `${label} failed${exit}.`, {
       output: `${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`.slice(-8000)
     });
   }
@@ -91,13 +99,15 @@ async function extractZip(archiveFile, directory) {
   const zip = await readFile(archiveFile);
   const name = path.basename(archiveFile);
   const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
-  if (end < 0) throw toolchainError(`${name} is not a zip archive.`);
+  if (end < 0) throw publishError("VIBE64_PUBLISH_TOOLCHAIN_ZIP_INVALID", `${name} is not a zip archive.`);
   const count = zip.readUInt16LE(end + 10);
   let offset = zip.readUInt32LE(end + 16);
   const root = path.resolve(directory);
   const inside = (target) => target === root || target.startsWith(`${root}${path.sep}`);
   for (let index = 0; index < count; index += 1) {
-    if (zip.readUInt32LE(offset) !== 0x02014b50) throw toolchainError(`${name} has a damaged central directory.`);
+    if (zip.readUInt32LE(offset) !== 0x02014b50) {
+      throw publishError("VIBE64_PUBLISH_TOOLCHAIN_ZIP_DAMAGED", `${name} has a damaged central directory.`);
+    }
     const method = zip.readUInt16LE(offset + 10);
     const compressedSize = zip.readUInt32LE(offset + 20);
     const nameLength = zip.readUInt16LE(offset + 28);
@@ -109,20 +119,24 @@ async function extractZip(archiveFile, directory) {
     offset += 46 + nameLength + extraLength + commentLength;
 
     const target = path.resolve(root, entryName);
-    if (path.isAbsolute(entryName) || !inside(target)) throw toolchainError(`${name} has an entry outside its folder: ${entryName}`);
+    if (path.isAbsolute(entryName) || !inside(target)) {
+      throw publishError("VIBE64_PUBLISH_TOOLCHAIN_ENTRY_OUTSIDE", `${name} has an entry outside its folder: ${entryName}`);
+    }
     if (entryName.endsWith("/")) {
       await mkdir(target, { recursive: true });
       continue;
     }
     const start = localOffset + 30 + zip.readUInt16LE(localOffset + 26) + zip.readUInt16LE(localOffset + 28);
     const stored = zip.subarray(start, start + compressedSize);
-    if (method !== 0 && method !== 8) throw toolchainError(`${name} uses an unsupported compression for ${entryName}.`);
+    if (method !== 0 && method !== 8) {
+      throw publishError("VIBE64_PUBLISH_TOOLCHAIN_COMPRESSION_UNSUPPORTED", `${name} uses an unsupported compression for ${entryName}.`);
+    }
     const bytes = method === 8 ? inflateRawSync(stored) : stored;
     await mkdir(path.dirname(target), { recursive: true });
     if ((mode & 0o170000) === 0o120000) {
       const link = bytes.toString("utf8");
       if (path.isAbsolute(link) || !inside(path.resolve(path.dirname(target), link))) {
-        throw toolchainError(`${name} has a link outside its folder: ${entryName}`);
+        throw publishError("VIBE64_PUBLISH_TOOLCHAIN_LINK_OUTSIDE", `${name} has a link outside its folder: ${entryName}`);
       }
       await symlink(link, target);
       continue;
@@ -158,7 +172,9 @@ async function unpackInto(archiveFile, destination, options) {
       });
     }
     const source = path.join(staging, inner);
-    if (!await exists(source)) throw toolchainError(`${path.basename(archiveFile)} has no ${inner} folder.`);
+    if (!await exists(source)) {
+      throw publishError("VIBE64_PUBLISH_TOOLCHAIN_ARCHIVE_FOLDER_ABSENT", `${path.basename(archiveFile)} has no ${inner} folder.`);
+    }
     await mkdir(path.dirname(destination), { recursive: true });
     await rename(source, destination);
     return destination;
@@ -167,4 +183,4 @@ async function unpackInto(archiveFile, destination, options) {
   }
 }
 
-export { downloadVerified, exists, runOrFail, toolchainEnvironment, toolchainError, unpackInto };
+export { downloadVerified, exists, runOrFail, toolchainEnvironment, unpackInto };

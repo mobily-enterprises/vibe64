@@ -34,15 +34,15 @@ async function setTimes(root, seconds) {
  */
 async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) {
-    throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The project root must be an absolute path.");
+    throw publishError("VIBE64_PUBLISH_EXPORT_ROOT_INVALID", "The project root must be an absolute path.");
   }
-  if (!COMMIT_ID.test(commit || "")) throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "Export needs a full commit id.");
+  if (!COMMIT_ID.test(commit || "")) throw publishError("VIBE64_PUBLISH_EXPORT_COMMIT_INVALID", "Export needs a full commit id.");
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
-    throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The export folder must be an absolute path.");
+    throw publishError("VIBE64_PUBLISH_EXPORT_FOLDER_INVALID", "The export folder must be an absolute path.");
   }
   const existing = await stat(directory).catch(() => null);
   if (existing && (await readdir(directory)).length) {
-    throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The export folder must be new or empty.");
+    throw publishError("VIBE64_PUBLISH_EXPORT_FOLDER_NOT_EMPTY", "The export folder must be new or empty.");
   }
   await mkdir(directory, { recursive: true });
   const indexHome = await mkdtemp(path.join(os.tmpdir(), "vibe64-export-index-"));

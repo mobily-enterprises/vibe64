@@ -36,7 +36,7 @@ function npmSettings(target) {
   const settings = settingsOf(target);
   const access = settings.access ?? null;
   if (access !== null && !["public", "restricted"].includes(access)) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "npm access is public or restricted.");
+    throw publishError("VIBE64_PUBLISH_NPM_ACCESS_INVALID", "npm access is public or restricted.");
   }
   return {
     registry: httpUrl(settings.registry || DEFAULT_REGISTRY, "The npm registry"),
@@ -56,7 +56,7 @@ function registryKey(registry) {
 
 function npmTokenUserconfig({ registry = DEFAULT_REGISTRY, token } = {}) {
   if (typeof token !== "string" || !/^[\x21-\x7e]{8,}$/u.test(token)) {
-    throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "The npm token is missing or malformed.");
+    throw publishError("VIBE64_PUBLISH_NPM_TOKEN_INVALID", "The npm token is missing or malformed.");
   }
   return `${registryKey(httpUrl(registry, "The npm registry"))}:_authToken=${token}\n`;
 }
@@ -74,7 +74,7 @@ function packumentUrl(registry, name) {
 function tarballOf(artifacts) {
   const files = artifactFiles(artifacts);
   if (files.length !== 1 || !files[0].name.endsWith(".tgz")) {
-    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "npm publishes exactly one tarball.");
+    throw publishError("VIBE64_PUBLISH_NPM_TARBALL_COUNT", "npm publishes exactly one tarball.");
   }
   return files[0];
 }
@@ -100,7 +100,10 @@ async function tarballDetails(artifacts) {
 
 function assertVersion(manifest, version) {
   if (version && manifest.version !== version) {
-    throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The tarball is ${manifest.name}@${manifest.version}, not ${version}.`);
+    throw publishError(
+      "VIBE64_PUBLISH_NPM_TARBALL_VERSION_MISMATCH",
+      `The tarball is ${manifest.name}@${manifest.version}, not ${version}.`
+    );
   }
 }
 
@@ -110,7 +113,7 @@ async function readPackument({ registry, name, token = "" }) {
   });
   if (response.status === 404) return null;
   if (!response.ok || !response.json) {
-    throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `The npm registry answered ${response.status} for ${name}.`);
+    throw publishError("VIBE64_PUBLISH_NPM_REGISTRY_FAILED", `The npm registry answered ${response.status} for ${name}.`);
   }
   return response.json;
 }
@@ -126,7 +129,7 @@ async function credentialToken(credentials, registry) {
  * Runs the npm CLI with only the given user config, a private cache and no
  */
 // global or project config, from an empty folder.
-async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], baseEnvironment, failureMessage }) {
+async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], baseEnvironment, failureCode, failureMessage }) {
   return withToolHome(async (home) => {
     const empty = path.join(home, "empty.npmrc");
     await writeFile(empty, "", { mode: 0o600 });
@@ -143,7 +146,7 @@ async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], ba
         npm_config_audit: "false"
       }
     });
-    return runTool({ argv: [...npm, ...args], cwd: home, env, secrets, failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED", failureMessage });
+    return runTool({ argv: [...npm, ...args], cwd: home, env, secrets, failureCode, failureMessage });
   });
 }
 
@@ -176,7 +179,7 @@ async function upload({ target, version, artifacts, credentials, baseEnvironment
   const { file, manifest } = await tarballDetails(artifacts);
   assertVersion(manifest, version);
   const { file: userconfig, token } = await credentialToken(credentials, registry);
-  if (!userconfig) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "npm publishing needs an npm sign-in.");
+  if (!userconfig) throw publishError("VIBE64_PUBLISH_NPM_SIGN_IN_ABSENT", "npm publishing needs an npm sign-in.");
   const args = ["publish", file.path, "--registry", registry, "--tag", channel, "--ignore-scripts"];
   if (access) args.push("--access", access);
   const result = await runNpm(args, {
@@ -184,6 +187,7 @@ async function upload({ target, version, artifacts, credentials, baseEnvironment
     userconfig,
     secrets: [token],
     baseEnvironment,
+    failureCode: "VIBE64_PUBLISH_NPM_UPLOAD_FAILED",
     failureMessage: `npm did not publish ${manifest.name}@${manifest.version}.`
   });
   return { output: result.output.slice(-2000) };
@@ -210,6 +214,7 @@ async function dryRun({ target, version, artifacts, credentials, baseEnvironment
       userconfig,
       secrets: [token],
       baseEnvironment,
+      failureCode: "VIBE64_PUBLISH_NPM_DRY_RUN_REFUSED",
       failureMessage: `npm's dry run refused ${manifest.name}@${manifest.version}.`
     })).output.slice(-4000);
   }
@@ -221,7 +226,10 @@ async function dryRun({ target, version, artifacts, credentials, baseEnvironment
       headers: token ? { authorization: `Bearer ${token}` } : {}
     });
     if (!response.ok) {
-      throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `Could not download ${manifest.name}@${previousVersion} to compare.`);
+      throw publishError(
+        "VIBE64_PUBLISH_NPM_PREVIOUS_DOWNLOAD_FAILED",
+        `Could not download ${manifest.name}@${previousVersion} to compare.`
+      );
     }
     previousEntries = listNpmTarball(Buffer.from(await response.arrayBuffer()));
   }

@@ -14,7 +14,7 @@ import path from "node:path";
 import { publishError } from "../errors.js";
 import { CAPACITOR_SHELL_TEMPLATE } from "../packers/capacitor/shellTemplate/index.js";
 import { spawnCommand } from "../stages.js";
-import { downloadVerified, exists, runOrFail, toolchainEnvironment, toolchainError, unpackInto } from "./download.js";
+import { downloadVerified, exists, runOrFail, toolchainEnvironment, unpackInto } from "./download.js";
 
 const ANDROID_REPOSITORY_URL = "https://dl.google.com/android/repository/repository2-3.xml";
 const ANDROID_TERMS_URL = "https://developer.android.com/studio/terms";
@@ -54,7 +54,7 @@ function licenceHash(text) {
  */
 function licenceFromRepository(xml, id = ANDROID_LICENCE_ID) {
   const match = new RegExp(`<license id="${id}" type="text">([\\s\\S]*?)</license>`, "u").exec(String(xml || ""));
-  if (!match) throw toolchainError(`Google's SDK repository has no ${id} text.`);
+  if (!match) throw publishError("VIBE64_PUBLISH_SDK_LICENCE_TEXT_ABSENT", `Google's SDK repository has no ${id} text.`);
   const text = xmlUnescape(match[1]).trim();
   return { id, text, hash: licenceHash(text), termsUrl: ANDROID_TERMS_URL, packages: [...SDK_PACKAGES] };
 }
@@ -64,9 +64,12 @@ async function fetchRepository({ fetchImpl = fetch, repositoryUrl = ANDROID_REPO
   try {
     response = await fetchImpl(repositoryUrl, { redirect: "follow", signal });
   } catch (error) {
-    throw toolchainError(`Could not reach Google's SDK repository: ${error?.cause?.code || error?.name || "network error"}.`);
+    throw publishError(
+      "VIBE64_PUBLISH_SDK_REPOSITORY_UNREACHABLE",
+      `Could not reach Google's SDK repository: ${error?.cause?.code || error?.name || "network error"}.`
+    );
   }
-  if (!response.ok) throw toolchainError(`Google's SDK repository answered HTTP ${response.status}.`);
+  if (!response.ok) throw publishError("VIBE64_PUBLISH_SDK_REPOSITORY_FAILED", `Google's SDK repository answered HTTP ${response.status}.`);
   return response.text();
 }
 
@@ -86,7 +89,7 @@ function assertAcceptance(acceptance, licence) {
     );
   }
   if (typeof acceptance.acceptedBy !== "string" || !acceptance.acceptedBy.trim() || Number.isNaN(Date.parse(acceptance.acceptedAt || ""))) {
-    throw publishError("VIBE64_PUBLISH_LICENCE_NOT_ACCEPTED", "A licence acceptance records who accepted it and when.");
+    throw publishError("VIBE64_PUBLISH_LICENCE_ACCEPTANCE_INCOMPLETE", "A licence acceptance records who accepted it and when.");
   }
 }
 
@@ -155,13 +158,20 @@ async function installAndroidSdk({
 }, options = {}) {
   const { fetchImpl = fetch, runCommand = spawnCommand } = options;
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
-    throw toolchainError("The Android SDK needs an absolute install folder.");
+    throw publishError("VIBE64_PUBLISH_SDK_FOLDER_INVALID", "The Android SDK needs an absolute install folder.");
   }
-  if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) throw toolchainError("Installing the Android SDK needs a Java home.");
+  if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) {
+    throw publishError("VIBE64_PUBLISH_SDK_JAVA_HOME_REQUIRED", "Installing the Android SDK needs a Java home.");
+  }
   const licence = licenceFromRepository(await fetchRepository({ fetchImpl, repositoryUrl, signal }));
   assertAcceptance(acceptance, licence);
   const tools = PINNED_COMMAND_LINE_TOOLS[platform];
-  if (!tools) throw toolchainError(`Android builds are not available on ${platform}: Google publishes no Android build tools for it.`);
+  if (!tools) {
+    throw publishError(
+      "VIBE64_PUBLISH_SDK_PLATFORM_UNSUPPORTED",
+      `Android builds are not available on ${platform}: Google publishes no Android build tools for it.`
+    );
+  }
   const archive = await downloadVerified(tools, path.join(directory, "downloads"), { fetchImpl, signal });
   const commandLineTools = await unpackInto(archive, path.join(directory, "cmdline-tools", "latest"), {
     inner: "cmdline-tools",
@@ -193,7 +203,7 @@ async function installAndroidSdk({
     await rm(home, { recursive: true, force: true });
   }
   const description = await describeAndroidSdk({ androidHome: directory });
-  if (!description.ok) throw toolchainError(description.message);
+  if (!description.ok) throw publishError("VIBE64_PUBLISH_SDK_INSTALL_INCOMPLETE", description.message);
   return { ...description, licence: { id: licence.id, hash: licence.hash }, commandLineTools: tools.version };
 }
 

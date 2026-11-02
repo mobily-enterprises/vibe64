@@ -12,19 +12,31 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const MAX_TTL_MS = 60 * 60 * 1000;
 const PLAN_HASH = /^sha256:[0-9a-f]{64}$/u;
 
-function refuse(code, message) {
-  throw publishError(code, message);
+/**
+ * @param {string} code
+ * @param {string} message
+ * @param {string} [messageCode] where several sentences share a code callers branch on
+ */
+function refuse(code, message, messageCode) {
+  throw publishError(code, message, undefined, { messageCode });
 }
 
 function personId(actor) {
   if (actor?.kind !== "person") {
     refuse(
       "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
-      "Only the person can confirm publishing, in Vibe64's own confirmation. An assistant's request is not a confirmation."
+      "Only the person can confirm publishing, in Vibe64's own confirmation. An assistant's request is not a confirmation.",
+      "VIBE64_PUBLISH_CONFIRMATION_ASSISTANT"
     );
   }
   const id = typeof actor.id === "string" ? actor.id.trim() : "";
-  if (!id) refuse("VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", "A publish confirmation needs the confirming person's identity.");
+  if (!id) {
+    refuse(
+      "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+      "A publish confirmation needs the confirming person's identity.",
+      "VIBE64_PUBLISH_CONFIRMATION_PERSON_REQUIRED"
+    );
+  }
   return id;
 }
 
@@ -40,9 +52,19 @@ function timestamp(value, label) {
 
 function issuePublishConfirmation({ planHash, actor, now = Date.now(), ttlMs = DEFAULT_TTL_MS } = {}) {
   const id = personId(actor);
-  if (!PLAN_HASH.test(planHash || "")) refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "A publish confirmation needs the plan hash.");
+  if (!PLAN_HASH.test(planHash || "")) {
+    refuse(
+      "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+      "A publish confirmation needs the plan hash.",
+      "VIBE64_PUBLISH_CONFIRMATION_PLAN_HASH_REQUIRED"
+    );
+  }
   if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0 || ttlMs > MAX_TTL_MS) {
-    refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "A publish confirmation expires within an hour.");
+    refuse(
+      "VIBE64_PUBLISH_CONFIRMATION_INVALID",
+      "A publish confirmation expires within an hour.",
+      "VIBE64_PUBLISH_CONFIRMATION_TTL_TOO_LONG"
+    );
   }
   const issuedAt = timestamp(now, "now");
   const token = randomBytes(32).toString("base64url");
@@ -78,7 +100,7 @@ function publishConfirmationTokenMatches(record, token) {
 function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.now() } = {}) {
   const id = personId(actor);
   if (!publishConfirmationTokenMatches(record, token)) {
-    refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "This publish confirmation is not valid.");
+    refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "This publish confirmation is not valid.", "VIBE64_PUBLISH_CONFIRMATION_TOKEN_INVALID");
   }
   if (record.usedAt) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_USED", "This publish confirmation was already used. Confirm again to publish again.");
@@ -86,7 +108,13 @@ function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.
   if (record.planHash !== planHash) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED", "The plan changed after it was confirmed. Review and confirm the new plan.");
   }
-  if (record.actorId !== id) refuse("VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", "This publish confirmation belongs to someone else.");
+  if (record.actorId !== id) {
+    refuse(
+      "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+      "This publish confirmation belongs to someone else.",
+      "VIBE64_PUBLISH_CONFIRMATION_OTHER_PERSON"
+    );
+  }
   const time = timestamp(now, "now");
   if (time >= timestamp(record.expiresAt, "expiresAt")) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_EXPIRED", "This publish confirmation expired. Confirm the plan again.");

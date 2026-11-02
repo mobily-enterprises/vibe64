@@ -12,11 +12,11 @@ import { recipeSteps, sourceDateEnvironment } from "../registryRecipe.js";
  */
 async function buildRecipe({ sourceRoot, entry, commitTime = null } = {}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The web-bundle packer needs the exported source folder.");
+    throw publishError("VIBE64_PUBLISH_WEB_SOURCE_REQUIRED", "The web-bundle packer needs the exported source folder.");
   }
   const output = path.join(sourceRoot, entry.output || "");
   if (!entry.output || !pathWithin(sourceRoot, output, { allowRoot: false })) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} needs an Output folder inside the project.`);
+    throw publishError("VIBE64_PUBLISH_WEB_OUTPUT_OUTSIDE", `Package ${entry.id} needs an Output folder inside the project.`);
   }
   return {
     steps: recipeSteps(entry, path.join(sourceRoot, entry.workdir || ".")),
@@ -33,7 +33,7 @@ function webRoot(artifacts) {
   const files = artifacts.manifest.files.map((file) => file.path);
   const roots = [...new Set(files.map((file) => file.split("/")[0]))];
   if (roots.length !== 1 || !files.includes(`${roots[0]}/index.html`)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "A web bundle must build one folder with an index.html at its top.");
+    throw publishError("VIBE64_PUBLISH_WEB_BUNDLE_INVALID", "A web bundle must build one folder with an index.html at its top.");
   }
   return { name: roots[0], directory: path.join(artifacts.directory, "files", roots[0]) };
 }

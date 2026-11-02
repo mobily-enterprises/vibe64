@@ -16,12 +16,10 @@ const SIDELOAD_KEY_ALIAS = "vibe64-sideload";
 const SIDELOAD_KEY_VALIDITY_DAYS = 10_000;
 const PASSWORD_VARIABLE = "VIBE64_SIDELOAD_KEY_PASSWORD";
 
-function keyError(message, details) {
-  return publishError("VIBE64_PUBLISH_KEY_FAILED", message, details);
-}
-
 function keytool(javaHome) {
-  if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) throw keyError("Creating a key needs a Java home.");
+  if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) {
+    throw publishError("VIBE64_PUBLISH_KEY_JAVA_HOME_REQUIRED", "Creating a key needs a Java home.");
+  }
   return path.join(javaHome, "bin", "keytool");
 }
 
@@ -39,7 +37,7 @@ async function runKeytool(javaHome, args, { cwd, password, runCommand = spawnCom
   });
   if (result?.ok !== true) {
     // keytool never echoes the password; its output is still kept short.
-    throw keyError("keytool failed.", {
+    throw publishError("VIBE64_PUBLISH_KEY_KEYTOOL_FAILED", "keytool failed.", {
       exitCode: result?.exitCode ?? null,
       output: `${result?.stdout || ""}${result?.stderr || ""}`.slice(-2000)
     });
@@ -75,7 +73,7 @@ async function exportCertificateSha256({ javaHome, keystore, alias, password, cw
 async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, options = {}) {
   const { runCommand = spawnCommand } = options;
   // readable-check: allow method-probe - input validation: the publishing caller hands over the sink that keeps the new key
-  if (typeof sink !== "function") throw keyError("Creating a key needs a sink that keeps it.");
+  if (typeof sink !== "function") throw publishError("VIBE64_PUBLISH_KEY_SINK_REQUIRED", "Creating a key needs a sink that keeps it.");
   const directory = await mkdtemp(path.join(tempRoot, "vibe64-sideload-key-"));
   const password = Buffer.from(randomBytes(32).toString("base64url"), "utf8");
   let keystore = null;

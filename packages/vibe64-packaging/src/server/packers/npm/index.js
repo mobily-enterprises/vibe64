@@ -20,13 +20,16 @@ async function readManifest(packageRoot) {
   try {
     manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
   } catch {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The npm package has no readable package.json.");
+    throw publishError("VIBE64_PUBLISH_NPM_MANIFEST_UNREADABLE", "The npm package has no readable package.json.");
   }
   if (typeof manifest.name !== "string" || typeof manifest.version !== "string") {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "package.json needs a name and a version.");
+    throw publishError("VIBE64_PUBLISH_NPM_MANIFEST_INCOMPLETE", "package.json needs a name and a version.");
   }
   if (manifest.private === true) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `${manifest.name} is marked private in package.json, so npm refuses to publish it.`);
+    throw publishError(
+      "VIBE64_PUBLISH_NPM_PACKAGE_PRIVATE",
+      `${manifest.name} is marked private in package.json, so npm refuses to publish it.`
+    );
   }
   return manifest;
 }
@@ -38,20 +41,20 @@ async function readManifest(packageRoot) {
  */
 async function buildRecipe({ sourceRoot, entry, version = null, commitTime = null } = {}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The npm packer needs the exported source folder.");
+    throw publishError("VIBE64_PUBLISH_NPM_SOURCE_REQUIRED", "The npm packer needs the exported source folder.");
   }
   const packageRoot = path.join(sourceRoot, entry.workdir || ".");
   const manifest = await readManifest(packageRoot);
   if (version && manifest.version !== version) {
     throw publishError(
-      "VIBE64_PUBLISH_VERSION_MISMATCH",
+      "VIBE64_PUBLISH_NPM_SOURCE_VERSION_MISMATCH",
       `${manifest.name} is version ${manifest.version} in the saved commit, not ${version}. Save the prepared release first.`
     );
   }
   const tarball = path.join(packageRoot, npmTarballName(manifest.name, manifest.version));
   if (await stat(tarball).catch(() => null)) {
     throw publishError(
-      "VIBE64_PUBLISH_BUILD_INVALID",
+      "VIBE64_PUBLISH_NPM_OUTPUT_COMMITTED",
       `${path.basename(tarball)} is committed in the source; remove it so the build makes it fresh.`
     );
   }
@@ -79,11 +82,11 @@ const npmPacker = Object.freeze({
   checkArtifacts: async ({ artifacts, version = null }) => {
     const files = artifacts.manifest.files.filter((file) => file.path.endsWith(".tgz"));
     if (files.length !== 1 || artifacts.manifest.files.length !== 1) {
-      throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "An npm build must produce exactly one tarball.");
+      throw publishError("VIBE64_PUBLISH_NPM_BUILD_TARBALL_COUNT", "An npm build must produce exactly one tarball.");
     }
     const manifest = npmTarballManifest(listNpmTarball(await readFile(path.join(artifacts.directory, "files", files[0].path))));
     if (version && manifest.version !== version) {
-      throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The tarball is version ${manifest.version}, not ${version}.`);
+      throw publishError("VIBE64_PUBLISH_NPM_BUILD_VERSION_MISMATCH", `The tarball is version ${manifest.version}, not ${version}.`);
     }
     return { packageName: manifest.name, version: manifest.version, files: [files[0].path] };
   }

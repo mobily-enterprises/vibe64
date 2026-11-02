@@ -74,7 +74,7 @@ function compareSemver(left, right) {
 function pep440FromSemver(version) {
   const parsed = parseSemver(version);
   if (/\+/u.test(version)) {
-    throw publishError("VIBE64_PUBLISH_VERSION_INVALID", `Version ${version} has build metadata, which PyPI does not accept.`);
+    throw publishError("VIBE64_PUBLISH_VERSION_PYPI_METADATA", `Version ${version} has build metadata, which PyPI does not accept.`);
   }
   const release = `${parsed.major}.${parsed.minor}.${parsed.patch}`;
   if (!parsed.prerelease.length) return release;
@@ -82,7 +82,7 @@ function pep440FromSemver(version) {
   const suffix = PEP440_PRE[label.toLowerCase()];
   if (!suffix || rest.length || !/^\d+$/u.test(number)) {
     throw publishError(
-      "VIBE64_PUBLISH_VERSION_INVALID",
+      "VIBE64_PUBLISH_VERSION_PYPI_PRERELEASE",
       `Version ${version} has no PyPI spelling; use a prerelease such as -alpha.1, -beta.1, -rc.1 or -dev.1.`
     );
   }

@@ -11,12 +11,10 @@ import { compareSemver, isSemver, pep440FromSemver } from "./version.js";
 const CHANGELOG = "CHANGELOG.md";
 const DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
-function prepareError(message, details) {
-  return publishError("VIBE64_PUBLISH_PREPARE_INVALID", message, details);
-}
-
 function packageRoot(projectRoot, entry) {
-  if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) throw prepareError("The project root must be an absolute path.");
+  if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_ROOT_INVALID", "The project root must be an absolute path.");
+  }
   return path.join(projectRoot, entry?.workdir || ".");
 }
 
@@ -37,7 +35,7 @@ function parseJson(text, label) {
   try {
     return JSON.parse(text);
   } catch {
-    throw prepareError(`${label} is not valid JSON.`);
+    throw publishError("VIBE64_PUBLISH_PREPARE_JSON_INVALID", `${label} is not valid JSON.`);
   }
 }
 
@@ -58,10 +56,13 @@ function pyprojectVersionLine(text) {
     const match = /^(\s*version\s*=\s*)(["'])([^"']+)\2(.*)$/u.exec(line);
     if (match) return { index, prefix: match[1], quote: match[2], version: match[3], rest: match[4], lines };
     if (/^\s*dynamic\s*=.*["']version["']/u.test(line)) {
-      throw prepareError("pyproject.toml computes its version dynamically; declare `Version from: external` for this package.");
+      throw publishError(
+        "VIBE64_PUBLISH_PREPARE_VERSION_DYNAMIC",
+        "pyproject.toml computes its version dynamically; declare `Version from: external` for this package."
+      );
     }
   }
-  throw prepareError("pyproject.toml has no static version in its [project] table.");
+  throw publishError("VIBE64_PUBLISH_PREPARE_PYPROJECT_VERSION_ABSENT", "pyproject.toml has no static version in its [project] table.");
 }
 
 const SOURCES = Object.freeze({
@@ -69,7 +70,9 @@ const SOURCES = Object.freeze({
     file: "package.json",
     read(text) {
       const manifest = parseJson(text, "package.json");
-      if (typeof manifest.version !== "string") throw prepareError("package.json has no version.");
+      if (typeof manifest.version !== "string") {
+        throw publishError("VIBE64_PUBLISH_PREPARE_PACKAGE_VERSION_ABSENT", "package.json has no version.");
+      }
       return manifest.version;
     },
     spell: (version) => version,
@@ -79,7 +82,10 @@ const SOURCES = Object.freeze({
       const before = parseJson(text, "package.json");
       const after = parseJson(next, "package.json");
       if (after.version !== to || JSON.stringify({ ...after, version: from }) !== JSON.stringify(before)) {
-        throw prepareError("package.json's version could not be changed on its own.");
+        throw publishError(
+          "VIBE64_PUBLISH_PREPARE_PACKAGE_VERSION_UNCHANGEABLE",
+          "package.json's version could not be changed on its own."
+        );
       }
       return next;
     }
@@ -90,7 +96,9 @@ const SOURCES = Object.freeze({
     spell: pep440FromSemver,
     write(text, from, to) {
       const found = pyprojectVersionLine(text);
-      if (found.version !== from) throw prepareError("pyproject.toml changed while the release was prepared.");
+      if (found.version !== from) {
+        throw publishError("VIBE64_PUBLISH_PREPARE_PYPROJECT_CHANGED", "pyproject.toml changed while the release was prepared.");
+      }
       found.lines[found.index] = `${found.prefix}${found.quote}${to}${found.quote}${found.rest}`;
       return found.lines.join("\n");
     }
@@ -100,7 +108,9 @@ const SOURCES = Object.freeze({
 function versionSource(entry) {
   const source = entry?.versionFrom;
   if (source === "external") return null;
-  if (!SOURCES[source]) throw prepareError(`Package ${entry?.id} has no version source Vibe64 can read.`);
+  if (!SOURCES[source]) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_VERSION_SOURCE_UNKNOWN", `Package ${entry?.id} has no version source Vibe64 can read.`);
+  }
   return SOURCES[source];
 }
 
@@ -113,7 +123,12 @@ async function readSourceVersion({ projectRoot, entry }) {
   const root = packageRoot(projectRoot, entry);
   const source = versionSource(entry) || SOURCES[entry.packer === "python-dist" ? "pyproject.toml" : "package.json"];
   const text = await readOptional(path.join(root, source.file));
-  if (text === null) throw prepareError(`Package ${entry.id} has no ${source.file} in ${entry.workdir || "."}.`);
+  if (text === null) {
+    throw publishError(
+      "VIBE64_PUBLISH_PREPARE_VERSION_FILE_ABSENT",
+      `Package ${entry.id} has no ${source.file} in ${entry.workdir || "."}.`
+    );
+  }
   return source.read(text);
 }
 
@@ -133,7 +148,7 @@ function nextChangelog(text, { version, date, notes }) {
   const entry = `${changelogHeading(version, date)}\n\n${notes}\n`;
   if (text === null || !text.trim()) return `# Changelog\n\n${entry}`;
   if (new RegExp(`^##\\s+\\[?${escapeRegExp(version)}\\]?(?:\\s|$)`, "mu").test(text)) {
-    throw prepareError(`CHANGELOG.md already has an entry for ${version}.`);
+    throw publishError("VIBE64_PUBLISH_PREPARE_CHANGELOG_ENTRY_EXISTS", `CHANGELOG.md already has an entry for ${version}.`);
   }
   const lines = text.split("\n");
   const firstRelease = lines.findIndex((line) => /^##\s+\[?\d/u.test(line));
@@ -150,8 +165,12 @@ function lockfileWithVersion(text, version) {
 }
 
 function cleanNotes(notes) {
-  if (typeof notes !== "string" || !notes.trim()) throw prepareError("Release notes are needed for the changelog.");
-  if (/^#{1,2}\s/mu.test(notes)) throw prepareError("Release notes use ### headings or lists, not # or ## headings.");
+  if (typeof notes !== "string" || !notes.trim()) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_NOTES_REQUIRED", "Release notes are needed for the changelog.");
+  }
+  if (/^#{1,2}\s/mu.test(notes)) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_NOTES_HEADINGS", "Release notes use ### headings or lists, not # or ## headings.");
+  }
   return notes.replace(/\r\n?/gu, "\n").trim();
 }
 
@@ -159,9 +178,11 @@ function cleanNotes(notes) {
  * Computes the exact change without writing it: each file's current and next text.
  */
 async function prepareReleaseChange({ projectRoot, entry, version, notes, date = new Date().toISOString().slice(0, 10) } = {}) {
-  if (!entry?.id) throw prepareError("A release change needs the Packaging package.");
-  if (!isSemver(version)) throw prepareError(`Version ${version} is not a semantic version such as 1.5.0.`);
-  if (!DATE.test(date)) throw prepareError("The release date must be YYYY-MM-DD.");
+  if (!entry?.id) throw publishError("VIBE64_PUBLISH_PREPARE_PACKAGE_REQUIRED", "A release change needs the Packaging package.");
+  if (!isSemver(version)) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_VERSION_INVALID", `Version ${version} is not a semantic version such as 1.5.0.`);
+  }
+  if (!DATE.test(date)) throw publishError("VIBE64_PUBLISH_PREPARE_DATE_INVALID", "The release date must be YYYY-MM-DD.");
   const source = versionSource(entry);
   if (!source) {
     throw publishError(
@@ -172,14 +193,21 @@ async function prepareReleaseChange({ projectRoot, entry, version, notes, date =
   const root = packageRoot(projectRoot, entry);
   const manifestPath = path.join(root, source.file);
   const manifest = await readOptional(manifestPath);
-  if (manifest === null) throw prepareError(`Package ${entry.id} has no ${source.file} in ${entry.workdir || "."}.`);
+  if (manifest === null) {
+    throw publishError(
+      "VIBE64_PUBLISH_PREPARE_VERSION_FILE_ABSENT",
+      `Package ${entry.id} has no ${source.file} in ${entry.workdir || "."}.`
+    );
+  }
   const current = source.read(manifest);
   const spelled = source.spell(version);
   const currentSemver = entry.versionFrom === "package.json" || /^\d+\.\d+\.\d+$/u.test(current) ? current : null;
   if (currentSemver && isSemver(currentSemver) && compareSemver(version, currentSemver) <= 0) {
-    throw prepareError(`Version ${version} must be newer than the current ${currentSemver}.`);
+    throw publishError("VIBE64_PUBLISH_PREPARE_VERSION_NOT_NEWER", `Version ${version} must be newer than the current ${currentSemver}.`);
   }
-  if (!currentSemver && current === spelled) throw prepareError(`Version ${spelled} is already the current version.`);
+  if (!currentSemver && current === spelled) {
+    throw publishError("VIBE64_PUBLISH_PREPARE_VERSION_CURRENT", `Version ${spelled} is already the current version.`);
+  }
   const files = [{ path: relativeTo(projectRoot, manifestPath), before: manifest, after: source.write(manifest, current, spelled) }];
   if (entry.versionFrom === "package.json") {
     const lockPath = path.join(root, "package-lock.json");

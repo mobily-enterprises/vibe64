@@ -66,6 +66,7 @@ async function publishingResult(operation) {
       ok: false,
       code: String(error?.code || "vibe64_publishing_failed"),
       error: String(error?.message || "Publishing failed."),
+      ...(error?.messageCode ? { messageCode: String(error.messageCode) } : {}),
       ...(error?.details && typeof error.details === "object" ? { details: error.details } : {})
     };
   }

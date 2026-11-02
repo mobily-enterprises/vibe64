@@ -5,15 +5,12 @@
 // has been downloaded.
 import { createHash } from "node:crypto";
 
+import { publishError } from "../errors.js";
 import { ageDecrypt, ageEncrypt } from "./age.js";
-
-const KIT_CONTRACT = "vibe64.publishing-recovery-kit.v1";
 
 /** @typedef {ReturnType<typeof import("./ageStore.js").createAgeStore>} AgeStore */
 
-function kitError(message, code = "vibe64_publishing_recovery_kit_invalid") {
-  return Object.assign(new Error(message), { code });
-}
+const KIT_CONTRACT = "vibe64.publishing-recovery-kit.v1";
 
 /**
  * @param {object} request
@@ -30,7 +27,9 @@ async function createRecoveryKit({
 }) {
   const index = await store.index();
   const entries = store.snapshot();
-  if (!entries.length) throw kitError("There are no publishing keys to put in a recovery kit yet.", "vibe64_publishing_recovery_kit_empty");
+  if (!entries.length) {
+    throw publishError("vibe64_publishing_recovery_kit_empty", "There are no publishing keys to put in a recovery kit yet.");
+  }
   const facts = new Map(index.entries.map((entry) => [entry.id, entry]));
   const createdAt = now();
   const plaintext = Buffer.from(JSON.stringify({
@@ -67,11 +66,13 @@ async function restoreRecoveryKit({ store, bytes, passphrase } = {}) {
   try {
     kit = JSON.parse(plaintext.toString("utf8"));
   } catch {
-    throw kitError("This file is not a Vibe64 recovery kit.");
+    throw publishError("vibe64_publishing_recovery_kit_invalid", "This file is not a Vibe64 recovery kit.");
   } finally {
     plaintext.fill(0);
   }
-  if (kit?.contract !== KIT_CONTRACT || !Array.isArray(kit.entries)) throw kitError("This file is not a Vibe64 recovery kit.");
+  if (kit?.contract !== KIT_CONTRACT || !Array.isArray(kit.entries)) {
+    throw publishError("vibe64_publishing_recovery_kit_invalid", "This file is not a Vibe64 recovery kit.");
+  }
   const restored = [];
   for (const { id, value, kind, label, createdAt: _createdAt, ...meta } of kit.entries) {
     const buffer = Buffer.from(String(value || ""), "base64");

@@ -16,7 +16,7 @@ function sourceDateEnvironment(entry, commitTime) {
   const environment = entry.environment.map((item) => ({ ...item }));
   if (commitTime !== null && commitTime !== undefined && !environment.some((item) => item.name === "SOURCE_DATE_EPOCH")) {
     if (!Number.isInteger(commitTime) || commitTime < 0) {
-      throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The commit time must be whole seconds.");
+      throw publishError("VIBE64_PUBLISH_COMMIT_TIME_INVALID", "The commit time must be whole seconds.");
     }
     environment.push({ name: "SOURCE_DATE_EPOCH", value: String(commitTime) });
   }

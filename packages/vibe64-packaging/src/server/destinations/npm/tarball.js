@@ -49,7 +49,7 @@ function listNpmTarball(tarball) {
   try {
     tar = gunzipSync(tarball, { maxOutputLength: MAX_UNPACKED_BYTES });
   } catch {
-    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "The npm tarball is not a gzip archive.");
+    throw publishError("VIBE64_PUBLISH_NPM_TARBALL_NOT_GZIP", "The npm tarball is not a gzip archive.");
   }
   const files = [];
   let offset = 0;
@@ -86,11 +86,11 @@ function listNpmTarball(tarball) {
 
 function npmTarballManifest(files) {
   const entry = files.find((file) => file.path === "package.json");
-  if (!entry) throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "The npm tarball has no package.json.");
+  if (!entry) throw publishError("VIBE64_PUBLISH_NPM_TARBALL_MANIFEST_ABSENT", "The npm tarball has no package.json.");
   try {
     return JSON.parse(entry.body.toString("utf8"));
   } catch {
-    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "The npm tarball's package.json is not valid JSON.");
+    throw publishError("VIBE64_PUBLISH_NPM_TARBALL_MANIFEST_INVALID", "The npm tarball's package.json is not valid JSON.");
   }
 }
 

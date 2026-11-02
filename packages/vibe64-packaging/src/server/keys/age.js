@@ -13,6 +13,8 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 
+import { publishError } from "../errors.js";
+
 const scrypt = promisify(scryptCallback);
 const INTRO = "age-encryption.org/v1";
 const SCRYPT_LABEL = "age-encryption.org/v1/scrypt";
@@ -22,18 +24,14 @@ const DEFAULT_WORK_FACTOR = 18;
 const MAX_WORK_FACTOR = 22;
 const MIN_PASSPHRASE = 12;
 
-function ageError(message, code = "vibe64_age_invalid") {
-  return Object.assign(new Error(message), { code });
-}
-
 function encode(bytes) {
   return Buffer.from(bytes).toString("base64").replace(/=+$/u, "");
 }
 
 function decode(text) {
-  if (!/^[A-Za-z0-9+/]*$/u.test(text)) throw ageError("The age header is not valid base64.");
+  if (!/^[A-Za-z0-9+/]*$/u.test(text)) throw publishError("vibe64_age_header_base64_invalid", "The age header is not valid base64.");
   const bytes = Buffer.from(text, "base64");
-  if (encode(bytes) !== text) throw ageError("The age header is not canonical base64.");
+  if (encode(bytes) !== text) throw publishError("vibe64_age_header_base64_noncanonical", "The age header is not canonical base64.");
   return bytes;
 }
 
@@ -47,7 +45,7 @@ function seal(key, nonce, plaintext) {
 }
 
 function open(key, nonce, sealed) {
-  if (sealed.length < TAG) throw ageError("The age data is truncated.");
+  if (sealed.length < TAG) throw publishError("vibe64_age_data_truncated", "The age data is truncated.");
   const decipher = createDecipheriv("chacha20-poly1305", key, nonce, { authTagLength: TAG });
   decipher.setAuthTag(sealed.subarray(sealed.length - TAG));
   try {
@@ -67,7 +65,7 @@ function streamNonce(counter, last) {
 function passphraseBytes(passphrase) {
   const text = Buffer.isBuffer(passphrase) ? passphrase.toString("utf8") : String(passphrase ?? "");
   if ([...text].length < MIN_PASSPHRASE) {
-    throw ageError(`A passphrase needs at least ${MIN_PASSPHRASE} characters.`, "vibe64_age_passphrase_short");
+    throw publishError("vibe64_age_passphrase_short", `A passphrase needs at least ${MIN_PASSPHRASE} characters.`);
   }
   return Buffer.from(text, "utf8");
 }
@@ -92,7 +90,7 @@ function wrapLines(text) {
 async function ageEncrypt(plaintext, passphrase, options = {}) {
   const { workFactor = DEFAULT_WORK_FACTOR } = options;
   if (!Number.isInteger(workFactor) || workFactor < 10 || workFactor > MAX_WORK_FACTOR) {
-    throw ageError("The scrypt work factor is out of range.");
+    throw publishError("vibe64_age_work_factor_out_of_range", "The scrypt work factor is out of range.");
   }
   const data = Buffer.isBuffer(plaintext) ? plaintext : Buffer.from(String(plaintext), "utf8");
   const fileKey = randomBytes(16);
@@ -121,18 +119,18 @@ function parseHeader(bytes) {
   let offset = 0;
   for (;;) {
     const end = bytes.indexOf(0x0a, offset);
-    if (end === -1) throw ageError("This is not an age file.");
+    if (end === -1) throw publishError("vibe64_age_not_age_file", "This is not an age file.");
     const line = bytes.subarray(offset, end).toString("latin1");
     lines.push(line);
     offset = end + 1;
     if (line.startsWith("---")) break;
-    if (lines.length > 64) throw ageError("The age header is too long.");
+    if (lines.length > 64) throw publishError("vibe64_age_header_too_long", "The age header is too long.");
   }
-  if (lines[0] !== INTRO) throw ageError("This is not an age v1 file.");
+  if (lines[0] !== INTRO) throw publishError("vibe64_age_version_unsupported", "This is not an age v1 file.");
   const stanzaLine = lines[1] || "";
   const parts = stanzaLine.split(" ");
   if (parts[0] !== "->" || parts[1] !== "scrypt" || parts.length !== 4) {
-    throw ageError("This age file is not protected by a passphrase.", "vibe64_age_not_passphrase");
+    throw publishError("vibe64_age_not_passphrase", "This age file is not protected by a passphrase.");
   }
   const bodyLines = [];
   let index = 2;
@@ -140,15 +138,17 @@ function parseHeader(bytes) {
     bodyLines.push(lines[index]);
     if (lines[index].length < 64) break;
   }
-  if (index !== lines.length - 2) throw ageError("A passphrase age file has exactly one recipient.");
+  if (index !== lines.length - 2) throw publishError("vibe64_age_recipient_count", "A passphrase age file has exactly one recipient.");
   const macLine = lines.at(-1);
-  if (!macLine.startsWith("--- ")) throw ageError("The age header has no MAC.");
+  if (!macLine.startsWith("--- ")) throw publishError("vibe64_age_header_without_mac", "The age header has no MAC.");
   const workFactor = Number(parts[3]);
-  if (!/^[1-9]\d?$/u.test(parts[3]) || workFactor > MAX_WORK_FACTOR) throw ageError("The age scrypt work factor is out of range.");
+  if (!/^[1-9]\d?$/u.test(parts[3]) || workFactor > MAX_WORK_FACTOR) {
+    throw publishError("vibe64_age_file_work_factor_out_of_range", "The age scrypt work factor is out of range.");
+  }
   const salt = decode(parts[2]);
-  if (salt.length !== 16) throw ageError("The age scrypt salt is not 16 bytes.");
+  if (salt.length !== 16) throw publishError("vibe64_age_salt_invalid", "The age scrypt salt is not 16 bytes.");
   const body = decode(bodyLines.join(""));
-  if (body.length !== 32) throw ageError("The age scrypt stanza is malformed.");
+  if (body.length !== 32) throw publishError("vibe64_age_stanza_malformed", "The age scrypt stanza is malformed.");
   const headerText = bytes.subarray(0, offset - macLine.length - 1).toString("latin1") + "---";
   return { salt, workFactor, body, mac: decode(macLine.slice(4)), headerText, payloadOffset: offset };
 }
@@ -159,12 +159,14 @@ async function ageDecrypt(ciphertext, passphrase) {
   const key = await wrapKey(passphraseBytes(passphrase), header.salt, header.workFactor);
   const fileKey = open(key, Buffer.alloc(12), header.body);
   key.fill(0);
-  if (!fileKey) throw ageError("That passphrase does not open these keys.", "vibe64_age_wrong_passphrase");
+  if (!fileKey) throw publishError("vibe64_age_wrong_passphrase", "That passphrase does not open these keys.");
   try {
     const expected = createHmac("sha256", hkdf(fileKey, Buffer.alloc(0), "header")).update(header.headerText, "utf8").digest();
-    if (header.mac.length !== expected.length || !timingSafeEqual(header.mac, expected)) throw ageError("The age header was changed.");
+    if (header.mac.length !== expected.length || !timingSafeEqual(header.mac, expected)) {
+      throw publishError("vibe64_age_header_changed", "The age header was changed.");
+    }
     const payload = bytes.subarray(header.payloadOffset);
-    if (payload.length < 16 + TAG) throw ageError("The age payload is truncated.");
+    if (payload.length < 16 + TAG) throw publishError("vibe64_age_payload_truncated", "The age payload is truncated.");
     const streamKey = hkdf(fileKey, payload.subarray(0, 16), "payload");
     const chunks = [];
     let position = 16;
@@ -173,8 +175,10 @@ async function ageDecrypt(ciphertext, passphrase) {
       const last = remaining <= CHUNK + TAG;
       const sealed = payload.subarray(position, position + (last ? remaining : CHUNK + TAG));
       const chunk = open(streamKey, streamNonce(counter, last), sealed);
-      if (!chunk) throw ageError("The age payload was changed or truncated.");
-      if (last && chunk.length === 0 && counter > 0) throw ageError("The age payload ends with an empty chunk.");
+      if (!chunk) throw publishError("vibe64_age_payload_changed", "The age payload was changed or truncated.");
+      if (last && chunk.length === 0 && counter > 0) {
+        throw publishError("vibe64_age_payload_empty_chunk", "The age payload ends with an empty chunk.");
+      }
       chunks.push(chunk);
       position += sealed.length;
       if (last) break;

@@ -130,25 +130,25 @@ test("one versioned package tags v<version>; independent packages tag <package>@
 });
 
 test("invalid plans are refused", () => {
-  const refuses = (overrides, pattern, message = pattern.source) => assert.throws(
+  const refuses = (overrides, code, pattern, message = pattern.source) => assert.throws(
     () => createPublishPlan(input(overrides)),
-    (error) => error.code === "VIBE64_PUBLISH_PLAN_INVALID" && pattern.test(error.message),
+    (error) => error.code === code && pattern.test(error.message),
     message
   );
-  refuses({ savedCommit: "abc123" }, /full saved commit/u);
-  refuses({ packaging: { ...APP, status: "blocked" } }, /ready Packaging/u);
-  refuses({ targets: [] }, /at least one target/u);
-  refuses({ targets: [{ id: "x", destination: "npm", package: "missing" }] }, /does not declare/u);
-  refuses({ targets: [{ id: "x", destination: "npm", package: "app" }] }, /cannot publish a capacitor package/u);
-  refuses({ targets: [{ id: "x", destination: "npm", package: "sdk", channel: "beta" }], versions: { sdk: "1.0.0" } }, /no channel beta/u);
-  refuses({ targets: [input().targets[0], input().targets[0]] }, /appears twice/u);
-  refuses({ versions: { app: "1.5", sdk: "0.9.1" } }, /needs its release version/u);
-  refuses({ versions: { app: "1.5.0", sdk: "0.9.1+ci" } }, /build metadata/u, "a version its release tag cannot hold is refused at plan time, before any build");
-  refuses({ versions: { app: "1.5.0", sdk: "0.9.1", web: "1.0.0" } }, /does not publish/u);
-  refuses({ toolchain: { node: "latest version" } }, /exact version/u);
-  refuses({ buildNumbers: {} }, /needs its build number/u);
-  refuses({ buildNumbers: { app: 0 } }, /needs its build number/u);
-  refuses({ buildNumbers: { app: 7, sdk: 1 } }, /does not build as an app/u);
+  refuses({ savedCommit: "abc123" }, "VIBE64_PUBLISH_PLAN_COMMIT_INVALID", /full saved commit/u);
+  refuses({ packaging: { ...APP, status: "blocked" } }, "VIBE64_PUBLISH_PLAN_PACKAGING_NOT_READY", /ready Packaging/u);
+  refuses({ targets: [] }, "VIBE64_PUBLISH_PLAN_TARGETS_REQUIRED", /at least one target/u);
+  refuses({ targets: [{ id: "x", destination: "npm", package: "missing" }] }, "VIBE64_PUBLISH_PLAN_TARGET_PACKAGE_UNKNOWN", /does not declare/u);
+  refuses({ targets: [{ id: "x", destination: "npm", package: "app" }] }, "VIBE64_PUBLISH_PLAN_TARGET_PACKER_UNSUPPORTED", /cannot publish a capacitor package/u);
+  refuses({ targets: [{ id: "x", destination: "npm", package: "sdk", channel: "beta" }], versions: { sdk: "1.0.0" } }, "VIBE64_PUBLISH_PLAN_TARGET_CHANNEL_UNKNOWN", /no channel beta/u);
+  refuses({ targets: [input().targets[0], input().targets[0]] }, "VIBE64_PUBLISH_PLAN_TARGET_DUPLICATE", /appears twice/u);
+  refuses({ versions: { app: "1.5", sdk: "0.9.1" } }, "VIBE64_PUBLISH_PLAN_PACKAGE_VERSION_REQUIRED", /needs its release version/u);
+  refuses({ versions: { app: "1.5.0", sdk: "0.9.1+ci" } }, "VIBE64_PUBLISH_PLAN_VERSION_METADATA", /build metadata/u, "a version its release tag cannot hold is refused at plan time, before any build");
+  refuses({ versions: { app: "1.5.0", sdk: "0.9.1", web: "1.0.0" } }, "VIBE64_PUBLISH_PLAN_VERSION_UNUSED", /does not publish/u);
+  refuses({ toolchain: { node: "latest version" } }, "VIBE64_PUBLISH_PLAN_TOOL_VERSION_INVALID", /exact version/u);
+  refuses({ buildNumbers: {} }, "VIBE64_PUBLISH_PLAN_BUILD_NUMBER_REQUIRED", /needs its build number/u);
+  refuses({ buildNumbers: { app: 0 } }, "VIBE64_PUBLISH_PLAN_BUILD_NUMBER_REQUIRED", /needs its build number/u);
+  refuses({ buildNumbers: { app: 7, sdk: 1 } }, "VIBE64_PUBLISH_PLAN_BUILD_NUMBER_UNUSED", /does not build as an app/u);
   assert.throws(
     () => createPublishPlan(input({ targets: [{ id: "x", destination: "app-store", package: "app" }] })),
     (error) => error.code === "VIBE64_PUBLISH_DESTINATION_UNKNOWN"
