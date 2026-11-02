@@ -60,7 +60,7 @@ async function applicationHost(t) {
   const grants = [];
   const options = {
     areaGid: GID,
-    areaRoot: path.join(root, "var", "lib", "vibe64-apps"),
+    areaRoot: path.join(root, "var", "lib", "applications"),
     areaUid: UID,
     createUser(identity) {
       created.push(identity.username);
@@ -574,7 +574,7 @@ test("a release service unit runs as its application in its sandbox, listening o
   const user = { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: applicationUser("0123456789ab") };
   const unit = (loopbackPort) => deploymentServiceUnit({
     environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort,
-    owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-managed-test-mariadb.service"],
+    owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-managed-test-mariadb.service"], servicePath: "/packs/bin:/usr/bin",
     startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
     workingDirectory: "/area/app/releases/r1/workspace"
   });
@@ -584,7 +584,7 @@ test("a release service unit runs as its application in its sandbox, listening o
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindAllow=udp", "SocketBindDeny=any",
-    "Environment=TMPDIR=/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
+    "Environment=PATH=/packs/bin:/usr/bin", "Environment=TMPDIR=/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK", "SystemCallArchitectures=native",
     "SystemCallFilter=@system-service", "SystemCallErrorNumber=EPERM",
     "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",

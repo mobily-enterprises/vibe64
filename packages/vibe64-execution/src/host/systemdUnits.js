@@ -4,7 +4,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { DEFAULT_PATH } from "./commandEnvironment.js";
 import {
   DAEMON_USERNAME_PREFIX,
   HOST_SETTINGS_ROOT,
@@ -186,6 +185,7 @@ function deploymentServiceUnit({
   loopbackPort = 0,
   owner = {},
   requiredUnits = [],
+  servicePath = "",
   startScript = "",
   unitName = "",
   user = {},
@@ -214,7 +214,7 @@ function deploymentServiceUnit({
     "SocketBindAllow=udp",
     "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
-    `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
+    `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
     "Environment=TMPDIR=/tmp",
     // The service's own user loads its environment at every start; see
     // runReleaseService. setpriv holds even where a drop-in switches the
@@ -235,6 +235,7 @@ function managedServiceUnit({
   owner = {},
   pidFile = "",
   processModel = "simple",
+  servicePath = "",
   startScript = "",
   unitName = "",
   workingDirectory = ""
@@ -251,7 +252,7 @@ function managedServiceUnit({
     ...serviceAccountUnitLines(owner),
     ...serviceResourceUnitLines(owner),
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
-    `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
+    `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
     `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
     `ExecStart=${systemdUnitSafeValue(startScript)}`,
     ...(normalizedProcessModel === "forking" ? [`PIDFile=${systemdUnitSafeValue(pidFile)}`] : []),

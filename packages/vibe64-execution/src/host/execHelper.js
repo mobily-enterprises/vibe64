@@ -1,4 +1,4 @@
-#!/opt/vibe64/runtime-packs/node26/bin/node
+#!/usr/bin/env node
 // The privileged exec helper: it reads one request, checks it, and acts as the
 // person, application or service account the request names. The modules beside
 // it import only Node built-ins and each other; a release bundles them into this

@@ -3,6 +3,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  closeSync,
   existsSync,
   readFileSync,
   realpathSync,
@@ -11,8 +12,8 @@ import {
 import path from "node:path";
 import process from "node:process";
 
-import { safeUsername, workspaceFromDaemonUsername, workspaceTempRoot } from "./hostAccounts.js";
-import { canonicalPath, relativePathParts } from "./hostFiles.js";
+import { HOST_SETTINGS_ROOT, safeUsername, workspaceFromDaemonUsername, workspaceTempRoot } from "./hostAccounts.js";
+import { canonicalPath, openRootOwnedDirectory, readOwnedFile, relativePathParts } from "./hostFiles.js";
 
 const ALLOWED_COMMANDS = new Set([
   "bash",
@@ -40,38 +41,14 @@ const BLOCKED_ENV_NAMES = new Set([
   "RES_OPTIONS",
   "TZDIR"
 ]);
-const DEFAULT_PATH = [
-  "/opt/vibe64/runtime-packs/policy-bin",
-  "/opt/vibe64/runtime-packs/operator-clis/bin",
-  "/opt/vibe64/runtime-packs/node26/bin",
-  "/opt/vibe64/runtime-packs/git/bin",
-  "/opt/vibe64/runtime-packs/gh/bin",
-  "/opt/vibe64/runtime-packs/ripgrep/bin",
-  "/opt/vibe64/runtime-packs/bubblewrap/bin",
-  "/opt/vibe64/runtime-packs/bun/bin",
-  "/opt/vibe64/runtime-packs/php/bin",
-  "/opt/vibe64/runtime-packs/composer/bin",
-  "/opt/vibe64/runtime-packs/awsebcli/bin",
-  "/opt/vibe64/runtime-packs/cpp/bin",
-  "/opt/vibe64/runtime-packs/python/bin",
-  "/opt/vibe64/runtime-packs/ruby/bin",
-  "/opt/vibe64/runtime-packs/go/bin",
-  "/opt/vibe64/runtime-packs/java/bin",
-  "/opt/vibe64/runtime-packs/kotlin/bin",
-  "/opt/vibe64/runtime-packs/csharp/bin",
-  "/opt/vibe64/runtime-packs/rust/bin",
-  "/opt/vibe64/runtime-packs/mariadb/bin",
-  "/opt/vibe64/runtime-packs/postgresql/bin",
-  "/opt/vibe64/runtime-packs/sqlite/bin",
-  "/opt/vibe64/runtime-packs/playwright/bin",
-  "/opt/vibe64/runtime-packs/guard-bin",
-  "/usr/local/sbin",
-  "/usr/local/bin",
-  "/usr/sbin",
-  "/usr/bin",
-  "/sbin",
-  "/bin"
-].join(":");
+// The system folders root's own steps run with, and the PATH a person's command or service starts with when
+// neither its caller nor the host's helper settings name one.
+const SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+// The host's settings for this helper, in EnvironmentFile syntax and in a file only root can change: PATH, the
+// folders commands and services start with when their caller names none, and VIBE64_APPLICATION_AREA_ROOT, the
+// folder application accounts have their areas below. A missing file names neither.
+const HELPER_SETTINGS_FILE = path.join(HOST_SETTINGS_ROOT, "exec-helper.env");
+const HELPER_SETTINGS_LIMIT_BYTES = 16384;
 
 function runUserCommand(targetUser, command, args, options) {
   // The caller's command PATH must only take effect after runuser drops root.
@@ -83,7 +60,7 @@ function runUserCommand(targetUser, command, args, options) {
     `PATH=${options.env.PATH}`, command, ...args
   ], {
     ...options,
-    env: { ...options.env, PATH: DEFAULT_PATH }
+    env: { ...options.env, PATH: SYSTEM_PATH }
   });
 }
 
@@ -94,6 +71,45 @@ function managedExecutionRuntimeBase(owner = {}) {
 
 function readEnvironmentFile(file = "") {
   return parseEnvironmentFile(readFileSync(file, "utf8"));
+}
+
+/**
+ * The host's settings for this helper, or none when it has no settings file.
+ * @param {string} [file]
+ * @param {number} [ownerUid] the only account that may own the file and its folder
+ * @returns {Record<string, string>}
+ */
+function helperSettings(file = HELPER_SETTINGS_FILE, ownerUid = 0) {
+  let directory;
+  try {
+    directory = openRootOwnedDirectory(path.dirname(file), ownerUid);
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  }
+  try {
+    return parseEnvironmentFile(readOwnedFile(directory, path.basename(file), {
+      maxBytes: HELPER_SETTINGS_LIMIT_BYTES, othersMayWrite: false, uid: ownerUid
+    }));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  } finally {
+    closeSync(directory);
+  }
+}
+
+/**
+ * The PATH commands and services start with when their caller names none: the host's, else the system folders.
+ * @param {Record<string, string>} [settings]
+ */
+function helperCommandPath(settings = helperSettings()) {
+  const configured = String(settings.PATH || "").trim();
+  if (!configured) return SYSTEM_PATH;
+  if (configured.split(":").some((folder) => !path.isAbsolute(folder))) {
+    throw new Error("Vibe64 exec helper settings name a PATH folder that is not absolute.");
+  }
+  return configured;
 }
 
 // Release environment files keep systemd's EnvironmentFile= syntax: comment
@@ -319,7 +335,6 @@ function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
 
 function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operation = "") {
   const env = {
-    PATH: DEFAULT_PATH,
     TERM: process.env.TERM || "xterm-256color"
   };
   for (const [key, value] of Object.entries(input)) {
@@ -328,6 +343,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
     }
     env[key] = String(value);
   }
+  // Read only when the caller names no PATH: a release runner, inside its sandbox, cannot read the settings.
+  env.PATH ||= helperCommandPath();
   if (operation === "opencode-app-server") {
     const providerRoot = path.join(
       managedExecutionRuntimeBase({ username: ownerUsername }),
@@ -364,8 +381,9 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 
 export {
   ALLOWED_COMMANDS,
-  DEFAULT_PATH,
   helperChildEnv,
+  helperCommandPath,
+  helperSettings,
   managedExecutionRuntimeBase,
   parseEnvironmentFile,
   readEnvironmentFile,

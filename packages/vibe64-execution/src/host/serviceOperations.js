@@ -11,7 +11,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { applicationReleaseServiceFiles, assertReleaseServiceClaim, registeredApplicationUser } from "./applicationAccounts.js";
-import { readEnvironmentFile } from "./commandEnvironment.js";
+import { helperCommandPath, readEnvironmentFile } from "./commandEnvironment.js";
 import {
   ensureGroup,
   MANAGED_ROOT,
@@ -74,6 +74,7 @@ function handleDeploymentServiceOperation(payload = {}) {
     loopbackPort,
     owner,
     requiredUnits,
+    servicePath: helperCommandPath(),
     unitName,
     user
   });
@@ -131,6 +132,7 @@ function handleManagedServiceOperation(payload = {}) {
     owner,
     pidFile,
     processModel,
+    servicePath: helperCommandPath(),
     startScript,
     unitName,
     workingDirectory
