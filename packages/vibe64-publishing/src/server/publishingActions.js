@@ -306,4 +306,4 @@ function createPublishingActions({ publishing }) {
   ]);
 }
 
-export { PERSON_ONLY, PUBLISHING_ACTIONS, createPublishingActions };
+export { PUBLISHING_ACTIONS, createPublishingActions };

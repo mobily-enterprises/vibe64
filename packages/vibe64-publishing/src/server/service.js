@@ -45,7 +45,7 @@ import { publishingError } from "./publishingError.js";
 
 const TWINE_VERSION = "6.1.0";
 
-function publishingRoots(env = process.env) {
+function publishingRoots(env) {
   const systemRoot = String(getStudioProjectContext()?.systemRoot || "").trim() || resolveDefaultLocalEditorSystemRoot();
   const cacheHome = String(env.XDG_CACHE_HOME || "").trim() || path.join(os.homedir(), ".cache");
   return {
@@ -153,7 +153,7 @@ function createPublishingPackaging() {
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {SourceEditorService} dependencies.sourceEditor
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env the process environment: publishing folders, PATH and locale for the tools
  * @param {{ personalRoot: string, toolchainsRoot: string, cacheRoot: string } | null} [dependencies.roots]
  * @param {() => string} [dependencies.now]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -162,7 +162,7 @@ function createPublishingService({
   logger,
   project,
   sourceEditor,
-  env = process.env,
+  env,
   roots = null,
   now = () => new Date().toISOString(),
   runCommand = runVibe64Command
@@ -198,6 +198,7 @@ function createPublishingService({
       const verification = createVerificationRunner({
         runtimeRoot: publishingRoot,
         repository,
+        baseEnvironment: env,
         now
       });
       const confirmations = createConfirmationService({ runtimeRoot: publishingRoot });
@@ -619,4 +620,4 @@ function minutes(value) {
   return Math.round(Number(value) * 60 * 1000);
 }
 
-export { createPublishingPackaging, createPublishingService, createPublishingToolchains, publishingResult, publishingRoots };
+export { createPublishingService };

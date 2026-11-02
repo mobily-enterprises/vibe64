@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createConfirmationService, confirmingActor } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
-import { PERSON_ONLY, PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/publishingActions.js";
+import { PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/publishingActions.js";
 import { VIBE64_COMMAND } from "../../packages/vibe64-core/src/shared/actionFields.js";
 
 const PLAN = `sha256:${"a".repeat(64)}`;
@@ -33,7 +33,7 @@ test("confirmation actions accept only the person's own page requests", () => {
   const actions = createPublishingActions({ publishing: new Proxy({}, { get: () => () => ({ ok: true }) }) });
   const byId = new Map(actions.map((action) => [action.id, action]));
   for (const id of [PUBLISHING_ACTIONS.BASELINE_PUSH, PUBLISHING_ACTIONS.CONFIRMATION_OPEN, PUBLISHING_ACTIONS.RELEASE_CONFIRM, PUBLISHING_ACTIONS.KEYS_UNLOCK, PUBLISHING_ACTIONS.ACCOUNT_ADD, PUBLISHING_ACTIONS.RECOVERY_KIT_CREATE]) {
-    assert.deepEqual(byId.get(id).channels, PERSON_ONLY, `${id} is person-only`);
+    assert.deepEqual(byId.get(id).channels, ["api"], `${id} is person-only`);
     assert.equal(byId.get(id).extensions.assistant, undefined, `${id} is no assistant tool`);
   }
   assert.ok(byId.get(PUBLISHING_ACTIONS.PUBLISH_RUN).extensions.assistant, "the assistant may ask for the confirmation");

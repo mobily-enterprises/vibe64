@@ -47,6 +47,7 @@ test("the Python publishing tools install through the gateway", async (t) => {
   const roots = { personalRoot: path.join(base, "personal"), toolchainsRoot: path.join(base, "toolchains"), cacheRoot: path.join(base, "cache") };
   const requests = [];
   const publishing = createPublishingService({
+    env: process.env,
     logger: silentLogger,
     project: { readCurrentProject: async () => ({}) },
     roots,

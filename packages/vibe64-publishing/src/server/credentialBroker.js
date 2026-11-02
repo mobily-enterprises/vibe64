@@ -255,4 +255,4 @@ function createCredentialBroker({
   });
 }
 
-export { accountEntryId, createCredentialBroker, sideloadKeyEntryId };
+export { createCredentialBroker, sideloadKeyEntryId };

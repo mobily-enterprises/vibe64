@@ -47,7 +47,12 @@ const Vibe64PublishingFeature = defineFeature({
     project,
     sourceEditor
   }, { actionCatalogue }) {
-    const publishing = createPublishingService({ logger, project, sourceEditor });
+    const publishing = createPublishingService({
+      env: process.env,
+      logger,
+      project,
+      sourceEditor
+    });
     registerRoutes(http, {
       projectContext: getStudioProjectContext(),
       publishing
