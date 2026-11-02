@@ -63,7 +63,8 @@ function createLearnerPreparation({
       throw failure(
         "This learner has no matching active reservation. Read the current learning state before preparing.",
         "VIBE64_TRAINING_ATTEMPT_MISSING",
-        404
+        404,
+        { messageCode: "VIBE64_TRAINING_PREPARE_RESERVATION_MISSING" }
       );
     }
     await verifyActiveLesson(before.progress, verification);
@@ -85,7 +86,8 @@ function createLearnerPreparation({
         throw failure(
           "The active attempt changed. Read the current learning state before preparing.",
           "VIBE64_TRAINING_ATTEMPT_MISSING",
-          404
+          404,
+          { messageCode: "VIBE64_TRAINING_PREPARE_ATTEMPT_CHANGED" }
         );
       }
       await verifyActiveLesson(state.progress, verification);
@@ -116,7 +118,8 @@ function createLearnerPreparation({
       throw failure(
         "This learner has no matching active reservation. Read the current learning state before preparing.",
         "VIBE64_TRAINING_ATTEMPT_MISSING",
-        404
+        404,
+        { messageCode: "VIBE64_TRAINING_PREPARE_RESERVATION_MISSING" }
       );
     }
     const release = await acquire(paths);
@@ -126,7 +129,8 @@ function createLearnerPreparation({
         throw failure(
           "The active attempt changed. Read the current learning state before preparing.",
           "VIBE64_TRAINING_ATTEMPT_MISSING",
-          404
+          404,
+          { messageCode: "VIBE64_TRAINING_PREPARE_ATTEMPT_CHANGED" }
         );
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
@@ -152,7 +156,7 @@ function createLearnerPreparation({
         // Recorded before the practice session exists; a retry before it
         // exists re-verifies the same exercise and may record again.
         if (current.phase === "ready") {
-          throw failure("A prepared lesson keeps the start commit it recorded.", "VIBE64_TRAINING_PREPARATION_CONFLICT", 409);
+          throw failure("A prepared lesson keeps the start commit it recorded.", "VIBE64_TRAINING_PREPARATION_COMMIT_FIXED", 409);
         }
         next = { ...current, startCommit: input.startCommit };
       } else if (operation === "ready") {
@@ -173,7 +177,8 @@ function createLearnerPreparation({
         throw failure(
           "Learning preparation changed. Read the current revision before reporting another observation.",
           "VIBE64_TRAINING_STATE_REVISION_CONFLICT",
-          409
+          409,
+          { messageCode: "VIBE64_TRAINING_PREPARATION_REVISION_CHANGED" }
         );
       }
       if (state.revision === Number.MAX_SAFE_INTEGER) {

@@ -1606,9 +1606,9 @@ test("explicit end retains the pinned attempt and fresh reserve creates new proj
   });
   assert.equal((await f.reserve()).attempt.attemptId, attemptId);
   assert.equal((await f.reserve()).attempt.ended.reason, "archived");
-  await assert.rejects(() => f.state.endAttempt({ ...input, reason: "deleted" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
-  await assert.rejects(() => f.state.endAttempt({ ...input, attemptId: next.attempt.attemptId }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
-  await assert.rejects(() => f.reserve({ requestId: "end-first" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
+  await assert.rejects(() => f.state.endAttempt({ ...input, reason: "deleted" }), error => error.code === "VIBE64_TRAINING_END_REQUEST_CONFLICT");
+  await assert.rejects(() => f.state.endAttempt({ ...input, attemptId: next.attempt.attemptId }), error => error.code === "VIBE64_TRAINING_END_REQUEST_CONFLICT");
+  await assert.rejects(() => f.reserve({ requestId: "end-first" }), error => error.code === "VIBE64_TRAINING_REQUEST_ENDED_ATTEMPT");
   for (const operation of [
     () => f.state.resumeAttempt(input),
     () => f.state.beginPreparation({ ...input, expectedRevision: current.revision }),
@@ -1645,7 +1645,7 @@ test("Learn mode is a saved per-learner flag and switching it never ends or chan
   for (const invalid of [{ schemaVersion: 2, learnerId: "43", on: true }, { schemaVersion: 2, learnerId: "42", on: "yes" },
     { schemaVersion: 2, learnerId: "42", on: true, currentAttemptId: attemptId }, { schemaVersion: 1, learnerId: "42", on: true }]) {
     await f.write("learning-mode.json", invalid, f.paths.root);
-    await assert.rejects(() => f.state.readLearningMode({ actor: f.actor }), { code: "VIBE64_TRAINING_STATE_INVALID" });
+    await assert.rejects(() => f.state.readLearningMode({ actor: f.actor }), { code: "VIBE64_TRAINING_MODE_STATE_INVALID" });
   }
   await f.state.setLearningMode({ actor: f.actor, on: true });
   await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "archive-1", expectedRevision: prepared.revision, reason: "archived" });
@@ -1700,7 +1700,7 @@ test("interrupted end and new-start summary publication retain real history and 
   syncBuiltinESMExports();
   let next;
   try {
-    await assert.rejects(() => f.state.endAttempt(input), error => error.code === "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED" &&
+    await assert.rejects(() => f.state.endAttempt(input), error => error.code === "VIBE64_TRAINING_END_SUMMARY_SAVE_UNCONFIRMED" &&
       error.attemptEndSaved === true && error.reservationSaved === false && error.revision === 2);
     const afterEnd = await treeState(f.systemRoot);
     const ended = await f.state.readState({ actor: f.actor });

@@ -603,7 +603,7 @@ test("owner custom course pins installed released topics through the original ca
   assert.equal(replay.revision, created.revision, "an identical retry changes nothing");
   await assert.rejects(c.execute("courses.create", { ...input, title: "My path!", expectedRevision: created.revision }), { code: "VIBE64_TRAINING_COURSE_EXISTS" });
   await assert.rejects(c.execute("courses.create", { ...input, title: "Twice", topics: [...input.topics, ...input.topics], expectedRevision: created.revision }),
-    { code: "VIBE64_TRAINING_COURSE_INVALID" });
+    { code: "VIBE64_TRAINING_COURSE_TOPICS_INVALID" });
   await assert.rejects(c.execute("courses.create", { ...input, title: "Missing", topics: [{ topicId: "missing", release: "0.1.0" }], expectedRevision: created.revision }),
     { code: "VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE" });
   await assert.rejects(c.execute("courses.create", { ...input, title: "Stale", expectedRevision: 0 }), { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT" });

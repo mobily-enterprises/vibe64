@@ -74,7 +74,9 @@ function createLearnerCodeLedgers({
     if (typeof operation !== "function") throw new Error("Update the code ledger of an exact attempt.");
     const attempt = await activeAttemptForProject({ actor, attemptId });
     if (!attempt) {
-      throw failure("Continue this practice project's lesson before recording code work.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+      throw failure("Continue this practice project's lesson before recording code work.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404, {
+        messageCode: "VIBE64_TRAINING_CODE_WORK_ATTEMPT_MISSING"
+      });
     }
     return withLedgerLock(paths, async () => {
       const current = await readCodeLedgerRecord(paths, attemptId);

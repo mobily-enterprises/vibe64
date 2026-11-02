@@ -2,6 +2,7 @@ import path from "node:path";
 import { assertLearningSystemRoot } from "./learnerRecords.js";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
+import { trainingInternalError } from "./errors.js";
 import {
   failure,
   inspectDirectoryChain,
@@ -159,11 +160,10 @@ function createPracticeHistoryReader({ systemRoot, content }) {
         } : null))
       };
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learning state is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
         "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        cause
       );
     }
   }
@@ -240,11 +240,12 @@ function createPracticeHistoryReader({ systemRoot, content }) {
         throw failure(
           "This saved lesson has no practice project. Use its source-less learning conversation.",
           "VIBE64_TRAINING_EXERCISE_MISSING",
-          409
+          409,
+          { messageCode: "VIBE64_TRAINING_SAVED_LESSON_EXERCISE_MISSING" }
         );
       }
       if (workInactive) {
-        throw failure("Resume this exact confirmed active lesson before admitting practice work.", "VIBE64_TRAINING_ATTEMPT_INACTIVE", 409);
+        throw failure("Resume this exact confirmed active lesson before admitting practice work.", "VIBE64_TRAINING_ATTEMPT_NOT_RESUMED", 409);
       }
       throw failure(
         "This installed content reader cannot supply the lesson's exact bundled exercise.",
@@ -267,7 +268,8 @@ function createPracticeHistoryReader({ systemRoot, content }) {
         throw failure(
           "This saved lesson has no practice project. Use its source-less learning conversation.",
           "VIBE64_TRAINING_EXERCISE_MISSING",
-          409
+          409,
+          { messageCode: "VIBE64_TRAINING_SAVED_LESSON_EXERCISE_MISSING" }
         );
       }
       throw error;
@@ -412,11 +414,10 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       }
       return { revision: record?.revision || 0, lessons: record?.lessons || [] };
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
-        "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        "VIBE64_TRAINING_STEP_STATE_INVALID",
+        cause
       );
     }
   }

@@ -161,7 +161,7 @@ test("a check result for other files is rejected", async t => {
   const f = await fixture(t, { ...entered, check: 'import { readFileSync } from "node:fs";\nconst input = JSON.parse(readFileSync(0, "utf8"));\n' +
     'console.log(JSON.stringify({ check: input.check, filesHash: "0".repeat(64), outcome: "verified" }));\n' });
   await f.learnerSave(solved);
-  await assert.rejects(f.checks().runCodeCheck(f.input), { code: "VIBE64_TRAINING_CHECK_RESULT_INVALID" });
+  await assert.rejects(f.checks().runCodeCheck(f.input), { code: "VIBE64_TRAINING_CODE_CHECK_RESULT_MISMATCH" });
   assert.deepEqual(await readdir(f.paths.artifactsRoot), []);
 });
 

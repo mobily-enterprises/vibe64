@@ -436,8 +436,15 @@ function assertLearningSystemRoot(systemRoot) {
   }
 }
 
-function failure(message, code, statusCode, details = {}) {
-  return trainingFailure(message, code, { statusCode, ...details });
+/**
+ * A learner-state refusal with the status the caller names.
+ * @param {string} message
+ * @param {string} code
+ * @param {number} statusCode
+ * @param {{ params?: object, details?: object, messageCode?: string, messageParams?: object, cause?: unknown }} [options]
+ */
+function failure(message, code, statusCode, options = {}) {
+  return trainingFailure(message, code, { ...options, statusCode });
 }
 
 function learnerIdentity(actor) {

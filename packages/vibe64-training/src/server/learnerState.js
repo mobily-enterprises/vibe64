@@ -9,6 +9,7 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_LESSON_IN_PROGRESS_CODE } from "../shared/learnerContract.js";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
+import { trainingInternalError } from "./errors.js";
 import { createInstalledTrainingContent, pinnedLessonKey } from "./installedContent.js";
 import { availableStepIds } from "./lessonAvailability.js";
 
@@ -229,11 +230,10 @@ function createTrainingLearnerState({
         } : null))
       };
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learning state is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
         "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        cause
       );
     }
   }
@@ -305,20 +305,15 @@ function createTrainingLearnerState({
       const summary = active || { schemaVersion: 1, learnerId: progress.learnerId, progressRevision: progress.revision, attemptId: null };
       await writeJsonFileAtomic(paths.active, summary, { directoryMode: 0o700, fileMode: 0o600 });
     } catch (cause) {
-      const error = failure(
-        active ? "The reservation is saved, but its active summary save was not confirmed. Retry the same request or resume before provisioning."
-          : "The attempt end is saved, but its empty active summary save was not confirmed. Read or retry the same end request; no project disposal was claimed.",
-        "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED",
-        null,
-        {
-          reservationSaved: Boolean(active),
-          ...(active ? {} : { attemptEndSaved: true }),
-          revision: progress.revision,
-          attemptId: progress.activeAttemptId
-        }
-      );
-      error.cause = cause;
-      throw error;
+      const unconfirmed = active
+        ? trainingInternalError("The reservation is saved, but its active summary save was not confirmed. Retry the same request or resume before provisioning.", "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED", cause)
+        : trainingInternalError("The attempt end is saved, but its empty active summary save was not confirmed. Read or retry the same end request; no project disposal was claimed.", "VIBE64_TRAINING_END_SUMMARY_SAVE_UNCONFIRMED", cause);
+      throw Object.assign(unconfirmed, {
+        reservationSaved: Boolean(active),
+        ...(active ? {} : { attemptEndSaved: true }),
+        revision: progress.revision,
+        attemptId: progress.activeAttemptId
+      });
     }
     return active;
   }
@@ -328,7 +323,7 @@ function createTrainingLearnerState({
     try {
       await writeJsonFileAtomic(paths.progress, progress, { directoryMode: 0o700, fileMode: 0o600 });
     } catch (cause) {
-      throw failure(message, "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", null, { cause });
+      throw trainingInternalError(message, "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", cause);
     }
   }
 
@@ -400,7 +395,7 @@ function createTrainingLearnerState({
     try {
       const state = await loadState(paths);
       if (state.progress.attempts.some(attempt => attempt.ended?.requestId === requestId)) {
-        throw failure("This request ID already ended an attempt; use its original end operation.", "VIBE64_TRAINING_REQUEST_CONFLICT", 409);
+        throw failure("This request ID already ended an attempt; use its original end operation.", "VIBE64_TRAINING_REQUEST_ENDED_ATTEMPT", 409);
       }
       const replay = state.progress.attempts.find(attempt => attempt.requestIds.includes(requestId));
       if (replay) {
@@ -423,6 +418,7 @@ function createTrainingLearnerState({
           TRAINING_LESSON_IN_PROGRESS_CODE,
           409,
           {
+            messageCode: "VIBE64_TRAINING_RESERVE_LESSON_IN_PROGRESS",
             details: {
               attemptId: attempt.attemptId,
               lessonCode: attempt.pin.lesson.code,
@@ -503,7 +499,7 @@ function createTrainingLearnerState({
       const replay = state.progress.attempts.find(value => value.ended?.requestId === requestId);
       if (replay) {
         if (replay.attemptId !== attemptId || replay.ended.reason !== reason) {
-          throw failure("This end request already retired a different attempt or reason.", "VIBE64_TRAINING_REQUEST_CONFLICT", 409);
+          throw failure("This end request already retired a different attempt or reason.", "VIBE64_TRAINING_END_REQUEST_CONFLICT", 409);
         }
         const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
         ended = { revision: state.revision, attempt: replay, active, replayed: true };
@@ -511,7 +507,7 @@ function createTrainingLearnerState({
         if (state.progress.attempts.some(value => value.requestIds.includes(requestId))) {
           throw failure(
             "This request ID already reserved an attempt; use a distinct stable end request.",
-            "VIBE64_TRAINING_REQUEST_CONFLICT",
+            "VIBE64_TRAINING_END_REQUEST_REUSED",
             409
           );
         }
@@ -519,11 +515,12 @@ function createTrainingLearnerState({
           throw failure(
             "Only this learner's exact lesson in progress can be ended; retained history is not reactivated.",
             "VIBE64_TRAINING_ATTEMPT_MISSING",
-            404
+            404,
+            { messageCode: "VIBE64_TRAINING_END_ATTEMPT_MISSING" }
           );
         }
         if (expectedRevision !== state.revision) {
-          throw failure("Learning state changed. Read it before ending the same attempt.", "VIBE64_TRAINING_STATE_REVISION_CONFLICT", 409);
+          throw failure("Learning state changed. Read it before ending the same attempt.", "VIBE64_TRAINING_STATE_REVISION_CONFLICT", 409, { messageCode: "VIBE64_TRAINING_END_REVISION_CHANGED" });
         }
         if (state.revision === Number.MAX_SAFE_INTEGER) throw new Error("Learning state reached its revision limit. No attempt was ended.");
         const lesson = await verifyActiveLesson(state.progress, { admissionOnly: reason !== "finished" });
@@ -531,7 +528,7 @@ function createTrainingLearnerState({
         let { completedLessons } = state.progress;
         if (reason === "finished") {
           if (!lessonCompletion(lesson, await steps.readAttemptSteps(paths, previous, lesson), availableStepIds(lesson, actor)).completed) {
-            throw failure("Pass every required step before finishing this lesson.", "VIBE64_TRAINING_LESSON_INCOMPLETE", 409);
+            throw failure("Pass every required step before finishing this lesson.", "VIBE64_TRAINING_LESSON_END_INCOMPLETE", 409);
           }
           const key = canonicalJson(previous.pin.lesson);
           if (!completedLessons.some(value => canonicalJson({ code: value.code, hash: value.hash }) === key)) {
@@ -593,7 +590,8 @@ function createTrainingLearnerState({
       throw failure(
         "This learner has no matching active reservation. Read the current learning state before resuming.",
         "VIBE64_TRAINING_ATTEMPT_MISSING",
-        404
+        404,
+        { messageCode: "VIBE64_TRAINING_RESUME_RESERVATION_MISSING" }
       );
     }
     const release = await acquire(paths);
@@ -603,7 +601,8 @@ function createTrainingLearnerState({
         throw failure(
           "The active attempt changed. Read the current learning state before resuming.",
           "VIBE64_TRAINING_ATTEMPT_MISSING",
-          404
+          404,
+          { messageCode: "VIBE64_TRAINING_RESUME_ATTEMPT_CHANGED" }
         );
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);

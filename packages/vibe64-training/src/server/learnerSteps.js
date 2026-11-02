@@ -2,6 +2,7 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
+import { trainingInternalError } from "./errors.js";
 import {
   attemptStepEntry,
   failure,
@@ -53,11 +54,10 @@ function createLearnerSteps({
       }
       return { ...entry, revision: record?.attemptId === attempt.attemptId ? record.revision : 0 };
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
-        "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        "VIBE64_TRAINING_STEP_STATE_INVALID",
+        cause
       );
     }
   }
@@ -88,7 +88,9 @@ function createLearnerSteps({
     }
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
-      throw failure("Continue this lesson before recording step results.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+      throw failure("Continue this lesson before recording step results.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404, {
+        messageCode: "VIBE64_TRAINING_STEP_RESULT_ATTEMPT_MISSING"
+      });
     }
     const release = await acquireRecordLock(
       paths.stepProgressLock,
@@ -99,11 +101,13 @@ function createLearnerSteps({
       const state = await loadState(paths);
       const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
       if (state.progress.activeAttemptId !== attemptId || !attempt || attempt.ended) {
-        throw failure("The saved learning attempt changed.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+        throw failure("The saved learning attempt changed.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404, {
+          messageCode: "VIBE64_TRAINING_SAVED_ATTEMPT_CHANGED"
+        });
       }
       const lesson = await verifyActiveLesson(state.progress);
       if (!lessonSteps(lesson)) {
-        throw failure("This lesson uses assessments, not step results.", "VIBE64_TRAINING_LESSON_VERSION", 409);
+        throw failure("This lesson uses assessments, not step results.", "VIBE64_TRAINING_LESSON_STEP_RESULTS_UNSUPPORTED", 409);
       }
       const { revision: stepRevision, ...entry } = await readAttemptSteps(paths, attempt, lesson);
       const result = await operation(structuredClone(entry), { lesson, attempt, revision: stepRevision, learnerId: paths.learner.id });
@@ -123,11 +127,10 @@ function createLearnerSteps({
       try {
         await writeJsonFileAtomic(paths.stepProgress, next, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
-        throw failure(
+        throw trainingInternalError(
           "The step result save was not confirmed; the atomic rename may have succeeded. Read or retry the same request ID.",
           "VIBE64_TRAINING_STEP_PROGRESS_SAVE_UNCONFIRMED",
-          null,
-          { cause }
+          cause
         );
       }
       return {
@@ -157,11 +160,10 @@ function createLearnerSteps({
       if (!state.progress.attempts.some(attempt => attempt.attemptId === reader.attemptId)) return null;
       return { attemptId: reader.attemptId, stepId: reader.stepId, scroll: reader.scroll };
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Lesson reader position is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
-        "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        "VIBE64_TRAINING_READER_STATE_INVALID",
+        cause
       );
     }
   }

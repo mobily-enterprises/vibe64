@@ -228,7 +228,7 @@ test("no changes, a working agent and every failed review record nothing", async
     JSON.stringify({ verdict: "passed", comment: "x", hint: "", points: [], extra: true }),
     JSON.stringify({ verdict: "passed", comment: "x", hint: "", points: Array.from({ length: 7 }, () => ({ text: "p", met: true })) })]) {
     f.state.answer = answer;
-    await assert.rejects(f.press(`bad-${aiRuns(f)}`), { code: "VIBE64_TRAINING_REVIEW_FAILED", message: /unexpected form/u }, answer);
+    await assert.rejects(f.press(`bad-${aiRuns(f)}`), { code: "VIBE64_TRAINING_REVIEW_INVALID", message: /unexpected form/u }, answer);
   }
   f.state.providerError = "The provider timed out.";
   await assert.rejects(f.press("provider"), { code: "VIBE64_TRAINING_REVIEW_FAILED", message: /Your AI could not finish the review: The provider timed out\. Nothing was recorded/u });
@@ -286,7 +286,7 @@ test("the learner store keeps the start commit across phases and accepts only we
   assert.equal(attempt.preparation.phase, "ready");
   assert.equal(attempt.preparation.startCommit, "d".repeat(40));
   await assert.rejects(f.learners.recordPreparationStart({ actor: f.user, attemptId: f.attemptId, initialSessionId: f.sessionId,
-    expectedRevision: 4, startCommit: "a".repeat(40) }), { code: "VIBE64_TRAINING_PREPARATION_CONFLICT" });
+    expectedRevision: 4, startCommit: "a".repeat(40) }), { code: "VIBE64_TRAINING_PREPARATION_COMMIT_FIXED" });
   const lesson = { code: "STEPS-ONE", hash: "a".repeat(64) };
   const valid = { stepId: "green-heading", kind: "review", outcome: "passed", origin: "check", requestId: "r1",
     recordedAt: new Date().toISOString(), evidence: { reviewId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", evidenceHash: "b".repeat(64) },

@@ -525,7 +525,7 @@ additive and needs no numbered upgrade (`docs/state-upgrades.md`).
 
 The internal `endAttempt({actor,attemptId,requestId,expectedRevision,reason})`
 accepts `reason: "finished" | "archived" | "deleted"`; `finished` is refused
-(`VIBE64_TRAINING_LESSON_INCOMPLETE`) unless the attempt is complete. It returns
+(`VIBE64_TRAINING_LESSON_END_INCOMPLETE`) unless the attempt is complete. It returns
 `{revision,attempt,active,replayed}` and adds immutable
 `ended:{requestId,revision,reason}` to that exact retained attempt. This records a
 learning retirement decision, not a Stop, archive, deletion or disposal receipt.

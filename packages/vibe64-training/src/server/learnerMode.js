@@ -1,6 +1,7 @@
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { validateContent } from "./contentSchemas.js";
+import { trainingInternalError } from "./errors.js";
 import { failure, MAX_MODE_BYTES, modeSchema, readRecord } from "./learnerRecords.js";
 
 /**
@@ -39,11 +40,10 @@ function createLearnerMode({
     try {
       on = await readMode(paths);
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
-        "VIBE64_TRAINING_STATE_INVALID",
-        null,
-        { cause }
+        "VIBE64_TRAINING_MODE_STATE_INVALID",
+        cause
       );
     }
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);

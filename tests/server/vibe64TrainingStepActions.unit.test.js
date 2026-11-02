@@ -201,7 +201,7 @@ test("choice, self-check and reader saves record learner results and notify only
   assert.equal((await f.execute("step.answer", { ...base, stepId: "which-side", selected: [0], requestId: "answer-1" })).replayed, true);
   assert.equal((await f.execute("step.answer", { ...base, stepId: "which-side", selected: [1], requestId: "answer-2" })).outcome, "passed");
   await assert.rejects(f.execute("step.answer", { ...base, stepId: "which-side", selected: [], requestId: "answer-3" }), { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(f.execute("step.done", { ...base, stepId: "which-side", requestId: "done-x" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
+  await assert.rejects(f.execute("step.done", { ...base, stepId: "which-side", requestId: "done-x" }), { code: "VIBE64_TRAINING_CHECK_NOT_SELF" });
   assert.equal((await f.execute("step.done", { ...base, stepId: "reflect", requestId: "done-1" })).outcome, "passed");
   const saved = await f.execute("reader.save", { ...base, stepId: "reflect", scroll: 120 });
   assert.deepEqual(saved.reader, { attemptId: attempt.attemptId, stepId: "reflect", scroll: 120 });

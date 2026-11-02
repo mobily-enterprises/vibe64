@@ -3,6 +3,7 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_NOTES_CHANGED_CODE } from "../shared/learnerContract.js";
 import { validateContent } from "./contentSchemas.js";
+import { trainingInternalError } from "./errors.js";
 import {
   failure,
   inspectDirectoryChain,
@@ -62,11 +63,10 @@ function createLearnerNotes({
     try {
       return notesProjection(await readNotesRecord(paths));
     } catch (cause) {
-      throw failure(
+      throw trainingInternalError(
         `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
         "VIBE64_TRAINING_NOTES_STATE_INVALID",
-        null,
-        { cause }
+        cause
       );
     }
   }
@@ -84,7 +84,8 @@ function createLearnerNotes({
       throw failure(
         `Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`,
         "VIBE64_TRAINING_NOTES_INVALID",
-        400
+        400,
+        { params: { limit: MAX_NOTES_CHARS } }
       );
     }
     const textHash = sha256Hex(value);
@@ -99,11 +100,10 @@ function createLearnerNotes({
       try {
         record = await readNotesRecord(paths);
       } catch (cause) {
-        throw failure(
+        throw trainingInternalError(
           `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`,
-          "VIBE64_TRAINING_NOTES_STATE_INVALID",
-          null,
-          { cause }
+          "VIBE64_TRAINING_NOTES_SAVE_STATE_INVALID",
+          cause
         );
       }
       const replay = record?.requests.find(request => request.requestId === requestId);
@@ -126,7 +126,7 @@ function createLearnerNotes({
         );
       }
       if (current === Number.MAX_SAFE_INTEGER) {
-        throw failure("Learner notes reached their revision limit. Nothing was saved.", "VIBE64_TRAINING_NOTES_REVISION_LIMIT", null);
+        throw trainingInternalError("Learner notes reached their revision limit. Nothing was saved.", "VIBE64_TRAINING_NOTES_REVISION_LIMIT");
       }
       const next = {
         schemaVersion: 1,
@@ -141,18 +141,17 @@ function createLearnerNotes({
       if (Buffer.byteLength(JSON.stringify(validated)) > MAX_NOTES_BYTES) {
         throw failure(
           "The learner notes exceed their storage bound. Shorten them; nothing was saved.",
-          "VIBE64_TRAINING_NOTES_INVALID",
+          "VIBE64_TRAINING_NOTES_TOO_LARGE",
           400
         );
       }
       try {
         await writeJsonFileAtomic(paths.notes, validated, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
-        throw failure(
+        throw trainingInternalError(
           "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
           "VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
-          null,
-          { cause }
+          cause
         );
       }
       return { notes: notesProjection(validated), replayed: false, changed: true };

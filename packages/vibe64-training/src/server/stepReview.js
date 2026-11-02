@@ -1,6 +1,6 @@
 import { createRetainedConversationHelper } from "@local/vibe64-terminals/server/retainedConversationHelper";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
-import { trainingFailure } from "./errors.js";
+import { conflictFailure } from "./errors.js";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -47,10 +47,6 @@ const OUTPUT_SCHEMA = Object.freeze({
   }
 });
 
-function reviewFailure(message, code = "VIBE64_TRAINING_REVIEW_FAILED") {
-  return trainingFailure(message, code, { statusCode: 409 });
-}
-
 /**
  * One line of saved text: the learner store refuses control characters.
  */
@@ -75,7 +71,12 @@ function parseVerdict(text) {
     Array.isArray(value.points) && value.points.length <= LIMITS.points && value.points.every(point =>
     point && typeof point === "object" && Object.keys(point).sort().join() === "met,text" &&
       typeof point.met === "boolean" && textOf(point.text, LIMITS.point, true));
-  if (!valid) throw reviewFailure("Your AI returned a review in an unexpected form. Nothing was recorded; check your work again.");
+  if (!valid) {
+    throw conflictFailure(
+      "Your AI returned a review in an unexpected form. Nothing was recorded; check your work again.",
+      "VIBE64_TRAINING_REVIEW_INVALID"
+    );
+  }
   const hint = oneLine(value.hint);
   return {
     passed: value.verdict === "passed",
@@ -118,9 +119,11 @@ function createTrainingStepReviewer({ learners, terminals }) {
         // No Helper route keeps its own AI Accounts → Model routing recovery.
         if (cause?.code === "vibe64_colleague_helper_unavailable") throw cause;
         const detail = String(cause?.message || "").slice(0, 300).replace(/[.\s]+$/u, "");
-        throw Object.assign(
-          reviewFailure(`Your AI could not finish the review${detail ? `: ${detail}` : ""}. Nothing was recorded; check your work again.`),
-          { cause }
+        throw conflictFailure(
+          `Your AI could not finish the review${detail ? `: ${detail}` : ""}. Nothing was recorded; check your work again.`,
+          "VIBE64_TRAINING_REVIEW_FAILED",
+          409,
+          { params: { detail }, cause }
         );
       }
       return parseVerdict(text);

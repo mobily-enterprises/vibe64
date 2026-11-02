@@ -235,9 +235,8 @@ function createTrainingLearningSpace({
     }
     const attempt = await readAttempt(actor, attemptId);
     if (!attempt) {
-      throw Object.assign(new Error("This is not one of your lessons. Nothing was changed."), {
-        code: "VIBE64_TRAINING_ATTEMPT_MISSING",
-        statusCode: 404
+      throw conflictFailure("This is not one of your lessons. Nothing was changed.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404, {
+        messageCode: "VIBE64_TRAINING_LESSON_NOT_OWNED"
       });
     }
     let closed = false;
@@ -245,14 +244,11 @@ function createTrainingLearningSpace({
       const directory = bundleRoot(actor, attemptId);
       // A resumed archive already holds its (partial) bundle and its slot.
       if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
-        throw Object.assign(
-          new Error(
-            `You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`
-          ),
-          {
-            code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT",
-            statusCode: 409
-          }
+        throw conflictFailure(
+          `You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`,
+          "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT",
+          409,
+          { params: { limit: MAX_ARCHIVES } }
         );
       }
       try {
@@ -301,10 +297,7 @@ function createTrainingLearningSpace({
     const archived = UUID_PATTERN.test(String(attemptId || "")) && attemptId !== state.progress.activeAttemptId &&
       await isDirectory(bundleRoot(actor, attemptId));
     if (!archived) {
-      throw Object.assign(new Error("This archived lesson is not in your archive."), {
-        code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING",
-        statusCode: 404
-      });
+      throw conflictFailure("This archived lesson is not in your archive.", "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING", 404);
     }
     await removePath(bundleRoot(actor, attemptId), { recursive: true, force: true });
     return { ok: true, attemptId, removed: true };

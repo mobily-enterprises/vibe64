@@ -4,7 +4,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server/practiceAgentGuidance";
-import { trainingFailure } from "./errors.js";
+import { conflictFailure } from "./errors.js";
 import { pathInside } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -30,10 +30,6 @@ const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 4 * 1024 * 1024;
 const commitPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u;
 const excludes = PRACTICE_AGENT_GUIDANCE_EXCLUDES.map(folder => `:(exclude)${folder.replace(/\/$/u, "")}`);
-
-function evidenceFailure(message, code = "VIBE64_TRAINING_EVIDENCE_UNREADABLE") {
-  return trainingFailure(message, code, { statusCode: 409 });
-}
 
 const nulList = text => String(text || "").split("\0").filter(Boolean);
 
@@ -91,7 +87,10 @@ function createTrainingStepEvidence({
       maxBuffer
     });
     if (result?.ok !== true) {
-      throw evidenceFailure("Your practice project's changes could not be read. Nothing was recorded; try again in a moment.");
+      throw conflictFailure(
+        "Your practice project's changes could not be read. Nothing was recorded; try again in a moment.",
+        "VIBE64_TRAINING_EVIDENCE_UNREADABLE"
+      );
     }
     return String(result.stdout || "");
   }
@@ -189,7 +188,10 @@ function createTrainingStepEvidence({
       context
     });
     if (result?.ok === false || result?.readError) {
-      throw evidenceFailure("The lesson's coding conversation could not be read. Nothing was recorded; try again in a moment.");
+      throw conflictFailure(
+        "The lesson's coding conversation could not be read. Nothing was recorded; try again in a moment.",
+        "VIBE64_TRAINING_EVIDENCE_CONVERSATION_UNREADABLE"
+      );
     }
     const eligible = (result.conversationLog || []).flatMap(turn => (turn.messages || []))
       .filter(message => ["user", "assistant"].includes(message.role) && message.complete !== false && String(message.text || "").trim());
@@ -241,10 +243,10 @@ function createTrainingStepEvidence({
   async function read({ attempt, conversation = false, context = {} } = {}) {
     const startCommit = attempt?.preparation?.startCommit;
     if (attempt?.preparation?.phase !== "ready") {
-      throw evidenceFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
+      throw conflictFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
     }
     if (!commitPattern.test(startCommit || "")) {
-      throw evidenceFailure(
+      throw conflictFailure(
         "This lesson started before its work could be reviewed. Restart the lesson to have your work checked.",
         "VIBE64_TRAINING_REVIEW_UNAVAILABLE"
       );
@@ -255,7 +257,10 @@ function createTrainingStepEvidence({
       const session = await runtime.getSessionWithoutSource(sessionId);
       const source = sessionSourcePath(session);
       if (!session || session.sessionId !== sessionId || !source) {
-        throw evidenceFailure("This lesson's practice session is unavailable. Resume the lesson, then try again.");
+        throw conflictFailure(
+          "This lesson's practice session is unavailable. Resume the lesson, then try again.",
+          "VIBE64_TRAINING_EVIDENCE_SESSION_UNAVAILABLE"
+        );
       }
       const working = sessionAgentWorking(session);
       return {
