@@ -352,7 +352,7 @@ async function createServer(options = {}) {
   });
   // Live session state (agent command helpers, pending uploads) lives below the
   // system root for the life of the process, so every caller resolves it alike.
-  configureCodexAttachmentHostRoot(systemRoot);
+  configureCodexAttachmentHostRoot(systemRoot, process.env);
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,

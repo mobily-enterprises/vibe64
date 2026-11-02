@@ -360,6 +360,7 @@ async function renewalHarness(targetRoot, {
     "utf8"
   );
   const runtime = new Vibe64SessionRuntime({
+    promptEnvironment: process.env,
     createSessionSource: async ({ expectedCommit = "", session, store }) => {
       if (session.sessionId === PREDECESSOR_ID) {
         return;

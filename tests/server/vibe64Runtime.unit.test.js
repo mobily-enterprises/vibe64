@@ -810,6 +810,7 @@ test("renewal retry rejects mismatched durable source ownership without repairin
 test("plain runtime cannot expose or use a private renewal successor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
+      promptEnvironment: process.env,
       projectContextRoot: targetRoot,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot),
       projectSessionSourceRoot: targetRoot

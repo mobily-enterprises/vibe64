@@ -444,6 +444,7 @@ test("workspace preparation transcript remains visible after a runtime restart",
     const started = await runner.start({ runtime, session });
     await started.completion;
     const restartedRuntime = new Vibe64SessionRuntime({
+      promptEnvironment: process.env,
       projectContextRoot: targetRoot,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
     });
