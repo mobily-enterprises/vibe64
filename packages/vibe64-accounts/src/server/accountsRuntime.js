@@ -17,9 +17,9 @@ const ALL_CODEX_AUTH_MODES = Object.freeze([
   API_KEY_AUTH_MODE
 ]);
 
-function resolveVibe64AccountsRoot(targetRoot) {
+function resolveVibe64AccountsRoot(targetRoot, env) {
   return resolveStudioTargetRoot({
-    env: process.env,
+    env,
     explicitRoot: targetRoot
   });
 }
@@ -129,7 +129,7 @@ function createAccountsRuntime({
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || (project ? projectServiceNamespaceRoot(project) : "")).trim();
-    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
+    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot, env) : "";
   }
 
   function readClaudeContext() {
