@@ -64,7 +64,7 @@ function createLanShare({
     if (!details?.isFile()) {
       throw Object.assign(
         new Error("The signed APK is no longer on this computer. Release again."),
-        { code: "vibe64_publishing_download_missing" }
+        { code: "vibe64_publishing_shared_apk_missing" }
       );
     }
     await stop();

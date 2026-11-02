@@ -204,15 +204,21 @@ function createReleaseOrchestrator({
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
     if (!release || release.packaging.status !== "ready") {
-      throw publishingError("Packaging is not ready on the saved project.", "vibe64_publishing_packaging_missing");
+      throw publishingError("Packaging is not ready on the saved project.", "vibe64_publishing_saved_packaging_missing");
     }
     const entries = Object.entries(versions);
     if (!entries.length) throw publishingError("Choose at least one package version.", "vibe64_publishing_prepare_invalid");
     const prepared = [];
     for (const [packageId, version] of entries) {
       const entry = release.packaging.packages.find((candidate) => candidate.id === packageId);
-      if (!entry?.versionFrom) throw publishingError(`${packageId} has no version Vibe64 manages.`, "vibe64_publishing_prepare_invalid");
-      if (!isReleaseVersion(version)) throw publishingError(`${version} is not a version such as 1.5.0.`, "vibe64_publishing_prepare_invalid");
+      if (!entry?.versionFrom) {
+        throw publishingError(`${packageId} has no version Vibe64 manages.`, "vibe64_publishing_package_version_unmanaged", {
+          params: { packageId }
+        });
+      }
+      if (!isReleaseVersion(version)) {
+        throw publishingError(`${version} is not a version such as 1.5.0.`, "vibe64_publishing_version_invalid", { params: { version } });
+      }
       prepared.push(await sourceWriter.prepareAndWrite({ sessionId, entry, version, notes, user }));
     }
     return {
@@ -380,7 +386,7 @@ function createReleaseOrchestrator({
       throw publishingError(
         "The plan changed since you reviewed it (new saved work, targets or tools). Review the new plan.",
         "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
-        { planHash: current.planHash }
+        { details: { planHash: current.planHash } }
       );
     }
     return current;
@@ -433,7 +439,9 @@ function createReleaseOrchestrator({
    */
   async function openConfirmation({ planHash, targetIds = [], acknowledged = [], actor }) {
     if (actor?.kind !== "person") {
-      throw publishingError("Only the person can open a publish confirmation, on the Publish page.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+      throw publishingError("Only the person can open a publish confirmation, on the Publish page.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", {
+        messageCode: "vibe64_publishing_confirmation_open_person_only"
+      });
     }
     const current = await requireCurrentPlan({ planHash, targetIds, acknowledged });
     assertPreflightAllowsRelease(current.preflight, acknowledged);

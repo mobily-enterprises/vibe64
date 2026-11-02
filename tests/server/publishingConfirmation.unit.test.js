@@ -42,7 +42,7 @@ test("confirmation actions accept only the person's own page requests", () => {
 
 test("an assistant request only waits for the person; it confirms nothing", async (t) => {
   const confirmations = await service(t);
-  await assert.rejects(confirmations.request({ planHash: PLAN }), { code: "vibe64_publishing_confirmation_invalid" }, "a request names the plan's targets");
+  await assert.rejects(confirmations.request({ planHash: PLAN }), { code: "vibe64_publishing_confirmation_targets_required" }, "a request names the plan's targets");
   const pending = await confirmations.request({ planHash: PLAN, targetIds: ["sdk-npm"] });
   assert.equal(pending.requestedBy, "assistant");
   assert.deepEqual(pending.targetIds, ["sdk-npm"]);
