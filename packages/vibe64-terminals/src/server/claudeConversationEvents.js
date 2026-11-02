@@ -163,7 +163,7 @@ function createClaudeConversationEvents({
     if (event.type === "goal-updated") return publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
     if (event.type === "stop-unconfirmed") {
       if (entry.turn) await publishRun(entry, { state: entry.turn.state, active: entry.turn.active, message: entry.observationError });
-      throw claudeConversationError(entry.observationError, "vibe64_claude_stop_unconfirmed");
+      throw claudeConversationError(entry.observationError, { code: "vibe64_claude_stop_unconfirmed" });
     }
     if (event.type === "execution") {
       const ctx = event.context;

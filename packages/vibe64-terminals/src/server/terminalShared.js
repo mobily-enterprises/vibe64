@@ -97,10 +97,12 @@ function openCodeSessionId(value = "") {
 }
 
 /**
- * A Claude conversation refusal. JSKIT's Claude conversation owner and turn helpers receive it as `createError`
- * and call it with a message only, so the default code stays for them.
+ * A Claude conversation refusal with its own code. JSKIT's Claude conversation owner and turn helpers receive it as
+ * `createError` and call it the same way.
+ * @param {string} message
+ * @param {{ code: string }} details
  */
-function claudeConversationError(message, code = "vibe64_claude_operation_failed") {
+function claudeConversationError(message, { code }) {
   return new AppError(409, message, { code });
 }
 

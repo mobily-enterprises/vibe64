@@ -237,9 +237,9 @@ function createClaudeConversationHost({
       check(entry) {
         if (operation === "start" && context.assistantScope && JSON.stringify(entry.profile || null) !==
             JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
-          throw claudeConversationError("The scoped helper profile changed. Start a new helper.", "vibe64_claude_helper_profile_changed");
+          throw claudeConversationError("The scoped helper profile changed. Start a new helper.", { code: "vibe64_claude_helper_profile_changed" });
         }
-        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.", "vibe64_claude_main_conversation_delete_refused");
+        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.", { code: "vibe64_claude_main_conversation_delete_refused" });
       }
     };
   }
@@ -247,7 +247,7 @@ function createClaudeConversationHost({
   function checkConfiguration(entry) {
     requireCompletedNativeConversationReplacement(entry.context.session);
     if (listTerminalSessions({ namespace: claudeTerminalNamespace(entry.context.sessionId), runningOnly: true }).length) {
-      throw claudeConversationError("Close the Claude Code terminal before sending in chat.", "vibe64_claude_terminal_active");
+      throw claudeConversationError("Close the Claude Code terminal before sending in chat.", { code: "vibe64_claude_terminal_active" });
     }
     return {
       get sessionClosing() {

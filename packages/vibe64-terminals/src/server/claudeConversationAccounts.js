@@ -109,7 +109,7 @@ function createClaudeConversationAccounts({
     })
   });
   function accountQueryFailure(failure) {
-    if (failure.code === "claude_account_query_failed") throw claudeConversationError(failure.message, "vibe64_claude_account_query_failed");
+    if (failure.code === "claude_account_query_failed") throw claudeConversationError(failure.message, { code: "vibe64_claude_account_query_failed" });
     throw failure;
   }
 
@@ -123,12 +123,12 @@ function createClaudeConversationAccounts({
     if (account.error) {
       throw claudeConversationError(
         `Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
-        "vibe64_claude_account_status_failed"
+        { code: "vibe64_claude_account_status_failed" }
       );
     }
     const email = toText(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
-      throw claudeConversationError("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");
+      throw claudeConversationError("Sign in to Claude Code with your Claude account before continuing.", { code: "vibe64_claude_account_required" });
     }
     return `sha256:${sha256Hex(JSON.stringify([configRoot, account.authMethod, email]))}`;
   }
@@ -199,7 +199,7 @@ function createClaudeConversationAccounts({
   async function resolveExecutionProfile(context, request) {
     const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
     if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) {
-      throw claudeConversationError("Unsupported Claude helper execution profile.", "vibe64_claude_helper_profile_unsupported");
+      throw claudeConversationError("Unsupported Claude helper execution profile.", { code: "vibe64_claude_helper_profile_unsupported" });
     }
     const modelId = context.assistantSelection?.modelId;
     const modelProviderId = context.assistantSelection?.modelProviderId;
@@ -208,7 +208,7 @@ function createClaudeConversationAccounts({
       .flatMap((provider) => provider.models).find((candidate) => candidate.id === modelId);
     const thinking = context.assistantSelection?.variantId || "";
     if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
-      throw claudeConversationError("The selected Claude helper model is unavailable. Choose another in AI Accounts.", "vibe64_claude_helper_model_unavailable");
+      throw claudeConversationError("The selected Claude helper model is unavailable. Choose another in AI Accounts.", { code: "vibe64_claude_helper_model_unavailable" });
     }
     return defineVibe64HelperExecutionProfileResolution({
       executionProfile: request,

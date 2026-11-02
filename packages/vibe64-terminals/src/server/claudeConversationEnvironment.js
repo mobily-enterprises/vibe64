@@ -131,7 +131,7 @@ function createClaudeConversationEnvironment({
       sessionId: context.sessionId,
       worktreePath: context.workdir
     });
-    if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.", "vibe64_claude_operation_failed");
+    if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.", { code: "vibe64_claude_command_environment_failed" });
     return {
       ...prepared,
       env: {
@@ -287,7 +287,7 @@ function createClaudeConversationEnvironment({
         vibe64User: ctx.vibe64User,
         workdir: ctx.workdir
       });
-      if (actor?.ok === false) throw claudeConversationError(actor.error, actor.code);
+      if (actor?.ok === false) throw claudeConversationError(actor.error, { code: actor.code });
       const terminal = await conversations.prepareTerminal(entry, ctx);
       await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
       return commandRunner({
