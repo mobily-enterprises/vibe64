@@ -8,11 +8,30 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
-  APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
-  assertReleaseServiceClaim, assertValidDeploymentUnitName,
-  assertActablePerson, deploymentServiceUnit, ensureApplicationAccount, helperChildEnv, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
-  registerPerson, resolveApplicationCwd, retireApplicationAccount
-} from "../../packages/vibe64-execution/src/host/execHelper.js";
+  applicationIdentity,
+  applicationReleaseEnvironmentFile,
+  applicationReleaseServiceFiles,
+  assertReleaseServiceClaim,
+  ensureApplicationAccount,
+  readApplicationRegistration,
+  registeredApplicationUser,
+  resolveApplicationCwd,
+  retireApplicationAccount
+} from "../../packages/vibe64-execution/src/host/applicationAccounts.js";
+import { helperChildEnv } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { openManagedExecutionReceipts } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
+import {
+  APPLICATION_USERNAME_PREFIX,
+  DAEMON_USERNAME_PREFIX,
+  HOST_SETTINGS_ROOT
+} from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { assertActablePerson, registerPerson } from "../../packages/vibe64-execution/src/host/personRegistry.js";
+import {
+  accountUnitLines,
+  assertValidDeploymentUnitName,
+  deploymentServiceUnit
+} from "../../packages/vibe64-execution/src/host/systemdUnits.js";
+import { execHelperSource } from "../fixtures/execHelperSource.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 
@@ -462,9 +481,9 @@ test("an application's execution runs as itself in its sandbox, with its own tem
 });
 
 test("an application's execution is finite, and its receipt sits where only root adds receipts", async (t) => {
-  const source = await readFile(EXEC_HELPER, "utf8");
+  const source = await execHelperSource();
   const operation = source.slice(source.indexOf("function handleManagedExecutionOperation("),
-    source.indexOf("function consumeManagedExecutionRequestPayload("));
+    source.indexOf("function runManagedExecutionPayload("));
   assert.match(operation, /if \(application && mode !== "capture"\) \{\n {4}throw new Error\("An application account runs only finite commands\."\);/u);
   assert.match(operation, /if \(!application\) \{\n {6}throw new Error\("Release environment requires an application's own execution\."\);/u);
   assert.match(operation, /\? openApplicationExecutionReceipts\(owner, \{ create: true \}\)/u);
@@ -650,7 +669,7 @@ test("another workspace's odd release unit never stops this one, and its own odd
 });
 
 test("only an application's registered account installs a release service", async () => {
-  const source = await readFile(EXEC_HELPER, "utf8");
+  const source = await execHelperSource();
   const operation = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
     source.indexOf("function inspectDeploymentServiceUnit("));
   assert.match(operation, /const user = registeredApplicationUser\(owner, payload\.applicationAccount\);/u);

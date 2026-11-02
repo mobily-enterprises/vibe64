@@ -16,7 +16,9 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
-- `packages/vibe64-execution/src/host/execHelper.js`
+- `packages/vibe64-execution/src/host/managedWorkflows.js`
+- `packages/vibe64-execution/src/host/executionReceipts.js`
+- `packages/vibe64-execution/src/host/executionState.js`
 - `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
 - `packages/vibe64-execution/src/server/runtime/runtimePacks.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`

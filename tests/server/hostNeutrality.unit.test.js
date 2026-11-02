@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -17,11 +17,13 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   // Database and Ruby packages' own install and data folders.
   "/usr/lib/postgresql", "/var/lib/postgres", "/var/lib/pgsql", "/var/lib/mysql", "/opt/mariadb", "/var/lib/gems"
 ]);
-// Known blocker: the privileged helper, its two test files and its release
-// packaging still describe the host they run on. They leave this repository
-// together in the helper extraction; until then they are the only exceptions.
+// Known blocker: the privileged helper (every module of its folder), its two
+// test files and its release packaging still describe the host they run on.
+// They leave this repository together in the helper extraction; until then they
+// are the only exceptions.
+const HELPER_FOLDER = "packages/vibe64-execution/src/host";
 const ALLOWED_FILES = new Set([
-  "packages/vibe64-execution/src/host/execHelper.js",
+  ...readdirSync(path.join(REPO_ROOT, HELPER_FOLDER)).map((name) => `${HELPER_FOLDER}/${name}`),
   "tests/server/executionBoundarySecurity.unit.test.js",
   "tests/server/vibe64ManagedWorkflow.unit.test.js",
   "tooling/release/runtime-package.mjs"

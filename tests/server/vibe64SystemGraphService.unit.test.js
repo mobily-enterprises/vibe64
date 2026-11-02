@@ -12,7 +12,7 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
-import { INPUT_LIMIT_BYTES } from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { INPUT_LIMIT_BYTES } from "../../packages/vibe64-execution/src/host/helperPayload.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import {
   readGenesisCity
