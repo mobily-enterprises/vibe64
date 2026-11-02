@@ -321,21 +321,13 @@ function sourceEditorExplanationFollowupPrompt(explanation = {}, message = "") {
 }
 
 export {
-  boundedSourceEditorPromptText,
   normalizeSourceEditorLineRange,
   positiveInteger,
   SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS,
   SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS,
-  SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES,
-  SOURCE_EDITOR_EXPLANATION_CONTEXT_MAX_CHARS,
   SOURCE_EDITOR_EXPLANATION_MAX_LINES,
   SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION,
   SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS,
-  SOURCE_EDITOR_FOLLOWUP_CONTEXT_MAX_CHARS,
-  SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH,
-  SOURCE_EXPLANATION_GENERAL_SHAPE,
-  SOURCE_EXPLANATION_PRESENTATIONS,
-  sourceEditorColumnIndex,
   sourceEditorContextWindow,
   sourceEditorExplanationDisplayPrompt,
   sourceEditorExplanationFollowupMessage,

@@ -347,7 +347,7 @@ async function runIntegrationSetupCommand({
   session,
   selection
 }) {
-  if (typeof runCommand !== "function" || !command || !path.isAbsolute(sourceRoot || "")) {
+  if (!command || !path.isAbsolute(sourceRoot || "")) {
     invalid("Application integration setup is not configured.");
   }
   const request = buildIntegrationSetupRequest(selection);

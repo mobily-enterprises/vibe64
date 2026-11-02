@@ -205,18 +205,8 @@ function sourceEditorFileMatches(index, input) {
 }
 
 export {
-  fileMatchScore,
-  filePathMatchesQuery,
-  filePathTokenMatchScore,
-  fuzzyCharacterIndexes,
   normalizeSourceEditorQuery,
-  orderedTokenIndexes,
-  sortFileMatches,
-  SOURCE_EDITOR_FILE_MATCH_LIMIT,
-  SOURCE_EDITOR_QUERY_MAX_LENGTH,
   sourceEditorFileMatches,
-  sourceEditorFileQueryTokens,
   sourceEditorResultLimit,
-  sourceEditorResultOffset,
-  textTokenMatchScore
+  sourceEditorResultOffset
 };

@@ -199,7 +199,6 @@ async function publishStaged(context, staging, staged, target, options = {}) {
 }
 
 export {
-  REPO_STAGING_FOLDER,
   STAGING_FOLDER,
   publishStaged,
   removeStaleStaging,

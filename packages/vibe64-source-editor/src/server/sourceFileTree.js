@@ -160,8 +160,6 @@ async function sourceEditorFileRevealTree(context = {}, relativePathValue = "") 
 
 export {
   directoryNode,
-  SOURCE_EDITOR_TREE_PAGE_LIMIT,
   sourceEditorDirectoryPage,
-  sourceEditorFileNode,
   sourceEditorFileRevealTree
 };

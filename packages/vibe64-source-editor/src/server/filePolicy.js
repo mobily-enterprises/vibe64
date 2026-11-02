@@ -93,9 +93,11 @@ function sourceEditorFilePolicy() {
   };
 }
 
+const __testables = Object.freeze({ pathMatchesPolicyPattern });
+
 export {
   normalizePolicyPath,
-  pathMatchesPolicyPattern,
   sourceEditorFilePolicy,
-  sourceEditorPathExcluded
+  sourceEditorPathExcluded,
+  __testables
 };

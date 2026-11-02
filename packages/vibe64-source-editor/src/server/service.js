@@ -3,7 +3,7 @@ import path from "node:path";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { pathMatchesPolicyPattern, sourceEditorFilePolicy, sourceEditorPathExcluded } from "./filePolicy.js";
+import { sourceEditorFilePolicy, sourceEditorPathExcluded } from "./filePolicy.js";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { createSourceEditorFileObserver } from "./sourceChangeObserver.js";
@@ -12,7 +12,6 @@ import { createSourceEditorFileIndex } from "./fileIndex.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "./searchIndex.js";
 import { readSourceInterpretations } from "./sourceInterpretations.js";
 import {
-  SOURCE_EDITOR_CONFLICT_CODE,
   SOURCE_EDITOR_SEARCH_RESULT_LIMIT,
   createSourceEditorFile,
   downloadSessionFile,
@@ -30,7 +29,6 @@ import {
   sourceEditorFileMatches,
   sourceEditorFilePaths,
   sourceEditorFileRevealTree,
-  sourceEditorLanguageForPath,
   sourceEditorPathStats,
   sourceEditorResultLimit,
   sourceEditorResultOffset,
@@ -472,11 +470,7 @@ function createService({
 }
 
 export {
-  SOURCE_EDITOR_CONFLICT_CODE,
   runApplicationIntegrationSetup,
   readApplicationIntegrations,
-  createService,
-  normalizeSourceEditorRelativePath,
-  pathMatchesPolicyPattern,
-  sourceEditorLanguageForPath
+  createService
 };

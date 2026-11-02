@@ -6,11 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import {
-  createService,
-  pathMatchesPolicyPattern,
-  sourceEditorLanguageForPath
-} from "../../packages/vibe64-source-editor/src/server/service.js";
+import { __testables } from "../../packages/vibe64-source-editor/src/server/filePolicy.js";
+import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
+import { sourceEditorLanguageForPath } from "../../packages/vibe64-source-editor/src/server/sourceEditorLanguage.js";
 import { readSourceInterpretations } from "../../packages/vibe64-source-editor/src/server/sourceInterpretations.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -20,6 +18,8 @@ import {
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
+
+const { pathMatchesPolicyPattern } = __testables;
 
 const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
   encoding: "utf8"

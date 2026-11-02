@@ -685,22 +685,15 @@ async function readSourceEditorExplanation(context = {}, explanationId = "", opt
 }
 
 export {
-  cleanupRejectedSourceEditorExplanationThread,
   createSourceEditorExplanationStreamState,
   emitSourceEditorExplanationEvent,
   readSourceEditorExplanation,
   runTrackedSourceEditorAgentTurn,
-  SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS,
-  SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
-  sourceEditorAgentStreamHandlers,
   sourceEditorClientExplanationId,
   sourceEditorClientMessageId,
   sourceEditorExplanationMessage,
   sourceEditorExplanationMessagesForAppend,
   sourceEditorExplanationWithMessage,
-  sourceEditorFailureWithRejectedThread,
-  sourceEditorFollowupThreadError,
-  sourceEditorStructuredAnswer,
   streamSourceEditorAgentTurn,
   withSourceEditorExplanationFreshness
 };
