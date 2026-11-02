@@ -142,7 +142,7 @@ function registerTerminalWebSocketRoute(
                   return;
                 }
                 if (message?.type === "resize") {
-                  const response = await resize?.(service, {
+                  const response = await resize(service, {
                     cols: message.cols,
                     jobId,
                     request,

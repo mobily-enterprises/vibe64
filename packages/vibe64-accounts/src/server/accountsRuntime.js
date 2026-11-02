@@ -128,7 +128,7 @@ function createAccountsRuntime({
   const readCodexRuntimeContext = requireExplicitRoots ? codexRuntimeContextRequiringSystemRoot : codexRuntimeContext;
 
   function currentTargetRoot() {
-    const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(project)).trim();
+    const selectedTargetRoot = String(targetRoot || (project ? projectServiceNamespaceRoot(project) : "")).trim();
     return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
   }
 

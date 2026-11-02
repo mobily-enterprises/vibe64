@@ -23,20 +23,19 @@ async function readProjectRecordMetadata(projectRecordPath = "") {
   }
 }
 
-async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) {
+/**
+ * Replaces a project record's metadata with what update returns for the current metadata, one update per record at a time.
+ * @param {string} projectRecordPath
+ * @param {(current: object) => object | Promise<object>} update
+ */
+async function updateProjectRecordMetadata(projectRecordPath, update) {
   const filePath = toText(projectRecordPath);
   if (!filePath) {
     throw new Error("Updating project metadata requires a project record path.");
   }
   const metadataPath = path.resolve(filePath);
   return serializeByKey(projectRecordMetadataUpdates, metadataPath, async () => {
-    const current = await readProjectRecordMetadata(metadataPath);
-    const next = typeof update === "function"
-      ? await update(current)
-      : {
-          ...current,
-          ...(isPlainObject(update) ? update : {})
-        };
+    const next = await update(await readProjectRecordMetadata(metadataPath));
     if (!isPlainObject(next)) {
       throw new TypeError("Project metadata updates must produce an object.");
     }
