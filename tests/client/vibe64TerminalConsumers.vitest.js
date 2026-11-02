@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const codexTerminalConsumerPath = path.resolve("src/components/studio/Vibe64CodexSession.vue");
+const codexTerminalPresentationPath = path.resolve("src/composables/useCodexTerminalPresentation.js");
 const interactiveTerminalPath = path.resolve(
   "src/components/studio/Vibe64InteractiveTerminal.vue"
 );
@@ -49,7 +50,7 @@ describe("Vibe64 terminal consumers", () => {
     expect(codex).toContain('@clean-exit="closeTerminal"');
     expect(codex).not.toContain(':loading="terminalStarting"');
     expect(codex).toContain(':aria-busy="terminalStarting ? \'true\' : undefined"');
-    expect(codex).toContain('return "Starting Codex…";');
+    expect(readFileSync(codexTerminalPresentationPath, "utf8")).toContain('return "Starting Codex…";');
     expect(codex).not.toContain(":collapsible");
     expect(interactive).toContain(':collapsible="false"');
     expect(interactive).toContain('emit("clean-exit"');
