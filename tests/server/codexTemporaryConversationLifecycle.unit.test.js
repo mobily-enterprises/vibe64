@@ -1232,7 +1232,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
     });
 
     assert.equal(generated, cancelled);
-    assert.equal(merged.code, "vibe64_session_renewal_source_invalid");
+    assert.equal(merged.code, "vibe64_session_renewal_source_multiline");
     assert.equal(seeded, cancelled);
     assert.equal(normalReads, 3, "renewal closure retains its supplied hidden session context");
     assert.equal(renewalReads, 1);
@@ -3365,7 +3365,7 @@ test("session renewal provider primitives reject every helper execution profile 
     });
 
     assert.equal(generation.code, "vibe64_session_renewal_interactive_provider_required");
-    assert.equal(seed.code, "vibe64_session_renewal_interactive_provider_required");
+    assert.equal(seed.code, "vibe64_session_renewal_seed_interactive_required");
     assert.equal(captures.threadStarts.length, 0);
     assert.equal(captures.turns.length, 0);
   });

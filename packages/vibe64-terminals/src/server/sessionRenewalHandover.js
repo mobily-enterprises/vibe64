@@ -49,9 +49,14 @@ function normalizeSessionRenewalHandoverDraft(value = "") {
   return { characterCount, handover, problem };
 }
 
+/**
+ * A renewal refusal. `options.messageCode` and `options.messageParams` name the sentence of a refusal that keeps
+ * a code the renewal workflow branches on.
+ */
 function sessionRenewalProtocolError(code, message, details = {}, options = {}) {
   const {
-    retryable = false
+    retryable = false,
+    ...messageFields
   } = options;
   const error = new Error(message);
   error.code = code;
@@ -60,6 +65,7 @@ function sessionRenewalProtocolError(code, message, details = {}, options = {}) 
     retryable
   };
   error.retryable = retryable;
+  Object.assign(error, messageFields);
   return error;
 }
 
@@ -137,7 +143,7 @@ function defineSessionRenewalSourceEnvelope(value = {}) {
   });
   if (!/^[0-9a-f]{40,64}$/iu.test(commit)) {
     throw sessionRenewalProtocolError(
-      "vibe64_session_renewal_source_invalid",
+      "vibe64_session_renewal_source_commit_invalid",
       "Canonical source commit must be a complete Git object id.",
       { commit }
     );
@@ -155,7 +161,7 @@ function defineSessionRenewalSourceEnvelope(value = {}) {
   });
   if ([authority, ref, repository].some((field) => /[\t\r\n]/u.test(field))) {
     throw sessionRenewalProtocolError(
-      "vibe64_session_renewal_source_invalid",
+      "vibe64_session_renewal_source_multiline",
       "Canonical source envelope fields must each be a single line."
     );
   }
@@ -217,6 +223,10 @@ function defineSessionRenewalHandoverText(value = "", options = {}) {
       {
         actualCharacters: characterCount,
         maxCharacters: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS
+      },
+      {
+        messageCode: "vibe64_session_renewal_handover_length_invalid",
+        messageParams: { maxCharacters: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS }
       }
     );
   }
@@ -236,7 +246,8 @@ function defineSessionRenewalHandoverText(value = "", options = {}) {
       throw sessionRenewalProtocolError(
         "vibe64_session_renewal_handover_invalid",
         `Session handover must contain the required ${heading} section exactly once and in order.`,
-        { heading, occurrenceCount }
+        { heading, occurrenceCount },
+        { messageCode: "vibe64_session_renewal_handover_section_missing", messageParams: { heading } }
       );
     }
     headingIndexes.push(index);
@@ -253,7 +264,8 @@ function defineSessionRenewalHandoverText(value = "", options = {}) {
       throw sessionRenewalProtocolError(
         "vibe64_session_renewal_handover_invalid",
         `Session handover section ${heading} must contain a concrete answer.`,
-        { heading }
+        { heading },
+        { messageCode: "vibe64_session_renewal_handover_section_empty", messageParams: { heading } }
       );
     }
   }
@@ -388,7 +400,7 @@ function defineSessionRenewalApprovedHandover({
   const expectedHash = defineSessionRenewalHandoverHash(handoverHash);
   if (expectedHash !== actualHash) {
     throw sessionRenewalProtocolError(
-      "vibe64_session_renewal_handover_hash_invalid",
+      "vibe64_session_renewal_handover_hash_mismatch",
       "Approved handover content no longer matches its frozen review hash.",
       {
         actualHash,
@@ -537,7 +549,7 @@ function prepareSessionRenewalHandoverRequest(input = {}) {
 function prepareSessionRenewalSeedRequest(input = {}) {
   if (input && Object.prototype.hasOwnProperty.call(input, "executionProfile")) {
     throw sessionRenewalProtocolError(
-      "vibe64_session_renewal_interactive_provider_required",
+      "vibe64_session_renewal_seed_interactive_required",
       "A renewed session must start with normal interactive assistant settings."
     );
   }

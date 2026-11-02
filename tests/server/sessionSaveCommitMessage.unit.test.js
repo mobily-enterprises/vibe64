@@ -167,7 +167,7 @@ test("Save naming cleans an empty failed scope and retains cleanup failure ahead
 test("invalid or unverified naming responses are rejected after confirmed cleanup", async (t) => {
   const f = await namingFixture(t);
   assert.throws(() => normalizeSessionSaveCommitMessage("Save Vibe64 work"), { code: "vibe64_session_save_message_generic" });
-  assert.throws(() => normalizeSessionSaveCommitMessage("A title\nwith a body"), { code: "vibe64_session_save_message_invalid" });
+  assert.throws(() => normalizeSessionSaveCommitMessage("A title\nwith a body"), { code: "vibe64_session_save_message_subject_invalid" });
   for (const [result, code] of [
     [{ ok: false, code: "provider_failed", error: "Provider failed." }, "provider_failed"],
     [{ ok: true, text: '{"subject":"Improve search"}' }, "vibe64_session_save_message_execution_profile_missing"],

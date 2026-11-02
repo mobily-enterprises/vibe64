@@ -83,7 +83,7 @@ test("a session without a recorded source commit never reads its clone's local b
     sessionId: "session-1"
   };
   assert.throws(() => repositoryReadContext(localProject("/project"), session),
-    (error) => error.code === "vibe64_repository_history_context_incomplete");
+    (error) => error.code === "vibe64_repository_history_session_version_missing");
   assert.equal(repositoryReadContext(localProject("/project"), {
     ...session,
     metadata: { ...session.metadata, base_commit: "a".repeat(40) }

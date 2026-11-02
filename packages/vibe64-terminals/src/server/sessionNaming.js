@@ -80,7 +80,7 @@ function createSessionNaming({
       // Learning v2 retired the lesson conversation teacher. A conversation
       // from the earlier lesson mode stays readable but is never renamed.
       if (runtime.learningScope) {
-        throw namingError("Lesson conversations from the earlier Learning mode are read-only and are not renamed.");
+        throw namingError("Lesson conversations from the earlier Learning mode are read-only and are not renamed.", "vibe64_session_name_lesson_read_only");
       }
       const result = await runBackgroundTaskHelperTurn({
         agent,

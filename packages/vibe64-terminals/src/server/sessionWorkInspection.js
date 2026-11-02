@@ -256,7 +256,7 @@ async function inspectSessionWorkDirect({
     const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);
     publishedCommit = published.head;
     if (!publishedCommit && knownSubmittedCommit) {
-      if (!isGitObjectId(knownSubmittedCommit)) throw saveError("The saved contribution evidence is invalid.", "vibe64_connected_integration_unknown");
+      if (!isGitObjectId(knownSubmittedCommit)) throw saveError("The saved contribution evidence is invalid.", "vibe64_connected_integration_evidence_invalid");
       publishedCommit = knownSubmittedCommit;
     }
     if (published.discarded || (publishedCommit && published.remoteAbsent)) {
@@ -277,7 +277,7 @@ async function inspectSessionWorkDirect({
     if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) {
       throw saveError(
         "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
-        "vibe64_contribution_branch_missing"
+        "vibe64_contribution_revision_unretained"
       );
     }
     if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {

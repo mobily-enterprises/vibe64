@@ -76,13 +76,14 @@ async function recoverSessionWorkSave({
     throw saveError(
       "The interrupted Save stopped before a commit was durably prepared for pushing. Retry Save.",
       "vibe64_session_save_interrupted_retryable",
-      { retryable: true }
+      { retryable: true },
+      { messageCode: "vibe64_session_save_interrupted_before_prepare" }
     );
   }
   if (await commitTree(runCommand, context, checkpointCommit, { commandOptions, project }) !== checkpointTree) {
     throw saveError(
       "The interrupted Save has inconsistent checkpoint evidence.",
-      "vibe64_session_save_recovery_evidence_invalid"
+      "vibe64_session_save_recovery_checkpoint_invalid"
     );
   }
   return runProjectSourceExclusive(async () => {
@@ -93,7 +94,9 @@ async function recoverSessionWorkSave({
       if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB) throw error;
       throw saveError(
         `Save publication is still unknown. Restore repository access and inspect work again. ${normalizeText(error.message)}`,
-        "vibe64_session_save_publication_unknown"
+        "vibe64_session_save_publication_unknown",
+        {},
+        { messageCode: "vibe64_session_save_publication_still_unknown", messageParams: { reason: normalizeText(error.message) } }
       );
     }
     let authorityCommit = canonical.commit;
@@ -101,14 +104,15 @@ async function recoverSessionWorkSave({
       throw saveError(
         "The interrupted Save did not push your changes. Retry Save when ready.",
         "vibe64_session_save_interrupted_retryable",
-        { retryable: true }
+        { retryable: true },
+        { messageCode: "vibe64_session_save_interrupted_unpushed" }
       );
     }
     if (context.contribution) authorityCommit = canonical.contribution.publishedCommit;
     if (authorityCommit !== proposedCommit) {
       throw saveError(
         "Canonical history advanced while the interrupted Save was being recovered.",
-        "vibe64_session_save_authority_advanced",
+        "vibe64_session_save_recovery_history_advanced",
         { authorityCommit, expectedCanonicalCommit, proposedCommit }
       );
     }

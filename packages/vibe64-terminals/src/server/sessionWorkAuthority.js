@@ -59,7 +59,7 @@ async function readRemoteCanonical(runCommand, context, operationId, options) {
       if (prepared.split("\n").some(ref => ref.endsWith("/prepared"))) {
         throw saveError(
           "This contribution branch is missing after a push attempt. Inspect its saved work and integration history before resubmitting it.",
-          "vibe64_contribution_branch_missing"
+          "vibe64_contribution_branch_missing_after_push"
         );
       }
       if (context.lastCanonicalCommit === context.contribution.baseCommit &&
@@ -88,7 +88,11 @@ async function readRemoteCanonical(runCommand, context, operationId, options) {
     ], options);
     let commit = await gitOutput(runCommand, context, ["rev-parse", "--verify", operationRef], options);
     if (integrationRef) {
-      if (!contribution.missingPublished && commit !== contribution.publishedCommit) throw saveError("The contribution branch changed during its authority check. Retry Update or Save.", "vibe64_session_save_update_required");
+      if (!contribution.missingPublished && commit !== contribution.publishedCommit) {
+        throw saveError("The contribution branch changed during its authority check. Retry Update or Save.", "vibe64_session_save_update_required", {}, {
+          messageCode: "vibe64_session_save_contribution_changed_during_check"
+        });
+      }
       const accepted = await gitOutput(runCommand, context, ["rev-parse", "--verify", integrationRef], options);
       // Once the exact published head is integrated, ordinary explicit Update
       // consumes the accepted target. Save still publishes only the incoming ref.
@@ -243,7 +247,7 @@ async function readCanonical(runCommand, context, operationId, options) {
     if (importedCommit !== authorityCommit) {
       throw saveError(
         "The local project baseline changed while Vibe64 was reading it.",
-        "vibe64_session_save_authority_advanced"
+        "vibe64_session_save_authority_changed_during_read"
       );
     }
     return rememberCanonicalCommit(runCommand, context, importedCommit, options)
@@ -258,7 +262,7 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
   if (await gitOutput(runCommand, context, ["rev-parse", "--is-shallow-repository"], options) !== "false") {
     throw saveError(
       "Connected integration requires complete Git history. Prepare a full checkout before saving.",
-      "vibe64_connected_integration_unknown"
+      "vibe64_connected_integration_history_incomplete"
     );
   }
   for (const { contribution, submittedCommit } of context.connectedSubmissions) {
@@ -275,11 +279,11 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
       for (const line of observed.split("\n").filter(Boolean)) {
         const [head, ref] = line.split(/\s+/u);
         if (![target, active, discarded].includes(ref) || heads.has(ref) || !isGitObjectId(head)) {
-          throw saveError("The receiving repository returned invalid ref evidence.");
+          throw saveError("The receiving repository returned invalid ref evidence.", "vibe64_session_save_receiving_refs_invalid");
         }
         heads.set(ref, head);
       }
-      if (!heads.has(target)) throw saveError("The receiving integration branch is unavailable.");
+      if (!heads.has(target)) throw saveError("The receiving integration branch is unavailable.", "vibe64_session_save_receiving_target_missing");
       if (heads.has(active) && heads.has(discarded)) {
         throw saveError(
           `${repository} has an interrupted discard. Resolve it in Incoming changes before saving this project.`,
@@ -293,11 +297,11 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
       await git(runCommand, context, ["fetch", "--no-tags", "--no-write-fetch-head", remote,
         ...refs.map(ref => `+${ref.remote}:${ref.local}`)], options);
       if (await gitOutput(runCommand, context, ["rev-parse", "--is-shallow-repository"], options) !== "false") {
-        throw saveError("The receiving history is incomplete.");
+        throw saveError("The receiving history is incomplete.", "vibe64_session_save_receiving_history_incomplete");
       }
       for (const ref of refs) {
         if (await gitOutput(runCommand, context, ["rev-parse", "--verify", `${ref.local}^{commit}`], options) !== ref.head) {
-          throw saveError("The receiving branches changed during the integration check. Retry Save.");
+          throw saveError("The receiving branches changed during the integration check. Retry Save.", "vibe64_session_save_receiving_refs_changed");
         }
       }
       // The required revision is retained independently of the branch's current
@@ -308,7 +312,7 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
         ["rev-list", "--count", `${heads.get(target)}..${submittedCommit}`],
         options
       );
-      if (!/^\d+$/u.test(remaining)) throw saveError("The required revision's ancestry is unknown.");
+      if (!/^\d+$/u.test(remaining)) throw saveError("The required revision's ancestry is unknown.", "vibe64_session_save_revision_ancestry_unknown");
       if (remaining !== "0") {
         const wasDiscarded = heads.has(discarded);
         throw saveError(
@@ -343,7 +347,7 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
 }
 
 function connectedWorkSnapshots(value = []) {
-  if (!Array.isArray(value)) throw saveError("Connected source snapshots are unavailable.", "vibe64_connected_source_unavailable");
+  if (!Array.isArray(value)) throw saveError("Connected source snapshots are unavailable.", "vibe64_connected_source_snapshots_invalid");
   return value.map(snapshot => {
     const contribution = sessionConnectedContribution({
       metadata: {
@@ -409,7 +413,7 @@ async function assertConnectedWorkSnapshotsUnchanged(runCommand, snapshots, opti
       if (error.code === "vibe64_connected_save_required") throw error;
       throw saveError(
         `Connected work in ${contribution.repository} could not be rechecked. Restore source access and retry Save.`,
-        "vibe64_connected_source_unavailable",
+        "vibe64_connected_source_recheck_failed",
         { repository: contribution.repository, sessionId: contribution.id }
       );
     }
