@@ -41,10 +41,7 @@ function parseApprovals(raw = "") {
   const value = JSON.parse(raw);
   if (value?.schemaVersion !== 1 || !Array.isArray(value.entries)) {
     // An unreadable queue is a server fault, so its message stays hidden from HTTP callers.
-    throw Object.assign(new Error("This chat's approval queue is unreadable."), {
-      code: "vibe64_main_chat_approvals_invalid",
-      statusCode: 500
-    });
+    throw new Error("This chat's approval queue is unreadable.");
   }
   return value;
 }

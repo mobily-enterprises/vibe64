@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
+import { sourceEditorError } from "./sourceEditorPaths.js";
+
 const INTEGRATION_SETUP_PROTOCOL = "vibe64.integration-setup.command.v1";
 const ADS_OPERATIONS = [
   "ads-discover",
@@ -28,11 +30,12 @@ const INTEGRATION_SETUP_OPERATIONS = [
 const STATUSES = ["unconfigured", "disconnected", "connected", "pending", "reconnect-required", "cancelled"];
 const MAX_BYTES = 32768;
 
-function invalid(message = "The application returned an invalid integration setup result.", statusCode = 502) {
-  const error = new Error(message);
-  error.code = "vibe64_integration_setup_invalid";
-  error.statusCode = statusCode;
-  throw error;
+/**
+ * The application's setup command answered outside the protocol: a bad
+ * gateway the person fixes in their application.
+ */
+function invalid() {
+  throw sourceEditorError("The application returned an invalid integration setup result.", "vibe64_integration_setup_invalid", {}, 502);
 }
 
 function parseIntegrationSetupResponse(stdout, request) {
@@ -165,7 +168,7 @@ function parseAdsResponse(result, request) {
 }
 
 function validateAdsSelection(operation, values) {
-  if (!values || Array.isArray(values) || typeof values !== "object") invalid("Supply the advertising operation inputs.", 422);
+  if (!values || Array.isArray(values) || typeof values !== "object") throw sourceEditorError("Supply the advertising operation inputs.", "vibe64_integration_setup_ads_inputs_required", {}, 422);
   const fields = {
     "ads-discover": ["customerId"],
     "ads-targets": ["customerId", "name"],
@@ -177,7 +180,7 @@ function validateAdsSelection(operation, values) {
     "ads-pause": ["campaignId"],
     "ads-report": []
   }[operation];
-  if (Object.keys(values).some(key => !fields.includes(key))) invalid("Unexpected advertising inputs.", 422);
+  if (Object.keys(values).some(key => !fields.includes(key))) throw sourceEditorError("Unexpected advertising inputs.", "vibe64_integration_setup_ads_inputs_unexpected", {}, 422);
   for (const field of fields) {
     const value = values[field];
     if (operation === "ads-discover" && value === undefined) continue;
@@ -279,37 +282,41 @@ function buildIntegrationSetupRequest(selection) {
   } = selection || {};
   if (!INTEGRATION_SETUP_OPERATIONS.includes(operation) || typeof integrationId !== "string" ||
       !/^[a-z][a-z0-9-]*$/u.test(integrationId) || integrationId.length > 200 ||
-      ["constructor", "prototype"].includes(integrationId)) invalid("Choose a valid integration setup operation.", 422);
+      ["constructor", "prototype"].includes(integrationId)) {
+    throw sourceEditorError("Choose a valid integration setup operation.", "vibe64_integration_setup_operation_invalid", {}, 422);
+  }
   if (operation === "cancel" && (typeof attemptId !== "string" || !/^[A-Za-z0-9_-]{1,256}$/u.test(attemptId))) {
-    invalid("Choose the pending connection attempt to cancel.", 422);
+    throw sourceEditorError("Choose the pending connection attempt to cancel.", "vibe64_integration_setup_attempt_required", {}, 422);
   }
   if (verificationInput !== undefined && (operation !== "connect" || !verificationInput ||
-      typeof verificationInput !== "object" || Array.isArray(verificationInput))) invalid("Check the provider verification inputs.", 422);
+      typeof verificationInput !== "object" || Array.isArray(verificationInput))) {
+    throw sourceEditorError("Check the provider verification inputs.", "vibe64_integration_setup_verification_invalid", {}, 422);
+  }
   const advertising = ADS_OPERATIONS.includes(operation);
   const adsInput = advertising ? validateAdsSelection(operation, ads) : undefined;
-  if (!advertising && ads !== undefined) invalid("Advertising inputs require an advertising operation.", 422);
+  if (!advertising && ads !== undefined) throw sourceEditorError("Advertising inputs require an advertising operation.", "vibe64_integration_setup_ads_operation_required", {}, 422);
   if (advertising && (attemptId !== undefined || selection.setupRequest !== undefined)) {
-    invalid("Advertising commands cannot resolve a connection request.", 422);
+    throw sourceEditorError("Advertising commands cannot resolve a connection request.", "vibe64_integration_setup_ads_request_forbidden", {}, 422);
   }
   const payment = operation.startsWith("payments-");
   if (payment && (!["sandbox", "live"].includes(paymentEnvironment) || attemptId !== undefined || selection.setupRequest !== undefined ||
       (["payments-publish", "payments-recover"].includes(operation) ? !/^[a-f0-9]{64}$/u.test(reviewId || "") : reviewId !== undefined))) {
-    invalid("Select the payment environment and review catalogue changes before applying them.", 422);
+    throw sourceEditorError("Select the payment environment and review catalogue changes before applying them.", "vibe64_integration_setup_payment_review_required", {}, 422);
   }
   if (operation === "payments-recover"
     ? typeof providerId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(providerId)
     : providerId !== undefined) {
-    invalid("Recovery requires the exact provider object ID and a current review.", 422);
+    throw sourceEditorError("Recovery requires the exact provider object ID and a current review.", "vibe64_integration_setup_recovery_invalid", {}, 422);
   }
-  if (!payment && (paymentEnvironment !== undefined || reviewId !== undefined)) invalid("Payment inputs require a payment operation.", 422);
+  if (!payment && (paymentEnvironment !== undefined || reviewId !== undefined)) throw sourceEditorError("Payment inputs require a payment operation.", "vibe64_integration_setup_payment_operation_required", {}, 422);
   if (operation === "payments-history") {
     if (typeof subjectId !== "string" || !subjectId.trim() || subjectId.length > 200 || /[\p{Cc}\p{Cf}]/u.test(subjectId) ||
         !["subscriptions", "transactions"].includes(collection) ||
         (after !== undefined && after !== null && (typeof after !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(after)))) {
-      invalid("Select an application billing account, history collection and valid page cursor.", 422);
+      throw sourceEditorError("Select an application billing account, history collection and valid page cursor.", "vibe64_integration_setup_history_invalid", {}, 422);
     }
   } else if (subjectId !== undefined || collection !== undefined || after !== undefined) {
-    invalid("Billing history inputs require a history operation.", 422);
+    throw sourceEditorError("Billing history inputs require a history operation.", "vibe64_integration_setup_history_operation_required", {}, 422);
   }
   const request = {
     protocol: INTEGRATION_SETUP_PROTOCOL,
@@ -327,7 +334,7 @@ function buildIntegrationSetupRequest(selection) {
     ...(verificationInput === undefined ? {} : { verificationInput })
   };
   const input = `${JSON.stringify(request)}\n`;
-  if (Buffer.byteLength(input) > MAX_BYTES) invalid("Integration setup inputs are too large.", 422);
+  if (Buffer.byteLength(input) > MAX_BYTES) throw sourceEditorError("Integration setup inputs are too large.", "vibe64_integration_setup_inputs_too_large", {}, 422);
   return request;
 }
 
@@ -348,7 +355,7 @@ async function runIntegrationSetupCommand({
   selection
 }) {
   if (!command || !path.isAbsolute(sourceRoot || "")) {
-    invalid("Application integration setup is not configured.");
+    throw sourceEditorError("Application integration setup is not configured.", "vibe64_integration_setup_unconfigured", {}, 502);
   }
   const request = buildIntegrationSetupRequest(selection);
   const input = `${JSON.stringify(request)}\n`;
@@ -380,10 +387,10 @@ async function runIntegrationSetupCommand({
     result = { ok: false };
   }
   if (result?.ok !== true) {
-    const error = new Error(result?.timedOut ? "Application integration setup timed out." : "Application integration setup failed.");
-    error.code = result?.timedOut ? "vibe64_integration_setup_timed_out" : "vibe64_integration_setup_failed";
-    error.statusCode = 502;
-    throw error;
+    if (result?.timedOut) {
+      throw sourceEditorError("Application integration setup timed out.", "vibe64_integration_setup_timed_out", {}, 502);
+    }
+    throw sourceEditorError("Application integration setup failed.", "vibe64_integration_setup_failed", {}, 502);
   }
   return parseIntegrationSetupResponse(result.stdout, request);
 }

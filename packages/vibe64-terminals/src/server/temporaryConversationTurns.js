@@ -316,7 +316,10 @@ function createTemporaryConversationTurns({
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
-        throw new AppError(409, "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed.", { code: "vibe64_codex_history_unsupported" });
+        throw new AppError(409, "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed.", {
+          code: "vibe64_codex_history_unsupported",
+          messageCode: "vibe64_codex_temporary_history_unsupported"
+        });
       }
       if (record.assistantSelection.engineId !== selection.engineId) {
         await conversationRuntime.preparePersistentConversationChangeover({

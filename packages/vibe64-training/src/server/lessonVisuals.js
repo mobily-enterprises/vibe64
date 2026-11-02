@@ -1,4 +1,5 @@
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
+import { conflictFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
@@ -24,9 +25,8 @@ function createTrainingLessonVisuals({ learners, content }) {
   async function readLessonVisual({ attemptId, visualId }, context) {
     const actor = authenticatedVibe64User(context);
     if (!actor) {
-      throw Object.assign(new Error("Log in to Vibe64 before reading your lesson diagram."), {
-        code: "vibe64_auth_required",
-        statusCode: 401
+      throw conflictFailure("Log in to Vibe64 before reading your lesson diagram.", "vibe64_auth_required", 401, {
+        messageCode: "VIBE64_TRAINING_VISUAL_AUTH_REQUIRED"
       });
     }
     const state = await learners.readState({ actor, attemptId, includeCompletion: true });
@@ -34,10 +34,12 @@ function createTrainingLessonVisuals({ learners, content }) {
     // attempts may read its pinned diagram.
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) {
-      throw Object.assign(new Error("Read one of this learner's exact saved attempts before requesting its diagram."), {
-        code: "VIBE64_TRAINING_ATTEMPT_MISSING",
-        statusCode: 404
-      });
+      throw conflictFailure(
+        "Read one of this learner's exact saved attempts before requesting its diagram.",
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
+        404,
+        { messageCode: "VIBE64_TRAINING_VISUAL_ATTEMPT_MISSING" }
+      );
     }
     const { pin } = attempt;
     const resource = await content.readVisual({ ...pinnedLessonKey(pin), visualId });
@@ -57,14 +59,10 @@ function createTrainingLessonVisuals({ learners, content }) {
       assets: resource.assets.map(encode)
     };
     if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESOURCE_BYTES) {
-      throw Object.assign(
-        new Error(
-          "The verified lesson diagram exceeds its transport limit. Ask the owner to inspect the pinned content; no files were omitted."
-        ),
-        {
-          code: "VIBE64_TRAINING_VISUAL_RESOURCE_TOO_LARGE",
-          statusCode: 413
-        }
+      throw conflictFailure(
+        "The verified lesson diagram exceeds its transport limit. Ask the owner to inspect the pinned content; no files were omitted.",
+        "VIBE64_TRAINING_VISUAL_RESOURCE_TOO_LARGE",
+        413
       );
     }
     return result;

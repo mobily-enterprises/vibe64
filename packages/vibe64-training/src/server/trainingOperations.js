@@ -13,6 +13,7 @@ import {
   toTrainingOperationError
 } from "./trainingResults.js";
 import { text } from "./actionSchemas.js";
+import { conflictFailure } from "./errors.js";
 
 /** @typedef {import("./types.js").InstalledTrainingCatalogue} InstalledTrainingCatalogue */
 /** @typedef {import("./types.js").TrainingContent} TrainingContent */
@@ -306,12 +307,10 @@ function createTrainingOperations({
   async function restartLessonForLearner(input, actor, context) {
     // The learner's own Restart button (the api channel) is its confirmation.
     if (context.channel !== "api" && input.confirmed !== true) {
-      throw Object.assign(new Error(
-        "Ask the person to confirm restarting this exact lesson, then repeat with confirmed: true. Nothing was changed."
-      ), {
-        code: "VIBE64_TRAINING_LESSON_UNCONFIRMED",
-        statusCode: 409
-      });
+      throw conflictFailure(
+        "Ask the person to confirm restarting this exact lesson, then repeat with confirmed: true. Nothing was changed.",
+        "VIBE64_TRAINING_LESSON_UNCONFIRMED"
+      );
     }
     return announced(actor, async () => preparedResult(await exercises.restartLesson({
       actor,

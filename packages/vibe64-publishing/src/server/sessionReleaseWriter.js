@@ -34,7 +34,7 @@ function createSessionReleaseWriter({
     const store = await project.createSessionStore();
     const session = await store.readSession(id);
     const root = session ? sessionSourcePath(session) : "";
-    if (!root) throw writerError("That session has no source to write the release change into.", "vibe64_publishing_session_required");
+    if (!root) throw writerError("That session has no source to write the release change into.", "vibe64_publishing_session_source_required");
     return root;
   }
 

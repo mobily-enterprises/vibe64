@@ -93,7 +93,11 @@ function createColleagueRecords({
   const storage = createConversationStorage({
     async readRecord(key) {
       const state = serviceState.conversationOwners.get(key);
-      if (!state) throw failure("This Colleague history is unavailable.", "conversation_forbidden", 403);
+      if (!state) {
+        throw failure("This Colleague history is unavailable.", "conversation_forbidden", 403, {
+          messageCode: "vibe64_colleague_history_unavailable"
+        });
+      }
       const record = state.record.runtimeId === key ? state.record :
         state.record.previousConversations.find(old => old.runtimeId === key);
       // A record keeps the compaction summary its conversation runtime writes, when it has one.
@@ -106,7 +110,9 @@ function createColleagueRecords({
     async writeRecord(key, { turns, metadata, summary }, transaction) {
       const state = serviceState.conversationOwners.get(key);
       if (!state || state.record.runtimeId !== key) {
-        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403, {
+          messageCode: "vibe64_colleague_previous_conversation_read_only"
+        });
       }
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
       decorateOperationReceipts(state, conversationLog);
@@ -185,7 +191,9 @@ function createColleagueRecords({
       // A released Learn thread's file belongs to Training now.
       if (state.released) return;
       if (expectedRuntimeId && state.record.runtimeId !== expectedRuntimeId) {
-        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403, {
+          messageCode: "vibe64_colleague_previous_conversation_read_only"
+        });
       }
       assignments.suspendDependencies(state);
       const directory = path.dirname(state.file);

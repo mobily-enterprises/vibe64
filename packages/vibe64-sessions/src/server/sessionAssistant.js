@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
@@ -84,9 +85,8 @@ function createSessionAssistant({
     const { session = null, vibe64User = null, mode = "senior" } = options;
     const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
     if (!direct && Object.keys(input.assistantSelection || {}).length) {
-      throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {
-        code: "vibe64_main_chat_approval_required",
-        statusCode: 403
+      throw new AppError(403, "Main chat runs on the workspace owner's AI. Team members can't choose its model.", {
+        code: "vibe64_main_chat_model_owner_only"
       });
     }
     // A chosen model comes from Custom's live catalogue, so it is checked as
@@ -102,10 +102,7 @@ function createSessionAssistant({
       : { mode: startMode });
     const routingSetup = await initializeModelRouting({ vibe64User });
     if (routingSetup?.ok === false) {
-      throw Object.assign(new Error(routingSetup.error), {
-        code: routingSetup.code,
-        statusCode: routingSetup.statusCode
-      });
+      throw vibe64Error(routingSetup.error, routingSetup.code);
     }
     // Outside a lesson, a team member's session records main chat's starting
     // model only; their messages wait for the owner, so nothing runs as them here.
@@ -118,7 +115,7 @@ function createSessionAssistant({
       { vibe64User: direct ? vibe64User : { role: "owner" } },
       direct ? undefined : { validateModels: false }
     );
-    if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
+    if (!decision.available) throw new AppError(403, decision.message, { code: decision.reasonCode });
     if (direct) {
       await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
         vibe64User,
@@ -165,7 +162,7 @@ function createSessionAssistant({
       // goal, except in a team member's own lesson.
       if (!isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
         throw new AppError(403, "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model.", {
-          code: "vibe64_main_chat_approval_required"
+          code: "vibe64_main_chat_settings_owner_only"
         });
       }
       const runtime = await project.createRuntimeWithoutSource();
@@ -208,7 +205,7 @@ function createSessionAssistant({
               reviewEnabled: preferences.review,
               ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
             }, { vibe64User });
-            if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
+            if (!decision.available) throw new AppError(403, decision.message, { code: decision.reasonCode });
             const destination = preferences.mode === "auto" ? decision.seniorJuniorPair.senior : decision;
             resolved = destination.effectiveSelection;
             connectionIdentity = destination.connectionIdentity;

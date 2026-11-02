@@ -35,7 +35,7 @@ function createColleagueBrowserConversations({
   async function open({ id, context } = {}) {
     // Action contributors own authority; never retain their cached result
     // when a subscription or subsequent model operation checks the request.
-    if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
+    if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.", "vibe64_colleague_shutting_down");
     const request = context?.requestMeta?.request;
     const requestContext = {
       surface: "app",
@@ -49,7 +49,11 @@ function createColleagueBrowserConversations({
     await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
     const state = await threads.stateFor(context);
     if (state.record.previousConversations.some(old => old.scopeId === id)) threads.assertCurrentConversation(state, id);
-    if (id !== state.record.scopeId) throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
+    if (id !== state.record.scopeId) {
+      throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403, {
+        messageCode: "vibe64_colleague_conversation_unavailable"
+      });
+    }
     requestContext.colleague.conversationId = id;
     requestContext.assistantSelection = state.record.assistantSelection;
     async function preparedConversation() {
@@ -101,7 +105,11 @@ function createColleagueBrowserConversations({
     }
 
     async function send(input) {
-      if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
+      if (input.attachmentIds?.length) {
+        throw failure("Colleague does not accept attachments.", "conversation_unsupported", 409, {
+          messageCode: "vibe64_colleague_attachments_unsupported"
+        });
+      }
       return actions.execute({
         actionId: ACTION_COLLEAGUE_MESSAGE_SEND,
         // The browser reads the delivery receipt, not the whole conversation.
@@ -156,7 +164,9 @@ function createColleagueBrowserConversations({
     }
 
     async function updateGoal() {
-      throw failure("Colleague does not support native goals.", "conversation_unsupported", 400);
+      throw failure("Colleague does not support native goals.", "conversation_unsupported", 400, {
+        messageCode: "vibe64_colleague_native_goals_unsupported"
+      });
     }
 
     async function subscribe(listener) {

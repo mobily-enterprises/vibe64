@@ -3136,7 +3136,7 @@ test("integrated discarded or deleted contributions retain accepted source and e
     assert.equal(publication.publishedCommit, saved.saveCommit);
     assert.equal(publication.sessionHead, accepted);
     if (disposition === "deleted") await assert.rejects(inspectSessionWork({ ...receiver,
-      runCommand: commandRunner, inspectContributionPublication: true }), { code: "vibe64_contribution_branch_missing" });
+      runCommand: commandRunner, inspectContributionPublication: true }), { code: "vibe64_contribution_revision_unretained" });
 
     const main = await contributionFixture(t);
     delete main.session.metadata.connected_contribution;
@@ -3265,7 +3265,7 @@ test("unconfirmed first contribution pushes retain evidence when the remote ref 
     await assert.rejects(recoverSessionWorkSave({ project, session, recovery: { operationId }, runCommand: noPush }),
       { code: "vibe64_session_save_publication_unknown" });
     await assert.rejects(saveSessionWork({ project, session, runCommand: noPush }),
-      { code: "vibe64_contribution_branch_missing" });
+      { code: "vibe64_contribution_branch_missing_after_push" });
     assert.equal(await readFile(path.join(session.sourcePath, "unknown.txt"), "utf8"), "preserve uncertain work\n");
     assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
   }
@@ -3499,7 +3499,7 @@ test("Incoming Merge recovers a lost accepted-target response from Git without a
   assert.equal(refreshed.contributions[0].status, "merged");
   assert.equal(refreshed.targetHead, target);
   await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
-    review, runCommand: readOnlyCommand }), { code: "vibe64_incoming_review_changed" });
+    review, runCommand: readOnlyCommand }), { code: "vibe64_incoming_heads_changed" });
   const result = await changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
     review: refreshed.contributions[0].review, runCommand: readOnlyCommand });
   assert.equal(result.status, "merged");
@@ -3523,7 +3523,7 @@ test("Incoming Merge refuses conflicts and stale reviews without changing either
   await git(f.seed, ["push", "origin", "main"]);
   const target = await git(f.remote, ["rev-parse", "main"]);
   await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
-    review: staleReview, runCommand: commandRunner }), { code: "vibe64_incoming_review_changed" });
+    review: staleReview, runCommand: commandRunner }), { code: "vibe64_incoming_heads_changed" });
   await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
     review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_merge_conflict" });
   assert.equal(await git(f.remote, ["rev-parse", "main"]), target);
@@ -3599,12 +3599,12 @@ test("Incoming repair rejects forged candidates and source changes before or dur
         await writeFile(path.join(f.session.sourcePath, "newer.txt"), "concurrent local work\n");
       }
       return commandRunner(request);
-    } }), { code: "vibe64_incoming_repair_changed" });
+    } }), { code: "vibe64_incoming_merge_source_changed" });
   assert.equal(await git(f.remote, ["rev-parse", "main"]), f.review.targetHead);
   assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
   await git(f.remote, ["update-ref", f.ref, f.baseCommit]);
   await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge", repairReview: current.repairReview }),
-    { code: "vibe64_incoming_review_changed" });
+    { code: "vibe64_incoming_heads_changed" });
 });
 
 test("Incoming repair review cannot publish a nonconflicting contribution", async t => {
@@ -3612,7 +3612,7 @@ test("Incoming repair review cannot publish a nonconflicting contribution", asyn
   await writeFile(path.join(f.session.sourcePath, "library.txt"), "simple contribution\n");
   await saveSessionWork({ ...f, runCommand: commandRunner });
   await assert.rejects(changeIncomingContribution({ ...f, action: "review-repair", id: f.contribution.id,
-    review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_review_changed" });
+    review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_repair_not_needed" });
   assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
 });
 
@@ -3659,7 +3659,7 @@ test("Incoming Discard refuses a destination collision and preserves a contribut
   const saved = await saveSessionWork({ ...f, runCommand: commandRunner });
   await git(f.remote, ["update-ref", `${f.ref}_discarded`, f.baseCommit]);
   await assert.rejects(changeIncomingContributionDirect({ ...f, action: "discard", id: f.contribution.id,
-    review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_review_changed" });
+    review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_discard_head_mismatch" });
   await git(f.remote, ["update-ref", "-d", `${f.ref}_discarded`]);
   await writeFile(path.join(f.session.sourcePath, "later.txt"), "later contribution\n");
   await git(f.session.sourcePath, ["add", "."]);

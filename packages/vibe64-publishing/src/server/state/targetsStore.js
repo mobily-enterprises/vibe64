@@ -4,25 +4,26 @@ import path from "node:path";
 
 import { vibe64Destination } from "@local/vibe64-packaging/server/destinations";
 
+import { publishingError } from "../publishingError.js";
 import { readJsonFile, serialized, writeJsonFile } from "./jsonFile.js";
 
 const TARGETS_CONTRACT = "vibe64.publishing-targets.v1";
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 
-function targetError(message, code = "vibe64_publishing_target_invalid") {
-  return Object.assign(new Error(message), { code });
+function targetError(message, code, params) {
+  return publishingError(message, code, { params });
 }
 
 function plainSettings(settings = {}) {
-  if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw targetError("Target settings must be an object.");
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw targetError("Target settings must be an object.", "vibe64_publishing_target_settings_invalid");
   const result = {};
   for (const [name, value] of Object.entries(settings)) {
     if (value === null || value === undefined || value === "") continue;
-    if (!/^[a-z][A-Za-z0-9]*$/u.test(name)) throw targetError(`Setting ${name} is not a setting name.`);
-    if (typeof value !== "string" && typeof value !== "boolean") throw targetError(`Setting ${name} must be text or true/false.`);
+    if (!/^[a-z][A-Za-z0-9]*$/u.test(name)) throw targetError(`Setting ${name} is not a setting name.`, "vibe64_publishing_target_setting_name_invalid", { name });
+    if (typeof value !== "string" && typeof value !== "boolean") throw targetError(`Setting ${name} must be text or true/false.`, "vibe64_publishing_target_setting_value_invalid", { name });
     if (typeof value === "string" && (value.length > 512 || /[\0\r\n]/u.test(value))) {
-      throw targetError(`Setting ${name} must be one short line.`);
+      throw targetError(`Setting ${name} must be one short line.`, "vibe64_publishing_target_setting_too_long", { name });
     }
     result[name] = value;
   }
@@ -32,13 +33,18 @@ function plainSettings(settings = {}) {
 function normalizeTarget(input, { now }) {
   const destination = vibe64Destination(input.destination);
   const packageId = String(input.package || "").trim();
-  if (!ID.test(packageId)) throw targetError("Choose the package this target publishes.");
+  if (!ID.test(packageId)) throw targetError("Choose the package this target publishes.", "vibe64_publishing_target_package_required");
   const id = String(input.id || `${packageId}-${destination.id}`).trim();
-  if (!ID.test(id) || id.length > 64) throw targetError("A target id uses lowercase letters, digits and single hyphens.");
+  if (!ID.test(id) || id.length > 64) throw targetError("A target id uses lowercase letters, digits and single hyphens.", "vibe64_publishing_target_id_invalid");
   const channel = input.channel ? String(input.channel).trim() : null;
-  if (channel && !destination.channels.includes(channel)) throw targetError(`${destination.label} has no channel ${channel}.`);
+  if (channel && !destination.channels.includes(channel)) {
+    throw targetError(`${destination.label} has no channel ${channel}.`, "vibe64_publishing_target_channel_invalid", {
+      destination: destination.label,
+      channel
+    });
+  }
   const account = input.account ? String(input.account).trim() : null;
-  if (account !== null && !ACCOUNT_ID.test(account)) throw targetError("The publishing account id is not valid.");
+  if (account !== null && !ACCOUNT_ID.test(account)) throw targetError("The publishing account id is not valid.", "vibe64_publishing_target_account_invalid");
   return {
     id,
     destination: destination.id,
@@ -63,7 +69,7 @@ function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() 
   async function read() {
     const value = await readJsonFile(file, () => ({ contract: TARGETS_CONTRACT, targets: [] }));
     if (value?.contract !== TARGETS_CONTRACT || !Array.isArray(value.targets)) {
-      throw targetError("The saved publishing targets are not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+      throw targetError("The saved publishing targets are not in a format this Vibe64 reads.", "vibe64_publishing_targets_unreadable");
     }
     return value.targets;
   }
@@ -82,7 +88,7 @@ function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() 
       const targets = await read();
       const target = normalizeTarget(input, { now });
       if (targets.some((existing) => existing.id === target.id)) {
-        throw targetError(`A target called ${target.id} already exists.`, "vibe64_publishing_target_exists");
+        throw targetError(`A target called ${target.id} already exists.`, "vibe64_publishing_target_exists", { targetId: target.id });
       }
       await write([...targets, target]);
       return target;

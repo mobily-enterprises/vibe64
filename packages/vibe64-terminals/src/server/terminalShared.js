@@ -68,8 +68,12 @@ function codexSessionWorkdirAllowed({
   return Boolean(sessionWorktree) && path.resolve(sessionWorktree) === path.resolve(workdir);
 }
 
-function openCodeError(code, message, details = {}, statusCode = 409) {
-  return new AppError(statusCode, message, { code, details: { ...details } });
+/**
+ * An OpenCode refusal. `options` carries `messageCode` and `messageParams` for a refusal that keeps a code callers
+ * branch on.
+ */
+function openCodeError(code, message, details = {}, statusCode = 409, options = {}) {
+  return new AppError(statusCode, message, { ...options, code, details: { ...details } });
 }
 
 const VIBE64_OPENCODE_ERROR_CODES = Object.freeze({
@@ -92,6 +96,10 @@ function openCodeSessionId(value = "") {
   return sessionId;
 }
 
+/**
+ * A Claude conversation refusal. JSKIT's Claude conversation owner and turn helpers receive it as `createError`
+ * and call it with a message only, so the default code stays for them.
+ */
 function claudeConversationError(message, code = "vibe64_claude_operation_failed") {
   return new AppError(409, message, { code });
 }

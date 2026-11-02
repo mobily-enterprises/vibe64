@@ -312,7 +312,7 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
     const invalidArchitecture = { ...machineCityFixture(), architecture: { schema: "genesis.architecture.v0" } };
     await writeJson(path.join(root, GENESIS_MACHINE_CITY_PATH), invalidArchitecture);
     await assert.rejects(readGenesisCity(root, "machine"), (error) => {
-      assert.equal(error.code, "vibe64_invalid_genesis_city");
+      assert.equal(error.code, "vibe64_invalid_genesis_city_architecture");
       assert.match(error.message, /^Machine City architecture is invalid: /u);
       assert.deepEqual(error.details, { cityKind: "machine", path: GENESIS_MACHINE_CITY_PATH });
       return true;

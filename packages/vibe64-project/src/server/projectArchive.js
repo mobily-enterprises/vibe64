@@ -260,7 +260,13 @@ function createProjectArchiveService({
       });
       const pinnedSessionId = await readPinnedSessionId({ projectContextRoot, projectRuntimeRoot, slug });
       if (pinnedSessionId) {
-        throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this project.`, { code: "vibe64_project_pinned" });
+        throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this project.`, {
+          code: "vibe64_project_pinned",
+          messageCode: "vibe64_project_archive_pinned",
+          messageParams: {
+            sessionId: pinnedSessionId
+          }
+        });
       }
       // A fresh archive may first ask the host for storage headroom; a resumed
       // one continues, because finishing it is what frees the space.
@@ -471,7 +477,13 @@ function createProjectArchiveService({
     });
     const pinnedSessionId = await readPinnedSessionId({ projectContextRoot, projectRuntimeRoot, slug });
     if (pinnedSessionId) {
-      throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this practice project.`, { code: "vibe64_project_pinned" });
+      throw new AppError(409, `Unpin session ${pinnedSessionId} before deleting this practice project.`, {
+        code: "vibe64_project_pinned",
+        messageCode: "vibe64_practice_project_removal_pinned",
+        messageParams: {
+          sessionId: pinnedSessionId
+        }
+      });
     }
     return { slug, namespace, existingState, projectRuntimeRoot };
   }

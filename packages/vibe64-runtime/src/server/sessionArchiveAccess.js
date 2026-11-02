@@ -145,7 +145,8 @@ function createSessionArchiveAccess({
     if (!archiveRecord) {
       throw vibe64Error(
         `Renewal predecessor has no published archive: ${normalizedSessionId}`,
-        "vibe64_session_renewal_archive_required"
+        "vibe64_session_renewal_archive_required",
+        { params: { sessionId: normalizedSessionId } }
       );
     }
     return withExtractedSessionArchive(archiveRecord, async (sessionPaths, record) => {
@@ -171,7 +172,8 @@ function createSessionArchiveAccess({
         if (await pathExists(sessionPaths.sessionRoot)) {
           throw vibe64Error(
             `Session archive is not finalized: ${normalizedSessionId}`,
-            "vibe64_session_archive_not_finalized"
+            "vibe64_session_archive_not_finalized",
+            { params: { sessionId: normalizedSessionId } }
           );
         }
       }
@@ -179,7 +181,8 @@ function createSessionArchiveAccess({
       if (archiveRecord.sessionId !== normalizedSessionId) {
         throw vibe64Error(
           `Session archive identity does not match: ${normalizedSessionId}`,
-          "vibe64_invalid_session_archive_metadata"
+          "vibe64_invalid_session_archive_metadata",
+          { params: { sessionId: normalizedSessionId } }
         );
       }
       await archiveRecords.validateSessionArchive(archiveRecord.archivePath);
@@ -189,7 +192,8 @@ function createSessionArchiveAccess({
         if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
           throw vibe64Error(
             `Session archive contains an unarchived session: ${normalizedSessionId}`,
-            "vibe64_session_archive_not_finalized"
+            "vibe64_session_archive_unarchived_session",
+            { params: { sessionId: normalizedSessionId } }
           );
         }
         const archived = {
@@ -325,7 +329,7 @@ function createSessionArchiveAccess({
         throw archiveCommandError(
           result,
           `Cannot prepare updated session archive: ${result.output}`,
-          "vibe64_session_archive_write_failed"
+          "vibe64_session_archive_update_failed"
         );
       }
       await archiveRecords.validateSessionArchive(candidatePath);
@@ -445,7 +449,8 @@ function createSessionArchiveAccess({
     if (!archiveRecord) {
       throw vibe64Error(
         `Renewal predecessor has no prepared archive: ${normalizedSessionId}`,
-        "vibe64_session_renewal_archive_required"
+        "vibe64_session_renewal_prepared_archive_required",
+        { params: { sessionId: normalizedSessionId } }
       );
     }
     await archiveRecords.validateSessionArchive(archiveRecord.archivePath);

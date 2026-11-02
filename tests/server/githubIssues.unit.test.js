@@ -68,7 +68,7 @@ test("new issue mentions load collaborators without an issue, and validate suppl
   const invalid = fixture([]);
   for (const number of [0, -1, "", "../../7", 1.5]) {
     await assert.rejects(githubIssues(project, { operation: "mentions", number, vibe64User: user }, invalid.options),
-      { code: "vibe64_issue_input_invalid" });
+      { code: "vibe64_issue_number_invalid" });
   }
   assert.equal(invalid.calls.length, 0);
 });
@@ -84,7 +84,7 @@ test("restricted collaborator lists retain issue participants with a warning; to
   assert.match(result.warning, /collaborators could not load/u);
   const failed = fixture([denied, denied]);
   await assert.rejects(githubIssues(project, { operation: "mentions", number: 7, vibe64User: user }, failed.options),
-    { code: "vibe64_github_issues_failed" });
+    { code: "vibe64_github_action_refused" });
   assert.equal(failed.calls.length, 2);
 });
 
@@ -197,7 +197,7 @@ test("issue numbers retain exact lookup when combined with typed labels", async 
 test("empty typed labels are rejected and incomplete qualifiers remain ordinary text", async () => {
   const invalid = fixture([]);
   await assert.rejects(githubIssues(project, { vibe64User: user, search: 'label:""' }, invalid.options),
-    { code: "vibe64_issue_input_invalid" });
+    { code: "vibe64_issue_labels_invalid" });
   assert.equal(invalid.calls.length, 0);
   for (const search of ['label:"unfinished', "label:"]) {
     const f = fixture([success({ data: { search: { nodes: [], issueCount: 0, pageInfo: { hasNextPage: false } } } })]);
@@ -223,7 +223,7 @@ test("number lookup respects state and every label, excludes pull requests and r
   }
   for (const search of ["0", "#0", "9007199254740992"]) {
     const f = fixture([]);
-    await assert.rejects(githubIssues(project, { vibe64User: user, search }, f.options), { code: "vibe64_issue_input_invalid" });
+    await assert.rejects(githubIssues(project, { vibe64User: user, search }, f.options), { code: "vibe64_issue_number_invalid" });
     assert.equal(f.calls.length, 0);
   }
   const denied = fixture([{ ok: false, stderr: "HTTP 403" }]);
@@ -282,7 +282,7 @@ test("invalid label filters fail before contacting GitHub", async () => {
   const f = fixture([]);
   for (const labels of [{ name: "bug" }, [null], [""], ["   "], ["bug\nrepo:other/private"], Array(101).fill("bug")]) {
     await assert.rejects(githubIssues(project, { vibe64User: user, labels }, f.options), {
-      code: "vibe64_issue_input_invalid"
+      code: "vibe64_issue_labels_invalid"
     });
   }
   assert.equal(f.calls.length, 0);
@@ -294,10 +294,12 @@ test("rejects non-GitHub projects, absent signed-in identity and invalid input b
     await assert.rejects(githubIssues(target, { vibe64User: user }, f.options), { code: "vibe64_github_project_required" });
   }
   await assert.rejects(githubIssues(project, {}, f.options), { code: "vibe64_os_user_required" });
-  for (const input of [{ operation: "read", number: "../../2" }, { operation: "state", number: 7, state: "all" },
-    { operation: "comment", number: 7, body: " " }, { operation: "comment", number: 7, body: "a".repeat(65537) },
-    { search: "a".repeat(201) }, { cursor: {} }]) {
-    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code: "vibe64_issue_input_invalid" });
+  for (const [input, code] of [[{ operation: "read", number: "../../2" }, "vibe64_issue_number_invalid"],
+    [{ operation: "state", number: 7, state: "all" }, "vibe64_issue_input_invalid"],
+    [{ operation: "comment", number: 7, body: " " }, "vibe64_issue_input_invalid"],
+    [{ operation: "comment", number: 7, body: "a".repeat(65537) }, "vibe64_issue_input_invalid"],
+    [{ search: "a".repeat(201) }, "vibe64_issue_input_invalid"], [{ cursor: {} }, "vibe64_issue_input_invalid"]]) {
+    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code });
   }
   assert.equal(f.calls.length, 0);
 });
@@ -326,7 +328,7 @@ test("close and reopen respect GitHub viewer permissions before mutating the fix
   for (const state of ["closed", "open"]) {
     const denied = fixture([success({ data: { repository: { issue: { ...issue, viewerCanClose: false, viewerCanReopen: false } } } })]);
     await assert.rejects(githubIssues(project, { operation: "state", number: 7, state, vibe64User: user }, denied.options),
-      { code: "vibe64_issue_permission_denied" });
+      { code: "vibe64_issue_state_change_denied" });
     assert.equal(denied.calls.length, 1);
     const f = fixture([success({ data: { repository: { issue } } }), success({ state, state_reason: "completed" })]);
     const result = await githubIssues(project, { operation: "state", number: 7, state, vibe64User: user }, f.options);
@@ -351,11 +353,12 @@ test("comments preserve Markdown literally through stdin and never retry an unce
 });
 
 test("upstream failures expose an actionable message without raw GitHub output", async () => {
-  for (const result of [{ ok: false, stderr: "HTTP 401 ghp_private" }, success({ errors: [{ message: "private details" }] }),
-    { ok: true, stdout: "not json" }, success({ data: {} })]) {
+  for (const [result, code] of [[{ ok: false, stderr: "HTTP 401 ghp_private" }, "vibe64_github_authentication_failed"],
+    [success({ errors: [{ message: "private details" }] }), "vibe64_github_issues_failed"],
+    [{ ok: true, stdout: "not json" }, "vibe64_github_issues_failed"], [success({ data: {} }), "vibe64_github_issue_list_unreadable"]]) {
     const f = fixture([result]);
     await assert.rejects(githubIssues(project, { vibe64User: user }, f.options), (error) => {
-      assert.equal(error.code, "vibe64_github_issues_failed");
+      assert.equal(error.code, code);
       assert.doesNotMatch(error.message, /private|not json/u);
       return true;
     });
@@ -399,7 +402,7 @@ test("creating label definitions requires write access and rejects duplicate nam
   for (const permission of ["TRIAGE", "READ", null]) {
     const f = fixture([labelPage([], permission)]);
     await assert.rejects(githubIssues(project, { operation: "create-label", name: "Ready", color: "0075ca", vibe64User: user }, f.options),
-      { code: "vibe64_issue_permission_denied" });
+      { code: "vibe64_issue_label_creation_denied" });
     assert.equal(f.calls.length, 1);
   }
   const duplicate = fixture([labelPage([], "WRITE", { hasNextPage: true, endCursor: "next-labels" }), labelPage([bug])]);
@@ -415,7 +418,7 @@ test("invalid label names and colours never reach GitHub; uncertain creation is 
     { color: "#0075ca" }, { color: "red" }, { color: "abc" }, { color: "abcdgg" }, { color: null }
   ]) {
     await assert.rejects(githubIssues(project, { operation: "create-label", name: "Ready", color: "0075ca", ...payload, vibe64User: user }, invalid.options),
-      { code: "vibe64_issue_input_invalid" });
+      { code: "name" in payload ? "vibe64_issue_label_name_invalid" : "vibe64_issue_label_color_invalid" });
   }
   assert.equal(invalid.calls.length, 0);
   for (const response of [{ ok: false, stderr: "upstream timeout" }, success({})]) {
@@ -443,9 +446,9 @@ test("creating without labels is allowed; denied or missing labels never silentl
   await githubIssues(project, { operation: "create", title: "New issue", vibe64User: user }, unlabelled.options);
   assert.deepEqual(JSON.parse(unlabelled.calls[0].input), { title: "New issue", body: "", labels: [] });
   for (const [permission, labels, code] of [
-    ["READ", ["bug"], "vibe64_issue_permission_denied"],
-    ["TRIAGE", ["bug"], "vibe64_issue_permission_denied"],
-    ["WRITE", ["removed-label"], "vibe64_issue_input_invalid"]
+    ["READ", ["bug"], "vibe64_issue_labels_denied"],
+    ["TRIAGE", ["bug"], "vibe64_issue_labels_denied"],
+    ["WRITE", ["removed-label"], "vibe64_issue_label_unavailable"]
   ]) {
     const f = fixture([labelPage([bug], permission)]);
     await assert.rejects(githubIssues(project, { operation: "create", title: "New issue", labels, vibe64User: user }, f.options), { code });
@@ -462,21 +465,22 @@ test("triage can replace or clear issue labels; PR numbers and read-only account
     assert.deepEqual(JSON.parse(f.calls[2].input), { labels });
   }
   const denied = fixture([labelPage([bug], "READ")]);
-  await assert.rejects(githubIssues(project, { operation: "set-labels", number: 7, labels: [], vibe64User: user }, denied.options), { code: "vibe64_issue_permission_denied" });
+  await assert.rejects(githubIssues(project, { operation: "set-labels", number: 7, labels: [], vibe64User: user }, denied.options), { code: "vibe64_issue_labels_denied" });
   const pr = fixture([labelPage([bug]), success({ data: { repository: { issue: null } } })]);
   await assert.rejects(githubIssues(project, { operation: "set-labels", number: 9, labels: ["bug"], vibe64User: user }, pr.options), { code: "vibe64_issue_not_found" });
 });
 
 test("invalid new issues and label payloads are rejected before requests; uncertain creation is never retried", async () => {
   const invalid = fixture([]);
-  for (const input of [
-    { operation: "create", title: " " }, { operation: "create", title: "a".repeat(257) },
-    { operation: "create", title: "Valid", body: "a".repeat(65537) },
-    { operation: "create", title: "Valid", labels: [null] },
-    { operation: "set-labels", number: 7 }, { operation: "set-labels", number: 7, labels: [""] },
-    { operation: "set-labels", number: 7, labels: Array(101).fill("bug") }
+  for (const [input, code] of [
+    [{ operation: "create", title: " " }, "vibe64_issue_text_invalid"], [{ operation: "create", title: "a".repeat(257) }, "vibe64_issue_text_invalid"],
+    [{ operation: "create", title: "Valid", body: "a".repeat(65537) }, "vibe64_issue_text_invalid"],
+    [{ operation: "create", title: "Valid", labels: [null] }, "vibe64_issue_labels_invalid"],
+    [{ operation: "set-labels", number: 7 }, "vibe64_issue_labels_invalid"],
+    [{ operation: "set-labels", number: 7, labels: [""] }, "vibe64_issue_labels_invalid"],
+    [{ operation: "set-labels", number: 7, labels: Array(101).fill("bug") }, "vibe64_issue_labels_invalid"]
   ]) {
-    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, invalid.options), { code: "vibe64_issue_input_invalid" });
+    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, invalid.options), { code });
   }
   assert.equal(invalid.calls.length, 0);
   const failed = fixture([{ ok: false, stderr: "upstream timeout" }]);
@@ -519,10 +523,10 @@ test("comment editing verifies its repository, issue and viewer even for older c
   assert.deepEqual(JSON.parse(f.calls[1].input).variables, { input: { id: commentId, body } });
   assert.equal(f.calls[1].userKey, "alice");
   for (const [node, code] of [
-    [null, "vibe64_issue_not_found"],
-    [{ issue: { ...parent, number: 8 }, viewerCanUpdate: true }, "vibe64_issue_not_found"],
-    [{ issue: { ...parent, repository: { nameWithOwner: "other/project" } }, viewerCanUpdate: true }, "vibe64_issue_not_found"],
-    [{ issue: parent, viewerCanUpdate: false }, "vibe64_issue_permission_denied"]
+    [null, "vibe64_issue_comment_not_found"],
+    [{ issue: { ...parent, number: 8 }, viewerCanUpdate: true }, "vibe64_issue_comment_not_found"],
+    [{ issue: { ...parent, repository: { nameWithOwner: "other/project" } }, viewerCanUpdate: true }, "vibe64_issue_comment_not_found"],
+    [{ issue: parent, viewerCanUpdate: false }, "vibe64_issue_comment_edit_denied"]
   ]) {
     const denied = fixture([success({ data: { node } })]);
     await assert.rejects(githubIssues(project, { operation: "edit-comment", number: 7, commentId, body, vibe64User: user }, denied.options), { code });
@@ -547,16 +551,16 @@ test("add and remove labels use catalog ids and leave unrelated issue labels unt
 
 test("invalid edit inputs and bulk label modes make no GitHub calls", async () => {
   const f = fixture([]);
-  for (const input of [
-    { operation: "edit", number: 7, title: " " },
-    { operation: "edit", number: 7, title: "Title only must not clear a description" },
-    { operation: "edit", number: 7, title: "a".repeat(257) },
-    { operation: "edit", number: 7, title: "Title", body: "a".repeat(65537) },
-    { operation: "edit-comment", number: 7, commentId: "", body: "Text" },
-    { operation: "edit-comment", number: 7, commentId: "id", body: " " },
-    { operation: "edit-comment", number: 7, commentId: "id", body: "a".repeat(65537) },
-    { operation: "set-labels", number: 7, labelMode: "unknown", labels: [] }
-  ]) await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code: "vibe64_issue_input_invalid" });
+  for (const [input, code] of [
+    [{ operation: "edit", number: 7, title: " " }, "vibe64_issue_text_invalid"],
+    [{ operation: "edit", number: 7, title: "Title only must not clear a description" }, "vibe64_issue_text_invalid"],
+    [{ operation: "edit", number: 7, title: "a".repeat(257) }, "vibe64_issue_text_invalid"],
+    [{ operation: "edit", number: 7, title: "Title", body: "a".repeat(65537) }, "vibe64_issue_text_invalid"],
+    [{ operation: "edit-comment", number: 7, commentId: "", body: "Text" }, "vibe64_issue_comment_invalid"],
+    [{ operation: "edit-comment", number: 7, commentId: "id", body: " " }, "vibe64_issue_input_invalid"],
+    [{ operation: "edit-comment", number: 7, commentId: "id", body: "a".repeat(65537) }, "vibe64_issue_input_invalid"],
+    [{ operation: "set-labels", number: 7, labelMode: "unknown", labels: [] }, "vibe64_issue_label_mode_invalid"]
+  ]) await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code });
   assert.equal(f.calls.length, 0);
 });
 
@@ -579,7 +583,7 @@ test("issue label and mention reads optionally page and search their existing co
     }
     const invalid = fixture([]);
     for (const input of [{ offset: -1 }, { offset: 0.5 }, { limit: 21 }, { limit: 0 }]) {
-      await assert.rejects(githubIssues(project, { operation, ...input, vibe64User: user }, invalid.options), { code: "vibe64_issue_input_invalid" });
+      await assert.rejects(githubIssues(project, { operation, ...input, vibe64User: user }, invalid.options), { code: "vibe64_issue_catalogue_page_invalid" });
     }
     assert.equal(invalid.calls.length, 0);
   }

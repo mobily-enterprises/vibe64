@@ -22,7 +22,7 @@ async function repositoryBranches(project, input = {}, {
   if (!["github", "managed_git"].includes(mode)) {
     throw new Error("Use the local Git controls to switch the opened folder before creating a session.");
   }
-  const api = mode === "github" ? githubApi(input, { env, runCommand, feature: "Branches" }) : null;
+  const api = mode === "github" ? githubApi(input, { env, runCommand, feature: "Branches", failureCode: "vibe64_github_branches_failed" }) : null;
   const repository = api ? requireGithubRepository(project, "Branches") : "";
   const root = project.canonicalRepositoryPath;
   async function git(args) {

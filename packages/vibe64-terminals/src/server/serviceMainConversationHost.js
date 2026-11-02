@@ -165,7 +165,7 @@ function createServiceMainConversationHost({
             const authority = current.browserAuthority;
             if (!authority || authority.sessionId !== id || admitted.conversationId !== id ||
                 admitted.origin !== "user" || !admitted.nativeThreadId || !admitted.nativeTurnId) {
-              throw new AppError(403, "Goal control requires the current admitted Main request.", { code: "vibe64_main_goal_control_required" });
+              throw new AppError(403, "Goal control requires the current admitted Main request.", { code: "vibe64_main_goal_control_request_required" });
             }
             const grant = await actions.execute({
               actionId: "vibe64.sessions.conversation.context.read",

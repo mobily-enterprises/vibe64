@@ -42,11 +42,11 @@ test("SQLite maps a declared filename and keeps browser reads enforced on the sa
   };
   assert.deepEqual(normalizeResourceEnvironment([resource], provided).environment, { DB_DATABASE: browser.write.database });
   for (const read of [{ ...browser.read, readOnly: false }, { ...browser.read, database: "/other.sqlite" }]) {
-    assert.throws(() => normalizeDatabaseToolEnvironment({ ...browser, read }), { code: "vibe64_database_tool_reader_required" });
+    assert.throws(() => normalizeDatabaseToolEnvironment({ ...browser, read }), { code: "vibe64_database_tool_sqlite_reader_required" });
   }
   assert.throws(() => normalizeResourceEnvironment([resource], { ...provided, resourceValues: [{
     ...provided.resourceValues[0], values: { database: "/another.sqlite" }
-  }] }), { code: "vibe64_database_tool_resource_mismatch" });
+  }] }), { code: "vibe64_database_tool_writer_mismatch" });
   for (const filename of [":memory:", "relative.sqlite", ""]) {
     assert.throws(() => applicationDatabaseToolEnvironment([resource], { DB_DATABASE: filename }));
   }
@@ -110,7 +110,7 @@ test("resource identity and preservation evidence remain optional and strictly v
     { identity: "a".repeat(64), preserved: "yes" },
     { identity: "not-an-identity", preserved: true }, { identity: "a".repeat(64), preserved: true, password: "secret" }]) {
     assert.throws(() => normalizeResourceEnvironment(resources, { ...pending, resourcePreparation }, options),
-      { code: "vibe64_resource_environment_contract_invalid" });
+      { code: "vibe64_resource_environment_evidence_invalid" });
   }
 });
 

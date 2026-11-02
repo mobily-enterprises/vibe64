@@ -103,11 +103,11 @@ function createAgentPreviewBrowserTests({
   async function resumeTestApproval({ projectSlug, sessionId, admissionId }, authorizeStart) {
     const pending = state.browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId) {
-      return commandFailure("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
+      return commandFailure("The original test request has ended. Run the test command again.", "vibe64_test_approval_request_ended");
     }
     if (["resuming", "running"].includes(pending.state)) return { ok: true, accepted: true, replayed: true, sessionId };
     if (pending.state !== "waiting" || Date.now() >= Date.parse(pending.expiresAt)) {
-      return commandFailure("This test approval has expired or is no longer available.", "vibe64_test_approval_unavailable");
+      return commandFailure("This test approval has expired or is no longer available.", "vibe64_test_approval_expired");
     }
     // The command's promise remains its result owner. HTTP only acknowledges
     // the handoff; a lost dashboard response never launches a second test.

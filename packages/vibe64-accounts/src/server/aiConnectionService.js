@@ -53,7 +53,7 @@ function createAiConnectionService({
     const id = String(modelProviderId || "").trim();
     if (!AI_CONNECTION_PROVIDER_PATTERN.test(id)) {
       throw aiConnectionError(
-        "vibe64_ai_provider_invalid",
+        "vibe64_ai_provider_not_in_catalog",
         "Choose a provider from the current OpenCode catalog.",
         400
       );
@@ -78,7 +78,7 @@ function createAiConnectionService({
       model?.id === policy.defaultModelId && model?.status === "available"
     ))) {
       throw aiConnectionError(
-        "vibe64_ai_provider_policy_stale",
+        "vibe64_ai_provider_catalog_changed",
         "This provider changed in OpenCode. Refresh its setup before connecting.",
         409
       );

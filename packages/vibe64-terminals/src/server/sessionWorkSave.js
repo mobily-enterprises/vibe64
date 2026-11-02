@@ -239,7 +239,8 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
         canonicalCommit,
         reconciledCommit: context.baseCommit,
         updateRequired: true
-      }
+      },
+      { messageCode: "vibe64_session_save_branch_changed" }
     );
   }
   const comparison = await sessionWorkComparison(runCommand, context, {

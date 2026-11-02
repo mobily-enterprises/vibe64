@@ -138,7 +138,7 @@ function createColleagueTurnInputs({
   function watchSource(watch) {
     if (!watch.source) return null;
     const source = watchSources.get(watch.source);
-    if (!source) throw failure("This watch's source is unavailable in this runtime.");
+    if (!source) throw failure("This watch's source is unavailable in this runtime.", "vibe64_colleague_watch_source_unavailable");
     return source;
   }
 

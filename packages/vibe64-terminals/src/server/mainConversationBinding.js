@@ -266,7 +266,9 @@ async function createSessionConversationBinding(provider, sessionId, options = {
             if (signal?.aborted) throw error;
             throw new AppError(409, `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`, {
               code: "vibe64_assistant_context_full",
-              params: { reason: error.message }
+              params: { reason: error.message },
+              messageCode: "vibe64_assistant_context_compaction_failed",
+              messageParams: { reason: error.message }
             });
           } finally {
             await setPhase("preparing");
@@ -274,7 +276,10 @@ async function createSessionConversationBinding(provider, sessionId, options = {
           bytes = await room();
         }
         if (bytes < 1024) {
-          throw new AppError(409, "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant.", { code: "vibe64_assistant_context_full" });
+          throw new AppError(409, "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant.", {
+            code: "vibe64_assistant_context_full",
+            messageCode: "vibe64_assistant_context_too_full"
+          });
         }
         return bytes;
       }

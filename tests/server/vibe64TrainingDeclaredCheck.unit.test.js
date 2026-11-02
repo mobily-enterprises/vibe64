@@ -221,8 +221,8 @@ test("a step's declared response check runs through the bounded gateway only for
   const f = await fixture(t);
   const { stepId: _stepId, ...withoutStep } = f.input;
   await assert.rejects(f.owner().runOrientationCheck(withoutStep), /Schema validation failed/u, "a response check names its step");
-  await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "look-around" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
-  await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "missing-step" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
+  await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "look-around" }), { code: "VIBE64_TRAINING_RESPONSE_CHECK_UNDECLARED" });
+  await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "missing-step" }), { code: "VIBE64_TRAINING_RESPONSE_CHECK_UNDECLARED" });
   await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "../escape" }));
   assert.equal(f.calls.length, 0);
   const before = await f.saved();

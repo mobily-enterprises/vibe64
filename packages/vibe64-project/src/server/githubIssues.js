@@ -10,7 +10,27 @@ const ISSUE_LIST_FIELDS = `number title url state updatedAt author { login } com
 const PAGE_INFO = "pageInfo { hasNextPage endCursor }";
 const LABEL_WRITE_PERMISSIONS = ["ADMIN", "MAINTAIN", "WRITE"];
 const LABEL_EDIT_PERMISSIONS = [...LABEL_WRITE_PERMISSIONS, "TRIAGE"];
+const ISSUE_CREATION_UNCONFIRMED = "Issue creation could not be confirmed. Refresh the issue list before trying again.";
 const LABEL_CREATION_UNCONFIRMED = "Label creation could not be confirmed. Refresh the labels before trying again.";
+/** The refusal of each write whose result GitHub did not confirm. */
+const UNCONFIRMED_WRITES = Object.freeze({
+  comment: Object.freeze({
+    message: "The comment could not be confirmed. Refresh the conversation before posting again.",
+    code: "vibe64_github_issue_comment_unconfirmed"
+  }),
+  create: Object.freeze({
+    message: ISSUE_CREATION_UNCONFIRMED,
+    code: "vibe64_github_issue_creation_unconfirmed"
+  }),
+  "create-label": Object.freeze({
+    message: LABEL_CREATION_UNCONFIRMED,
+    code: "vibe64_github_issue_label_creation_unconfirmed"
+  })
+});
+const NO_UNCONFIRMED_WRITE = Object.freeze({
+  message: "",
+  code: ""
+});
 
 function issueCataloguePage(result, key, input) {
   if (input.search == null && input.offset == null && input.limit == null) return result;
@@ -52,7 +72,7 @@ async function issueMentionUsers(api, owner, name, number) {
         const page = participants ? repository?.issue?.participants : repository?.collaborators;
         if (!Array.isArray(page?.nodes) || !page.pageInfo ||
             (page.pageInfo.hasNextPage && (!page.pageInfo.endCursor || page.pageInfo.endCursor === cursor))) {
-          throw vibe64Error("Mention suggestions could not load.", "vibe64_github_issues_failed");
+          throw vibe64Error("Mention suggestions could not load.", "vibe64_github_issue_mentions_unreadable");
         }
         for (const user of page.nodes) {
           if (user?.login) users.set(user.login.toLowerCase(), { login: user.login, name: user.name || "" });
@@ -92,7 +112,7 @@ async function repositoryLabels(api, owner, name) {
     const page = repository?.labels;
     if (!Array.isArray(page?.nodes) || !page.pageInfo ||
         (page.pageInfo.hasNextPage && (!page.pageInfo.endCursor || page.pageInfo.endCursor === cursor))) {
-      throw vibe64Error("GitHub labels could not load. Refresh and try again.", "vibe64_github_issues_failed");
+      throw vibe64Error("GitHub labels could not load. Refresh and try again.", "vibe64_github_issue_labels_unreadable");
     }
     labels.push(...page.nodes);
     viewerPermission = repository.viewerPermission;
@@ -113,13 +133,13 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "create-label", "set-labels", "mentions"].includes(
     operation
   )) {
-    throw vibe64Error("Unknown issue action.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Unknown issue action.", "vibe64_issue_operation_unknown");
   }
   const number = Number(input.number);
   if ((["read", "comment", "edit-comment", "edit", "state", "set-labels"].includes(operation) ||
       (operation === "mentions" && input.number != null)) &&
       (!Number.isSafeInteger(number) || number < 1)) {
-    throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Choose a valid issue number.", "vibe64_issue_number_invalid");
   }
   const state = input.state || "open";
   let search = String(input.search || "").trim();
@@ -127,7 +147,7 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (["labels", "mentions"].includes(operation) &&
       ((input.offset != null && (!Number.isSafeInteger(input.offset) || input.offset < 0)) ||
        (input.limit != null && (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 20)))) {
-    throw vibe64Error("Choose a valid catalogue page of up to 20 entries.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Choose a valid catalogue page of up to 20 entries.", "vibe64_issue_catalogue_page_invalid");
   }
   if (!["open", "closed", "all"].includes(state) || search.length > 200 ||
       (cursor !== null && (typeof cursor !== "string" || cursor.length > 500)) ||
@@ -139,22 +159,22 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (["create", "edit"].includes(operation) && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
       (operation === "edit" && typeof input.body !== "string") ||
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)))) {
-    throw vibe64Error("Enter an issue title and a description of up to 65,536 characters.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Enter an issue title and a description of up to 65,536 characters.", "vibe64_issue_text_invalid");
   }
   if (operation === "edit-comment" && (typeof input.commentId !== "string" || !input.commentId.trim() || input.commentId.length > 256)) {
-    throw vibe64Error("Choose a valid comment.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Choose a valid comment.", "vibe64_issue_comment_invalid");
   }
   if (operation === "create-label") {
     if (typeof input.name !== "string" || !input.name.trim() || input.name.trim().length > 50 || /\p{Cc}/u.test(input.name)) {
-      throw vibe64Error("Enter a label name of up to 50 characters.", "vibe64_issue_input_invalid");
+      throw vibe64Error("Enter a label name of up to 50 characters.", "vibe64_issue_label_name_invalid");
     }
     if (typeof input.color !== "string" || !/^[a-f\d]{6}$/iu.test(input.color)) {
-      throw vibe64Error("Choose a colour or enter a six-digit hex colour.", "vibe64_issue_input_invalid");
+      throw vibe64Error("Choose a colour or enter a six-digit hex colour.", "vibe64_issue_label_color_invalid");
     }
   }
   const labelMode = input.labelMode ?? "replace";
   if (operation === "set-labels" && !["replace", "add", "remove"].includes(labelMode)) {
-    throw vibe64Error("Choose whether to add, remove or replace labels.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Choose whether to add, remove or replace labels.", "vibe64_issue_label_mode_invalid");
   }
   let selectedLabels = input.labels;
   if (["create", "list"].includes(operation)) selectedLabels ??= [];
@@ -176,16 +196,15 @@ export async function githubIssues(project, input = {}, options = {}) {
       (!Array.isArray(selectedLabels) || selectedLabels.length > 100 ||
        selectedLabels.some((label) => typeof label !== "string" || !label.trim() ||
          (operation === "list" && /\p{Cc}/u.test(label))))) {
-    throw vibe64Error("Choose up to 100 repository labels.", "vibe64_issue_input_invalid");
+    throw vibe64Error("Choose up to 100 repository labels.", "vibe64_issue_labels_invalid");
   }
+  const unconfirmedWrite = UNCONFIRMED_WRITES[operation] || NO_UNCONFIRMED_WRITE;
   const api = githubApi(input, {
     ...options,
     feature: "Issues",
     failureCode: "vibe64_github_issues_failed",
-    uncertainWriteMessage: operation === "comment"
-      ? "The comment could not be confirmed. Refresh the conversation before posting again."
-      : operation === "create" ? "Issue creation could not be confirmed. Refresh the issue list before trying again."
-        : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
+    uncertainWriteMessage: unconfirmedWrite.message,
+    uncertainWriteCode: unconfirmedWrite.code
   });
   const [owner, name] = fullName.split("/");
   if (operation === "mentions") {
@@ -197,25 +216,25 @@ export async function githubIssues(project, input = {}, options = {}) {
     if (operation === "labels") return issueCataloguePage({ ok: true, ...catalog }, "labels", input);
     if (operation === "create-label") {
       if (!catalog.canCreateLabels) {
-        throw vibe64Error("GitHub requires write access to create repository labels.", "vibe64_issue_permission_denied");
+        throw vibe64Error("GitHub requires write access to create repository labels.", "vibe64_issue_label_creation_denied");
       }
       const labelName = input.name.trim();
       if (catalog.labels.some((label) => label.name.toLowerCase() === labelName.toLowerCase())) {
-        throw vibe64Error("A label with this name already exists. Choose another name.", "vibe64_issue_input_invalid");
+        throw vibe64Error("A label with this name already exists. Choose another name.", "vibe64_issue_label_exists");
       }
       const created = await api(`repos/${fullName}/labels`, { name: labelName, color: input.color.toLowerCase() });
       if (typeof created.name !== "string" || !created.name || !/^[a-f\d]{6}$/iu.test(created.color || "")) {
-        throw vibe64Error(LABEL_CREATION_UNCONFIRMED, "vibe64_github_issues_failed");
+        throw vibe64Error(LABEL_CREATION_UNCONFIRMED, "vibe64_github_issue_label_creation_unconfirmed");
       }
       return { ok: true, label: { id: created.node_id, name: created.name, color: created.color, description: created.description || "" } };
     }
     const allowed = operation === "create" ? catalog.canCreateWithLabels : catalog.canEditLabels;
     if (!allowed) {
-      throw vibe64Error("Your GitHub account cannot set labels for this issue.", "vibe64_issue_permission_denied");
+      throw vibe64Error("Your GitHub account cannot set labels for this issue.", "vibe64_issue_labels_denied");
     }
     const names = new Set(catalog.labels.map((label) => label.name));
     if (selectedLabels.some((label) => !names.has(label))) {
-      throw vibe64Error("A selected label is no longer available. Reload the labels and try again.", "vibe64_issue_input_invalid");
+      throw vibe64Error("A selected label is no longer available. Reload the labels and try again.", "vibe64_issue_label_unavailable");
     }
     labelIds = catalog.labels.filter((label) => selectedLabels.includes(label.name)).map((label) => label.id);
   }
@@ -226,10 +245,7 @@ export async function githubIssues(project, input = {}, options = {}) {
       labels: selectedLabels
     });
     if (!Number.isSafeInteger(created.number) || !created.html_url) {
-      throw vibe64Error(
-        "Issue creation could not be confirmed. Refresh the issue list before trying again.",
-        "vibe64_github_issues_failed"
-      );
+      throw vibe64Error(ISSUE_CREATION_UNCONFIRMED, "vibe64_github_issue_creation_unconfirmed");
     }
     return { ok: true, issue: { number: created.number, url: created.html_url } };
   }
@@ -237,7 +253,7 @@ export async function githubIssues(project, input = {}, options = {}) {
     if (/^#?\d+$/u.test(search)) {
       const issueNumber = Number(search.replace(/^#/u, ""));
       if (!Number.isSafeInteger(issueNumber) || issueNumber < 1) {
-        throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
+        throw vibe64Error("Choose a valid issue number.", "vibe64_issue_number_invalid");
       }
       const found = await api(`repos/${fullName}/issues/${issueNumber}`, undefined, "GET", { allowNotFound: true });
       const matches = found && !found.pull_request && (state === "all" || found.state === state) &&
@@ -302,7 +318,7 @@ export async function githubIssues(project, input = {}, options = {}) {
       });
       list = result.data?.search;
     }
-    if (!Array.isArray(list?.nodes)) throw vibe64Error("GitHub returned an unreadable issue list.", "vibe64_github_issues_failed");
+    if (!Array.isArray(list?.nodes)) throw vibe64Error("GitHub returned an unreadable issue list.", "vibe64_github_issue_list_unreadable");
     return {
       ok: true,
       repository: fullName,
@@ -321,10 +337,10 @@ export async function githubIssues(project, input = {}, options = {}) {
     });
     const comment = result.data?.node;
     if (comment?.issue?.number !== number || comment.issue.repository?.nameWithOwner?.toLowerCase() !== fullName.toLowerCase()) {
-      throw vibe64Error("This comment is unavailable on this issue.", "vibe64_issue_not_found");
+      throw vibe64Error("This comment is unavailable on this issue.", "vibe64_issue_comment_not_found");
     }
     if (!comment.viewerCanUpdate) {
-      throw vibe64Error("Your GitHub account cannot edit this comment.", "vibe64_issue_permission_denied");
+      throw vibe64Error("Your GitHub account cannot edit this comment.", "vibe64_issue_comment_edit_denied");
     }
     const updated = await api("graphql", {
       query: `mutation($input:UpdateIssueCommentInput!) {
@@ -372,7 +388,7 @@ export async function githubIssues(project, input = {}, options = {}) {
   }
   if (operation === "state") {
     const allowed = input.state === "closed" ? issue.viewerCanClose : issue.viewerCanReopen;
-    if (!allowed) throw vibe64Error("Your GitHub account cannot change this issue's state.", "vibe64_issue_permission_denied");
+    if (!allowed) throw vibe64Error("Your GitHub account cannot change this issue's state.", "vibe64_issue_state_change_denied");
     const updated = await api(`repos/${fullName}/issues/${number}`, {
       state: input.state,
       state_reason: input.state === "closed" ? "completed" : "reopened"

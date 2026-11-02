@@ -1,11 +1,10 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
+
 const MAIN_CONVERSATION_PREFIX = "vibe64-main:";
 const TEMPORARY_CONVERSATION_PREFIX = "vibe64-temporary:";
 
 function invalidConversation(kind) {
-  return Object.assign(new TypeError(`Invalid ${kind} conversation identity.`), {
-    code: "conversation_input_invalid",
-    statusCode: 400
-  });
+  return new AppError(400, `Invalid ${kind} conversation identity.`, { code: "vibe64_conversation_identity_invalid", params: { kind } });
 }
 
 /**

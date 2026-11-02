@@ -9,9 +9,7 @@ const USAGE_ENTRY_KINDS = Object.freeze([
 ]);
 
 function usageError(message, code, details) {
-  const error = vibe64Error(message, code);
-  if (details) error.details = details;
-  return error;
+  return vibe64Error(message, code, { details });
 }
 
 const byText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
@@ -68,7 +66,11 @@ function renderLinks(ui) {
 function buildSnapshotIndex(record, layout) {
   const machine = requireGenesisCity(record, "machine");
   const architecture = machine.architecture;
-  if (!architecture) throw usageError("This scan has no architecture. Refresh analysis.", "vibe64_genesis_city_missing");
+  if (!architecture) {
+    throw vibe64Error("This scan has no architecture. Refresh analysis.", "vibe64_genesis_city_missing", {
+      messageCode: "vibe64_genesis_architecture_missing"
+    });
+  }
   const groups = layoutGroups(layout);
   const groupByRoot = new Map(groups.flatMap((group) => group.roots.map((root) => [root, group.id])));
   const subsystems = (architecture.subsystems || []).map((owner) => ({

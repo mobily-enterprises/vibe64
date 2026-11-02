@@ -659,9 +659,10 @@ on every catalogue read. Lessons keep their exact code and hash, so saved passes
 count in every course containing them; lesson content never changes. An identical
 retry returns `changed:false`; the same name with a different definition returns
 `VIBE64_TRAINING_COURSE_EXISTS`. Other refusals are
-`VIBE64_TRAINING_COURSE_INVALID`, `VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE`,
-`VIBE64_TRAINING_COURSE_LIMIT` and the original catalogue revision/busy/save
-errors. To retire a custom course, disable its exact release with
+`VIBE64_TRAINING_COURSE_NAME_INVALID`, `VIBE64_TRAINING_COURSE_TOPICS_INVALID`,
+`VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE`, `VIBE64_TRAINING_COURSE_CREATE_LIMIT`
+and the original catalogue revision/busy/save errors. To retire a custom course,
+disable its exact release with
 `vibe64 training disable-course custom-<name-slug> 1.0.0 <system-root> <revision>`,
 or remove it with `remove-course` to free its place.
 
@@ -712,7 +713,7 @@ records every finished lesson content and is never pruned, so the course list
 keeps a lesson completed after its attempts are gone.
 
 `endAttempt` takes reason `finished` (refused with
-`VIBE64_TRAINING_LESSON_INCOMPLETE` unless every required step has passed; adds
+`VIBE64_TRAINING_LESSON_END_INCOMPLETE` unless every required step has passed; adds
 the lesson to `completedLessons`), `archived` or `deleted`. After the end is
 saved it removes that attempt's step results and code ledger. The archive or
 deletion of its project and conversation is the lifecycle owner's job.

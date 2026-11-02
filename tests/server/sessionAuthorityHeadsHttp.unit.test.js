@@ -175,10 +175,10 @@ test("invalid or refused GitHub evidence fails that authority's read, as ls-remo
     github.answer = () => ({ body: lsRefsAnswer(["ERR upload-pack: not our ref"]), status: 200 });
     assert.match((await failure()).error, /not our ref/u);
     github.answer = () => ({ headers: { location: "https://elsewhere.example/owner/repo.git/git-upload-pack" }, status: 307 });
-    assert.equal((await failure()).code, "vibe64_session_update_check_failed");
+    assert.equal((await failure()).code, "vibe64_session_update_http_failed");
     assert.equal(github.requests.length, 6, "a redirect is not followed with the token");
     github.answer = () => ({ body: "Repository not found.", contentType: "text/plain", status: 404 });
-    assert.equal((await failure()).code, "vibe64_session_update_check_failed");
+    assert.equal((await failure()).code, "vibe64_session_update_access_denied");
     assert.deepEqual(commands.commands, []);
     assert.equal(commands.tokens, 1, "only GitHub's rejection of the credential drops it");
   });

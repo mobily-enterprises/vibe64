@@ -7,7 +7,7 @@ import { canonicalJson } from "./content.js";
 import { courseSchema, id, list, text, validateContent } from "./contentSchemas.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
-import { causedFailure } from "./errors.js";
+import { causedFailure, trainingFailure, trainingInternalError } from "./errors.js";
 
 /** @typedef {import("./types.js").InstalledTrainingCatalogue} InstalledTrainingCatalogue */
 
@@ -182,7 +182,7 @@ function createTrainingCourseInstaller({
       timeout
     });
     if (result?.ok !== true) {
-      throw causedFailure(
+      throw trainingInternalError(
         String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300),
         "VIBE64_TRAINING_SOURCE_FETCH_FAILED"
       );
@@ -372,10 +372,10 @@ function createTrainingCourseInstaller({
         return { changed: retired.length > 0, course, retired, catalogueCommit: available.commit };
       }
       if (state === "conflict") {
-        throw causedFailure(
+        throw trainingFailure(
           `This server already has a different course ${key}. Installed releases are immutable; ask the owner to inspect it.`,
-          "VIBE64_TRAINING_COURSE_RELEASE_CONFLICT",
-          409
+          "VIBE64_TRAINING_COURSE_RELEASE_DIFFERENT",
+          { statusCode: 409, params: { course: key } }
         );
       }
       // Installing never re-enables a disabled release, for anyone: that stays

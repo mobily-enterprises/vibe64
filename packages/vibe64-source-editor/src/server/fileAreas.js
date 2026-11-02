@@ -139,7 +139,7 @@ function createFileArea(project, { repoChanged }) {
     if (area === "repo") {
       const root = sessionSourcePath(session);
       if (!root) {
-        throw sourceEditorError("This session has no Repo files.", "vibe64_source_editor_source_unavailable", {}, 409);
+        throw sourceEditorError("This session has no Repo files.", "vibe64_files_repo_unavailable", {}, 409);
       }
       if (!write) return { key, session, run: (perform) => perform(context(root)) };
       const writeContext = context(root, { staging: await repoStagingFolder(root) });
@@ -208,7 +208,7 @@ function createFileArea(project, { repoChanged }) {
         return runtime.store.mutateSession(sessionId, async (sessionPaths) => {
           const current = await runtime.store.readSessionSummary(sessionId);
           if (sessionClosingReason(current) || current.status === "archived") {
-            throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_session_closing", {}, 409);
+            throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_files_drop_zone_closing", {}, 409);
           }
           await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
           const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, staging: STAGING_FOLDER });
@@ -420,7 +420,7 @@ async function areaOperation(operation, context, input, readUpload) {
   }
   await sourceEditorPathStats(sourceRoot);
   if (["mkdir", "delete", "rename"].includes(operation) && !relativePath) {
-    throw sourceEditorError("Choose an item inside this folder.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose an item inside this folder.", "vibe64_invalid_source_editor_item");
   }
   for (const item of [relativePath, operation === "rename" ? normalizeSourceEditorRelativePath(input.destination) : ""]) {
     if (item && sourceEditorPathExcluded(context.policy, item)) throw protectedError(item);
@@ -481,12 +481,12 @@ async function existingNames(context, folder, names = []) {
     throw sourceEditorError("Check fewer names at once.", "vibe64_files_too_many_names", {}, 413);
   }
   if (!(await sourceEditorPathStats(context.sourceRoot, folder)).isDirectory()) {
-    throw sourceEditorError("Choose a folder.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose a folder.", "vibe64_invalid_source_editor_folder");
   }
   const existing = [];
   for (const name of list) {
     const candidate = normalizeNewSourceEditorFilePath(name);
-    if (candidate.includes("/")) throw sourceEditorError("Names cannot include folders.", "vibe64_invalid_source_editor_path");
+    if (candidate.includes("/")) throw sourceEditorError("Names cannot include folders.", "vibe64_invalid_source_editor_name");
     if (await pathExists(absoluteSourceEditorPath(context.sourceRoot, joinRelative(folder, candidate)))) existing.push(candidate);
   }
   return existing;
@@ -496,10 +496,14 @@ async function createAreaTextFile(context, input) {
   const relativePath = normalizeNewSourceEditorFilePath(input.path);
   const content = Buffer.from(String(input.text ?? ""), "utf8");
   if (content.byteLength > context.policy.maxFileBytes) {
-    throw sourceEditorError("The new file is too large for the text editor.", "vibe64_source_editor_file_too_large", {}, 413);
+    throw sourceEditorError("The new file is too large for the text editor.", "vibe64_source_editor_file_too_large", {}, 413, {
+      messageCode: "vibe64_files_new_file_too_large"
+    });
   }
   if (content.includes(0)) {
-    throw sourceEditorError("A new file must contain text.", "vibe64_source_editor_binary_file", {}, 415);
+    throw sourceEditorError("A new file must contain text.", "vibe64_source_editor_binary_file", {}, 415, {
+      messageCode: "vibe64_files_new_file_binary"
+    });
   }
   await withAreaFolder(context, folderOf(relativePath), (destination) => withStaging(context, async (staging) => {
     const staged = stagedItem(staging);
@@ -519,7 +523,7 @@ async function uploadIntoArea(context, input, readUpload) {
   if (sourceEditorPathExcluded(context.policy, requested)) throw protectedError(requested);
   const folder = folderOf(requested);
   if (!(await sourceEditorPathStats(context.sourceRoot, folder)).isDirectory()) {
-    throw sourceEditorError("Choose a folder to upload into.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError("Choose a folder to upload into.", "vibe64_invalid_source_editor_upload_folder");
   }
   return withStaging(context, (staging) => receiveUpload(context, staging, input, readUpload, requested));
 }
@@ -532,7 +536,7 @@ async function receiveUpload(context, staging, input, readUpload, requested) {
     for await (const part of readUpload()) {
       if (++count !== 1 || part.type !== "file" || part.fieldname !== "file") {
         part.file?.resume();
-        throw sourceEditorError("Upload exactly one file.", "vibe64_files_invalid_upload");
+        throw sourceEditorError("Upload exactly one file.", "vibe64_files_upload_single_file");
       }
       // Multipart limits can close the stream before the iterator yields it.
       if (part.file.destroyed) {

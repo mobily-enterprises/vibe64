@@ -378,7 +378,7 @@ test("PR merge refuses drafts, conflicts, restrictions and unknown state without
   }
   const f = fixture([readPr()]);
   await assert.rejects(githubPullRequests(project, { operation: "merge", number: 7, review,
-    mergeMethod: "rebase", vibe64User: user }, f.options), { code: "vibe64_pull_request_input_invalid" });
+    mergeMethod: "rebase", vibe64User: user }, f.options), { code: "vibe64_pull_request_merge_method_invalid" });
   assert.equal(f.calls.length, 2);
 });
 

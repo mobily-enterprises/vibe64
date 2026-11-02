@@ -18,10 +18,12 @@ const MAX_PAGE_BODY_BYTES = 64 * 1024;
  * @param {object} result
  */
 function boundedLessonResult(result) {
-  return boundedTrainingResult(result, {
-    statusCode: 413,
-    message: "The lesson result exceeds 128 KiB. Ask the owner to inspect the content; nothing was silently omitted."
-  });
+  return boundedTrainingResult(result, () => conflictFailure(
+    "The lesson result exceeds 128 KiB. Ask the owner to inspect the content; nothing was silently omitted.",
+    "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE",
+    413,
+    { messageCode: "VIBE64_TRAINING_LESSON_RESULT_TOO_LARGE" }
+  ));
 }
 
 function refusalText(reason, fallback) {
@@ -181,7 +183,12 @@ function createTrainingStepOperations({
     }));
     const count = pageBodies(projected, lesson.notesText);
     const index = input.page ?? 0;
-    if (index >= count) throw conflictFailure(`This lesson has ${count} page(s).`, "ACTION_VALIDATION_FAILED", 400);
+    if (index >= count) {
+      throw conflictFailure(`This lesson has ${count} page(s).`, "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_LESSON_PAGE_INVALID",
+        messageParams: { count }
+      });
+    }
     for (const step of projected) if (step.bodyPage !== index) delete step.bodyText;
     const progress = await steps.read({ actor, attemptId: attempt.attemptId });
     // readable-check: allow method-probe - optional operation: a learner store without reader positions reads none

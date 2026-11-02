@@ -266,7 +266,7 @@ function createSessionRenewalController({
             ) {
               throw renewalError(
                 "This handover is no longer awaiting confirmation.",
-                "vibe64_session_renewal_confirm_not_available"
+                "vibe64_session_renewal_confirm_withdrawn"
               );
             }
             return statePatch(latest, {
@@ -370,7 +370,7 @@ function createSessionRenewalController({
         ) {
           throw renewalError(
             "Only an active session can be renewed.",
-            "vibe64_session_renewal_source_not_active"
+            "vibe64_session_renewal_session_inactive"
           );
         }
         const initial = createSessionRenewalState({
@@ -454,7 +454,7 @@ function createSessionRenewalController({
         if (sourceStatus !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
           throw renewalError(
             "The acknowledged predecessor no longer owns its renewal transition.",
-            "vibe64_session_renewal_link_mismatch",
+            "vibe64_session_renewal_acknowledged_predecessor_lost",
             { retryable: true, statusCode: 500 }
           );
         }

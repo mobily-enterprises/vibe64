@@ -8,13 +8,17 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 const SAVE_TIMEOUT_MS = 120_000;
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
 
-function saveError(message, code = "vibe64_session_save_failed", details = {}) {
+/**
+ * A session work refusal. Its `details` are copied onto the error and into `error.details`; `messageFields`
+ * (`{ messageCode, messageParams }`) names the sentence of a refusal that keeps a code callers branch on.
+ */
+function saveError(message, code, details = {}, messageFields = {}) {
   const error = new Error(message || "Vibe64 could not save this session.");
   error.code = code;
   error.details = details && typeof details === "object" && !Array.isArray(details)
     ? { ...details }
     : {};
-  Object.assign(error, details);
+  Object.assign(error, details, messageFields);
   return error;
 }
 

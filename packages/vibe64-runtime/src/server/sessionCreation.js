@@ -64,7 +64,7 @@ function createSessionCreation({
     if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) {
       throw vibe64Error(
         "Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
-        "vibe64_learning_scope_invalid"
+        "vibe64_learning_scope_metadata_forbidden"
       );
     }
     const normalizedMetadata = Object.fromEntries(
@@ -179,7 +179,8 @@ function createSessionCreation({
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(status)) {
       throw vibe64Error(
         `Renewal session status requires createRenewalPendingSession: ${status}`,
-        "vibe64_session_renewal_transition_required"
+        "vibe64_session_renewal_pending_creation_required",
+        { params: { status } }
       );
     }
     return createSessionRecord({
@@ -244,8 +245,9 @@ function createSessionCreation({
         throw vibe64Error(
           `A renewed session can only be prepared from its quiesced predecessor: ${sourceSessionId}`,
           sourceSession.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED
-            ? "vibe64_session_renewal_conflict"
-            : "vibe64_session_renewal_source_not_quiesced"
+            ? "vibe64_session_renewal_predecessor_quiesced_elsewhere"
+            : "vibe64_session_renewal_source_not_quiesced",
+          { params: { sessionId: sourceSessionId } }
         );
       }
       const renewalRecords = await listing.listSessionsForRenewal();
@@ -256,7 +258,8 @@ function createSessionCreation({
       if (foreignOwner) {
         throw vibe64Error(
           `Renewal ${normalizedRenewalId} belongs to another predecessor.`,
-          "vibe64_session_renewal_conflict"
+          "vibe64_session_renewal_foreign_predecessor",
+          { params: { renewalId: normalizedRenewalId } }
         );
       }
       const existingSuccessor = renewalRecords.find((session) => (
@@ -284,7 +287,8 @@ function createSessionCreation({
         }
         throw vibe64Error(
           `Another renewal is already prepared for session ${sourceSessionId}.`,
-          "vibe64_session_renewal_conflict"
+          "vibe64_session_renewal_already_prepared",
+          { params: { sessionId: sourceSessionId } }
         );
       }
       const successorCreatedAt = state.now().toISOString();

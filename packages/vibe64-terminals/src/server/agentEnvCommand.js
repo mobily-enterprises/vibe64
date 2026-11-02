@@ -84,7 +84,8 @@ const commandServers = createSessionCommandServers({
     statusCode: 409,
     payload: commandLineFailure(
       "Managed Env control generation is no longer current. Reconnect the assistant.",
-      "vibe64_agent_control_unavailable"
+      "vibe64_agent_control_unavailable",
+      { messageCode: "vibe64_agent_env_control_stale" }
     )
   },
   requestFailure: {

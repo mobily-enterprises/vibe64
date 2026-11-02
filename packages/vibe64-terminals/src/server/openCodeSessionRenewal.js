@@ -162,14 +162,18 @@ function createOpenCodeSessionRenewalPreparation({
             return openCodeError(
               "vibe64_session_renewal_fresh_thread_required",
               "The renewed OpenCode session does not own the expected fresh native history.",
-              details
+              details,
+              409,
+              { messageCode: "vibe64_session_renewal_opencode_history_not_fresh" }
             );
           }
           if (reason === "unrelated_history") {
             return openCodeError(
               "vibe64_session_renewal_fresh_thread_required",
               "The successor OpenCode history contains unrelated conversation and cannot be used for renewal.",
-              details
+              details,
+              409,
+              { messageCode: "vibe64_session_renewal_opencode_history_unrelated" }
             );
           }
           return openCodeError(

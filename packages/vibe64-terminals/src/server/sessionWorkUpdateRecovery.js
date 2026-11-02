@@ -121,7 +121,7 @@ async function recoverSessionWorkUpdate({
     if (recoveredTree !== recovery.mergedTree) {
       throw saveError(
         "The interrupted session update could not reproduce its prepared worktree.",
-        "vibe64_session_update_verification_failed"
+        "vibe64_session_update_recovery_unreproducible"
       );
     }
     await rememberCanonicalCommit(runCommand, context, recovery.canonicalCommit, {

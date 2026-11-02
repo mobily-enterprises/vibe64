@@ -5,7 +5,7 @@ import {
   defineVibe64AgentExecutionProfileRequest,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROFILE_KEYS = Object.freeze([
   "limits",
@@ -35,8 +35,8 @@ const PROFILE_REQUEST_KEYS = Object.freeze([
   "summary"
 ]);
 
-function ledgerError(message = "", code = "vibe64_codex_helper_ledger_invalid") {
-  const error = new Error(toText(message) || "Codex helper ownership record is invalid.");
+function ledgerError(message, code) {
+  const error = new Error(message);
   error.code = code;
   error.retryable = true;
   return error;
@@ -44,7 +44,7 @@ function ledgerError(message = "", code = "vibe64_codex_helper_ledger_invalid") 
 
 function assertExactKeys(value, expectedKeys, label) {
   if (!isRecord(value)) {
-    throw ledgerError(`${label} must be an object.`);
+    throw ledgerError(`${label} must be an object.`, "vibe64_codex_helper_ledger_not_object");
   }
   const actual = Object.keys(value).sort();
   const expected = [...expectedKeys].sort();
@@ -52,7 +52,7 @@ function assertExactKeys(value, expectedKeys, label) {
     actual.length !== expected.length ||
     actual.some((key, index) => key !== expected[index])
   ) {
-    throw ledgerError(`${label} has an unsupported shape.`);
+    throw ledgerError(`${label} has an unsupported shape.`, "vibe64_codex_helper_ledger_invalid");
   }
 }
 

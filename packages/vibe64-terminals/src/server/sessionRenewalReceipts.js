@@ -116,7 +116,7 @@ function codexSessionRenewalTurnError(reason, details = {}, providerMessage = ""
       "vibe64_session_renewal_thread_unreadable",
       "The exact handover turn is no longer readable. Write or edit the handover manually instead.",
       { reason: "exact_handover_turn_missing" },
-      { retryable: false }
+      { retryable: false, messageCode: "vibe64_session_renewal_handover_turn_unreadable" }
     );
   }
   if (reason === "handover_history_missing") {
@@ -124,7 +124,7 @@ function codexSessionRenewalTurnError(reason, details = {}, providerMessage = ""
       "vibe64_session_renewal_thread_unreadable",
       "The old assistant thread has no readable conversation history. Write or edit the handover manually instead.",
       {},
-      { retryable: false }
+      { retryable: false, messageCode: "vibe64_session_renewal_history_unreadable" }
     );
   }
   if (reason === "seed_turn_missing") {
@@ -138,7 +138,9 @@ function codexSessionRenewalTurnError(reason, details = {}, providerMessage = ""
   if (reason === "seed_unrelated_history") {
     return sessionRenewalProtocolError(
       "vibe64_session_renewal_fresh_thread_required",
-      "The successor assistant thread contains unrelated conversation and cannot be used for renewal."
+      "The successor assistant thread contains unrelated conversation and cannot be used for renewal.",
+      {},
+      { messageCode: "vibe64_session_renewal_successor_history_unrelated" }
     );
   }
   if (reason === "seed_identity_missing") {

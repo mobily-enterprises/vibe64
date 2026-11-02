@@ -174,7 +174,8 @@ failure is attached as its cause. Failed cleanup prevents another question for t
 and remains retryable on session close after restart. Its error names the
 copilot Helper and keeps the native owner's reason and code. Session close tries
 each actor's receipt on its own, logs each failure and reports all of them; an
-unreadable or invalid receipt is a coded `vibe64_database_assistant_receipt_invalid`
+unreadable receipt (`vibe64_database_assistant_receipt_unreadable`) or one with
+invalid cleanup paths (`vibe64_database_assistant_receipt_invalid`) is a coded
 error that leaves the receipt unchanged. A late native start after
 Close is still retained and cleaned up. Closing never re-resolves a destination
 or starts inference. Cleanup uses the saved Helper selection, conversation and

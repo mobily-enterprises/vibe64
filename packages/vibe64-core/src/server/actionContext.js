@@ -23,6 +23,17 @@ function actionContextError(code, message, statusCode = 403) {
   return new AppError(statusCode, message, { code });
 }
 
+/**
+ * The owner-only refusal keeps vibe64_owner_required, which composing hosts
+ * branch on; this sentence has its own messageCode.
+ */
+function ownerRequiredError() {
+  return new AppError(403, "Only the workspace owner can perform this operation.", {
+    code: "vibe64_owner_required",
+    messageCode: "vibe64_operation_owner_required"
+  });
+}
+
 function actionProjectSlug(input, context) {
   const routeSlug = context.requestMeta?.request?.params?.slug;
   const requestedSlug = input.projectSlug;
@@ -110,7 +121,7 @@ async function executeVibe64Action({ definition, input, context, run }) {
     getStudioProjectContext().projectCatalogEnabled === false &&
     isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }));
   if (ownerRequired && user?.role !== "owner" && !localOwner) {
-    throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
+    throw ownerRequiredError();
   }
   const operationInput = { ...input };
   delete operationInput.projectSlug;
@@ -122,7 +133,7 @@ async function executeVibe64Action({ definition, input, context, run }) {
   if (Object.hasOwn(definition.input.schema.getFieldDefinitions(), "projectSlug")) trustedInput.projectSlug = slug;
   const resolved = context.vibe64Action?.project;
   if (resolved && resolved.slug !== slug) {
-    throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
+    throw actionContextError("vibe64_action_authorized_project_mismatch", "The authorized project does not match this operation.");
   }
   // An action from a person's request stays that person's request (its
   // headers, through the prototype), so practice admission compares the
@@ -212,7 +223,7 @@ function registerVibe64ActionContext(actions, {
         const user = await measure("user", () => resolveUser({ request: context.requestMeta?.request || null, context }));
         if (!user) throw actionContextError("vibe64_auth_required", "Log in to Vibe64.", 401);
         if (scope.ownerRequired && user.role !== "owner") {
-          throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
+          throw ownerRequiredError();
         }
         let project = null;
         if (scope.projectScoped) {

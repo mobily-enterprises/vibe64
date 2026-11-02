@@ -3297,7 +3297,7 @@ test("a starting model makes the owner's main chat Custom and a member cannot ch
     assert.deepEqual(preferences.override, initialPlanSelection);
     const member = await harness.service.createSession({ vibe64User: { username: "member", role: "member" },
       assistantSelection: { engineId: "opencode" } });
-    assert.equal(member.code, "vibe64_main_chat_approval_required");
+    assert.equal(member.code, "vibe64_main_chat_model_owner_only");
     assert.equal(harness.creationInputs.length, 1);
   });
 });
@@ -4450,7 +4450,7 @@ test("a team member can't change main chat's mode, review or model outside their
     { assistantSelection: { modelId: "gpt-5.6-codex" } }]) {
     const refused = await service.updateAssistantSelection(session.sessionId, { ...input, vibe64User: member });
     assert.equal(refused.ok, false);
-    assert.equal(refused.code, "vibe64_main_chat_approval_required");
+    assert.equal(refused.code, "vibe64_main_chat_settings_owner_only");
   }
   assert.equal(runtimes, 0);
   assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "junior", review: true });
@@ -4879,7 +4879,7 @@ test("source pin works during assistant preparation and retains closing and rene
     await writeSessionRenewalState(runtime, "source", createSessionRenewalState({
       sessionId: "source", operationKey: "renewal-pin-test", actor: { id: "owner", name: "Owner" }
     }));
-    assert.equal((await service.pinSession("source", { pinned: true })).code, "vibe64_session_pin_unavailable");
+    assert.equal((await service.pinSession("source", { pinned: true })).code, "vibe64_session_pin_renewal_unfinished");
     assert.equal(await store.readPinnedSessionId(), "");
   });
 });

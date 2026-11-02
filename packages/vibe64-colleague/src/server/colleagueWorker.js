@@ -87,7 +87,7 @@ function createColleagueWorker({
           messageId: message.messageId,
           text: message.text
         });
-        if (!turn) throw failure("The authored Colleague message could not be admitted.");
+        if (!turn) throw failure("The authored Colleague message could not be admitted.", "vibe64_colleague_message_unadmitted");
         state.pendingMessages.push({ ...message, turnId: turn.turnId });
         state.nextConnection = connection;
         admission.resolve({ status: "accepted", messageId: message.messageId, turnId: turn.turnId, origin: "user" });
@@ -184,7 +184,7 @@ function createColleagueWorker({
       if (!isCurrent()) return;
       const turn = result.conversationLog.find(candidate => candidate.turnId === receipt.turnId);
       if (turn?.metadata?.runtime?.status !== "complete") {
-        throw failure(result.error || "Colleague's response did not complete. Your message is kept.");
+        throw failure(result.error || "Colleague's response did not complete. Your message is kept.", "vibe64_colleague_response_incomplete");
       }
       markObservationsDelivered(state.record, observations);
       state.record.status = "ready";
@@ -281,13 +281,19 @@ function createColleagueWorker({
         signal: controller.signal,
         policy: { maximumResponses: 24 },
         completedEnvelope: true,
-        limitError: failure("Colleague reached this turn's operation limit. The completed results are kept; send a follow-up to continue."),
-        invalidResponseError: ({ nativeToolAttempt }) => failure(
-          nativeToolAttempt
-            ? "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model."
-            : "The model did not return a valid Colleague response. Your message is kept; try another model or retry.",
-          "vibe64_colleague_response_invalid"
+        limitError: failure(
+          "Colleague reached this turn's operation limit. The completed results are kept; send a follow-up to continue.",
+          "vibe64_colleague_operation_limit"
         ),
+        invalidResponseError: ({ nativeToolAttempt }) => nativeToolAttempt
+          ? failure(
+            "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model.",
+            "vibe64_colleague_tool_request_invalid"
+          )
+          : failure(
+            "The model did not return a valid Colleague response. Your message is kept; try another model or retry.",
+            "vibe64_colleague_response_invalid"
+          ),
         async complete(_prompt, { outputSchema, previousResponse }) {
           release?.();
           release = null;
@@ -383,13 +389,15 @@ function createColleagueWorker({
             if (!["failed", "interrupted", "cancelled"].includes(turn?.metadata?.runtime?.status)) {
               const observed = await conversation.inspectDelivery({ messageId: internalMessageId });
               if (observed.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) {
-                throw failure("Colleague's response did not complete. Your message is kept.");
+                throw failure("Colleague's response did not complete. Your message is kept.", "vibe64_colleague_response_incomplete");
               }
               turn = await records.storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
             }
             if (turn?.metadata?.runtime?.status !== "complete") {
-              throw failure(turn?.metadata?.runtime?.error || result?.error ||
-              "Colleague's response did not complete. Your message is kept.");
+              throw failure(
+                turn?.metadata?.runtime?.error || result?.error || "Colleague's response did not complete. Your message is kept.",
+                "vibe64_colleague_response_incomplete"
+              );
             }
           }
           prepared = await conversation.prepareCompletedResponse(

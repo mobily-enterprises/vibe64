@@ -1,5 +1,5 @@
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { boundedTrainingResult } from "./errors.js";
+import { boundedTrainingResult, conflictFailure, trainingFailure, trainingInternalError } from "./errors.js";
 
 /**
  * Training's result projections, bounds and error mappers, shared by its
@@ -56,9 +56,25 @@ function completionProjection(value) {
  * @param {object} result
  */
 function boundedResult(result) {
-  return boundedTrainingResult(result, {
-    message: "The training result exceeds 128 KiB. Ask the owner to inspect the content; no teaching text or progress was silently omitted."
-  });
+  return boundedTrainingResult(result, () => trainingInternalError(
+    "The training result exceeds 128 KiB. Ask the owner to inspect the content; no teaching text or progress was silently omitted.",
+    "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE"
+  ));
+}
+
+/**
+ * The error a failed operation reports in place of its cause, keeping the cause's code: a refusal at the cause's
+ * status below 500, whose messageCode names the reported sentence, otherwise an internal failure.
+ * @param {string} message
+ * @param {Error & { code?: string, statusCode?: number }} cause
+ * @param {{ fallbackCode: string, messageCode: string, messageParams?: object }} reported
+ */
+function toReportedError(message, cause, reported) {
+  const { fallbackCode, ...messageFields } = reported;
+  const code = cause.code || fallbackCode;
+  return cause.statusCode < 500
+    ? trainingFailure(message, code, { ...messageFields, statusCode: cause.statusCode, cause })
+    : trainingInternalError(message, code, cause);
 }
 
 /**
@@ -67,36 +83,27 @@ function boundedResult(result) {
  */
 function toTrainingOperationError(cause) {
   if (cause.code === "VIBE64_TRAINING_PREPARATION_BUSY") {
-    return Object.assign(
-      new Error(
-        "This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt."
-      ),
-      {
-        code: cause.code,
-        statusCode: 409,
-        cause
-      }
+    return conflictFailure(
+      "This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt.",
+      cause.code,
+      409,
+      { cause }
     );
   }
   // Learner notes failures already carry notes-specific recovery text; the
   // generic attempt wording below would send the learner to the wrong place.
-  if (/^VIBE64_TRAINING_NOTES_/u.test(cause.code || "")) {
-    return Object.assign(new Error(cause.message), {
-      code: cause.code,
-      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-      cause
-    });
+  if (/^VIBE64_TRAINING_NOTES_/u.test(cause.code || "")) return cause;
+  if (String(cause.code || "").includes("SAVE_UNCONFIRMED")) {
+    return toReportedError(
+      "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress.",
+      cause,
+      { fallbackCode: "VIBE64_TRAINING_OPERATION_FAILED", messageCode: "VIBE64_TRAINING_OPERATION_SAVE_UNCONFIRMED" }
+    );
   }
-  const unconfirmed = String(cause.code || "").includes("SAVE_UNCONFIRMED");
-  return Object.assign(
-    new Error(unconfirmed
-      ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."
-      : "The training operation could not complete. Keep the saved attempt and ask the owner to inspect its exact content, state or preparation; no automatic repair was performed."),
-    {
-      code: cause.code || "VIBE64_TRAINING_OPERATION_FAILED",
-      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-      cause
-    }
+  return toReportedError(
+    "The training operation could not complete. Keep the saved attempt and ask the owner to inspect its exact content, state or preparation; no automatic repair was performed.",
+    cause,
+    { fallbackCode: "VIBE64_TRAINING_OPERATION_FAILED", messageCode: "VIBE64_TRAINING_OPERATION_FAILED" }
   );
 }
 
@@ -106,15 +113,11 @@ function toTrainingOperationError(cause) {
  */
 function toCourseInstallError(cause) {
   if (/^VIBE64_TRAINING_(COURSE|CATALOGUE|AVAILABLE|TOPIC|SOURCE)_/u.test(cause.code || "")) return cause;
-  return Object.assign(
-    new Error(
-      `The course could not be installed: ${String(cause.message || "unknown failure").slice(0, 300)} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`
-    ),
-    {
-      code: cause.code || "VIBE64_TRAINING_COURSE_INSTALL_FAILED",
-      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-      cause
-    }
+  const reason = String(cause.message || "unknown failure").slice(0, 300);
+  return toReportedError(
+    `The course could not be installed: ${reason} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`,
+    cause,
+    { fallbackCode: "VIBE64_TRAINING_COURSE_INSTALL_FAILED", messageCode: "VIBE64_TRAINING_COURSE_INSTALL_FAILED", messageParams: { reason } }
   );
 }
 
@@ -193,9 +196,8 @@ const preparedResult = result => {
 function signedInLearner(context) {
   const actor = authenticatedVibe64User(context);
   if (!actor) {
-    throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), {
-      code: "vibe64_auth_required",
-      statusCode: 401
+    throw conflictFailure("Log in to Vibe64 before using learning actions.", "vibe64_auth_required", 401, {
+      messageCode: "VIBE64_TRAINING_LEARNING_AUTH_REQUIRED"
     });
   }
   return actor;

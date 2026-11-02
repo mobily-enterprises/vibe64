@@ -203,10 +203,14 @@ function createService({
       }
       const current = await readDataOverview(context.session);
       if (current.present && (!input.baseHash || input.baseHash !== current.hash)) {
-        throw databaseError("The data overview changed. Reload it before saving your grouping.", "vibe64_database_overview_conflict");
+        throw databaseError("The data overview changed. Reload it before saving your grouping.", "vibe64_database_overview_conflict", {}, {
+          messageCode: "vibe64_database_overview_changed"
+        });
       }
       if (!current.present && input.baseHash) {
-        throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict");
+        throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict", {}, {
+          messageCode: "vibe64_database_overview_removed"
+        });
       }
       const payload = {
         sessionId: context.sessionId,

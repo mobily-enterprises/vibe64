@@ -310,7 +310,9 @@ function createOpenCodeConversationEvents({
           observation: () => observationProjection(context, options.onEvent),
           eventReady: options.eventReady,
           readiness: options.eventReady ? {
-            timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504)
+            timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504, {
+              messageCode: "vibe64_opencode_events_timeout_retry"
+            })
           } : undefined,
           finalResponse: {
             get agent() {

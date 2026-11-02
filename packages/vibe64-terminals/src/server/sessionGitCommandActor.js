@@ -101,7 +101,7 @@ function sessionGitCommandActorMetadataFromExistingActor({
   if (!actor.actorScope || !actor.actorUserKey || !normalizedSessionId || !normalizedSourceRoot) {
     return commandFailure(
       "Session Git command actor metadata requires a session id, source root, and stored actor.",
-      "vibe64_session_git_command_actor_context_required"
+      "vibe64_session_git_command_actor_stored_actor_required"
     );
   }
   return {

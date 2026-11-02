@@ -99,7 +99,12 @@ async function readSessionConversationContext(engine, project, sessionId, option
   if (codex) return prepareCodexConversationContext(id, runtime, session, codex.allowClosing, codexHost);
   if (engine === "opencode") {
     if (!session) {
-      throw openCodeError("vibe64_session_not_found", "Vibe64 session is not available.", { sessionId: id }, 404);
+      // vibe64_session_not_found answers 404 wherever it is caught; this sentence has its own messageCode.
+      throw new AppError(404, "Vibe64 session is not available.", {
+        code: "vibe64_session_not_found",
+        messageCode: "vibe64_session_unavailable",
+        details: { sessionId: id }
+      });
     }
     const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) ||
       sessionSourcePath(session);
@@ -119,13 +124,13 @@ async function readSessionConversationContext(engine, project, sessionId, option
       workdir: path.resolve(workdir)
     };
   }
-  if (!scope && !session) throw claudeConversationError("This session is unavailable.");
+  if (!scope && !session) throw claudeConversationError("This session is unavailable.", "vibe64_claude_session_unavailable");
   const selection = options.assistantSelection || vibe64AssistantSelectionFromMetadata(session?.metadata);
-  if (selection?.engineId !== "claude") throw claudeConversationError("This session does not have a Claude Code selection.");
+  if (selection?.engineId !== "claude") throw claudeConversationError("This session does not have a Claude Code selection.", "vibe64_claude_selection_required");
   const workdir = scope?.workdir ||
     await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) ||
     sessionSourcePath(session);
-  if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.");
+  if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.", "vibe64_claude_workspace_required");
   return {
     ...options,
     runtime,
@@ -149,7 +154,7 @@ function claudeConversationKey(runtime, id) {
 function claudeConversationScope(id, options) {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)) throw new TypeError("Claude requires a valid session id.");
   const scope = options.assistantScope;
-  if (scope && scope.id !== id) throw claudeConversationError("Claude conversation scope does not match.");
+  if (scope && scope.id !== id) throw claudeConversationError("Claude conversation scope does not match.", "vibe64_claude_scope_mismatch");
   return scope;
 }
 
@@ -167,7 +172,7 @@ async function readClaudeConversationOwnerContext(project, sessionId, options = 
   const runtime = options.runtime || (scope
     ? { stateRoot: scope.runtimeRoot }
     : await project.createRuntimeWithoutSource());
-  if (!runtime.stateRoot) throw claudeConversationError("Claude requires a session state root.");
+  if (!runtime.stateRoot) throw claudeConversationError("Claude requires a session state root.", "vibe64_claude_state_root_required");
   return { ...options, runtime, sessionId: id, key: claudeConversationKey(runtime, id) };
 }
 
@@ -181,7 +186,7 @@ function scopedOpenCodeContext(id, assistantScope, options) {
   const selection = defineVibe64AssistantSelection(options.assistantSelection || {});
   if (selection.engineId !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE) {
     throw openCodeError(
-      "vibe64_opencode_selection_required",
+      "vibe64_opencode_ephemeral_selection_required",
       "The ephemeral conversation does not have an OpenCode selection."
     );
   }

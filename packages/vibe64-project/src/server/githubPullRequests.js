@@ -1,6 +1,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 
+const PULL_REQUESTS_FAILED = "vibe64_github_pull_requests_failed";
 const FIELDS = `id number title body url state isDraft updatedAt author { login }
   baseRefName baseRefOid baseRef { name target { oid } } headRefName headRefOid headRef { name target { oid } }
   headRepository { nameWithOwner viewerPermission isArchived }
@@ -21,7 +22,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
       (operation !== "list" && (!Number.isSafeInteger(number) || number < 1))) {
     throw vibe64Error("Choose a valid pull request or filter.", "vibe64_pull_request_input_invalid");
   }
-  const api = githubApi(input, options);
+  const api = githubApi(input, { ...options, failureCode: PULL_REQUESTS_FAILED });
   if (operation === "list") {
     const phrase = search.replace(/["\\\r\n]/gu, " ").trim();
     let stateFilter = "";
@@ -46,7 +47,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     });
     const list = result.data?.search;
     if (!Array.isArray(list?.nodes)) {
-      throw vibe64Error("GitHub returned an unreadable pull request list.", "vibe64_github_pull_requests_failed");
+      throw vibe64Error("GitHub returned an unreadable pull request list.", "vibe64_github_pull_request_list_unreadable");
     }
     return {
       ok: true,
@@ -87,7 +88,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     if (!Number.isSafeInteger(comparison.behind_by) || comparison.behind_by < 0) {
       throw vibe64Error(
         "GitHub could not compare the pull request branches. Refresh and try again.",
-        "vibe64_github_pull_requests_failed"
+        "vibe64_github_pull_request_comparison_failed"
       );
     }
     behindBase = comparison.behind_by;
@@ -188,7 +189,9 @@ export async function githubPullRequests(project, input = {}, options = {}) {
   // Read immediately before writing, then let GitHub enforce the reviewed head and repository rules.
   const write = githubApi(input, {
     ...options,
-    uncertainWriteMessage: "The result could not be confirmed. Refresh this pull request or view it on GitHub before trying again."
+    failureCode: PULL_REQUESTS_FAILED,
+    uncertainWriteMessage: "The result could not be confirmed. Refresh this pull request or view it on GitHub before trying again.",
+    uncertainWriteCode: "vibe64_pull_request_result_unconfirmed"
   });
   if (operation === "ready") {
     const marked = await write("graphql", {
@@ -201,7 +204,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     if (ready?.id !== pullRequest.id || ready.isDraft !== false) {
       throw vibe64Error(
         "Ready for review could not be confirmed. Refresh the pull request before trying again.",
-        "vibe64_pull_request_result_unconfirmed"
+        "vibe64_pull_request_ready_unconfirmed"
       );
     }
     return { ok: true, message: "Pull request marked ready for review." };
@@ -211,7 +214,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     if (typeof accepted.message !== "string" || !accepted.message.trim()) {
       throw vibe64Error(
         "GitHub did not confirm the branch update request. Refresh the pull request before trying again.",
-        "vibe64_pull_request_result_unconfirmed"
+        "vibe64_pull_request_branch_update_unconfirmed"
       );
     }
     // GitHub accepts this asynchronously; do not report the branch as already updated.
@@ -222,7 +225,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     };
   }
   if (!mergeMethods.includes(input.mergeMethod)) {
-    throw vibe64Error("Choose a merge method allowed by this repository.", "vibe64_pull_request_input_invalid");
+    throw vibe64Error("Choose a merge method allowed by this repository.", "vibe64_pull_request_merge_method_invalid");
   }
   const merged = await write(`repos/${fullName}/pulls/${number}/merge`, {
     sha: review.headCommit,
@@ -231,7 +234,7 @@ export async function githubPullRequests(project, input = {}, options = {}) {
   if (merged.merged !== true) {
     throw vibe64Error(
       "GitHub did not confirm the merge. Refresh the pull request or view it on GitHub.",
-      "vibe64_pull_request_result_unconfirmed"
+      "vibe64_pull_request_merge_unconfirmed"
     );
   }
   return { ok: true, message: `Merged into ${review.baseBranch}. Archive your session when you have finished with it.` };
@@ -259,7 +262,7 @@ export function pullRequestSessionSource(pullRequest) {
 
 export async function preparePullRequestSource(project, session, input, options = {}) {
   const fullName = requireGithubRepository(project, "Pull requests");
-  const repository = await githubApi(input, options)(`repos/${fullName}`, undefined, "GET");
+  const repository = await githubApi(input, { ...options, failureCode: PULL_REQUESTS_FAILED })(`repos/${fullName}`, undefined, "GET");
   if (!repository.permissions?.push || repository.archived) {
     throw vibe64Error("Your GitHub account needs write access to this repository.", "vibe64_pull_request_permission_denied");
   }
@@ -283,14 +286,14 @@ export async function preparePullRequestSource(project, session, input, options 
 }
 
 export async function publishSessionPullRequest(source, input, options = {}) {
-  const api = githubApi(input, options);
+  const api = githubApi(input, { ...options, failureCode: PULL_REQUESTS_FAILED });
   const head = `${source.headRepository.split("/")[0]}:${source.headBranch}`;
   const query = new URLSearchParams({ state: "open", head, base: source.baseBranch, per_page: "1" });
   const existing = await api(`repos/${source.baseRepository}/pulls?${query}`, undefined, "GET");
   if (!Array.isArray(existing)) {
     throw vibe64Error(
       "Existing pull requests could not be checked. Try again before creating another.",
-      "vibe64_github_pull_requests_failed"
+      "vibe64_github_pull_request_existing_unchecked"
     );
   }
   const pr = existing[0] || await api(`repos/${source.baseRepository}/pulls`, {

@@ -22,6 +22,7 @@ import {
   stateConnection
 } from "./aiConnectionRecords.js";
 import { assistantProviderPolicy, assistantProviderProductLabel } from "./assistantProviderPolicy.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function verifyOpenCodeConnection({
@@ -37,21 +38,18 @@ async function verifyOpenCodeConnection({
       modelProviderId: policy.modelProviderId
     });
     if (result?.ok !== true) {
-      throw Object.assign(new Error("OpenCode verification did not complete."), {
-        retryable: true,
-        statusCode: 503
-      });
+      // An internal failure: the catch below answers with the unavailable refusal.
+      throw Object.assign(new Error("OpenCode verification did not complete."), { retryable: true });
     }
   } catch (error) {
     if (
       Number(error?.statusCode) === 409 ||
       error?.code === "vibe64_assistant_catalog_stale"
     ) {
-      throw aiConnectionError(
-        "vibe64_ai_provider_policy_stale",
-        `${policy.productLabel} changed in OpenCode. Refresh its setup before connecting.`,
-        409
-      );
+      throw new AppError(409, `${policy.productLabel} changed in OpenCode. Refresh its setup before connecting.`, {
+        code: "vibe64_ai_provider_policy_stale",
+        params: { provider: policy.productLabel }
+      });
     }
     let providerReason = "";
     if (policy.modelProviderId === "zai") {
@@ -479,7 +477,7 @@ function createAiConnectionStore({
     }
 
     if (!["cancel-check", "check-available", "disable-additional", "enable-all"].includes(requestedOperation)) {
-      throw aiConnectionError("vibe64_ai_model_access_invalid", "Choose how OpenCode Zen models should be enabled.", 400);
+      throw aiConnectionError("vibe64_ai_zen_model_access_invalid", "Choose how OpenCode Zen models should be enabled.", 400);
     }
 
     if (requestedOperation === "check-available") {
@@ -488,7 +486,7 @@ function createAiConnectionStore({
         const state = await readState();
         const current = state.connections[id];
         if (!current) {
-          throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before checking model access.", 409);
+          throw aiConnectionError("vibe64_ai_zen_key_required_for_check", "Add a Zen API key before checking model access.", 409);
         }
         if (zenModelChecks.has(id)) {
           return publicConnection(stateConnection(state, id), id, { activeZenCheck: true });
@@ -551,7 +549,7 @@ function createAiConnectionStore({
         const state = await readState();
         const connection = state.connections[id];
         if (!connection) {
-          throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before changing model access.", 409);
+          throw aiConnectionError("vibe64_ai_zen_key_required", "Add a Zen API key before changing model access.", 409);
         }
         const now = new Date().toISOString();
         if (connection.zenModelCheck) {
@@ -578,7 +576,7 @@ function createAiConnectionStore({
       const state = await readState();
       const connection = state.connections[id];
       if (!connection) {
-        throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before changing model access.", 409);
+        throw aiConnectionError("vibe64_ai_zen_key_required", "Add a Zen API key before changing model access.", 409);
       }
       const mode = requestedOperation === "enable-all" ? "all" : "recommended";
       const now = new Date().toISOString();

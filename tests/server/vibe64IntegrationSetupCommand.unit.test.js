@@ -132,15 +132,15 @@ test("failed and throwing commands do not expose private stdout, stderr or excep
 });
 
 test("invalid operations and unbounded verification inputs fail before execution", async () => {
-  for (const selection of [
-    { operation: "invoke", integrationId: "calendar" },
-    { operation: "status", integrationId: "../other" },
-    { operation: "cancel", integrationId: "calendar" },
-    { operation: "status", integrationId: "calendar", verificationInput: {} },
-    { operation: "connect", integrationId: "calendar", verificationInput: { data: "x".repeat(32768) } }
+  for (const [selection, code] of [
+    [{ operation: "invoke", integrationId: "calendar" }, "vibe64_integration_setup_operation_invalid"],
+    [{ operation: "status", integrationId: "../other" }, "vibe64_integration_setup_operation_invalid"],
+    [{ operation: "cancel", integrationId: "calendar" }, "vibe64_integration_setup_attempt_required"],
+    [{ operation: "status", integrationId: "calendar", verificationInput: {} }, "vibe64_integration_setup_verification_invalid"],
+    [{ operation: "connect", integrationId: "calendar", verificationInput: { data: "x".repeat(32768) } }, "vibe64_integration_setup_inputs_too_large"]
   ]) {
     await assert.rejects(runIntegrationSetupCommand({ ...options, selection, runCommand: async () => assert.fail("must not execute") }),
-      { code: "vibe64_integration_setup_invalid" });
+      { code });
   }
 });
 

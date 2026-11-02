@@ -117,7 +117,7 @@ function normalizedConversation(messages = [], schema = {}) {
       );
     }
     const table = role === "user" ? toText(message.table) : "";
-    if (table.length > 512) throw vibe64Error("The selected table name is too long.", "vibe64_database_assistant_table_invalid");
+    if (table.length > 512) throw vibe64Error("The selected table name is too long.", "vibe64_database_assistant_table_name_too_long");
     return { content, role, ...(table ? { table } : {}) };
   }).filter(Boolean);
   if (normalized.length < 1 || normalized.at(-1)?.role !== "user") {

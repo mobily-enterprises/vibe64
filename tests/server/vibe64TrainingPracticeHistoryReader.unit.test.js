@@ -125,7 +125,7 @@ test("the frozen reader reads vibe64 0.1.35 progress, its retired learning recor
   assert.equal(historical.active, false);
   for (const access of ["write", "create"]) {
     await assert.rejects(() => f.reader.readExerciseProjectScope({ actor: f.actor, attemptId: ended.attemptId, access }),
-      { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+      { code: "VIBE64_TRAINING_ATTEMPT_NOT_RESUMED" });
   }
   await assert.rejects(() => f.reader.readExerciseProjectScope({ actor: { uid: 43 }, attemptId: active.attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   await assert.rejects(() => f.reader.readExerciseProjectScope({ actor: f.actor, attemptId: "../attempt" }));

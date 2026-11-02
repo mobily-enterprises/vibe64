@@ -1,3 +1,4 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 
@@ -24,10 +25,7 @@ function createRepositoryUpdates({ closeWatches, probe }) {
     const binding = context.watchBinding;
     // readable-check: allow method-probe - input validation: the binding comes from the caller that executes the action
     if (typeof binding?.current !== "function" || typeof binding.hold !== "function" || typeof binding.join !== "function") {
-      throw Object.assign(new Error("Watching a project requires a realtime connection."), {
-        code: "vibe64_project_watch_connection_required",
-        statusCode: 400
-      });
+      throw vibe64Error("Watching a project requires a realtime connection.", "vibe64_project_watch_connection_required", { status: 400 });
     }
     if (!binding.current()) return { ok: true };
     const slug = currentProjectRequestContext()?.slug;

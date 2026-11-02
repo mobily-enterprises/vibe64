@@ -113,7 +113,7 @@ async function inspectCanonicalProjectStack({
       commit = (await git(["--git-dir", repositoryPath, "rev-parse", "--verify", `refs/heads/${source.branch}^{commit}`])).trim();
     }
     if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
-      throw inspectionError("vibe64_stack_repository_authority_invalid", "Invalid repository commit.");
+      throw inspectionError("vibe64_stack_repository_commit_invalid", "Invalid repository commit.");
     }
     const listing = await git([
       "--git-dir",

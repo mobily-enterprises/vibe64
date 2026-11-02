@@ -72,8 +72,9 @@ function parseArgs(args = []) {
 
 function validateCommand(parsed = {}) {
   if (parsed.unsupportedFlag) {
-    return commandLineFailure(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_database_command_usage", {
+    return commandLineFailure(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_database_command_option_unsupported", {
       exitCode: 2,
+      params: { option: parsed.unsupportedFlag },
       stderr: `Unsupported option: ${parsed.unsupportedFlag}\n\n${usageText()}`
     });
   }
@@ -186,7 +187,8 @@ const commandServers = createSessionCommandServers({
     statusCode: 409,
     payload: commandLineFailure(
       "Managed database control generation is no longer current. Reconnect the assistant.",
-      "vibe64_agent_control_unavailable"
+      "vibe64_agent_control_unavailable",
+      { messageCode: "vibe64_agent_database_control_stale" }
     )
   },
   requestFailure: {

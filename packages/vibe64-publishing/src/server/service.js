@@ -248,7 +248,9 @@ function createPublishingService({
     if (!kind) return null;
     const chosen = accounts.find((entry) => entry.id === account);
     if (!chosen || chosen.kind !== kind.id) {
-      throw publishingError(`Choose a ${kind.label} account for this target.`, "vibe64_publishing_account_missing");
+      throw publishingError(`Choose a ${kind.label} account for this target.`, "vibe64_publishing_target_account_missing", {
+        params: { accountKind: kind.label }
+      });
     }
     return chosen;
   }
@@ -323,7 +325,9 @@ function createPublishingService({
       }
       const destination = vibe64Destination(input.destination);
       if (!destination.packers.includes(entry.packer)) {
-        throw publishingError(`${destination.label} cannot publish a ${entry.packer} package.`, "vibe64_publishing_target_invalid");
+        throw publishingError(`${destination.label} cannot publish a ${entry.packer} package.`, "vibe64_publishing_target_packer_unsupported", {
+          params: { destination: destination.label, packer: entry.packer }
+        });
       }
       const accounts = await broker.accounts();
       requireAccountKind(destination.id, input.account, accounts);
@@ -494,7 +498,7 @@ function createPublishingService({
       const { targets, orchestrator } = projectRuntime();
       const target = await targets.get(input.targetId);
       if (target?.destination !== "android-sideload") {
-        throw publishingError("Install keys belong to an Install on my phone target.", "vibe64_publishing_target_invalid");
+        throw publishingError("Install keys belong to an Install on my phone target.", "vibe64_publishing_install_keys_target_invalid");
       }
       const status = await toolchains.status();
       if (!status.java.ready) {
@@ -614,7 +618,7 @@ function createPublishingService({
   async function signedApkDownload({ releaseId, targetId }) {
     const apk = await signedApk({ releaseId, targetId });
     const details = await stat(apk.file).catch(() => null);
-    if (!details?.isFile()) throw publishingError("The signed APK is gone. Release again.", "vibe64_publishing_download_missing");
+    if (!details?.isFile()) throw publishingError("The signed APK is gone. Release again.", "vibe64_publishing_signed_apk_missing");
     return { fileName: apk.fileName, size: details.size, stream: createReadStream(apk.file) };
   }
 }

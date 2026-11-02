@@ -72,7 +72,7 @@ function repositoryReadContext(project = {}, session = null) {
     if (!snapshotRef) {
       throw repositoryError(
         "This session has no recorded source version to read its history from.",
-        "vibe64_repository_history_context_incomplete"
+        "vibe64_repository_history_session_version_missing"
       );
     }
     return {

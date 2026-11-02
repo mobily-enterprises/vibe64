@@ -94,7 +94,7 @@ function createService({
     } = options;
     const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) {
-      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
 
     const runtime = existingRuntime || await project.createRuntime({
@@ -169,7 +169,7 @@ function createService({
   async function runSourceEditorWriteExclusive(input, operation) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
-      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const runtime = await project.createRuntime({ sessionId });
     const exclusive = await runVibe64AgentWriteExclusive(
@@ -321,7 +321,7 @@ function createService({
       const context = await sourceEditorContext(input.sessionId);
       const filePath = normalizeSourceEditorRelativePath(input.path);
       if (!filePath) {
-        throw sourceEditorError("Choose a file to star.", "vibe64_invalid_source_editor_path");
+        throw sourceEditorError("Choose a file to star.", "vibe64_invalid_source_editor_star_path");
       }
       if (input.starred) {
         await sourceEditorExistingFile(context, filePath, { maxFileBytes: Infinity });

@@ -6,6 +6,7 @@ import {
   assertProjectEffectAdmission,
   currentProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { serializeVibe64AssistantSelection, VIBE64_ASSISTANT_SELECTION_METADATA } from "@local/vibe64-runtime/shared";
@@ -28,16 +29,16 @@ function sessionRuntimeOptions(terminals) {
 }
 
 function sessionCreationLimitError(policy) {
-  const error = new Error(
-    normalizeText(policy?.creation?.disabledReason) || "No more sessions can be created for this project."
+  return vibe64Error(
+    normalizeText(policy?.creation?.disabledReason) || "No more sessions can be created for this project.",
+    "vibe64_session_creation_limit",
+    {
+      details: {
+        maxOpenSessions: Number(policy?.limits?.maxOpenSessions || 0),
+        openSessionCount: Number(policy?.limits?.openSessionCount || 0)
+      }
+    }
   );
-  error.code = "vibe64_session_creation_limit";
-  error.details = {
-    maxOpenSessions: Number(policy?.limits?.maxOpenSessions || 0),
-    openSessionCount: Number(policy?.limits?.openSessionCount || 0)
-  };
-  error.statusCode = 409;
-  return error;
 }
 
 /**

@@ -43,18 +43,24 @@ const SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES = new Set([
   SESSION_RENEWAL_STAGE.SUCCESSOR_SETUP
 ]);
 
+/**
+ * A renewal refusal at its status, or, at 500, a server fault: a plain Error
+ * whose message HTTP hides, still carrying the code, details and retryability
+ * the renewal workflow records.
+ * @param {string} message
+ * @param {string} code
+ * @param {{ details?: Record<string, unknown> | null, retryable?: boolean, statusCode?: number }} [options]
+ */
 function renewalError(message, code, options = {}) {
   const {
-    details = null,
+    details,
     retryable = false,
     statusCode = 409
   } = options;
-  const error = vibe64Error(message, code);
+  const error = statusCode === 500
+    ? Object.assign(new Error(message), { code }, details ? { details } : {})
+    : vibe64Error(message, code, { status: statusCode, ...(details ? { details } : {}) });
   error.retryable = retryable;
-  error.statusCode = statusCode;
-  if (details) {
-    error.details = details;
-  }
   return error;
 }
 
@@ -215,11 +221,11 @@ async function inspectSessionRenewalEligibility({
   if (!session || toText(session.status) !== VIBE64_SESSION_STATUS.ACTIVE) {
     throw renewalError(
       "Only an active session can be renewed.",
-      "vibe64_session_renewal_source_not_active"
+      "vibe64_session_renewal_session_inactive"
     );
   }
   if (session.pinnedSessionId === session.sessionId) {
-    throw renewalError("Unpin this session before renewing it.", "vibe64_session_pinned");
+    throw renewalError("Unpin this session before renewing it.", "vibe64_session_renewal_pinned");
   }
   assertWorkspaceIdle(session, setupRunner);
   await assertNoRepositoryOperation(runtime, session.sessionId);

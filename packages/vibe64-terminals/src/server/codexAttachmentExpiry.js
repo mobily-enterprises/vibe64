@@ -72,7 +72,8 @@ async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId = 
         throw attachmentUploadValidationError(
           "vibe64_agent_attachment_busy",
           "Attachment is still in use. Try removing it again.",
-          409
+          409,
+          { messageCode: "vibe64_agent_attachment_removal_busy" }
         );
       }
       clearAttachmentCleanupTimer(cleanupPath);
@@ -188,7 +189,8 @@ async function releaseCodexSessionAttachments(executionRoot, sessionId, options 
     const error = attachmentUploadValidationError(
       "vibe64_agent_attachment_busy",
       "Session attachments are still in use. Try releasing them again.",
-      409
+      409,
+      { messageCode: "vibe64_agent_attachment_release_busy" }
     );
     error.retryable = true;
     throw error;

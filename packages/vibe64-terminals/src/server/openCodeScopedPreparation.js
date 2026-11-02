@@ -267,7 +267,9 @@ function createOpenCodeScopedPreparation({
           observation: () => detachedObservationProjection(context, onEvent),
           get readiness() {
             return {
-              timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504)
+              timeoutError: openCodeError("vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504, {
+                messageCode: "vibe64_opencode_scoped_events_timeout"
+              })
             };
           },
           async beforeDispatch() {

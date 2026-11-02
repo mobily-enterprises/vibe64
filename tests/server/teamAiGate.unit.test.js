@@ -134,7 +134,7 @@ test("project admission gates only a team member's own requests", async (t) => {
   }
   assert.deepEqual(asked, [], "no readiness read for them");
   const refused = await open({ headers, vibe64User: MEMBER }).catch((error) => error);
-  assert.deepEqual({ code: refused.code, statusCode: refused.statusCode, ownerName: refused.ownerName, message: refused.message }, gated);
+  assert.deepEqual({ code: refused.code, statusCode: refused.statusCode, ownerName: refused.params.ownerName, message: refused.message }, gated);
   assert.deepEqual(refused.details, { ownerName: "Tony" }, "the client reads the owner's name from the refusal");
   assert.equal(projectRequestErrorStatusCode(refused), 403);
   ready.value = true;
@@ -146,7 +146,7 @@ test("the refusal names the workspace owner when the host has no name", async (t
   const release = registerWorkspaceTeamReader(async () => ({ available: true, ownerName: "", memberCount: 1 }));
   t.after(release);
   await assert.rejects(open({ headers, vibe64User: MEMBER }), {
-    code: "vibe64_team_ai_required", message: "Ask the workspace owner to set up AI for team members.", ownerName: ""
+    code: "vibe64_team_ai_required", message: "Ask the workspace owner to set up AI for team members.", params: { ownerName: "" }
   });
 });
 

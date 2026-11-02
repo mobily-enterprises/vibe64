@@ -175,12 +175,14 @@ function routingAssignmentSelection(engine, assignment, options = {}) {
   const { purpose = "senior" } = options;
   // A saved role keeps its exact model when the catalogue refreshes. Validate
   // availability against the current catalogue instead of silently substituting.
-  if (!assignment) throw routingError("Choose this model in Models first.");
-  if (!engine || assignment.engineId !== engine.engineId) throw routingError("The chosen model's tool is not available.");
+  if (!assignment) throw routingError("Choose this model in Models first.", "vibe64_assistant_model_unassigned");
+  if (!engine || assignment.engineId !== engine.engineId) {
+    throw routingError("The chosen model's tool is not available.", "vibe64_assistant_engine_unavailable");
+  }
   const selection = resolveVibe64AssistantSelection(engine, { ...assignment, catalogRevision: engine.revision });
   const choice = routingModelChoices(engine, { purpose }).find((item) =>
     item.modelProviderId === selection.modelProviderId && item.modelId === selection.modelId);
-  if (choice?.compatibilityError) throw routingError(choice.compatibilityError);
+  if (choice?.compatibilityError) throw routingError(choice.compatibilityError, "vibe64_assistant_model_incompatible");
   return selection;
 }
 
@@ -218,7 +220,7 @@ function resolveAssistantPurpose({
     executionProfileRequest: null
   };
   try {
-    if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.");
+    if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.", "vibe64_assistant_routing_actor_required");
     if (configuration && (configuration.orchestrators || !configuration.owner)) throw upgradeRequired();
     if (needsMainChatApproval(purpose, actor, { temporaryChat, practice })) {
       return {
@@ -265,16 +267,16 @@ function resolveAssistantPurpose({
         routerConnectionIdentity: router.connectionIdentity
       };
     }
-    if (!role) throw routingError("Unknown assistant purpose.");
+    if (!role) throw routingError("Unknown assistant purpose.", "vibe64_assistant_purpose_unknown");
     if (override && (!["custom", "senior", "junior"].includes(override.role) || !override.selection)) {
-      throw routingError("A conversation override must identify its role and selection.");
+      throw routingError("A conversation override must identify its role and selection.", "vibe64_assistant_override_invalid");
     }
     const configured = (roleName) => override?.role === roleName ? { value: override.selection, followedRole: "" }
       : assistantSetupRoleValue(values, roleName);
     const identity = ({ value, followedRole }, roleName) => {
       const named = followedRole || roleName;
       if (!value) {
-        if (roleName === "custom") throw routingError("Choose a custom model from Chat mode.");
+        if (roleName === "custom") throw routingError("Choose a custom model from Chat mode.", "vibe64_assistant_custom_model_missing");
         if (setup === "nonOwner") {
           throw routingError(
             `The workspace owner hasn't chosen ${withArticle(assistantModeLabel(named))} model for team members yet.`,
@@ -289,13 +291,26 @@ function resolveAssistantPurpose({
           typeof access.connectionIdentity !== "string" || !access.connectionIdentity.trim()) {
         throw routingError(
           "The chosen connection is no longer recognised. Review Models.",
-          VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE
+          VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE,
+          { messageCode: "vibe64_assistant_connection_unrecognised" }
         );
       }
       if (!canUseVibe64Assistant({ ...access, available: true }, actor)) {
-        throw routingError(roleName === "custom" ? "This custom model uses a personal connection. Choose a model you can access."
-          : setup === "nonOwner" ? "This team model uses a personal plan. The workspace owner must choose a Workspace-use model."
-            : "Only the workspace owner can use this personal AI connection.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
+        if (roleName === "custom") {
+          throw routingError(
+            "This custom model uses a personal connection. Choose a model you can access.",
+            VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED,
+            { messageCode: "vibe64_assistant_custom_model_personal" }
+          );
+        }
+        if (setup === "nonOwner") {
+          throw routingError(
+            "This team model uses a personal plan. The workspace owner must choose a Workspace-use model.",
+            VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED,
+            { messageCode: "vibe64_assistant_team_model_personal" }
+          );
+        }
+        throw routingError("Only the workspace owner can use this personal AI connection.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
       }
       return { selection, access };
     };
@@ -316,7 +331,7 @@ function resolveAssistantPurpose({
       if (!Array.isArray(requiredCapabilities) || requiredCapabilities.some((name) => model.capabilities?.[name] !== true)) {
         throw routingError(
           "The selected model does not support this request's required capabilities.",
-          "vibe64_assistant_capability_unavailable"
+          "vibe64_assistant_capabilities_unsupported"
         );
       }
       return { ...destination, selection };
@@ -329,9 +344,9 @@ function resolveAssistantPurpose({
     if (role === "senior" || role === "junior") {
       const original = { senior: identity(configured("senior"), "senior"), junior: identity(configured("junior"), "junior") };
       if (original.senior.selection.engineId !== original.junior.selection.engineId) {
-        throw routingError(
-          override ? "Senior and Junior overrides must run in your main AI's tool." : "Senior and Junior must run in the same tool."
-        );
+        throw override
+          ? routingError("Senior and Junior overrides must run in your main AI's tool.", "vibe64_assistant_override_pair_engine_mismatch")
+          : routingError("Senior and Junior must run in the same tool.", "vibe64_assistant_pair_engine_mismatch");
       }
       const effective = { ...original };
       for (const key of ["senior", "junior"]) effective[key] = validate(effective[key], key, requirements[key]);

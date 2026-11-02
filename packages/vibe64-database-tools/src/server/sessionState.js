@@ -172,7 +172,7 @@ function normalizedDiagram(value = null) {
   const record = isPlainObject(value) ? value : {};
   const nodes = Array.isArray(record.nodes) ? record.nodes : [];
   if (nodes.length > LAYOUT_NODE_LIMIT) {
-    throw vibe64Error("The ERD layout contains too many nodes.", "vibe64_database_erd_layout_too_large");
+    throw vibe64Error("The ERD layout contains too many nodes.", "vibe64_database_erd_layout_too_many_nodes");
   }
   return {
     routes: normalizedRoutes(record.routes),
@@ -202,7 +202,7 @@ function normalizedDiagram(value = null) {
 
 function normalizedRoutes(value = []) {
   if (!Array.isArray(value) || value.length > 10_000 || Buffer.byteLength(JSON.stringify(value)) > ERD_LAYOUT_MAX_BYTES) {
-    throw vibe64Error("The ERD connection paths are too large.", "vibe64_database_erd_layout_too_large");
+    throw vibe64Error("The ERD connection paths are too large.", "vibe64_database_erd_routes_too_large");
   }
   return value.map((route) => {
     if (!toText(route?.id) ||

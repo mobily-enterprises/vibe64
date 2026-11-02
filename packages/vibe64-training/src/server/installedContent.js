@@ -7,6 +7,7 @@ import { splitStepBeats } from "../shared/beats.js";
 import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
 import { acceptEvery } from "@local/vibe64-core/shared/acceptEvery";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
+import { conflictFailure } from "./errors.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -137,11 +138,11 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
    * An installed lesson this Vibe64 cannot teach (see validateTopic installed).
    */
   function unusableLesson(bundle) {
-    return Object.assign(
-      new Error(
-        `Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`
-      ),
-      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 }
+    return conflictFailure(
+      `Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`,
+      "VIBE64_TRAINING_LESSON_UNUSABLE",
+      422,
+      { params: { lessonCode: bundle.lesson.code, lessonTitle: bundle.lesson.title, problem: bundle.problem } }
     );
   }
 

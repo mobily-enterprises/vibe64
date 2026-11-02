@@ -353,7 +353,7 @@ function createService({
   async function systemContext(sessionId = "") {
     const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) {
-      throw systemError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw systemError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const runtime = await project.createRuntime({
       sessionId: normalizedSessionId

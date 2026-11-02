@@ -404,7 +404,7 @@ test("symbol explanations reject missing, malformed, impossible, symlinked and o
     symbols: [{ id: "symbol:app", fileId: "file:src/app.js", path: "src/app.js", name: "app", visibility: "public", rangeAvailable: true, start: { line: 1, column: 1 }, end: { line: 1, column: 500 } }],
     relations: [], capabilities: { symbols: "partial", dependencies: "partial", pages: "unconfigured", runtimeCalls: "unsupported" }, diagnostics: [] };
   await writeFile(artifact, JSON.stringify({ architecture }));
-  assert.equal((await explainSource(fixture.service, input)).errors[0].code, "vibe64_source_explanation_symbol_changed");
+  assert.equal((await explainSource(fixture.service, input)).errors[0].code, "vibe64_source_explanation_symbol_range_invalid");
   await rm(artifact);
   await symlink(path.join(fixture.sourceRoot, "src/app.js"), artifact);
   assert.equal((await explainSource(fixture.service, input)).statusCode, 403);
@@ -989,7 +989,7 @@ test("source editor creates new files without overwriting existing or excluded p
       sessionId: "session-1"
     });
     assert.equal(traversalResponse.ok, false);
-    assert.equal(traversalResponse.errors[0].code, "vibe64_invalid_source_editor_path");
+    assert.equal(traversalResponse.errors[0].code, "vibe64_invalid_source_editor_path_segment");
 
     const text = '{"version":1,"actors":[]}\n';
     const initialized = await fixture.service.createFile({ path: "data-overview.json", sessionId: "session-1", text });
@@ -1149,7 +1149,7 @@ test("source editor rejects explanation admission before provider inspection or 
 
     assert.equal(blocked.ok, false);
     assert.equal(blocked.statusCode, 409);
-    assert.equal(blocked.errors[0].code, "vibe64_source_explanation_busy");
+    assert.equal(blocked.errors[0].code, "vibe64_source_explanation_session_busy");
     assert.equal(providerInspections, 0);
     await assert.rejects(
       readFile(path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json"), "utf8"),
@@ -4498,7 +4498,7 @@ test("source editor rejects symbolic links in ancestor directories", async (t) =
           path: `${linkPath}/nested/created.js`
         });
         assert.equal(result.ok, false);
-        assert.equal(result.errors[0].code, "vibe64_source_editor_symlink");
+        assert.equal(result.errors[0].code, "vibe64_source_editor_symlink_write");
         await assert.rejects(readFile(path.join(target.root, "nested", "created.js")), { code: "ENOENT" });
       });
 

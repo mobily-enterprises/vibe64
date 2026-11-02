@@ -76,7 +76,7 @@ function parseLsRefsResponse(bytes) {
     if (line.startsWith("ERR ")) {
       throw remoteHeadsError(
         `The project's repository refused the branch read: ${line.slice(4).trim()}`,
-        "vibe64_session_update_check_failed"
+        "vibe64_session_update_branch_read_refused"
       );
     }
     const [head, ref] = line.split(" ");
@@ -112,12 +112,12 @@ function failedStatusError(status) {
   if (status === 403 || status === 404) {
     return remoteHeadsError(
       "GitHub did not let the signed-in account read this repository.",
-      "vibe64_session_update_check_failed"
+      "vibe64_session_update_access_denied"
     );
   }
   return remoteHeadsError(
     `GitHub answered the repository check with HTTP ${status}.`,
-    "vibe64_session_update_check_failed"
+    "vibe64_session_update_http_failed"
   );
 }
 

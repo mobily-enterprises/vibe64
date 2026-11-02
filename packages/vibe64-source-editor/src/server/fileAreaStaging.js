@@ -60,7 +60,7 @@ async function withOpenFolder(folderPath, stats, perform) {
  */
 async function withAreaFolder(context, relativePath, perform) {
   const stats = await sourceEditorPathStats(context.sourceRoot, relativePath);
-  if (!stats.isDirectory()) throw sourceEditorError("Choose a folder.", "vibe64_invalid_source_editor_path");
+  if (!stats.isDirectory()) throw sourceEditorError("Choose a folder.", "vibe64_invalid_source_editor_folder");
   const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
   const expected = path.resolve(await realpath(context.sourceRoot), relativePath);
   return withOpenFolder(absolutePath, stats, async ({ at, handle }) => {

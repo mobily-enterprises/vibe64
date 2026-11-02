@@ -122,7 +122,7 @@ test("another learner and the workspace owner can never read or change a learner
   await writeFile(path.join(f.userRoot(ALICE), "teacher-notes.json"), bobRecord, { mode: 0o600 });
   await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
   await assert.rejects(f.learners.saveTeacherNotes({ actor: ALICE, text: "x", requestId: "a2", updatedBy: "learner" }),
-    { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
+    { code: "VIBE64_TRAINING_NOTES_SAVE_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
   assert.equal(await readFile(path.join(f.userRoot(ALICE), "teacher-notes.json"), "utf8"), bobRecord, "nothing was overwritten");
 });
 

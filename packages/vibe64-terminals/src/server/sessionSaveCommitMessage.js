@@ -110,7 +110,7 @@ function normalizeSessionSaveCommitMessage(value = "") {
   ) {
     throw commitMessageError(
       "The assistant did not return one valid commit subject. Save was not started.",
-      "vibe64_session_save_message_invalid"
+      "vibe64_session_save_message_subject_invalid"
     );
   }
   if (/^(save( vibe64)? work|update files|changes)$/iu.test(subject)) {

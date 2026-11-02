@@ -132,7 +132,7 @@ function createService({
 
   async function sessionContext(sessionId = "") {
     const id = normalizeText(sessionId);
-    if (!id) throw recordingError(400, "A session id is required.", "vibe64_invalid_session_id");
+    if (!id) throw recordingError(400, "A session id is required.", "vibe64_invalid_session_id_required");
     const runtime = await project.createRuntime({ sessionId: id });
     const session = await runtime.getSession(id);
     return {
@@ -441,7 +441,7 @@ function createService({
       throw recordingError(409, "Recording needs an active session.", "vibe64_usage_recording_session_inactive");
     }
     if (!context.directory || !context.sourceRoot) {
-      throw recordingError(409, "This session has no source to record.", "vibe64_usage_recording_session_inactive");
+      throw recordingError(409, "This session has no source to record.", "vibe64_usage_recording_session_source_missing");
     }
   }
 

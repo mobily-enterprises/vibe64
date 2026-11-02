@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { publishingError } from "../publishingError.js";
 import { readJsonFile, serialized, writeJsonFile } from "./jsonFile.js";
 
 const RELEASE_RECORD_CONTRACT = "vibe64.publishing-release.v1";
@@ -13,8 +14,11 @@ const RELEASE_ID = /^r-\d{8}-\d{6}-[0-9a-f]{6}$/u;
 const LOG_LIMIT = 400;
 const LINE_LIMIT = 2000;
 
-function historyError(message, code = "vibe64_publishing_release_missing") {
-  return Object.assign(new Error(message), { code });
+/**
+ * A release the history does not hold. Its code answers 404; each sentence has its own messageCode.
+ */
+function historyError(message, options) {
+  return publishingError(message, "vibe64_publishing_release_missing", options);
 }
 
 function releaseId(at) {
@@ -32,13 +36,13 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
   const directory = path.join(runtimeRoot, "releases");
   const exclusive = serialized();
   const fileOf = (id) => {
-    if (!RELEASE_ID.test(id || "")) throw historyError("That is not a release id.");
+    if (!RELEASE_ID.test(id || "")) throw historyError("That is not a release id.", { messageCode: "vibe64_publishing_release_id_unknown" });
     return path.join(directory, `${id}.json`);
   };
 
   async function read(id) {
     const record = await readJsonFile(fileOf(id), () => null);
-    if (!record) throw historyError(`There is no release ${id}.`);
+    if (!record) throw historyError(`There is no release ${id}.`, { messageCode: "vibe64_publishing_release_not_found", params: { releaseId: id } });
     return record;
   }
 

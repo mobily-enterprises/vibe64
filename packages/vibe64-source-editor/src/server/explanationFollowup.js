@@ -50,7 +50,7 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
   ) {
     throw sourceEditorError(
       "Regenerate this explanation before asking follow-up questions. Only a verified low-cost source-explanation conversation can be continued.",
-      "vibe64_source_explanation_execution_profile_missing",
+      "vibe64_source_explanation_followup_unverified",
       {},
       409
     );

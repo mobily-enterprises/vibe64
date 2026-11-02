@@ -385,7 +385,7 @@ function createRenewalWorkflow({
       ) {
         throw renewalError(
           "The renewed-session replacement allowance is invalid.",
-          "vibe64_session_renewal_state_invalid",
+          "vibe64_session_renewal_replacement_allowance_invalid",
           { retryable: true, statusCode: 500 }
         );
       }
@@ -426,7 +426,7 @@ function createRenewalWorkflow({
           ) {
             throw renewalError(
               "The predecessor no longer owns this renewal transition.",
-              "vibe64_session_renewal_link_mismatch",
+              "vibe64_session_renewal_quiescing_owner_lost",
               { retryable: true, statusCode: 500 }
             );
           }

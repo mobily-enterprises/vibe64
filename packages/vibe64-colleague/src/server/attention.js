@@ -1,4 +1,5 @@
 import { conversationObservation, watchUpdate } from "@local/vibe64-core/server/watch-observations";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const working = new Set(["starting", "inProgress", "working", "preparing"]);
@@ -12,7 +13,9 @@ async function readWatchedConversation(actions, watch, context) {
   const execute = async (actionId, input) => {
     const result = await actions.execute({ actionId, input, context: { ...context, projectSlug: watch.projectSlug } });
     if (result?.ok === false || result?.readError) {
-      throw Object.assign(new Error(result.error || "The conversation could not be observed."), { statusCode: result.statusCode });
+      throw new AppError(result.statusCode || 409, result.error || "The conversation could not be observed.", {
+        code: "vibe64_colleague_conversation_unobservable"
+      });
     }
     return result;
   };

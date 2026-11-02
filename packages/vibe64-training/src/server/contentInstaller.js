@@ -5,6 +5,7 @@ import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { readPinnedTopic } from "./catalogue.js";
 import { runTrainingCli } from "./cli.js";
 import { canonicalJson } from "./content.js";
+import { conflictFailure } from "./errors.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
 
 function absoluteDirectory(value, label) {
@@ -109,10 +110,10 @@ function createTrainingContentInstaller({ systemRoot }) {
     }
     const release = await tryAcquireExclusiveFileLock(lockPath);
     if (!release) {
-      const error = new Error("This topic revision is being installed. Retry after the current owner operation finishes.");
-      error.code = "VIBE64_TRAINING_INSTALL_BUSY";
-      error.statusCode = 409;
-      throw error;
+      throw conflictFailure(
+        "This topic revision is being installed. Retry after the current owner operation finishes.",
+        "VIBE64_TRAINING_INSTALL_BUSY"
+      );
     }
     let stageRoot;
     try {

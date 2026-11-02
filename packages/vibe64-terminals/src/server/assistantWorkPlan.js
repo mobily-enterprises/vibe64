@@ -12,14 +12,14 @@ const PLAN_LIMIT = 256 * 1024;
 // one at a time per plan path, whichever service asks.
 const workPlanQueue = createKeyedQueue();
 
-function planError(message, code = "vibe64_work_plan_invalid") {
-  return new AppError(409, message, { code });
+function planError(message, code, params) {
+  return new AppError(409, message, { code, params });
 }
 
 function workPlanPath(context) {
   const paths = context.runtime.store.paths(context.session.sessionId);
   const id = context.routingConversationId;
-  if (id && !/^[a-zA-Z0-9_-]{1,128}$/u.test(id)) throw planError("Invalid plan conversation.");
+  if (id && !/^[a-zA-Z0-9_-]{1,128}$/u.test(id)) throw planError("Invalid plan conversation.", "vibe64_work_plan_conversation_invalid");
   return path.join(id ? path.join(paths.conversationsRoot, id) : paths.sessionRoot, "plans", "current.md");
 }
 
@@ -27,15 +27,15 @@ async function readPlanFile(file, options = {}) {
   const { plainText = false } = options;
   let handle;
   try {
-    if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("The plan directory must not be a link.");
+    if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
-    if (!info.isFile() || info.size > PLAN_LIMIT) throw planError("The plan must be a regular Markdown file smaller than 256 KiB.");
+    if (!info.isFile() || info.size > PLAN_LIMIT) throw planError("The plan must be a regular Markdown file smaller than 256 KiB.", "vibe64_work_plan_file_invalid");
     const text = await handle.readFile("utf8");
-    if (Buffer.byteLength(text) > PLAN_LIMIT) throw planError("The plan is too large.");
+    if (Buffer.byteLength(text) > PLAN_LIMIT) throw planError("The plan is too large.", "vibe64_work_plan_too_large");
     if (plainText) return text;
     const status = /^Status: (active|completed)\r?$/mu.exec(text)?.[1];
-    if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.");
+    if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.", "vibe64_work_plan_upgrade_required");
     const items = parseWorkPlanLines(text).filter((item) => item.checked !== undefined);
     return {
       text,
@@ -57,7 +57,7 @@ function planDirectory(context) {
   return path.dirname(workPlanPath(context));
 }
 function pairPath(context, id = "") {
-  if (id && !/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.");
+  if (id && !/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.", "vibe64_work_plan_archive_id_invalid");
   return id ? path.join(planDirectory(context), "archive", id + ".json") : path.join(planDirectory(context), "current.json");
 }
 function pairIdentity(record) {
@@ -67,7 +67,7 @@ function pairRecord(plan, progressRevision) {
   return { schemaVersion: 1, planRevision: plan.revision, progressRevision };
 }
 function documentPath(context, kind, revision) {
-  if (!["plan", "progress"].includes(kind) || !/^[a-f0-9]{64}$/u.test(revision)) throw planError("Invalid plan document identity.");
+  if (!["plan", "progress"].includes(kind) || !/^[a-f0-9]{64}$/u.test(revision)) throw planError("Invalid plan document identity.", "vibe64_work_plan_document_id_invalid");
   return path.join(planDirectory(context), kind, revision + ".md");
 }
 function parsePairRecord(source, id = "") {
@@ -75,17 +75,17 @@ function parsePairRecord(source, id = "") {
   try {
     record = JSON.parse(source);
   } catch {
-    throw planError("The plan and progress record is invalid. Inspect its saved snapshot.");
+    throw planError("The plan and progress record is invalid. Inspect its saved snapshot.", "vibe64_work_plan_invalid");
   }
   if (!record || record.schemaVersion !== 1 || !/^[a-f0-9]{64}$/u.test(record.planRevision) ||
       !(record.progressRevision === null || /^[a-f0-9]{64}$/u.test(record.progressRevision)) ||
       Object.keys(record)
         .some(key => !["schemaVersion", "planRevision", "progressRevision", "archivedAt", "legacyArchive"].includes(key)) ||
       (record.archivedAt !== undefined && !Number.isFinite(Date.parse(record.archivedAt))) ||
-      (record.legacyArchive !== undefined && record.legacyArchive !== true)) throw planError("The plan and progress binding is invalid.");
-  if (id && !record.archivedAt) throw planError("The archived pair has no recorded archive time.");
+      (record.legacyArchive !== undefined && record.legacyArchive !== true)) throw planError("The plan and progress binding is invalid.", "vibe64_work_plan_binding_invalid");
+  if (id && !record.archivedAt) throw planError("The archived pair has no recorded archive time.", "vibe64_work_plan_archive_time_missing");
   if (id && (record.legacyArchive ? record.progressRevision !== null || id !== record.planRevision : id !== pairIdentity(record))) {
-    throw planError("The archived plan and progress no longer match their snapshot.");
+    throw planError("The archived plan and progress no longer match their snapshot.", "vibe64_work_plan_archive_snapshot_mismatch");
   }
   return record;
 }
@@ -99,9 +99,7 @@ async function readPair(context, id = "") {
     : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
   if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
       (progressText === null || sha256Hex(progressText) !== record.progressRevision))) {
-    throw planError(
-      "A plan or progress document is missing or changed. Restore the saved pair before continuing."
-    );
+    throw planError("A plan or progress document is missing or changed. Restore the saved pair before continuing.", "vibe64_work_plan_pair_missing");
   }
   return {
     ...plan,
@@ -114,18 +112,18 @@ async function readPair(context, id = "") {
 async function readWorkPlanUnlocked(context) {
   const pair = await readPair(context);
   const legacy = await readPlanFile(workPlanPath(context));
-  if (pair && legacy) throw planError("Both legacy and paired current plans exist. Finish the stopped-service state upgrade.");
+  if (pair && legacy) throw planError("Both legacy and paired current plans exist. Finish the stopped-service state upgrade.", "vibe64_work_plan_current_formats_conflict");
   return pair || (legacy ? { ...legacy, progressText: null, progressRevision: null, legacy: true } : null);
 }
 function archivePath(context, id) {
-  if (!/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.");
+  if (!/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.", "vibe64_work_plan_archive_id_invalid");
   return path.join(planDirectory(context), "archive", id + ".md");
 }
 async function readArchived(context, id) {
   const pair = await readPair(context, id);
   const legacy = await readPlanFile(archivePath(context, id));
-  if (pair && legacy) throw planError("Both legacy and paired archive records exist. Finish the stopped-service state upgrade.");
-  if (legacy && legacy.revision !== id) throw planError("An archived plan has changed. Restore its saved snapshot before continuing.");
+  if (pair && legacy) throw planError("Both legacy and paired archive records exist. Finish the stopped-service state upgrade.", "vibe64_work_plan_archive_formats_conflict");
+  if (legacy && legacy.revision !== id) throw planError("An archived plan has changed. Restore its saved snapshot before continuing.", "vibe64_work_plan_archive_changed");
   return pair || (legacy ? {
     ...legacy,
     progressText: null,
@@ -136,7 +134,7 @@ async function readArchived(context, id) {
 }
 async function readWorkPlanHistoryUnlocked(context) {
   try {
-    if (!(await lstat(planDirectory(context))).isDirectory()) throw planError("The plan directory must not be a link.");
+    if (!(await lstat(planDirectory(context))).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
   } catch (error) {
     if (error.code === "ENOENT") return [];
     throw error;
@@ -144,7 +142,7 @@ async function readWorkPlanHistoryUnlocked(context) {
   const directory = path.join(planDirectory(context), "archive");
   let entries;
   try {
-    if (!(await lstat(directory)).isDirectory()) throw planError("Plan history must not be a link.");
+    if (!(await lstat(directory)).isDirectory()) throw planError("Plan history must not be a link.", "vibe64_work_plan_history_link");
     entries = await readdir(directory);
   } catch (error) {
     if (error.code === "ENOENT") return [];
@@ -154,7 +152,7 @@ async function readWorkPlanHistoryUnlocked(context) {
   const ids = new Set(entries.filter(name => /^[a-f0-9]{64}\.(md|json)$/u.test(name)).map(name => name.slice(0, 64)));
   for (const id of ids) {
     const plan = await readArchived(context, id);
-    if (!plan) throw planError("Plan history changed while it was being read. Read it again.");
+    if (!plan) throw planError("Plan history changed while it was being read. Read it again.", "vibe64_work_plan_history_changed");
     const { text: _text, progressText: _progress, legacy: _legacy, ...summary } = plan;
     history.push({ ...summary, progressRevision: plan.progressRevision || "", progressAvailable: plan.progressText !== null, id });
   }
@@ -169,7 +167,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
     archiveId = ""
   } = options;
   if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
-    throw planError("Invalid plan page bounds.");
+    throw planError("Invalid plan page bounds.", "vibe64_work_plan_page_bounds_invalid");
   }
   if (offset > 0 && !expectedRevision) {
     throw planError("Further plan pages require the revision from the first page.", "vibe64_work_plan_revision_required");
@@ -186,10 +184,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
       expectedProgressRevision !== (plan.progressRevision || "")) {
-    throw planError(
-      "The plan or progress changed. Read both again from the beginning.",
-      "vibe64_work_plan_changed"
-    );
+    throw planError("The plan or progress changed. Read both again from the beginning.", "vibe64_work_plan_read_changed");
   }
   const characters = Array.from(plan.text);
   const progress = Array.from(plan.progressText || "");
@@ -216,7 +211,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
 async function writePlan(file, text) {
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  if (!(await lstat(directory)).isDirectory()) throw planError("The plan directory must not be a link.");
+  if (!(await lstat(directory)).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
     await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
@@ -230,7 +225,7 @@ async function saveDocument(context, kind, text) {
   const revision = sha256Hex(text);
   const file = documentPath(context, kind, revision);
   const previous = await readPlanFile(file, { plainText: true });
-  if (previous !== null && previous !== text) throw planError("The immutable plan document conflicts with its content identity.");
+  if (previous !== null && previous !== text) throw planError("The immutable plan document conflicts with its content identity.", "vibe64_work_plan_document_conflict");
   if (previous === null) await writePlan(file, text);
   return revision;
 }
@@ -245,7 +240,7 @@ async function archiveCurrent(context, current) {
   const id = pairIdentity(record);
   const previous = await readPair(context, id);
   if (previous && (previous.text !== current.text || previous.progressText !== current.progressText)) {
-    throw planError("The archived pair conflicts with the current documents.");
+    throw planError("The archived pair conflicts with the current documents.", "vibe64_work_plan_archive_conflict");
   }
   if (!previous) await writePlan(pairPath(context, id), JSON.stringify({ ...record, archivedAt: new Date().toISOString() }) + "\n");
 }
@@ -266,18 +261,18 @@ async function retireUnreferencedDocuments(context) {
     const directory = path.join(planDirectory(context), kind);
     let names;
     try {
-      if (!(await lstat(directory)).isDirectory()) throw planError("Plan documents must not be stored through a link.");
+      if (!(await lstat(directory)).isDirectory()) throw planError("Plan documents must not be stored through a link.", "vibe64_work_plan_documents_link");
       names = await readdir(directory);
     } catch (error) {
       if (error.code === "ENOENT") continue;
       throw error;
     }
     for (const name of names) {
-      if (!/^[a-f0-9]{64}\.md$/u.test(name)) throw planError("Unknown plan document. Inspect the owned directory before cleanup.");
+      if (!/^[a-f0-9]{64}\.md$/u.test(name)) throw planError("Unknown plan document. Inspect the owned directory before cleanup.", "vibe64_work_plan_document_unknown");
       const revision = name.slice(0, 64);
       const file = documentPath(context, kind, revision);
       const text = await readPlanFile(file, { plainText: true });
-      if (text === null || sha256Hex(text) !== revision) throw planError("A plan document has changed; cleanup refused.");
+      if (text === null || sha256Hex(text) !== revision) throw planError("A plan document has changed; cleanup refused.", "vibe64_work_plan_cleanup_refused");
       if (!retained[kind].has(revision)) retired.push(file);
     }
   }
@@ -310,30 +305,31 @@ async function manageWorkPlan(context, input, role) {
     if (operation === "read") return readWorkPlanPageUnlocked(context, input);
     if (operation === "history") return { history: await readWorkPlanHistoryUnlocked(context) };
     if (!["new", "write", "progress-write", "complete", "archive", "reopen"].includes(operation)) {
-      throw planError("Unknown plan operation.");
+      throw planError("Unknown plan operation.", "vibe64_work_plan_operation_unknown");
     }
     const canEdit = ["senior", "review"].includes(role) || (role === "junior" && ["write", "progress-write"].includes(operation)) ||
       (role === "user" && (operation === "archive" || (operation === "reopen" && Boolean(archiveId))));
     if (!canEdit) {
       throw planError(
-        "Only Senior can change the scope, create, reopen, archive or complete a plan. Junior can update checklist ticks and Progress."
+        "Only Senior can change the scope, create, reopen, archive or complete a plan. Junior can update checklist ticks and Progress.",
+        "vibe64_work_plan_senior_required"
       );
     }
     const current = await readWorkPlanUnlocked(context);
-    if (current?.legacy) throw planError("This plan needs the stopped-service plan-progress upgrade before it can be changed.");
+    if (current?.legacy) throw planError("This plan needs the stopped-service plan-progress upgrade before it can be changed.", "vibe64_work_plan_progress_upgrade_required");
     if (role === "user" && operation === "reopen" && current) {
-      throw planError("There is already a current plan. Archive it before making another plan current.");
+      throw planError("There is already a current plan. Archive it before making another plan current.", "vibe64_work_plan_current_exists");
     }
     if (current && expectedRevision !== current.revision) {
       throw planError("The plan changed. Read the current plan before editing it.", "vibe64_work_plan_changed");
     }
     if (current && expectedProgressRevision !== (current.progressRevision || "")) {
-      throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_changed");
+      throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_progress_changed");
     }
-    if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_changed");
-    if (["write", "progress-write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.");
+    if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_revision_missing");
+    if (["write", "progress-write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
     if (["write", "progress-write"].includes(operation) && current.status !== "active") {
-      throw planError("The plan is completed. Senior must explicitly reopen it before changes.");
+      throw planError("The plan is completed. Senior must explicitly reopen it before changes.", "vibe64_work_plan_completed");
     }
     let next;
     let progressText = operation === "new" ? "# Progress\n\n" : current?.progressText ?? null;
@@ -342,15 +338,16 @@ async function manageWorkPlan(context, input, role) {
       case "write": {
         const body = String(input.text || "").replace(/^Status: .*\r?\n?/gmu, "").trim();
         if (!/^# .+/mu.test(body) || !parseWorkPlanLines(body).some((item) => item.checked !== undefined)) {
-          throw planError("A plan needs a title and Markdown checklists (- [ ] item). No other fixed structure is required.");
+          throw planError("A plan needs a title and Markdown checklists (- [ ] item). No other fixed structure is required.", "vibe64_work_plan_structure_invalid");
         }
         next = "Status: active\n" + body + "\n";
-        if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.");
+        if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.", "vibe64_work_plan_too_large");
         if (role === "junior") {
           const scopes = [current.text, next].map(workPlanScope);
           if (scopes[0] !== scopes[1]) {
             throw planError(
-              "Only Senior can change Plan content. Junior may change existing checklist ticks only; record evidence in Progress."
+              "Only Senior can change Plan content. Junior may change existing checklist ticks only; record evidence in Progress.",
+              "vibe64_work_plan_content_senior_only"
             );
           }
         }
@@ -359,16 +356,16 @@ async function manageWorkPlan(context, input, role) {
       case "progress-write":
         next = current.text;
         progressText = String(input.text ?? "");
-        if (Buffer.byteLength(progressText) > PLAN_LIMIT) throw planError("Progress is too large.");
+        if (Buffer.byteLength(progressText) > PLAN_LIMIT) throw planError("Progress is too large.", "vibe64_work_plan_progress_too_large");
         break;
       case "complete":
-        if (!current.total) throw planError("A plan needs acceptance requirements before Senior can complete it.");
+        if (!current.total) throw planError("A plan needs acceptance requirements before Senior can complete it.", "vibe64_work_plan_requirements_missing");
         next = current.text.replace(/^Status: active\r?$/mu, "Status: completed");
         break;
       case "reopen": {
         const saved = archiveId ? await readArchived(context, archiveId) : current;
-        if (saved?.legacy) throw planError("This archive needs the stopped-service plan-progress upgrade before it can be reopened.");
-        if (!saved) throw planError("The requested plan snapshot is unavailable.");
+        if (saved?.legacy) throw planError("This archive needs the stopped-service plan-progress upgrade before it can be reopened.", "vibe64_work_plan_archive_upgrade_required");
+        if (!saved) throw planError("The requested plan snapshot is unavailable.", "vibe64_work_plan_snapshot_unavailable");
         progressText = saved.progressText;
         next = saved.text.replace(/^Status: completed\r?$/mu, "Status: active");
         break;
@@ -377,9 +374,9 @@ async function manageWorkPlan(context, input, role) {
     const replacing = operation === "new" || (operation === "reopen" && Boolean(archiveId));
     if (replacing && current && !acknowledgeArchive) {
       throw planError(
-        "Ask the user whether to update “" +
-          current.title +
-          "” or archive it and replace it. Explain that the archive remains accessible. Once the user has authorized replacement, repeat with archiveCurrent: true."
+        `Ask the user whether to update “${current.title}” or archive it and replace it. Explain that the archive remains accessible. Once the user has authorized replacement, repeat with archiveCurrent: true.`,
+        "vibe64_work_plan_replacement_unconfirmed",
+        { title: current.title }
       );
     }
     // Save the exact record before replacement. Content identity makes retry safe.
@@ -426,30 +423,30 @@ function planProgressUpgradeChanges(files) {
   const find = name => changes.has(name) ? changes.get(name) : saved.get(name)?.text ?? null;
   const put = (name, text) => {
     const old = find(name);
-    if (old !== null && old !== text) throw planError("A prepared plan-progress document conflicts with saved state.");
+    if (old !== null && old !== text) throw planError("A prepared plan-progress document conflicts with saved state.", "vibe64_work_plan_upgrade_document_conflict");
     if (old === null) changes.set(name, text);
   };
   const validatePlan = text => {
     if (Buffer.byteLength(text) > PLAN_LIMIT || !/^Status: (active|completed)\r?$/mu.test(text)) {
-      throw planError("A legacy plan is malformed. Inspect it before upgrading.");
+      throw planError("A legacy plan is malformed. Inspect it before upgrading.", "vibe64_work_plan_legacy_malformed");
     }
   };
   const validateRecord = (source, id = "") => {
     const record = parsePairRecord(source, id);
     const text = find("plan/" + record.planRevision + ".md");
-    if (text === null || sha256Hex(text) !== record.planRevision) throw planError("The paired plan document is missing or changed.");
+    if (text === null || sha256Hex(text) !== record.planRevision) throw planError("The paired plan document is missing or changed.", "vibe64_work_plan_upgrade_plan_missing");
     validatePlan(text);
     if (record.progressRevision !== null) {
       const progress = find("progress/" + record.progressRevision + ".md");
       if (progress === null || Buffer.byteLength(progress) > PLAN_LIMIT || sha256Hex(progress) !== record.progressRevision) {
-        throw planError("The paired progress document is missing or changed.");
+        throw planError("The paired progress document is missing or changed.", "vibe64_work_plan_upgrade_progress_missing");
       }
     }
     return record;
   };
   if (saved.has("current.json")) {
     validateRecord(saved.get("current.json").text);
-    if (saved.has("current.md")) throw planError("Both current formats exist. Finish the original publication retry before upgrading.");
+    if (saved.has("current.md")) throw planError("Both current formats exist. Finish the original publication retry before upgrading.", "vibe64_work_plan_upgrade_current_conflict");
   } else if (saved.has("current.md")) {
     const text = saved.get("current.md").text;
     validatePlan(text);
@@ -461,9 +458,9 @@ function planProgressUpgradeChanges(files) {
   for (const file of files.filter(entry => /^archive\/[a-f0-9]{64}\.md$/u.test(entry.name))) {
     validatePlan(file.text);
     const id = file.name.slice(8, 72);
-    if (sha256Hex(file.text) !== id) throw planError("A legacy archive differs from its saved identity.");
+    if (sha256Hex(file.text) !== id) throw planError("A legacy archive differs from its saved identity.", "vibe64_work_plan_legacy_archive_changed");
     const next = "archive/" + id + ".json";
-    if (saved.has(next)) throw planError("Both archived formats exist. Finish the original publication retry before upgrading.");
+    if (saved.has(next)) throw planError("Both archived formats exist. Finish the original publication retry before upgrading.", "vibe64_work_plan_upgrade_archive_conflict");
     put("plan/" + id + ".md", file.text);
     put(next, JSON.stringify({
       schemaVersion: 1,

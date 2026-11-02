@@ -7,6 +7,7 @@ import {
   rejectCallerEnvPolicy
 } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { codedError } from "./codedError.js";
 
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
@@ -70,12 +71,6 @@ function resourceSemanticIsSecret(semantic) {
   return SECRET_RESOURCE_SEMANTICS.has(name) || SECRET_RESOURCE_SEMANTIC_SUFFIX.test(name);
 }
 
-function resourceEnvironmentError(message, code = "vibe64_resource_environment_invalid") {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
-
 function objectRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
@@ -89,12 +84,12 @@ function declarationIdentity(component = "", resource = {}) {
 function normalizedSemanticValues(value = {}) {
   const record = objectRecord(value);
   if (!record) {
-    throw resourceEnvironmentError("A resource provider returned invalid semantic values.");
+    throw codedError("A resource provider returned invalid semantic values.", "vibe64_resource_environment_invalid");
   }
   return Object.fromEntries(Object.entries(record).map(([semantic, entry]) => {
     const name = toText(semantic);
     if (!/^[a-z][A-Za-z0-9]*$/u.test(name) || !["number", "string"].includes(typeof entry)) {
-      throw resourceEnvironmentError("A resource provider returned an invalid semantic value.");
+      throw codedError("A resource provider returned an invalid semantic value.", "vibe64_resource_environment_semantic_value_invalid");
     }
     return [name, String(entry)];
   }));
@@ -113,7 +108,7 @@ function assertSafeResourceEnvironmentName(name = "") {
   const key = toText(name);
   rejectCallerEnvPolicy({ [key]: "value" });
   if (runtimeConfigKeyIsVibe64Reserved(key) || FORBIDDEN_RESOURCE_ENVIRONMENT_NAMES.has(key)) {
-    throw resourceEnvironmentError(
+    throw codedError(
       `Managed resource binding cannot target reserved environment variable ${key}.`,
       "vibe64_resource_environment_name_reserved"
     );
@@ -123,10 +118,10 @@ function assertSafeResourceEnvironmentName(name = "") {
 function validateVoiceResource(resource, bindings, values) {
   if (resource.kind !== "voice") return;
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(resource.id || "")) {
-    throw resourceEnvironmentError("A voice resource id must use letters, numbers, underscores or hyphens.");
+    throw codedError("A voice resource id must use letters, numbers, underscores or hyphens.", "vibe64_voice_resource_id_invalid");
   }
   if (Object.keys(bindings || {}).sort().join(",") !== "accessTokenFile,endpoint" || Object.keys(resource.optionalBindings || {}).length) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "A voice resource requires endpoint and accessTokenFile bindings.",
       "vibe64_voice_resource_bindings_invalid"
     );
@@ -138,7 +133,7 @@ function validateVoiceResource(resource, bindings, values) {
   } catch { /* Report the same safe setup error below. */ }
   if (!endpoint || !["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
       !path.isAbsolute(values.accessTokenFile || "") || /[\0\r\n]/u.test(values.accessTokenFile)) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "Voice requires a ws:// or wss:// endpoint without credentials and an absolute accessTokenFile path.",
       "vibe64_voice_resource_values_invalid"
     );
@@ -151,7 +146,7 @@ function preferredAlternative(resource = {}) {
     : [];
   const preferred = alternatives.filter((alternative) => alternative?.preferred === true);
   if (preferred.length !== 1 || !objectRecord(preferred[0].bindings)) {
-    throw resourceEnvironmentError(
+    throw codedError(
       `Genesis resource ${toText(resource.id) || "(unknown)"} has no unambiguous preferred semantic binding.`,
       "vibe64_resource_bindings_required"
     );
@@ -226,21 +221,21 @@ function resourceKindIsDatabase(kind = "") {
 function normalizedConnectionEndpoint(value = {}, kind = "") {
   const endpoint = objectRecord(value);
   if (!endpoint) {
-    throw resourceEnvironmentError("Database tool connection endpoint is invalid.");
+    throw codedError("Database tool connection endpoint is invalid.", "vibe64_database_tool_endpoint_invalid");
   }
   if (kind === "sqlite") {
     const database = toText(endpoint.database);
     if (!database || !path.isAbsolute(database) || database.includes("\0") ||
         typeof endpoint.readOnly !== "boolean" ||
         Object.keys(endpoint).some((name) => !["database", "readOnly"].includes(name))) {
-      throw resourceEnvironmentError("SQLite requires an absolute database filename and an explicit access mode.");
+      throw codedError("SQLite requires an absolute database filename and an explicit access mode.", "vibe64_database_tool_sqlite_endpoint_invalid");
     }
     return { database: path.normalize(database), readOnly: endpoint.readOnly };
   }
   const url = toText(endpoint.url);
   if (url) {
     if (Object.keys(endpoint).some((name) => name !== "url")) {
-      throw resourceEnvironmentError("Database tool URL connections cannot mix structured fields.");
+      throw codedError("Database tool URL connections cannot mix structured fields.", "vibe64_database_tool_url_mixed");
     }
     return { url };
   }
@@ -261,7 +256,7 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
     port > 65535 ||
     Object.keys(endpoint).some((name) => !["database", "host", "password", "port", "username"].includes(name))
   ) {
-    throw resourceEnvironmentError(
+    throw codedError(
       `The ${kind || "database"} tool connection is incomplete.`,
       "vibe64_database_tool_connection_incomplete"
     );
@@ -280,7 +275,7 @@ function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
     !DATABASE_RESOURCE_KINDS.has(kind) ||
     Object.keys(environment).some((name) => !["contract", "kind", "read", "write"].includes(name))
   ) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "The database tool environment contract is invalid.",
       "vibe64_database_tool_environment_invalid"
     );
@@ -289,9 +284,9 @@ function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
   const write = normalizedConnectionEndpoint(environment.write, kind);
   if (kind === "sqlite") {
     if (read.database !== write.database || !read.readOnly || write.readOnly) {
-      throw resourceEnvironmentError(
+      throw codedError(
         "SQLite inspection requires a read-only connection to the same database.",
-        "vibe64_database_tool_reader_required"
+        "vibe64_database_tool_sqlite_reader_required"
       );
     }
   } else if (requireDistinctReader) {
@@ -304,7 +299,7 @@ function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
       read.username === write.username ||
       read.password === write.password
     ) {
-      throw resourceEnvironmentError(
+      throw codedError(
         "A managed database tool requires a distinct reader for the same development database.",
         "vibe64_database_tool_reader_required"
       );
@@ -329,7 +324,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     !Array.isArray(provided.resourceValues) ||
     Object.keys(objectRecord(provided) || {}).some((name) => !RESOURCE_PROVIDER_RESULT_KEYS.has(name))
   ) {
-    throw resourceEnvironmentError(
+    throw codedError(
       `The host must return ${RESOURCE_ENVIRONMENT_CONTRACT}.`,
       "vibe64_resource_environment_contract_invalid"
     );
@@ -343,9 +338,9 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
       Object.keys(preparation).some(key => !["identity", "preserved"].includes(key)) ||
       typeof preparation.identity !== "string" || !/^[a-f0-9]{64}$/u.test(preparation.identity) ||
       typeof preparation.preserved !== "boolean")) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "The host returned invalid resource preparation evidence.",
-      "vibe64_resource_environment_contract_invalid"
+      "vibe64_resource_environment_evidence_invalid"
     );
   }
   const entries = new Map();
@@ -356,9 +351,9 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
       Object.keys(objectRecord(providedResource) || {}).some((name) => !["declaration", "values"].includes(name)) ||
       Object.keys(descriptor).some((name) => !["component", "id", "kind"].includes(name))
     ) {
-      throw resourceEnvironmentError(
+      throw codedError(
         "A resource provider returned an invalid resource declaration.",
-        "vibe64_resource_environment_declaration_mismatch"
+        "vibe64_resource_environment_declaration_invalid"
       );
     }
     const identity = declarationIdentity(descriptor?.component, {
@@ -366,7 +361,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
       kind: descriptor?.kind
     });
     if (!declarations.has(identity) || entries.has(identity)) {
-      throw resourceEnvironmentError(
+      throw codedError(
         "The host returned an unknown or duplicate resource declaration.",
         "vibe64_resource_environment_declaration_mismatch"
       );
@@ -375,7 +370,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     const declaration = declarations.get(identity);
     const semantics = declaredSemantics(declaration.resource);
     if (Object.keys(values).some((semantic) => !semantics.has(semantic))) {
-      throw resourceEnvironmentError(
+      throw codedError(
         `The host returned an undeclared semantic value for resource ${declaration.resource.id}.`,
         "vibe64_resource_environment_semantic_undeclared"
       );
@@ -393,7 +388,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
       if (allowUnprepared && provided.prepared === false) {
         continue;
       }
-      throw resourceEnvironmentError(
+      throw codedError(
         `The host did not satisfy managed resource ${declaration.resource.id}.`,
         DATABASE_RESOURCE_KINDS.has(declaration.resource.kind)
           ? "vibe64_managed_database_resource_missing"
@@ -411,13 +406,13 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     for (const [semantic, name] of Object.entries(bindings)) {
       assertSafeResourceEnvironmentName(name);
       if (!Object.hasOwn(values, semantic) || (!values[semantic] && !allowEmpty.includes(semantic))) {
-        throw resourceEnvironmentError(
+        throw codedError(
           `The host did not supply ${semantic} for resource ${declaration.resource.id}.`,
           "vibe64_resource_environment_value_missing"
         );
       }
       if (Object.hasOwn(environment, name) && environment[name] !== values[semantic]) {
-        throw resourceEnvironmentError(
+        throw codedError(
           `Managed resources assign conflicting values to ${name}.`,
           "vibe64_resource_environment_collision"
         );
@@ -434,13 +429,13 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
   }
 
   if (managedDatabases.length > 1) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "The session declares more than one managed database.",
       "vibe64_managed_database_ambiguous"
     );
   }
   if (!requireDatabaseTool && provided.databaseToolEnvironment != null) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "Production resource provisioning must not return database-tool credentials.",
       "vibe64_database_tool_environment_forbidden"
     );
@@ -452,7 +447,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
       requireDistinctReader: true
     });
   if (databaseToolEnvironment && databaseToolEnvironment.kind !== managedDatabases[0].declaration.resource.kind) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "The database tool kind does not match the managed resource.",
       "vibe64_database_tool_resource_mismatch"
     );
@@ -466,9 +461,9 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     ["port", String(writer.port)],
     ["username", writer.username]
   ].some(([semantic, expected]) => Object.hasOwn(values, semantic) && values[semantic] !== expected)) {
-    throw resourceEnvironmentError(
+    throw codedError(
       "The database tool writer does not match the application resource credential.",
-      "vibe64_database_tool_resource_mismatch"
+      "vibe64_database_tool_writer_mismatch"
     );
   }
 
@@ -549,7 +544,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
     DATABASE_RESOURCE_KINDS.has(resource?.kind)
   ));
   if (databases.length !== 1) {
-    throw resourceEnvironmentError(
+    throw codedError(
       databases.length > 1
         ? "The session declares more than one database."
         : "The session Stack does not declare a supported database.",
@@ -562,9 +557,9 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
   const alternative = satisfiedAlternative(resource, environment);
   if (!alternative) {
     preferredAlternative(resource);
-    throw resourceEnvironmentError(
+    throw codedError(
       "The session database environment is incomplete.",
-      "vibe64_session_database_configuration_incomplete"
+      "vibe64_session_database_environment_incomplete"
     );
   }
   const values = Object.fromEntries(Object.entries(alternative.bindings).map(([semantic, name]) => [
@@ -574,7 +569,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
   const unsupported = Object.keys(values).filter((semantic) => !DATABASE_CONNECTION_SEMANTICS.has(semantic));
   let endpoint;
   if (unsupported.length > 0) {
-    throw resourceEnvironmentError(
+    throw codedError(
       `The database tool does not support connection semantics: ${unsupported.join(", ")}.`,
       "vibe64_database_tool_semantics_unsupported"
     );
@@ -583,7 +578,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
     const database = toText(values.database);
     if (!database || database === ":memory:" || Object.keys(values).some((key) => key !== "database") ||
         (!path.isAbsolute(database) && !path.isAbsolute(sourceRoot))) {
-      throw resourceEnvironmentError("SQLite database browsing requires a declared persistent database file.");
+      throw codedError("SQLite database browsing requires a declared persistent database file.", "vibe64_session_database_file_required");
     }
     const filename = path.resolve(sourceRoot, database);
     return normalizeDatabaseToolEnvironment({

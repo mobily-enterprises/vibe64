@@ -194,7 +194,7 @@ test("resume retains prepared project/session and works after course is disabled
 test("unmarked existing directory is preserved and never adopted", async t => {
   const f = await fixture(t);
   await mkdir(f.projectRoot);
-  await assert.rejects(f.service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PROJECT_CONFLICT" });
+  await assert.rejects(f.service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_OWNERSHIP_CONFLICT" });
   assert.equal(f.calls.some(value => value[0] === "project" || value[0] === "session-create"), false);
   assert.equal(f.failure.stage, "project");
 });
@@ -211,7 +211,7 @@ test("changed repository authority is not adopted using only the training marker
   await f.service.prepareLesson({ actor, attemptId });
   const training = f.calls.find(value => value[0] === "project")[1].training;
   f.setMetadata({ training, repository: { mode: "github" } });
-  await assert.rejects(f.service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PROJECT_CONFLICT" });
+  await assert.rejects(f.service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_OWNERSHIP_CONFLICT" });
   assert.equal(f.calls.filter(value => value[0] === "session-read").length, 1);
   assert.equal(f.attempt.preparation.phase, "ready");
 });

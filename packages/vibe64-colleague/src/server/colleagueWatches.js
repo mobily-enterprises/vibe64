@@ -111,7 +111,7 @@ function createColleagueWatches({
   async function changeAssignments(context, change) {
     const state = await threads.stateFor(context);
     return changeWatches(state, async () => {
-      if (serviceState.lifecycle.closed || state.stopping) throw failure("Colleague is stopping.");
+      if (serviceState.lifecycle.closed || state.stopping) throw failure("Colleague is stopping.", "vibe64_colleague_stopping");
       const result = await change(state);
       worker.scheduleWatches(state, watchDebounceMs);
       return result;
@@ -138,7 +138,7 @@ function createColleagueWatches({
    */
   async function watchState(input, context) {
     if (watchSources.get(input.source)?.kind !== "state") {
-      throw failure("Colleague cannot watch that. watch.sources.read lists what it can watch here.", "vibe64_colleague_failed", 422);
+      throw failure("Colleague cannot watch that. watch.sources.read lists what it can watch here.", "vibe64_colleague_watch_unsupported", 422);
     }
     return startWatch(input, context);
   }
@@ -185,11 +185,14 @@ function createColleagueWatches({
   async function startWatch(input, context) {
     const state = await threads.stateFor(context);
     return changeWatches(state, async () => {
-      if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
+      if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.", "vibe64_colleague_shutting_down");
       const source = input.source ? watchSources.get(input.source) : null;
       const watchedInput = source?.kind === "state" ? stateWatchInput(source, input.input) : null;
       if (watchedInput && !Object.hasOwn(source.conditions, input.condition)) {
-        throw failure(`A ${source.label} watch reports ${Object.keys(source.conditions).join(", ")}.`, "vibe64_colleague_failed", 422);
+        const conditions = Object.keys(source.conditions).join(", ");
+        throw failure(`A ${source.label} watch reports ${conditions}.`, "vibe64_colleague_watch_condition_invalid", 422, {
+          params: { source: source.label, conditions }
+        });
       }
       const target = watchedInput ? { source: input.source, input: watchedInput, projectSlug: watchedInput.projectSlug || "" }
         : {
@@ -204,16 +207,16 @@ function createColleagueWatches({
             !isDeepStrictEqual(existing.input || null, target.input || null) ||
             ["condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
             (existing.once !== false) !== (input.once !== false)) {
-          throw failure(
-            "This watch ID belongs to a different request. Use a new watch ID."
-          );
+          throw failure("This watch ID belongs to a different request. Use a new watch ID.", "vibe64_colleague_watch_id_reused");
         }
         return { ok: true, watch: publicWatch(existing) };
       }
-      if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_failed", 422);
+      if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_watch_unavailable_here", 422);
       if (state.thread.kind === "learn") await assertLearnWatchTarget(state, context, target.projectSlug);
       if (state.record.watches.filter((watch) => ["active", "pending", "paused"].includes(watch.status)).length >= 16) {
-        throw failure("Cancel an existing watch before adding another; up to 16 can be retained.");
+        throw failure("Cancel an existing watch before adding another; up to 16 can be retained.", "vibe64_colleague_watch_limit", 409, {
+          params: { limit: 16 }
+        });
       }
       state.requestContext = context;
       const watch = {
@@ -256,8 +259,10 @@ function createColleagueWatches({
     const state = await threads.stateFor(context);
     return changeWatches(state, async () => {
       const watch = state.record.watches.find(item => item.watchId === input.watchId);
-      if (!watch || !["active", "pending"].includes(watch.status)) throw failure("Only an active watch can be paused.");
-      if (watch.assignmentId) throw failure("Pause the assignment through its retained assignment controls.");
+      if (!watch || !["active", "pending"].includes(watch.status)) throw failure("Only an active watch can be paused.", "vibe64_colleague_watch_not_active");
+      if (watch.assignmentId) {
+        throw failure("Pause the assignment through its retained assignment controls.", "vibe64_colleague_watch_assignment_pause");
+      }
       watch.status = "paused";
       watch.error = "Watching paused.";
       await suppressWatchObservation(state, input.watchId);
@@ -269,8 +274,10 @@ function createColleagueWatches({
     const state = await threads.stateFor(context);
     return changeWatches(state, async () => {
       const watch = state.record.watches.find((item) => item.watchId === input.watchId);
-      if (!watch || watch.status !== "paused") throw failure("Only a paused watch can be resumed.");
-      if (watch.assignmentId) throw failure("Resume the assignment through assignment.update after a new user instruction.");
+      if (!watch || watch.status !== "paused") throw failure("Only a paused watch can be resumed.", "vibe64_colleague_watch_not_paused");
+      if (watch.assignmentId) {
+        throw failure("Resume the assignment through assignment.update after a new user instruction.", "vibe64_colleague_watch_assignment_resume");
+      }
       state.requestContext = context;
       watch.status = "active";
       try {

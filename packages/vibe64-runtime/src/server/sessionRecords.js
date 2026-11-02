@@ -214,7 +214,8 @@ function createSessionRecords({
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
       throw vibe64Error(
         `Renewal session status requires a renewal transition: ${normalizedStatus}`,
-        "vibe64_session_renewal_transition_required"
+        "vibe64_session_renewal_transition_required",
+        { params: { status: normalizedStatus } }
       );
     }
     return mutateSession(sessionId, async (sessionPaths) => {
@@ -222,7 +223,8 @@ function createSessionRecords({
       if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(currentStatus)) {
         throw vibe64Error(
           `Renewal session status requires a renewal transition: ${currentStatus}`,
-          "vibe64_session_renewal_transition_required"
+          "vibe64_session_renewal_transition_required",
+          { params: { status: currentStatus } }
         );
       }
       await writeTextFile(sessionPaths.statusPath, `${normalizedStatus}\n`);

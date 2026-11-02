@@ -19,7 +19,7 @@ function protectedError(item) {
 }
 
 function changedError() {
-  return sourceEditorError("An item changed while it was being moved or copied. Try again.", "vibe64_source_editor_file_changed", {}, 409);
+  return sourceEditorError("An item changed while it was being moved or copied. Try again.", "vibe64_files_item_changed", {}, 409);
 }
 
 function sameEntry(left, right) {
@@ -59,7 +59,7 @@ async function availableName(destination, name) {
     const candidate = `${stem} (${number})${extension}`;
     if (!(await pathExists(destination.at(candidate)))) return candidate;
   }
-  throw sourceEditorError("Too many items with this name already exist here.", "vibe64_files_exists", { name }, 409);
+  throw sourceEditorError("Too many items with this name already exist here.", "vibe64_files_names_exhausted", { name }, 409);
 }
 
 export {

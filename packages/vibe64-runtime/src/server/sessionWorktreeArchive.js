@@ -45,21 +45,21 @@ async function validateCleanRenewalRecovery({
   ) {
     throw vibe64Error(
       "A renewal source stage requires complete clean-worktree recovery evidence.",
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_evidence_incomplete"
     );
   }
   const head = await readWorktreeGitFact(worktreePath, ["rev-parse", "--verify", "HEAD"]);
   if (!details.head || head !== details.head) {
     throw vibe64Error(
       "The renewal recovery commit does not match the staged worktree.",
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_commit_mismatch"
     );
   }
   const branch = await readWorktreeGitFact(worktreePath, ["branch", "--show-current"]);
   if (details.branch && branch !== details.branch) {
     throw vibe64Error(
       "The renewal recovery branch does not match the staged worktree.",
-      "vibe64_session_renewal_recovery_invalid"
+      "vibe64_session_renewal_recovery_branch_mismatch"
     );
   }
   await validateRecoveryBundle({
@@ -90,7 +90,8 @@ async function prepareRenewalSessionSource({
   if (sourceExists && stageExists) {
     throw vibe64Error(
       `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
-      "vibe64_session_renewal_source_stage_conflict"
+      "vibe64_session_renewal_source_stage_conflict",
+      { params: { sessionId: toText(session.sessionId) } }
     );
   }
   if (!sourceExists) {
@@ -104,10 +105,7 @@ async function prepareRenewalSessionSource({
     );
   }
   if (!sessionOwnsWorktreePath(session, sourcePath) || !await isExactGitWorktree(sourcePath)) {
-    throw vibe64Error(
-      `Renewal requires the exact session-owned Git worktree: ${sourcePath}`,
-      "vibe64_session_renewal_source_invalid"
-    );
+    throw new Error(`Renewal requires the exact session-owned Git worktree: ${sourcePath}`);
   }
   if (await inspectWorktreeDirty(sourcePath)) {
     throw vibe64Error(
@@ -163,7 +161,7 @@ async function prepareRenewalSessionSource({
   if (await inspectWorktreeDirty(sourcePath)) {
     throw vibe64Error(
       "Renewal source changed while its recovery evidence was being prepared.",
-      "vibe64_session_renewal_source_dirty"
+      "vibe64_session_renewal_source_changed_during_evidence"
     );
   }
   return {
@@ -190,7 +188,8 @@ async function stagePreparedRenewalSessionSource({
   if (sourceExists && stageExists) {
     throw vibe64Error(
       `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
-      "vibe64_session_renewal_source_stage_conflict"
+      "vibe64_session_renewal_source_stage_conflict",
+      { params: { sessionId: toText(session.sessionId) } }
     );
   }
   if (!sourceExists && !stageExists) {
@@ -201,15 +200,12 @@ async function stagePreparedRenewalSessionSource({
   }
   const currentPath = sourceExists ? sourcePath : stagePath;
   if (!sessionOwnsWorktreePath(session, sourcePath) || !await isExactGitWorktree(currentPath)) {
-    throw vibe64Error(
-      `Renewal requires the exact session-owned Git worktree: ${currentPath}`,
-      "vibe64_session_renewal_source_invalid"
-    );
+    throw new Error(`Renewal requires the exact session-owned Git worktree: ${currentPath}`);
   }
   if (await inspectWorktreeDirty(currentPath)) {
     throw vibe64Error(
       "Renewal requires the exact clean source used for its recovery proof.",
-      "vibe64_session_renewal_source_dirty"
+      "vibe64_session_renewal_source_proof_dirty"
     );
   }
   await validateCleanRenewalRecovery({
@@ -222,7 +218,7 @@ async function stagePreparedRenewalSessionSource({
     if (await inspectWorktreeDirty(sourcePath)) {
       throw vibe64Error(
         "Renewal source changed before its committed stage transition.",
-        "vibe64_session_renewal_source_dirty"
+        "vibe64_session_renewal_source_changed_before_stage"
       );
     }
     await rename(sourcePath, stagePath);
@@ -250,7 +246,8 @@ async function restoreRenewalSessionSourceStage({
   if (sourceExists && stageExists) {
     throw vibe64Error(
       `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
-      "vibe64_session_renewal_source_stage_conflict"
+      "vibe64_session_renewal_source_stage_conflict",
+      { params: { sessionId: toText(session.sessionId) } }
     );
   }
   if (!sourceExists && !stageExists) {
@@ -261,10 +258,7 @@ async function restoreRenewalSessionSourceStage({
   }
   const currentPath = stageExists ? stagePath : sourcePath;
   if (!await isExactGitWorktree(currentPath) || await inspectWorktreeDirty(currentPath)) {
-    throw vibe64Error(
-      `Renewal source stage is no longer the exact clean session Git worktree: ${currentPath}`,
-      "vibe64_session_renewal_source_invalid"
-    );
+    throw new Error(`Renewal source stage is no longer the exact clean session Git worktree: ${currentPath}`);
   }
   await validateCleanRenewalRecovery({
     details: recoveryDetailsFromSession(session),
@@ -276,10 +270,7 @@ async function restoreRenewalSessionSourceStage({
     await rename(stagePath, sourcePath);
   }
   if (!await isExactGitWorktree(sourcePath)) {
-    throw vibe64Error(
-      `Restored renewal source is not the exact session Git worktree: ${sourcePath}`,
-      "vibe64_session_renewal_source_invalid"
-    );
+    throw new Error(`Restored renewal source is not the exact session Git worktree: ${sourcePath}`);
   }
   return {
     changed: stageExists,
@@ -303,7 +294,8 @@ async function commitRenewalSessionSourceStage({
   ) {
     throw vibe64Error(
       `Renewal source removal requires the published predecessor archive: ${toText(session.sessionId)}`,
-      "vibe64_session_renewal_source_commit_status_invalid"
+      "vibe64_session_renewal_source_archive_unpublished",
+      { params: { sessionId: toText(session.sessionId) } }
     );
   }
   const sourcePath = sessionSourcePath(session);
@@ -322,15 +314,13 @@ async function commitRenewalSessionSourceStage({
   if (stageExists && deletionExists) {
     throw vibe64Error(
       `Renewal source exists in both staged and deleting locations: ${toText(session.sessionId)}`,
-      "vibe64_session_renewal_source_stage_conflict"
+      "vibe64_session_renewal_source_deletion_conflict",
+      { params: { sessionId: toText(session.sessionId) } }
     );
   }
   if (stageExists) {
     if (!await isExactGitWorktree(stagePath) || await inspectWorktreeDirty(stagePath)) {
-      throw vibe64Error(
-        `Refusing to remove an invalid renewal source stage: ${stagePath}`,
-        "vibe64_session_renewal_source_invalid"
-      );
+      throw new Error(`Refusing to remove an invalid renewal source stage: ${stagePath}`);
     }
     await validateCleanRenewalRecovery({
       details: recoveryDetailsFromSession(session),

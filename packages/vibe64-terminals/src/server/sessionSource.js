@@ -93,7 +93,7 @@ function canonicalProjectSource(project = {}, standaloneSourceRoot = "") {
     if (!repositoryPath || !branch) {
       throw sourceError(
         "The Vibe64 Git project does not declare a complete canonical repository and default branch.",
-        "vibe64_session_source_canonical_repository_missing"
+        "vibe64_session_source_managed_repository_missing"
       );
     }
     return {
@@ -336,7 +336,7 @@ async function resolveExpectedSourceCommit({
   if (resolved !== expected) {
     throw sourceError(
       "The frozen renewal source commit did not resolve to the exact requested object.",
-      "vibe64_session_source_expected_commit_mismatch"
+      "vibe64_session_source_expected_commit_unresolved"
     );
   }
   return resolved;
@@ -481,7 +481,7 @@ async function createSessionSource({
   } else if (contribution && expectedSourceRef) {
     throw sourceError(
       "Only a confirmed renewal can select a contribution source ref.",
-      "vibe64_contribution_renewal_source_invalid"
+      "vibe64_contribution_renewal_source_unconfirmed"
     );
   }
   const sessionId = toText(session.sessionId);
@@ -573,7 +573,7 @@ async function createSessionSource({
     throw path.resolve(existingTopLevel) === path.resolve(sourcePath)
       ? sourceError(
         "The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
-        "vibe64_session_source_exists"
+        "vibe64_session_source_appeared"
       )
       : sourceError(
         `Session source path is already owned by another Git repository: ${sourcePath}`,

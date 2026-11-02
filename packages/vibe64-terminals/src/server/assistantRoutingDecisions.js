@@ -54,7 +54,7 @@ function createAssistantRoutingDecisions({
     async function retainHelper(helper) {
       await exclusive(sessionId, options, async (current) => {
         const persisted = await read(current.runtime.store, sessionId);
-        if (persisted?.messageId !== state.messageId) throw failure("The routing request changed before its helper finished.");
+        if (persisted?.messageId !== state.messageId) throw failure("The routing request changed before its helper finished.", "vibe64_assistant_routing_helper_request_changed");
         state.helper = helper;
         persisted.helper = helper;
         await records.save(current, persisted);
@@ -91,7 +91,7 @@ function createAssistantRoutingDecisions({
         if (event.type !== "helper-execution") return;
         helper.executionId = event.executionId;
         await retainHelper(helper);
-        if (task.cancelled) throw failure("Routing cancelled.");
+        if (task.cancelled) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       }
     };
     let interrupt;
@@ -112,7 +112,7 @@ function createAssistantRoutingDecisions({
     let decision;
     let generationError;
     try {
-      if (task.cancelled) throw failure("Routing cancelled.");
+      if (task.cancelled) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       await mkdir(scope.workdir, { recursive: true });
       await mkdir(scope.runtimeRoot, { recursive: true });
       const messages = await recentVisibleMessages(context.runtime.store, sessionId, 3);
@@ -120,12 +120,12 @@ function createAssistantRoutingDecisions({
       const executionProfile = await agent.resolveEphemeralExecutionProfile(scope, PROFILE, helperContext);
       helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
       await retainHelper(helper);
-      if (task.cancelled) throw failure("Routing cancelled.");
+      if (task.cancelled) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       const created = await agent.createEphemeralConversation(scope, { executionProfile, ephemeral: true }, helperContext);
-      if (created?.ok !== true || !created.conversationId) throw failure(created?.error || "The routing helper could not start.");
+      if (created?.ok !== true || !created.conversationId) throw failure(created?.error || "The routing helper could not start.", "vibe64_assistant_routing_helper_start_failed");
       helper.conversationId = created.conversationId;
       await retainHelper(helper);
-      if (task.cancelled) throw failure("Routing cancelled.");
+      if (task.cancelled) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       const started = await agent.startEphemeralConversationTurn(scope, {
         conversationId: helper.conversationId,
         executionProfile,
@@ -145,7 +145,7 @@ function createAssistantRoutingDecisions({
           attachments: state.input.attachments || state.input.displayAttachments
         })
       }, helperContext);
-      if (started?.ok !== true) throw failure(started?.error || "Routing could not start. Retry or choose a mode.");
+      if (started?.ok !== true) throw failure(started?.error || "Routing could not start. Retry or choose a mode.", "vibe64_assistant_routing_start_failed");
       helper.runId = started.runId;
       await retainHelper(helper);
       if (task.cancelled) {
@@ -154,7 +154,7 @@ function createAssistantRoutingDecisions({
         await interrupt;
         interrupt = null;
         await task.stop();
-        throw failure("Routing cancelled.");
+        throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
       }
       const result = await agent.waitForEphemeralConversationTurn(scope, {
         conversationId: helper.conversationId,
@@ -162,7 +162,7 @@ function createAssistantRoutingDecisions({
         executionProfile: helper.executionProfile
       }, helperContext);
       if (result?.ok !== true || (result.status && result.status !== "completed")) {
-        throw failure(result?.error || "Routing could not finish. Retry or choose a mode.");
+        throw failure(result?.error || "Routing could not finish. Retry or choose a mode.", "vibe64_assistant_routing_finish_failed");
       }
       decision = parseRoutingDecision(result.rawText || result.text);
     } catch (error) {
@@ -212,13 +212,13 @@ function createAssistantRoutingDecisions({
       : { [decision.role]: decision };
   }
   async function validateDecision(context, state, followup = false) {
-    if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.");
+    if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.", "vibe64_assistant_routing_admission_required");
     const current = destinations(await resolve(context, state, followup));
     for (const [role, captured] of Object.entries(destinations(state.decision))) {
       if ((followup || state.task === "deslop") && role === "router") continue;
       if (!sameVibe64AssistantSelection(current[role]?.effectiveSelection, captured.effectiveSelection) ||
           current[role]?.connectionIdentity !== captured.connectionIdentity) {
-        throw failure("The selected AI connection changed. Cancel this request and send it again.");
+        throw failure("The selected AI connection changed. Cancel this request and send it again.", "vibe64_assistant_routing_connection_changed");
       }
     }
   }

@@ -96,7 +96,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       ]; },
       async connectedContributionSource() {
         assert.notEqual(currentProjectRequestContext().slug, preparingProject);
-        if (!allowWrite) throw Object.assign(new Error("Repository write access revoked"), { code: "vibe64_connections_access_required" });
+        if (!allowWrite) throw Object.assign(new Error("Repository write access revoked"), { code: "vibe64_contribution_access_required" });
         return sourceFor(currentProjectRequestContext().slug);
       },
       async readCurrentProject() { return { repositoryMode: "github", repository: { defaultBranch: "main",
@@ -271,7 +271,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(received.sessionName, "Library tweaks", "a name given to the receiving session itself is kept");
 
     allowWrite = false;
-    assert.equal((await prepare()).code, "vibe64_connections_access_required");
+    assert.equal((await prepare()).code, "vibe64_contribution_access_required");
     assert.equal(createCount, 1);
     allowWrite = true;
     received.metadata.connected_contribution = JSON.stringify({ ...binding.contribution, baseCommit: "c".repeat(40) });
@@ -316,7 +316,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(replacementBinding.contribution.baseCommit, incomingReview.discardedHead);
     assert.equal(createCount, 2);
     allowWrite = false;
-    assert.equal((await replace()).code, "vibe64_connections_access_required", "retry rechecks receiving write access");
+    assert.equal((await replace()).code, "vibe64_contribution_access_required", "retry rechecks receiving write access");
     allowWrite = true;
     const replacement = await replace();
     assert.equal(replacement.ok, true, JSON.stringify(replacement));
@@ -373,7 +373,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     await assert.rejects(connectedWork("save"), { code: "receiver_forbidden" });
     allowReceiver = true;
     allowWrite = false;
-    assert.equal((await connectedWork("save")).code, "vibe64_connections_access_required");
+    assert.equal((await connectedWork("save")).code, "vibe64_contribution_access_required");
     allowWrite = true;
 
     const priorState = renewalStates.get(firstSuccessor.sessionId);

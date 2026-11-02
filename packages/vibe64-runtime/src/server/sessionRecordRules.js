@@ -169,7 +169,7 @@ function isSafeBackgroundTaskId(taskId) {
  * answers the same clean 404, whichever operation looked it up.
  */
 function unknownSessionError(sessionId) {
-  return Object.assign(vibe64Error(`Unknown vibe64 session: ${sessionId}`, "vibe64_session_not_found"), { statusCode: 404 });
+  return vibe64Error(`Unknown vibe64 session: ${sessionId}`, "vibe64_session_not_found", { params: { sessionId } });
 }
 
 function assertValidVibe64SessionId(sessionId) {
@@ -252,7 +252,8 @@ function assertRenewalSuccessorLink(metadata = {}, options = {}) {
   ) {
     throw vibe64Error(
       `Renewal successor does not match renewal ${renewalId}: ${successorSessionId}`,
-      "vibe64_session_renewal_link_mismatch"
+      "vibe64_session_renewal_link_mismatch",
+      { params: { renewalId, sessionId: successorSessionId } }
     );
   }
 }

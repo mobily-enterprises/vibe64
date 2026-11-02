@@ -35,7 +35,7 @@ function incomingRepositoryContext(project, session) {
     metadata: { base_commit: session.metadata?.base_commit }
   }, project);
   if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB || context.branch.startsWith("vibe64-incoming/")) {
-    throw saveError("Incoming changes require the receiving GitHub repository's authority.", "vibe64_incoming_repository_required");
+    throw saveError("Incoming changes require the receiving GitHub repository's authority.", "vibe64_incoming_repository_authority_required");
   }
   return context;
 }
@@ -119,7 +119,7 @@ async function inspectIncomingContributionsDirect({
     for (const entry of candidates) {
       const head = entry.activeHead || entry.discardedHead;
       const count = await gitOutput(runCommand, context, ["rev-list", "--count", `${targetHead}..${head}`], options);
-      if (!/^\d+$/u.test(count)) throw saveError("Contribution ancestry could not be established.", "vibe64_incoming_history_incomplete");
+      if (!/^\d+$/u.test(count)) throw saveError("Contribution ancestry could not be established.", "vibe64_incoming_ancestry_unknown");
       entry.status = entry.activeHead && entry.discardedHead ? "unresolved"
         : count === "0" ? "merged" : entry.activeHead ? "pending" : "discarded";
     }
@@ -215,7 +215,7 @@ async function changeIncomingContributionDirect({
   runCommand = runVibe64Command
 } = {}) {
   if (!["merge", "discard", "review-repair"].includes(action) || !id) {
-    throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_input_invalid");
+    throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_action_invalid");
   }
   const context = incomingRepositoryContext(project, session);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, { label: "Updating incoming contribution", operationId });
@@ -231,7 +231,7 @@ async function changeIncomingContributionDirect({
     discardedHead: entry.discardedHead
   };
   if (Object.entries(expected).some(([key, value]) => review?.[key] !== value)) {
-    throw saveError("This contribution or its target changed. Review the current heads before acting.", "vibe64_incoming_review_changed");
+    throw saveError("This contribution or its target changed. Review the current heads before acting.", "vibe64_incoming_heads_changed");
   }
   const activeRef = `refs/heads/${entry.branch}`;
   const discardedRef = `${activeRef}_discarded`;
@@ -244,11 +244,11 @@ async function changeIncomingContributionDirect({
     let mergedCommit = entry.head;
     let repairedTree = "";
     const targetAhead = await gitOutput(runCommand, context, ["rev-list", "--count", `${entry.head}..${current.targetHead}`], options);
-    if (!/^\d+$/u.test(targetAhead)) throw saveError("Integration ancestry is unavailable.", "vibe64_incoming_history_incomplete");
+    if (!/^\d+$/u.test(targetAhead)) throw saveError("Integration ancestry is unavailable.", "vibe64_incoming_integration_ancestry_unknown");
     if (targetAhead === "0" && (repairReview || action === "review-repair")) {
       throw saveError(
         "These heads do not need conflict repair. Refresh and review the contribution normally.",
-        "vibe64_incoming_review_changed"
+        "vibe64_incoming_repair_not_needed"
       );
     }
     if (targetAhead !== "0") {
@@ -337,7 +337,7 @@ async function changeIncomingContributionDirect({
       } else if (repairReview || action === "review-repair") {
         throw saveError(
           "These heads no longer need conflict repair. Refresh and review the contribution normally.",
-          "vibe64_incoming_review_changed"
+          "vibe64_incoming_repair_no_longer_needed"
         );
       }
       const mergedTree = repairedTree || await regenerateDerivedArtifactTree(runCommand, context, {
@@ -356,7 +356,7 @@ async function changeIncomingContributionDirect({
     const refreshed = await inspectIncomingContributionsDirect({ project, session, id, commandOptions, operationId, runCommand });
     const refreshedEntry = refreshed.contributions[0];
     if (refreshed.targetHead !== current.targetHead || refreshedEntry.activeHead !== entry.activeHead || refreshedEntry.discardedHead) {
-      throw saveError("The contribution changed while its merge was prepared. Review it again.", "vibe64_incoming_review_changed");
+      throw saveError("The contribution changed while its merge was prepared. Review it again.", "vibe64_incoming_merge_contribution_changed");
     }
     if (repairedTree) {
       const head = await gitOutput(runCommand, context, ["rev-parse", "HEAD"], options);
@@ -369,7 +369,7 @@ async function changeIncomingContributionDirect({
       if (head !== repairReview.head || indexTree !== repairReview.indexTree || worktreeTree !== repairReview.worktreeTree) {
         throw saveError(
           "The receiving source changed while the merge was prepared. Review resolved conflicts again.",
-          "vibe64_incoming_repair_changed"
+          "vibe64_incoming_merge_source_changed"
         );
       }
     }
@@ -384,7 +384,7 @@ async function changeIncomingContributionDirect({
   if (!entry.activeHead || (entry.discardedHead && entry.discardedHead !== entry.activeHead)) {
     throw saveError(
       "This discard cannot replace a different or missing contribution head. Inspect the current branches.",
-      "vibe64_incoming_review_changed"
+      "vibe64_incoming_discard_head_mismatch"
     );
   }
   const createDiscarded = `${entry.head}:${discardedRef}`;
@@ -408,7 +408,7 @@ async function changeIncomingContributionDirect({
     }
     const copied = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, discardedRef], options);
     if (copied.split(/\s+/u)[0] !== entry.head) {
-      throw saveError("The discarded branch was not verified; the active branch was retained.", "vibe64_incoming_verification_failed");
+      throw saveError("The discarded branch was not verified; the active branch was retained.", "vibe64_incoming_discard_unverified");
     }
     await git(runCommand, context, ["push", activeLease, context.remoteUrl, deleteActive], options);
   }

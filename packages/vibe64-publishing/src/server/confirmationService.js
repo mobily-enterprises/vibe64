@@ -48,7 +48,7 @@ function createConfirmationService({
   async function read() {
     const value = await readJsonFile(file, () => ({ contract: CONFIRMATIONS_CONTRACT, records: [], pendingRequest: null }));
     if (value?.contract !== CONFIRMATIONS_CONTRACT) {
-      throw publishingError("Saved confirmations are not readable.", "vibe64_publishing_state_invalid");
+      throw publishingError("Saved confirmations are not readable.", "vibe64_publishing_confirmations_unreadable");
     }
     return value;
   }
@@ -71,7 +71,7 @@ function createConfirmationService({
         throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
       }
       if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
-        throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
+        throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_targets_required");
       }
       const value = await read();
       value.pendingRequest = {
@@ -117,7 +117,8 @@ function createConfirmationService({
       if (actor?.kind !== "person") {
         throw publishingError(
           "Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.",
-          "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON"
+          "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+          { messageCode: "vibe64_publishing_confirmation_person_only" }
         );
       }
       const value = await read();

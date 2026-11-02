@@ -106,7 +106,7 @@ function createExplanationOperations({
   async function runSourceEditorAgentOperation(input, operation) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
-      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const explanationId = sourceEditorClientExplanationId(input.explanationId) || sourceEditorExplanationId();
     const key = sourceEditorExplanationMemoryKey({ sessionId }, explanationId);
@@ -213,7 +213,7 @@ function createExplanationOperations({
       if (!exclusive.acquired) {
         throw sourceEditorError(
           "This explanation is already answering a question. Try again when it finishes.",
-          "vibe64_source_explanation_busy",
+          "vibe64_source_explanation_session_busy",
           {},
           409
         );
@@ -463,7 +463,7 @@ async function sourceEditorExplanationInput(context, input) {
       if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
         throw sourceEditorError(
           "The indexed symbol range is invalid for this file. Refresh analysis.",
-          "vibe64_source_explanation_symbol_changed",
+          "vibe64_source_explanation_symbol_range_invalid",
           {},
           409
         );

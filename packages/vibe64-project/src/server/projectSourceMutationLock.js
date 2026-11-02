@@ -9,17 +9,12 @@ import {
   stat
 } from "node:fs/promises";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { codedError } from "./codedError.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
 const SESSION_POLICY_LOCK_TIMEOUT_MS = 300_000;
 const LOCK_POLL_MS = 40;
-
-function lockError(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
 
 function processAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) {
@@ -76,7 +71,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
   } = options;
   const root = normalizeText(projectRuntimeRoot);
   if (!path.isAbsolute(root)) {
-    throw lockError(
+    throw codedError(
       `${rootErrorLabel} requires an absolute project runtime root.`,
       rootErrorCode
     );
@@ -111,7 +106,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
       }
     }
   }
-  throw lockError(
+  throw codedError(
     timeoutErrorMessage,
     timeoutErrorCode
   );

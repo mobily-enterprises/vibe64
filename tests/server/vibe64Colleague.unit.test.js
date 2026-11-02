@@ -313,7 +313,7 @@ test("missing Colleague state stays non-destructive and repaired invalid state c
   await mkdir(directory, { recursive: true });
   await writeFile(file, invalid);
   const repaired = await fixture(t, [], { systemRoot: invalidRoot });
-  await assert.rejects(repaired.service.read({}, repaired.context), { code: "colleague_history_invalid", statusCode: 503 });
+  await assert.rejects(repaired.service.read({}, repaired.context), { code: "colleague_history_invalid", statusCode: 409 });
   assert.equal(await readFile(file, "utf8"), invalid, "opening never replaces the invalid saved file");
   const valid = JSON.stringify({ schemaVersion: 3, runtimeId: "NDI", previousConversations: [],
     scopeId: "colleague_repaired", assistantSelection: null, status: "ready", error: "", conversationLog: [] });

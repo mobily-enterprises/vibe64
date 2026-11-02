@@ -121,7 +121,7 @@ test("a project operation refuses a slug other than its URL's or its authorized 
     { ...resolvedFor(MEMBER), requestMeta: { request: { params: { slug: "alpha" } } } }),
   { code: "vibe64_action_project_mismatch", statusCode: 403, message: "The operation must target the project in its URL." });
   await assert.rejects(runUnderPolicy(definition, { text: "hello", projectSlug: "beta" }, resolvedFor(MEMBER, "alpha")),
-    { code: "vibe64_action_project_mismatch", statusCode: 403, message: "The authorized project does not match this operation." });
+    { code: "vibe64_action_authorized_project_mismatch", statusCode: 403, message: "The authorized project does not match this operation." });
   const routed = await runUnderPolicy(definition, { text: "hello" },
     { ...resolvedFor(MEMBER), requestMeta: { request: { params: { slug: "alpha" } } } });
   assert.equal(routed.project, "alpha", "the URL's project is the operation's");

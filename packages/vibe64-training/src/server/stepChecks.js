@@ -6,7 +6,7 @@ import { declaredStepCheck, validateContent } from "./contentSchemas.js";
 import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { availableStepIds } from "./lessonAvailability.js";
-import { trainingFailure } from "./errors.js";
+import { conflictFailure } from "./errors.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 import { acceptEvery } from "@local/vibe64-core/shared/acceptEvery";
 
@@ -23,12 +23,10 @@ const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
 
-function stepFailure(message, code = "VIBE64_TRAINING_STEP_INVALID", statusCode = 409) {
-  return trainingFailure(message, code, { statusCode });
-}
-
-function requireResult(result, failure) {
-  if (result?.ok === false) throw failure(result.error || "The assistant operation failed.", result.code);
+function requireResult(result) {
+  if (result?.ok === false) {
+    throw conflictFailure(result.error || "The assistant operation failed.", result.code || "VIBE64_TRAINING_STEP_ACTION_FAILED");
+  }
   return result;
 }
 
@@ -52,9 +50,9 @@ async function runExerciseResponseCheck({
     actionId: "vibe64.terminals.outputs.read",
     input: target,
     context
-  }), stepFailure);
+  }));
   const terminalId = outputs?.activeTerminal?.id;
-  if (!terminalId) throw stepFailure("Use the exact ready App run for this exercise before repeating the interaction.");
+  if (!terminalId) throw conflictFailure("Use the exact ready App run for this exercise before repeating the interaction.", "VIBE64_TRAINING_STEP_INVALID");
   const checked = await checks.runOrientationCheck({
     actor,
     signal: context.signal,
@@ -69,7 +67,7 @@ async function runExerciseResponseCheck({
   });
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome)) {
-    throw stepFailure("The declared check did not confirm this exact native observation.");
+    throw conflictFailure("The declared check did not confirm this exact native observation.", "VIBE64_TRAINING_STEP_OBSERVATION_UNCONFIRMED");
   }
   return checked;
 }
@@ -83,7 +81,10 @@ async function runCodeCheckObservation({ checks, context, actor, attemptId, sess
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome) || !["learner", "other"].includes(checked.authorship) ||
       checked.authorship === "other" && checked.checkResult.outcome !== "not-yet-passed") {
-    throw stepFailure("The declared code check did not confirm this exact native observation.");
+    throw conflictFailure(
+      "The declared code check did not confirm this exact native observation.",
+      "VIBE64_TRAINING_STEP_CODE_OBSERVATION_UNCONFIRMED"
+    );
   }
   return checked;
 }
@@ -100,7 +101,7 @@ function stepCheckTrigger(context) {
 
 function requireLearnerChannel(context, what) {
   if (stepCheckTrigger(context) !== "learner") {
-    throw stepFailure(`Only the learner can ${what} in the lesson.`, "VIBE64_TRAINING_LEARNER_ONLY", 403);
+    throw conflictFailure(`Only the learner can ${what} in the lesson.`, "VIBE64_TRAINING_LEARNER_ONLY", 403);
   }
 }
 
@@ -137,34 +138,36 @@ function createTrainingStepChecks({
 }) {
   async function openStep({ actor, attemptId, stepId, active = true }) {
     if (!uuidPattern.test(attemptId || "") || !idPattern.test(stepId || "")) {
-      throw stepFailure("Use an exact saved attempt ID and a declared step ID.", "ACTION_VALIDATION_FAILED", 400);
+      throw conflictFailure("Use an exact saved attempt ID and a declared step ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_STEP_ID_INVALID"
+      });
     }
     const state = await learners.readState({ actor });
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
-    if (!attempt) throw stepFailure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+    if (!attempt) throw conflictFailure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     if (active && (state.progress.activeAttemptId !== attemptId || attempt.ended)) {
-      throw stepFailure(
+      throw conflictFailure(
         "Continue this lesson before recording its steps; an ended attempt keeps its results read-only.",
         "VIBE64_TRAINING_ATTEMPT_INACTIVE"
       );
     }
     const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const steps = lessonSteps(lesson);
-    if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
+    if (!steps) throw conflictFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_STEPS_UNSUPPORTED");
     const step = steps.find(value => value.id === stepId);
-    if (!step) throw stepFailure("The step is not declared in this attempt's pinned lesson.", "VIBE64_TRAINING_STEP_MISSING", 404);
+    if (!step) throw conflictFailure("The step is not declared in this attempt's pinned lesson.", "VIBE64_TRAINING_STEP_MISSING", 404);
     return { state, attempt, lesson, step };
   }
 
   function declaredCheck(lesson, step) {
     const check = declaredStepCheck(lesson.lesson, step);
-    if (!check) throw stepFailure("This step has no automatic check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (!check) throw conflictFailure("This step has no automatic check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     return check;
   }
 
   function practiceTarget(attempt) {
     if (attempt.preparation?.phase !== "ready") {
-      throw stepFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
+      throw conflictFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
     }
     return { projectSlug: attempt.projectSlug, sessionId: attempt.preparation.initialSessionId };
   }
@@ -175,7 +178,7 @@ function createTrainingStepChecks({
 
   function replayed(result, stepId, same = acceptEvery) {
     if (result.stepId !== stepId || !same(result)) {
-      throw stepFailure("This request ID already recorded a different step result.", "VIBE64_TRAINING_REQUEST_CONFLICT");
+      throw conflictFailure("This request ID already recorded a different step result.", "VIBE64_TRAINING_STEP_REQUEST_REUSED");
     }
     return {
       ok: true,
@@ -228,7 +231,7 @@ function createTrainingStepChecks({
         };
       }
       if (entry.results.length >= MAX_STEP_RESULTS) {
-        throw stepFailure(
+        throw conflictFailure(
           `This lesson reached its ${MAX_STEP_RESULTS} saved step results. Its history is kept; ask the owner to review it.`,
           "VIBE64_TRAINING_STEP_RESULTS_FULL"
         );
@@ -262,24 +265,27 @@ function createTrainingStepChecks({
    */
   async function observe({ actor, attemptId, stepId, observation, context = {} } = {}) {
     requireLearnerChannel(context, "record an App interaction");
-    if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
+    if (!actions?.execute) throw conflictFailure("Native lesson observations are unavailable in this host.", "VIBE64_TRAINING_STEP_OBSERVATIONS_UNAVAILABLE");
     const input = validateContent(trainingStepObservationSchema, observation, "Step observation");
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     const check = declaredCheck(lesson, step);
     if (check.kind === "code") {
-      throw stepFailure("This step checks code; use Check instead of an App interaction.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+      throw conflictFailure("This step checks code; use Check instead of an App interaction.", "VIBE64_TRAINING_CHECK_IS_CODE");
     }
     const target = practiceTarget(attempt);
     if (!input.workspace.ready || !isDeepStrictEqual({
       projectSlug: input.workspace.projectSlug,
       sessionId: input.workspace.sessionId
     }, target)) {
-      throw stepFailure("Use the ready exercise project and session reserved for this exact lesson.");
+      throw conflictFailure("Use the ready exercise project and session reserved for this exact lesson.", "VIBE64_TRAINING_STEP_PRACTICE_MISMATCH");
     }
     if (!input.workspace.projectVisible || input.workspace.pane !== "preview") {
-      throw stepFailure("Press the App's control in the visible Preview of this lesson's practice project.");
+      throw conflictFailure(
+        "Press the App's control in the visible Preview of this lesson's practice project.",
+        "VIBE64_TRAINING_STEP_PREVIEW_REQUIRED"
+      );
     }
-    requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: target, context }), stepFailure);
+    requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: target, context }));
     const requestId = input.exercise.requestId;
     const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
@@ -366,7 +372,9 @@ function createTrainingStepChecks({
   async function runCheck({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     const trigger = stepCheckTrigger(context);
     if (!requestPattern.test(requestId || "")) {
-      throw stepFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+      throw conflictFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_CHECK_REQUEST_ID_INVALID"
+      });
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind === "fact") return runFactCheck({ actor, attempt, lesson, step, requestId, trigger, context });
@@ -395,7 +403,7 @@ function createTrainingStepChecks({
         ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256Hex(canonicalJson(checked.files)) } : {})
       };
     } else {
-      if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
+      if (!actions?.execute) throw conflictFailure("Native lesson observations are unavailable in this host.", "VIBE64_TRAINING_STEP_OBSERVATIONS_UNAVAILABLE");
       const receipt = entry.receipts.find(value => value.stepId === stepId && value.checkId === check.id);
       if (!receipt || receipt.sessionId !== target.sessionId) {
         return {
@@ -451,13 +459,19 @@ function createTrainingStepChecks({
    */
   async function answer({ actor, attemptId, stepId, selected, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "answer a question");
-    if (!requestPattern.test(requestId || "")) throw stepFailure("Answer with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    if (!requestPattern.test(requestId || "")) {
+      throw conflictFailure("Answer with a stable request ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_ANSWER_REQUEST_ID_INVALID"
+      });
+    }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
-    if (step.check?.kind !== "choice") throw stepFailure("This step is not a choice question.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (step.check?.kind !== "choice") throw conflictFailure("This step is not a choice question.", "VIBE64_TRAINING_CHECK_NOT_CHOICE");
     const options = step.check.options?.length || 0;
     if (!Array.isArray(selected) || !selected.length || selected.length > options || new Set(selected).size !== selected.length ||
         selected.some(value => !Number.isSafeInteger(value) || value < 0 || value >= options)) {
-      throw stepFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400);
+      throw conflictFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_ANSWER_CHOICE_INVALID"
+      });
     }
     const { answer: expected } = await content.readChoiceAnswer({ ...pinnedLessonKey(attempt.pin), stepId });
     const chosen = [...selected].sort((left, right) => left - right);
@@ -481,11 +495,13 @@ function createTrainingStepChecks({
   async function done({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "mark a step done");
     if (!requestPattern.test(requestId || "")) {
-      throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+      throw conflictFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_DONE_REQUEST_ID_INVALID"
+      });
     }
     const { lesson, step } = await openStep({ actor, attemptId, stepId });
     if (!["self", "none"].includes(step.check?.kind)) {
-      throw stepFailure("Only a self-check or reading step can be marked done.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+      throw conflictFailure("Only a self-check or reading step can be marked done.", "VIBE64_TRAINING_CHECK_NOT_SELF");
     }
     return record({
       actor,
@@ -515,10 +531,12 @@ function createTrainingStepChecks({
   async function review({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "ask for a review of your work");
     if (!requestPattern.test(requestId || "")) {
-      throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+      throw conflictFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_REVIEW_REQUEST_ID_INVALID"
+      });
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
-    if (step.check?.kind !== "review") throw stepFailure("This step has no review check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (step.check?.kind !== "review") throw conflictFailure("This step has no review check.", "VIBE64_TRAINING_REVIEW_CHECK_UNDECLARED");
     const entry = await savedEntry(actor, attempt);
     const previous = entry.results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
@@ -528,7 +546,7 @@ function createTrainingStepChecks({
     practiceTarget(attempt);
     const practice = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
     if (practice.session.agentWorking) {
-      throw stepFailure("Wait until the agent finishes, then check your work again.", "VIBE64_TRAINING_REVIEW_AGENT_WORKING");
+      throw conflictFailure("Wait until the agent finishes, then check your work again.", "VIBE64_TRAINING_REVIEW_AGENT_WORKING");
     }
     if (practice.empty) {
       return {
@@ -574,7 +592,7 @@ function createTrainingStepChecks({
    */
   async function readEvidence({ actor, attemptId, stepId, context = {} } = {}) {
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
-    if (!lesson.lesson.exercise) throw stepFailure("This lesson has no practice project to read.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (!lesson.lesson.exercise) throw conflictFailure("This lesson has no practice project to read.", "VIBE64_TRAINING_PRACTICE_PROJECT_UNDECLARED");
     practiceTarget(attempt);
     const practice = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
     const last = (await savedEntry(actor, attempt)).results.findLast(value => value.stepId === stepId && value.kind === "review");
@@ -594,11 +612,15 @@ function createTrainingStepChecks({
    * is what completion counts). An ended attempt's results went with it.
    */
   async function read({ actor, attemptId } = {}) {
-    if (!uuidPattern.test(attemptId || "")) throw stepFailure("Use an exact saved attempt ID.", "ACTION_VALIDATION_FAILED", 400);
+    if (!uuidPattern.test(attemptId || "")) {
+      throw conflictFailure("Use an exact saved attempt ID.", "ACTION_VALIDATION_FAILED", 400, {
+        messageCode: "VIBE64_TRAINING_ATTEMPT_ID_INVALID"
+      });
+    }
     const { entry, revision, attempt } = await learners.readStepProgress({ actor, attemptId });
     const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const steps = lessonSteps(lesson);
-    if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
+    if (!steps) throw conflictFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_STEPS_UNSUPPORTED");
     const results = entry.results.map(result => structuredClone(result));
     const passed = new Set(results.filter(result => result.outcome === "passed").map(result => result.stepId));
     const available = availableStepIds(lesson, actor);

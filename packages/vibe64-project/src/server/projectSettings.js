@@ -67,7 +67,11 @@ function createProjectSettings({
   }
 
   async function saveConnectedProjectsState(input = {}) {
-    if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required");
+    if (!canEditProjectSettings(input)) {
+      throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required", {
+        messageCode: "vibe64_connected_projects_owner_required"
+      });
+    }
     const selected = await selection.genesisSettingsSourceForInput(input);
     const sourceInput = { ...input, sessionId: selected.sessionId };
     const write = async () => {
@@ -86,7 +90,12 @@ function createProjectSettings({
             if (!repository.permissions?.push || repository.archived || repository.disabled) {
               throw vibe64Error(
                 `Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`,
-                "vibe64_connections_access_required"
+                "vibe64_connections_access_required",
+                {
+                  params: {
+                    repository: fullName
+                  }
+                }
               );
             }
           }
@@ -144,7 +153,10 @@ function createProjectSettings({
     if (!canEditProjectSettings(input)) {
       throw vibe64Error(
         "Only the Vibe64 project owner can change collaboration through Project settings.",
-        "vibe64_owner_required"
+        "vibe64_owner_required",
+        {
+          messageCode: "vibe64_collaboration_owner_required"
+        }
       );
     }
     const sourceInput = await selection.settingsSourceInput(input);

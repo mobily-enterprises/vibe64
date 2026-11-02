@@ -90,7 +90,7 @@ function createAssistantRoutingCancellation({
       const result = await exclusive(sessionId, routingOptions, async context => {
         const state = await read(context.runtime.store, sessionId);
         if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) {
-          throw failure("The routing request changed. Retry the assistant selection.");
+          throw failure("The routing request changed. Retry the assistant selection.", "vibe64_assistant_routing_request_changed");
         }
         const task = routingState.running.get(records.keyFor(sessionId, context));
         routingState.liveFollowupRequests.delete(records.keyFor(sessionId, context));
@@ -116,7 +116,7 @@ function createAssistantRoutingCancellation({
       if (waitForCleanup) {
         await exclusive(sessionId, routingOptions, async context => {
           if ((await read(context.runtime.store, sessionId))?.helper) {
-            throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+            throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.", "vibe64_assistant_routing_helper_close_failed");
           }
         });
       }

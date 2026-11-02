@@ -1,3 +1,5 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
+
 // What Colleague can watch besides a project's own coding conversations,
 // which are built in (a watch without a source). Owners register the rest by
 // composition, through the Colleague service:
@@ -13,9 +15,6 @@ const SOURCE_ID = /^[a-z][a-z0-9-]{0,63}$/u;
 const NAME = /^[a-z][A-Za-z0-9-]{0,63}$/u;
 const MAX_INPUT = 512;
 
-function failure(message, statusCode = 422) {
-  return Object.assign(new Error(message), { code: "vibe64_colleague_watch_source", statusCode });
-}
 function descriptions(value, what) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
       Object.entries(value).some(([name, text]) => !NAME.test(name) || typeof text !== "string" || !text.trim())) {
@@ -98,11 +97,15 @@ function stateWatchInput(source, input) {
   const value = input && typeof input === "object" && !Array.isArray(input) ? input : null;
   const declared = Object.keys(source.input);
   const expected = declared.length ? declared.join(", ") : "no input";
-  if (!value || Object.keys(value).some(key => !declared.includes(key))) throw failure(`A ${source.label} watch takes ${expected}.`);
+  const invalidInput = () => new AppError(422, `A ${source.label} watch takes ${expected}.`, {
+    code: "vibe64_colleague_watch_source",
+    params: { source: source.label, expected }
+  });
+  if (!value || Object.keys(value).some(key => !declared.includes(key))) throw invalidInput();
   const normalized = {};
   for (const key of declared) {
     const text = typeof value[key] === "string" ? value[key].trim() : "";
-    if (!text || text.length > MAX_INPUT) throw failure(`A ${source.label} watch takes ${expected}.`);
+    if (!text || text.length > MAX_INPUT) throw invalidInput();
     normalized[key] = text;
   }
   return normalized;
@@ -110,10 +113,13 @@ function stateWatchInput(source, input) {
 
 function stateObservation(source, value) {
   if (value?.ok === false) {
-    throw failure(String(value.error || `The ${source.label} could not be read.`).slice(0, 512), value.statusCode || 409);
+    throw new AppError(value.statusCode || 409, String(value.error || `The ${source.label} could not be read.`).slice(0, 512), {
+      code: "vibe64_colleague_watch_source_unreadable"
+    });
   }
   const fingerprint = typeof value?.fingerprint === "string" ? value.fingerprint : "";
-  if (!fingerprint || fingerprint.length > 4096) throw failure(`The ${source.label} reader gave no usable answer.`, 502);
+  // A reader that answers without a usable fingerprint is an internal failure of its owner, hidden as a 500.
+  if (!fingerprint || fingerprint.length > 4096) throw new Error(`The ${source.label} reader gave no usable answer.`);
   const met = Array.isArray(value.conditionsMet) ? value.conditionsMet : [];
   return {
     fingerprint,

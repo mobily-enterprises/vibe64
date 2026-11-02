@@ -28,7 +28,7 @@ function createSessionDatabase({
   async function sessionContext(input) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
-      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const store = await project.createSessionStore();
     const session = await store.readSession(sessionId);
@@ -174,7 +174,7 @@ function createSessionDatabase({
   async function checkServer(input) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
-      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
+      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id_missing");
     }
     const store = await project.createSessionStore();
     const session = await store.readSession(sessionId);

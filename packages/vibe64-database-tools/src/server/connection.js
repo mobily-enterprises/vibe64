@@ -74,7 +74,7 @@ function resolveDatabaseConnection(endpoint = {}) {
         Object.keys(endpoint).some((name) => !["kind", "database", "readOnly"].includes(name))) {
       throw vibe64Error(
         "SQLite requires an absolute filename and explicit access mode.",
-        "vibe64_session_database_configuration_incomplete"
+        "vibe64_session_database_sqlite_invalid"
       );
     }
     return Object.freeze({

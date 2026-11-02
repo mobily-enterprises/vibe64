@@ -1,3 +1,5 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
+
 /** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const VIBE64_AGENT_WRITE_LOCK = "agent-write-mode";
@@ -62,12 +64,9 @@ async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId, operation
  * HTTP callers show its message; without a status it would be a server error.
  */
 function agentWriteBusyError(result = VIBE64_AGENT_WRITE_BUSY_RESULT) {
-  return Object.assign(
-    new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error),
-    VIBE64_AGENT_WRITE_BUSY_RESULT,
-    result,
-    { retryable: true, statusCode: 409 }
-  );
+  const { code, details, error, ok: _ok, retryable: _retryable, ...fields } = { ...VIBE64_AGENT_WRITE_BUSY_RESULT, ...result };
+  const message = error || VIBE64_AGENT_WRITE_BUSY_RESULT.error;
+  return Object.assign(vibe64Error(message, code, { status: 409, details }), fields, { retryable: true });
 }
 
 function throwIfAgentWriteBusy(result) {

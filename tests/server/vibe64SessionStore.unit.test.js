@@ -990,7 +990,7 @@ test("renewal records are private to explicit store APIs", async () => {
         runtimeKind: "genesis",
         sessionId: fixture.successorSessionId
       }),
-      { code: "vibe64_session_renewal_conflict" }
+      { code: "vibe64_session_renewal_already_prepared" }
     );
     await assert.rejects(
       () => store.createRenewalPendingSession({
@@ -1001,7 +1001,7 @@ test("renewal records are private to explicit store APIs", async () => {
         runtimeKind: "genesis",
         sessionId: "another-successor"
       }),
-      { code: "vibe64_session_renewal_conflict" }
+      { code: "vibe64_session_renewal_predecessor_quiesced_elsewhere" }
     );
 
     for (const operation of [
@@ -1080,7 +1080,7 @@ test("renewal records are private to explicit store APIs", async () => {
         sessionId: "ordinary-hidden-create",
         status: VIBE64_SESSION_STATUS.RENEWAL_PENDING
       }),
-      { code: "vibe64_session_renewal_transition_required" }
+      { code: "vibe64_session_renewal_pending_creation_required" }
     );
     await assert.rejects(
       () => store.writeStatus(fixture.sourceSessionId, "renewing"),
@@ -1246,7 +1246,7 @@ test("renewal handoff and private preparation preserve the predecessor projectio
         sourceSessionId: fixture.sourceSessionId,
         successorSessionId: fixture.successorSessionId
       }),
-      { code: "vibe64_session_renewal_archive_required" }
+      { code: "vibe64_session_renewal_prepared_archive_required" }
     );
     assert.equal(await store.readStatus(fixture.sourceSessionId), VIBE64_SESSION_STATUS.RENEWAL_QUIESCED);
     assert.deepEqual(
@@ -1965,7 +1965,7 @@ test("integration continuation has one durable claim and preserves uncertain del
       await assert.rejects(reopened[operation](sessionId, { ...delivery, threadId: "another-thread" }),
         { code: "vibe64_integration_continuation_thread_changed" });
       await assert.rejects(reopened[operation](sessionId, { ...delivery, continuationMessageId: "another-message" }),
-        { code: "vibe64_integration_setup_request_changed" });
+        { code: "vibe64_integration_completion_changed" });
     }
     const accepted = await reopened.acceptIntegrationContinuation(sessionId, delivery);
     assert.equal(accepted.changed, true);
@@ -2460,7 +2460,7 @@ test("learning binding is constructor-owned, immutable and captured before calle
     await store.writeMetadataValue(session.sessionId, "label", "Renamed lesson");
     assert.equal((await store.readSession(session.sessionId)).sessionName, "Renamed lesson");
     await assert.rejects(() => store.createSession({ sessionId: "caller-bind", runtimeKind: "genesis", metadata: { learning_session: session.metadata.learning_session } }),
-      { code: "vibe64_learning_scope_invalid" });
+      { code: "vibe64_learning_scope_metadata_forbidden" });
     // The source-less lesson scope is retired (20261022).
     assert.throws(() => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private-learning"),
       learningScope: { ...practiceScope(), noExercise: true } }), { code: "vibe64_learning_scope_invalid" });
@@ -2561,7 +2561,7 @@ test("source-bearing Learning refuses missing source configuration, foreign scop
     const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
     const scope = practiceScope();
     assert.throws(() => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private-learning"), learningScope: scope }),
-      { code: "vibe64_learning_scope_invalid" });
+      { code: "vibe64_learning_scope_source_root_required" });
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
     const own = createVibe64SessionStore({ ...options, learningScope: scope });
     const session = await own.createSession({ sessionId: "private-practice", runtimeKind: "genesis", metadata: sourceMetadata(root, "private-practice") });
@@ -2577,7 +2577,8 @@ test("source-bearing Learning refuses missing source configuration, foreign scop
     }
     assert.deepEqual(await readFile(file), before);
     await assert.rejects(own.createSession({ sessionId: "caller-practice-binding", runtimeKind: "genesis", metadata: {
-      ...sourceMetadata(root, "caller-practice-binding"), learning_session: session.metadata.learning_session } }), { code: "vibe64_learning_scope_invalid" });
+      ...sourceMetadata(root, "caller-practice-binding"), learning_session: session.metadata.learning_session } }),
+      { code: "vibe64_learning_scope_metadata_forbidden" });
   });
 });
 

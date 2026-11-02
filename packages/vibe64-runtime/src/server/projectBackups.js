@@ -1,5 +1,6 @@
 import path from "node:path";
 import { lstat, mkdir, readdir, realpath, unlink } from "node:fs/promises";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 
 const BACKUP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -15,7 +16,7 @@ async function withProjectAreaLock(stateRoot, name, busy, operation) {
   await mkdir(lockRoot, { recursive: true, mode: 0o700 });
   if (await realpath(lockRoot) !== lockRoot) throw new Error("Project lock directory must not contain links.");
   const release = await tryAcquireExclusiveFileLock(path.join(lockRoot, `${name}.lock`));
-  if (!release) throw Object.assign(new Error(busy.message), { code: busy.code, statusCode: 409 });
+  if (!release) throw new AppError(409, busy.message, { code: busy.code });
   try {
     return await operation();
   } finally {

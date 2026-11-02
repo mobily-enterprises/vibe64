@@ -96,7 +96,9 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     if ((await readContributionHead(runCommand, context, options)).head !== expected) {
       throw saveError(
         "The contribution branch changed while Save was preparing. Inspect it before trying again.",
-        "vibe64_session_save_update_required"
+        "vibe64_session_save_update_required",
+        {},
+        { messageCode: "vibe64_session_save_contribution_changed_during_preparation" }
       );
     }
     // The prepared commit descends from the observed head. The exact lease also
@@ -126,7 +128,9 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     if (["vibe64_contribution_discarded", "vibe64_contribution_discard_incomplete"].includes(error.code)) throw error;
     throw saveError(
       `Save publication could not be confirmed. Inspect work to recover the prepared commit before retrying. ${normalizeText(error.message)}`,
-      "vibe64_session_save_publication_unknown"
+      "vibe64_session_save_publication_unknown",
+      {},
+      { messageCode: "vibe64_session_save_publication_unconfirmed", messageParams: { reason: normalizeText(error.message) } }
     );
   }
   if (verified === saveCommit) {
@@ -144,7 +148,8 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
           canonicalCommit: verified,
           reconciledCommit: canonicalCommit,
           updateRequired: true
-        }
+        },
+        { messageCode: "vibe64_session_save_branch_changed_during_push" }
       );
     }
     const reason = normalizeText(pushed?.stderr || pushed?.stdout || pushed?.output || pushed?.error) || "Git Save publication failed.";

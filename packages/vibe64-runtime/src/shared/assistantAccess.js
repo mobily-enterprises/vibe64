@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_ASSISTANT_ACCESS_ERROR_CODES = Object.freeze({
@@ -36,15 +37,19 @@ function assertCanUseVibe64Assistant(accessValue = {}, vibe64User = null) {
   if (canUseVibe64Assistant(access, vibe64User)) {
     return access;
   }
-  const unavailable = access.available === false;
-  const error = new Error(!unavailable ? "Only the workspace owner can use this personal AI connection."
-    : access.missingAccountLabel ? `${access.missingAccountLabel} isn't connected. Reconnect it in AI Accounts or choose another model.`
-      : "The selected AI connection is unavailable.");
-  error.code = unavailable
-    ? VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE
-    : VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED;
-  error.statusCode = unavailable ? 409 : 403;
-  throw error;
+  if (access.available !== false) {
+    throw new AppError(403, "Only the workspace owner can use this personal AI connection.", {
+      code: VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED
+    });
+  }
+  if (access.missingAccountLabel) {
+    throw new AppError(409, `${access.missingAccountLabel} isn't connected. Reconnect it in AI Accounts or choose another model.`, {
+      code: VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE,
+      messageCode: "vibe64_assistant_account_not_connected",
+      messageParams: { accountLabel: access.missingAccountLabel }
+    });
+  }
+  throw new AppError(409, "The selected AI connection is unavailable.", { code: VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE });
 }
 
 export {

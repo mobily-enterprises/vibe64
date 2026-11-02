@@ -13,10 +13,12 @@ import { projectNoReply, releaseObserver } from "./colleaguePresentation.js";
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
-// A plain error, not a refusal: the API answers this 503 with its generic server-error text.
-const invalidHistory = () => Object.assign(
-  new Error("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry."),
-  { code: "colleague_history_invalid", statusCode: 503 }
+/**
+ * A refusal the person sees, like the state-upgrade one below: the owner restores or repairs the saved file.
+ */
+const invalidHistory = () => failure(
+  "Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.",
+  "colleague_history_invalid"
 );
 
 /**
@@ -62,7 +64,9 @@ function createColleagueThreads({
     if (pinned) {
       const state = await serviceState.users.get(pinned);
       if (!state || state.userKey !== owner || state.released) {
-        throw failure("This Colleague conversation has ended.", "conversation_forbidden", 403);
+        throw failure("This Colleague conversation has ended.", "conversation_forbidden", 403, {
+          messageCode: "vibe64_colleague_conversation_ended"
+        });
       }
       return state;
     }
@@ -163,7 +167,8 @@ function createColleagueThreads({
     }
     if (saved && saved.schemaVersion !== 3) {
       throw failure(
-        "Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed."
+        "Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed.",
+        "vibe64_colleague_history_upgrade_required"
       );
     }
     const record = saved || {
@@ -247,7 +252,8 @@ function createColleagueThreads({
       throw failure(
         "This Colleague conversation has been retained as read-only history. Open the current conversation before sending.",
         "ACTION_VALIDATION_FAILED",
-        400
+        400,
+        { messageCode: "vibe64_colleague_conversation_retained" }
       );
     }
   }

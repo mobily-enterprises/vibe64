@@ -68,10 +68,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
       !isPlainObject(value.index) ||
       toText(value.index.sessionId) !== toText(value.sessionId)
     ) {
-      throw vibe64Error(
-        `Invalid Vibe64 session archive metadata: ${metadataPath}`,
-        "vibe64_invalid_session_archive_metadata"
-      );
+      throw new Error(`Invalid Vibe64 session archive metadata: ${metadataPath}`);
     }
     const normalizedStatus = assertVibe64SessionStatus(value.status);
     if (
@@ -108,10 +105,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
       if (error?.code?.startsWith?.("vibe64_")) {
         throw error;
       }
-      throw vibe64Error(
-        `Invalid Vibe64 session archive metadata: ${metadataPath}`,
-        "vibe64_invalid_session_archive_metadata"
-      );
+      throw new Error(`Invalid Vibe64 session archive metadata: ${metadataPath}`);
     }
   }
 
@@ -146,10 +140,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
       if (error?.code?.startsWith?.("vibe64_")) {
         throw error;
       }
-      throw vibe64Error(
-        `Invalid prepared renewal archive metadata: ${metadataPath}`,
-        "vibe64_invalid_session_archive_metadata"
-      );
+      throw new Error(`Invalid prepared renewal archive metadata: ${metadataPath}`);
     }
     return sessionArchiveRecordFromJson(value, {
       archivePath,

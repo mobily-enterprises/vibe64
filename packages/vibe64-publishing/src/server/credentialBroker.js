@@ -19,8 +19,8 @@ const PROOF_FIELDS = Object.freeze([
   "project", "files", "fileName", "sha256", "size", "certificateSha256", "applicationId", "versionName", "versionCode", "page", "index"
 ]);
 
-function brokerError(message, code = "vibe64_publishing_account_invalid") {
-  return Object.assign(new Error(message), { code });
+function brokerError(message, code, params) {
+  return Object.assign(new Error(message), { code, ...(params ? { params } : {}) });
 }
 
 function accountEntryId(accountId) {
@@ -73,15 +73,15 @@ function createCredentialBroker({
   }
 
   async function addAccount({ kind, label, address = "", token, source = "token" } = {}) {
-    if (!ACCOUNT_KINDS.includes(kind)) throw brokerError("Choose npm, PyPI or GitHub.");
+    if (!ACCOUNT_KINDS.includes(kind)) throw brokerError("Choose npm, PyPI or GitHub.", "vibe64_publishing_account_kind_invalid");
     let value = typeof token === "string" ? token.trim() : "";
     if (source === "github-cli") {
-      if (kind !== "github") throw brokerError("Only a GitHub account can come from the GitHub CLI.");
+      if (kind !== "github") throw brokerError("Only a GitHub account can come from the GitHub CLI.", "vibe64_publishing_account_cli_unsupported");
       value = await githubCliToken();
     }
-    if (!/^[\x21-\x7e]{8,4096}$/u.test(value)) throw brokerError("Paste the whole token: it is one word of at least 8 characters.");
+    if (!/^[\x21-\x7e]{8,4096}$/u.test(value)) throw brokerError("Paste the whole token: it is one word of at least 8 characters.", "vibe64_publishing_account_token_invalid");
     const id = slug(`${kind}-${label || address || kind}`) || kind;
-    if (!ACCOUNT_ID.test(id)) throw brokerError("Give the account a short name.");
+    if (!ACCOUNT_ID.test(id)) throw brokerError("Give the account a short name.", "vibe64_publishing_account_name_invalid");
     const entry = await keys.put(accountEntryId(id), {
       value,
       kind: "account",
@@ -97,7 +97,7 @@ function createCredentialBroker({
   }
 
   async function removeAccount(id) {
-    if (!ACCOUNT_ID.test(id || "")) throw brokerError("That is not an account.");
+    if (!ACCOUNT_ID.test(id || "")) throw brokerError("That is not an account.", "vibe64_publishing_account_invalid");
     await keys.remove(accountEntryId(id));
     return { removed: id };
   }
@@ -127,7 +127,7 @@ function createCredentialBroker({
         const stored = JSON.parse(keys.read(sideloadKeyEntryId(target)).toString("utf8"));
         return spec.id === ANDROID_SIDELOAD_KEYSTORE.id ? Buffer.from(stored.keystore, "base64") : stored.password;
       }
-      if (!target.account) throw brokerError(`Choose a publishing account for ${target.id}.`, "vibe64_publishing_account_missing");
+      if (!target.account) throw brokerError(`Choose a publishing account for ${target.id}.`, "vibe64_publishing_account_missing", { targetId: target.id });
       const token = keys.read(accountEntryId(target.account)).toString("utf8");
       if (spec.id === "npm-userconfig") return packaging.npmTokenUserconfig({ registry: target.settings?.registry || undefined, token });
       return token;

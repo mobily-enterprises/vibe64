@@ -1,4 +1,5 @@
 import { registerVoiceProxyRoute } from "@jskit-ai/assistant-voice/server";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -15,10 +16,7 @@ import { COLLEAGUE_VOICE_SOCKET_URL } from "../shared/routes.js";
  */
 function authorizeOrigin(request) {
   if (!isTrustedStudioWebSocketRequest(request)) {
-    throw Object.assign(new Error("Sign in to use voice."), {
-      code: "voice_auth_required",
-      statusCode: 403
-    });
+    throw new AppError(403, "Sign in to use voice.", { code: "voice_auth_required" });
   }
 }
 
@@ -44,10 +42,7 @@ function registerVoiceSocketRoutes(fastify, { actionCatalogue, proxyConfig, sess
       const sessionId = String(request.params?.sessionId || "").trim();
       const inspection = await runWithProjectRequestContext(context, () => sessions.inspectSession(sessionId));
       if (inspection?.ok !== true || !sessionId || inspection.sessionId !== sessionId) {
-        throw Object.assign(new Error("This session is not available."), {
-          code: "voice_session_unavailable",
-          statusCode: 403
-        });
+        throw new AppError(403, "This session is not available.", { code: "voice_session_unavailable" });
       }
     }
   });

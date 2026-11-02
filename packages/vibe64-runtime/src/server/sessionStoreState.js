@@ -39,7 +39,7 @@ function createSessionStoreState({
   // A practice scope is accepted, with its actual source root, only for the published
   // 20261008-learning-practice-history readers, which verify adoption with it.
   if (admittedLearningScope && !projectSessionSourceRoot) {
-    throw vibe64Error("A practice learning runtime requires its actual project session source root.", "vibe64_learning_scope_invalid");
+    throw vibe64Error("A practice learning runtime requires its actual project session source root.", "vibe64_learning_scope_source_root_required");
   }
   const normalizedProjectContextRoot = normalizeTargetRoot(projectContextRoot);
   const resolvedProjectRuntimeRoot = String(projectRuntimeRoot || "").trim();

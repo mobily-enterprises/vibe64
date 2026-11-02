@@ -356,8 +356,8 @@ English explanation, ordered steps and original source-editor presentation.
 
 Genesis owns the Machine and Program City formats and their validator; Vibe64
 calls it for saved and freshly refreshed Cities and reports a rejection as
-`vibe64_invalid_genesis_city` with the City kind and path, keeping no copy of
-the schema. Architecture status and view reads share at most two immutable
+`vibe64_invalid_genesis_city` (`vibe64_invalid_genesis_city_architecture` for its
+architecture) with the City kind and path, keeping no copy of the schema. Architecture status and view reads share at most two immutable
 validated city snapshots, held only while read: one unread for two minutes is
 released, and a scan releases its source's snapshots when it starts. A scan's
 response reports the new Cities' status, never the documents. Filesystem

@@ -23,7 +23,7 @@ test("session runtime never derives private state from a project context path", 
     () => new Vibe64SessionRuntime({
       projectContextRoot: "/home/merc/.local/state/vibe64/managed-sources/merc/projects/example"
     }),
-    (error) => error?.code === "vibe64_project_runtime_root_required"
+    (error) => error?.code === "vibe64_session_runtime_root_required"
   );
 });
 
@@ -635,7 +635,7 @@ test("renewal runtime materializes a private successor through the explicit stor
         sessionId: "renewal-successor",
         startedAt: "2026-08-24T01:00:00.000Z"
       }),
-      { code: "vibe64_session_renewal_conflict" }
+      { code: "vibe64_session_renewal_already_prepared" }
     );
     await assert.rejects(
       () => runtime.getSessionWithoutSource("renewal-successor"),
@@ -797,7 +797,7 @@ test("renewal retry rejects mismatched durable source ownership without repairin
         sessionId: "renewal-successor",
         startedAt: "2026-08-24T01:00:00.000Z"
       }),
-      { code: "vibe64_session_source_not_attached" }
+      { code: "vibe64_session_renewal_source_path_mismatch" }
     );
     assert.equal(materializationCalls, 0);
     assert.equal(
@@ -984,8 +984,8 @@ test("learning construction cannot be enabled by caller metadata or source provi
       projectRuntimeRoot: path.join(root, "learning-runtime"), projectSessionSourceRoot: managedSessionSourceRoot(root),
       learningScope: practiceLessonScope(), ...options });
     await assert.rejects(() => practiceRuntime().createSession({ sessionId: "forged-binding", metadata: { learning_session: "{}" } }),
-      { code: "vibe64_learning_scope_invalid" });
-    assert.throws(() => practiceRuntime({ store: working.store }), { code: "vibe64_learning_scope_invalid" });
+      { code: "vibe64_learning_scope_metadata_forbidden" });
+    assert.throws(() => practiceRuntime({ store: working.store }), { code: "vibe64_learning_scope_store_mismatch" });
     for (const patch of [{ noExercise: true }, { learnerId: "" }, { attemptId: "another" }, { mode: "learning" }, { pin: {} }]) {
       assert.throws(() => practiceRuntime({ learningScope: { ...practiceLessonScope(), ...patch } }),
         { code: "vibe64_learning_scope_invalid" });
@@ -1030,10 +1030,9 @@ test("source-bearing Learning uses the original source creator, Genesis environm
     assert.deepEqual((await restarted.getSession(created.sessionId)).learning, created.learning);
     assert.equal((await restarted.listSessionSummaries())[0].nativeExecutionRoot, created.sourcePath);
     await restarted.markSessionClosing(created.sessionId);
-    for (const operation of [() => restarted.getNativeExecutionRoot(created.sessionId),
-      () => restarted.renderPrompt(created.sessionId, { request: "New work" })]) {
-      await assert.rejects(operation, { code: "vibe64_learning_session_inactive" });
-    }
+    await assert.rejects(() => restarted.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_session_inactive" });
+    await assert.rejects(() => restarted.renderPrompt(created.sessionId, { request: "New work" }),
+      { code: "vibe64_learning_session_work_closed" });
     assert.equal(await restarted.getNativeExecutionRoot(created.sessionId, { allowClosing: true }), created.sourcePath);
   });
 });

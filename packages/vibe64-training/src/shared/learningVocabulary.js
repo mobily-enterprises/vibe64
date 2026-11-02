@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 // The learning vocabulary: the real Vibe64 places a lesson or its teacher can
@@ -327,8 +328,14 @@ const filePathExpression = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\u0000-\u001f\\]{
 
 const TRAINING_GUIDE_CAPTION_LIMIT = 256;
 
-function guideFailure(message) {
-  return Object.assign(new Error(message), { code: "VIBE64_TRAINING_GUIDE_INVALID", statusCode: 422 });
+/**
+ * A guide request this installation cannot honour: a 422 refusal with its own code.
+ * @param {string} message
+ * @param {string} code
+ * @param {object} [params]
+ */
+function guideFailure(message, code, params) {
+  return new AppError(422, message, { code, params });
 }
 
 const placeOpens = place => Boolean(place?.open);
@@ -342,28 +349,45 @@ function trainingGuideRequest(input = {}, vocabulary = learningVocabulary) {
   const place = typeof input.target === "string" ? vocabulary.place(input.target) : null;
   const declared = !place && vocabulary.declaredPlace(input.target);
   if (!place && !declared) {
-    throw guideFailure(`Use one of this installation's guide places: ${vocabulary.places().map(value => value.id).join(", ")}.`);
+    const places = vocabulary.places().map(value => value.id).join(", ");
+    throw guideFailure(`Use one of this installation's guide places: ${places}.`, "VIBE64_TRAINING_GUIDE_INVALID", { places });
   }
   const target = input.target;
   const navigate = input.navigate ?? false;
   const highlight = input.highlight ?? true;
-  if (typeof navigate !== "boolean" || typeof highlight !== "boolean") throw guideFailure("navigate and highlight are booleans.");
-  if (!navigate && !highlight) throw guideFailure("Point at the place (highlight) or open it (navigate); this request does neither.");
-  if (navigate && target === "dashboard") {
-    throw guideFailure("Dashboard has no single view to open. Point at it, or open one Dashboard section such as files or database-erd.");
+  if (typeof navigate !== "boolean" || typeof highlight !== "boolean") {
+    throw guideFailure("navigate and highlight are booleans.", "VIBE64_TRAINING_GUIDE_FLAGS_INVALID");
   }
-  if (navigate && place && !placeOpens(place)) throw guideFailure(`${place.label} has no view to open; point at it instead.`);
+  if (!navigate && !highlight) {
+    throw guideFailure(
+      "Point at the place (highlight) or open it (navigate); this request does neither.",
+      "VIBE64_TRAINING_GUIDE_ACTION_MISSING"
+    );
+  }
+  if (navigate && target === "dashboard") {
+    throw guideFailure(
+      "Dashboard has no single view to open. Point at it, or open one Dashboard section such as files or database-erd.",
+      "VIBE64_TRAINING_GUIDE_DASHBOARD_UNOPENABLE"
+    );
+  }
+  if (navigate && place && !placeOpens(place)) {
+    throw guideFailure(`${place.label} has no view to open; point at it instead.`, "VIBE64_TRAINING_GUIDE_PLACE_UNOPENABLE", {
+      place: place.label
+    });
+  }
   const request = { target, navigate, highlight };
   if (input.filePath !== undefined) {
-    if (target !== "files") throw guideFailure("filePath is only for the files place.");
+    if (target !== "files") throw guideFailure("filePath is only for the files place.", "VIBE64_TRAINING_GUIDE_FILE_PATH_MISPLACED");
     if (typeof input.filePath !== "string" || !filePathExpression.test(input.filePath)) {
-      throw guideFailure("Use a relative practice project file path without '..'.");
+      throw guideFailure("Use a relative practice project file path without '..'.", "VIBE64_TRAINING_GUIDE_FILE_PATH_INVALID");
     }
     request.filePath = input.filePath;
   }
   if (input.caption !== undefined) {
     if (typeof input.caption !== "string" || !input.caption.trim() || input.caption.length > TRAINING_GUIDE_CAPTION_LIMIT) {
-      throw guideFailure(`Use a caption of 1 to ${TRAINING_GUIDE_CAPTION_LIMIT} characters.`);
+      throw guideFailure(`Use a caption of 1 to ${TRAINING_GUIDE_CAPTION_LIMIT} characters.`, "VIBE64_TRAINING_GUIDE_CAPTION_INVALID", {
+        limit: TRAINING_GUIDE_CAPTION_LIMIT
+      });
     }
     request.caption = input.caption.trim();
   }
