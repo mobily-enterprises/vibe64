@@ -25,6 +25,7 @@ import {
 } from "../../packages/vibe64-runtime/src/server/codexAppServerHelperThreads.js";
 import { __testables } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+import { configureVibe64SessionDebugLog } from "../../packages/vibe64-runtime/src/server/sessionDebugLog.js";
 
 const { CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile } = __testables;
 const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
@@ -1093,8 +1094,7 @@ test("exhausted accepted-delivery lease recovery emits the established diagnosti
   t.mock.timers.enable({
     apis: ["setTimeout"]
   });
-  const previousDebug = process.env.VIBE64_SESSION_DEBUG;
-  process.env.VIBE64_SESSION_DEBUG = "1";
+  configureVibe64SessionDebugLog({ VIBE64_SESSION_DEBUG: "1" });
   const info = t.mock.method(console, "info", () => {});
   const attachmentId = "44444444-4444-4444-8444-444444444444";
   const deliveries = [];
@@ -1148,11 +1148,7 @@ test("exhausted accepted-delivery lease recovery emits the established diagnosti
       ))
     )), true);
   } finally {
-    if (previousDebug == null) {
-      delete process.env.VIBE64_SESSION_DEBUG;
-    } else {
-      process.env.VIBE64_SESSION_DEBUG = previousDebug;
-    }
+    configureVibe64SessionDebugLog({});
     t.mock.timers.reset();
   }
 });

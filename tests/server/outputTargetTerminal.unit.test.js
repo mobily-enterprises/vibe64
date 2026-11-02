@@ -543,6 +543,7 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
         return runtime;
       },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+      inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
       currentProjectSlug: () => "",
       currentServiceDataRoot() {
         return path.join(root, "service");
@@ -1134,7 +1135,7 @@ test("the browser's own editor origin wins over rewritten routing headers", asyn
     response.end("<!doctype html><html><head></head><body>app</body></html>");
   });
   await new Promise(resolve => target.listen(0, "127.0.0.1", resolve));
-  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
   try {
     const preview = await registry.ensure({
       editorOrigin,

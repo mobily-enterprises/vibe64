@@ -14,6 +14,7 @@ import {
   resolveVibe64LogLevel
 } from "../../packages/vibe64-core/src/shared/logging.js";
 import {
+  configureVibe64SessionDebugLog,
   vibe64SessionDebugLog
 } from "../../packages/vibe64-runtime/src/server/sessionDebugLogCore.js";
 
@@ -281,15 +282,12 @@ test("Vibe64 debug streams are opt-in", () => {
     lines.push(args.map((part) => String(part)).join(" "));
   };
   try {
-    vibe64SessionDebugLog("test.off", {}, {
-      env: {}
-    });
-    vibe64SessionDebugLog("test.on", {}, {
-      env: {
-        VIBE64_SESSION_DEBUG: "1"
-      }
-    });
+    configureVibe64SessionDebugLog({});
+    vibe64SessionDebugLog("test.off", {});
+    configureVibe64SessionDebugLog({ VIBE64_SESSION_DEBUG: "1" });
+    vibe64SessionDebugLog("test.on", {});
   } finally {
+    configureVibe64SessionDebugLog({});
     console.info = originalInfo;
   }
   assert.equal(lines.length, 1);

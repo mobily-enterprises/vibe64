@@ -100,20 +100,20 @@ test("workspace preparation executes declared argv in order through the managed 
         workflowCalls.push({ id, ...options });
         assert.equal(calls.length, 2);
       },
-      inspect: () => readySetup({
-        steps: [{
-          argv: ["composer", "install", "--no-interaction"],
-          label: "Install PHP dependencies",
-          runtimeRequirements: ["composer", "php"],
-          workdir: "."
-        }, {
-          argv: ["npm", "install"],
-          label: "Install JavaScript dependencies",
-          runtimeRequirements: ["nodejs"],
-          workdir: "web"
-        }]
-      }),
       project: {
+        inspectWorkspaceSetup: () => readySetup({
+          steps: [{
+            argv: ["composer", "install", "--no-interaction"],
+            label: "Install PHP dependencies",
+            runtimeRequirements: ["composer", "php"],
+            workdir: "."
+          }, {
+            argv: ["npm", "install"],
+            label: "Install JavaScript dependencies",
+            runtimeRequirements: ["nodejs"],
+            workdir: "web"
+          }]
+        }),
         ...readyProject(),
         async projectExecutionEnvironment(input) {
           assert.equal(input.includeResourceConfiguration, true);
@@ -213,7 +213,6 @@ test("a requested connected preparation returns at once and records each progres
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
       async finishWorkflow() {},
-      inspect: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
       async connectedPreparation({ mode, onProgress }) {
         if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
         preparations += 1;
@@ -226,6 +225,7 @@ test("a requested connected preparation returns at once and records each progres
         ] };
       },
       project: {
+        inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
         ...readyProject(),
         async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
       },
@@ -286,6 +286,7 @@ for (const [phase, change] of ["environment preparation", "admission"].flatMap((
       const workflowId = "4c6a4b6c-1fde-4364-9f48-5b1cafb2535c";
       const runner = createWorkspaceSetupRunner({
         project: {
+          inspectWorkspaceSetup: inspectVibe64WorkspaceSetup,
           ...readyProject(),
           async projectExecutionEnvironment() {
             environmentCalls += 1;
@@ -347,8 +348,7 @@ test("source invalidation survives restart and reruns an unchanged preparation r
     const { runtime, session } = await workspaceSession(targetRoot);
     let installs = 0;
     const options = {
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       async runCommand() { installs += 1; return { ok: true }; }
     };
     const runner = createWorkspaceSetupRunner(options);
@@ -397,8 +397,7 @@ test("resource refusal preserves its decision identity across reload and clears 
     const id = "cc295f04-3870-4020-9352-900f872848eb";
     let rejected = true;
     let commands = 0;
-    const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(), project: readyProject(),
+    const runner = createWorkspaceSetupRunner({ project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       async startWorkflow() {
         return rejected ? { ok: false, code: "vibe64_capacity_rejected", error: "Insufficient peak headroom.", admission: { id } }
           : { ok: true, workflow: null };
@@ -428,8 +427,7 @@ test("workspace preparation transcript remains visible after a runtime restart",
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot, "restart-session");
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       async runCommand() {
         return {
           exitCode: 0,
@@ -466,16 +464,18 @@ test("workspace preparation configuration never infers a package manager", async
     const { runtime, session } = await workspaceSession(targetRoot);
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => ({
-        components: [],
-        diagnostics: [],
-        runtimeRequirements: [],
-        source: null,
-        stackHash: "sha256:empty",
-        status: "unconfigured",
-        steps: []
-      }),
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup: () => ({
+          components: [],
+          diagnostics: [],
+          runtimeRequirements: [],
+          source: null,
+          stackHash: "sha256:empty",
+          status: "unconfigured",
+          steps: []
+        })
+      },
       async runCommand() {
         commandCount += 1;
       }
@@ -504,18 +504,20 @@ test("workspace preparation starts when a later Stack declaration supplies a rec
     let configured = false;
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => configured
-        ? readySetup()
-        : {
-            components: [],
-            diagnostics: [],
-            runtimeRequirements: [],
-            source: null,
-            stackHash: "sha256:empty",
-            status: "unconfigured",
-            steps: []
-          },
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup: () => configured
+          ? readySetup()
+          : {
+              components: [],
+              diagnostics: [],
+              runtimeRequirements: [],
+              source: null,
+              stackHash: "sha256:empty",
+              status: "unconfigured",
+              steps: []
+            }
+      },
       async runCommand() {
         commandCount += 1;
         return {
@@ -545,8 +547,7 @@ test("workspace preparation reruns a successful recipe after its identity change
     let recipeHash = "sha256:retired-contract";
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup({ recipeHash }),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup({ recipeHash }) },
       async runCommand() {
         commandCount += 1;
         return {
@@ -577,8 +578,8 @@ test("unchanged setup provisions newly declared resources before reusing a succe
     let preparations = 0;
     let commands = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
       project: {
+        inspectWorkspaceSetup: () => readySetup(),
         async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared" }; },
         async projectExecutionEnvironment() {
           preparations += 1;
@@ -636,8 +637,8 @@ for (const scenario of ["preserved", "created", "changed identity", "unknown", "
       let commands = 0;
       let includesEvidence = true;
       const runner = createWorkspaceSetupRunner({
-        inspect: () => readySetup(),
         project: {
+          inspectWorkspaceSetup: () => readySetup(),
           async projectEnvironmentStatus() {
             return { status: prepared ? "ready" : "not-prepared",
               ...(includesEvidence ? { resourcePreparation: { identity, preserved: prepared } } : {}) };
@@ -691,8 +692,8 @@ for (const failure of ["provisioning failed", "still unprepared", "recipe change
       let recipeHash = "sha256:recipe";
       let commands = 0;
       const runner = createWorkspaceSetupRunner({
-        inspect: () => readySetup({ recipeHash }),
         project: {
+          inspectWorkspaceSetup: () => readySetup({ recipeHash }),
           async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared", resourcePreparation }; },
           async projectExecutionEnvironment() {
             if (recovering && failure === "provisioning failed") throw new Error("Database unavailable.");
@@ -722,12 +723,14 @@ test("workspace preparation treats a missing Genesis Stack as unconfigured", asy
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);
     const runner = createWorkspaceSetupRunner({
-      inspect: async () => {
-        const error = new Error("Run genesis init first.");
-        error.code = "STACK_REQUIRED";
-        throw error;
-      },
-      project: readyProject()
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup: async () => {
+          const error = new Error("Run genesis init first.");
+          error.code = "STACK_REQUIRED";
+          throw error;
+        }
+      }
     });
 
     const result = await runner.start({ runtime, session });
@@ -744,9 +747,8 @@ test("workspace preparation reports project contract decisions with Genesis's me
       const message = `${code}: author one complete project \`## Connected development\` section in genesis/stack.md.`;
       const commands = [];
       const runner = createWorkspaceSetupRunner({
-        inspect: async () => { throw Object.assign(new Error(message), { code }); },
         inspectProjectFormat: async () => ({ action: "none", status: "current" }),
-        project: readyProject(),
+        project: { ...readyProject(), inspectWorkspaceSetup: async () => { throw Object.assign(new Error(message), { code }); } },
         async runCommand(request) { commands.push(request); return { ok: true, exitCode: 0, output: "" }; }
       });
       for (const retry of [false, true]) {
@@ -774,13 +776,6 @@ test("workspace preparation retry migrates a recognized legacy Genesis project b
       return error;
     };
     const runner = createWorkspaceSetupRunner({
-      inspect() {
-        inspectionCount += 1;
-        if (inspectionCount < 3) {
-          throw legacyError();
-        }
-        return readySetup();
-      },
       inspectProjectFormat() {
         formatInspectionCount += 1;
         return {
@@ -790,7 +785,16 @@ test("workspace preparation retry migrates a recognized legacy Genesis project b
           supportedVersion: 2
         };
       },
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup() {
+          inspectionCount += 1;
+          if (inspectionCount < 3) {
+            throw legacyError();
+          }
+          return readySetup();
+        }
+      },
       async runCommand(request) {
         calls.push(request);
         return {
@@ -851,9 +855,6 @@ test("workspace preparation never migrates a current project after an inspection
     const { runtime, session } = await workspaceSession(targetRoot);
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect() {
-        throw new Error("The current Stack contract is incomplete.");
-      },
       inspectProjectFormat() {
         return {
           action: null,
@@ -862,7 +863,12 @@ test("workspace preparation never migrates a current project after an inspection
           supportedVersion: 2
         };
       },
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup() {
+          throw new Error("The current Stack contract is incomplete.");
+        }
+      },
       async runCommand() {
         commandCount += 1;
         return { exitCode: 0, ok: true };
@@ -882,17 +888,19 @@ test("workspace preparation keeps a failed Genesis migration recoverable", async
     const { runtime, session } = await workspaceSession(targetRoot);
     let inspectionCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect() {
-        inspectionCount += 1;
-        throw new Error("Run genesis migrate.");
-      },
       inspectProjectFormat() {
         return {
           action: "migrate",
           status: "outdated"
         };
       },
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup() {
+          inspectionCount += 1;
+          throw new Error("Run genesis migrate.");
+        }
+      },
       async runCommand() {
         return {
           exitCode: 1,
@@ -918,15 +926,17 @@ test("ambiguous setup remains an actionable session state without executing eith
     const { runtime, session } = await workspaceSession(targetRoot);
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => ({
-        diagnostics: [{
-          code: "STACK_SECTION_AMBIGUOUS",
-          message: "JSKIT and Laravel both declare workspace setup. Add one project override."
-        }],
-        status: "blocked",
-        steps: []
-      }),
-      project: readyProject(),
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup: () => ({
+          diagnostics: [{
+            code: "STACK_SECTION_AMBIGUOUS",
+            message: "JSKIT and Laravel both declare workspace setup. Add one project override."
+          }],
+          status: "blocked",
+          steps: []
+        })
+      },
       async runCommand() {
         commandCount += 1;
       }
@@ -952,8 +962,8 @@ test("a program that isn't installed reads as one plain sentence", async () => {
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
       async finishWorkflow() {},
-      inspect: () => readySetup(),
       project: {
+        inspectWorkspaceSetup: () => readySetup(),
         ...readyProject(),
         async projectExecutionEnvironment() {
           return { environment: {}, resourceConfigurationFingerprint: "d".repeat(64) };
@@ -977,8 +987,8 @@ test("command failure records a short diagnostic and leaves the session active",
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
       async finishWorkflow(id, options) { workflowOutcomes.push({ id, ...options }); },
-      inspect: () => readySetup(),
       project: {
+        inspectWorkspaceSetup: () => readySetup(),
         ...readyProject(),
         async projectExecutionEnvironment(input) {
           assert.equal(input.includeResourceConfiguration, true);
@@ -1042,8 +1052,7 @@ test("a failed setup runs again on an explicit start; a success stays cached", a
     let shouldFail = true;
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       async runCommand() {
         commandCount += 1;
         return shouldFail
@@ -1085,8 +1094,7 @@ test("a long failure keeps its first line intact and marks the omitted middle", 
     const stderr = `${frame}Error: The migration directory is corrupt, the following files are missing: ${missing}\n${stack}\n\nNode.js v26.5.0`;
     assert.ok(stderr.length > 1600);
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       runCommand: async () => ({ exitCode: 1, ok: false, stderr })
     });
     const { diagnostic } = await (await runner.start({ runtime, session })).completion;
@@ -1106,8 +1114,7 @@ test("an active preparation is shared instead of starting another run", async ()
       finishCommand = resolve;
     });
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       runCommand: () => commandFinished
     });
 
@@ -1152,8 +1159,7 @@ test("same raw session workspace preparations remain isolated across project con
     }));
     const resumedContexts = [];
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(),
-      project: readyProject(),
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
       async runCommand() {
         const slug = currentProjectRequestContext()?.slug;
         gates[slug].enter();
@@ -1233,7 +1239,7 @@ test("admitted practice Workspace setup finishes in original owner control after
     let calls = 0;
     let completion;
     let actualRuntime;
-    const runner = createWorkspaceSetupRunner({ project, inspect: () => readySetup(),
+    const runner = createWorkspaceSetupRunner({ project: { ...project, inspectWorkspaceSetup: () => readySetup() },
       async runCommand(request) {
         calls++;
         started();

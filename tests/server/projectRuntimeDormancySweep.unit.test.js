@@ -7,7 +7,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_SERVICE_DATA_ROOT_ENV } from "@local/vibe64-core/server/studioRoots";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
-import { createVibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
+import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 
 const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",
@@ -61,7 +61,7 @@ test("the dormancy sweep reads session records only and closes an idle runtime w
   await created.store.writeMetadataValue(session.sessionId, "source_kind", "session_clone");
   await created.store.writeStatus(session.sessionId, "active");
   const published = [];
-  const feature = createVibe64TerminalsFeature();
+  const feature = Vibe64TerminalsFeature;
   const dependencies = {
     actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }), env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
     events: { async publish(event) { published.push(event); return event; } },

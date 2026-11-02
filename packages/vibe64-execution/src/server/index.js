@@ -14,11 +14,8 @@ export {
   USER_CREDENTIAL_SCOPE,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   codexCredentialContext,
-  composeGithubTerminalHome,
   githubCredentialContext,
-  logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,
-  resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
 } from "./credentialHomes.js";
 export {

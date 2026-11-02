@@ -390,33 +390,32 @@ test("Codex attachment streams preserve binary bytes and atomically expose the f
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-stream-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          contentType: "application/octet-stream",
-          fileName: "café 📄.bin",
-          stream: upload
-        },
-        sessionId: "stream-session"
-      });
-      upload.write(Buffer.from([0, 1, 2, 3]));
-
-      const partial = await waitForOnlyAttachmentFile(root);
-      assert.match(partial, /^\.uploading-/u);
-
-      upload.end(Buffer.from([254, 255]));
-      const result = await storing;
-      assert.equal(result.ok, true);
-      assert.equal(result.fileName, "caf_ _.bin");
-      assert.equal(result.size, 6);
-      assert.deepEqual(await readFile(result.path), Buffer.from([0, 1, 2, 3, 254, 255]));
-      assert.deepEqual(await attachmentFiles(root), [result.fileName]);
-
-      await cleanupCodexAttachments("/source/project", "stream-session", result.attachmentId);
-      assert.deepEqual(await attachmentFiles(root), []);
+    const env = attachmentRootEnv(root);
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        contentType: "application/octet-stream",
+        fileName: "café 📄.bin",
+        stream: upload
+      },
+      sessionId: "stream-session"
     });
+    upload.write(Buffer.from([0, 1, 2, 3]));
+
+    const partial = await waitForOnlyAttachmentFile(root);
+    assert.match(partial, /^\.uploading-/u);
+
+    upload.end(Buffer.from([254, 255]));
+    const result = await storing;
+    assert.equal(result.ok, true);
+    assert.equal(result.fileName, "caf_ _.bin");
+    assert.equal(result.size, 6);
+    assert.deepEqual(await readFile(result.path), Buffer.from([0, 1, 2, 3, 254, 255]));
+    assert.deepEqual(await attachmentFiles(root), [result.fileName]);
+
+    await cleanupCodexAttachments("/source/project", "stream-session", result.attachmentId, { env });
+    assert.deepEqual(await attachmentFiles(root), []);
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -427,19 +426,18 @@ test("managed attachment files and directories honor the shared-process umask co
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-mode-test-"));
   configureVibe64Host({ sharedGroupAccess: true });
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "permissions.txt", stream: Readable.from(["permissions"]) },
-        sessionId: "permissions-session"
-      });
-      assert.equal(result.ok, true);
-      assert.equal((await stat(result.path)).mode & 0o777, 0o660);
-      assert.equal((await stat(path.dirname(result.path))).mode & 0o777, 0o770);
-      assert.equal((await stat(path.dirname(path.dirname(result.path)))).mode & 0o777, 0o770);
-      await cleanupCodexAttachments("/source/project", "permissions-session");
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "permissions.txt", stream: Readable.from(["permissions"]) },
+      sessionId: "permissions-session"
     });
+    assert.equal(result.ok, true);
+    assert.equal((await stat(result.path)).mode & 0o777, 0o660);
+    assert.equal((await stat(path.dirname(result.path))).mode & 0o777, 0o770);
+    assert.equal((await stat(path.dirname(path.dirname(result.path)))).mode & 0o777, 0o770);
+    await cleanupCodexAttachments("/source/project", "permissions-session", "", { env });
   } finally {
     configureVibe64Host(null);
     await rm(root, { force: true, recursive: true });
@@ -449,27 +447,26 @@ test("managed attachment files and directories honor the shared-process umask co
 test("duplicate Unicode filenames receive isolated attachment ids and paths", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-duplicate-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const results = await Promise.all(["first", "second"].map((contents) => (
-        storeCodexAttachment({
-          env: process.env,
-          executionRoot: "/source/project",
-          input: {
-            fileName: "résumé.txt",
-            stream: Readable.from([contents])
-          },
-          sessionId: "duplicate-session"
-        })
-      )));
+    const env = attachmentRootEnv(root);
+    const results = await Promise.all(["first", "second"].map((contents) => (
+      storeCodexAttachment({
+        env,
+        executionRoot: "/source/project",
+        input: {
+          fileName: "résumé.txt",
+          stream: Readable.from([contents])
+        },
+        sessionId: "duplicate-session"
+      })
+    )));
 
-      assert.notEqual(results[0].attachmentId, results[1].attachmentId);
-      assert.notEqual(results[0].path, results[1].path);
-      assert.deepEqual(await Promise.all(results.map((result) => readFile(result.path, "utf8"))), [
-        "first",
-        "second"
-      ]);
-      await cleanupCodexAttachments("/source/project", "duplicate-session");
-    });
+    assert.notEqual(results[0].attachmentId, results[1].attachmentId);
+    assert.notEqual(results[0].path, results[1].path);
+    assert.deepEqual(await Promise.all(results.map((result) => readFile(result.path, "utf8"))), [
+      "first",
+      "second"
+    ]);
+    await cleanupCodexAttachments("/source/project", "duplicate-session", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -478,37 +475,36 @@ test("duplicate Unicode filenames receive isolated attachment ids and paths", as
 test("configured-size overflow and empty streams leave no partial attachment", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-invalid-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const tooLarge = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          fileName: "too-large.bin",
-          stream: Readable.from([Buffer.from("12345")])
-        },
-        maxBytes: 4,
-        sessionId: "limit-session"
-      });
-      const empty = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          fileName: "empty.txt",
-          stream: Readable.from([])
-        },
-        sessionId: "empty-session"
-      });
-
-      assert.deepEqual(tooLarge, {
-        code: "vibe64_agent_attachment_too_large",
-        error: "Attachment file is too large. Maximum allowed size is 4 bytes.",
-        ok: false,
-        statusCode: 413
-      });
-      assert.equal(empty.ok, false);
-      assert.equal(empty.code, "vibe64_agent_attachment_empty");
-      assert.deepEqual(await attachmentFiles(root), []);
+    const env = attachmentRootEnv(root);
+    const tooLarge = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        fileName: "too-large.bin",
+        stream: Readable.from([Buffer.from("12345")])
+      },
+      maxBytes: 4,
+      sessionId: "limit-session"
     });
+    const empty = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        fileName: "empty.txt",
+        stream: Readable.from([])
+      },
+      sessionId: "empty-session"
+    });
+
+    assert.deepEqual(tooLarge, {
+      code: "vibe64_agent_attachment_too_large",
+      error: "Attachment file is too large. Maximum allowed size is 4 bytes.",
+      ok: false,
+      statusCode: 413
+    });
+    assert.equal(empty.ok, false);
+    assert.equal(empty.code, "vibe64_agent_attachment_empty");
+    assert.deepEqual(await attachmentFiles(root), []);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -518,28 +514,27 @@ test("aborted Codex attachment streams reject and leave no partial file", async 
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-abort-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          fileName: "aborted.txt",
-          stream: upload
-        },
-        sessionId: "abort-session"
-      });
-      upload.write("partial");
-      await waitForOnlyAttachmentFile(root);
-      upload.destroy(Object.assign(new Error("client disconnected"), {
-        code: "ECONNRESET"
-      }));
-
-      await assert.rejects(storing, {
-        code: "ECONNRESET",
-        message: "client disconnected"
-      });
-      assert.deepEqual(await attachmentFiles(root), []);
+    const env = attachmentRootEnv(root);
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        fileName: "aborted.txt",
+        stream: upload
+      },
+      sessionId: "abort-session"
     });
+    upload.write("partial");
+    await waitForOnlyAttachmentFile(root);
+    upload.destroy(Object.assign(new Error("client disconnected"), {
+      code: "ECONNRESET"
+    }));
+
+    await assert.rejects(storing, {
+      code: "ECONNRESET",
+      message: "client disconnected"
+    });
+    assert.deepEqual(await attachmentFiles(root), []);
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -549,26 +544,25 @@ test("aborted Codex attachment streams reject and leave no partial file", async 
 test("attachment DELETE rejects traversal instead of touching sibling namespaces", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-delete-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          fileName: "keep.txt",
-          stream: Readable.from(["keep"])
-        },
-        sessionId: "delete-session"
-      });
-
-      await assert.rejects(
-        () => cleanupCodexAttachments("/source/project", "delete-session", ".."),
-        {
-          code: "vibe64_invalid_agent_attachment_id"
-        }
-      );
-      assert.equal(await readFile(result.path, "utf8"), "keep");
-      await cleanupCodexAttachments("/source/project", "delete-session", result.attachmentId);
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        fileName: "keep.txt",
+        stream: Readable.from(["keep"])
+      },
+      sessionId: "delete-session"
     });
+
+    await assert.rejects(
+      () => cleanupCodexAttachments("/source/project", "delete-session", "..", { env }),
+      {
+        code: "vibe64_invalid_agent_attachment_id"
+      }
+    );
+    assert.equal(await readFile(result.path, "utf8"), "keep");
+    await cleanupCodexAttachments("/source/project", "delete-session", result.attachmentId, { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -577,30 +571,30 @@ test("attachment DELETE rejects traversal instead of touching sibling namespaces
 test("accepted attachments renew their persisted and in-process 30-minute lease", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-renew-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: {
-          fileName: "renew.txt",
-          stream: Readable.from(["renew"])
-        },
-        sessionId: "renew-session"
-      });
-      const old = new Date(Date.now() - 20 * 60 * 1000);
-      await utimes(result.path, old, old);
-
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "renew-session",
-        [result.attachmentId]
-      ), {
-        missing: [],
-        retained: [result.attachmentId]
-      });
-      assert.ok((await fileMtime(result.path)) > old.getTime());
-      await cleanupCodexAttachments("/source/project", "renew-session");
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: {
+        fileName: "renew.txt",
+        stream: Readable.from(["renew"])
+      },
+      sessionId: "renew-session"
     });
+    const old = new Date(Date.now() - 20 * 60 * 1000);
+    await utimes(result.path, old, old);
+
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "renew-session",
+      [result.attachmentId],
+      { env }
+    ), {
+      missing: [],
+      retained: [result.attachmentId]
+    });
+    assert.ok((await fileMtime(result.path)) > old.getTime());
+    await cleanupCodexAttachments("/source/project", "renew-session", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -610,46 +604,45 @@ test("an attachment lease held by another process is busy until that process rel
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-process-lock-test-"));
   let holder = null;
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "process-lock.txt", stream: Readable.from(["locked"]) },
-        sessionId: "process-lock-session"
-      });
-      holder = await spawnExclusiveLockHolder(
-        path.join(path.dirname(result.path), ".lease-lock"),
-        root
-      );
-
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "process-lock-session",
-        [result.attachmentId],
-        { lockWaitMs: 25 }
-      ), {
-        busy: [result.attachmentId],
-        missing: [],
-        retained: []
-      });
-
-      await holder.release();
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "process-lock-session",
-        [result.attachmentId],
-        { lockWaitMs: 25 }
-      ), {
-        missing: [],
-        retained: [result.attachmentId]
-      });
-      await cleanupCodexAttachments(
-        "/source/project",
-        "process-lock-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "process-lock.txt", stream: Readable.from(["locked"]) },
+      sessionId: "process-lock-session"
     });
+    holder = await spawnExclusiveLockHolder(
+      path.join(path.dirname(result.path), ".lease-lock"),
+      root
+    );
+
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "process-lock-session",
+      [result.attachmentId],
+      { env, lockWaitMs: 25 }
+    ), {
+      busy: [result.attachmentId],
+      missing: [],
+      retained: []
+    });
+
+    await holder.release();
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "process-lock-session",
+      [result.attachmentId],
+      { env, lockWaitMs: 25 }
+    ), {
+      missing: [],
+      retained: [result.attachmentId]
+    });
+    await cleanupCodexAttachments(
+      "/source/project",
+      "process-lock-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     await holder?.dispose();
     await rm(root, { force: true, recursive: true });
@@ -660,35 +653,34 @@ test("SIGKILL releases an attachment lease for immediate renewal", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-killed-lock-test-"));
   let holder = null;
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "killed-lock.txt", stream: Readable.from(["locked"]) },
-        sessionId: "killed-lock-session"
-      });
-      holder = await spawnExclusiveLockHolder(
-        path.join(path.dirname(result.path), ".lease-lock"),
-        root
-      );
-
-      await holder.kill();
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "killed-lock-session",
-        [result.attachmentId],
-        { lockWaitMs: 250 }
-      ), {
-        missing: [],
-        retained: [result.attachmentId]
-      });
-      await cleanupCodexAttachments(
-        "/source/project",
-        "killed-lock-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "killed-lock.txt", stream: Readable.from(["locked"]) },
+      sessionId: "killed-lock-session"
     });
+    holder = await spawnExclusiveLockHolder(
+      path.join(path.dirname(result.path), ".lease-lock"),
+      root
+    );
+
+    await holder.kill();
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "killed-lock-session",
+      [result.attachmentId],
+      { env, lockWaitMs: 250 }
+    ), {
+      missing: [],
+      retained: [result.attachmentId]
+    });
+    await cleanupCodexAttachments(
+      "/source/project",
+      "killed-lock-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     await holder?.dispose();
     await rm(root, { force: true, recursive: true });
@@ -699,65 +691,64 @@ test("multi-attachment renewal records each lease after its own lock wait", asyn
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-renew-wait-test-"));
   const holders = [];
   try {
-    await withAttachmentRoot(root, async () => {
-      const [first, second] = await Promise.all([
-        storeCodexAttachment({
-          env: process.env,
-          executionRoot: "/source/project",
-          input: { fileName: "first-wait.txt", stream: Readable.from(["first"]) },
-          sessionId: "renew-wait-session"
-        }),
-        storeCodexAttachment({
-          env: process.env,
-          executionRoot: "/source/project",
-          input: { fileName: "second-wait.txt", stream: Readable.from(["second"]) },
-          sessionId: "renew-wait-session"
-        })
-      ]);
-      const old = new Date(Date.now() - (20 * 60 * 1000));
-      await Promise.all([
-        utimes(first.path, old, old),
-        utimes(second.path, old, old)
-      ]);
-      holders.push(
-        await spawnExclusiveLockHolder(
-          path.join(path.dirname(first.path), ".lease-lock"),
-          root
-        ),
-        await spawnExclusiveLockHolder(
-          path.join(path.dirname(second.path), ".lease-lock"),
-          root
-        )
-      );
+    const env = attachmentRootEnv(root);
+    const [first, second] = await Promise.all([
+      storeCodexAttachment({
+        env,
+        executionRoot: "/source/project",
+        input: { fileName: "first-wait.txt", stream: Readable.from(["first"]) },
+        sessionId: "renew-wait-session"
+      }),
+      storeCodexAttachment({
+        env,
+        executionRoot: "/source/project",
+        input: { fileName: "second-wait.txt", stream: Readable.from(["second"]) },
+        sessionId: "renew-wait-session"
+      })
+    ]);
+    const old = new Date(Date.now() - (20 * 60 * 1000));
+    await Promise.all([
+      utimes(first.path, old, old),
+      utimes(second.path, old, old)
+    ]);
+    holders.push(
+      await spawnExclusiveLockHolder(
+        path.join(path.dirname(first.path), ".lease-lock"),
+        root
+      ),
+      await spawnExclusiveLockHolder(
+        path.join(path.dirname(second.path), ".lease-lock"),
+        root
+      )
+    );
 
-      const firstRelease = delay(75).then(() => holders[0].release());
-      const secondRelease = delay(325).then(() => holders[1].release());
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "renew-wait-session",
-        [first.attachmentId, second.attachmentId],
-        { lockWaitMs: 750 }
-      ), {
-        missing: [],
-        retained: [first.attachmentId, second.attachmentId]
-      });
-      await Promise.all([firstRelease, secondRelease]);
-
-      const [firstMtime, secondMtime] = await Promise.all([
-        fileMtime(first.path),
-        fileMtime(second.path)
-      ]);
-      assert.ok(
-        secondMtime - firstMtime >= 150,
-        `Expected separate post-wait renewal times; got ${firstMtime} and ${secondMtime}.`
-      );
-      await cleanupCodexAttachments(
-        "/source/project",
-        "renew-wait-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const firstRelease = delay(75).then(() => holders[0].release());
+    const secondRelease = delay(325).then(() => holders[1].release());
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "renew-wait-session",
+      [first.attachmentId, second.attachmentId],
+      { env, lockWaitMs: 750 }
+    ), {
+      missing: [],
+      retained: [first.attachmentId, second.attachmentId]
     });
+    await Promise.all([firstRelease, secondRelease]);
+
+    const [firstMtime, secondMtime] = await Promise.all([
+      fileMtime(first.path),
+      fileMtime(second.path)
+    ]);
+    assert.ok(
+      secondMtime - firstMtime >= 150,
+      `Expected separate post-wait renewal times; got ${firstMtime} and ${secondMtime}.`
+    );
+    await cleanupCodexAttachments(
+      "/source/project",
+      "renew-wait-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     await Promise.all(holders.map((holder) => holder.dispose()));
     await rm(root, { force: true, recursive: true });
@@ -767,69 +758,69 @@ test("multi-attachment renewal records each lease after its own lock wait", asyn
 test("a cleanup timer in another process observes a later lease renewal", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-cross-process-lease-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "cross-process.txt", stream: Readable.from(["keep"]) },
-        sessionId: "cross-process-session"
-      });
-      const nearlyExpired = new Date(Date.now() - (30 * 60 * 1000) + 1_500);
-      await utimes(result.path, nearlyExpired, nearlyExpired);
-
-      const moduleUrl = new URL(
-        "../../packages/vibe64-terminals/src/server/codexAttachments.js",
-        import.meta.url
-      ).href;
-      const childScript = `
-        import { access } from "node:fs/promises";
-        import { prepareCodexAttachmentStorage } from ${JSON.stringify(moduleUrl)};
-        await prepareCodexAttachmentStorage({
-          env: { VIBE64_CODEX_ATTACHMENTS_ROOT: process.env.ATTACHMENT_TEST_ROOT }
-        });
-        process.stdout.write("READY\\n");
-        await new Promise((resolve) => setTimeout(resolve, 2_500));
-        try {
-          await access(process.env.ATTACHMENT_TEST_PATH);
-          process.stdout.write("EXISTS\\n");
-        } catch {
-          process.stdout.write("MISSING\\n");
-        }
-      `;
-      const child = spawn(process.execPath, ["--input-type=module", "--eval", childScript], {
-        env: {
-          ...process.env,
-          ATTACHMENT_TEST_PATH: result.path,
-          ATTACHMENT_TEST_ROOT: root
-        },
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-      let output = "";
-      let errors = "";
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk) => {
-        output += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        errors += chunk;
-      });
-      await waitForOutput(() => output, "READY");
-
-      assert.deepEqual(await renewCodexAttachments(
-        "/source/project",
-        "cross-process-session",
-        [result.attachmentId]
-      ), {
-        missing: [],
-        retained: [result.attachmentId]
-      });
-      const [exitCode] = await once(child, "exit");
-      assert.equal(exitCode, 0, errors);
-      assert.match(output, /EXISTS/u);
-      assert.equal(await readFile(result.path, "utf8"), "keep");
-      await cleanupCodexAttachments("/source/project", "cross-process-session");
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "cross-process.txt", stream: Readable.from(["keep"]) },
+      sessionId: "cross-process-session"
     });
+    const nearlyExpired = new Date(Date.now() - (30 * 60 * 1000) + 1_500);
+    await utimes(result.path, nearlyExpired, nearlyExpired);
+
+    const moduleUrl = new URL(
+      "../../packages/vibe64-terminals/src/server/codexAttachments.js",
+      import.meta.url
+    ).href;
+    const childScript = `
+      import { access } from "node:fs/promises";
+      import { prepareCodexAttachmentStorage } from ${JSON.stringify(moduleUrl)};
+      await prepareCodexAttachmentStorage({
+        env: { VIBE64_CODEX_ATTACHMENTS_ROOT: process.env.ATTACHMENT_TEST_ROOT }
+      });
+      process.stdout.write("READY\\n");
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      try {
+        await access(process.env.ATTACHMENT_TEST_PATH);
+        process.stdout.write("EXISTS\\n");
+      } catch {
+        process.stdout.write("MISSING\\n");
+      }
+    `;
+    const child = spawn(process.execPath, ["--input-type=module", "--eval", childScript], {
+      env: {
+        ...process.env,
+        ATTACHMENT_TEST_PATH: result.path,
+        ATTACHMENT_TEST_ROOT: root
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let output = "";
+    let errors = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      errors += chunk;
+    });
+    await waitForOutput(() => output, "READY");
+
+    assert.deepEqual(await renewCodexAttachments(
+      "/source/project",
+      "cross-process-session",
+      [result.attachmentId],
+      { env }
+    ), {
+      missing: [],
+      retained: [result.attachmentId]
+    });
+    const [exitCode] = await once(child, "exit");
+    assert.equal(exitCode, 0, errors);
+    assert.match(output, /EXISTS/u);
+    assert.equal(await readFile(result.path, "utf8"), "keep");
+    await cleanupCodexAttachments("/source/project", "cross-process-session", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -838,56 +829,56 @@ test("a cleanup timer in another process observes a later lease renewal", async 
 test("Codex controller renews accepted attachments in the selected session source namespace", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-controller-renew-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const sessionId = "controller-renew-session";
-      const executionRoot = path.join(root, "managed", "sessions", "active", sessionId, "source");
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot,
-        input: {
-          fileName: "renew-controller.txt",
-          stream: Readable.from(["renew"])
-        },
-        sessionId
-      });
-      const old = new Date(Date.now() - 20 * 60 * 1000);
-      await utimes(result.path, old, old);
-      const { attachments: controller } = createCodexSessionRegistration({ logger: silentLogger,
-        listConnections: async () => [], codexAppServerProviderOptions: {}, publishSessionChanged: async () => null,
-        connectionStatus: async () => true, publishConversation: async () => null, hostEnv: process.env,
-        env: {
-          VIBE64_RUNTIME_NAMESPACE: "test",
-          VIBE64_WORKSPACE: "test"
-        },
-        project: {
-          createRuntime() {
-            return {
-              async getSession() {
-                return {
-                  metadata: {
-                    source_kind: "session_clone",
-                    source_path: executionRoot,
-                    source_path_authority: "managed_session_source"
-                  },
-                  sessionId,
-                  sessionRoot: path.join(root, "runtime", "sessions", "active", sessionId)
-                };
-              },
-              getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
-            };
-          },
-          createRuntimeWithoutSource(options) { return this.createRuntime(options); }
-        }
-      });
-
-      assert.deepEqual(await controller.renewAttachments(sessionId, [result.attachmentId]), {
-        missing: [],
-        ok: true,
-        retained: [result.attachmentId]
-      });
-      assert.ok((await fileMtime(result.path)) > old.getTime());
-      await cleanupCodexAttachments(executionRoot, sessionId);
+    const env = attachmentRootEnv(root);
+    const sessionId = "controller-renew-session";
+    const executionRoot = path.join(root, "managed", "sessions", "active", sessionId, "source");
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot,
+      input: {
+        fileName: "renew-controller.txt",
+        stream: Readable.from(["renew"])
+      },
+      sessionId
     });
+    const old = new Date(Date.now() - 20 * 60 * 1000);
+    await utimes(result.path, old, old);
+    const { attachments: controller } = createCodexSessionRegistration({ logger: silentLogger,
+      listConnections: async () => [], codexAppServerProviderOptions: {}, publishSessionChanged: async () => null,
+      connectionStatus: async () => true, publishConversation: async () => null, runtimeProfile: null,
+      env: {
+        ...env,
+        VIBE64_RUNTIME_NAMESPACE: "test",
+        VIBE64_WORKSPACE: "test"
+      },
+      project: {
+        createRuntime() {
+          return {
+            async getSession() {
+              return {
+                metadata: {
+                  source_kind: "session_clone",
+                  source_path: executionRoot,
+                  source_path_authority: "managed_session_source"
+                },
+                sessionId,
+                sessionRoot: path.join(root, "runtime", "sessions", "active", sessionId)
+              };
+            },
+            getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+          };
+        },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+      }
+    });
+
+    assert.deepEqual(await controller.renewAttachments(sessionId, [result.attachmentId]), {
+      missing: [],
+      ok: true,
+      retained: [result.attachmentId]
+    });
+    assert.ok((await fileMtime(result.path)) > old.getTime());
+    await cleanupCodexAttachments(executionRoot, sessionId, "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -895,7 +886,6 @@ test("Codex controller renews accepted attachments in the selected session sourc
 
 test("shared upload, Codex renewal, and cleanup use the configured attachment root", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-controller-env-test-"));
-  const processRoot = path.join(root, "process-root");
   const configuredRoot = path.join(root, "configured-root");
   const sessionId = "controller-configured-root-session";
   const executionRoot = path.join(root, "sessions", "active", sessionId, "source");
@@ -913,7 +903,7 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
   const attachments = createSessionAttachments({ env, project });
   const { attachments: controller } = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
     logger: silentLogger, publishSessionChanged: async () => null, connectionStatus: async () => true,
-    publishConversation: async () => null, env, hostEnv: process.env, project });
+    publishConversation: async () => null, env, project, runtimeProfile: null });
   try {
     await store.createSession({
       metadata: {
@@ -926,31 +916,28 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
       status: VIBE64_SESSION_STATUS.ACTIVE
     });
     await mkdir(executionRoot, { recursive: true });
-    await withAttachmentRoot(processRoot, async () => {
-      const upload = await attachments.uploadAttachment({ sessionId }, {
-        fileName: "configured.txt",
-        stream: Readable.from(["configured"])
-      });
-      assert.equal(upload.ok, true, JSON.stringify(upload));
-      assert.equal(upload.path.startsWith(`${configuredRoot}${path.sep}`), true);
-      assert.equal((await attachmentFiles(processRoot)).length, 0);
-
-      const old = new Date(Date.now() - 20 * 60 * 1000);
-      await utimes(upload.path, old, old);
-      assert.deepEqual(await controller.renewAttachments(sessionId, [upload.attachmentId]), {
-        missing: [],
-        ok: true,
-        retained: [upload.attachmentId]
-      });
-      assert.ok((await fileMtime(upload.path)) > old.getTime());
-      assert.deepEqual(await attachments.deleteAttachment({ sessionId }, {
-        attachmentId: upload.attachmentId
-      }), {
-        attachmentId: upload.attachmentId,
-        ok: true
-      });
-      await assert.rejects(() => access(upload.path), { code: "ENOENT" });
+    const upload = await attachments.uploadAttachment({ sessionId }, {
+      fileName: "configured.txt",
+      stream: Readable.from(["configured"])
     });
+    assert.equal(upload.ok, true, JSON.stringify(upload));
+    assert.equal(upload.path.startsWith(`${configuredRoot}${path.sep}`), true);
+
+    const old = new Date(Date.now() - 20 * 60 * 1000);
+    await utimes(upload.path, old, old);
+    assert.deepEqual(await controller.renewAttachments(sessionId, [upload.attachmentId]), {
+      missing: [],
+      ok: true,
+      retained: [upload.attachmentId]
+    });
+    assert.ok((await fileMtime(upload.path)) > old.getTime());
+    assert.deepEqual(await attachments.deleteAttachment({ sessionId }, {
+      attachmentId: upload.attachmentId
+    }), {
+      attachmentId: upload.attachmentId,
+      ok: true
+    });
+    await assert.rejects(() => access(upload.path), { code: "ENOENT" });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1040,37 +1027,36 @@ test("session cleanup leaves a slow active upload intact and succeeds after it f
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-slow-cleanup-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "slow.txt", stream: upload },
-        lockWaitMs: 25,
-        sessionId: "slow-cleanup-session"
-      });
-      upload.write("partial");
-      const partialPath = await waitForAttachmentStage(root);
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "slow-cleanup-session",
-        "",
-        { lockWaitMs: 25 }
-      ), false);
-      assert.equal(await readFile(partialPath, "utf8"), "partial");
-
-      upload.end("-complete");
-      const result = await storing;
-      assert.equal(await readFile(result.path, "utf8"), "partial-complete");
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "slow-cleanup-session",
-        "",
-        { lockWaitMs: 25 }
-      ), true);
-      await assert.rejects(() => access(result.path), { code: "ENOENT" });
-      assert.deepEqual(await attachmentIds(root), []);
+    const env = attachmentRootEnv(root);
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "slow.txt", stream: upload },
+      lockWaitMs: 25,
+      sessionId: "slow-cleanup-session"
     });
+    upload.write("partial");
+    const partialPath = await waitForAttachmentStage(root);
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "slow-cleanup-session",
+      "",
+      { env, lockWaitMs: 25 }
+    ), false);
+    assert.equal(await readFile(partialPath, "utf8"), "partial");
+
+    upload.end("-complete");
+    const result = await storing;
+    assert.equal(await readFile(result.path, "utf8"), "partial-complete");
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "slow-cleanup-session",
+      "",
+      { env, lockWaitMs: 25 }
+    ), true);
+    await assert.rejects(() => access(result.path), { code: "ENOENT" });
+    assert.deepEqual(await attachmentIds(root), []);
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -1081,44 +1067,43 @@ test("a concurrent startup sweep cannot remove an upload while it is starting", 
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-startup-race-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const seed = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
-        sessionId: "startup-race-session"
-      });
-      const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
-      await utimes(seed.path, expiredTime, expiredTime);
-
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "starting.txt", stream: upload },
-        lockWaitMs: 25,
-        sessionId: "startup-race-session"
-      });
-      const sweeping = prepareCodexAttachmentStorage({
-        env: {
-          [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
-        },
-        now: Date.now() + (31 * 60 * 1000)
-      });
-      upload.write("still-uploading");
-      const partialPath = await waitForAttachmentStage(root);
-      await sweeping;
-
-      assert.equal(await readFile(partialPath, "utf8"), "still-uploading");
-      upload.end("-done");
-      const result = await storing;
-      assert.equal(await readFile(result.path, "utf8"), "still-uploading-done");
-      await cleanupCodexAttachments(
-        "/source/project",
-        "startup-race-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const env = attachmentRootEnv(root);
+    const seed = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
+      sessionId: "startup-race-session"
     });
+    const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
+    await utimes(seed.path, expiredTime, expiredTime);
+
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "starting.txt", stream: upload },
+      lockWaitMs: 25,
+      sessionId: "startup-race-session"
+    });
+    const sweeping = prepareCodexAttachmentStorage({
+      env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
+      },
+      now: Date.now() + (31 * 60 * 1000)
+    });
+    upload.write("still-uploading");
+    const partialPath = await waitForAttachmentStage(root);
+    await sweeping;
+
+    assert.equal(await readFile(partialPath, "utf8"), "still-uploading");
+    upload.end("-done");
+    const result = await storing;
+    assert.equal(await readFile(result.path, "utf8"), "still-uploading-done");
+    await cleanupCodexAttachments(
+      "/source/project",
+      "startup-race-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -1129,46 +1114,45 @@ test("session cleanup racing upload startup leaves no untracked attachment direc
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-session-start-race-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const seed = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
-        sessionId: "session-start-race"
-      });
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "racing.txt", stream: upload },
-        lockWaitMs: 250,
-        sessionId: "session-start-race"
-      });
-      const cleaning = cleanupCodexAttachments(
-        "/source/project",
-        "session-start-race",
-        "",
-        { lockWaitMs: 25 }
-      );
-      upload.write("racing");
-
-      const cleanupResult = await cleaning;
-      await waitForAttachmentStage(root);
-      upload.end("-complete");
-      const result = await storing;
-      assert.ok(cleanupResult === true || cleanupResult === false);
-      const ids = await attachmentIds(root);
-      assert.equal(ids.includes(result.attachmentId), true);
-      assert.equal(ids.every((id) => [seed.attachmentId, result.attachmentId].includes(id)), true);
-      assert.equal(await readFile(result.path, "utf8"), "racing-complete");
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "session-start-race",
-        "",
-        { lockWaitMs: 250 }
-      ), true);
-      assert.deepEqual(await attachmentIds(root), []);
+    const env = attachmentRootEnv(root);
+    const seed = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "seed.txt", stream: Readable.from(["seed"]) },
+      sessionId: "session-start-race"
     });
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "racing.txt", stream: upload },
+      lockWaitMs: 250,
+      sessionId: "session-start-race"
+    });
+    const cleaning = cleanupCodexAttachments(
+      "/source/project",
+      "session-start-race",
+      "",
+      { env, lockWaitMs: 25 }
+    );
+    upload.write("racing");
+
+    const cleanupResult = await cleaning;
+    await waitForAttachmentStage(root);
+    upload.end("-complete");
+    const result = await storing;
+    assert.ok(cleanupResult === true || cleanupResult === false);
+    const ids = await attachmentIds(root);
+    assert.equal(ids.includes(result.attachmentId), true);
+    assert.equal(ids.every((id) => [seed.attachmentId, result.attachmentId].includes(id)), true);
+    assert.equal(await readFile(result.path, "utf8"), "racing-complete");
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "session-start-race",
+      "",
+      { env, lockWaitMs: 250 }
+    ), true);
+    assert.deepEqual(await attachmentIds(root), []);
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -1179,32 +1163,31 @@ test("busy session cleanup preserves the attachment for its eventual expiry retr
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-busy-expiry-test-"));
   let holder = null;
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "expire-after-busy.txt", stream: Readable.from(["expired"]) },
-        sessionId: "busy-expiry-session"
-      });
-      const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
-      await utimes(result.path, expiredTime, expiredTime);
-      holder = await spawnExclusiveLockHolder(
-        path.join(path.dirname(result.path), ".lease-lock"),
-        root
-      );
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "busy-expiry-session",
-        "",
-        { lockWaitMs: 25 }
-      ), false);
-      assert.equal(await readFile(result.path, "utf8"), "expired");
-      await holder.release();
-
-      await waitForMissing(result.path, 2_500);
-      assert.deepEqual(await attachmentIds(root), []);
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "expire-after-busy.txt", stream: Readable.from(["expired"]) },
+      sessionId: "busy-expiry-session"
     });
+    const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
+    await utimes(result.path, expiredTime, expiredTime);
+    holder = await spawnExclusiveLockHolder(
+      path.join(path.dirname(result.path), ".lease-lock"),
+      root
+    );
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "busy-expiry-session",
+      "",
+      { env, lockWaitMs: 25 }
+    ), false);
+    assert.equal(await readFile(result.path, "utf8"), "expired");
+    await holder.release();
+
+    await waitForMissing(result.path, 2_500);
+    assert.deepEqual(await attachmentIds(root), []);
   } finally {
     await holder?.dispose();
     await rm(root, { force: true, recursive: true });
@@ -1215,54 +1198,53 @@ test("strict session attachment release retries busy ownership and cannot cross 
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-strict-release-test-"));
   let holder = null;
   try {
-    await withAttachmentRoot(root, async () => {
-      const owned = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "owned.txt", stream: Readable.from(["owned"]) },
-        sessionId: "strict-release-session"
-      });
-      const sibling = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "sibling.txt", stream: Readable.from(["sibling"]) },
-        sessionId: "strict-release-sibling"
-      });
-      holder = await spawnExclusiveLockHolder(
-        path.join(path.dirname(owned.path), ".lease-lock"),
-        root
-      );
+    const env = attachmentRootEnv(root);
+    const owned = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "owned.txt", stream: Readable.from(["owned"]) },
+      sessionId: "strict-release-session"
+    });
+    const sibling = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "sibling.txt", stream: Readable.from(["sibling"]) },
+      sessionId: "strict-release-sibling"
+    });
+    holder = await spawnExclusiveLockHolder(
+      path.join(path.dirname(owned.path), ".lease-lock"),
+      root
+    );
 
-      await assert.rejects(
-        () => releaseCodexSessionAttachments(
-          "/source/project",
-          "strict-release-session",
-          { lockWaitMs: 25 }
-        ),
-        { code: "vibe64_agent_attachment_busy", retryable: true }
-      );
-      assert.equal(await readFile(owned.path, "utf8"), "owned");
-      assert.equal(await readFile(sibling.path, "utf8"), "sibling");
-
-      await holder.release();
-      assert.deepEqual(await releaseCodexSessionAttachments(
+    await assert.rejects(
+      () => releaseCodexSessionAttachments(
         "/source/project",
         "strict-release-session",
-        { lockWaitMs: 250 }
-      ), {
-        alreadyReleased: false,
-        released: true
-      });
-      await assert.rejects(() => access(owned.path), { code: "ENOENT" });
-      assert.equal(await readFile(sibling.path, "utf8"), "sibling");
-      assert.deepEqual(await releaseCodexSessionAttachments(
-        "/source/project",
-        "strict-release-session",
-        { lockWaitMs: 250 }
-      ), {
-        alreadyReleased: true,
-        released: true
-      });
+        { env, lockWaitMs: 25 }
+      ),
+      { code: "vibe64_agent_attachment_busy", retryable: true }
+    );
+    assert.equal(await readFile(owned.path, "utf8"), "owned");
+    assert.equal(await readFile(sibling.path, "utf8"), "sibling");
+
+    await holder.release();
+    assert.deepEqual(await releaseCodexSessionAttachments(
+      "/source/project",
+      "strict-release-session",
+      { env, lockWaitMs: 250 }
+    ), {
+      alreadyReleased: false,
+      released: true
+    });
+    await assert.rejects(() => access(owned.path), { code: "ENOENT" });
+    assert.equal(await readFile(sibling.path, "utf8"), "sibling");
+    assert.deepEqual(await releaseCodexSessionAttachments(
+      "/source/project",
+      "strict-release-session",
+      { env, lockWaitMs: 250 }
+    ), {
+      alreadyReleased: true,
+      released: true
     });
   } finally {
     await holder?.dispose();
@@ -1274,32 +1256,31 @@ test("startup defers a busy session scan and expires stale data after lock relea
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-deferred-scan-test-"));
   let holder = null;
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "deferred-stale.txt", stream: Readable.from(["stale"]) },
-        sessionId: "deferred-scan-session"
-      });
-      const sessionDirectory = path.dirname(path.dirname(result.path));
-      const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
-      await utimes(result.path, expiredTime, expiredTime);
-      const sessionLockPath = await waitForOnlySessionLock(root);
-      holder = await spawnExclusiveLockHolder(sessionLockPath, path.dirname(sessionLockPath));
-
-      await prepareCodexAttachmentStorage({
-        env: {
-          [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
-        },
-        lockWaitMs: 25,
-        now: Date.now()
-      });
-      assert.equal(await readFile(result.path, "utf8"), "stale");
-      await holder.release();
-
-      await waitForMissing(sessionDirectory, 2_500);
-      await assert.rejects(() => access(result.path), { code: "ENOENT" });
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "deferred-stale.txt", stream: Readable.from(["stale"]) },
+      sessionId: "deferred-scan-session"
     });
+    const sessionDirectory = path.dirname(path.dirname(result.path));
+    const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
+    await utimes(result.path, expiredTime, expiredTime);
+    const sessionLockPath = await waitForOnlySessionLock(root);
+    holder = await spawnExclusiveLockHolder(sessionLockPath, path.dirname(sessionLockPath));
+
+    await prepareCodexAttachmentStorage({
+      env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
+      },
+      lockWaitMs: 25,
+      now: Date.now()
+    });
+    assert.equal(await readFile(result.path, "utf8"), "stale");
+    await holder.release();
+
+    await waitForMissing(sessionDirectory, 2_500);
+    await assert.rejects(() => access(result.path), { code: "ENOENT" });
   } finally {
     await holder?.dispose();
     await rm(root, { force: true, recursive: true });
@@ -1310,32 +1291,31 @@ test("session cleanup automatically retries after losing an active-upload lock r
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-cleanup-retry-test-"));
   const upload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const storing = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "cleanup-retry.txt", stream: upload },
-        lockWaitMs: 25,
-        sessionId: "cleanup-retry-session"
-      });
-      upload.write("active");
-      const partialPath = await waitForAttachmentStage(root);
-      const sessionDirectory = path.dirname(path.dirname(partialPath));
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "cleanup-retry-session",
-        "",
-        { lockWaitMs: 25 }
-      ), false);
-      upload.end("-complete");
-      const result = await storing;
-      assert.equal(await readFile(result.path, "utf8"), "active-complete");
-
-      await waitForMissing(sessionDirectory, 2_500);
-      await assert.rejects(() => access(result.path), { code: "ENOENT" });
-      assert.deepEqual(await attachmentIds(root), []);
+    const env = attachmentRootEnv(root);
+    const storing = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "cleanup-retry.txt", stream: upload },
+      lockWaitMs: 25,
+      sessionId: "cleanup-retry-session"
     });
+    upload.write("active");
+    const partialPath = await waitForAttachmentStage(root);
+    const sessionDirectory = path.dirname(path.dirname(partialPath));
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "cleanup-retry-session",
+      "",
+      { env, lockWaitMs: 25 }
+    ), false);
+    upload.end("-complete");
+    const result = await storing;
+    assert.equal(await readFile(result.path, "utf8"), "active-complete");
+
+    await waitForMissing(sessionDirectory, 2_500);
+    await assert.rejects(() => access(result.path), { code: "ENOENT" });
+    assert.deepEqual(await attachmentIds(root), []);
   } finally {
     upload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -1346,48 +1326,47 @@ test("deferred session cleanup removes only attachments from its original snapsh
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-cleanup-snapshot-test-"));
   const firstUpload = new PassThrough();
   try {
-    await withAttachmentRoot(root, async () => {
-      const storingFirst = storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "snapshot-first.txt", stream: firstUpload },
-        lockWaitMs: 25,
-        sessionId: "cleanup-snapshot-session"
-      });
-      firstUpload.write("first-active");
-      await waitForAttachmentStage(root);
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "cleanup-snapshot-session",
-        "",
-        { lockWaitMs: 25 }
-      ), false);
-      const second = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "snapshot-second.txt", stream: Readable.from(["second-valid"]) },
-        lockWaitMs: 25,
-        sessionId: "cleanup-snapshot-session"
-      });
-      firstUpload.end("-complete");
-      const first = await storingFirst;
-
-      await waitForMissing(first.path, 2_500);
-      assert.equal(await readFile(second.path, "utf8"), "second-valid");
-      assert.deepEqual(await attachmentIds(root), [second.attachmentId]);
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "cleanup-snapshot-session",
-        second.attachmentId,
-        { lockWaitMs: 25 }
-      ), true);
-      await assert.rejects(
-        () => access(path.dirname(path.dirname(second.path))),
-        { code: "ENOENT" }
-      );
+    const env = attachmentRootEnv(root);
+    const storingFirst = storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "snapshot-first.txt", stream: firstUpload },
+      lockWaitMs: 25,
+      sessionId: "cleanup-snapshot-session"
     });
+    firstUpload.write("first-active");
+    await waitForAttachmentStage(root);
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "cleanup-snapshot-session",
+      "",
+      { env, lockWaitMs: 25 }
+    ), false);
+    const second = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "snapshot-second.txt", stream: Readable.from(["second-valid"]) },
+      lockWaitMs: 25,
+      sessionId: "cleanup-snapshot-session"
+    });
+    firstUpload.end("-complete");
+    const first = await storingFirst;
+
+    await waitForMissing(first.path, 2_500);
+    assert.equal(await readFile(second.path, "utf8"), "second-valid");
+    assert.deepEqual(await attachmentIds(root), [second.attachmentId]);
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "cleanup-snapshot-session",
+      second.attachmentId,
+      { env, lockWaitMs: 25 }
+    ), true);
+    await assert.rejects(
+      () => access(path.dirname(path.dirname(second.path))),
+      { code: "ENOENT" }
+    );
   } finally {
     firstUpload.destroy();
     await rm(root, { force: true, recursive: true });
@@ -1397,41 +1376,40 @@ test("deferred session cleanup removes only attachments from its original snapsh
 test("last-item DELETE prunes session data while its persistent lock remains reusable", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-last-delete-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const first = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "first.txt", stream: Readable.from(["first"]) },
-        sessionId: "last-delete-session"
-      });
-      const sessionDirectory = path.dirname(path.dirname(first.path));
-      const sessionLockPath = await waitForOnlySessionLock(root);
-
-      assert.equal(await cleanupCodexAttachments(
-        "/source/project",
-        "last-delete-session",
-        first.attachmentId,
-        { lockWaitMs: 25 }
-      ), true);
-      await assert.rejects(() => access(sessionDirectory), { code: "ENOENT" });
-      assert.equal((await stat(sessionLockPath)).isFile(), true);
-
-      const second = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "second.txt", stream: Readable.from(["second"]) },
-        lockWaitMs: 25,
-        sessionId: "last-delete-session"
-      });
-      assert.equal(await readFile(second.path, "utf8"), "second");
-      assert.equal(await waitForOnlySessionLock(root), sessionLockPath);
-      await cleanupCodexAttachments(
-        "/source/project",
-        "last-delete-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const env = attachmentRootEnv(root);
+    const first = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "first.txt", stream: Readable.from(["first"]) },
+      sessionId: "last-delete-session"
     });
+    const sessionDirectory = path.dirname(path.dirname(first.path));
+    const sessionLockPath = await waitForOnlySessionLock(root);
+
+    assert.equal(await cleanupCodexAttachments(
+      "/source/project",
+      "last-delete-session",
+      first.attachmentId,
+      { env, lockWaitMs: 25 }
+    ), true);
+    await assert.rejects(() => access(sessionDirectory), { code: "ENOENT" });
+    assert.equal((await stat(sessionLockPath)).isFile(), true);
+
+    const second = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "second.txt", stream: Readable.from(["second"]) },
+      lockWaitMs: 25,
+      sessionId: "last-delete-session"
+    });
+    assert.equal(await readFile(second.path, "utf8"), "second");
+    assert.equal(await waitForOnlySessionLock(root), sessionLockPath);
+    await cleanupCodexAttachments(
+      "/source/project",
+      "last-delete-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1440,37 +1418,36 @@ test("last-item DELETE prunes session data while its persistent lock remains reu
 test("startup removes a leftover retired-session quarantine", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-session-quarantine-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const result = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "live.txt", stream: Readable.from(["live"]) },
-        sessionId: "session-quarantine-session"
-      });
-      const sessionDirectory = path.dirname(path.dirname(result.path));
-      const projectDirectory = path.dirname(sessionDirectory);
-      const quarantine = path.join(
-        projectDirectory,
-        `.expired-session-${path.basename(sessionDirectory)}-leftover`
-      );
-      await writeFileAfterMkdir(path.join(quarantine, "orphan.txt"), "orphan");
-
-      await prepareCodexAttachmentStorage({
-        env: {
-          [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
-        },
-        lockWaitMs: 25
-      });
-
-      await assert.rejects(() => access(quarantine), { code: "ENOENT" });
-      assert.equal(await readFile(result.path, "utf8"), "live");
-      await cleanupCodexAttachments(
-        "/source/project",
-        "session-quarantine-session",
-        "",
-        { lockWaitMs: 25 }
-      );
+    const env = attachmentRootEnv(root);
+    const result = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "live.txt", stream: Readable.from(["live"]) },
+      sessionId: "session-quarantine-session"
     });
+    const sessionDirectory = path.dirname(path.dirname(result.path));
+    const projectDirectory = path.dirname(sessionDirectory);
+    const quarantine = path.join(
+      projectDirectory,
+      `.expired-session-${path.basename(sessionDirectory)}-leftover`
+    );
+    await writeFileAfterMkdir(path.join(quarantine, "orphan.txt"), "orphan");
+
+    await prepareCodexAttachmentStorage({
+      env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
+      },
+      lockWaitMs: 25
+    });
+
+    await assert.rejects(() => access(quarantine), { code: "ENOENT" });
+    assert.equal(await readFile(result.path, "utf8"), "live");
+    await cleanupCodexAttachments(
+      "/source/project",
+      "session-quarantine-session",
+      "",
+      { env, lockWaitMs: 25 }
+    );
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1487,40 +1464,39 @@ test("attachment admission runs under the session lock and rejection creates no 
     rejectAdmission = reject;
   });
   try {
-    await withAttachmentRoot(root, async () => {
-      const storing = storeCodexAttachment({
-        env: process.env,
-        beforeCreate: async () => {
-          enterAdmission();
-          await admission;
-        },
-        executionRoot: "/source/project",
-        input: { fileName: "rejected.txt", stream: Readable.from(["rejected"]) },
-        lockWaitMs: 25,
-        sessionId: "before-create-session"
-      });
-      const rejected = assert.rejects(storing, {
-        code: "vibe64_test_attachment_admission_rejected",
-        message: "Attachment admission was rejected."
-      });
-      await admissionEntered;
-      const sessionLockPath = await waitForOnlySessionLock(root);
-
-      assert.equal(await tryAcquireExclusiveFileLock(sessionLockPath, {
-        cwd: path.dirname(sessionLockPath)
-      }), null);
-      rejectAdmission(Object.assign(new Error("Attachment admission was rejected."), {
-        code: "vibe64_test_attachment_admission_rejected"
-      }));
-      await rejected;
-      await assert.rejects(() => access(path.join(root, "files")), { code: "ENOENT" });
-
-      const release = await tryAcquireExclusiveFileLock(sessionLockPath, {
-        cwd: path.dirname(sessionLockPath)
-      });
-      assert.equal(typeof release, "function");
-      await release();
+    const env = attachmentRootEnv(root);
+    const storing = storeCodexAttachment({
+      env,
+      beforeCreate: async () => {
+        enterAdmission();
+        await admission;
+      },
+      executionRoot: "/source/project",
+      input: { fileName: "rejected.txt", stream: Readable.from(["rejected"]) },
+      lockWaitMs: 25,
+      sessionId: "before-create-session"
     });
+    const rejected = assert.rejects(storing, {
+      code: "vibe64_test_attachment_admission_rejected",
+      message: "Attachment admission was rejected."
+    });
+    await admissionEntered;
+    const sessionLockPath = await waitForOnlySessionLock(root);
+
+    assert.equal(await tryAcquireExclusiveFileLock(sessionLockPath, {
+      cwd: path.dirname(sessionLockPath)
+    }), null);
+    rejectAdmission(Object.assign(new Error("Attachment admission was rejected."), {
+      code: "vibe64_test_attachment_admission_rejected"
+    }));
+    await rejected;
+    await assert.rejects(() => access(path.join(root, "files")), { code: "ENOENT" });
+
+    const release = await tryAcquireExclusiveFileLock(sessionLockPath, {
+      cwd: path.dirname(sessionLockPath)
+    });
+    assert.equal(typeof release, "function");
+    await release();
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1529,42 +1505,41 @@ test("attachment admission runs under the session lock and rejection creates no 
 test("restart preparation expires stale stages and files without deleting another live process upload", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-restart-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const expired = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "expired.txt", stream: Readable.from(["old"]) },
-        sessionId: "restart-session"
-      });
-      const live = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "live.txt", stream: Readable.from(["live"]) },
-        sessionId: "restart-session"
-      });
-      const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
-      await utimes(expired.path, expiredTime, expiredTime);
-      const sessionDirectory = path.dirname(path.dirname(live.path));
-      const staleStageDirectory = path.join(sessionDirectory, "11111111-1111-4111-8111-111111111111");
-      const liveStageDirectory = path.join(sessionDirectory, "22222222-2222-4222-8222-222222222222");
-      const staleStagePath = path.join(staleStageDirectory, ".uploading-interrupted");
-      const liveStagePath = path.join(liveStageDirectory, ".uploading-active");
-      await writeFileAfterMkdir(staleStagePath, "stale partial");
-      await writeFileAfterMkdir(liveStagePath, "live partial");
-      await utimes(staleStagePath, expiredTime, expiredTime);
-
-      await prepareCodexAttachmentStorage({
-        env: {
-          [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
-        }
-      });
-
-      await assert.rejects(() => access(expired.path), { code: "ENOENT" });
-      await assert.rejects(() => access(staleStageDirectory), { code: "ENOENT" });
-      assert.equal(await readFile(liveStagePath, "utf8"), "live partial");
-      assert.equal(await readFile(live.path, "utf8"), "live");
-      await cleanupCodexAttachments("/source/project", "restart-session");
+    const env = attachmentRootEnv(root);
+    const expired = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "expired.txt", stream: Readable.from(["old"]) },
+      sessionId: "restart-session"
     });
+    const live = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "live.txt", stream: Readable.from(["live"]) },
+      sessionId: "restart-session"
+    });
+    const expiredTime = new Date(Date.now() - (31 * 60 * 1000));
+    await utimes(expired.path, expiredTime, expiredTime);
+    const sessionDirectory = path.dirname(path.dirname(live.path));
+    const staleStageDirectory = path.join(sessionDirectory, "11111111-1111-4111-8111-111111111111");
+    const liveStageDirectory = path.join(sessionDirectory, "22222222-2222-4222-8222-222222222222");
+    const staleStagePath = path.join(staleStageDirectory, ".uploading-interrupted");
+    const liveStagePath = path.join(liveStageDirectory, ".uploading-active");
+    await writeFileAfterMkdir(staleStagePath, "stale partial");
+    await writeFileAfterMkdir(liveStagePath, "live partial");
+    await utimes(staleStagePath, expiredTime, expiredTime);
+
+    await prepareCodexAttachmentStorage({
+      env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
+      }
+    });
+
+    await assert.rejects(() => access(expired.path), { code: "ENOENT" });
+    await assert.rejects(() => access(staleStageDirectory), { code: "ENOENT" });
+    assert.equal(await readFile(liveStagePath, "utf8"), "live partial");
+    assert.equal(await readFile(live.path, "utf8"), "live");
+    await cleanupCodexAttachments("/source/project", "restart-session", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1573,27 +1548,26 @@ test("restart preparation expires stale stages and files without deleting anothe
 test("attachment cleanup is idempotent and cannot cross session namespaces", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-session-isolation-test-"));
   try {
-    await withAttachmentRoot(root, async () => {
-      const first = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "first.txt", stream: Readable.from(["first"]) },
-        sessionId: "session-first"
-      });
-      const second = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "second.txt", stream: Readable.from(["second"]) },
-        sessionId: "session-second"
-      });
-
-      await cleanupCodexAttachments("/source/project", "session-first", first.attachmentId);
-      await cleanupCodexAttachments("/source/project", "session-first", first.attachmentId);
-
-      await assert.rejects(() => access(first.path), { code: "ENOENT" });
-      assert.equal(await readFile(second.path, "utf8"), "second");
-      await cleanupCodexAttachments("/source/project", "session-second");
+    const env = attachmentRootEnv(root);
+    const first = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "first.txt", stream: Readable.from(["first"]) },
+      sessionId: "session-first"
     });
+    const second = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "second.txt", stream: Readable.from(["second"]) },
+      sessionId: "session-second"
+    });
+
+    await cleanupCodexAttachments("/source/project", "session-first", first.attachmentId, { env });
+    await cleanupCodexAttachments("/source/project", "session-first", first.attachmentId, { env });
+
+    await assert.rejects(() => access(first.path), { code: "ENOENT" });
+    assert.equal(await readFile(second.path, "utf8"), "second");
+    await cleanupCodexAttachments("/source/project", "session-second", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1613,46 +1587,39 @@ test("the exact binary 500 MiB boundary succeeds and one extra byte is rejected"
     })());
   }
   try {
-    await withAttachmentRoot(root, async () => {
-      assert.equal(CODEX_ATTACHMENT_MAX_BYTES, 500 * 1024 * 1024);
-      const accepted = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "exact.bin", stream: binaryUpload() },
-        sessionId: "exact-limit"
-      });
-      const rejected = await storeCodexAttachment({
-        env: process.env,
-        executionRoot: "/source/project",
-        input: { fileName: "too-large.bin", stream: binaryUpload(true) },
-        sessionId: "over-limit"
-      });
-
-      assert.equal(accepted.ok, true);
-      assert.equal(accepted.size, 500 * 1024 * 1024);
-      assert.equal((await stat(accepted.path)).size, 500 * 1024 * 1024);
-      assert.equal(rejected.ok, false);
-      assert.equal(rejected.code, "vibe64_agent_attachment_too_large");
-      assert.match(rejected.error, /500 MiB/u);
-      assert.deepEqual((await attachmentFiles(root)).filter((name) => name.includes("uploading")), []);
-      await cleanupCodexAttachments("/source/project", "exact-limit");
+    const env = attachmentRootEnv(root);
+    assert.equal(CODEX_ATTACHMENT_MAX_BYTES, 500 * 1024 * 1024);
+    const accepted = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "exact.bin", stream: binaryUpload() },
+      sessionId: "exact-limit"
     });
+    const rejected = await storeCodexAttachment({
+      env,
+      executionRoot: "/source/project",
+      input: { fileName: "too-large.bin", stream: binaryUpload(true) },
+      sessionId: "over-limit"
+    });
+
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.size, 500 * 1024 * 1024);
+    assert.equal((await stat(accepted.path)).size, 500 * 1024 * 1024);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, "vibe64_agent_attachment_too_large");
+    assert.match(rejected.error, /500 MiB/u);
+    assert.deepEqual((await attachmentFiles(root)).filter((name) => name.includes("uploading")), []);
+    await cleanupCodexAttachments("/source/project", "exact-limit", "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
 });
 
-test("Codex attachment root is process-owned and isolates files from sibling state", async () => {
-  // Without a server-fixed root, a process uses the local state root, never temporary space.
-  const previous = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
-  delete process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
-  try {
-    const root = codexAttachmentHostRoot({ env: {} });
-    assert.equal(root, path.join(resolveDefaultLocalEditorSystemRoot(), "attachments"));
-    assert.equal(root.startsWith(tmpdir()), false);
-  } finally {
-    if (previous !== undefined) process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = previous;
-  }
+test("Codex attachment root comes from the caller's env and isolates files from sibling state", async () => {
+  // An env that names no root uses the local state root, never temporary space.
+  const defaultRoot = codexAttachmentHostRoot({ env: {} });
+  assert.equal(defaultRoot, path.join(resolveDefaultLocalEditorSystemRoot(), "attachments"));
+  assert.equal(defaultRoot.startsWith(tmpdir()), false);
 
   const configuredRoot = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-root-test-"));
   const attachmentRoot = path.join(configuredRoot, "owner", "state", "attachments");
@@ -1677,48 +1644,37 @@ test("Codex attachment namespace follows project identity instead of its absolut
   const oldTargetRoot = path.join(oldProjectsRoot, "beepollen");
   const newTargetRoot = path.join(newProjectsRoot, "beepollen");
   try {
-    await withAttachmentRoot(root, async () => {
-      const oldResult = await runWithProjectRequestContext({
-        projectsRoot: oldProjectsRoot,
-        slug: "beepollen",
-        targetRoot: oldTargetRoot
-      }, () => storeCodexAttachment({
-        env: process.env,
-        executionRoot: oldTargetRoot,
-        input: { fileName: "old.txt", stream: Readable.from(["hello"]) },
-        sessionId
-      }));
-      const newResult = await runWithProjectRequestContext({
-        projectsRoot: newProjectsRoot,
-        slug: "beepollen",
-        targetRoot: newTargetRoot
-      }, () => storeCodexAttachment({
-        env: process.env,
-        executionRoot: newTargetRoot,
-        input: { fileName: "new.txt", stream: Readable.from(["hello"]) },
-        sessionId
-      }));
+    const env = attachmentRootEnv(root);
+    const oldResult = await runWithProjectRequestContext({
+      projectsRoot: oldProjectsRoot,
+      slug: "beepollen",
+      targetRoot: oldTargetRoot
+    }, () => storeCodexAttachment({
+      env,
+      executionRoot: oldTargetRoot,
+      input: { fileName: "old.txt", stream: Readable.from(["hello"]) },
+      sessionId
+    }));
+    const newResult = await runWithProjectRequestContext({
+      projectsRoot: newProjectsRoot,
+      slug: "beepollen",
+      targetRoot: newTargetRoot
+    }, () => storeCodexAttachment({
+      env,
+      executionRoot: newTargetRoot,
+      input: { fileName: "new.txt", stream: Readable.from(["hello"]) },
+      sessionId
+    }));
 
-      assert.equal(path.dirname(path.dirname(oldResult.path)), path.dirname(path.dirname(newResult.path)));
-      await cleanupCodexAttachments(oldTargetRoot, sessionId);
-    });
+    assert.equal(path.dirname(path.dirname(oldResult.path)), path.dirname(path.dirname(newResult.path)));
+    await cleanupCodexAttachments(oldTargetRoot, sessionId, "", { env });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
 });
 
-async function withAttachmentRoot(root, operation) {
-  const previous = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
-  process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = root;
-  try {
-    return await operation();
-  } finally {
-    if (previous == null) {
-      delete process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
-    } else {
-      process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = previous;
-    }
-  }
+function attachmentRootEnv(root) {
+  return { [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root };
 }
 
 async function attachmentFiles(root) {

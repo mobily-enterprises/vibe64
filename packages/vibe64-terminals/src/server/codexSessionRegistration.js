@@ -22,9 +22,6 @@ import {
   createCodexHelperThreadLedger,
   codexHelperThreadLedgerOwner
 } from "./codexHelperThreadLedger.js";
-import {
-  getStudioProjectContext
-} from "@local/vibe64-core/server/studioProjectContext";
 import { runtimeProfileIsLocal } from "@local/vibe64-core/server/studioRoots";
 import {
   createPersonalAiProfileStore
@@ -168,7 +165,6 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {boolean} [dependencies.codexToolHomeRequired]
  * @param {string} [dependencies.codexToolHomeSource]
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -177,6 +173,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {ConversationRuntime["runNativeDetachedConversation"]} dependencies.runNativeDetachedConversation
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  */
 function createCodexSessionRegistration({
   connectionStatus,
@@ -194,7 +191,6 @@ function createCodexSessionRegistration({
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
   env,
-  hostEnv,
   codexGitCommand,
   logger,
   project,
@@ -202,7 +198,8 @@ function createCodexSessionRegistration({
   continueGoalAfterAccountChange,
   runNativeDetachedConversation,
   publishSessionChanged,
-  runCommand = runVibe64Command
+  runCommand = runVibe64Command,
+  runtimeProfile
 }) {
   const initialCodexRuntime = codexRuntimeContext({
     env,
@@ -222,7 +219,7 @@ function createCodexSessionRegistration({
   const {
     codexAppServerProviderKeyFields
   } = codexRuntimeHost;
-  const localRuntime = runtimeProfileIsLocal(getStudioProjectContext().runtimeProfile);
+  const localRuntime = runtimeProfileIsLocal(runtimeProfile);
   // Only a local run with a system root has a standalone profile.
   const actorProfile = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
     ? {
@@ -277,7 +274,6 @@ function createCodexSessionRegistration({
     sessionEnvironment: codexSessionEnvironment,
     providerConnections,
     env,
-    hostEnv,
     logger,
     /**
      * The native owner consumes these preparations only after construction.
@@ -293,7 +289,7 @@ function createCodexSessionRegistration({
   } = codexSessionProviderHost;
 
   const codexAppServerProviderOwner = createCodexAppServerProviderOwner({
-    runtimeRoot: codexAppServerRuntimeBaseDir({ env, hostEnv }),
+    runtimeRoot: codexAppServerRuntimeBaseDir({ env }),
     exitUnverifiedCode: "vibe64_codex_runtime_exit_unverified",
     requiredStopCode: "vibe64_session_renewal_process_exit_unverified",
     runtimeCloseError: "Vibe64 Codex app-server runtime close failed.",

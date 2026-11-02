@@ -7,7 +7,7 @@ import os from "node:os";
 import { createServer } from "node:http";
 import path from "node:path";
 import test from "node:test";
-import { createCodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 
 function harness({ status = "idle", historyMode = "paginated", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {} } = {}) {
   const calls = [];

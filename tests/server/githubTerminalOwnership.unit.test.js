@@ -7,15 +7,14 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
 } from "../../packages/vibe64-execution/src/server/credentialHomes.js";
 import { __testables } from "../../packages/studio-terminal-core/src/server/terminalOwnership.js";
 
 const { terminalOwnerMetadata } = __testables;
 
-test("GitHub local actor uses the daemon runner real home", () => {
-  const result = resolveGithubHomeForActor({
+test("a stored GitHub actor in local mode uses the daemon runner real home", async () => {
+  const result = await resolveGithubHomeForStoredActor({
     accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
     env: {}
   });
@@ -27,51 +26,18 @@ test("GitHub local actor uses the daemon runner real home", () => {
   assert.equal(result.toolHomeSource, path.resolve(os.homedir()));
 });
 
-test("GitHub user actor uses OS username and real home, not email", () => {
-  const result = resolveGithubHomeForActor({
-    accountMode: GITHUB_ACCOUNT_MODE_USER,
-    env: {},
-    vibe64User: {
-      home: "/home/ada",
-      gid: 1001,
-      uid: 1001,
-      username: "ada"
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.accountMode, GITHUB_ACCOUNT_MODE_USER);
-  assert.equal(result.credentialScope, "user");
-  assert.equal(result.ownerUserKey, "ada");
-  assert.equal(result.hostGid, 1001);
-  assert.equal(result.hostUid, 1001);
-  assert.equal(result.toolHomeSource, "/home/ada");
-});
-
-test("GitHub user actor fails without OS username and home", () => {
-  const result = resolveGithubHomeForActor({
-    accountMode: GITHUB_ACCOUNT_MODE_USER,
-    env: {},
-    vibe64User: {
-      email: "ada@example.com"
-    }
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_os_user_required");
-});
-
-test("GitHub actor mode reads from env", () => {
-  const result = resolveGithubHomeForActor({
+test("a stored GitHub actor reads its account mode from env", async () => {
+  const result = await resolveGithubHomeForStoredActor({
     env: {
       [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER
     },
-    vibe64User: {
-      home: "/home/grace",
+    ownerUserKey: "grace",
+    osUserResolver: async (username) => ({
       gid: 1002,
+      home: `/home/${username}`,
       uid: 1002,
-      username: "grace"
-    }
+      username
+    })
   });
 
   assert.equal(result.ok, true);

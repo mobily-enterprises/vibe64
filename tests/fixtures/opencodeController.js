@@ -404,7 +404,6 @@ async function controllerHarness({
 
   const controllerOptions = {
     getAssistantManager: () => null,
-    hostEnv: process.env,
     logger,
     env: {
       ...process.env,

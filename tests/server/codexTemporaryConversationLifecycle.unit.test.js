@@ -48,9 +48,9 @@ import {
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  codexAppServerRuntimeDir,
-  createCodexAppServerAgentProvider
+  codexAppServerRuntimeDir
 } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import {
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
@@ -95,6 +95,7 @@ import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/code
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+import { configureVibe64SessionDebugLog } from "../../packages/vibe64-runtime/src/server/sessionDebugLog.js";
 
 const { sessionRenewalHandoverHash } = __testables;
 
@@ -5739,7 +5740,7 @@ test("closing a session without recorded Codex ownership leaves the shared runti
     VIBE64_WORKSPACE: "test"
   };
   const sharedRuntimeDir = codexAppServerRuntimeDir({
-    env: providerEnv
+    runtimeRoot: agentRuntimeRoot
   });
   await mkdir(sharedRuntimeDir, {
     recursive: true
@@ -12696,7 +12697,6 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
 });
 
 test("concurrent Main reconciliation retains the cached fallback until prune can finish", { timeout: 15_000 }, async (t) => {
-  const previousDebug = process.env.VIBE64_SESSION_DEBUG;
   const diagnostics = [];
   const debug = t.mock.method(console, "info", (line) => {
     const prefix = "[VIBE64_SESSION_DEBUG] ";
@@ -12704,7 +12704,7 @@ test("concurrent Main reconciliation retains the cached fallback until prune can
       diagnostics.push(JSON.parse(line.slice(prefix.length)));
     }
   });
-  process.env.VIBE64_SESSION_DEBUG = "1";
+  configureVibe64SessionDebugLog({ VIBE64_SESSION_DEBUG: "1" });
   try {
     await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => (
       runWithProjectRequestContext({ targetRoot: runtime.projectContextRoot }, async () => {
@@ -12824,8 +12824,7 @@ test("concurrent Main reconciliation retains the cached fallback until prune can
     ));
   } finally {
     debug.mock.restore();
-    if (previousDebug === undefined) delete process.env.VIBE64_SESSION_DEBUG;
-    else process.env.VIBE64_SESSION_DEBUG = previousDebug;
+    configureVibe64SessionDebugLog({});
   }
 });
 

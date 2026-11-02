@@ -81,7 +81,6 @@ function notSentDeliveryError(error, messageId) {
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  * @param {CodexAppServerProviderOptions} dependencies.codexProviderOptions
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {RuntimeLogger} dependencies.logger
  * @param {ConversationRuntime} dependencies.mainConversations
  * @param {OpenCodeSessionRegistration} dependencies.opencode
@@ -100,7 +99,6 @@ function createServiceAssistant({
   codexProviderConnections,
   codexProviderOptions,
   env,
-  hostEnv,
   logger,
   mainConversations,
   opencode,
@@ -165,6 +163,7 @@ function createServiceAssistant({
     async function prepareCodexHost({ providerId }) {
       // Same account/runtime scope as main chat. The conversation's workdir
       // and command environment belong to its thread, not this service.
+      const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
       const options = {
         ...codexProviderOptions,
         ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
@@ -172,8 +171,9 @@ function createServiceAssistant({
         executionRoot: "",
         workdir: "",
         project: {},
+        runtimeRoot,
         session: {},
-        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env, hostEnv })),
+        terminalEnv: await vibe64HostContextEnvironment(runtimeRoot),
         userKey: ""
       };
       options.runtimeDir ||= codexAppServerRuntimeDir(options);

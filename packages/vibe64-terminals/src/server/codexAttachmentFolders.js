@@ -23,6 +23,7 @@ function attachmentSessionKey(executionRoot, sessionId) {
 }
 
 /** @typedef {{ env: RuntimeEnv }} AttachmentRootOptions the env that names the attachment root */
+/** @typedef {AttachmentRootOptions & { lockWaitMs?: number }} AttachmentOptions the attachment root, and how long a held lock is awaited */
 
 /** @param {AttachmentRootOptions} options */
 function attachmentFilesRoot({ env }) {

@@ -5,7 +5,13 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { helperChildEnv, parseEnvironmentFile } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { applicationAreaRoot } from "../../packages/vibe64-execution/src/host/applicationAccounts.js";
+import {
+  helperChildEnv,
+  helperCommandPath,
+  helperSettings,
+  parseEnvironmentFile
+} from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { openManagedExecutionReceipts } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
 import {
   managedExecutionOomBoundary,
@@ -356,22 +362,34 @@ test("a new execution never waits for another member of its work slice to stop",
   assert.match(configure.slice(check, start), /status !== 0/u);
 });
 
-test("execution helper default PATH includes every first-class runtime pack", async () => {
-  const source = await helperSource();
+test("the host's helper settings name the command PATH and the application area; without them only the system folders", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-settings-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const file = path.join(root, "exec-helper.env");
+  const uid = process.getuid();
+  const systemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/operator-clis\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/node26\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/git\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/gh\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/mariadb\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/postgresql\/bin/u);
-  assert.match(source, /PATH: DEFAULT_PATH/u);
+  assert.deepEqual(helperSettings(file, uid), {}, "a host without settings names nothing");
+  assert.equal(helperCommandPath({}), systemPath);
+  assert.throws(() => applicationAreaRoot({}), /no application area/u);
+  await writeFile(file, "PATH=/packs/git/bin:/usr/bin\nVIBE64_APPLICATION_AREA_ROOT=/srv/applications\n", { mode: 0o600 });
+  const settings = helperSettings(file, uid);
+  assert.equal(helperCommandPath(settings), "/packs/git/bin:/usr/bin");
+  assert.equal(applicationAreaRoot(settings), "/srv/applications");
+  assert.equal(helperChildEnv({}, { home: "/home/member", username: "member" }, daemonUser("test"), "vibe64-command").PATH,
+    helperCommandPath(), "a command whose caller names no PATH starts with the host's");
+  assert.throws(() => helperCommandPath({ PATH: "packs/bin:/usr/bin" }), /not absolute/u);
+  for (const area of ["", "/", "srv/applications", "/srv/../applications"]) {
+    assert.throws(() => applicationAreaRoot({ VIBE64_APPLICATION_AREA_ROOT: area }), /no application area/u, area);
+  }
+  assert.throws(() => helperSettings(file, uid + 1), /not its owner's regular file|only root can change/u);
 });
 
-test("execution helper gives release services the shared runtime PATH", async () => {
+test("execution helper gives release services the host's command PATH", async () => {
   const source = await helperSource();
 
-  assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(DEFAULT_PATH\)\}/u);
+  assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(servicePath\)\}/u);
+  assert.equal(source.match(/servicePath: helperCommandPath\(\)/gu)?.length, 2, "release and managed services");
   assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
   assert.match(source, /StartLimitIntervalSec=60/u);
   assert.match(source, /StartLimitBurst=5/u);
@@ -659,22 +677,9 @@ test("execution receipts follow no planted link and never touch its target", asy
   assert.throws(() => openManagedExecutionReceipts(path.join(root, "moved"), { ...ids, legacyUid: 0, uid: 0 }), /owned by another user/u);
 });
 
-test("runtime pack lists stay in step: interactive order and the helper PATH cover every pack", () => {
+test("runtime pack lists stay in step: the interactive order covers every pack", () => {
+  // The helper's command PATH is the host's (its helper settings), so the host keeps that list in step.
   assert.deepEqual([...VIBE64_INTERACTIVE_RUNTIME_PACKS].sort(), Object.keys(RUNTIME_PACKS).sort());
-
-  // The helper's own PATH names the pack folder; public tests must not.
-  const packMarker = "/runtime-packs/";
-  const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, daemonUser("alice"), "command")
-    .PATH.split(":")
-    .filter((entry) => entry.includes(packMarker))
-    .map((entry) => entry.slice(entry.indexOf(packMarker) + packMarker.length));
-  const packBinDirs = new Set(Object.values(RUNTIME_PACKS).flatMap((pack) => pack.binDirs));
-  for (const dir of helperPackDirs) {
-    assert.ok(packBinDirs.has(dir) || dir === "policy-bin" || dir === "guard-bin", `unknown helper PATH entry ${dir}`);
-  }
-  for (const [runtime, pack] of Object.entries(RUNTIME_PACKS)) {
-    assert.ok(pack.binDirs.some((dir) => helperPackDirs.includes(dir)), `helper PATH misses runtime ${runtime}`);
-  }
 });
 
 test("a starting controller releases every receipt and failed unit record except those it owns or that still run", () => {
@@ -919,7 +924,7 @@ test("release environment files are parsed with systemd's EnvironmentFile= rules
 test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
   const unit = deploymentServiceUnit({
     environmentFile: "/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
-    owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/handover/r1/start.sh",
+    owner: { username: daemonUser("test") }, requiredUnits: [], servicePath: "/usr/bin:/bin", startScript: "/handover/r1/start.sh",
     unitName: "vibe64-release-test.service",
     user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${APPLICATION_USERNAME_PREFIX}0123456789ab` },
     workingDirectory: "/area/app/releases/r1/workspace"

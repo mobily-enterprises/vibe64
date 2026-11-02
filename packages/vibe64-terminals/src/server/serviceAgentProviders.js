@@ -43,7 +43,6 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {ServiceCommandServices} dependencies.commands
  * @param {ContinueGoalAfterAccountChange} dependencies.continueGoalAfterAccountChange
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} dependencies.opencodeTerminalController a host's OpenCode terminal settings
  * @param {ServiceMainConversationHost["prepareMainConversationOperation"]} dependencies.prepareMainConversationOperation
@@ -51,6 +50,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {ReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {ServiceState} dependencies.state
  */
 function createServiceAgentProviders({
@@ -62,7 +62,6 @@ function createServiceAgentProviders({
   commands,
   continueGoalAfterAccountChange,
   env,
-  hostEnv,
   logger,
   opencodeTerminalController,
   prepareMainConversationOperation,
@@ -70,6 +69,7 @@ function createServiceAgentProviders({
   providerUsage,
   publishAgentSessionChanged,
   readClaudeAccountStatus,
+  runtimeProfile,
   state
 }) {
   const {
@@ -119,13 +119,13 @@ function createServiceAgentProviders({
     codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
     codexGitCommand,
     env,
-    hostEnv,
     logger,
     project,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation,
     continueGoalAfterAccountChange,
-    runNativeDetachedConversation
+    runNativeDetachedConversation,
+    runtimeProfile
   });
   // OpenCode's registration reaches the session agent manager that routes to it.
   let sessionAgent;
@@ -138,7 +138,6 @@ function createServiceAgentProviders({
     codexGitCommand,
     env,
     getAssistantManager: () => sessionAgent,
-    hostEnv,
     listConnections: (context) => state.assistantRuntime.listConnections(context),
     logger,
     project,
@@ -150,7 +149,6 @@ function createServiceAgentProviders({
   const sessionAttachments = createSessionAttachments({ project, env });
   const claudeProvider = createClaudeConversationHost({
     env,
-    hostEnv,
     project,
     logger,
     publishSessionChanged: publishAgentSessionChanged,

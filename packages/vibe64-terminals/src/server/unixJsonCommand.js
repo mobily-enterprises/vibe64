@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -66,13 +67,13 @@ const DEAD_UNIX_COMMAND_SOCKET_CODES = new Set([
   "ENOTSOCK"
 ]);
 
-function commandRequestError({
-  code = "",
-  message = ""
-} = {}) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+/**
+ * A command server's refusal of one request, with the route's own code and sentence.
+ * @param {{ code: string, message: string }} refusal
+ * @param {number} status
+ */
+function commandRequestError({ code, message }, status) {
+  return new AppError(status, message, { code });
 }
 
 function shortCommandHash(value = "") {
@@ -96,10 +97,11 @@ function unixCommandSocketPath(identity, options) {
   const socketPath = path.join(root, `v64-${owner}-${shortCommandHash(identity)}.sock`);
   const maxBytes = process.platform === "darwin" ? 103 : 107;
   if (Buffer.byteLength(socketPath, "utf8") > maxBytes) {
-    throw commandRequestError({
-      code: "vibe64_agent_control_path_too_long",
-      message: "The assistant cannot start because the server's temporary directory path is too long. Ask the workspace administrator to shorten TMPDIR, then retry."
-    });
+    throw new AppError(
+      500,
+      "The assistant cannot start because the server's temporary directory path is too long. Ask the workspace administrator to shorten TMPDIR, then retry.",
+      { code: "vibe64_agent_control_path_too_long" }
+    );
   }
   return socketPath;
 }
@@ -303,7 +305,8 @@ function createSessionCommandServers({
     } catch (error) {
       if (response.destroyed || response.headersSent) return;
       const payload = vibe64ErrorResponse(error, requestFailure);
-      sendJsonCommandResponse(response, vibe64StatusCode(payload), errorBody(payload));
+      // A refusal answers with its own status; any other failure with its code's status.
+      sendJsonCommandResponse(response, error instanceof AppError ? error.status : vibe64StatusCode(payload), errorBody(payload));
     }
   }
 
@@ -452,7 +455,7 @@ async function readJsonCommandRequest(request, options = {}) {
     request.on("data", (chunk) => {
       size += chunk.length;
       if (size > maxBytes) {
-        const error = commandRequestError(tooLargeError);
+        const error = commandRequestError(tooLargeError, 413);
         reject(error);
         request.destroy(error);
         return;
@@ -469,7 +472,7 @@ async function readJsonCommandRequest(request, options = {}) {
       ? parsed
       : {};
   } catch {
-    throw commandRequestError(invalidJsonError);
+    throw commandRequestError(invalidJsonError, 400);
   }
 }
 

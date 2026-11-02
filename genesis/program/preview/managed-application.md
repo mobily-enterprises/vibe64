@@ -67,7 +67,6 @@ test targets. External URLs do not acquire this managed Preview transaction.
 
 - `packages/vibe64-core/src/server/launchPreviewProxyEnv.js`
 - `packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js`
-- `packages/vibe64-terminals/src/server/terminalsEnv.js`
 - `tests/server/vibe64TerminalsProvider.unit.test.js`
 - `packages/current-app/src/server/currentAppActions.js`
 - `packages/current-app/src/server/inputSchemas.js`

@@ -33,6 +33,8 @@ import {
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
+/** @typedef {import("./codexAttachmentFolders.js").AttachmentOptions} AttachmentOptions */
+
 const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
 const ATTACHMENT_RENEW_LOCK_WAIT_MS = 500;
 const ATTACHMENT_DELETE_LOCK_WAIT_MS = 30_000;
@@ -48,7 +50,13 @@ const attachmentRetiredDirectoryTimers = new Map();
 const attachmentSessionCleanupTimers = new Map();
 const attachmentSessionScanTimers = new Map();
 
-async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId = "", options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {string} attachmentId one attachment, or "" for the whole session
+ * @param {AttachmentOptions} options
+ */
+async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId, options) {
   const normalizedAttachmentId = attachmentId ? assertAttachmentId(attachmentId) : "";
   const cleanupPath = normalizedAttachmentId
     ? attachmentHostDirectory(executionRoot, sessionId, normalizedAttachmentId, options)
@@ -181,7 +189,12 @@ async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId = 
   }
 }
 
-async function releaseCodexSessionAttachments(executionRoot, sessionId, options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentOptions} options
+ */
+async function releaseCodexSessionAttachments(executionRoot, sessionId, options) {
   const sessionDirectory = attachmentHostDirectory(executionRoot, sessionId, "", options);
   const existed = await attachmentDirectoryExists(sessionDirectory);
   await cleanupCodexAttachments(executionRoot, sessionId, "", options);
@@ -245,7 +258,12 @@ function clearAttachmentForcedCleanupTimer(directory) {
   return clearScheduledTimer(attachmentForcedCleanupTimers, path.resolve(directory));
 }
 
-function clearAttachmentSessionCleanupTimer(executionRoot, sessionId, options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentOptions} options
+ */
+function clearAttachmentSessionCleanupTimer(executionRoot, sessionId, options) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
   return clearScheduledTimer(
     attachmentSessionCleanupTimers,
@@ -253,7 +271,12 @@ function clearAttachmentSessionCleanupTimer(executionRoot, sessionId, options = 
   );
 }
 
-function clearAttachmentSessionScanTimer(executionRoot, sessionId, options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentOptions} options
+ */
+function clearAttachmentSessionScanTimer(executionRoot, sessionId, options) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
   return clearScheduledTimer(
     attachmentSessionScanTimers,
@@ -261,7 +284,12 @@ function clearAttachmentSessionScanTimer(executionRoot, sessionId, options = {})
   );
 }
 
-async function pruneAttachmentSessionDirectory(executionRoot, sessionId, options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentOptions} options
+ */
+async function pruneAttachmentSessionDirectory(executionRoot, sessionId, options) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
   const sessionDirectory = attachmentHostDirectory(executionRoot, sessionId, "", options);
   if (!await attachmentDirectoryExists(sessionDirectory)) {
@@ -389,11 +417,18 @@ function scheduleAttachmentCleanup(directory, delayMs = ATTACHMENT_TTL_MS) {
   attachmentCleanupTimers.set(timerKey, timer);
 }
 
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {string} attachmentId
+ * @param {AttachmentOptions} options
+ * @param {number} [delayMs]
+ */
 function scheduleAttachmentForcedCleanup(
   executionRoot,
   sessionId,
   attachmentId,
-  options = {},
+  options,
   delayMs = ATTACHMENT_EXPIRY_RETRY_MS
 ) {
   const cleanupPath = attachmentHostDirectory(
@@ -462,10 +497,16 @@ function scheduleRetiredDirectoryRemoval(directory, delayMs = ATTACHMENT_EXPIRY_
   attachmentRetiredDirectoryTimers.set(timerKey, timer);
 }
 
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {AttachmentOptions} options
+ * @param {number} [delayMs]
+ */
 function scheduleAttachmentSessionCleanup(
   executionRoot,
   sessionId,
-  options = {},
+  options,
   delayMs = ATTACHMENT_SESSION_RETRY_MS
 ) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
@@ -565,10 +606,16 @@ async function scanAttachmentSession(projectKey, sessionKey, options) {
   }
 }
 
+/**
+ * @param {string} projectKey
+ * @param {string} sessionKey
+ * @param {AttachmentOptions} options
+ * @param {number} [delayMs]
+ */
 function scheduleAttachmentSessionScan(
   projectKey,
   sessionKey,
-  options = {},
+  options,
   delayMs = ATTACHMENT_SESSION_RETRY_MS
 ) {
   const timerKey = attachmentSessionTimerKey(projectKey, sessionKey, options);

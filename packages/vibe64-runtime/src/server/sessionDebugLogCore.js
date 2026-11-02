@@ -1,12 +1,20 @@
-import {
-  isVibe64BrowserFlagEnabled,
-  isVibe64DebugLoggingEnabled
-} from "@local/vibe64-core/shared";
+import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 const VIBE64_SESSION_DEBUG_MARKER = "VIBE64_SESSION_DEBUG";
 const VIBE64_SESSION_DEBUG_ENV = "VIBE64_SESSION_DEBUG";
-const VIBE64_SESSION_DEBUG_QUERY_PARAM = "vibe64_session_debug";
-const VIBE64_SESSION_DEBUG_STORAGE_KEY = "vibe64:session-debug";
+
+// The env that turns session debug logging on, named once by the server at startup; none logs nothing.
+let sessionDebugEnv = Object.freeze({});
+
+/**
+ * Names the env whose VIBE64_SESSION_DEBUG flag or debug log level turns session debug logging on.
+ * @param {RuntimeEnv} env the server's runtime env
+ */
+function configureVibe64SessionDebugLog(env) {
+  sessionDebugEnv = env;
+}
 
 function normalizeErrorStatus(error) {
   const status = Number(error?.status ?? error?.statusCode);
@@ -46,19 +54,12 @@ function vibe64SessionDebugDurationMs(startedAtMs) {
   return Math.max(0, Date.now() - Number(startedAtMs || Date.now()));
 }
 
-function vibe64SessionDebugEnabled({
-  env = globalThis?.process?.env || {},
-  globalObject = globalThis,
-  level = ""
-} = {}) {
+/** @param {{ level?: string }} [options] a log level that wins over the configured env's */
+function vibe64SessionDebugEnabled({ level = "" } = {}) {
   return isVibe64DebugLoggingEnabled({
-    env,
+    env: sessionDebugEnv,
     flagName: VIBE64_SESSION_DEBUG_ENV,
     level
-  }) || isVibe64BrowserFlagEnabled({
-    globalObject,
-    queryParam: VIBE64_SESSION_DEBUG_QUERY_PARAM,
-    storageKey: VIBE64_SESSION_DEBUG_STORAGE_KEY
   });
 }
 
@@ -101,6 +102,7 @@ function vibe64SessionDebugSummary(session) {
 }
 
 export {
+  configureVibe64SessionDebugLog,
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,

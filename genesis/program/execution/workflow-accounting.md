@@ -192,7 +192,11 @@ its caller waits, through the same parser and with no memo.
 
 The privileged command helper requires exact numeric target UID/GID values and
 uses a fixed executable path and trusted environment search path while dropping
-privilege. The requested command PATH takes effect only for the target user;
+privilege. Root's own steps run with the system folders as PATH. The requested
+command PATH takes effect only for the target user; a command whose caller names
+none, and every release and managed service unit, starts with the PATH the
+host's helper settings name (`PATH` in `exec-helper.env`, an EnvironmentFile in
+the helper's root-only settings folder), else the system folders;
 provider credentials and the private OpenCode home remain in their existing
 environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
@@ -264,8 +268,9 @@ own folder, or a learner's practice project's,
 `.learning/<learner>/<practice>/training-<practice>`, the shape
 `learningSpace.js` gives it. The helper derives the account, `v64a_` and twelve
 hex digits of a hash of the workspace and the project's slug, and its area, a
-folder per workspace and slug in root's system folder for applications, from
-the calling daemon. Catalogue projects may not take a practice slug, so every
+folder per workspace and slug below the application area the host's helper
+settings name (`VIBE64_APPLICATION_AREA_ROOT`), from the calling daemon; a host
+that names none refuses every application account. Catalogue projects may not take a practice slug, so every
 slug, and with it every account, area and release unit name, belongs to one
 project of its workspace. The account
 is a system account with only its own group: no login, no home outside its

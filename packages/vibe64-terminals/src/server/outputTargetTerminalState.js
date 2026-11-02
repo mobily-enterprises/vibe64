@@ -11,10 +11,7 @@ import { createSharedOperations } from "@local/vibe64-core/server/keyedOperation
  * @param {RuntimeEnv} dependencies.env
  */
 function createOutputTargetTerminalState({ env }) {
-  const launchPreviewProxies = createLaunchPreviewProxyRegistry({
-    env,
-    hostEnv: process.env
-  });
+  const launchPreviewProxies = createLaunchPreviewProxyRegistry({ env });
   const launchReadyWrites = createSharedOperations();
   const previewTestRuns = new Map();
   const outputResultWrites = createSharedOperations();

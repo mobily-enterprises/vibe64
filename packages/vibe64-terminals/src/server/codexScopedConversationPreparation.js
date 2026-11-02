@@ -1,4 +1,5 @@
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { beginTerminalNamespaceOperation } from "@local/vibe64-execution/server/terminalSessions";
 import { codexAppServerReadOnlyThreadSettings } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
@@ -59,6 +60,12 @@ function codexAppServerExpiredEphemeralConversation(conversationId = "", input =
   };
 }
 
+/**
+ * A detached chat turn's failure with its request details appended. A refusal
+ * (AppError) keeps its status, code and message code, so its caller still sees it.
+ * @param {unknown} error
+ * @param {{ agentSettings?: object, executionProfile?: object | null, status?: string }} [options]
+ */
 function codexDetachedChatTurnError(error, options = {}) {
   const {
     agentSettings = {},
@@ -81,7 +88,18 @@ function codexDetachedChatTurnError(error, options = {}) {
   const contextualMessage = requestDetails.length && !message.includes("Request details:")
     ? `${message}\n\nRequest details: ${requestDetails.join("; ")}.`
     : message;
-  const contextualError = new Error(contextualMessage);
+  if (error instanceof AppError) {
+    return new AppError(error.status, contextualMessage, {
+      cause: error,
+      code: error.code,
+      details: error.details,
+      headers: error.headers,
+      messageCode: error.messageCode,
+      messageParams: error.messageParams,
+      params: error.params
+    });
+  }
+  const contextualError = new Error(contextualMessage, { cause: error });
   contextualError.code = error?.code;
   contextualError.statusCode = error?.statusCode;
   return contextualError;

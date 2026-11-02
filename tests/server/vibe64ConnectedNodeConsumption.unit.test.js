@@ -109,13 +109,14 @@ async function createTask(target, name, releaseRoot, env) {
 
 function connectedWorkspaceRunner(tasks) {
   return createWorkspaceSetupRunner({
-    project: {},
-    async inspect({ projectRoot, session, environment }) {
-      const task = tasks.find(candidate => candidate.root === projectRoot);
-      assert.equal(session.sessionId, task.session.sessionId);
-      return inspectConnectedWorkspaceSetup({ session, env: environment,
-        setup: await inspectVibe64WorkspaceSetup({ projectRoot }),
-        inspection: await inspectVibe64ConnectedDevelopment({ projectRoot }) });
+    project: {
+      async inspectWorkspaceSetup({ projectRoot, session, environment }) {
+        const task = tasks.find(candidate => candidate.root === projectRoot);
+        assert.equal(session.sessionId, task.session.sessionId);
+        return inspectConnectedWorkspaceSetup({ session, env: environment,
+          setup: await inspectVibe64WorkspaceSetup({ projectRoot }),
+          inspection: await inspectVibe64ConnectedDevelopment({ projectRoot }) });
+      }
     },
     async connectedPreparation({ mode, session }) {
       assert.ok(["prepare", "inspect"].includes(mode));

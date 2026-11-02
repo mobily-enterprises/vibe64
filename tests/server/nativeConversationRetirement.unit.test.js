@@ -6,7 +6,7 @@ import test from "node:test";
 import { EventEmitter } from "node:events";
 import { nativeConversationBindings } from "@local/vibe64-terminals/server/nativeConversationBindings";
 import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
-import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
+import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 

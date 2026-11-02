@@ -758,6 +758,11 @@ Push of that upstream stay with the original folder.
   and one managed publish-and-reconcile transaction under the project source
   lock. A deterministic private prepared-commit ref supplies restart evidence;
   disposable mirror refresh is deferred until after Save.
+- Save, Update and Incoming refusals (`saveError()`) are AppErrors with their
+  own code: a 409 conflict, or 400 for a bad request and 404 for a change or
+  contribution that is gone. Git command and helper failures are 500s with
+  their message shown. The repository helper process reports a refusal's
+  status and message code, so `runSessionWorkOperation()` rethrows it unchanged.
 - `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) as that
   person, a managed job, and keeps it in memory for five minutes per actor and
   tool home, so repeated session-work operations and the agent's GitHub Git

@@ -8,7 +8,6 @@ import {
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const APP_CREDENTIAL_SCOPE = "app";
 const USER_CREDENTIAL_SCOPE = "user";
@@ -186,46 +185,6 @@ function githubCredentialContext(input, options = {}) {
  * @param {object} input
  * @param {string} [input.accountMode]
  * @param {RuntimeEnv} input.env names the account mode when the caller does not
- * @param {object | null} [input.vibe64User]
- */
-function resolveGithubHomeForActor({
-  accountMode = "",
-  env,
-  vibe64User = null
-}) {
-  const resolvedAccountMode = normalizeGithubAccountMode(
-    accountMode || env[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
-    GITHUB_ACCOUNT_MODE_LOCAL
-  );
-  const context = githubCredentialContext({
-    vibe64User
-  }, {
-    accountMode: resolvedAccountMode
-  });
-  if (context?.ok === false) {
-    return {
-      ...context,
-      accountMode: resolvedAccountMode,
-      ownerUserKey: "",
-      credentialScope: "",
-      toolHomeSource: ""
-    };
-  }
-  return {
-    accountMode: resolvedAccountMode,
-    credentialScope: context.scope || "",
-    ok: true,
-    ownerUserKey: context.username || "",
-    hostGid: context.gid,
-    hostUid: context.uid,
-    toolHomeSource: context.home || ""
-  };
-}
-
-/**
- * @param {object} input
- * @param {string} [input.accountMode]
- * @param {RuntimeEnv} input.env names the account mode when the caller does not
  * @param {string} [input.ownerUserKey]
  * @param {typeof resolveOsUser} [input.osUserResolver]
  */
@@ -240,10 +199,24 @@ async function resolveGithubHomeForStoredActor({
     GITHUB_ACCOUNT_MODE_LOCAL
   );
   if (resolvedAccountMode === GITHUB_ACCOUNT_MODE_LOCAL) {
-    return resolveGithubHomeForActor({
+    const local = githubCredentialContext({}, { accountMode: resolvedAccountMode });
+    if (local.ok === false) {
+      return {
+        ...local,
+        credentialScope: "",
+        ownerUserKey: "",
+        toolHomeSource: ""
+      };
+    }
+    return {
       accountMode: resolvedAccountMode,
-      env
-    });
+      credentialScope: local.scope,
+      hostGid: local.gid,
+      hostUid: local.uid,
+      ok: true,
+      ownerUserKey: local.username || "",
+      toolHomeSource: local.home || ""
+    };
   }
 
   const username = normalizeText(ownerUserKey);
@@ -271,43 +244,6 @@ async function resolveGithubHomeForStoredActor({
   };
 }
 
-function composeGithubTerminalHome(result = {}) {
-  if (result.ok === false) {
-    return result;
-  }
-  const githubToolHomeSource = normalizeText(result.githubToolHomeSource || result.toolHomeSource);
-  if (!githubToolHomeSource) {
-    return credentialHomeRequiredError("terminal");
-  }
-  return {
-    ...result,
-    githubToolHomeSource,
-    toolHomeSource: githubToolHomeSource
-  };
-}
-
-/** @param {RuntimeLogger} logger */
-function logGithubCredentialHomeResolution(logger, result, options = {}) {
-  const {
-    operation = "",
-    terminalKind = ""
-  } = options;
-  const ok = result?.ok !== false;
-  return logger[ok ? "info" : "warn"]({
-    accountMode: normalizeText(result?.accountMode),
-    code: result?.code || "",
-    component: "vibe64.github_credential_home",
-    event: ok
-      ? "vibe64.github_credential_home.resolved"
-      : "vibe64.github_credential_home.failed",
-    ok,
-    operation: normalizeText(operation),
-    ownerUserKey: result?.ownerUserKey || result?.userKey || "",
-    credentialScope: result?.credentialScope || result?.scope || "",
-    terminalKind
-  }, ok ? "Vibe64 GitHub credential home resolved." : "Vibe64 GitHub credential home resolution failed.");
-}
-
 export {
   appCredentialContext,
   APP_CREDENTIAL_SCOPE,
@@ -316,10 +252,7 @@ export {
   USER_CREDENTIAL_SCOPE,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   codexCredentialContext,
-  composeGithubTerminalHome,
   githubCredentialContext,
-  logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,
-  resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
 };

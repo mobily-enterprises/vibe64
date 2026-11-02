@@ -1110,7 +1110,10 @@ JSKIT also owns the original provider inventory, acquisition tracking, lifecycle
 queue, account invalidation and shared recovery sequence. Both consumers acquire
 their native providers from it. Inventory and invalidation use the workspace's
 runtime root and the selected account; shared fallback recovery uses the exact
-runtime directory. Vibe64 retains session barriers, stopped-state persistence,
+runtime directory. That root comes from the server's env (`VIBE64_AGENT_RUNTIME_DIR`,
+else `$XDG_RUNTIME_DIR/vibe64/agent-providers`), and every Codex runtime
+directory sits below it: the Codex runtime host adds it to the provider options as
+`runtimeRoot`, because a provider's own env is its child's curated env. Vibe64 retains session barriers, stopped-state persistence,
 publication and Helper cleanup. Colleague's common runtime persists its native
 barrier through the same conversation storage contract. Both host bindings supply
 the existing Genesis hook environment, so their shared server has one consistent
@@ -2923,12 +2926,15 @@ include the full wrapper path and control kind, keeping projects and sessions
 separate without placing a long workspace path in the socket address. The shared
 path builder checks the OS byte limit before binding; an oversized configured
 temporary root reports `vibe64_agent_control_path_too_long` with a repair action.
+A command socket answers a refusal with the refusal's own status, such as 400
+for invalid JSON and 413 for oversized input; other failures keep their code's status.
 The command helpers those sockets serve (the session shell wrapper and runner,
 Git, Env, Preview, Playwright and Helper commands) and pending uploads are live
 session state, not temporary files: an agent keeps their paths for its whole life.
 `codexAttachmentPaths.js` owns their root, `<system root>/attachments`, which the
-server fixes for the process at startup so every caller resolves the same root
-whatever environment it passes. Helpers are rewritten idempotently whenever an
+server names at startup. The terminals feature passes it in every caller's
+environment, startup preparation included, so every caller resolves the same
+root; an environment that names none uses the local state root. Helpers are rewritten idempotently whenever an
 assistant starts or reconnects. Only the listening sockets stay in temporary space.
 A session's final close (its archive, in the stopping phase, or the discard of a
 renewal successor that never went live, just before its record is removed)
@@ -3912,16 +3918,18 @@ these account-setup operations do not create a conversation runner.
 - `vibe64HostContextRegistry()` and `vibe64HostContextEnvironment()` bind native
   conversations to the existing Genesis executable bridge. `vibe64Driver()`
   owns the single provider-neutral managed-session contribution.
-- `sendCodexAppServerPromptForSession()` and `stablePromptBody()` preserve the
-  authored user text without attaching Vibe64 turn context.
+- `createCodexMainMessagePreparation()` sends an ordinary message's authored
+  text as its prompt and renders the Genesis prompt only for the opening
+  request or a Genesis task, so no Vibe64 turn context is attached.
 - `writeMirroredCodexAppServerTerminalMessage()` copies the latest prior UI
   user's existing actor metadata onto a native-terminal user item in History;
   it does not alter provider input.
-- `sendCodexAppServerMessage()` recognizes only the provider's exact
-  missing-thread response for an inactive conversation and routes it through
-  `ensureCodexAppServerThreadForSession()` so its existing replacement,
-  durable-history recovery, and identity update complete before the pending
-  message starts the new ordinary turn.
+- JSKIT's Codex message commands recognize only the provider's exact
+  missing-thread response (`codexAppServerThreadIsMissing()`) for an inactive
+  conversation; `dispatchCodexAppServerMessage()` then starts the message as a
+  new turn through `ensureCodexAppServerThread()` with Vibe64's thread
+  preparation, so replacement, durable-history recovery and the identity update
+  complete before the pending message starts the new ordinary turn.
 - `startAttachedTerminal()` attaches OpenCode's native TUI to the session's
   existing upstream history in a session-owned PTY. The OpenCode interactive
   terminal facility owns its bounded snapshot, stream, input, resize and close;

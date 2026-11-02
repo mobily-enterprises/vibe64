@@ -4,7 +4,6 @@ import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 
 import {
   inspectVibe64Outputs,
-  inspectVibe64WorkspaceSetup,
   resolveVibe64OutputParameters
 } from "@local/vibe64-genesis/server";
 import {
@@ -19,6 +18,8 @@ import {
 import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
+
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 const OUTPUT_RESULTS_READY_MARKER_PREFIX = "VIBE64_OUTPUT_RESULTS_READY_V1";
 const VIBE64_RUNTIME_PACKS = Object.freeze({
@@ -142,11 +143,12 @@ async function inspectVibe64OutputsForContext(context = {}, options = {}) {
   return outputs;
 }
 
-async function inspectVibe64WorkspaceSetupForContext(context = {}, options = {}) {
-  const {
-    inspect = context.project?.inspectWorkspaceSetup?.bind(context.project) || inspectVibe64WorkspaceSetup
-  } = options;
-  return inspectVibe64ForContext(context, inspect, {
+/**
+ * The session source's workspace setup, inspected by the context's project; a source without a Stack is unconfigured.
+ * @param {{ project: ProjectService }} context a launch context
+ */
+async function inspectVibe64WorkspaceSetupForContext(context) {
+  return inspectVibe64ForContext(context, context.project.inspectWorkspaceSetup, {
     recipeHash: "",
     status: "unconfigured",
     steps: []

@@ -115,7 +115,7 @@ function createClaudeSessionAgentProvider(options) {
       ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
     }) }
   });
-  provider = createNativeClaudeSessionAgentProvider({ env: process.env, hostEnv: process.env, logger: silentLogger, ...nativeOptions, conversationRuntime: conversations,
+  provider = createNativeClaudeSessionAgentProvider({ env: process.env, logger: silentLogger, ...nativeOptions, conversationRuntime: conversations,
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
   const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime: conversations, defaultProviderId: "claude",
@@ -270,7 +270,8 @@ async function fixture(t, { scopedConversations = false } = {}) {
   const publications = [];
   const behavior = { account: { loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" } };
   const providerOptions = { [fixtureRuntimeOwners]: owners, systemRoot: path.join(root, "system"), env: {
-    CLAUDE_CONFIG_DIR: path.join(root, "config"), VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtime")
+    CLAUDE_CONFIG_DIR: path.join(root, "config"), VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtime"),
+    VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments")
   },
     logger: { info: fields => diagnostics.push(fields), warn: fields => diagnostics.push(fields) },
     publishSessionChanged: async (_id, event) => publications.push(event),

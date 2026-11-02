@@ -42,6 +42,7 @@ import {
   readOwnedFile,
   relativePathParts
 } from "./hostFiles.js";
+import { helperSettings } from "./commandEnvironment.js";
 import {
   hostLoginUids,
   openRegistry,
@@ -54,7 +55,6 @@ import { SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
-const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
 // A learner's practice project lives below the workspace's projects at
@@ -66,6 +66,18 @@ const PRACTICE_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9
 // Each registration holds a system uid for as long as it lasts, and the host's
 // system uid range is small (100-999 by default).
 const APPLICATION_LIMIT_PER_WORKSPACE = 100;
+
+/**
+ * The folder application accounts have their areas below, which only the host's helper settings name.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function applicationAreaRoot(settings = helperSettings()) {
+  const configured = String(settings.VIBE64_APPLICATION_AREA_ROOT || "").trim();
+  if (!path.isAbsolute(configured) || path.resolve(configured) !== configured || configured === "/") {
+    throw new Error("This host's Vibe64 exec helper settings name no application area (VIBE64_APPLICATION_AREA_ROOT).");
+  }
+  return configured;
+}
 
 // Each published project runs as its own application account: a system
 // account with only its own group, no login and no Vibe64 group. Root
@@ -100,7 +112,7 @@ function applicationWorkspace(owner = {}) {
 // The daemon names the project by its folder below the workspace's projects,
 // a catalogue project's own or a learner's practice project's; its
 // application, area and units are named by the project's slug either way.
-function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_AREA_ROOT } = {}) {
+function applicationIdentity(owner = {}, project = "", { areaRoot = applicationAreaRoot() } = {}) {
   const workspace = applicationWorkspace(owner);
   const folder = String(project || "").split("/");
   const name = folder.at(-1);
@@ -301,7 +313,7 @@ function assertNewApplication(identity = {}, { applicationLimit, managedRoot, re
 
 function ensureApplicationAccount(owner = {}, project = "", {
   applicationLimit = APPLICATION_LIMIT_PER_WORKSPACE,
-  areaRoot = APPLICATION_AREA_ROOT,
+  areaRoot = applicationAreaRoot(),
   createUser = (identity) => runRootCommand("useradd", ["--system", "--user-group", "--no-create-home",
     "--home-dir", identity.home, "--shell", APPLICATION_SHELL, identity.username]),
   facts = hostApplicationFacts,
@@ -380,7 +392,7 @@ function applicationDatabaseEntries(identity = {}, { areaUid = 0 } = {}) {
 // is unregistered before the check for its processes, so no new execution can
 // start as it meanwhile. A refused retire registers it again.
 function retireApplicationAccount(owner = {}, project = "", {
-  areaRoot = APPLICATION_AREA_ROOT,
+  areaRoot = applicationAreaRoot(),
   areaUid = 0,
   deleteUser = (username) => runRootCommand("userdel", [username]),
   facts = hostApplicationFacts,
@@ -453,7 +465,7 @@ function retireApplicationAccount(owner = {}, project = "", {
 // registered for the calling daemon's workspace, still exactly the account the
 // helper made. Never a person, nor another workspace's application.
 function registeredApplicationUser(owner = {}, username = "", {
-  areaRoot = APPLICATION_AREA_ROOT,
+  areaRoot = applicationAreaRoot(),
   facts = hostApplicationFacts,
   resolveUser = resolveOsUser,
   ...registry
@@ -583,6 +595,7 @@ function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = ""
 
 export {
   APPLICATION_LIMIT_PER_WORKSPACE,
+  applicationAreaRoot,
   applicationIdentity,
   applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles,

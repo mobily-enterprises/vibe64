@@ -42,7 +42,8 @@ test("runuser receives a trusted PATH and no new privileges while the user comma
   assert.deepEqual(result.args, ["--no-new-privs", "--", "/usr/sbin/runuser", "-u", "member", "--", "/usr/bin/env", "--",
     "PATH=/workspace/bin:/usr/bin", "git", "status"]);
   assert.ok(!result.options.env.PATH.includes("/workspace/bin"));
-  assert.ok(result.options.env.PATH.includes("/opt/vibe64/runtime-packs/git/bin"));
+  assert.equal(result.options.env.PATH, "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "root's own steps run with the system folders");
   assert.equal(result.options.env.PROVIDER_API_KEY, "private-token");
   assert.ok(!result.args.join(" ").includes("private-token"));
   assert.equal(result.options.env.HOME, "/home/member");

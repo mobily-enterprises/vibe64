@@ -55,9 +55,8 @@ import { createServiceAgentProviders } from "./serviceAgentProviders.js";
  * @param {object} input
  * @param {object} input.codexTerminalController a host's Codex terminal settings
  * @param {RuntimeEnv} input.env
- * @param {RuntimeEnv} input.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  */
-function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env, hostEnv }) {
+function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env }) {
   const context = codexRuntimeContext({
     env,
     providerOptions: codexTerminalController.codexAppServerProviderOptions || {},
@@ -66,7 +65,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env,
   if (context?.ok === false) {
     throw new Error(context.error || "Codex runtime context could not be resolved.");
   }
-  return { ...context.providerOptions, hostEnv };
+  return context.providerOptions;
 }
 
 /**
@@ -74,7 +73,6 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env,
  * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeEnv} dependencies.hostEnv this process's live env, read for the agent runtime directory the env leaves out
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
@@ -84,6 +82,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env,
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
+ * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
  */
 function createService({
@@ -91,7 +90,6 @@ function createService({
   // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
   env,
-  hostEnv,
   inspectAgentSkills = inspectGenesisSkills,
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
@@ -102,6 +100,7 @@ function createService({
   publishProjectRuntimeChanged,
   publishSessionChanged,
   runCodexGitGatewayCommand,
+  runtimeProfile,
   savedEnvValueLinks
 }) {
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
@@ -113,7 +112,7 @@ function createService({
    */
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
-  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env, hostEnv });
+  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
   const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
   const providerUsage = createProviderUsage({
     resolveConnection: (selection) => selection.engineId === "opencode"
@@ -208,7 +207,6 @@ function createService({
     commands,
     continueGoalAfterAccountChange: (sessionId, input) => goals.continueGoalAfterAccountChange(sessionId, input),
     env,
-    hostEnv,
     logger,
     opencodeTerminalController,
     prepareMainConversationOperation: (request) => mainConversationHost.prepareMainConversationOperation(request),
@@ -216,6 +214,7 @@ function createService({
     providerUsage,
     publishAgentSessionChanged,
     readClaudeAccountStatus,
+    runtimeProfile,
     state
   });
   const sessionPromptHints = createSessionPromptHintsService({
@@ -368,7 +367,6 @@ function createService({
     codexProviderConnections,
     codexProviderOptions,
     env,
-    hostEnv,
     logger,
     mainConversations,
     opencode,

@@ -1,5 +1,5 @@
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
-import { directoryExists, ensureTerminalSessionSourceGitSelfContained } from "./terminalShared.js";
+import { directoryExists, ensureTerminalSessionSourceGitSelfContained, sessionSourceRepairExclusive } from "./terminalShared.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -111,13 +111,16 @@ function createServiceAgentReconcile({
         if (!workdir || !await directoryExists(workdir)) {
           continue;
         }
+        const repairSessionId = sessionRecordId(session) || sessionId;
+        const runtime = await project.createRuntimeWithoutSource();
         const result = await ensureTerminalSessionSourceGitSelfContained({
+          runExclusive: sessionSourceRepairExclusive(runtime, repairSessionId, "repair-session-source"),
           session,
           workdir
         });
         if (result.repaired === true) {
           vibe64SessionDebugLog("server.terminals.codexAppServerThread.sourceGit.repaired", {
-            sessionId: sessionRecordId(session) || sessionId,
+            sessionId: repairSessionId,
             sourceRoot: result.sourceRoot
           });
         }

@@ -1531,7 +1531,7 @@ test("managed browser identity returns from the app port to the real Preview pro
     response.end(`<!doctype html><html><body>${request.headers.cookie?.includes("app_session=ada")
       ? "Signed in as Ada" : "Sign in"}</body></html>`);
   });
-  const registry = createLaunchPreviewProxyRegistry({ env: process.env, hostEnv: process.env });
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
   let commandService;
   try {
     await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,13 +9,7 @@ import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import {
   VIBE64_SERVICE_DATA_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
-import {
-  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
-  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_USER_DOMAIN_ENV
-} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import { VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
   createProjectRuntimeChangedPublisher
 } from "../../packages/vibe64-terminals/src/server/events.js";
@@ -24,11 +18,10 @@ import {
   clearProjectRuntimeOpenState,
   readProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
-import {
-  Vibe64TerminalsFeature,
-  createVibe64TerminalsFeature
-} from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
-import { terminalsProviderEnv } from "../../packages/vibe64-terminals/src/server/terminalsEnv.js";
+import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
+import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
+import { codexAttachmentHostRoot } from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/projectRuntimeDormancy.js";
@@ -43,6 +36,28 @@ async function withTemporaryRoot(callback) {
   }
 }
 
+const silentLogger = Object.freeze({ error() {}, info() {}, warn() {} });
+
+/**
+ * The env the server composes features with: the process env under the test's settings.
+ * @param {object} settings
+ */
+function serverEnv(settings) {
+  return { ...process.env, ...settings };
+}
+
+/**
+ * A terminals service built as the feature builds it, with the test's own Codex terminal settings.
+ * @param {object} dependencies
+ */
+function terminalsService({ env, ...dependencies }) {
+  return createService(terminalsServiceCollaborators({
+    env: serverEnv(env),
+    logger: silentLogger,
+    ...dependencies
+  }));
+}
+
 async function failingCodexAuthPreflight() {
   throw new Error("test Codex authentication unavailable");
 }
@@ -50,7 +65,7 @@ async function failingCodexAuthPreflight() {
 function featureDependencies({ env = {}, project, published = [], hooks = [] } = {}) {
   return {
     actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }),
-    env,
+    env: serverEnv(env),
     events: {
       async publish(event) {
         published.push(event);
@@ -96,53 +111,23 @@ test("terminals feature declares only named AI-first capabilities", () => {
   assert.equal(Object.hasOwn(Vibe64TerminalsFeature, "register"), false);
 });
 
-test("terminals provider overlays only declared live host values", () => {
-  assert.deepEqual(terminalsProviderEnv({
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "stale.example.test",
-    KEEP_ME: "runtime",
-    SECRET_VALUE: "runtime-secret"
-  }, {
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
-    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
-    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
-    VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
-    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
-    SECRET_VALUE: "live-secret"
-  }), {
-    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
-    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
-    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
-    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
-    VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/host/preview-sockets",
-    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
-    KEEP_ME: "runtime",
-    SECRET_VALUE: "runtime-secret"
-  });
-});
-
-test("installed host guidance survives the runtime environment filter into agent context", () => {
+test("installed host guidance in the env reaches agent context", () => {
   const guidance = "Installed here: vibe64-local update; SSH recovery: sudo vibe64-local restore.";
-  const env = terminalsProviderEnv({ KEEP_ME: "runtime" }, { VIBE64_HOST_AGENT_GUIDANCE: guidance, UNRELATED_SECRET: "hidden" });
-  assert.equal(env.VIBE64_HOST_AGENT_GUIDANCE, guidance);
-  assert.equal(env.UNRELATED_SECRET, undefined);
-  const context = createCodexSessionEnvironment({ env }).vibe64SessionContextInput();
+  const context = createCodexSessionEnvironment({ env: { VIBE64_HOST_AGENT_GUIDANCE: guidance } }).vibe64SessionContextInput();
   assert.equal(context.hostGuidance, guidance);
-  assert.equal(Object.hasOwn(createCodexSessionEnvironment({ env: terminalsProviderEnv({}, {}) }).vibe64SessionContextInput(), "hostGuidance"), false);
+  assert.equal(Object.hasOwn(createCodexSessionEnvironment({ env: {} }).vibe64SessionContextInput(), "hostGuidance"), false);
 });
 
-test("live editor namespaces reach Preview routing through the runtime environment filter", () => {
+test("editor namespaces in the env reach Preview routing", () => {
   const origin = (namespace) => previewPublicOriginForLaunch({
-    env: terminalsProviderEnv({}, { [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: namespace }),
+    env: { [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: namespace },
     publicHost: "owner.users.example.test", sessionId: "same-cloned-session"
   });
   assert.notEqual(origin("first"), origin("second"));
   assert.equal(origin("first"), origin("first"));
 });
 
-test("terminals feature creates the direct API from runtime env", async () => {
+test("terminals service creates the direct API from runtime env", async () => {
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
@@ -155,13 +140,11 @@ test("terminals feature creates the direct API from runtime env", async () => {
       auth_mode: "api_key",
       OPENAI_API_KEY: "fixture-terminals-provider-key"
     }));
-    const feature = createVibe64TerminalsFeature({
+    const terminals = terminalsService({
       codexTerminalController: {
         codexAuthPreflight: failingCodexAuthPreflight,
         codexToolHomeSource
-      }
-    });
-    const outputs = await feature.setup(featureDependencies({
+      },
       env: {
         [VIBE64_SERVICE_DATA_ROOT_ENV]: serviceDataRoot
       },
@@ -204,18 +187,15 @@ test("terminals feature creates the direct API from runtime env", async () => {
           };
         }
       }
-    }), { profile: "test" });
+    });
 
     try {
-      const result = await outputs.terminals.startGlobalCodexTerminal();
+      const result = await terminals.startGlobalCodexTerminal();
       assert.equal(result.ok, false);
       assert.match(result.error, /test Codex authentication unavailable/u);
       assert.doesNotMatch(result.error, /toolchain|image/u);
     } finally {
-      await feature.shutdown(featureDependencies({ project: {} }), {
-        outputs,
-        profile: "test"
-      });
+      await terminals.close();
     }
   });
 });
@@ -229,22 +209,20 @@ test("personal Codex access blocks a member before authentication starts", async
       auth_mode: "chatgpt",
       tokens: { account_id: "fixture-owner", access_token: "fixture-owner-access-token" }
     }));
-    const feature = createVibe64TerminalsFeature({
-      codexTerminalController: {
-        async codexAuthPreflight() {
-          authenticationStarts += 1;
-          throw new Error("A member must not reach Codex authentication.");
-        },
-        codexToolHomeSource
-      }
-    });
     const runtimeRoot = path.join(root, "runtime");
     const targetRoot = path.join(root, "project");
     await Promise.all([
       mkdir(runtimeRoot, { recursive: true }),
       mkdir(targetRoot, { recursive: true })
     ]);
-    const outputs = await feature.setup(featureDependencies({
+    const terminals = terminalsService({
+      codexTerminalController: {
+        async codexAuthPreflight() {
+          authenticationStarts += 1;
+          throw new Error("A member must not reach Codex authentication.");
+        },
+        codexToolHomeSource
+      },
       env: {
         [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services")
       },
@@ -275,20 +253,17 @@ test("personal Codex access blocks a member before authentication starts", async
           return { ok: true };
         }
       }
-    }), { profile: "test" });
+    });
     try {
       await assert.rejects(
-        outputs.terminals.startGlobalCodexTerminal({
+        terminals.startGlobalCodexTerminal({
           vibe64User: { role: "user", username: "member" }
         }),
         (error) => error.code === "vibe64_assistant_owner_required"
       );
       assert.equal(authenticationStarts, 0);
     } finally {
-      await feature.shutdown(featureDependencies({ project: {} }), {
-        outputs,
-        profile: "test"
-      });
+      await terminals.close();
     }
   });
 });
@@ -303,11 +278,7 @@ test("session source creation holds the project source mutation lock while it re
     ]);
     let lockHeld = false;
     let lockOptions = null;
-    const feature = createVibe64TerminalsFeature({
-      codexTerminalController: {
-        codexAuthPreflight: failingCodexAuthPreflight
-      }
-    });
+    const feature = Vibe64TerminalsFeature;
     const project = {
       createSessionStore() {
         return {};
@@ -438,7 +409,7 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
       published,
       hooks
     });
-    const feature = createVibe64TerminalsFeature();
+    const feature = Vibe64TerminalsFeature;
     const outputs = await feature.setup(dependencies, { profile: "test" });
     try {
       assert.equal(recovered, 0, "feature setup must not recover before catalogue admission is configured");
@@ -470,11 +441,9 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
 });
 
 test("terminals feature owns attachment and dormancy startup and shutdown", async () => {
-  let closeCalls = 0;
   let cleanupCalls = 0;
   await withTemporaryRoot(async (root) => {
-    const attachmentRoot = path.join(root, "attachments");
-    // Boot's idle-project sweep lists the projects; shutdown closes every project's services.
+    // Boot prepares the attachment files below the root the server named and its idle-project sweep lists the projects.
     const project = {
       async listProjects() {
         cleanupCalls += 1;
@@ -482,27 +451,30 @@ test("terminals feature owns attachment and dormancy startup and shutdown", asyn
       },
       async listPracticeProjectSlugs() { return []; }
     };
-    const projectServices = {
-      beginClose() {},
-      async close() {},
-      async closeAll() { closeCalls += 1; },
-      async ensure() {},
-      opened() {}
-    };
     const dependencies = featureDependencies({
-      env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot,
-        [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services")
-      },
+      env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
       project
     });
-    const feature = createVibe64TerminalsFeature({ projectServices });
-    const outputs = await feature.setup(dependencies, { profile: "test" });
-    await feature.boot(dependencies, { outputs, profile: "test" });
-    await feature.shutdown(dependencies, { outputs, profile: "test" });
+    const outputs = await Vibe64TerminalsFeature.setup(dependencies, { profile: "test" });
+    await Vibe64TerminalsFeature.boot(dependencies, { outputs, profile: "test" });
+    const attachmentRoot = codexAttachmentHostRoot({ env: dependencies.env });
+    assert.equal((await stat(attachmentRoot)).isDirectory(), true);
+    await Vibe64TerminalsFeature.shutdown(dependencies, { outputs, profile: "test" });
   });
 
   assert.equal(cleanupCalls, 1);
+});
+
+test("terminals service shutdown closes every project's services", async () => {
+  let closeCalls = 0;
+  await withTemporaryRoot(async (root) => {
+    const terminals = terminalsService({
+      env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
+      project: {},
+      projectServices: { beginClose() {}, async close() {}, async closeAll() { closeCalls += 1; }, async ensure() {}, opened() {} }
+    });
+    await terminals.close();
+  });
   assert.equal(closeCalls, 1);
 });
 
@@ -540,7 +512,7 @@ test("original dormancy owner supplies internal close authority while an explici
       async saveEnvUserValues() { return { ok: true }; }
     };
     const published = [], dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, published });
-    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    const feature = Vibe64TerminalsFeature, outputs = await feature.setup(dependencies, { profile: "test" });
     try {
       await outputs.terminals.openProjectRuntime();
       const dormant = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
@@ -576,7 +548,7 @@ test("the dormant sweep closes an idle practice project outside the catalogue", 
       async saveEnvUserValues() { return { ok: true }; }
     };
     const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, published: [] });
-    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    const feature = Vibe64TerminalsFeature, outputs = await feature.setup(dependencies, { profile: "test" });
     try {
       await outputs.terminals.openProjectRuntime();
       const fresh = await outputs.terminals.closeDormantProjectRuntimes({});
@@ -622,14 +594,9 @@ test("a partial project close restores Preview service admission after services 
       runInProjectContext(_slug, operation) { return operation(); },
       async saveEnvUserValues() { return { ok: true }; }
     };
-    const dependencies = featureDependencies({
-      env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
-      project
-    });
-    const feature = createVibe64TerminalsFeature({ projectServices });
-    const outputs = await feature.setup(dependencies, { profile: "test" });
+    const terminals = terminalsService({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, projectServices });
     try {
-      const result = await outputs.terminals.closeProjectRuntime({ reason: "test-partial-close" });
+      const result = await terminals.closeProjectRuntime({ reason: "test-partial-close" });
       assert.equal(result.ok, false);
       // Without a project request context the close acts on the global scope,
       // the same scope its terminal namespaces use.
@@ -638,7 +605,7 @@ test("a partial project close restores Preview service admission after services 
       assert.match(result.failed[0].error, /session inventory unavailable/u);
       assert.deepEqual(calls, ["begin-close", "close", "opened"]);
     } finally {
-      await feature.shutdown(dependencies, { outputs, profile: "test" });
+      await terminals.close();
     }
   });
 });
@@ -685,7 +652,7 @@ test("a Claude session whose source was never created blocks no idle close, proj
       metadata: { assistant_selection: claudeSelection, source_creation_failed: "yes" } });
     await created.store.writeStatus("clone-failed", "blocked");
     const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
-    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    const feature = Vibe64TerminalsFeature, outputs = await feature.setup(dependencies, { profile: "test" });
     try {
       await outputs.terminals.openProjectRuntime();
       const idle = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
@@ -715,7 +682,7 @@ test("an unreadable session keeps an idle project open, named in an operational 
     await mkdir(targetRoot, { recursive: true });
     const warnings = [];
     const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
-    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    const feature = Vibe64TerminalsFeature, outputs = await feature.setup(dependencies, { profile: "test" });
     const schedule = startProjectRuntimeDormancyCleanupSchedule({
       idleAfterMs: 1, logger: { warn(fields, message) { warnings.push({ fields, message }); } },
       serviceFactory: () => outputs.terminals, setIntervalImpl: () => null, clearIntervalImpl() {}
@@ -759,20 +726,17 @@ test("a pinned project cannot close explicitly or through idle cleanup", async (
       runInProjectContext(_slug, operation) { return operation(); },
       async saveEnvUserValues() { return { ok: true }; }
     };
-    const feature = createVibe64TerminalsFeature({ projectServices: {
-      beginClose() { closed++; }, async close() {}, async closeAll() {}, opened() {}, async ensure() {}
-    } });
-    const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
-    const outputs = await feature.setup(dependencies, { profile: "test" });
+    const terminals = terminalsService({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project,
+      projectServices: { beginClose() { closed++; }, async close() {}, async closeAll() {}, opened() {}, async ensure() {} } });
     try {
-      await outputs.terminals.openProjectRuntime();
-      await assert.rejects(outputs.terminals.closeProjectRuntime(), { code: "vibe64_project_pinned" });
-      const idle = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
+      await terminals.openProjectRuntime();
+      await assert.rejects(terminals.closeProjectRuntime(), { code: "vibe64_project_pinned" });
+      const idle = await terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
       assert.equal(idle.skipped, true); assert.equal(idle.reason, "pinned-session");
       assert.equal(closed, 0); assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
       pinned = false;
-      assert.equal((await outputs.terminals.closeProjectRuntime()).ok, true);
+      assert.equal((await terminals.closeProjectRuntime()).ok, true);
       assert.equal(closed, 1);
-    } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
+    } finally { await terminals.close(); }
   });
 });

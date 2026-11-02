@@ -172,12 +172,17 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
   ].filter(Boolean).join("\n");
 }
 
-function codexAppServerRuntimeDir(options = {}) {
+/**
+ * A Codex app-server runtime's own directory, named by its scope, below the agent runtime root.
+ * @param {object} options the runtime's provider options
+ * @param {string} options.runtimeRoot the agent runtime root the server's env names (codexAppServerRuntimeBaseDir)
+ */
+function codexAppServerRuntimeDir(options) {
   const scope = codexAppServerRuntimeIdentityScope(options);
   const dirName = scope
     ? `${CODEX_APP_SERVER_RUNTIME_DIR_NAME}-${stableHash(scope)}`
     : CODEX_APP_SERVER_RUNTIME_DIR_NAME;
-  return path.join(codexAppServerRuntimeBaseDir(options), dirName);
+  return path.join(options.runtimeRoot, dirName);
 }
 
 async function currentCodexAuthStateSignature(options = {}) {

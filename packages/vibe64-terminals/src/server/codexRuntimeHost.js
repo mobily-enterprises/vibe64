@@ -4,7 +4,11 @@ import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRun
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { currentCodexLoginGeneration } from "@local/vibe64-core/server/codexAuthState";
-import { codexAppServerRuntimeDir, codexAppServerRuntimeHost } from "@local/vibe64-runtime/server/codexAppServerAgent";
+import {
+  codexAppServerRuntimeBaseDir,
+  codexAppServerRuntimeDir,
+  codexAppServerRuntimeHost
+} from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { VIBE64_ASSISTANT_ENGINE_IDS, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { stableHash } from "@local/vibe64-execution/server";
 import { codexGitCommandShimDirs } from "./codexTerminalAccess.js";
@@ -73,6 +77,10 @@ function createCodexRuntimeHost({
   codexAppServerProviderOptions,
   codexToolHomeSource
 }) {
+  // Every runtime's directory sits below the agent runtime root the server's env
+  // names; a provider's own env is the curated env its child process gets.
+  const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
   }
@@ -94,7 +102,7 @@ function createCodexRuntimeHost({
     } : {};
     const runtimeContext = codexRuntimeContext({
       env,
-      providerOptions: { ...codexAppServerProviderOptions, ...connectionOptions },
+      providerOptions: { ...codexAppServerProviderOptions, ...connectionOptions, runtimeRoot },
       shimDirs: codexGitCommandShimDirs({ terminalEnv }),
       terminalEnv,
       toolHomeSource: selectedHome

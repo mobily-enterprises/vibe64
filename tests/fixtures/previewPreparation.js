@@ -96,7 +96,8 @@ require("node:http").createServer((_request, response) => {
   });
   const terminals = createTerminalService(terminalsServiceCollaborators({
     codexTerminalController: { codexToolHomeRequired: false },
-    env: { VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
+    // The server composes its features with the process env and its own settings.
+    env: { ...process.env, VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
     logger: silentLogger,
     project,
     publishSessionChanged

@@ -47,6 +47,7 @@ import {
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("./codexAttachmentFolders.js").AttachmentOptions} AttachmentOptions */
 
 const CODEX_ATTACHMENT_MAX_BYTES = VIBE64_UPLOAD_MAX_BYTES;
 const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = VIBE64_UPLOAD_BODY_LIMIT_BYTES;
@@ -141,7 +142,13 @@ async function prepareCodexAttachmentStorage({
   return filesRoot;
 }
 
-async function renewCodexAttachments(executionRoot, sessionId, attachmentIds = [], options = {}) {
+/**
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {string[]} attachmentIds
+ * @param {AttachmentOptions} options
+ */
+async function renewCodexAttachments(executionRoot, sessionId, attachmentIds, options) {
   const busy = [];
   const retained = [];
   const missing = [];
@@ -183,8 +190,13 @@ async function renewCodexAttachments(executionRoot, sessionId, attachmentIds = [
 /**
  * The shared conversation layer uses the same upload lease as expiry and deletion.
  * Keep it held until the caller has copied or opened the file.
+ * @param {string} executionRoot
+ * @param {string} sessionId
+ * @param {string} attachmentId
+ * @param {(upload: { attachmentId: string, fileName: string, path: string, size: number }) => Promise<unknown>} operation
+ * @param {AttachmentOptions} options
  */
-async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentId, operation, options = {}) {
+async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentId, operation, options) {
   const id = assertAttachmentId(attachmentId);
   const directory = attachmentHostDirectory(executionRoot, sessionId, id, options);
   const result = await withAttachmentDirectoryLock(directory, async () => {
