@@ -10,7 +10,6 @@
       <h2 class="project-selection-gate__title">This practice project is gone</h2>
       <p class="project-selection-gate__deleted-text">It was archived or deleted. Its lesson is under Courses → Archived; start it again from Courses.</p>
       <v-btn
-        v-if="learning"
         class="project-selection-gate__deleted-learning"
         color="primary"
         variant="flat"
@@ -284,7 +283,7 @@ function openTeamAiSetup() {
 }
 
 function openCourses() {
-  return learning?.openCourses();
+  return learning.openCourses();
 }
 
 async function retryProject() {

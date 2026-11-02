@@ -65,9 +65,6 @@ const MODE_PLACE_PREFIX = "vibe64:mode-place:v1:";
 const VIBE64_LEARNING_TEACH_MESSAGE = "Teach me this step.";
 const VIBE64_LEARNING_STUCK_MESSAGE = "I'm stuck on this step.";
 const EMPTY_PRACTICE = Object.freeze({ current: null, archived: Object.freeze([]), loaded: false });
-// A part the host shell does not publish (its layout, page focus, browser
-// navigation or Colleague's project view): a ref that holds nothing.
-const NO_HOST_PART = Object.freeze({ value: null });
 
 /**
  * The controller's reactive state, which its concern factories share.
@@ -99,28 +96,45 @@ const NO_HOST_PART = Object.freeze({ value: null });
  */
 
 /**
- * The studio's HTTP request for a Training action (or a test's stub).
+ * The studio's HTTP request for a Training action.
  * @typedef {(url: string, options: { method: string, body?: object }) => Promise<any>} LearningRequest
  */
 
 /**
- * The page layout a host shell publishes: a studio page, the Lesson toggle's
- * place and state, the chat's visibility, and the moves between a phone's two
- * sides.
+ * The page layout a host's project page publishes while it is mounted (null
+ * otherwise): a studio page, the Lesson toggle's place and state, the chat's
+ * visibility, and the moves between a phone's two sides.
  * @typedef {import("vue").Ref<{
  *   studio?: boolean,
  *   lessonShown?: boolean,
  *   lessonToggleOnBar?: boolean,
  *   chatVisible?: boolean,
- *   showProject?: () => void,
- *   hideLesson?: () => void,
- *   showChat?: () => void
+ *   showProject: () => void,
+ *   hideLesson: () => void,
+ *   showChat: () => void
  * } | null>} LearningLayout
  */
 
 /**
- * Colleague's project view (its project, selected session and file opener), as a host shell publishes it.
- * @typedef {import("vue").Ref<object | null>} LearningColleagueView
+ * The selected session's view, as it publishes itself to Colleague: its
+ * project and session, whether it is ready, and how it opens a file or sends a
+ * lesson message to its Main chat.
+ * @typedef {object} LearningProjectView
+ * @property {string} projectSlug
+ * @property {string} sessionId
+ * @property {boolean} ready
+ * @property {(path: string) => boolean} openFile
+ * @property {(text: string) => Promise<boolean>} sendLessonMessage
+ */
+
+/**
+ * Colleague's project view while a session view is selected (null otherwise).
+ * @typedef {import("vue").Ref<LearningProjectView | null>} LearningColleagueView
+ */
+
+/**
+ * The page focus the host writes (null until it writes one).
+ * @typedef {import("vue").Ref<object | null>} LearningPageFocus
  */
 
 /**
@@ -256,6 +270,7 @@ function normalizePractice(result) {
 // /app/learning (the project page with no project selected); a host whose
 // studio has its own pages sets its own at startup.
 let studioHome = VIBE64_LEARNING_PAGE_PATH;
+// readable-check: allow setter-seam - filled by a composing host (its studio home); convert with its supplier
 function setLearningStudioHome(path) {
   if (typeof path !== "string" || !/^\/app(\/[a-z0-9-]+)*$/u.test(path)) throw new TypeError(`Studio home ${path} is not an /app page.`);
   studioHome = path;
@@ -389,7 +404,6 @@ function createPendingRequestIds() {
 export {
   DEVELOP_HOME_PATH,
   EMPTY_PRACTICE,
-  NO_HOST_PART,
   STEP_STATUS_LABELS,
   SURFACES,
   VIBE64_DEVELOP_MODE_NOTE,

@@ -15,21 +15,21 @@ const props = defineProps({
   visible: { type: Boolean, default: true }
 });
 const learning = useVibe64Learning();
-const finished = computed(() => Boolean(learning?.state.finished && learning.lesson.value));
+const finished = computed(() => Boolean(learning.state.finished && learning.lesson.value));
 // The Finished screen's next lesson and its start (requests only while it shows).
 const courses = useVibe64LearningCourses({ active: computed(() => props.visible && finished.value) });
 
 // The reader's place is saved when the pane goes away or the page is left.
-const flush = () => learning?.flushReader();
-onMounted(() => globalThis.addEventListener?.("pagehide", flush));
+const flush = () => learning.flushReader();
+onMounted(() => globalThis.addEventListener("pagehide", flush));
 onBeforeUnmount(() => {
-  globalThis.removeEventListener?.("pagehide", flush);
+  globalThis.removeEventListener("pagehide", flush);
   flush();
 });
 </script>
 
 <template>
-  <section v-if="learning" class="vibe64-learning-lesson-pane" aria-label="Lesson" data-test="learning-lesson-pane" data-vibe64-guide-pane="lesson">
+  <section class="vibe64-learning-lesson-pane" aria-label="Lesson" data-test="learning-lesson-pane" data-vibe64-guide-pane="lesson">
     <div v-if="finished" class="vibe64-learning-lesson-pane__scroll">
       <Vibe64LearningFinished :learning="learning" :courses="courses" />
     </div>

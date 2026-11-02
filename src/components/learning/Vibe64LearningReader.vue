@@ -12,9 +12,7 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 const props = defineProps({
   learning: { type: Object, required: true },
   // The reader is on screen: it then restores its saved scroll place.
-  visible: { type: Boolean, default: true },
-  // Test seam for the step's visual resource read.
-  readVisual: { type: Function, default: null }
+  visible: { type: Boolean, default: true }
 });
 // return: Show me could not show its place, so the host shows the step again.
 const emit = defineEmits(["return"]);
@@ -104,7 +102,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
         </nav>
 
         <article v-if="step" ref="body" class="vibe64-learning-reader__body" :aria-labelledby="`vibe64-learning-step-${step.id}`" @scroll.passive="onScroll">
-          <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" :read-visual="readVisual" @return="emit('return')">
+          <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" @return="emit('return')">
             <template #after-actions>
               <details v-if="lesson.notesText" class="vibe64-learning-reader__notes">
                 <summary>Lesson notes</summary>

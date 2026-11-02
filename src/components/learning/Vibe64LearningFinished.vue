@@ -31,7 +31,7 @@ let finishingFor = "";
 async function finish() {
   if (finished.value || busy.value) return;
   finishError.value = "";
-  summary.value ||= props.learning.finishSummary?.() ||
+  summary.value ||= props.learning.finishSummary() ||
     { passed: passedNow.value, practice: Boolean(lesson.value?.practiceProjectSlug) };
   if (await props.learning.finish(summary.value)) {
     finished.value = true;

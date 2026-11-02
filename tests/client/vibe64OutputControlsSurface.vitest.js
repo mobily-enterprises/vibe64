@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRenderer, markRaw, nextTick, reactive, ref, shallowRef } from "vue";
+import { createRenderer, markRaw, nextTick, reactive, ref } from "vue";
 import { MessageChannel } from "node:worker_threads";
 import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createVibe64Learning } from "../../src/lib/vibe64Learning.js";
+import { idleLearning, learningHostParts } from "./helpers/learningHostParts.js";
 
 const surfaceHost = vi.hoisted(() => ({ outputs: null, projectSlug: null }));
 vi.mock("@/composables/useVibe64OutputControls.js", async original => ({
@@ -772,7 +773,7 @@ function fakeLearningOwner() {
   };
   return owner;
 }
-function mountPreviewSurface({ learning = null, projectSlug = "project-a" } = {}) {
+function mountPreviewSurface({ learning = idleLearning(), projectSlug = "project-a" } = {}) {
   // Supply the existing output owner's read state, not an alternate bridge.
   const outputs = Object.fromEntries([
     "launchButtonsDisabled", "loading", "loadError", "operationBusy", "launchError", "launchStarting", "launchWaiting",
@@ -801,14 +802,12 @@ function mountPreviewSurface({ learning = null, projectSlug = "project-a" } = {}
   vi.stubGlobal("MessageChannel", MessageChannel);
   const props = reactive({ embeddedPreview: true, previewDisplayed: true, windowDisplayed: true,
     session: { sessionId: "session-a" } });
-  // The host shell provides the controller itself or a ref holding it.
-  const owner = shallowRef(learning);
   let state;
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
   const app = renderer.createApp({ setup() {
     state = useVibe64OutputControlsSurface(props); return () => null;
   } });
-  if (learning) app.provide(VIBE64_LEARNING_KEY, owner);
+  app.provide(VIBE64_LEARNING_KEY, learning);
   app.mount({});
   const posts = [];
   let rect = { left: 100, top: 100, right: 900, bottom: 700 };
@@ -833,7 +832,7 @@ function mountPreviewSurface({ learning = null, projectSlug = "project-a" } = {}
     packet("request", { interactionId, method: "POST", path: "/api/greeting" });
     packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
   }
-  const fixture = { state, props, outputs, posts, owner, get frame() { return frame; }, windowListeners, documentListeners,
+  const fixture = { state, props, outputs, posts, get frame() { return frame; }, windowListeners, documentListeners,
     documentObject, windowObject, announce, load, init, packet, press,
     replaceFrame() {
       frame = markRaw({ ...frame, dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
@@ -980,10 +979,7 @@ it("reload, service and session replacement fence old real ports while native di
   expect(owner.responses).toHaveLength(0);
 });
 
-it("without a Learning controller the App opens no channel, and an ineligible project or step begins no press", async () => {
-  const plain = mountPreviewSurface({ projectSlug: "practice" });
-  plain.load(); plain.announce(); await nextTick();
-  expect(plain.init()).toBeUndefined();
+it("an ineligible project or step begins no press", async () => {
   const owner = fakeLearningOwner();
   const other = mountPreviewSurface({ learning: owner, projectSlug: "project-a" });
   other.load(); other.announce(); other.packet("ready"); other.press();
@@ -1011,7 +1007,7 @@ async function mountLearningSurface(read = lessonRead()) {
     if (url.endsWith("/learning-mode")) return { ok: true, learningMode: { on: true, currentAttemptId: attemptId, practiceSlug: "practice" } };
     return options.method === "POST" ? { ok: true, stepId: "try-the-app", outcome: "passed", recorded: true } : structuredClone(read);
   });
-  const learning = createVibe64Learning({ request });
+  const learning = createVibe64Learning({ ...learningHostParts(), request });
   learning.setViewer("member");
   await learning.show({ attemptId, stepId: "try-the-app" });
   learning.minimise();

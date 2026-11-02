@@ -35,8 +35,8 @@ import {
  * @param {LearningCurrentLesson} dependencies.currentLesson
  * @param {LearningPracticeList} dependencies.practiceList
  * @param {LearningLayout} dependencies.layout
- * @param {LearningPageActivity | null} dependencies.pageActivity
- * @param {LearningRouter | null} dependencies.router
+ * @param {LearningPageActivity} dependencies.pageActivity
+ * @param {LearningRouter} dependencies.router
  */
 function createLearningModes({ state, request, currentLesson, practiceList, layout, pageActivity, router }) {
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
@@ -101,7 +101,7 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
   }
 
   function currentPath() {
-    return String(router?.currentRoute?.value?.fullPath || "");
+    return router.currentRoute.value.fullPath;
   }
 
   function readModePlace(side) {
@@ -139,10 +139,10 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
       acceptMode(value);
       if (!value.on) minimise();
       const target = modePlace(value);
-      if (router && target !== path) await router.push(target);
+      if (target !== path) await router.push(target);
       // Learn with no lesson in progress starts at the lesson picker.
       if (value.on && !value.currentAttemptId) void openCourses("courses");
-      pageActivity?.report("learn-toggled", { projectSlug: projectSlugFromPathname(currentPath()) });
+      pageActivity.report("learn-toggled", { projectSlug: projectSlugFromPathname(currentPath()) });
       return value;
     } catch (cause) {
       if (expected === viewer) showNotice(cause?.message || "The switch was not confirmed. Press L again.");
@@ -208,16 +208,16 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
     // learner is on (not its Lesson finished screen: finishing archives that
     // project); a studio lesson docks it on the studio page showing a stage
     // frame; anything else goes to the lesson's home.
-    const here = String(router?.currentRoute?.value?.path || "");
+    const here = router.currentRoute.value.path;
     const inPractice = !state.finished && Boolean(value.practiceSlug) && projectSlugFromPathname(here) === value.practiceSlug;
     const home = inPractice ? here : value.lessonStage === "project" ? learnHomePath(value)
       : layout.value?.studio && here ? here : learnHomePath(value);
     const target = withLesson(home);
-    if (router && currentPath() !== target) await router.push(target);
+    if (currentPath() !== target) await router.push(target);
     // A phone shows one side: the project side, where the Lesson pane is,
     // also when the address already names it (after L, or Show chat).
     await nextTick();
-    layout.value?.showProject?.();
+    layout.value?.showProject();
     // A read already under way for this attempt (a restored or current lesson) is awaited, not repeated.
     if (changed || (!currentLesson.lesson.value && !state.loading)) await currentLesson.loadLesson();
     else if (!currentLesson.lesson.value) await currentLesson.lessonLoad;
@@ -243,7 +243,7 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
    * The Lesson toggle: pressing it again hides the lesson (its flag off); the
    * Preview or Dash it covered is still there, as it was.
    */
-  function hideLesson() { layout.value?.hideLesson?.(); }
+  function hideLesson() { layout.value?.hideLesson(); }
   const toggleLesson = () => layout.value?.lessonShown ? hideLesson() : openLesson();
 
   /**

@@ -1,6 +1,6 @@
 // The studio stage frame: the lesson it lays over a studio page (?lesson=1)
 // stays shown while the learner moves between that page's views, until hidden.
-import { createRenderer, nextTick, reactive, ref, ssrContextKey } from "vue";
+import { createRenderer, nextTick, reactive, ref, shallowRef, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
 const route = reactive({ path: "/app/manage/launcher", query: { lesson: "1" } });
@@ -14,6 +14,7 @@ vi.mock("../../src/components/learning/Vibe64LessonSheet.vue", () => ({ default:
 vi.mock("../../src/components/learning/Vibe64LearningStepBar.vue", () => ({ default: { render: () => null } }));
 
 const { default: Stage } = await import("../../src/components/learning/Vibe64LearningStage.vue");
+const { VIBE64_COLLEAGUE_LAYOUT_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
 
 let app;
 afterEach(() => {
@@ -28,6 +29,7 @@ function mount() {
     patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...Stage, render: () => null }, { studio: true });
   app.provide(ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_COLLEAGUE_LAYOUT_KEY, shallowRef(null));
   app.mount({});
   return app._instance.setupState;
 }

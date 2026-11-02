@@ -6,7 +6,6 @@ import { createLessonPlayer } from "@/lib/vibe64LessonPlayer.js";
 import { createLearningAttempts, createLearningPracticeList } from "@/lib/vibe64LearningAttempts.js";
 import { createLearningCurrentLesson } from "@/lib/vibe64LearningCurrentLesson.js";
 import {
-  NO_HOST_PART,
   VIBE64_LEARNING_AI_REQUIRED_CODE,
   createPendingRequestIds,
   readPlace,
@@ -33,9 +32,18 @@ import { createLearningStepHelp } from "@/lib/vibe64LearningStepHelp.js";
 /** @typedef {import("./vibe64LearningModel.js").LearningGuideRunner} LearningGuideRunner */
 /** @typedef {import("./vibe64LearningModel.js").LearningLayout} LearningLayout */
 /** @typedef {import("./vibe64LearningModel.js").LearningPageActivity} LearningPageActivity */
+/** @typedef {import("./vibe64LearningModel.js").LearningPageFocus} LearningPageFocus */
 /** @typedef {import("./vibe64LearningModel.js").LearningRequest} LearningRequest */
 /** @typedef {import("./vibe64LearningModel.js").LearningRouter} LearningRouter */
 /** @typedef {import("./vibe64LearningModel.js").LearningState} LearningState */
+
+/**
+ * The studio's HTTP request for a Training action.
+ * @type {LearningRequest}
+ */
+function requestStudio(url, options) {
+  return getHttpWebClient().request(resolveStudioRequestUrl(url), options);
+}
 
 /**
  * The host shell's Learning controller. It composes one factory per concern
@@ -43,38 +51,33 @@ import { createLearningStepHelp } from "@/lib/vibe64LearningStepHelp.js";
  * the practice list and attempts, the step actions, the step help, the
  * learner notes and the step bar's player) over one reactive state, and
  * offers their members by name.
- * @param {object} [options]
- * @param {LearningRequest | null} [options.request] replaces the studio's HTTP client
- * @param {LearningBrowserNavigation} [options.browserNavigation]
- * @param {LearningColleagueView} [options.colleagueView]
- * @param {LearningLayout} [options.layout]
- * @param {import("vue").Ref<object | null>} [options.pageFocus] the page focus the host writes
- * @param {LearningPageActivity | null} [options.pageActivity]
- * @param {LearningRouter | null} [options.router]
- * @param {LearningGuideRunner} [options.runGuide]
- * @param {() => number} [options.now]
+ * @param {object} collaborators
+ * @param {LearningBrowserNavigation} collaborators.browserNavigation
+ * @param {LearningColleagueView} collaborators.colleagueView
+ * @param {LearningLayout} collaborators.layout
+ * @param {LearningPageFocus} collaborators.pageFocus
+ * @param {LearningPageActivity} collaborators.pageActivity
+ * @param {LearningRouter} collaborators.router
+ * @param {LearningRequest} collaborators.request the studio's HTTP request (`requestStudio`)
+ * @param {LearningGuideRunner} [collaborators.runGuide]
+ * @param {() => number} [collaborators.now]
  */
 function createVibe64Learning({
-  request: requestOverride = null,
-  browserNavigation = NO_HOST_PART,
-  colleagueView = NO_HOST_PART,
-  layout = NO_HOST_PART,
-  pageFocus = NO_HOST_PART,
-  pageActivity = null,
-  router = null,
+  browserNavigation,
+  colleagueView,
+  layout,
+  pageFocus,
+  pageActivity,
+  router,
+  request,
   runGuide = runTrainingGuideCommand,
-  now = () => Date.now()
-} = {}) {
+  now = Date.now
+}) {
   /** @type {LearningState} */
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, lessonError: "", attemptsError: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
     modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false, orientationRequested: false });
   const pending = createPendingRequestIds();
-
-  async function request(url, options = {}) {
-    if (requestOverride) return requestOverride(url, options);
-    return getHttpWebClient().request(resolveStudioRequestUrl(url), options);
-  }
 
   const currentLesson = createLearningCurrentLesson({
     state,
@@ -236,6 +239,7 @@ function createVibe64Learning({
     notesState: learnerNotes.notesState,
     player,
     stepStatus: stepId => stepStatus(currentLesson.results.value, stepId, currentLesson.lesson.value?.passedStepIds || []),
+    // readable-check: allow setter-seam - not a slot: setViewer binds the signed-in viewer, which is data the host's authenticated content supplies below this controller
     setViewer,
     show: modes.show,
     openCourses: modes.openCourses,
@@ -315,13 +319,13 @@ function orientationSelection(catalogue, saved) {
 // "open Z.AI's key page" keeps Vibe64, Learning and the reader's place open.
 // Links inside Vibe64, modified clicks and non-web schemes keep the default.
 function openLessonLink(event, browser = globalThis) {
-  const link = event?.target?.closest?.("a[href]");
+  const link = event.target.closest("a[href]");
   if (!link || event.defaultPrevented || event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
   let url;
-  try { url = new URL(link.getAttribute("href"), browser.location?.href); } catch { return false; }
-  if (!/^https?:$/u.test(url.protocol) || url.origin === browser.location?.origin) return false;
+  try { url = new URL(link.getAttribute("href"), browser.location.href); } catch { return false; }
+  if (!/^https?:$/u.test(url.protocol) || url.origin === browser.location.origin) return false;
   event.preventDefault();
-  browser.open?.(url.href, "_blank", "noopener,noreferrer");
+  browser.open(url.href, "_blank", "noopener,noreferrer");
   return true;
 }
 
@@ -329,7 +333,8 @@ function openLessonLink(event, browser = globalThis) {
 // into that row so Next and Previous never leave it hidden off-screen. Only
 // the row moves: the page and the reader body keep their scroll.
 function revealCurrentStep(list) {
-  const current = list?.querySelector?.('[aria-current="step"]');
+  if (!list) return false;
+  const current = list.querySelector('[aria-current="step"]');
   if (!current || !(list.scrollWidth > list.clientWidth)) return false;
   const row = list.getBoundingClientRect();
   const item = current.getBoundingClientRect();
@@ -366,6 +371,7 @@ export {
   createVibe64Learning,
   openLessonLink,
   orientationSelection,
+  requestStudio,
   reviewNote,
   revealCurrentStep,
   stepStatus

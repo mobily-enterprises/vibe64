@@ -39,7 +39,7 @@
       :aria-hidden="selectedSessionArchiving ? 'true' : undefined"
       :chat-collapsed="chatCollapsed"
       :dashboard="dashboardProjectActive"
-      :lesson="Boolean(learning?.lessonShown)"
+      :lesson="learning.lessonShown"
       :hint="emptyChatHintText"
       :inert="selectedSessionArchiving"
       :preview-detail="emptyPreviewDetailText"

@@ -38,7 +38,7 @@ async function resolve() {
   resolving = true;
   error.value = "";
   try {
-    if (learning?.learnMode) {
+    if (learning.learnMode) {
       await router.replace(learning.modePlace());
       return;
     }
@@ -52,8 +52,8 @@ async function resolve() {
   }
 }
 
-// The mode is read once the overlay binds the viewer (without Learning: Develop).
-watch(() => !learning || learning.state.modeRead, ready => { if (ready) void resolve(); }, { immediate: true });
+// The mode is read once the overlay binds the viewer.
+watch(() => learning.state.modeRead, ready => { if (ready) void resolve(); }, { immediate: true });
 </script>
 
 <template>

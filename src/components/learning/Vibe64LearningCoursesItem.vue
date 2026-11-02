@@ -10,7 +10,7 @@ const learning = useVibe64Learning();
 
 <template>
   <v-list-item
-    v-if="learning?.learnMode"
+    v-if="learning.learnMode"
     data-test="learning-courses"
     data-vibe64-guide="courses"
     :prepend-icon="mdiSchoolOutline"

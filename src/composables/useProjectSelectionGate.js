@@ -1,4 +1,4 @@
-import { computed, hasInjectionContext, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -120,8 +120,8 @@ function useProjectSelectionGate(emit, {
 
   // Learn mode (server-backed): the server lists no project of yours; the
   // picker says why and offers no project creation.
-  const learning = hasInjectionContext() ? useVibe64Learning() : null;
-  const learnMode = computed(() => learning?.learnMode === true);
+  const learning = useVibe64Learning();
+  const learnMode = computed(() => learning.learnMode === true);
   // A project the current mode does not allow was refused (the server's
   // message says which way to switch); the overlay's guard usually moves away first.
   const learningModeBlocked = computed(() =>
@@ -200,7 +200,7 @@ function useProjectSelectionGate(emit, {
     learnMode,
     learningModeBlocked,
     learningModeMessage,
-    toggleMode: () => learning?.toggleMode(),
+    toggleMode: () => learning.toggleMode(),
     loadProjectSelection,
     newProjectName,
     practiceDeleted,

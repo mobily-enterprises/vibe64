@@ -53,7 +53,7 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
    */
   async function goTo(guide) {
     let command = showMeCommand(guide, { projectSlug: currentLesson.lesson.value?.practiceProjectSlug || "" });
-    const navigator = browserNavigation.value || null;
+    const navigator = browserNavigation.value;
     // A Database view belongs to one session: both hosts open it only with that
     // exact sessionId. Use the practice project's selected session, opening the
     // project first.
@@ -83,8 +83,7 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
 
   function projectView(projectSlug) {
     const handle = colleagueView.value;
-    return projectSlug && handle?.projectSlug === projectSlug && handle.ready !== false &&
-      typeof handle.openFile === "function" ? handle : null;
+    return projectSlug && handle?.projectSlug === projectSlug && handle.ready !== false ? handle : null;
   }
 
   function selectedSession(projectSlug) {
@@ -140,15 +139,15 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
     const projectSlug = currentLesson.lesson.value?.practiceProjectSlug || "";
     if (kind === "send") {
       const view = colleagueView.value;
-      if (!projectSlug || view?.projectSlug !== projectSlug || typeof view.sendLessonMessage !== "function") return false;
+      if (!projectSlug || view?.projectSlug !== projectSlug) return false;
       return await view.sendLessonMessage(beat.prompt) === true;
     }
     if (kind === "navigate") return goTo({ target: beat.target === "file-opened" ? "files" : beat.target, navigate: true,
       ...(beat.path ? { filePath: beat.path } : {}) });
     if (kind === "chat") {
-      layout.value?.showChat?.();
+      layout.value?.showChat();
       await nextTick();
-      globalThis.document?.querySelector?.('[data-vibe64-guide="chat"] textarea')?.focus();
+      globalThis.document.querySelector('[data-vibe64-guide="chat"] textarea')?.focus();
       return true;
     }
     if (kind === "courses") return modes.show();
@@ -161,7 +160,7 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
       // The Preview's own Reload button, after opening the Preview.
       await goTo({ target: "preview", navigate: true });
       await nextTick();
-      const reload = globalThis.document?.querySelector?.('[data-vibe64-guide="reload-preview"]');
+      const reload = globalThis.document.querySelector('[data-vibe64-guide="reload-preview"]');
       if (!reload) return false;
       reload.click();
       return true;

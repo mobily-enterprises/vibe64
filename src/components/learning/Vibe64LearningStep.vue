@@ -17,9 +17,7 @@ const MAX_COMMAND_IDS = 64;
 const props = defineProps({
   learning: { type: Object, required: true },
   // The step heading's id (the host labels its region with it).
-  headingId: { type: String, default: "" },
-  // Test seam for the visual resource read.
-  readVisual: { type: Function, default: null }
+  headingId: { type: String, default: "" }
 });
 // "return": Show me could not show its place, so the host shows the step (and
 // its reason) again.
@@ -73,8 +71,7 @@ watch([() => props.learning.state.attemptId, () => step.value?.visual?.id], asyn
   const key = `${attemptId}\n${visualId}`;
   try {
     if (!visuals.has(key)) {
-      const read = props.readVisual || (url => getHttpWebClient().request(resolveStudioRequestUrl(url), { method: "GET" }));
-      visuals.set(key, read(VIBE64_LEARNING_ROUTES.visual(attemptId, visualId)));
+      visuals.set(key, getHttpWebClient().request(resolveStudioRequestUrl(VIBE64_LEARNING_ROUTES.visual(attemptId, visualId)), { method: "GET" }));
     }
     const result = await visuals.get(key);
     if (props.learning.state.attemptId !== attemptId || step.value?.visual?.id !== visualId) return;

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { VIBE64_LEARNING_ROUTES, createVibe64Learning, normalizePractice } from "../../src/lib/vibe64Learning.js";
 import { isPracticeProjectSlug, projectDisplayName, projectSubtitle } from "../../src/lib/vibe64PracticeProjectName.js";
+import { learningHostParts } from "./helpers/learningHostParts.js";
 
 const CURRENT = "12345678-1234-4234-8234-123456789abc";
 const listed = { ok: true,
@@ -34,7 +35,7 @@ describe("the lesson in progress and the archived lessons (practice.list)", () =
       if (url.includes("/learning-mode")) return { ok: true, available: true, learningMode: { on: true, currentAttemptId: CURRENT, practiceSlug: "training-x" } };
       return { ok: true, available: true, lesson: { steps: [] }, results: [] };
     });
-    const learning = createVibe64Learning({ request });
+    const learning = createVibe64Learning({ ...learningHostParts(), request });
     expect(learning.practice.loaded).toBe(false);
     learning.setViewer("member");
     await learning.readPractice();

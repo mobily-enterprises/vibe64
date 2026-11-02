@@ -81,7 +81,7 @@ import {
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
 const learning = useVibe64Learning();
-const lessonShown = computed(() => Boolean(learning?.lessonShown));
+const lessonShown = computed(() => learning.lessonShown);
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
 // Usage in the Architecture tool, opened from the recording indicator
 // ({ recordingId }) or from a pick in Preview ({ entryId, mode }).

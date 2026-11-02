@@ -137,7 +137,7 @@ function useVibe64AppPage() {
   const projects = projectSelection.projects;
   const learning = useVibe64Learning();
   const projectTitle = computed(() => projectHeaderTitle(projectSlug.value, {
-    mode: learning?.mode, lesson: learning?.lesson?.value
+    mode: learning.mode, lesson: learning.lesson.value
   }));
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
@@ -146,7 +146,7 @@ function useVibe64AppPage() {
   // Learn mode's current lesson has a Lesson sheet: over a practice project's
   // Preview or Dash while its flag is on (?lesson=1, the Lesson toggle); the
   // whole area without a project.
-  const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
+  const lessonPaneAvailable = computed(() => Boolean(learning.learnMode && learning.lessonAttemptId));
   const lessonShown = computed(() => lessonPaneAvailable.value && (!projectSlug.value || lessonShownIn(route.query)));
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
@@ -158,7 +158,7 @@ function useVibe64AppPage() {
   // A lesson without a practice project has no coding session, so no chat column.
   const chatColumnVisible = computed(() => Boolean(projectSlug.value) || !lessonPaneAvailable.value);
   // Learn lists only the current lesson's practice project, beside Courses.
-  const learnMode = computed(() => Boolean(learning?.learnMode));
+  const learnMode = computed(() => learning.learnMode);
   const switcherProjects = computed(() => {
     const open = openProjectSwitcherProjects(projects.value);
     return learnMode.value ? open.filter(project => project.slug === learning.mode?.practiceSlug) : open;

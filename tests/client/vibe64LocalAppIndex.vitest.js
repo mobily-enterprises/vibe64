@@ -7,6 +7,7 @@ import * as Vue from "vue";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import * as LearningEnvironment from "../../src/lib/vibe64Learning.js";
 import * as PageActivity from "../../src/lib/vibe64PageActivity.js";
+import { idleLearning } from "./helpers/learningHostParts.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { readFileSync } from "node:fs";
@@ -211,7 +212,7 @@ it("shared original shell refs are per mount and only local composition supplies
 describe("local /app mode resolver", () => {
   // The server redirects a request for /app to the started project; `startedUrl`
   // is where that redirect ends (still /app when no project was started).
-  async function resolveApp({ startedUrl = "http://127.0.0.1:4531/app/project/my-app", learning = null } = {}) {
+  async function resolveApp({ startedUrl = "http://127.0.0.1:4531/app/project/my-app", learning = idleLearning() } = {}) {
     const replace = vi.fn(async () => {});
     const fetch = vi.fn(async () => ({ ok: true, url: startedUrl }));
     vi.stubGlobal("fetch", fetch);
