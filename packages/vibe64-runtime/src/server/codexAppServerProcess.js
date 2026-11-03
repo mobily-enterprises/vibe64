@@ -8,5 +8,6 @@ await runCodexAppServerProcess({
   args,
   runtimeToken: process.env.VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN,
   bundled: process.env.VIBE64_CODEX_MODEL_CATALOG_SOURCE === "bundled",
-  additionalModels: codexProviderModelCatalog().models
+  additionalModels: codexProviderModelCatalog().models,
+  env: process.env
 });
