@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
+import { expectSteady, openMenu } from "./support/settled-ui";
 import { mdiContentSaveOutline, mdiSourceCommit } from "@mdi/js";
 
 import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
@@ -971,7 +972,7 @@ test.describe("direct chat", () => {
       expect(branchReads).toBe(0);
       const workOn = async (choice: string) => {
         await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Work on", exact: true }) }).click();
-        await page.getByRole("option", { name: choice, exact: true }).click();
+        await openMenu(page).getByRole("option", { name: choice, exact: true }).click();
       };
       await workOn("Use an existing branch");
       await expect(dialog).toContainText(/Opens a new session on this branch\. Your changes will be saved to \S+:main\./);
@@ -1250,7 +1251,7 @@ test.describe("direct chat", () => {
         await page.getByRole("button", { name: /^Custom/ }).click();
         const custom = page.getByRole("dialog", { name: "Custom AI", exact: true });
         await custom.getByRole("combobox", { name: "Model", exact: true }).click();
-        await page.getByRole("option", { name: /Main model/ }).click();
+        await openMenu(page).getByRole("option", { name: /Main model/ }).click();
         await custom.getByRole("button", { name: "Apply", exact: true }).click();
         await expect(custom).not.toBeVisible();
         await expect(input).toHaveValue("Inspect this without changing it.");
@@ -1572,8 +1573,8 @@ test.describe("direct chat", () => {
         text: "A collaborator added a remote message while this reader was reviewing history."
       }));
       await expect(page.getByText(/collaborator added a remote message/iu)).toBeVisible();
-      await page.waitForTimeout(180);
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(200);
+      await expectSteady(async () => await conversationDistanceFromBottom(body) > 200, true, 180);
 
       // The reader returns to the end with downward input (a wheel down, or a
       // finger moving up the screen), which resumes following.
@@ -2888,16 +2889,16 @@ for (const width of [390, 820, 1280]) {
     const dialog = page.getByRole("dialog", { name: "Custom AI", exact: true });
     await expect(dialog.getByRole("combobox", { name: "Orchestrator", exact: true })).toBeVisible();
     await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-    await page.getByRole("option", { name: /GPT-5.5/ }).click();
+    await openMenu(page).getByRole("option", { name: /GPT-5.5/ }).click();
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).not.toBeVisible(); expect(patches).toBe(0);
     await mode.click(); await page.getByRole("button", { name: /^Custom/ }).click();
     await dialog.getByRole("combobox", { name: "Orchestrator", exact: true }).press("ArrowDown");
-    await page.getByRole("option", { name: "OpenCode", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "OpenCode", exact: true }).click();
     await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-    await page.getByRole("option", { name: /GLM-5.3 Flash/ }).click();
+    await openMenu(page).getByRole("option", { name: /GLM-5.3 Flash/ }).click();
     await dialog.getByRole("combobox", { name: "Thinking", exact: true }).press("ArrowDown");
-    await page.getByRole("option", { name: "High", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "High", exact: true }).click();
     await expect(dialog.getByRole("combobox", { name: "Thinking", exact: true })).toHaveValue("High");
     await page.screenshot({ path: info.outputPath(`custom-${width}.png`), animations: "disabled" });
     const box = await dialog.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width);

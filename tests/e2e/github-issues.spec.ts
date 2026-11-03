@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMenu } from "./support/settled-ui";
 import { DASHBOARD_PATH, readyProjectSelectionPayload, viewports } from "./support/base-shell-data";
 import { expectNoHorizontalOverflow, showProjectPaneIfNeeded } from "./support/base-shell-assertions";
 import { mockProjectGateReady } from "./support/base-shell-mocks";
@@ -224,7 +225,7 @@ for (const viewport of viewports) {
     await comment.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(14, 14));
     await comment.press("ArrowLeft");
     await comment.press("ArrowRight");
-    const tamia = page.getByRole("option", { name: /@tamiastewart123/u });
+    const tamia = openMenu(page).getByRole("option", { name: /@tamiastewart123/u });
     await expect(tamia).toBeVisible();
     await expect(comment).toBeFocused();
     await expectNoHorizontalOverflow(page);
@@ -236,10 +237,10 @@ for (const viewport of viewports) {
     await expect(tamia).not.toBeVisible();
 
     await comment.fill("Thanks @early");
-    await page.getByRole("option", { name: /@early-commenter/u }).click();
+    await openMenu(page).getByRole("option", { name: /@early-commenter/u }).click();
     await expect(comment).toHaveValue("Thanks @early-commenter ");
     await comment.fill("Thanks @");
-    await expect(page.getByRole("option")).toHaveCount(3);
+    await expect(openMenu(page).getByRole("option")).toHaveCount(3);
     await comment.press("ArrowDown");
     await comment.press("Tab");
     await expect(comment).toHaveValue("Thanks @early-commenter ");
@@ -258,7 +259,7 @@ for (const viewport of viewports) {
     await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
     await expect(comment).toHaveValue("person@tamiastewart123.com");
     await comment.fill("@early");
-    await expect(page.getByRole("option", { name: /@early-commenter/u })).toBeVisible();
+    await expect(openMenu(page).getByRole("option", { name: /@early-commenter/u })).toBeVisible();
     await comment.press("Escape");
     expect(mentionRequests).toHaveLength(1);
 
@@ -306,12 +307,12 @@ test("mention loading failure retains local authors and typing, and Retry restor
   await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
   const comment = page.getByRole("textbox", { name: "Add a comment", exact: true });
   await comment.fill("Hello @");
-  await expect(page.getByRole("option", { name: "@alice", exact: true })).toBeVisible();
+  await expect(openMenu(page).getByRole("option", { name: "@alice", exact: true })).toBeVisible();
   const retry = page.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeVisible();
   unavailable = false;
   await retry.click();
-  await expect(page.getByRole("option", { name: /@tamiastewart123/u })).toBeVisible();
+  await expect(openMenu(page).getByRole("option", { name: /@tamiastewart123/u })).toBeVisible();
   await expect(comment).toHaveValue("Hello @");
   await comment.fill("Hello @t");
   await comment.press("Tab");
@@ -409,7 +410,7 @@ for (const viewport of viewports) {
     expect(new URL(page.url()).searchParams.getAll("issueLabel")).toEqual(["bug"]);
 
     await filter.fill("help");
-    const helpOption = page.getByRole("option", { name: /help wanted/u });
+    const helpOption = openMenu(page).getByRole("option", { name: /help wanted/u });
     await expect(helpOption.locator(".v-chip")).toHaveCSS("background-color", "rgb(0, 134, 114)");
     await helpOption.click();
     await filter.press("Escape");
@@ -579,7 +580,7 @@ for (const viewport of viewports) {
     await panel.getByRole("button", { name: "Bulk edit labels", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).fill("bug");
-    await page.getByRole("option", { name: "bug", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "bug", exact: true }).click();
     await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).press("Escape");
     await dialog.getByRole("button", { name: "Apply labels", exact: true }).click();
     await expect(dialog.getByText("#1002: GitHub refused this label change.", { exact: true })).toBeVisible();
@@ -598,7 +599,7 @@ for (const viewport of viewports) {
     await panel.getByRole("button", { name: "Bulk edit labels", exact: true }).click();
     await dialog.getByRole("button", { name: "Remove labels", exact: true }).click();
     await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).fill("bug");
-    await page.getByRole("option", { name: "bug", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "bug", exact: true }).click();
     await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).press("Escape");
     await dialog.getByRole("button", { name: "Apply labels", exact: true }).click();
     await expect(dialog).toHaveCount(0);

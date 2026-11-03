@@ -8,6 +8,7 @@ import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { mockIntegrationShellReads } from "./support/integration-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+import { expandPanel } from "./support/settled-ui";
 
 const viewport={name:'expanded',width:1440,height:2400};
 test('payment configuration persists and catalogue publication requires review',async ({page})=>{test.setTimeout(210000);
@@ -288,7 +289,7 @@ test('payment configuration persists and catalogue publication requires review',
         expect(await payment.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       }
       const setupSection = payment.getByRole('button', { name: 'Set up payment events and checkout', exact: true });
-      if (await setupSection.getAttribute('aria-expanded') !== 'true') await setupSection.click();
+      await expandPanel(setupSection);
       const draftName = payment.getByRole('textbox', { name: 'Plan name', exact: true });
       const amount = payment.getByRole('spinbutton', { name: 'Amount in smallest currency unit', exact: true });
       await draftName.fill('Unsaved responsive plan');

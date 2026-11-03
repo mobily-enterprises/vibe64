@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openMenu } from "./support/settled-ui";
 import {
   BASE_URL, DEVELOPMENT_PATH, directChatSessionId, directChatSessionPayload, viewports
 } from "./support/base-shell-data";
@@ -80,7 +81,7 @@ for (const viewport of viewports) {
         : page.getByRole("tab", { name: "Dashboard", exact: true })).click();
       if (viewport.width <= 760) {
         await page.getByRole("combobox", { name: "Dashboard section", exact: true }).press("ArrowDown");
-        await page.getByRole("option", { name: "Session History", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Session History", exact: true }).click();
       } else {
         await page.getByRole("navigation", { name: "Dashboard sections" })
           .getByRole("link", { name: "Session History", exact: true }).click();

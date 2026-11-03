@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { dismissFeedbackIfShown, expandPanel, openMenu } from "./support/settled-ui";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -12,7 +13,7 @@ import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
 // On a compact screen the Dashboard's sections are a "Dashboard section" select.
 async function openCompactDashboardSection(page: Page, name: string) {
   await page.getByRole("combobox", { name: "Dashboard section", exact: true }).press("ArrowDown");
-  await page.getByRole("option", { name, exact: true }).click();
+  await openMenu(page).getByRole("option", { name, exact: true }).click();
 }
 
 async function addIntegration(panel: Locator, name: string) {
@@ -485,7 +486,7 @@ for (const { viewport, providerBatch } of [
         await ads.getByRole("textbox", { name: "Ads customer ID", exact: true }).fill("1234567890");
         await ads.getByRole("button", { name: "Load account and goals", exact: true }).click();
         await ads.getByRole("combobox", { name: "Website conversion goal" }).press("ArrowDown");
-        await page.getByRole("option", { name: "Booking (22)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Booking (22)", exact: true }).click();
         await expect(ads.getByRole("textbox", { name: "Google tag snippet 1 (display only)" })).toHaveValue(/__adsMustNotExecute/);
         expect(await page.evaluate(() => (window as any).__adsMustNotExecute)).toBeUndefined();
         await ads.getByRole("button", { name: "2. Prepare the Search campaign" }).click();
@@ -496,10 +497,10 @@ for (const { viewport, providerBatch } of [
         await ads.getByRole("textbox", { name: "Find a target location" }).fill("Australia");
         await ads.getByRole("button", { name: "Find locations and languages" }).click();
         await ads.getByRole("combobox", { name: "Target location IDs" }).click();
-        await page.getByRole("option", { name: "Australia", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Australia", exact: true }).click();
         await ads.getByRole("combobox", { name: "Target location IDs" }).press("Escape");
         await ads.getByRole("combobox", { name: "Target language ID", exact: true }).click();
-        await page.getByRole("option", { name: "English", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "English", exact: true }).click();
         await ads.getByRole("textbox", { name: "Phrase keywords — one per line" }).fill("dog grooming");
         await ads.getByRole("textbox", { name: "Ad headlines — one per line" }).fill("Book Dog Grooming\nLocal Groomers\nMake A Booking");
         await ads.getByRole("textbox", { name: "Ad descriptions — one per line" }).fill("Book an appointment for your dog.\nMeet our experienced team.");
@@ -550,7 +551,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Google Analytics", { exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Measurement ID", exact: true })).toHaveValue("G-APP12345");
         const analyticsSetup = panel.getByRole("button", { name: "Set up Google Analytics", exact: true });
-        if (await analyticsSetup.getAttribute("aria-expanded") !== "true") await analyticsSetup.click();
+        await expandPanel(analyticsSetup);
         await expect(panel.getByText(/Choose one tracking owner/)).toBeVisible();
         await expect(panel.getByText(/For conversions, emit an event such as generate_lead/)).toBeVisible();
         await panel.getByRole("button", { name: "Remove", exact: true }).click();
@@ -621,7 +622,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText("Enter the Google Cloud project ID, not its number or URL.", { exact: true })).toBeVisible();
         await project.fill("query-project");
         const setup = panel.getByRole("button", { name: "Set up BigQuery", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/OAuth consent alone does not grant project or dataset access/)).toBeVisible();
         await expect(panel.getByText(/Sharing > Permissions > Add principal/)).toBeVisible();
         await expect(panel.getByText(/Connect only lists accessible projects/)).toBeVisible();
@@ -699,13 +700,13 @@ for (const { viewport, providerBatch } of [
           await resource.fill(provider.id === "aws-s3" ? "my-app-files" : "reports");
           await session.fill("env:AWS_SESSION_TOKEN");
           await panel.getByText("N. Virginia (us-east-1)", { exact: true }).click();
-          await expect(page.getByRole("option", { name: "N. Virginia (us-east-1)", exact: true })).toBeVisible();
+          await expect(openMenu(page).getByRole("option", { name: "N. Virginia (us-east-1)", exact: true })).toBeVisible();
           await region.press("c");
-          await page.getByRole("option", { name: "Cape Town (af-south-1)", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "Cape Town (af-south-1)", exact: true }).click();
           await panel.getByRole("textbox", { name: "Display name", exact: true }).fill(`${provider.name} account`);
           if (provider.id === "aws-s3") {
             const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-            if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+            await expandPanel(permissions);
             await expect(panel.getByText("These choices limit the application's operations. AWS IAM and bucket policies decide actual access; selecting a permission does not grant it in AWS.", { exact: true })).toBeVisible();
             await expect(panel.getByRole("checkbox", { name: "List and download objects from bucket", exact: true })).toBeChecked();
             await expect(panel.getByRole("checkbox", { name: "List and download objects from bucket", exact: true })).toBeDisabled();
@@ -746,7 +747,7 @@ for (const { viewport, providerBatch } of [
           expect(cleared.sessionTokenRef).toBeUndefined();
           if (provider.id === "aws-athena") { expect(cleared.workgroup).toBe("primary"); expect(cleared.resultLocation).toBeUndefined(); }
           const setup = panel.getByRole("button", { name: `Set up ${provider.name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", provider.id === "aws-s3"
             ? "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html" : "https://docs.aws.amazon.com/athena/latest/ug/creating-workgroups.html");
           if (provider.id === "aws-s3") {
@@ -879,7 +880,7 @@ for (const { viewport, providerBatch } of [
           ok: true, env: { environment: "dev", records: [], unavailable: null }
         }));
         const setupGuide = panel.getByRole("button", { name: "Set up Google Calendar", exact: true });
-        if (await setupGuide.getAttribute("aria-expanded") !== "true") await setupGuide.click();
+        await expandPanel(setupGuide);
         await panel.getByRole("link", { name: "Open Env", exact: true }).click();
         await expect(page.locator(".env-panel")).toBeVisible();
         await page.goBack();
@@ -933,31 +934,31 @@ for (const { viewport, providerBatch } of [
           await panel.getByRole("textbox", { name: "Space ID", exact: true }).fill("space-one");
           await panel.getByRole("textbox", { name: "Environment ID", exact: true }).fill("published-web");
           await panel.getByRole("combobox", { name: "Region", exact: true }).press("Enter");
-          await page.getByRole("option", { name: "Europe", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "Europe", exact: true }).click();
         }
         if (id === "gitlab-api") {
           await panel.getByRole("textbox", { name: "Instance URL", exact: true }).fill("https://code.example.test");
           await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-          await page.getByRole("option", { name: "OAuth", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "OAuth", exact: true }).click();
         }
         if (["calendly", "github-api", "gitlab-api"].includes(id)) {
           await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toBeVisible();
           await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-          await page.getByRole("option", { name: "API key", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "API key", exact: true }).click();
         }
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveCount(0);
         await expect(panel.getByRole("button", { name: "Permissions", exact: true })).toHaveCount(["calendly", "github-api", "gitlab-api", "hubspot", "linear"].includes(id) ? 1 : 0);
         const keyField = panel.getByRole("textbox", { name: credentialLabels[id] || "API key reference", exact: true });
         if (id === "resend") {
           const setup = panel.getByRole("button", { name: "Set up Resend", exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByText(/copy the displayed SPF\/DKIM DNS records/)).toBeVisible();
           await expect(panel.getByText(/broadcasts.create always creates a draft/)).toBeVisible();
           await expect(panel.getByText(/older guides call these Audiences/)).toBeVisible();
         }
         if (id === "replicate") {
           const setup = panel.getByRole("button", { name: "Set up Replicate", exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByText(/copy the owner\/name or version and model-specific input schema/)).toBeVisible();
           await expect(panel.getByText(/normally after one hour/)).toBeVisible();
         }
@@ -965,19 +966,19 @@ for (const { viewport, providerBatch } of [
           const company = panel.getByRole("textbox", { name: "Company domain (API token)", exact: true });
           await company.fill("acme");
           const setup = panel.getByRole("button", { name: "Set up Pipedrive", exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByText(/The adapter lists\/reads deals/)).toBeVisible();
           await expect(panel.getByText(/copy the company subdomain from your browser/)).toBeVisible();
         }
         if (id === "perplexity") {
           const setup = panel.getByRole("button", { name: "Set up Perplexity", exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByText(/Requests go directly to Perplexity and use the application’s provider account/)).toBeVisible();
           await expect(panel.getByText(/API console, then Projects/)).toBeVisible();
         }
         if (id === "notion") {
           const setup = panel.getByRole("button", { name: "Set up Notion", exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByText(/enable Insert content for creation/)).toBeVisible();
           await expect(panel.getByText(/LIMITATIONS: no embedded editor/)).toBeVisible();
         }
@@ -1036,7 +1037,7 @@ for (const { viewport, providerBatch } of [
         if (id === "pipedrive") expect(file.integrations[id].settings).toEqual({ companyDomain: "acme" });
         if (optionalKey) expect(file.integrations[id].settings).toEqual({ ...(id === "mapbox" ? { usage: "backend" } : {}), [optionalKey.setting]: optionalKey.reference, ...(providerBatch === "google-maps" ? { mapId: "DEMO_MAP_ID" } : {}) });
         const setup = panel.getByRole("button", { name: `Set up ${name}`, exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", /^https:/);
         if (id === "lexware" && providerBatch === "lexware") {
           await expect(panel.getByText(/Erweiterungen > Weitere Apps > Public API/)).toBeVisible();
@@ -1138,7 +1139,7 @@ for (const { viewport, providerBatch } of [
           await expect(panel.getByText(/Current Messaging API callbacks use Signature/)).toBeVisible();
           await expect(panel.getByText(/API Keys in the left menu/)).toBeVisible();
           await panel.getByRole("combobox", { name: "API domain", exact: true }).press("Enter");
-          await page.getByRole("option", { name: "EU (gatewayapi.eu)", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "EU (gatewayapi.eu)", exact: true }).click();
           await panel.getByRole("button", { name: "Save configuration" }).click();
           await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
           expect(JSON.parse(await readFile(filePath, "utf8")).integrations.gatewayapi.settings.region).toBe("eu");
@@ -1247,7 +1248,7 @@ for (const { viewport, providerBatch } of [
           await expect(panel.getByRole("textbox", { name: credentialLabels[id] || "API key reference", exact: true }))
             .toHaveValue(`env:${id.toUpperCase().replaceAll("-", "_")}_KEY`);
           const setup = panel.getByRole("button", { name: `Set up ${name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", setupUrl);
           const optionalKey = optionalKeyFields[id];
           if (optionalKey) {
@@ -1259,7 +1260,7 @@ for (const { viewport, providerBatch } of [
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         const usage = panel.getByRole("combobox", { name: "Mapbox usage", exact: true });
         const publicKey = panel.getByRole("textbox", { name: "Public browser token reference", exact: true });
-        await usage.press("Enter"); await page.getByRole("option", { name: "Browser maps only", exact: true }).click();
+        await usage.press("Enter"); await openMenu(page).getByRole("option", { name: "Browser maps only", exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Backend access token reference", exact: true })).toHaveCount(0);
         await publicKey.fill(""); await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
         await publicKey.fill("env:MAPBOX_BROWSER_ONLY"); await save.click(); await expect(save).toBeDisabled();
@@ -1271,24 +1272,24 @@ for (const { viewport, providerBatch } of [
         await expect(usage).toHaveValue("Browser maps only"); await expect(publicKey).toHaveValue("env:MAPBOX_BROWSER_ONLY");
         await expect(panel.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
         const setup = panel.getByRole("button", { name: "Set up Mapbox", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/No backend token, account verification or OAuth callback is needed/)).toBeVisible();
         await expect(panel.getByText(/Mapbox GL JS integration, import its CSS/)).toBeVisible();
-        await usage.press("Enter"); await page.getByRole("option", { name: "Backend geocoding and optional browser maps", exact: true }).click();
+        await usage.press("Enter"); await openMenu(page).getByRole("option", { name: "Backend geocoding and optional browser maps", exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Backend access token reference", exact: true })).toBeVisible();
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
       }
       if (providerBatch === "mailgun") {
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         await panel.getByRole("combobox", { name: "API region", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "European Union (api.eu.mailgun.net)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "European Union (api.eu.mailgun.net)", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Mailgun", { exact: true }).click();
         await expect(panel.getByRole("combobox", { name: "API region", exact: true })).toHaveValue("European Union (api.eu.mailgun.net)");
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.mailgun.settings.region).toBe("eu");
         const setup = panel.getByRole("button", { name: "Set up Mailgun", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/choose Developer for sending and domain management/)).toBeVisible();
         await expect(panel.getByText(/Add the exact sending DNS records/)).toBeVisible();
         await expect(panel.getByText(/queued does not mean delivered/)).toBeVisible();
@@ -1304,7 +1305,7 @@ for (const { viewport, providerBatch } of [
         await page.reload();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Logo.dev", { exact: true }).click();
         const setup = panel.getByRole("button", { name: "Set up Logo.dev", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/strips the part before @ locally/)).toBeVisible();
         await expect(panel.getByText(/no brand search, private enrichment API/)).toBeVisible();
         await expect(panel.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
@@ -1398,9 +1399,9 @@ for (const { viewport, providerBatch } of [
         const region = panel.getByRole("combobox", { name: "Space region", exact: true });
         await region.press("Enter");
         for (const title of ["European Union (EU)", "United States (US)", "Canada (CA)", "Australia / APAC (AP)", "China (CN)"]) {
-          await expect(page.getByRole("option", { name: title, exact: true })).toBeVisible();
+          await expect(openMenu(page).getByRole("option", { name: title, exact: true })).toBeVisible();
         }
-        await page.getByRole("option", { name: "Canada (CA)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Canada (CA)", exact: true }).click();
         const save = panel.getByRole("button", { name: "Save configuration" });
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
@@ -1409,7 +1410,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("textbox", { name: "API key reference", exact: true })).toHaveValue("env:STORYBLOK_KEY");
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.storyblok.settings).toEqual({ region: "ca" });
         const setup = panel.getByRole("button", { name: "Set up Storyblok", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Select the intended Storyblok space and open Settings/)).toBeVisible();
         await expect(panel.getByText(/For a public site, use a Public token/)).toBeVisible();
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.storyblok.com/docs/concepts/access-tokens");
@@ -1437,10 +1438,10 @@ for (const { viewport, providerBatch } of [
           await panel.getByText(selected, { exact: true }).click();
           if (id === "storyblok") {
             for (const title of ["European Union (EU)", "United States (US)", "Canada (CA)", "Australia / APAC (AP)", "China (CN)"]) {
-              await expect(page.getByRole("option", { name: title, exact: true })).toBeVisible();
+              await expect(openMenu(page).getByRole("option", { name: title, exact: true })).toBeVisible();
             }
           }
-          await page.getByRole("option", { name: alternate, exact: true }).click();
+          await openMenu(page).getByRole("option", { name: alternate, exact: true }).click();
           await panel.getByRole("button", { name: "Save configuration" }).click();
           await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
           const file = JSON.parse(await readFile(filePath, "utf8"));
@@ -1493,7 +1494,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.algolia.settings).toEqual({ applicationId: "APP123ABC" });
         await expect(panel.getByRole("region", { name: "Public frontend API key", exact: true })).toHaveCount(0);
         const setup = panel.getByRole("button", { name: "Set up Algolia", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.algolia.com/doc/guides/security/api-keys");
       }
       if (providerBatch === "twilio") {
@@ -1528,14 +1529,14 @@ for (const { viewport, providerBatch } of [
         expect(file.extensions).toEqual(saved.extensions);
         await panel.getByText("United States (US1)", { exact: true }).click();
         for (const title of ["United States (US1)", "Ireland (IE1)", "Australia (AU1)"]) {
-          await expect(page.getByRole("option", { name: title, exact: true })).toBeVisible();
+          await expect(openMenu(page).getByRole("option", { name: title, exact: true })).toBeVisible();
         }
-        await page.getByRole("option", { name: "Ireland (IE1)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Ireland (IE1)", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.twilio.settings.region).toBe("ie1");
         await panel.getByText("Ireland (IE1)", { exact: true }).click();
-        await page.getByRole("option", { name: "Australia (AU1)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Australia (AU1)", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.twilio.settings.region).toBe("au1");
@@ -1548,7 +1549,7 @@ for (const { viewport, providerBatch } of [
         await expect(callbackSecret).toHaveValue("env:TWILIO_AUTH_TOKEN");
         await expect(panel.getByText("Australia (AU1)", { exact: true })).toBeVisible();
         const setup = panel.getByRole("button", { name: "Set up Twilio", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.twilio.com/docs/iam/api-keys/keys-in-console");
         await expect(panel.getByText(/For callbacks, reveal the account Auth Token/)).toBeVisible();
         await expect(panel.getByText(/For incoming messages or calls/)).toBeVisible();
@@ -1587,9 +1588,9 @@ for (const { viewport, providerBatch } of [
         expect(file.extensions).toEqual(saved.extensions);
         await panel.getByText("Europe (eu.i.posthog.com)", { exact: true }).click();
         for (const title of ["Europe (eu.i.posthog.com)", "United States (us.i.posthog.com)"]) {
-          await expect(page.getByRole("option", { name: title, exact: true })).toBeVisible();
+          await expect(openMenu(page).getByRole("option", { name: title, exact: true })).toBeVisible();
         }
-        await page.getByRole("option", { name: "United States (us.i.posthog.com)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "United States (us.i.posthog.com)", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.posthog.settings.region).toBe("us");
@@ -1600,7 +1601,7 @@ for (const { viewport, providerBatch } of [
         await expect(token).toHaveValue("env:POSTHOG_PROJECT_TOKEN");
         await expect(panel.getByText("United States (us.i.posthog.com)", { exact: true })).toBeVisible();
         const setup = panel.getByRole("button", { name: "Set up PostHog", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://posthog.com/docs/settings/projects");
       }
       if (providerBatch === "chargebee") {
@@ -1632,7 +1633,7 @@ for (const { viewport, providerBatch } of [
         await expect(siteName).toHaveValue("acme-test");
         await expect(key).toHaveValue("env:CHARGEBEE_API_KEY");
         const setup = panel.getByRole("button", { name: "Set up Chargebee", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.chargebee.com/docs/billing/2.0/site-configuration/api_keys");
         await expect(panel.getByText(/choose Full-Access Key with Write access/)).toBeVisible();
         await expect(panel.getByText(/Connect account or Verify again/)).toBeVisible();
@@ -1657,7 +1658,7 @@ for (const { viewport, providerBatch } of [
         expect(await readFile(filePath, "utf8")).not.toContain("raw-callback-value");
         await callback.fill("env:CANVA_CALLBACK_URL");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(16);
         const read = panel.getByRole("checkbox", { name: "Read design content", exact: true });
         const write = panel.getByRole("checkbox", { name: "Create and edit designs", exact: true });
@@ -1683,11 +1684,11 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("https://assistant.example/oauth/canva.json");
         await expect(callback).toHaveValue("env:CANVA_CALLBACK_URL");
         await expect(panel.getByRole("textbox", { name: "Client secret reference", exact: true })).toHaveCount(0);
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const checkbox of [read, write, comment]) await expect(checkbox).toBeChecked();
         await expect(folder).not.toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Canva", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.canva.dev/docs/mcp/");
         await expect(panel.getByText("Open the Canva MCP guide and follow Register your redirect URI to its Waitlist form. Apply with the exact callback URL and wait for Canva's approval.", { exact: true })).toBeVisible();
       }
@@ -1713,7 +1714,7 @@ for (const { viewport, providerBatch } of [
           await secret.fill(`env:${prefix}_CLIENT_SECRET`);
           await callback.fill(`env:${prefix}_CALLBACK_URL`);
           const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           await expect(panel.getByRole("checkbox")).toHaveCount(spec.count);
           await expect(panel.getByRole("checkbox", { name: spec.scope, exact: true })).toBeChecked();
           if (spec.id === "miro") {
@@ -1735,7 +1736,7 @@ for (const { viewport, providerBatch } of [
           await expect(client).toHaveValue(`assigned-${spec.id}-client`);
           await expect(secret).toHaveValue(`env:${prefix}_CLIENT_SECRET`);
           await expect(callback).toHaveValue(`env:${prefix}_CALLBACK_URL`);
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           await expect(panel.getByRole("checkbox", { name: spec.scope, exact: true })).toBeChecked();
           if (spec.id === "miro") {
             await expect(panel.getByRole("checkbox", { name: "Create and edit boards", exact: true })).toBeChecked();
@@ -1744,7 +1745,7 @@ for (const { viewport, providerBatch } of [
             }
           }
           const setup = panel.getByRole("button", { name: `Set up ${spec.name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", spec.guide);
           if (spec.id === "miro") await expect(panel.getByText(/LIMITATIONS: connecting alone does not attach Miro tools/)).toBeVisible();
           if (spec.id === "figma") {
@@ -1777,7 +1778,7 @@ for (const { viewport, providerBatch } of [
         await secret.fill("env:ATLASSIAN_CLIENT_SECRET");
         await callback.fill("env:ATLASSIAN_CALLBACK_URL");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(32);
         const read = panel.getByRole("checkbox", { name: "Read Jira content", exact: true });
         const write = panel.getByRole("checkbox", { name: "Create and edit Jira content", exact: true });
@@ -1807,11 +1808,11 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("assigned-atlassian-client");
         await expect(secret).toHaveValue("env:ATLASSIAN_CLIENT_SECRET");
         await expect(callback).toHaveValue("env:ATLASSIAN_CALLBACK_URL");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const checkbox of [read, write, confluence, loom]) await expect(checkbox).toBeChecked();
         for (const checkbox of [remove, manage, refresh]) await expect(checkbox).not.toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Atlassian", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/");
       }
       if (providerBatch === "wix") {
@@ -1844,8 +1845,8 @@ for (const { viewport, providerBatch } of [
           authentication: { method: "api-key", secretRef: "env:WIX_KEY" }, settings: { accountId: "01234567-89ab-cdef-0123-456789abcdef", siteId: "12345678-9abc-def0-1234-56789abcdef0", selectableSiteIds: "01234567-89ab-cdef-0123-456789abcdef" } });
         expect(file.registrations.wix).toBeUndefined();
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Website inventory");
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
@@ -1858,7 +1859,7 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations.wix.accountMode).toBe("assistant"); expect(file.extensions).toEqual(saved.extensions);
         expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         const setup = panel.getByRole("button", { name: "Set up Wix", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://dev.wix.com/docs/go-headless/authentication/admin/generate-an-api-key");
         await expect(panel.getByText("This account credential is for backend administrative operations. It does not connect each app user's Wix account or implement application login.", { exact: true })).toBeVisible();
         await expect(panel.getByText(/For CRM access, enter the intended Site ID/)).toBeVisible();
@@ -1876,7 +1877,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Read bookings with.*direct confirmation skips availability checks/)).toBeVisible();
         await expect(panel.getByText(/To create shipments or update tracking, grant Manage Orders.*Wix may send shipping emails/)).toBeVisible();
         await panel.getByText("Assistant access", { exact: true }).click();
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         const beforeConnection = JSON.parse(await readFile(filePath, "utf8"));
         const connection = panel.getByRole("region", { name: "Application connection" });
@@ -1909,11 +1910,11 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveCount(0);
         await save.click(); await expect(panel.locator(".v-input--error")).not.toHaveCount(0);
         const read = async () => JSON.parse(await readFile(filePath, "utf8"));
-        await model.fill("Big Pickle"); await expect(page.getByRole("option")).toHaveCount(0);
+        await model.fill("Big Pickle"); await expect(openMenu(page).getByRole("option")).toHaveCount(0);
         await model.press("Escape");
         const chooseModel = async (search: string, name: RegExp) => {
           await model.fill(search);
-          await page.getByRole("option", { name }).click();
+          await openMenu(page).getByRole("option", { name }).click();
         };
         await chooseModel("GLM-4.7-Flash (zai)", /^GLM-4.7-Flash \(zai\)/);
         await expect(key).toBeVisible();
@@ -1927,7 +1928,7 @@ for (const { viewport, providerBatch } of [
         await expect(key).toHaveValue(""); // A different provider cannot inherit this key.
         await chooseModel("GLM-4.7-Flash (zai)", /^GLM-4.7-Flash \(zai\)/);
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await key.fill("account:personal-ai"); await save.click(); await expect(save).toBeDisabled();
         expect((await read()).integrations.ai.accountMode).toBe("per-user");
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
@@ -1937,7 +1938,7 @@ for (const { viewport, providerBatch } of [
         await expect(key).toHaveCount(0); await save.click(); await expect(save).toBeDisabled();
         expect((await read()).integrations.ai.authentication).toEqual({ method: "none" });
         expect((await read()).integrations.ai.settings.model).toBe("opencode/mimo-v2.5-free");
-        await model.fill("grok-code"); await expect(page.getByRole("option")).toHaveCount(0);
+        await model.fill("grok-code"); await expect(openMenu(page).getByRole("option")).toHaveCount(0);
         await model.press("Escape"); await model.blur();
         expect((await read()).integrations.ai.settings.model).toBe("opencode/mimo-v2.5-free");
         await panel.getByRole("button", { name: "Set up AI", exact: true }).click();
@@ -1972,7 +1973,7 @@ for (const { viewport, providerBatch } of [
         const choose = async (label: string, current: string, next: string) => {
           const field = panel.locator(".v-input").filter({ has: page.getByRole("combobox", { name: label, exact: true }) });
           await field.getByText(current, { exact: true }).click({ timeout: 10000 });
-          await page.getByRole("option", { name: next, exact: true }).click();
+          await openMenu(page).getByRole("option", { name: next, exact: true }).click();
         };
         await choose("Filter findings by policy hits", "Blocking policy hits (BLOCK)", "Blocking or audit policy hits (AUDIT)");
         await save.click(); await expect(save).toBeDisabled();
@@ -1991,7 +1992,7 @@ for (const { viewport, providerBatch } of [
         file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations.wiz.settings).toEqual({ tokenUrl: "https://auth.app.wiz.io/oauth/token", byPolicyHits: "DISABLED" });
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
-        const setup = panel.getByRole("button", { name: "Set up Wiz", exact: true }); if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        const setup = panel.getByRole("button", { name: "Set up Wiz", exact: true }); await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://marketplace.visualstudio.com/items?itemName=WizCloud.wiz-task");
       }
       if (providerBatch === "shopify") {
@@ -2013,8 +2014,8 @@ for (const { viewport, providerBatch } of [
         const choose = async (label: string, current: string, next: string) => {
           const field = panel.locator(".v-input").filter({ has: page.getByRole("combobox", { name: label, exact: true }) });
           await field.getByText(current, { exact: true }).click({ timeout: 10000 });
-          for (const option of ["Ask each time", "Always allow", "Never allow"]) await expect(page.getByRole("option", { name: option, exact: true })).toBeVisible();
-          await page.getByRole("option", { name: next, exact: true }).click();
+          for (const option of ["Ask each time", "Always allow", "Never allow"]) await expect(openMenu(page).getByRole("option", { name: option, exact: true })).toBeVisible();
+          await openMenu(page).getByRole("option", { name: next, exact: true }).click();
           await expect(page.getByRole("listbox")).toHaveCount(0);
         };
         await choose("Delete product", "Ask each time", "Never allow");
@@ -2043,7 +2044,7 @@ for (const { viewport, providerBatch } of [
           expect(await field.locator(".v-field").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(48);
         }
         await panel.getByText("App in your Shopify organization", { exact: true }).click();
-        await page.getByRole("option", { name: "Existing Admin API access token", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Existing Admin API access token", exact: true }).click();
         const token = panel.getByRole("textbox", { name: "Admin API access token reference", exact: true });
         await token.fill("raw-secret"); await save.click(); await expect(panel.getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         expect(await readFile(filePath, "utf8")).not.toContain("raw-secret"); await token.fill("env:SHOPIFY_TOKEN");
@@ -2051,7 +2052,7 @@ for (const { viewport, providerBatch } of [
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.shopify.authentication).toEqual({ method: "api-key", secretRef: "env:SHOPIFY_TOKEN" });
         expect(file.integrations.shopify.assistantPolicy.actions).toEqual({ claim: "never", "products.create": "ask" });
         expect(file.integrations["google-calendar"].displayName).toBe("After CLI update"); expect(file.extensions).toEqual(saved.extensions);
-        const setup = panel.getByRole("button", { name: "Set up Shopify", exact: true }); if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        const setup = panel.getByRole("button", { name: "Set up Shopify", exact: true }); await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant");
       }
       if (providerBatch === "workday") {
@@ -2066,9 +2067,9 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("button", { name: "Permissions", exact: true })).toHaveCount(0);
         await expect(panel.getByRole("combobox", { name: "Account used by the application", exact: true })).toHaveValue("Each app user's own account");
         await panel.getByText("Each app user's own account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "One shared account", exact: true })).toHaveCount(0);
-        await expect(page.getByRole("option", { name: "Assistant access", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "One shared account", exact: true })).toHaveCount(0);
+        await expect(openMenu(page).getByRole("option", { name: "Assistant access", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.workday).toBeUndefined();
         await client.fill("fixture-workday-client"); await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(3);
@@ -2089,8 +2090,7 @@ for (const { viewport, providerBatch } of [
           tokenEndpoint: "https://wd5-services1.myworkday.com/ccx/oauth2/acme_corp/token", authorizationEndpoint: "https://acme.wd5.myworkday.com/acme_corp/authorize" });
         expect(file.integrations.workday.accountMode).toBe("per-user"); expect(file.integrations.workday.scopes).toEqual([]);
         expect(file.registrations.workday).toEqual({ source: "own", clientId: "fixture-workday-client", clientSecretRef: "env:WORKDAY_SECRET", callbackUrlRef: "env:WORKDAY_CALLBACK" });
-        const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Staff directory");
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
@@ -2102,7 +2102,7 @@ for (const { viewport, providerBatch } of [
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.workday.accountMode).toBe("per-user");
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         const setup = panel.getByRole("button", { name: "Set up Workday", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://doc.workday.com/peakon/en-us/workday-peakon-employee-voice/integrations/workday-integration/nfa1667304944189.html");
         await expect(panel.getByText("Register this confidential client without PKCE so Workday issues a Client Secret. Enter your application's exact backend callback URL.", { exact: true })).toBeVisible();
         await expect(panel.getByText(/For organization browsing, also select Organizations and Roles/)).toBeVisible();
@@ -2119,7 +2119,7 @@ for (const { viewport, providerBatch } of [
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Cloud Platform (full access)", exact: true })).toBeChecked();
         await expect(location).toHaveValue("Global");
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
@@ -2135,7 +2135,7 @@ for (const { viewport, providerBatch } of [
         await secret.fill("env:GEMINI_ENTERPRISE_SECRET"); await callback.fill("https://app.example.test/callback"); await save.click();
         await expect(panel.locator(".v-input--error").getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         await callback.fill("env:GEMINI_ENTERPRISE_CALLBACK");
-        await panel.getByText("Global", { exact: true }).click(); await page.getByRole("option", { name: "European Union", exact: true }).click();
+        await panel.getByText("Global", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "European Union", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         let file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["gemini-enterprise"].settings).toEqual({ projectId: "my-gcp-project", location: "eu", engineId: "company_search-1" });
@@ -2143,9 +2143,9 @@ for (const { viewport, providerBatch } of [
         expect(file.registrations["gemini-enterprise"]).toEqual({ source: "own", clientId: "fixture-google-client", clientSecretRef: "env:GEMINI_ENTERPRISE_SECRET", callbackUrlRef: "env:GEMINI_ENTERPRISE_CALLBACK" });
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Company search");
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
-        await panel.getByText("European Union", { exact: true }).click(); await page.getByRole("option", { name: "United States", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("European Union", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "United States", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Company search", { exact: true }).click();
@@ -2155,7 +2155,7 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations["gemini-enterprise"].settings.location).toBe("us");
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         const setup = panel.getByRole("button", { name: "Set up Gemini Enterprise", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.cloud.google.com/gemini/enterprise/docs/authentication");
         await expect(panel.getByText(/Google-generated summary with citations/)).toBeVisible();
         await expect(panel.getByText(/Grant the connecting Google account discoveryengine.engines.get/)).toBeVisible();
@@ -2169,7 +2169,7 @@ for (const { viewport, providerBatch } of [
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Keep access between visits (required)", exact: true })).toBeChecked();
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.snowflake).toBeUndefined();
@@ -2201,7 +2201,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("checkbox", { name: "Keep access between visits", exact: true }).uncheck();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Inventory databases");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Inventory databases", { exact: true }).click();
@@ -2214,25 +2214,24 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText("Each user connects in your application's own account screen.", { exact: true })).toBeVisible();
         await expect(panel.getByRole("region", { name: "Application connection" }).getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
         await role.fill("");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         const offline = panel.getByRole("checkbox", { name: "Keep access between visits (required)", exact: true });
         await expect(offline).toBeChecked(); await expect(offline).toBeDisabled();
-        await panel.getByText("Each app user's own account", { exact: true }).click(); await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("Each app user's own account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.snowflake.accountMode).toBe("assistant");
         expect(file.integrations.snowflake.settings.role).toBeUndefined(); expect(file.integrations.snowflake.scopes).toEqual(["refresh_token"]);
         const setup = panel.getByRole("button", { name: "Set up Snowflake", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Run: CREATE SECURITY INTEGRATION APP_CONNECTOR/)).toBeVisible();
         await expect(panel.getByText(/Run SELECT SYSTEM\$SHOW_OAUTH_CLIENT_SECRETS/)).toBeVisible();
         await expect(panel.getByText(/Warehouse management needs separate grants/)).toBeVisible();
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.snowflake.com/en/user-guide/oauth-custom");
-        const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await panel.getByRole("combobox", { name: "Account used by the application", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         const connection = panel.getByRole("region", { name: "Application connection" });
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
         await expect(connection.getByRole("link", { name: "Continue with provider" })).toBeVisible();
@@ -2253,7 +2252,7 @@ for (const { viewport, providerBatch } of [
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         const required = panel.getByRole("checkbox", { name: "Read basic profile information (required)", exact: true });
         await expect(required).toBeChecked(); await expect(required).toBeDisabled();
         const optional = ["Read user statistics", "Read extended profile information", "Read published video metadata"];
@@ -2290,24 +2289,24 @@ for (const { viewport, providerBatch } of [
         for (const label of optional) await panel.getByRole("checkbox", { name: label, exact: true }).uncheck();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("My creator account");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("My creator account", { exact: true }).click();
         await expect(client).toHaveValue("fixture-tiktok-key"); await expect(secret).toHaveValue("env:TIKTOK_SECRET"); await expect(callback).toHaveValue("env:TIKTOK_CALLBACK");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(required).toBeChecked(); await expect(required).toBeDisabled();
         for (const label of optional) await expect(panel.getByRole("checkbox", { name: label, exact: true })).not.toBeChecked();
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.tiktok.accountMode).toBe("per-user");
         expect(file.integrations.tiktok.scopes).toEqual(["user.info.basic"]);
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         await panel.getByRole("checkbox", { name: "Read published video metadata", exact: true }).check();
-        await panel.getByText("Each app user's own account", { exact: true }).click(); await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("Each app user's own account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.tiktok.accountMode).toBe("assistant");
         expect(file.integrations.tiktok.scopes).toEqual(["user.info.basic", "video.list"]);
         const setup = panel.getByRole("button", { name: "Set up TikTok", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.tiktok.com/docs/en/getting-started-create-an-app");
         await expect(panel.getByText("Use the Client key from TikTok's app credentials, not its App ID.", { exact: true })).toBeVisible();
         await expect(panel.getByText(/Open your profile menu, choose Manage apps/)).toBeVisible();
@@ -2321,7 +2320,7 @@ for (const { viewport, providerBatch } of [
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const label of ["OpenID (required)", "Read basic profile (required)"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeDisabled();
@@ -2346,12 +2345,12 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("checkbox", { name: "Publish posts", exact: true }).check();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("My LinkedIn profile");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("My LinkedIn profile", { exact: true }).click();
         await expect(client).toHaveValue("fixture-linkedin-client"); await expect(secret).toHaveValue("env:LINKEDIN_SECRET"); await expect(callback).toHaveValue("env:LINKEDIN_CALLBACK");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const label of ["OpenID (required)", "Read basic profile (required)", "Read primary email address", "Publish posts"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
         }
@@ -2360,12 +2359,12 @@ for (const { viewport, providerBatch } of [
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         await panel.getByRole("checkbox", { name: "Read primary email address", exact: true }).uncheck();
         await panel.getByRole("checkbox", { name: "Publish posts", exact: true }).uncheck();
-        await panel.getByText("Each app user's own account", { exact: true }).click(); await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("Each app user's own account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations.linkedin.accountMode).toBe("assistant");
         expect(file.integrations.linkedin.scopes).toEqual(["openid", "profile"]);
         const setup = panel.getByRole("button", { name: "Set up LinkedIn", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2");
         await expect(panel.getByText(/request Share on LinkedIn, wait until Auth lists w_member_social/)).toBeVisible();
         await expect(panel.getByText(/approve the exact post text and visibility/)).toBeVisible();
@@ -2404,7 +2403,7 @@ for (const { viewport, providerBatch } of [
           authentication: { method: "oauth2", registrationRef: "google-ads" } });
         expect(file.registrations["google-ads"]).toEqual({ source: "own", clientId: "fixture-ads.apps.googleusercontent.com", clientSecretRef: "env:ADS_SECRET", callbackUrlRef: "env:ADS_CALLBACK" });
         await manager.fill("");
-        await panel.getByText("One shared account", { exact: true }).click(); await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await panel.getByText("One shared account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Ads reports");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -2416,10 +2415,10 @@ for (const { viewport, providerBatch } of [
         await expect(mode).toHaveCount(0); await expect(developer).toHaveCount(0); await expect(manager).toHaveValue("");
         await expect(client).toHaveValue("fixture-ads.apps.googleusercontent.com"); await expect(secret).toHaveValue("env:ADS_SECRET"); await expect(callback).toHaveValue("env:ADS_CALLBACK");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Access Google Ads accounts", exact: true })).toBeChecked();
         await manager.fill("0987654321");
-        await panel.getByText("Each app user's own account", { exact: true }).click(); await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("Each app user's own account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Ads reports", { exact: true }).click();
@@ -2427,7 +2426,7 @@ for (const { viewport, providerBatch } of [
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations["google-ads"].accountMode).toBe("assistant");
         expect(file.integrations["google-ads"].settings).toEqual({ loginCustomerId: "0987654321" });
         const setup = panel.getByRole("button", { name: "Set up Google Ads", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.google.com/google-ads/api/docs/get-started/make-first-call");
       }
       if (providerBatch === "salesforce") {
@@ -2459,15 +2458,15 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations.salesforce).toEqual({ provider: "salesforce", displayName: "Salesforce", accountMode: "shared", scopes: ["api", "refresh_token"],
           settings: { environment: "production", accountUrl: "https://fixture.develop.my.salesforce.com/" }, authentication: { method: "oauth2", registrationRef: "salesforce" } });
         expect(file.registrations.salesforce).toEqual({ source: "own", clientId: "fixture-salesforce-client", clientSecretRef: "env:SALESFORCE_SECRET", callbackUrlRef: "env:SALESFORCE_CALLBACK" });
-        await panel.getByText("Production", { exact: true }).click(); await page.getByRole("option", { name: "Sandbox", exact: true }).click();
+        await panel.getByText("Production", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Sandbox", exact: true }).click();
         await save.click();
         await expect(panel.getByText("Enter a lowercase HTTPS My Domain URL matching the selected environment, without a path, query or port.", { exact: true })).toBeVisible();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.salesforce.settings.environment).toBe("production");
         await account.fill("https://fixture--uat.sandbox.my.salesforce.com");
-        await panel.getByText("One shared account", { exact: true }).click(); await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await panel.getByText("One shared account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Sandbox CRM");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         const api = panel.getByRole("checkbox", { name: "Access Salesforce APIs with this user's permissions", exact: true });
         const refresh = panel.getByRole("checkbox", { name: "Keep access when the user is away", exact: true });
         await expect(api).toBeChecked(); await expect(refresh).toBeChecked(); await refresh.uncheck();
@@ -2484,18 +2483,18 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("fixture-salesforce-client"); await expect(secret).toHaveValue("env:SALESFORCE_SECRET"); await expect(callback).toHaveValue("env:SALESFORCE_CALLBACK");
         await expect(environment.locator("..")).toContainText("Sandbox");
         await expect(owner.locator("..")).toContainText("Each app user's own account");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(api).toBeChecked(); await expect(refresh).not.toBeChecked();
-        await panel.getByText("Sandbox", { exact: true }).click(); await page.getByRole("option", { name: "Production", exact: true }).click();
+        await panel.getByText("Sandbox", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Production", exact: true }).click();
         await account.fill("https://fixture.my.salesforce.com"); await refresh.check();
-        await panel.getByText("Each app user's own account", { exact: true }).click(); await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await panel.getByText("Each app user's own account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations.salesforce.accountMode).toBe("assistant");
         expect(file.integrations.salesforce.settings).toEqual({ environment: "production", accountUrl: "https://fixture.my.salesforce.com" });
         expect(file.integrations.salesforce.scopes).toEqual(["api", "refresh_token"]);
         const setup = panel.getByRole("button", { name: "Set up Salesforce", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://help.salesforce.com/s/articleView?id=sf.external_client_apps.htm&type=5");
       }
       if (providerBatch === "firebase") {
@@ -2528,7 +2527,7 @@ for (const { viewport, providerBatch } of [
           authentication: { method: "service-account", secretRef: "env:FIREBASE_SERVICE_ACCOUNT" } });
         expect(file.registrations["firebase-cloud-messaging"]).toBeUndefined();
         await panel.getByText("Server or native only", { exact: true }).click();
-        await page.getByRole("option", { name: "Include web push", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Include web push", exact: true }).click();
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(3);
         await apiKey.fill("raw-invalid-key"); await appId.fill("1:123:ios:not-web"); await vapid.fill("private-vapid-value");
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(3);
@@ -2537,18 +2536,18 @@ for (const { viewport, providerBatch } of [
         file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["firebase-cloud-messaging"].settings).toEqual({ projectId: "target-project", clientMode: "web", apiKey: publicKey, appId: webId, vapidKey: publicVapid });
         await panel.getByText("Include web push", { exact: true }).click();
-        await page.getByRole("option", { name: "Server or native only", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Server or native only", exact: true }).click();
         await expect(apiKey).toHaveCount(0); await expect(appId).toHaveCount(0); await expect(vapid).toHaveCount(0);
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["firebase-cloud-messaging"].settings).toEqual({ projectId: "target-project", clientMode: "server" });
         await panel.getByText("Server or native only", { exact: true }).click();
-        await page.getByRole("option", { name: "Include web push", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Include web push", exact: true }).click();
         await expect(apiKey).toHaveValue(""); await expect(appId).toHaveValue(""); await expect(vapid).toHaveValue("");
         await apiKey.fill(publicKey); await appId.fill(webId); await vapid.fill(publicVapid);
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("App notifications");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -2559,7 +2558,7 @@ for (const { viewport, providerBatch } of [
         await expect(project).toHaveValue("target-project"); await expect(key).toHaveValue("env:FIREBASE_SERVICE_ACCOUNT");
         await expect(mode).toHaveValue("Include web push"); await expect(apiKey).toHaveValue(publicKey); await expect(appId).toHaveValue(webId); await expect(vapid).toHaveValue(publicVapid);
         const setup = panel.getByRole("button", { name: "Set up Firebase Cloud Messaging", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://firebase.google.com/docs/cloud-messaging/send/v1-api");
         await expect(panel.getByText(/On connector_recipient_unregistered/)).toBeVisible();
         await expect(panel.getByText(/Check connection only reads saved status/)).toBeVisible();
@@ -2592,8 +2591,8 @@ for (const { viewport, providerBatch } of [
           settings: { host: "semantic-layer.au.dbt.com", environmentId: "9007199254740993" }, authentication: { method: "api-key", secretRef: "env:DBT_SERVICE_TOKEN" } });
         expect(file.registrations["dbt-semantic-layer"]).toBeUndefined();
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Warehouse metadata");
         await host.fill("team.semantic-layer.us1.dbt.com"); await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -2605,7 +2604,7 @@ for (const { viewport, providerBatch } of [
         await expect(host).toHaveValue("team.semantic-layer.us1.dbt.com"); await expect(environment).toHaveValue("9007199254740993");
         await expect(key).toHaveValue("env:DBT_SERVICE_TOKEN"); await expect(owner).toHaveValue("Assistant access");
         const setup = panel.getByRole("button", { name: "Set up dbt Semantic Layer", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.getdbt.com/docs/use-dbt-semantic-layer/setup-sl");
         await expect(panel.getByText(/Check connection only reads saved status/)).toBeVisible();
         await expect(panel.getByText(/JSON results suit small tables/)).toBeVisible();
@@ -2638,9 +2637,9 @@ for (const { viewport, providerBatch } of [
         await secret.fill("env:FABRIC_SECRET"); await callback.fill("https://literal.example.test/callback"); await save.click();
         await expect(panel.locator(".v-input--error").getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         await callback.fill("env:FABRIC_CALLBACK"); await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(2); await expect(panel.getByRole("checkbox", { checked: true })).toHaveCount(2);
         await save.click(); await expect(save).toBeDisabled();
         const user = JSON.parse(await readFile(filePath, "utf8"));
@@ -2648,7 +2647,7 @@ for (const { viewport, providerBatch } of [
         expect(user.integrations["microsoft-fabric"].scopes).toEqual(["https://analysis.windows.net/powerbi/api/GraphQLApi.Execute.All", "offline_access"]);
         expect(user.integrations["microsoft-fabric"].accountMode).toBe("per-user");
         expect(user.registrations["microsoft-fabric"].callbackUrlRef).toBe("env:FABRIC_CALLBACK");
-        await panel.getByText("User consent", { exact: true }).click(); await page.getByRole("option", { name: "Service account", exact: true }).click();
+        await panel.getByText("User consent", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Service account", exact: true }).click();
         await expect(callback).toHaveCount(0); await expect(account).toHaveValue("One shared account");
         await expect(panel.getByRole("checkbox")).toHaveCount(1);
         const servicePermission = panel.getByRole("checkbox", { name: "Use the service account's Fabric permissions", exact: true });
@@ -2667,8 +2666,8 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Fabric inventory", { exact: true }).click();
         await expect(flow).toHaveValue("Service account"); await expect(callback).toHaveCount(0);
         await expect(tenant).toHaveValue(clientId); await expect(client).toHaveValue(tenantId); await expect(endpoint).toHaveValue(graphqlEndpoint);
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click(); await expect(servicePermission).toBeChecked();
-        await panel.getByText("Service account", { exact: true }).click(); await page.getByRole("option", { name: "User consent", exact: true }).click();
+        await expandPanel(permissions); await expect(servicePermission).toBeChecked();
+        await panel.getByText("Service account", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "User consent", exact: true }).click();
         await expect(callback).toHaveValue(""); await expect(servicePermission).toHaveCount(0);
         await expect(panel.getByRole("checkbox", { checked: true })).toHaveCount(0);
         await callback.fill("env:FABRIC_NEW_CALLBACK");
@@ -2679,7 +2678,7 @@ for (const { viewport, providerBatch } of [
         expect(restored.registrations["microsoft-fabric"].callbackUrlRef).toBe("env:FABRIC_NEW_CALLBACK");
         expect(restored.integrations["microsoft-fabric"].scopes).toEqual(["https://analysis.windows.net/powerbi/api/GraphQLApi.Execute.All"]);
         const setup = panel.getByRole("button", { name: "Set up Microsoft Fabric", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://learn.microsoft.com/en-us/fabric/data-engineering/connect-apps-api-graphql");
         await expect(panel.getByText(/Use graphql.execute with an app-approved query/)).toBeVisible();
         await expect(panel.getByText(/LIMITATIONS: no automatic table browser/)).toBeVisible();
@@ -2706,9 +2705,9 @@ for (const { viewport, providerBatch } of [
         await expect(panel.locator(".v-input--error").getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         await callback.fill("env:DATABRICKS_CALLBACK");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(2); await expect(panel.getByRole("checkbox", { checked: true })).toHaveCount(2);
         await save.click(); await expect(save).toBeDisabled();
         const user = JSON.parse(await readFile(filePath, "utf8"));
@@ -2716,7 +2715,7 @@ for (const { viewport, providerBatch } of [
         expect(user.integrations.databricks.accountMode).toBe("per-user");
         expect(user.registrations.databricks).toEqual({ source: "own", clientId: "assigned-user-client", clientSecretRef: "env:DATABRICKS_SECRET", callbackUrlRef: "env:DATABRICKS_CALLBACK" });
         await panel.getByText("User consent", { exact: true }).click();
-        await page.getByRole("option", { name: "Service account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Service account", exact: true }).click();
         await expect(callback).toHaveCount(0); await expect(account).toHaveValue("One shared account");
         await client.fill("assigned-service-principal"); await workspace.fill("https://adb-123456789.7.azuredatabricks.net");
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Warehouse jobs");
@@ -2734,9 +2733,9 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Warehouse jobs", { exact: true }).click();
         await expect(flow).toHaveValue("Service account"); await expect(callback).toHaveCount(0); await expect(client).toHaveValue("assigned-service-principal");
         await expect(workspace).toHaveValue("https://adb-123456789.7.azuredatabricks.net");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click(); await expect(jobs).toBeChecked();
+        await expandPanel(permissions); await expect(jobs).toBeChecked();
         await panel.getByText("Service account", { exact: true }).click();
-        await page.getByRole("option", { name: "User consent", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "User consent", exact: true }).click();
         await expect(callback).toHaveValue(""); await expect(jobs).toHaveCount(0);
         await save.click(); await expect(panel.locator(".v-input--error")).toHaveCount(1);
         await expect(panel.getByText("Select at least one permission.", { exact: true })).toBeVisible();
@@ -2750,7 +2749,7 @@ for (const { viewport, providerBatch } of [
         expect(restored.registrations.databricks.tokenEndpointAuthMethod).toBe("client_secret_post");
         expect(restored.registrations.databricks.callbackUrlRef).toBe("env:DATABRICKS_USER_CALLBACK");
         const setup = panel.getByRole("button", { name: "Set up Databricks", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.databricks.com/aws/en/integrations/enable-disable-oauth");
       }
       if (providerBatch === "lightspeed") {
@@ -2773,7 +2772,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.locator(".v-input--error").getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         await callback.fill("env:LIGHTSPEED_CALLBACK");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(49);
         await expect(panel.getByRole("checkbox", { checked: true })).toHaveCount(16);
         for (const label of ["Read products", "Read customers", "Read outlets"]) await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -2784,7 +2783,7 @@ for (const { viewport, providerBatch } of [
         expect(initial.integrations.lightspeed.scopes).toEqual(["retailer:read", "outlets:read", "registers:read", "payment_types:read", "products:read", "products:read:price_books", "inventory:read", "customers:read", "sales:read", "fulfillments:read", "promotions:read", "gift_cards:read", "store_credits:read", "suppliers:read", "taxes:read", "users:read"]);
         expect(initial.registrations.lightspeed).toEqual({ source: "own", clientId: "assigned-lightspeed-client", clientSecretRef: "env:LIGHTSPEED_SECRET", callbackUrlRef: "env:LIGHTSPEED_CALLBACK" });
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Retail connection");
         await prefix.fill("next-store");
         await panel.getByRole("checkbox", { name: "Read customers", exact: true }).uncheck();
@@ -2799,17 +2798,17 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Retail connection", { exact: true }).click();
         await expect(client).toHaveValue("assigned-lightspeed-client"); await expect(secret).toHaveValue("env:LIGHTSPEED_SECRET");
         await expect(callback).toHaveValue("env:LIGHTSPEED_CALLBACK"); await expect(owner).toHaveValue("Each app user's own account"); await expect(prefix).toHaveValue("next-store");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read customers", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "Edit customers", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Lightspeed", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://x-series-api.lightspeedhq.com/docs/authorization");
         await expect(panel.getByText(/This connector is Retail X-Series only/)).toBeVisible();
         await expect(panel.getByText(/Select inventory:read to read stock and sales:read/)).toBeVisible();
         await expect(panel.getByText(/Customer\/product edits, stock adjustments, sale\/payment writes/)).toBeVisible();
         await owner.press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click();
         const connection = panel.getByRole("region", { name: "Application connection" });
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
@@ -2840,7 +2839,7 @@ for (const { viewport, providerBatch } of [
           const callbackRef = `env:CONFIDENCE_${provider.binding}_CALLBACK_URL`;
           await secret.fill(secretRef); await callback.fill(callbackRef);
           const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           const identity = panel.getByRole("checkbox", { name: "Identify the connected Confidence account", exact: true });
           const profile = panel.getByRole("checkbox", { name: "Read account profile", exact: true });
           const email = panel.getByRole("checkbox", { name: "Read account email", exact: true });
@@ -2859,10 +2858,10 @@ for (const { viewport, providerBatch } of [
           await page.reload(); if (viewport.name !== "expanded") await showProject.click();
           await panel.getByRole("list", { name: "Configured integrations" }).getByText(displayName, { exact: true }).click();
           await expect(client).toHaveValue(assignedClient); await expect(secret).toHaveValue(secretRef); await expect(callback).toHaveValue(callbackRef);
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           await expect(identity).toBeChecked(); await expect(profile).toBeChecked(); await expect(email).not.toBeChecked(); await expect(refresh).not.toBeChecked();
           const setup = panel.getByRole("button", { name: `Set up ${provider.name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://confidence.spotify.com/docs/sdks/mcp-servers");
           await expect(panel.getByText(provider.id === "confidence-flags" ? /Flag creation, variants, schema changes and targeting rules/ : /positive effect estimate alone is not a winning experiment/)).toBeVisible();
           await expect(panel.getByText("Verification only lists tools. The host must authorize each tool and its arguments; identity scopes do not limit calls to reads.", { exact: true })).toBeVisible();
@@ -2887,7 +2886,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.hex).toBeUndefined();
         await callback.fill("env:HEX_CALLBACK_URL");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         const labels = ["Identify the connected Hex account", "Read account profile", "Read account email", "Refresh access without repeating sign-in"];
         for (const label of labels) await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
         await panel.getByRole("checkbox", { name: "Read account email", exact: true }).uncheck();
@@ -2895,7 +2894,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Data assistant");
         for (const [value, title] of [["eu", "Europe (eu.hex.tech)"], ["hipaa", "HIPAA (hc.hex.tech)"], ["standard", "Standard (app.hex.tech)"]]) {
           await endpoint.focus(); await endpoint.press("ArrowDown");
-          await page.getByRole("option", { name: title, exact: true }).click();
+          await openMenu(page).getByRole("option", { name: title, exact: true }).click();
           await save.click(); await expect(save).toBeDisabled();
           expect(JSON.parse(await readFile(filePath, "utf8")).integrations.hex.settings).toEqual({ endpoint: value });
         }
@@ -2910,11 +2909,11 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("assigned-hex-client");
         await expect(secret).toHaveValue("env:HEX_CLIENT_SECRET");
         await expect(callback).toHaveValue("env:HEX_CALLBACK_URL");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const label of labels.slice(0, 2)) await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
         for (const label of labels.slice(2)) await expect(panel.getByRole("checkbox", { name: label, exact: true })).not.toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Hex", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://learn.hex.tech/docs/api-integrations/mcp-server");
         await expect(panel.getByText(/Choose Register client and connect to create the client for this endpoint/)).toBeVisible();
         await expect(panel.getByText(/Thread tools can run analysis and consume credits/)).toBeVisible();
@@ -2956,9 +2955,9 @@ for (const { viewport, providerBatch } of [
         await expect(region).toHaveValue("United States");
         await region.focus();
         await region.press("ArrowDown");
-        await page.getByRole("option", { name: "European Union", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "European Union", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         const read = panel.getByRole("checkbox", { name: "Read Amplitude content (required for verification)", exact: true });
         const write = panel.getByRole("checkbox", { name: "Create and edit Amplitude content", exact: true });
         const refresh = panel.getByRole("checkbox", { name: "Refresh access without repeating sign-in", exact: true });
@@ -2982,12 +2981,12 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("assigned-amplitude-client");
         await expect(secret).toHaveValue("env:AMPLITUDE_CLIENT_SECRET");
         await expect(callback).toHaveValue("env:AMPLITUDE_CALLBACK_URL");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(read).toBeChecked();
         await expect(write).toBeChecked();
         await expect(refresh).not.toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Amplitude", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://amplitude.com/docs/amplitude-ai/amplitude-mcp/other-clients");
       }
       if (providerBatch === "inngest") {
@@ -3028,7 +3027,7 @@ for (const { viewport, providerBatch } of [
         await expect(eventKey).toHaveValue("env:INNGEST_EVENT_KEY");
         await expect(branch).toHaveValue("feature/my-branch");
         const setup = panel.getByRole("button", { name: "Set up Inngest", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.inngest.com/docs/events/creating-an-event-key");
         const eventCredential = panel.getByRole("region", { name: "Inngest Event Key", exact: true });
         await expect(eventCredential.getByRole("link", { name: "Set credential in Env", exact: true })).toHaveAttribute("href", /prefillKey=INNGEST_EVENT_KEY&prefillSecret=true/);
@@ -3089,7 +3088,7 @@ for (const { viewport, providerBatch } of [
         await page.getByRole("button", { name: "Disconnect account", exact: true }).click();
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
         const setup = panel.getByRole("button", { name: "Set up Sanity", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.sanity.io/docs/ai/mcp-server");
         await expect(panel.getByText(/For API key authentication instead/)).toBeVisible();
         await expect(panel.getByText(/The assistant host must explicitly attach and authorize these tools/)).toBeVisible();
@@ -3137,7 +3136,7 @@ for (const { viewport, providerBatch } of [
         await page.getByRole("button", { name: "Disconnect account", exact: true }).click();
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
         const setup = panel.getByRole("button", { name: "Set up Sentry", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://mcp.sentry.dev/");
         await expect(panel.getByText(/This is assistant context, not application login/)).toBeVisible();
         await expect(panel.getByText(/automatic editor-tool attachment/)).toBeVisible();
@@ -3151,7 +3150,7 @@ for (const { viewport, providerBatch } of [
           if (provider.id === "sanity") {
             await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toBeVisible();
             await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-            await page.getByRole("option", { name: "API key", exact: true }).click();
+            await openMenu(page).getByRole("option", { name: "API key", exact: true }).click();
             await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveCount(0);
             await expect(panel.getByRole("button", { name: "Register client and connect", exact: true })).toHaveCount(0);
           }
@@ -3161,10 +3160,10 @@ for (const { viewport, providerBatch } of [
           await expect(account).toHaveValue("Assistant access");
           await account.focus();
           await account.press("ArrowDown");
-          await expect(page.getByRole("option", { name: "Assistant access", exact: true })).toBeVisible();
-          await expect(page.getByRole("option", { name: "One shared account", exact: true })).toHaveCount(0);
-          await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-          await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+          await expect(openMenu(page).getByRole("option", { name: "Assistant access", exact: true })).toBeVisible();
+          await expect(openMenu(page).getByRole("option", { name: "One shared account", exact: true })).toHaveCount(0);
+          await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+          await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
           const server = panel.getByRole("textbox", { name: "Server URL", exact: true });
           if (provider.id === "n8n") {
             await save.click();
@@ -3195,7 +3194,7 @@ for (const { viewport, providerBatch } of [
           await expect(token).toHaveValue(reference);
           if (provider.id === "n8n") await expect(server).toHaveValue("https://automation.example:8443/team/mcp-server/http");
           const setup = panel.getByRole("button", { name: `Set up ${provider.name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", provider.setupUrl);
           if (provider.id === "n8n") await expect(panel.getByText(/LIMITATIONS: Assistant tool attachment requires explicit host integration\. A separately wired CLI or assistant host can discover and invoke exposed workflows/)).toBeVisible();
         }
@@ -3214,7 +3213,7 @@ for (const { viewport, providerBatch } of [
         await secret.fill("env:WORDPRESS_COM_CLIENT_SECRET");
         await callback.fill("env:WORDPRESS_COM_CALLBACK_URL");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         for (const label of ["View user information (required for verification)", "View site information and options", "View and manage posts"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
         }
@@ -3255,11 +3254,11 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("12345");
         await expect(secret).toHaveValue("env:WORDPRESS_COM_CLIENT_SECRET");
         await expect(callback).toHaveValue("env:WORDPRESS_COM_CALLBACK_URL");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "View and manage posts", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "View site statistics", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up WordPress.com", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developer.wordpress.com/docs/api/oauth2/");
         await expect(panel.getByText(/open My Apps and choose Create New Application/)).toBeVisible();
         await expect(panel.getByText(/exact backend Redirect URL/)).toBeVisible();
@@ -3290,11 +3289,11 @@ for (const { viewport, providerBatch } of [
         await organization.fill("");
         await panel.getByText("Europe (.eu)", { exact: true }).click();
         for (const label of ["United States (.com)", "Europe (.eu)", "India (.in)", "Australia (.com.au)", "Japan (.jp)", "Canada (.ca)", "China (.com.cn)", "Saudi Arabia (.sa)"]) {
-          await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+          await expect(openMenu(page).getByRole("option", { name: label, exact: true })).toHaveCount(1);
         }
-        await page.getByRole("option", { name: "Saudi Arabia (.sa)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Saudi Arabia (.sa)", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(13);
         for (const label of ["Read organisations and settings", "Read contacts", "Read invoices"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -3306,7 +3305,7 @@ for (const { viewport, providerBatch } of [
         expect(initial.registrations["zoho-books"]).toEqual({ source: "own", clientId: "1000.assigned-books-client", clientSecretRef: "env:BOOKS_SECRET", callbackUrlRef: "env:BOOKS_CALLBACK" });
         await organization.fill("10234695");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Personal accounting");
         await panel.getByRole("checkbox", { name: "Read invoices", exact: true }).uncheck();
         await panel.getByRole("checkbox", { name: "Full access to invoices", exact: true }).check();
@@ -3321,11 +3320,11 @@ for (const { viewport, providerBatch } of [
         await expect(region).toHaveValue("Saudi Arabia (.sa)"); await expect(organization).toHaveValue("10234695"); await expect(owner).toHaveValue("Each app user's own account");
         await organization.fill(""); await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8")); expect(file.integrations["zoho-books"].settings).toEqual({ region: "sa" });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read invoices", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "Full access to invoices", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Zoho Books", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.zoho.com/books/api/v3/oauth/");
       }
       if (providerBatch === "zoho-crm") {
@@ -3347,13 +3346,13 @@ for (const { viewport, providerBatch } of [
         await callback.fill("env:ZOHO_CALLBACK");
         await panel.getByText("United States (.com)", { exact: true }).click();
         for (const label of ["United States (.com)", "Europe (.eu)", "India (.in)", "Australia (.com.au)", "Japan (.jp)", "Canada (.ca)", "China (.com.cn)"]) {
-          await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+          await expect(openMenu(page).getByRole("option", { name: label, exact: true })).toHaveCount(1);
         }
-        await page.getByRole("option", { name: "Canada (.ca)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Canada (.ca)", exact: true }).click();
         await panel.getByText("Production", { exact: true }).click();
-        await page.getByRole("option", { name: "Sandbox", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Sandbox", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(12);
         for (const label of ["Read the connected CRM user", "Read leads", "Read contacts", "Read accounts", "Read deals"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -3364,7 +3363,7 @@ for (const { viewport, providerBatch } of [
         expect(initial.integrations["zoho-crm"].settings).toEqual({ region: "ca", environment: "sandbox" });
         expect(initial.registrations["zoho-crm"]).toEqual({ source: "own", clientId: "1000.assigned-client", clientSecretRef: "env:ZOHO_SECRET", callbackUrlRef: "env:ZOHO_CALLBACK" });
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Personal CRM");
         await panel.getByRole("checkbox", { name: "Read leads", exact: true }).uncheck();
         await panel.getByRole("checkbox", { name: "Full lead access", exact: true }).check();
@@ -3376,14 +3375,14 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Personal CRM", { exact: true }).click();
         await expect(client).toHaveValue("1000.assigned-client"); await expect(secret).toHaveValue("env:ZOHO_SECRET"); await expect(callback).toHaveValue("env:ZOHO_CALLBACK");
         await expect(region).toHaveValue("Canada (.ca)"); await expect(environment).toHaveValue("Sandbox"); await expect(owner).toHaveValue("Each app user's own account");
-        await panel.getByText("Sandbox", { exact: true }).click(); await page.getByRole("option", { name: "Developer", exact: true }).click();
+        await panel.getByText("Sandbox", { exact: true }).click(); await openMenu(page).getByRole("option", { name: "Developer", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled(); file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["zoho-crm"].settings).toEqual({ region: "ca", environment: "developer" });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read leads", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "Full lead access", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Zoho CRM", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.zoho.com/crm/developer/docs/api/v8/register-client.html");
       }
       if (providerBatch === "wave") {
@@ -3402,7 +3401,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.locator(".v-input--error").getByText("Use a reference such as env:VARIABLE_NAME.", { exact: true })).toBeVisible();
         await callback.fill("env:WAVE_CALLBACK");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(32);
         for (const label of ["Read the connected user's profile", "Read businesses", "Read customers", "Read invoices"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -3413,7 +3412,7 @@ for (const { viewport, providerBatch } of [
         expect(initial.integrations.wave.scopes).toEqual(["user:read", "business:read", "customer:read", "invoice:read"]);
         expect(initial.registrations.wave).toEqual({ source: "own", clientId: "assigned-wave-client", clientSecretRef: "env:WAVE_SECRET", callbackUrlRef: "env:WAVE_CALLBACK" });
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Personal accounting");
         await panel.getByRole("checkbox", { name: "Read customers", exact: true }).uncheck();
         await panel.getByRole("checkbox", { name: "Full customer access", exact: true }).check();
@@ -3425,11 +3424,11 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Personal accounting", { exact: true }).click();
         await expect(client).toHaveValue("assigned-wave-client"); await expect(secret).toHaveValue("env:WAVE_SECRET");
         await expect(callback).toHaveValue("env:WAVE_CALLBACK"); await expect(owner).toHaveValue("Each app user's own account");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read customers", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "Full customer access", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Wave", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developer.waveapps.com/hc/en-us/articles/50682251860884-2-Create-an-application");
         await expect(panel.getByText("Wave OAuth access requires an active Pro or Wave Advisor business subscription. Integrations for other Wave users require Wave approval.", { exact: true })).toBeVisible();
         for (const phrase of [
@@ -3442,13 +3441,12 @@ for (const { viewport, providerBatch } of [
         const connection = panel.getByRole("region", { name: "Application connection" });
         await expect(connection.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
         await expect(panel.getByText("Each user connects in your application's own account screen.", { exact: true })).toBeVisible();
-        const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await owner.press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
         await expect(connection.getByRole("link", { name: "Continue with provider" })).toBeVisible();
         await connection.getByRole("button", { name: "Cancel connection", exact: true }).click();
@@ -3482,8 +3480,8 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations.granola).toEqual({ provider: "granola", displayName: "Granola", accountMode: "shared", scopes: [], authentication: { method: "api-key", secretRef: "env:GRANOLA_KEY" } });
         expect(file.registrations.granola).toBeUndefined();
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Meeting research");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -3494,11 +3492,11 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Meeting research", { exact: true }).click();
         await expect(key).toHaveValue("env:GRANOLA_KEY"); await expect(owner).toHaveValue("Assistant access");
         const setup = panel.getByRole("button", { name: "Set up Granola", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.granola.ai/help-center/sharing/integrations/granola-api");
         await expect(panel.getByText(/Enter env:GRANOLA_API_KEY in API key reference/)).toBeVisible();
         await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "OAuth", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "OAuth", exact: true }).click();
         await panel.getByRole("textbox", { name: "Suggested callback URL", exact: true }).fill("https://app.example/integrations/granola/callback");
         await panel.getByRole("button", { name: "Register client and connect", exact: true }).click();
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -3514,7 +3512,7 @@ for (const { viewport, providerBatch } of [
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Meeting research", { exact: true }).click();
         await expect(client).toHaveValue("assigned-granola-client");
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.granola.ai/help-center/sharing/integrations/mcp");
         await expect(panel.getByText(/Choose Register client and connect to create the client/)).toBeVisible();
       }
@@ -3527,22 +3525,22 @@ for (const { viewport, providerBatch } of [
         expect(await readFile(filePath, "utf8")).not.toContain("raw-linear-token");
         await key.fill("env:HUBSPOT_API_KEY");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read your account", exact: true })).toBeChecked();
         await panel.getByRole("checkbox", { name: "Write on your behalf", exact: true }).check();
         await save.click(); await expect(save).toBeDisabled();
         const setup = panel.getByRole("button", { name: "Set up Linear", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Personal API keys/)).toBeVisible();
         await expect(panel.getByText(/saved connection alone does not let the coding chat edit an issue/)).toBeVisible();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.linear.scopes).toContain("write");
         await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "OAuth", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "OAuth", exact: true }).click();
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("linear-project-client");
         await panel.getByRole("textbox", { name: "Client secret reference", exact: true }).fill("env:HUBSPOT_SECRET");
         await panel.getByRole("textbox", { name: "Callback URL reference", exact: true }).fill("env:HUBSPOT_CALLBACK");
         await panel.getByRole("combobox", { name: "Account used by the application", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         const file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations.linear.accountMode).toBe("per-user");
@@ -3550,12 +3548,12 @@ for (const { viewport, providerBatch } of [
         await page.reload();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Linear", { exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveValue("linear-project-client");
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Settings > Administration > API and create an OAuth application/)).toBeVisible();
         await expect(panel.getByText(/Your app owns tool approval and must check isError/)).toBeVisible();
         await expect(panel.getByText("Configuration matches integrations.json. Account access is verified by your application when a user connects.", { exact: true })).toBeVisible();
         await panel.getByRole("combobox", { name: "Account used by the application", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         const connection = panel.getByRole("region", { name: "Application connection" });
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
@@ -3572,7 +3570,7 @@ for (const { viewport, providerBatch } of [
         expect(await readFile(filePath, "utf8")).not.toContain("raw-hubspot-token");
         await key.fill("env:HUBSPOT_API_KEY");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read CRM contacts", exact: true })).toBeChecked();
         for (const name of ["Create and update CRM contacts", "Read deals and pipelines", "Create and update CRM deals"]) {
           await expect(panel.getByRole("checkbox", { name, exact: true })).not.toBeChecked();
@@ -3580,17 +3578,17 @@ for (const { viewport, providerBatch } of [
         }
         await save.click(); await expect(save).toBeDisabled();
         const setup = panel.getByRole("button", { name: "Set up HubSpot", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Development > Legacy apps > Create legacy app > Private/)).toBeVisible();
         await expect(panel.getByText(/Use internal property, pipeline and stage IDs/)).toBeVisible();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.hubspot.scopes).toContain("crm.objects.deals.write");
         await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "OAuth", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "OAuth", exact: true }).click();
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("hubspot-project-client");
         await panel.getByRole("textbox", { name: "Client secret reference", exact: true }).fill("env:HUBSPOT_SECRET");
         await panel.getByRole("textbox", { name: "Callback URL reference", exact: true }).fill("env:HUBSPOT_CALLBACK");
         await panel.getByRole("combobox", { name: "Account used by the application", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         const file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations.hubspot.accountMode).toBe("per-user");
@@ -3598,12 +3596,12 @@ for (const { viewport, providerBatch } of [
         await page.reload();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("HubSpot", { exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveValue("hubspot-project-client");
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/Under Project Components, select the app, then Auth > Client credentials/)).toBeVisible();
         await expect(panel.getByText(/HubSpot installation normally grants account-level CRM access/)).toBeVisible();
         await expect(panel.getByText("Configuration matches integrations.json. Account access is verified by your application when a user connects.", { exact: true })).toBeVisible();
         await panel.getByRole("combobox", { name: "Account used by the application", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         const connection = panel.getByRole("region", { name: "Application connection" });
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
@@ -3630,8 +3628,8 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations.heygen).toEqual({ provider: "heygen", displayName: "HeyGen", accountMode: "shared", scopes: [], authentication: { method: "api-key", secretRef: "env:HEYGEN_KEY" } });
         expect(file.registrations.heygen).toBeUndefined();
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Video creation");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -3642,11 +3640,11 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Video creation", { exact: true }).click();
         await expect(key).toHaveValue("env:HEYGEN_KEY"); await expect(owner).toHaveValue("Assistant access");
         const setup = panel.getByRole("button", { name: "Set up HeyGen", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.heygen.com/docs/api-key");
         await expect(panel.getByText(/Enter env:HEYGEN_API_KEY in API key reference/)).toBeVisible();
         await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
-        await page.getByRole("option", { name: "OAuth", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "OAuth", exact: true }).click();
         await panel.getByRole("textbox", { name: "Suggested callback URL", exact: true }).fill("https://app.example/integrations/heygen/callback");
         await panel.getByRole("button", { name: "Register client and connect", exact: true }).click();
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -3662,7 +3660,7 @@ for (const { viewport, providerBatch } of [
         await page.reload(); if (viewport.name !== "expanded") await showProject.click();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Video creation", { exact: true }).click();
         await expect(client).toHaveValue("assigned-heygen-client");
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.heygen.com/mcp/overview");
         await expect(panel.getByText(/Choose Register client and connect to create the client/)).toBeVisible();
       }
@@ -3692,7 +3690,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Telegram", { exact: true }).click();
         await expect(key).toHaveValue("env:TELEGRAM_BOT_TOKEN");
         const setup = panel.getByRole("button", { name: "Set up Telegram", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://core.telegram.org/bots/tutorial");
         await expect(panel.getByText(/open the verified BotFather account and send/)).toBeVisible();
         await expect(panel.getByText(/Use one app worker and save update offsets/)).toBeVisible();
@@ -3725,7 +3723,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Tally", { exact: true }).click();
         await expect(key).toHaveValue("env:TALLY_API_KEY");
         const setup = panel.getByRole("button", { name: "Set up Tally", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.tally.so/api-reference/api-keys");
         await expect(panel.getByText(/Open Tally Settings, then API keys and Create API key/)).toBeVisible();
         await expect(panel.getByText(/Creating forms defaults to draft/)).toBeVisible();
@@ -3772,8 +3770,8 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations["x-twitter"]).toEqual({ provider: "x-twitter", displayName: "X (Twitter)", accountMode: "shared", scopes: [], authentication: { method: "api-key", secretRef: "env:X_APP_BEARER_TOKEN" } });
         expect(file.registrations["x-twitter"]).toBeUndefined();
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Public social research");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -3785,7 +3783,7 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Public social research", { exact: true }).click();
         await expect(key).toHaveValue("env:X_APP_BEARER_TOKEN"); await expect(owner).toHaveValue("Assistant access");
         const setup = panel.getByRole("button", { name: "Set up X (Twitter)", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.x.com/x-api/getting-started/getting-access");
         await expect(panel.getByText("This flow has no OAuth callback or per-user consent. It cannot post, read direct messages or provide application login.", { exact: true })).toBeVisible();
         await expect(panel.getByText(/Recent search covers the last seven days/)).toBeVisible();
@@ -3819,8 +3817,7 @@ for (const { viewport, providerBatch } of [
         await v3.fill("env:SEMRUSH_V3_KEY"); await save.click(); await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.semrush.settings).toEqual({ v3ApiKeyRef: "env:SEMRUSH_V3_KEY" });
         // Feedback drops a repeated "saved" message within two seconds of the first.
-        const repeatedSaveFeedback = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await repeatedSaveFeedback.isVisible()) await repeatedSaveFeedback.click();
+        await dismissFeedbackIfShown(page);
         const connection = panel.getByRole("region", { name: "Application connection" });
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
@@ -3832,8 +3829,8 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.semrush.settings).toEqual({ v3ApiKeyRef: "env:SEMRUSH_V3_KEY" });
         await panel.getByText("One shared account", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
-        await page.getByRole("option", { name: "Assistant access", exact: true }).click();
+        await expect(openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true })).toHaveCount(0);
+        await openMenu(page).getByRole("option", { name: "Assistant access", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Marketing research");
         await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
@@ -3845,7 +3842,7 @@ for (const { viewport, providerBatch } of [
         await expect(key).toHaveValue("env:SEMRUSH_V4_KEY"); await expect(owner).toHaveValue("Assistant access");
         await expect(v3).toHaveValue("env:SEMRUSH_V3_KEY");
         const setup = panel.getByRole("button", { name: "Set up Semrush", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developer.semrush.com/api/v4/get-started/quick-start/");
         await expect(panel.getByText(/Keyword metrics and backlink overview/)).toBeVisible();
         await expect(panel.getByText(/Project deletion permanently removes/)).toBeVisible();
@@ -3866,7 +3863,7 @@ for (const { viewport, providerBatch } of [
         expect(await readFile(filePath, "utf8")).not.toContain("raw-xero-secret");
         await secret.fill("env:XERO_SECRET"); await callback.fill("env:XERO_CALLBACK");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(24);
         for (const label of ["Keep access when the user is away", "Read organisation settings", "Read contacts", "Read invoices and bills"]) {
           await expect(panel.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -3877,7 +3874,7 @@ for (const { viewport, providerBatch } of [
         expect(initial.registrations.xero).toEqual({ source: "own", clientId: "assigned-xero-client", clientSecretRef: "env:XERO_SECRET", callbackUrlRef: "env:XERO_CALLBACK", tokenEndpointAuthMethod: "client_secret_basic" });
         expect(initial.integrations.xero.scopes).toEqual(["offline_access", "accounting.settings.read", "accounting.contacts.read", "accounting.invoices.read"]);
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Personal accounts");
         await panel.getByRole("checkbox", { name: "Read invoices and bills", exact: true }).uncheck();
         await panel.getByRole("checkbox", { name: "Read profit and loss reports", exact: true }).check();
@@ -3889,11 +3886,11 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("Personal accounts", { exact: true }).click();
         await expect(client).toHaveValue("assigned-xero-client"); await expect(secret).toHaveValue("env:XERO_SECRET");
         await expect(callback).toHaveValue("env:XERO_CALLBACK"); await expect(owner).toHaveValue("Each app user's own account");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read invoices and bills", exact: true })).not.toBeChecked();
         await expect(panel.getByRole("checkbox", { name: "Read profit and loss reports", exact: true })).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Xero", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developer.xero.com/documentation/guides/oauth2/auth-flow/");
         for (const guidance of [
           /create an app using the Auth Code grant type/,
@@ -3923,16 +3920,16 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("textbox", { name: "Database", exact: true }).fill("dev");
         await workgroup.fill("analytics");
         await panel.getByText("N. Virginia (us-east-1)", { exact: true }).click();
-        await expect(page.getByRole("option", { name: "N. Virginia (us-east-1)", exact: true })).toBeVisible();
+        await expect(openMenu(page).getByRole("option", { name: "N. Virginia (us-east-1)", exact: true })).toBeVisible();
         await region.press("o");
         await region.press("s");
-        await page.getByRole("option", { name: "Osaka (ap-northeast-3)", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Osaka (ap-northeast-3)", exact: true }).click();
         await save.click(); await expect(save).toBeDisabled();
         let file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["amazon-redshift"].settings).toEqual({ deploymentType: "serverless", region: "ap-northeast-3", database: "dev", workgroup: "analytics", accessKeyIdRef: "env:AWS_ACCESS_KEY_ID" });
         expect(file.extensions).toEqual(saved.extensions);
         await panel.getByText("Serverless", { exact: true }).click();
-        await page.getByRole("option", { name: "Provisioned cluster", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Provisioned cluster", exact: true }).click();
         await expect(workgroup).toHaveCount(0); await expect(cluster).toHaveValue("");
         await save.click();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations["amazon-redshift"].settings.deploymentType).toBe("serverless");
@@ -3946,14 +3943,14 @@ for (const { viewport, providerBatch } of [
         await user.fill(""); await save.click(); await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations["amazon-redshift"].settings.databaseUser).toBeUndefined();
         await panel.getByText("Provisioned cluster", { exact: true }).click();
-        await page.getByRole("option", { name: "Serverless", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Serverless", exact: true }).click();
         await expect(workgroup).toHaveValue(""); await expect(cluster).toHaveCount(0); await expect(user).toHaveCount(0);
         await workgroup.fill("restored-group"); await save.click(); await expect(save).toBeDisabled();
         file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations["amazon-redshift"].settings.clusterIdentifier).toBeUndefined();
         expect(file.integrations["amazon-redshift"].settings.workgroup).toBe("restored-group");
         const setup = panel.getByRole("button", { name: "Set up Amazon Redshift", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.aws.amazon.com/redshift/latest/mgmt/data-api.html");
         await expect(panel.getByText(/ListDatabases, ListSchemas, ListTables, DescribeTable/)).toBeVisible();
         await expect(panel.getByText(/Save the configuration, then use Set credential in Env/)).toBeVisible();
@@ -3990,9 +3987,9 @@ for (const { viewport, providerBatch } of [
         await signing.fill("env:SLACK_SIGNING_SECRET");
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Team Slack");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(52);
         const read = panel.getByRole("checkbox", { name: "View basic information about public channels in a workspace", exact: true });
         const history = panel.getByRole("checkbox", { name: "View messages and other content in public channels you are in", exact: true });
@@ -4002,14 +3999,14 @@ for (const { viewport, providerBatch } of [
         await history.uncheck();
         await profile.check();
         await panel.getByText("Connected user", { exact: true }).click();
-        await page.getByRole("option", { name: "Installed bot", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Installed bot", exact: true }).click();
         await expect(panel.getByRole("checkbox")).toHaveCount(49);
         await expect(profile).toHaveCount(0);
         await expect(read).toBeChecked();
         await join.check();
         await save.click();
         await expect(save).toBeDisabled();
-        if (await page.getByRole("button", { name: "Dismiss", exact: true }).isVisible()) await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+        await dismissFeedbackIfShown(page);
         const bot = JSON.parse(await readFile(filePath, "utf8"));
         expect(bot.integrations.slack).toEqual({ provider: "slack", displayName: "Team Slack", accountMode: "per-user", scopes: ["channels:read", "channels:join"], settings: { actor: "bot", signingSecretRef: "env:SLACK_SIGNING_SECRET" }, authentication: { method: "oauth2", registrationRef: "slack" } });
         expect(bot.registrations.slack).toEqual({ source: "own", clientId: "assigned-slack-client", clientSecretRef: "env:SLACK_SECRET", callbackUrlRef: "env:SLACK_CALLBACK" });
@@ -4023,34 +4020,33 @@ for (const { viewport, providerBatch } of [
         await expect(secret).toHaveValue("env:SLACK_SECRET");
         await expect(callback).toHaveValue("env:SLACK_CALLBACK");
         await expect(signing).toHaveValue("env:SLACK_SIGNING_SECRET");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(join).toBeChecked();
         await expect(history).not.toBeChecked();
         await panel.getByText("Installed bot", { exact: true }).click();
-        await page.getByRole("option", { name: "Connected user", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Connected user", exact: true }).click();
         await expect(panel.getByRole("checkbox")).toHaveCount(52);
         await expect(profile).not.toBeChecked();
         await save.click();
         await expect(save).toBeDisabled();
-        if (await page.getByRole("button", { name: "Dismiss", exact: true }).isVisible()) await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+        await dismissFeedbackIfShown(page);
         const user = JSON.parse(await readFile(filePath, "utf8"));
         expect(user.integrations.slack.settings).toEqual({ actor: "user", signingSecretRef: "env:SLACK_SIGNING_SECRET" });
         expect(user.integrations.slack.scopes).toEqual(["channels:read"]);
         expect(user.registrations.slack).toEqual(bot.registrations.slack);
         const setup = panel.getByRole("button", { name: "Set up Slack", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.slack.dev/authentication/installing-with-oauth/");
               await expect(panel.getByText(/For incoming events, copy Signing Secret/)).toBeVisible();
         await expect(panel.getByText(/The application must verify signed raw request bytes/)).toBeVisible();
         await expect(panel.getByText("Each user connects in your application's own account screen.", { exact: true })).toBeVisible();
         await expect(panel.getByRole("region", { name: "Application connection" }).getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
-        const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await owner.press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
-        if (await page.getByRole("button", { name: "Dismiss", exact: true }).isVisible()) await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+        await dismissFeedbackIfShown(page);
         const connection = panel.getByRole("region", { name: "Application connection" });
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
         await expect(connection.getByRole("link", { name: "Continue with provider" })).toBeVisible();
@@ -4086,10 +4082,10 @@ for (const { viewport, providerBatch } of [
         await expect(panel.locator(".v-input--error")).toHaveCount(1);
         await callback.fill("env:TWITCH_CALLBACK");
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         await displayName.fill("Stream account");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox")).toHaveCount(23);
         const email = panel.getByRole("checkbox", { name: "Read your email address", exact: true });
         const follows = panel.getByRole("checkbox", { name: "Read the channels you follow", exact: true });
@@ -4113,12 +4109,12 @@ for (const { viewport, providerBatch } of [
         await expect(client).toHaveValue("assigned-twitch-client");
         await expect(secret).toHaveValue("env:TWITCH_SECRET");
         await expect(callback).toHaveValue("env:TWITCH_CALLBACK");
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(email).not.toBeChecked();
         await expect(follows).toBeChecked();
         await expect(chat).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Twitch", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://dev.twitch.tv/docs/authentication/register-app/");
         await expect(panel.getByText(/Sign in to dev.twitch.tv\/console/)).toBeVisible();
         await expect(panel.getByText(/A new secret invalidates the previous one/)).toBeVisible();
@@ -4129,13 +4125,12 @@ for (const { viewport, providerBatch } of [
         const connection = panel.getByRole("region", { name: "Application connection" });
         await expect(connection.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
         await expect(panel.getByText("Each user connects in your application's own account screen.", { exact: true })).toBeVisible();
-        const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await owner.press("Enter");
-        await page.getByRole("option", { name: "One shared account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "One shared account", exact: true }).click();
         await save.click();
         await expect(save).toBeDisabled();
-        if (await dismiss.isVisible()) await dismiss.click();
+        await dismissFeedbackIfShown(page);
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
         await expect(connection.getByRole("link", { name: "Continue with provider" })).toBeVisible();
         await connection.getByRole("button", { name: "Cancel connection", exact: true }).click();
@@ -4179,7 +4174,7 @@ for (const { viewport, providerBatch } of [
           settings: { httpUrl: "https://warehouse.example:8443/query/", username: "reader" }
         });
         await panel.getByText("Username and password", { exact: true }).click();
-        await page.getByRole("option", { name: "No credentials", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "No credentials", exact: true }).click();
         await expect(username).toHaveCount(0);
         await expect(password).toHaveCount(0);
         await save.click();
@@ -4196,14 +4191,14 @@ for (const { viewport, providerBatch } of [
         await expect(endpoint).toHaveValue("https://warehouse.example:8443/query/");
         await expect(password).toHaveCount(0);
         await panel.getByText("No credentials", { exact: true }).click();
-        await page.getByRole("option", { name: "Username and password", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Username and password", exact: true }).click();
         await expect(username).toHaveValue("");
         await expect(password).toHaveValue("");
         await save.click();
         await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.clickhouse.authentication).toEqual({ method: "api-key" });
         const setup = panel.getByRole("button", { name: "Set up ClickHouse", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://clickhouse.com/docs/products/cloud/guides/sql-console/connection-details");
         await expect(panel.getByText(/accepting SQL text is not a sandbox/)).toBeVisible();
         await expect(panel.getByText(/Connect account or Verify again/)).toBeVisible();
@@ -4245,7 +4240,7 @@ for (const { viewport, providerBatch } of [
         await expect(key).toHaveValue("env:PRESTASHOP_WEBSERVICE_KEY");
         await expect(displayName).toHaveValue("Merchant catalogue");
         const setup = panel.getByRole("button", { name: "Set up PrestaShop", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://devdocs.prestashop-project.org/9/webservice/tutorials/creating-access/");
       }
       if (["wordpress", "wordpress-self-hosted", "woocommerce"].includes(providerBatch)) {
@@ -4296,7 +4291,7 @@ for (const { viewport, providerBatch } of [
           await expect(identity).toHaveValue(provider.identity);
           await expect(secret).toHaveValue(reference);
           const setup = panel.getByRole("button", { name: `Set up ${provider.name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", provider.setupUrl);
           if (provider.id === "wordpress-self-hosted") {
             await expect(panel.getByText(/choose Add New Application Password/)).toBeVisible();
@@ -4376,7 +4371,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.gong.settings.apiBaseUrl).toBe("https://api.gong.io");
         await expect(apiBaseUrl).toHaveValue("https://api.gong.io");
         const setup = panel.getByRole("button", { name: "Set up Gong", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://help.gong.io/docs/receive-access-to-the-api");
         await expect(panel.getByText(/technical administrator. Open Admin center/)).toBeVisible();
         await expect(panel.getByText(/Call reads require existing recordings/)).toBeVisible();
@@ -4387,7 +4382,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText("Each app user's own account", { exact: true })).toBeVisible();
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-oura-client");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-        if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+        await expandPanel(permissions);
         await expect(panel.getByRole("checkbox", { name: "Read daily sleep, activity and readiness summaries", exact: true })).toBeChecked();
         const personal = panel.getByRole("checkbox", { name: "Read personal profile information", exact: true });
         await expect(personal).not.toBeChecked();
@@ -4411,7 +4406,7 @@ for (const { viewport, providerBatch } of [
         await expect(personal).toBeChecked();
         await expect(heartRate).toBeChecked();
         const setup = panel.getByRole("button", { name: "Set up Oura", exact: true });
-        if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+        await expandPanel(setup);
         await expect(panel.getByText(/LIMITATIONS: no live synchronization/)).toBeVisible();
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://support.ouraring.com/hc/en-us/articles/4415266939155-The-Oura-API");
         await expect(panel.getByRole("checkbox", { name: "Read the account email address", exact: true })).not.toBeChecked();
@@ -4449,7 +4444,7 @@ for (const { viewport, providerBatch } of [
           expect(file.registrations[id].clientId).toBe(`${id}.apps.googleusercontent.com`);
           expect(file.extensions).toEqual(saved.extensions);
           const setup = panel.getByRole("button", { name: `Set up ${name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", /^https:/);
           if (id === "google-search-console" && providerBatch === "google-search-console") {
             await expect(panel.getByText(/To add a property, open Search Console/)).toBeVisible();
@@ -4573,7 +4568,7 @@ for (const { viewport, providerBatch } of [
           });
           expect(file.extensions).toEqual(saved.extensions);
           const setup = panel.getByRole("button", { name: `Set up ${name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app");
           if (id === "microsoft-sharepoint") {
             await expect(panel.getByText(/listItems.list returns fields and ETags/)).toBeVisible();
@@ -4629,10 +4624,10 @@ for (const { viewport, providerBatch } of [
           await secret.fill(`env:${id.toUpperCase().replaceAll("-", "_")}_SECRET`);
           await callback.fill(`env:${id.toUpperCase().replaceAll("-", "_")}_CALLBACK`);
           await panel.getByText("One shared account", { exact: true }).click();
-          await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+          await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
           await panel.getByRole("textbox", { name: "Display name", exact: true }).fill(`${name} files`);
           const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           await expect(panel.getByRole("checkbox", { name: "Read your files", exact: true })).toBeChecked();
           const offline = panel.getByRole("checkbox", { name: "Keep access when you are away", exact: true });
           await expect(offline).toBeChecked();
@@ -4654,10 +4649,10 @@ for (const { viewport, providerBatch } of [
           await expect(secret).toHaveValue(file.registrations[id].clientSecretRef);
           await expect(callback).toHaveValue(file.registrations[id].callbackUrlRef);
           await expect(panel.getByRole("combobox", { name: "Account used by the application", exact: true })).toHaveValue("Each app user's own account");
-          if (await permissions.getAttribute("aria-expanded") !== "true") await permissions.click();
+          await expandPanel(permissions);
           await expect(offline).toBeChecked({ checked: index === 0 });
           const setup = panel.getByRole("button", { name: `Set up ${name}`, exact: true });
-          if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
+          await expandPanel(setup);
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app");
         }
       }
@@ -4728,7 +4723,7 @@ for (const { viewport, providerBatch } of [
         await openCompactDashboardSection(page, "Integrations");
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("After CLI update", { exact: true }).click();
         await panel.getByText("One shared account", { exact: true }).click();
-        await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: "Each app user's own account", exact: true }).click();
         const personalRequest = panel.getByRole("button", { name: "Prepare app user connection request", exact: true });
         await expect(personalRequest).toBeDisabled();
         const requestsBeforePersonalSave = setupRequests.length;

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { DASHBOARD_PATH, viewports } from "./support/base-shell-data";
 import { assistantStatusServer, json } from "./support/assistant-status-server";
+import { expectSteady } from "./support/settled-ui";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 let server: Awaited<ReturnType<typeof assistantStatusServer>>;
@@ -509,8 +510,7 @@ test("leaving the page cancels retries without interrupting the assistant", asyn
   await expect(warning(page)).toBeVisible();
   await page.goto("about:blank");
   const checks = server.state.checkCount;
-  await page.waitForTimeout(2_000);
-  expect(server.state.checkCount).toBe(checks);
+  await expectSteady(() => server.state.checkCount, checks, 2_000);
   expect(server.state.interrupts).toBe(0);
 });
 

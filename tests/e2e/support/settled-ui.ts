@@ -1,0 +1,48 @@
+import { expect, type Locator, type Page } from "@playwright/test";
+
+/**
+ * The open Vuetify menu or overlay. A menu that is closing keeps its list in the page until its fade-out ends, so an
+ * option locator read from the whole page can match the closing list as well as the one just opened: pick options
+ * through `openMenu(page)`.
+ */
+function openMenu(page: Page): Locator {
+  return page.locator(".v-overlay--active");
+}
+
+/**
+ * Dismisses save feedback when it is showing. Feedback drops a message that repeats within its two-second dedupe
+ * window, so a second identical save may show none; a test must not wait for it.
+ */
+async function dismissFeedbackIfShown(page: Page) {
+  const dismiss = page.getByRole("button", { name: "Dismiss", exact: true });
+  if (await dismiss.isVisible()) await dismiss.click();
+}
+
+/**
+ * Opens an expansion panel through its title button and waits until its content has finished expanding, so a control
+ * inside it receives the next click.
+ */
+async function expandPanel(title: Locator) {
+  if (await title.getAttribute("aria-expanded") !== "true") await title.click();
+  await expect(title).toHaveAttribute("aria-expanded", "true");
+  const panel = title.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' v-expansion-panel ')][1]");
+  const text = panel.locator(".v-expansion-panel-text").first();
+  await expect(text).toBeVisible();
+  // Vuetify's expand transition writes the animating height inline and removes it when the transition ends.
+  await expect(text).not.toHaveAttribute("style", /height/u);
+}
+
+/**
+ * Asserts that `read()` keeps answering `expected` for the whole of `durationMs`: an observed quiet period for
+ * something that must not happen, which fails as soon as it does instead of sleeping and checking once.
+ */
+async function expectSteady<T>(read: () => T | Promise<T>, expected: T, durationMs: number) {
+  const until = Date.now() + durationMs;
+  do {
+    expect(await read()).toEqual(expected);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } while (Date.now() < until);
+  expect(await read()).toEqual(expected);
+}
+
+export { dismissFeedbackIfShown, expandPanel, expectSteady, openMenu };
