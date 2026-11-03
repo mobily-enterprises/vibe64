@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
+import { mockIntegrationShellReads } from "./support/integration-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
 
@@ -36,20 +37,7 @@ test('payment configuration persists and catalogue publication requires review',
         await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ ok: false, error: "Unmocked integration test request." }) });
       });
       await mockDirectChatSession(page);
-      for (const [endpoint, payload] of [
-        ["/vibe64/settings", { ok: true, promptHints: { enabled: false } }],
-        ["/vibe64/sessions/current", { ok: true, sessionId: directChatSessionId }],
-        [`/vibe64/sessions/${directChatSessionId}/agent-session`, { ok: true }],
-        [`/vibe64/sessions/${directChatSessionId}/presence`, { ok: true }],
-        [`/vibe64/sessions/${directChatSessionId}/assistant-access`, { ok: true, available: true, canUse: true, ownerOnly: false }],
-        [`/vibe64/sessions/${directChatSessionId}/message-suggestions`, { ok: true, suggestions: [], canManage: true }],
-        [`/vibe64/sessions/${directChatSessionId}/work`, { ok: true, unsaved: false, operation: null, updateOperation: null }],
-        [`/vibe64/sessions/${directChatSessionId}/updates/check`, { ok: true, updateAvailable: false, status: "up-to-date" }],
-        [`/vibe64/sessions/${directChatSessionId}/renewal`, { ok: true, renewal: null, viewerScope: "integration-test-owner" }],
-        [`/vibe64/sessions/${directChatSessionId}/source-editor/stars`, { ok: true, files: [] }]
-      ] as const) {
-        await routeApiEndpoint(page, endpoint, (route) => fulfillJson(route, payload));
-      }
+      await mockIntegrationShellReads(page);
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/integrations`, async (route) => {
         const input = { sessionId: directChatSessionId, ...route.request().postDataJSON() };
         const response = route.request().method() === "PUT"
