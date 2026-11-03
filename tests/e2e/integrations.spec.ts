@@ -3139,7 +3139,7 @@ for (const { viewport, providerBatch } of [
         await expandPanel(setup);
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://mcp.sentry.dev/");
         await expect(panel.getByText(/This is assistant context, not application login/)).toBeVisible();
-        await expect(panel.getByText(/automatic editor-tool attachment/)).toBeVisible();
+        await expect(panel.getByText(/saving the connection alone does not grant it/)).toBeVisible();
       }
       if (["mcp", "n8n"].includes(providerBatch)) {
         for (const provider of [
