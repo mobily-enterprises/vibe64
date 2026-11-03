@@ -95,7 +95,7 @@ function sessionUpdateFirstRepairBrief(state, { updateRepair = false } = {}) {
     "Local work the saved version supersedes, such as a stale or partial dependency bump it completes, is resolved by taking the saved version. " +
       "Say so plainly in one sentence and do not ask the person to choose: Vibe64's checkpoint keeps the original. Ask only about genuine product decisions.",
     updateRepair
-      ? "Update is this repair. Prepare it so Update succeeds; Vibe64 runs Update itself afterwards."
+      ? "Update is this repair. Prepare it so Update succeeds; Vibe64 will check Update after the repair."
       : "Update owns this session until it succeeds. When this repair concerns project setup, workspace preparation, verification, " +
         "dependencies or code the saved version may already port, do not repair it in this chat now: tell the person in one sentence " +
         "that the session must be brought up to date first, then end your turn; setup is checked again against the updated session. " +

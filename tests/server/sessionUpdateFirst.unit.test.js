@@ -57,6 +57,6 @@ test("a repair brief names the incoming versions, takes superseded local work fr
   const update = sessionUpdateFirstRepairBrief(sessionUpdateFirst({ updateCheck: behindCheck,
     updateOperation: { status: "failed", conflictPaths: ["package.json"], error: "1 file needs review." } }), { updateRepair: true });
   assert.match(update, /^\[Vibe64 saved version\]\nThis session's Update failed on: package\.json\. 1 file needs review\.\n/);
-  assert.match(update, /Update is this repair\. Prepare it so Update succeeds; Vibe64 runs Update itself afterwards\./);
+  assert.match(update, /Update is this repair\. Prepare it so Update succeeds; Vibe64 will check Update after the repair\./);
   assert.doesNotMatch(update, /do not repair it in this chat now/);
 });

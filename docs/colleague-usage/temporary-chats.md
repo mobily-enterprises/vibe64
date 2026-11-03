@@ -134,7 +134,7 @@ While the session's Update has failed, is running or is waiting, Update is the
 one repair for the session. A setup, workspace preparation or verification
 repair that is already open tells you the session must be brought up to date
 first, then stops. Use **Fix it with AI** on the Update notice. After that
-repair, Vibe64 runs Update itself, and setup is checked again against the
+repair, Vibe64 checks Update again, and setup is checked again against the
 updated session. See
 [Project setup waits for Update](workspace-preparation.md#project-setup-waits-for-update).
 

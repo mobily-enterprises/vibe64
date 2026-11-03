@@ -106,8 +106,8 @@ already supersedes, such as a partial dependency bump, and repairing it here
 would redo that work.
 
 Bring the session up to date first: choose **Update**, or **Fix it with AI** on
-the Update notice when Update needs help. When the repair finishes, Vibe64 runs
-Update itself. When Update succeeds, Vibe64 prepares the workspace again and
+the Update notice when Update needs help. When the repair finishes, Vibe64 checks Update
+again. When Update succeeds, Vibe64 prepares the workspace again and
 rechecks setup. Setup repair is offered again only if setup still needs
 attention. Colleague's onboarding read reports the same `updateFirst` state and
 offers no setup repair while it is present.

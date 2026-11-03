@@ -298,7 +298,7 @@ test("every Fix it with AI turn carries the saved version it is behind, and a se
     } });
     await f.service.startTemporaryConversationTurn("one", { conversationId: "update", messageId: "update-1",
       message: "Help resolve this Vibe64 Update problem." });
-    assert.match(f.native.lastInput.message, /Update is this repair\. Prepare it so Update succeeds; Vibe64 runs Update itself afterwards\./);
+    assert.match(f.native.lastInput.message, /Update is this repair\. Prepare it so Update succeeds; Vibe64 will check Update after the repair\./);
     assert.doesNotMatch(f.native.lastInput.message, /do not repair it in this chat now/);
 
     settle();
