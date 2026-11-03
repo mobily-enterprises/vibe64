@@ -940,7 +940,7 @@ for (const { viewport, providerBatch } of [
           await page.getByRole("option", { name: "API key", exact: true }).click();
         }
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveCount(0);
-        await expect(panel.getByRole("button", { name: "Permissions", exact: true })).toHaveCount(["calendly", "github-api", "gitlab-api"].includes(id) ? 1 : 0);
+        await expect(panel.getByRole("button", { name: "Permissions", exact: true })).toHaveCount(["calendly", "github-api", "gitlab-api", "hubspot", "linear"].includes(id) ? 1 : 0);
         const keyField = panel.getByRole("textbox", { name: credentialLabels[id] || "API key reference", exact: true });
         if (id === "resend") {
           const setup = panel.getByRole("button", { name: "Set up Resend", exact: true });
@@ -1127,7 +1127,7 @@ for (const { viewport, providerBatch } of [
           await expect(panel.getByText(/does not synchronize project code/)).toBeVisible();
           await expect(panel.getByText(/repository access still depends on token permissions/)).toBeVisible();
         }
-        if (id === "gatewayapi") {
+        if (id === "gatewayapi" && providerBatch === "gatewayapi") {
           await expect(panel.getByText(/RCS requires an approved agent/)).toBeVisible();
           await expect(panel.getByText(/Current Messaging API callbacks use Signature/)).toBeVisible();
           await expect(panel.getByText(/API Keys in the left menu/)).toBeVisible();
@@ -1232,7 +1232,7 @@ for (const { viewport, providerBatch } of [
           ["Attention", "attention", "https://docs.attention.com/api-authentication"],
           ["Clay", "clay", "https://developers.clay.com/public-api/authentication"]
         ] : [
-          ["Ashby", "ashby", "https://developers.ashbyhq.com/reference/authentication"],
+          ["Ashby", "ashby", "https://docs.ashbyhq.com/how-do-i-generate-an-api-key"],
           ["Lexware", "lexware", "https://help.lexware.de/de-form/articles/548863-alles-rund-um-public-api"],
           ["Sevdesk", "sevdesk", "https://hilfe.sevdesk.de/de/articles/9374740-wo-finde-ich-meinen-api-token-in-sevdesk"]
         ];
