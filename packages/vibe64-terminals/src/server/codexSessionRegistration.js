@@ -353,9 +353,7 @@ function createCodexSessionRegistration({
       code: "vibe64_server_stopping",
       retryable: true
     },
-    storeReadError: "Vibe64 session store does not support agent-run reads.",
     sessionIdRequiredError: "Vibe64 session ID is required.",
-    turnClaimsUnsupportedError: "Vibe64 session runtime does not support Codex turn claims.",
     turnAlreadyRunningError: "Codex is already working on this Vibe64 session.",
     messageIdPrefix: "vibe64:",
     idlePublishPayload: VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD,
