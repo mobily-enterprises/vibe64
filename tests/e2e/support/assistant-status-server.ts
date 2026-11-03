@@ -113,7 +113,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const http = createCapabilityHttpRuntime({ fastify: app, actions });
   const owner = { uid: 42, username: "owner", email: "owner@example.com", role: "owner" };
   const id = mainConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId });
-  const turns = () => state.conversationLog.map((turn, index) => normalizeConversationTurn(turn, index)).filter(Boolean);
+  // Like the session store, a turn read carries its saved integration setup decision.
+  const turns = () => state.conversationLog.map((turn, index) => {
+    const normalized = normalizeConversationTurn(turn, index);
+    return normalized && turn.integrationSetup ? { ...normalized, integrationSetup: turn.integrationSetup } : normalized;
+  }).filter(Boolean);
   const transcript = createConversationTranscript({ storage: {
     read(_scope, callback) {
       const rows = turns();

@@ -1,8 +1,24 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 import { BASE_URL, DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+
+// The chat reads its transcript from the real conversation owner over Socket.IO;
+// each test's owner is closed after the test.
+const conversationServers: Awaited<ReturnType<typeof assistantStatusServer>>[] = [];
+test.afterEach(async () => {
+  await Promise.all(conversationServers.splice(0).map((server) => server.close()));
+});
+
+async function realConversation(page, conversationLog: Record<string, unknown>[]) {
+  const server = await assistantStatusServer({ session: directChatSessionPayload });
+  conversationServers.push(server);
+  await relayConversation(page, server);
+  server.state.conversationLog = conversationLog;
+  return server;
+}
 
 async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], additionalFiles = {} } = {}) {
   const messages: object[] = [];
@@ -103,7 +119,8 @@ for (const width of [390, 900, 1280, 2400]) {
     await expect(page.getByRole("combobox", { name: "Dashboard section" })).not.toBeVisible();
     const project = await page.locator(".studio-autopilot__project-panel:visible").boundingBox();
     const review = await changes.boundingBox();
-    expect(review!.width).toBeGreaterThan(project!.width - 32);
+    // The pane keeps only the Dashboard page gutter: 16 px on each side.
+    expect(review!.width).toBeGreaterThanOrEqual(project!.width - 32);
     const browser = changes.locator(".vibe64-repository-file-browser");
     const list = browser.locator(".vibe64-repository-file-browser__list");
     const detail = browser.locator(".vibe64-repository-file-browser__detail");
@@ -157,15 +174,10 @@ for (const width of [390, 900, 1600]) {
     const path = "docs/staff guide.docx";
     const bytes = Buffer.from([80, 75, 3, 4, 0, 255, 13, 10]);
     await mockFiles(page, { additionalFiles: { [path]: bytes } });
-    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/conversation-log`, (route) => fulfillJson(route, {
-      ok: true,
-      sessionId: directChatSessionId,
-      conversationLog: [{ turnId: "word-guide", assistant: {
-        at: "2026-08-14T01:03:00.000Z", role: "assistant",
-        text: `[Download the Word staff guide](/managed-source/sessions/active/${directChatSessionId}/source/docs/staff%20guide.docx)`
-      } }],
-      pagination: { count: 1, hasMoreBefore: false, limit: 20, totalTurnCount: 1 }
-    }));
+    await realConversation(page, [{ turnId: "word-guide", assistant: {
+      at: "2026-08-14T01:03:00.000Z", role: "assistant",
+      text: `[Download the Word staff guide](/managed-source/sessions/active/${directChatSessionId}/source/docs/staff%20guide.docx)`
+    } }]);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const writes: string[] = [];

@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import {
   DASHBOARD_PATH,
   directChatSessionId,
+  directChatSessionPayload,
   viewports,
 } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
@@ -17,6 +19,7 @@ for (const viewport of viewports) {
     let deliveryUnavailable: boolean;
     let deliveryRequests: number;
     let providerDeliveries: number;
+    let conversation: Awaited<ReturnType<typeof assistantStatusServer>> | null = null;
     test.beforeEach(async ({ page }) => {
       await page.setViewportSize(viewport);
       errors = [];
@@ -97,32 +100,28 @@ for (const viewport of viewports) {
         await routeApiEndpoint(page, endpoint, (route) =>
           fulfillJson(route, payload),
         );
-      await routeApiEndpoint(
-        page,
-        `/vibe64/sessions/${directChatSessionId}/conversation-log`,
-        (route) =>
-          fulfillJson(route, {
-            ok: true,
-            conversationLog: [
-              {
-                turnId: "000001",
-                integrationSetup: decision(),
-                user: {
-                  role: "user",
-                  text: "Add our business mailbox",
-                  at: "2026-09-11T01:00:00Z",
-                },
-                assistant: {
-                  role: "assistant",
-                  messageId: "saved-setup-request",
-                  at: "2026-09-11T01:01:00Z",
-                  text: 'Configure your business mailbox.\n\n```vibe64-integration\n{"integrationId":"gmail-business"}\n```',
-                },
-              },
-            ],
-            hasMoreBefore: false,
-          }),
-      );
+      // The chat reads its transcript from the real conversation owner over
+      // Socket.IO; each read carries the turn's current setup decision, as the
+      // session store adds it to the saved turn.
+      conversation = await assistantStatusServer({ session: directChatSessionPayload });
+      await relayConversation(page, conversation);
+      conversation.state.conversationLog = [
+        {
+          turnId: "000001",
+          get integrationSetup() { return decision(); },
+          user: {
+            role: "user",
+            text: "Add our business mailbox",
+            at: "2026-09-11T01:00:00Z",
+          },
+          assistant: {
+            role: "assistant",
+            messageId: "saved-setup-request",
+            at: "2026-09-11T01:01:00Z",
+            text: 'Configure your business mailbox.\n\n```vibe64-integration\n{"integrationId":"gmail-business"}\n```',
+          },
+        },
+      ];
       await routeApiEndpoint(
         page,
         `/vibe64/sessions/${directChatSessionId}/integrations`,
@@ -187,11 +186,16 @@ for (const viewport of viewports) {
         });
       });
     });
-    test.afterEach(() => {
-      expect(operations.every((operation) => consentFlow ? ["status", "connect", "cancel"].includes(operation) : operation === "status")).toBe(
-        true,
-      );
-      expect(errors).toEqual([]);
+    test.afterEach(async () => {
+      try {
+        expect(operations.every((operation) => consentFlow ? ["status", "connect", "cancel"].includes(operation) : operation === "status")).toBe(
+          true,
+        );
+        expect(errors).toEqual([]);
+      } finally {
+        await conversation?.close();
+        conversation = null;
+      }
     });
     test("Analytics request shows configuration guidance without account actions", async ({ page }) => {
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/integrations`, (route) => fulfillJson(route, {
