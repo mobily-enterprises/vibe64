@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -8,6 +8,12 @@ import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { mockIntegrationShellReads } from "./support/integration-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId, viewports } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+
+// On a compact screen the Dashboard's sections are a "Dashboard section" select.
+async function openCompactDashboardSection(page: Page, name: string) {
+  await page.getByRole("combobox", { name: "Dashboard section", exact: true }).press("ArrowDown");
+  await page.getByRole("option", { name, exact: true }).click();
+}
 
 async function addIntegration(panel: Locator, name: string) {
   const search = panel.getByRole("textbox", { name: "Search integrations", exact: true });
@@ -4716,7 +4722,7 @@ for (const { viewport, providerBatch } of [
           values: { RESEND_KEY: { value: "fixture-resend-secret", secret: true } } });
         expect(page.url()).not.toContain("fixture-resend-secret");
         expect(await readFile(filePath, "utf8")).not.toContain("fixture-resend-secret");
-        await page.getByRole("button", { name: "Integrations", exact: true }).click();
+        await openCompactDashboardSection(page, "Integrations");
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("After CLI update", { exact: true }).click();
         await panel.getByText("One shared account", { exact: true }).click();
         await page.getByRole("option", { name: "Each app user's own account", exact: true }).click();
@@ -4742,9 +4748,9 @@ for (const { viewport, providerBatch } of [
         await expect(spreadsheet).toBeVisible();
         await expect(panel.getByRole("button", { name: "Connect account", exact: true })).toBeEnabled();
         await spreadsheet.fill("sheet-check-only-123");
-        await page.getByRole("button", { name: "Env", exact: true }).click();
+        await openCompactDashboardSection(page, "Env");
         await expect(env).toBeVisible();
-        await page.getByRole("button", { name: "Integrations", exact: true }).click();
+        await openCompactDashboardSection(page, "Integrations");
         await expect(spreadsheet).toHaveValue("sheet-check-only-123");
         await panel.getByRole("button", { name: "Connect account", exact: true }).click();
         await expect(panel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
@@ -4780,9 +4786,9 @@ for (const { viewport, providerBatch } of [
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));
         const accountLabel = panel.getByText("Connected account: business@example.test", { exact: true });
         await expect(accountLabel).toBeVisible();
-        await page.getByRole("button", { name: "Env", exact: true }).click();
+        await openCompactDashboardSection(page, "Env");
         await expect(env).toBeVisible();
-        await page.getByRole("button", { name: "Integrations", exact: true }).click();
+        await openCompactDashboardSection(page, "Integrations");
         await expect(accountLabel).toBeVisible();
         await addIntegration(panel, "Gmail");
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Support mailbox");
