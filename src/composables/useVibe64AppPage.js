@@ -92,7 +92,7 @@ function useVibe64AppPage() {
   const mobilePaneLayout = ref(false);
   const phoneBar = ref(false);
   const projectPaneNavigationReadySlug = ref("");
-  const lastDashboardRoutePath = ref("");
+  const lastDashboardRoute = ref(null);
   let stopMediaQueries = [];
   const projectSlug = computed(() => projectSlugFromRoute(route));
   const queryClient = useQueryClient();
@@ -302,12 +302,13 @@ function useVibe64AppPage() {
     for (const stop of stopMediaQueries.splice(0)) stop();
   });
 
+  // The whole route: a dashboard tool keeps its own selection in the query (Database's view, for one).
   watch(() => [
     dashboardBasePath.value,
-    route.path
+    route.fullPath
   ].join("|"), () => {
     if (dashboardRouteActive.value) {
-      lastDashboardRoutePath.value = normalizeRoutePath(route.path);
+      lastDashboardRoute.value = { path: normalizeRoutePath(route.path), query: { ...route.query }, hash: route.hash };
     }
   }, {
     immediate: true
@@ -380,9 +381,9 @@ function useVibe64AppPage() {
       setChatCollapsed(true);
     }
     if (known === "dashboard") {
-      void router.push(dashboardReturnPath({
+      void router.push(dashboardReturnRoute({
         dashboardBasePath: dashboardBasePath.value,
-        lastDashboardRoutePath: lastDashboardRoutePath.value
+        lastDashboardRoute: lastDashboardRoute.value
       }));
       return;
     }
@@ -532,13 +533,17 @@ function previewToolbarTargetVisible({
   );
 }
 
-function dashboardReturnPath({
+// The last route seen in this project's Dashboard, with its query and hash and
+// uncovered (without the Lesson flag); otherwise Env.
+function dashboardReturnRoute({
   dashboardBasePath = "",
-  lastDashboardRoutePath = ""
+  lastDashboardRoute = null
 } = {}) {
   const base = normalizeRoutePath(dashboardBasePath);
-  const last = normalizeRoutePath(lastDashboardRoutePath);
-  return routePathContainsSection(last, base) && last !== base ? last : `${base}/env`;
+  const last = normalizeRoutePath(lastDashboardRoute?.path);
+  return routePathContainsSection(last, base) && last !== base
+    ? { path: last, query: withoutLesson(lastDashboardRoute.query), hash: lastDashboardRoute.hash || "" }
+    : { path: `${base}/env` };
 }
 
 function selectedProjectSlug(selection = {}) {
@@ -555,7 +560,7 @@ function selectedProjectSlug(selection = {}) {
 
 export {
   PREVIEW_TOOLBAR_HOST_ID,
-  dashboardReturnPath,
+  dashboardReturnRoute,
   nextProjectPane,
   openProjectSwitcherProjects,
   projectHeaderTitle,

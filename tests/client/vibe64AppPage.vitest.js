@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-  dashboardReturnPath,
+  dashboardReturnRoute,
   nextProjectPane,
   openProjectSwitcherProjects,
   projectHeaderTitle,
@@ -93,26 +93,32 @@ describe("Vibe64 app page", () => {
     expect(nextProjectPane(projectPaneTabs({ projectSlug: "", lesson: true }), "lesson")).toBeNull();
   });
 
-  it("returns dashboard navigation to the last dashboard route", () => {
-    expect(dashboardReturnPath({
-      dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: "/app/project/beepollen/dashboard/files"
-    })).toBe("/app/project/beepollen/dashboard/files");
+  it("returns dashboard navigation to the last dashboard route with its query", () => {
+    const dashboardBasePath = "/app/project/beepollen/dashboard";
+    expect(dashboardReturnRoute({
+      dashboardBasePath,
+      lastDashboardRoute: { path: "/app/project/beepollen/dashboard/files", query: {}, hash: "" }
+    })).toEqual({ path: "/app/project/beepollen/dashboard/files", query: {}, hash: "" });
 
-    expect(dashboardReturnPath({
-      dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: "/app/project/beepollen/dashboard/repository"
-    })).toBe("/app/project/beepollen/dashboard/repository");
+    // Database keeps its view in the query; the Lesson flag stays off, so Dash returns uncovered.
+    expect(dashboardReturnRoute({
+      dashboardBasePath,
+      lastDashboardRoute: {
+        path: "/app/project/beepollen/dashboard/database",
+        query: { sessionId: "s1", databaseView: "erd", lesson: "1" },
+        hash: "#map"
+      }
+    })).toEqual({ path: "/app/project/beepollen/dashboard/database", query: { sessionId: "s1", databaseView: "erd" }, hash: "#map" });
 
-    expect(dashboardReturnPath({
-      dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: "/app/project/other/dashboard/files"
-    })).toBe("/app/project/beepollen/dashboard/env");
+    expect(dashboardReturnRoute({
+      dashboardBasePath,
+      lastDashboardRoute: { path: "/app/project/other/dashboard/files", query: { databaseView: "erd" }, hash: "" }
+    })).toEqual({ path: "/app/project/beepollen/dashboard/env" });
 
-    expect(dashboardReturnPath({
-      dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: ""
-    })).toBe("/app/project/beepollen/dashboard/env");
+    expect(dashboardReturnRoute({ dashboardBasePath, lastDashboardRoute: { path: dashboardBasePath, query: {}, hash: "" } }))
+      .toEqual({ path: "/app/project/beepollen/dashboard/env" });
+    expect(dashboardReturnRoute({ dashboardBasePath, lastDashboardRoute: null }))
+      .toEqual({ path: "/app/project/beepollen/dashboard/env" });
   });
 
   it("opens the project runtime without route-leave shutdown", () => {

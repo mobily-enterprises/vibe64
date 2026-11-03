@@ -271,6 +271,9 @@ session, assistant and preview controls, including with cached project data.
 Selecting the current project retries that opening without a browser reload.
 Duplicate navigation retries opening only when the current opening has failed;
 clicking an already-active dashboard tab leaves the project and chat mounted.
+Returning from Preview to Dash reopens the last dashboard route with its query
+and hash, such as Database's selected view, without the Lesson flag; with none
+seen in the project it opens Env.
 Failed opening offers an inline retry; late
 responses from another project cannot unlock the current project's controls.
 Project-data and opening failures share one inline Try again action. It awaits
