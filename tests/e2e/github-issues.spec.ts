@@ -45,6 +45,9 @@ async function mockGithubIssues(page: Page) {
   }));
   await routeApiEndpoint(page, "/vibe64/settings", (route) => fulfillJson(route, { ok: true }));
   await routeApiEndpoint(page, "/vibe64/sessions/current", (route) => fulfillJson(route, { ok: true }));
+  // The project shell reads its AI accounts; this project has none.
+  await routeApiEndpoint(page, "/vibe64/accounts/codex-providers", (route) => fulfillJson(route, { ok: true, providers: [] }));
+  await routeApiEndpoint(page, "/vibe64/accounts/ai-connections", (route) => fulfillJson(route, { ok: true, connections: [] }));
   await routeApiEndpoint(page, "/vibe64/issues", async (route) => {
     const url = new URL(route.request().url());
     requests.push(url);
@@ -281,7 +284,7 @@ test("issue number search preserves bare and hash-prefixed numbers through navig
   const requests = await mockGithubIssues(page);
   await page.goto(`${DASHBOARD_PATH}/issues`);
   const search = page.getByRole("textbox", { name: "Search issues", exact: true });
-  await expect(search).toHaveAttribute("placeholder", "Number, title or description");
+  await expect(search).toHaveAttribute("placeholder", "Number, text, label:new or label:\"some label\"");
   for (const number of ["1001", "#1001"]) {
     await search.fill(number);
     await search.press("Enter");
