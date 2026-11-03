@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 import { BASE_URL, DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+import { openMenu } from "./support/settled-ui";
 
 // The chat reads its transcript from the real conversation owner over Socket.IO;
 // each test's owner is closed after the test.
@@ -20,8 +21,32 @@ async function realConversation(page, conversationLog: Record<string, unknown>[]
   return server;
 }
 
+// Below Vuetify's md breakpoint the source editor is compact: repository navigation starts hidden and opens from the
+// file toolbar, opening a file hides it again, and secondary file actions live in the File actions menu
+// (Program: source/edit-and-review).
+const compact = (width: number) => width < 840;
+
+async function showFiles(editor: Locator, width: number) {
+  if (compact(width)) await editor.getByRole("button", { name: "Show files", exact: true }).click();
+}
+
+async function fileAction(page: Page, editor: Locator, name: string, width: number) {
+  if (!compact(width)) return editor.locator("header").getByRole("button", { name, exact: true }).click();
+  await editor.getByRole("button", { name: "File actions", exact: true }).click();
+  await fileMenuItem(page, name).click();
+}
+
+function fileMenuItem(page: Page, name: string) {
+  return openMenu(page).getByRole("listitem").filter({ hasText: new RegExp(`^${name}$`, "u") });
+}
+
+// A text file opens in its Interface, or rendered when it is Markdown; edits happen in its source view.
+async function showSource(editor: Locator, toggle: "Code" | "Markdown") {
+  await editor.getByRole("button", { name: toggle, exact: true }).click();
+  await expect(editor.locator(".cm-content")).toBeVisible();
+}
+
 async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], additionalFiles = {} } = {}) {
-  const messages: object[] = [];
   await mockDirectChatSession(page);
   const session = {
     ...directChatSessionPayload,
@@ -39,11 +64,7 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
   await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/message-suggestions`, (route) => fulfillJson(route, { ok: true, suggestions: [] }));
   await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/update-check`, (route) => fulfillJson(route, { ok: true, status: "up-to-date" }));
   await routeApiEndpoint(page, "/vibe64/sessions/current", (route) => fulfillJson(route, { ok: true, sessionId: directChatSessionId }));
-  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/agent-message`, async (route) => {
-    const body = route.request().postDataJSON();
-    messages.push(body);
-    return fulfillJson(route, { ok: true, delivered: true, messageId: body.messageId, sessionId: directChatSessionId });
-  });
+  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/files`, (route) => fulfillJson(route, { ok: true, areas: ["repo"] }));
   const base = `/vibe64/sessions/${directChatSessionId}/source-editor`;
   const files = { "README.md": "# Hello\n", "notes.bin": Buffer.from([0, 255, 3]), "src/app.js": "export const ready = true;\n", ...additionalFiles };
   let stars = [...initialStars];
@@ -91,7 +112,6 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
     if (url.pathname.endsWith("changes/stream")) return route.fulfill({ contentType: "text/event-stream", body: ": ready\n\n" });
     return fulfillJson(route, { ok: true, files: [], results: [] });
   }, { children: true });
-  return { messages };
 }
 
 for (const width of [390, 900, 1280, 2400]) {
@@ -194,20 +214,37 @@ for (const width of [390, 900, 1600]) {
     await expect(editor.getByText("This file cannot be edited as text. Download it to open it in another application.")).toBeVisible();
     await expect(editor.getByText("Select a file to edit.", { exact: true })).toHaveCount(0);
     await expect(editor.locator(".cm-content")).not.toBeVisible();
-    for (const name of ["Undo", "Redo", "Save now"]) await expect(editor.getByTitle(name, { exact: true })).toBeDisabled();
-    await expect(editor.getByRole("button", { name: "Explain", exact: true })).toBeDisabled();
+    if (compact(width)) {
+      await expect(editor.getByRole("button", { name: "Save now", exact: true })).toBeDisabled();
+      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      for (const name of ["Undo", "Redo", "Explain file or selection"]) await expect(fileMenuItem(page, name)).toHaveClass(/v-list-item--disabled/u);
+      await page.keyboard.press("Escape");
+      await expect(fileMenuItem(page, "Undo")).toHaveCount(0);
+    } else {
+      for (const name of ["Undo", "Redo", "Save now"]) await expect(editor.getByTitle(name, { exact: true })).toBeDisabled();
+      await expect(editor.getByRole("button", { name: "Explain", exact: true })).toBeDisabled();
+    }
     await page.screenshot({ path: testInfo.outputPath(`binary-download-${width}.png`), animations: "disabled" });
 
-    for (const button of [editor.locator("main").getByRole("button", { name: "Download file", exact: true }), editor.locator("header").getByRole("button", { name: "Download file", exact: true })]) {
+    for (const startDownload of [
+      () => editor.locator("main").getByRole("button", { name: "Download file", exact: true }).click(),
+      () => fileAction(page, editor, "Download file", width)
+    ]) {
       const downloading = page.waitForEvent("download");
-      await button.click();
+      await startDownload();
       const download = await downloading;
       expect(download.suggestedFilename()).toBe("staff guide.docx");
       expect(await readFile((await download.path())!)).toEqual(bytes);
     }
-    await editor.getByRole("button", { name: "Star file", exact: true }).click();
-    await expect(editor.getByRole("button", { name: "Unstar file", exact: true })).toBeVisible();
-    await editor.getByTitle("Refresh files", { exact: true }).click();
+    await fileAction(page, editor, "Star file", width);
+    if (compact(width)) {
+      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await expect(fileMenuItem(page, "Unstar file")).toBeVisible();
+      await page.keyboard.press("Escape");
+    } else {
+      await expect(editor.getByRole("button", { name: "Unstar file", exact: true })).toBeVisible();
+    }
+    await fileAction(page, editor, "Refresh files", width);
     await expect(editor.getByRole("heading", { name: "staff guide.docx", exact: true })).toBeVisible();
     await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
 
@@ -217,8 +254,10 @@ for (const width of [390, 900, 1600]) {
     await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
 
     // Reopen text, then choose a binary file directly from the tree.
+    await showFiles(editor, width);
     await editor.locator(".vibe64-source-tree__button").filter({ hasText: "README.md" }).click();
     await expect(editor.locator(".cm-content")).toContainText("# Hello");
+    await showFiles(editor, width);
     await editor.locator(".vibe64-source-tree__button").filter({ hasText: "notes.bin" }).click();
     await expect(editor.getByRole("heading", { name: "notes.bin", exact: true })).toBeVisible();
     await expect(editor.locator(".cm-content")).not.toBeVisible();
@@ -278,6 +317,7 @@ test("download offers an explicit save choice and waits for that save", async ({
     const editor = page.getByLabel("Session source editor");
     await editor.locator(".vibe64-source-tree__button").filter({ hasText: "README.md" }).click();
     await expect(editor.locator(".cm-content")).toContainText("# Hello");
+    await showSource(editor, "Markdown");
     await editor.locator(".cm-content").fill("# My draft\n");
     await editor.getByRole("button", { name: "Download file", exact: true }).click();
     const dialog = page.getByRole("dialog");
@@ -310,6 +350,8 @@ for (const width of [390, 900, 1600]) {
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/files`);
     const editor = page.getByLabel("Session source editor");
     const starred = editor.locator(".vibe64-source-editor__starred");
+    // A compact editor mounts its file list, with the starred files, only while navigation shows.
+    await showFiles(editor, width);
     await expect(starred.locator("summary")).toHaveText("Starred 6");
     await expect(starred).toHaveJSProperty("open", false);
     await starred.locator("summary").focus();
@@ -331,12 +373,18 @@ for (const width of [390, 900, 1600]) {
     await page.screenshot({ path: testInfo.outputPath(`compact-stars-${width}.png`), animations: "disabled" });
     await second.click();
     await expect(editor.locator(".cm-content")).toContainText("export const library = true;");
+    if (compact(width)) {
+      // Opening a file hides compact navigation; shown again, its six starred files start folded.
+      await showFiles(editor, width);
+      await starred.locator("summary").click();
+    }
     await first.click();
     await expect(editor.locator(".cm-content")).toContainText("export const ready = true;");
-    await expect(starred).toHaveJSProperty("open", true);
+    if (!compact(width)) await expect(starred).toHaveJSProperty("open", true);
     const beforeTyping = starReads;
+    await showSource(editor, "Code");
     await editor.locator(".cm-content").fill("export const ready = false;\n");
-    await expect(starred).toHaveJSProperty("open", true);
+    if (!compact(width)) await expect(starred).toHaveJSProperty("open", true);
     expect(starReads).toBe(beforeTyping);
 
     const showChat = page.getByRole("button", { name: "Show chat", exact: true });
@@ -349,10 +397,14 @@ for (const width of [390, 900, 1600]) {
     await page.keyboard.press("Enter");
     await expect(editor).toBeVisible();
     await expect(editor.locator(".cm-content")).toContainText("export const ready = false;");
-    await expect(starred).toHaveJSProperty("open", true);
-    await starred.locator("summary").click();
+    if (compact(width)) await showFiles(editor, width);
+    else {
+      await expect(starred).toHaveJSProperty("open", true);
+      await starred.locator("summary").click();
+    }
     await expect(starred).toHaveJSProperty("open", false);
     await page.reload();
+    await showFiles(editor, width);
     await expect(starred.locator("summary")).toHaveText("Starred 6");
     await expect(starred).toHaveJSProperty("open", false);
     expect(errors).toEqual([]);
@@ -361,14 +413,24 @@ for (const width of [390, 900, 1600]) {
 
   test(`starred files open from chat and downloads preserve bytes at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
-    const { messages } = await mockFiles(page);
+    await mockFiles(page);
+    // The chat sends through its conversation owner.
+    const conversation = await realConversation(page, []);
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/files`);
     const editor = page.getByLabel("Session source editor");
     await expect(editor).toBeVisible();
+    await showFiles(editor, width);
     await editor.locator(".vibe64-source-tree__button").filter({ hasText: "README.md" }).click();
     await expect(editor.locator(".cm-content")).toContainText("# Hello");
-    await editor.getByRole("button", { name: "Star file", exact: true }).click();
-    await expect(editor.getByRole("button", { name: "Unstar file", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await fileAction(page, editor, "Star file", width);
+    if (compact(width)) {
+      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await expect(fileMenuItem(page, "Unstar file")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await showFiles(editor, width);
+    } else {
+      await expect(editor.getByRole("button", { name: "Unstar file", exact: true })).toHaveAttribute("aria-pressed", "true");
+    }
     await expect(editor.getByRole("list", { name: "Starred files" }).getByText("README.md", { exact: true })).toHaveCount(1);
 
     await editor.getByRole("button", { name: "Actions for notes.bin", exact: true }).click();
@@ -403,10 +465,11 @@ for (const width of [390, 900, 1600]) {
     await composer.press("Tab");
     await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect.poll(() => messages.length).toBe(1);
+    await expect.poll(() => conversation.state.messages.length).toBe(1);
     await expect(composer).toHaveValue("");
     await page.reload();
     await expect(editor).toBeVisible();
+    await showFiles(editor, width);
     await expect(editor.locator(".vibe64-source-editor__starred").getByRole("button", { name: "Unstar README.md", exact: true })).toBeVisible();
   });
 }
@@ -431,7 +494,9 @@ for (const width of [390, 1600]) {
     });
     try {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/files`);
-      const starred = page.getByLabel("Session source editor").locator(".vibe64-source-editor__starred");
+      const editor = page.getByLabel("Session source editor");
+      const starred = editor.locator(".vibe64-source-editor__starred");
+      await showFiles(editor, width);
       await expect(starred.locator("summary")).toHaveText("Starred 3");
       const list = starred.getByRole("list", { name: "Starred files", exact: true });
       const listTop = (await list.boundingBox())!.y;
