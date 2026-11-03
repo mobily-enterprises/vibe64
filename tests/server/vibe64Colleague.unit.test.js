@@ -139,6 +139,11 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     async requireAssistantSelectionAccess(actual, options) {
       assert.equal(options.vibe64User.username, "member");
       if (actual.modelId === "denied") throw Object.assign(new Error("Model access denied."), { statusCode: 403 });
+      // A disconnected AI account: the host's own refusal, before any native work.
+      if (observations.disconnected?.has(actual.engineId)) {
+        throw Object.assign(new Error(`${actual.engineId === "codex" ? "Codex (OpenAI)" : "Claude"} isn't connected. Reconnect it in AI Accounts or choose another model.`),
+          { statusCode: 409, code: "vibe64_assistant_connection_unavailable" });
+      }
     },
     async resolveAssistantSelection(actual, options) {
       assert.equal(options.vibe64User.username, "member");
@@ -3661,6 +3666,117 @@ test("Colleague requires explicit Stop before model selection after native provi
     await f.service.stop({}, f.context);
   }
 });
+
+const claudeSelection = { ...selection, engineId: "claude", modelProviderId: "anthropic" };
+const selectModel = (f, assistantSelection) => f.actions.execute({ actionId: "vibe64.colleague.model.select",
+  input: { assistantSelection }, context: f.context });
+// Codex's own work: its app-server launches and every request sent to it.
+const codexWork = async f => (await f.native.trace()).filter(row => row.method || row.args?.includes("--listen"));
+
+// Live on workspace matt (2026-11-03): an upgraded Codex Colleague keeps its native
+// thread with empty process identities and no saved Codex run, as the native
+// conversation upgrade writes it. The owner then disconnected Codex and connected
+// Claude; nothing was running.
+async function disconnectedCodexColleagueWithoutRun(t, responses) {
+  const f = await fixture(t, [{ text: reply("Codex answered before the account changed.") }], { native: true });
+  await f.send("Hello on Codex.");
+  const before = await f.service.wait(f.context);
+  assert.equal(before.status, "ready", before.error);
+  await f.service.close();
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  const { threadId, workdir, configRoot, toolSchemaIdentity } = saved.conversationMetadata.runtime.binding;
+  saved.conversationMetadata.runtime.binding = { threadId, workdir, configRoot, executionId: "", processInstanceId: "", toolSchemaIdentity };
+  await writeFile(file, JSON.stringify(saved));
+  const restored = await fixture(t, responses, { systemRoot: f.root, native: f.native });
+  restored.observations.disconnected = new Set(["codex"]);
+  return { f: restored, before, file };
+}
+
+test("a disconnected Codex Colleague with no saved native run switches to Claude at once", async t => {
+  const { f, before, file } = await disconnectedCodexColleagueWithoutRun(t, [{ text: reply("Claude has the conversation.") }]);
+  const browser = await f.service.browserConversations.open({ id: before.conversationId, context: f.context });
+  assert.equal((await browser.read()).status, "ready", "Nothing is running");
+  const quiet = await codexWork(f);
+  const selected = await selectModel(f, claudeSelection);
+  assert.equal(selected.assistantSelection.engineId, "claude");
+  assert.equal(selected.status, "ready", selected.error);
+  assert.deepEqual(await codexWork(f), quiet, "Reading and switching start no Codex process or run");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(saved.assistantSelection.engineId, "claude");
+  assert.equal(saved.conversationMetadata.runtime.engine, "claude");
+  await f.send("Are you there?", "after-switch");
+  const after = await f.service.wait(f.context);
+  assert.equal(after.status, "ready", after.error);
+  assert.equal(after.messages.at(-1).text, "Claude has the conversation.");
+  assert.deepEqual(after.messages.filter(({ role }) => role === "user").map(({ text }) => text), ["Hello on Codex.", "Are you there?"]);
+});
+
+test("Stop on a disconnected Codex Colleague with no saved run succeeds without starting Codex, and the switch then works", async t => {
+  const { f } = await disconnectedCodexColleagueWithoutRun(t, []);
+  const quiet = await codexWork(f);
+  const stopped = await f.service.stop({}, f.context);
+  assert.equal(stopped.status, "interrupted");
+  assert.deepEqual(await codexWork(f), quiet, "Stop with nothing running starts no Codex process");
+  const selected = await selectModel(f, claudeSelection);
+  assert.equal(selected.assistantSelection.engineId, "claude");
+  assert.equal(selected.status, "ready", selected.error);
+});
+
+test("a message after Codex is disconnected fails with the reconnect message, leaves nothing running, and Claude takes over", async t => {
+  const f = await fixture(t, [{ text: reply("Codex answer.") }, { text: reply("Claude answer.") }], { native: true });
+  await f.send("First on Codex.");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  f.observations.disconnected = new Set(["codex"]);
+  await f.send("Second while Codex is disconnected.", "user-2");
+  const failed = await f.service.wait(f.context);
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.error, "Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model.");
+  const browser = await f.service.browserConversations.open({ id: failed.conversationId, context: f.context });
+  assert.notEqual((await browser.read()).status, "working", "The failed message leaves no turn running");
+  const selected = await selectModel(f, claudeSelection);
+  assert.equal(selected.assistantSelection.engineId, "claude");
+  await f.send("Third on Claude.", "user-3");
+  const after = await f.service.wait(f.context);
+  assert.equal(after.status, "ready", after.error);
+  assert.equal(after.messages.at(-1).text, "Claude answer.");
+});
+
+// A model change never stops or kills Colleague's running turn. It is refused at
+// once while the turn runs, and works as soon as the turn ends or is stopped.
+for (const ending of ["finishes", "is stopped"]) {
+  test(`a model change during Colleague's running Codex turn stops nothing, and works once the turn ${ending}`, async t => {
+    const f = await fixture(t, [{ mode: "held-completion", text: reply("The running answer.") }], { native: true });
+    let held;
+    try {
+      await f.send("Take your time.");
+      for (let attempts = 0; attempts < 3000 && !held; attempts++) {
+        held = (await f.native.trace()).find(row => row.completionHeld)?.completionHeld;
+        if (!held) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.ok(held, "The native turn is running");
+      await assert.rejects(selectModel(f, claudeSelection), { code: "vibe64_colleague_model_change_busy" });
+      assert.equal((await f.native.trace()).some(row => row.method === "turn/interrupt"), false, "The refused change stops nothing");
+      assert.equal((await f.service.read({}, f.context)).assistantSelection.engineId, "codex");
+      if (ending === "finishes") {
+        await f.native.releaseCompletion(held);
+        held = null;
+        const finished = await f.service.wait(f.context);
+        assert.equal(finished.status, "ready", finished.error);
+        assert.equal(finished.messages.at(-1).text, "The running answer.");
+      } else {
+        const stopped = await f.service.stop({}, f.context);
+        held = null;
+        assert.equal(stopped.status, "interrupted");
+      }
+      const selected = await selectModel(f, claudeSelection);
+      assert.equal(selected.assistantSelection.engineId, "claude");
+      assert.equal(selected.status, "ready", selected.error);
+    } finally {
+      if (held) await f.native.releaseCompletion(held).catch(() => {});
+    }
+  });
+}
 
 test("Colleague model selection takes an exact selection only", async t => {
   const f = await fixture(t, []);

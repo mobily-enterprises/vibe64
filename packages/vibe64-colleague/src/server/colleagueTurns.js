@@ -97,8 +97,10 @@ function createColleagueTurns({
       let conversation = state.record.conversationMetadata?.runtime ? await conversations.openConversation(state, scoped) : null;
       let current = await conversation?.read();
       const savedRuntime = state.record.conversationMetadata?.runtime;
-      if (current?.status === "working" || savedRuntime?.engine === "codex" &&
-          codexAppServerTurnStateFromAgentRun(savedRuntime.binding?.codexAppServerRun || {}).active) {
+      // Only a saved Codex run can still be running. A binding that never ran
+      // a turn here, such as an upgraded one, has none and nothing to stop.
+      const savedRun = savedRuntime?.engine === "codex" ? savedRuntime.binding?.codexAppServerRun : null;
+      if (current?.status === "working" || savedRun && codexAppServerTurnStateFromAgentRun(savedRun).active) {
         throw failure("Stop Colleague's previous native turn before changing its model.", "vibe64_colleague_model_change_native_busy");
       }
       if (conversation && state.runtimeOwner === conversations.nativeRuntime && settings.engine === "api") {
