@@ -305,6 +305,8 @@ for (const viewport of viewports) {
       await expect(
         panel.getByRole("textbox", { name: "Display name", exact: true }),
       ).toHaveValue("Business mailbox");
+      // The requested integration is configured, so no missing-integration warning shows.
+      await expect(panel.getByText(/The requested integration/)).toHaveCount(0);
       await page.screenshot({
         path: `/tmp/integration-chat-${viewport.name}.png`,
       });
