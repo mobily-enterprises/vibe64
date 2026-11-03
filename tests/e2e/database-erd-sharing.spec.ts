@@ -15,6 +15,7 @@ import { bookingOverview, dataOverviewSchema } from "../fixtures/dataOverviewSch
 import { createDatabaseLayoutChangedPublisher } from "../../packages/vibe64-database-tools/src/server/events.js";
 import { saveErdLayout } from "../../packages/vibe64-database-tools/src/server/sessionState.js";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
+import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 import { DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
 
@@ -172,8 +173,8 @@ async function openDiagram(page: Page, url: string, { waitForReady = true, view 
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/message-suggestions`, (route) => fulfillJson(route, { ok: true, suggestions: [] }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/renewal`, (route) => fulfillJson(route, { ok: true, renewal: null }));
   await routeApiEndpoint(page, "/vibe64/settings", (route) => fulfillJson(route, { ok: true, promptHints: { enabled: false, canEdit: true } }));
+  // The session query opens that session's Database directly.
   await page.goto(`${url}${DASHBOARD_PATH}/database?sessionId=${sessionId}`);
-  if (sessionId !== directChatSessionId) await page.getByRole("link", { name: "Database", exact: true }).click();
   if (view) await page.getByRole("button", { name: view, exact: true }).click({ timeout: 15_000 });
   if (view === "Overview") {
     await expect(page.getByText("Arranging actors…")).toHaveCount(0);
@@ -183,6 +184,13 @@ async function openDiagram(page: Page, url: string, { waitForReady = true, view 
   if (!waitForReady) return;
   await expect(page.locator('.vue-flow__node[data-id="public.customers"]')).toBeVisible();
   await expect(page.getByText("Arranging tables…", { exact: true })).toHaveCount(0);
+}
+
+// Temporary AI runs on the real conversation owner over Socket.IO; it records the creates and turns it receives.
+async function temporaryAiOwner(page: Page, provider = "codex") {
+  const owner = await assistantStatusServer({ temporaryEngineId: provider, session: directChatSessionPayload });
+  await relayConversation(page, owner);
+  return owner;
 }
 
 async function overviewAction(page: Page, name: string) {
@@ -285,7 +293,7 @@ for (const width of [390, 1600]) {
       await tables.locator(".database-workspace__table-detail").getByRole("button", { name: "notes text", exact: true }).click();
       await expect(details.locator('[data-id="public.checklists"]')).toContainText("notes");
       await page.screenshot({ path: testInfo.outputPath(`overview-expanded-${width}.png`) });
-      await page.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
       await expect(details).toHaveCount(0);
       await expect(camera).toHaveAttribute("style", before!);
       await expect(map).toHaveCSS("opacity", "1");
@@ -386,7 +394,7 @@ test("@data-overview 130-table schema stays collapsed and typing remains respons
       const search = page.getByLabel("Message AI assistant");
       await search.fill(`typing ${index}`, { timeout: 2000 });
       await expect(search).toHaveValue(`typing ${index}`);
-      await page.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
       await expect(page.locator(".database-overview .vue-flow__node-table")).toHaveCount(0);
     }
     expect(server.saves).toHaveLength(0);
@@ -407,7 +415,7 @@ test("@data-overview a stale expansion cannot replace a newer collapse", async (
     await worker.hold();
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect.poll(worker.pending).toBe(1);
-    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     await worker.release();
     await expect(page.locator(".database-overview .vue-flow__node-table")).toHaveCount(0);
     await expect(page.locator(".database-overview .vue-flow__node-actor")).toHaveCount(4);
@@ -485,7 +493,7 @@ for (const width of [390, 1600]) {
       expect(saved.actors.find((actor) => actor.table === "public.invoice_groups").tables).toEqual(["public.invoice_groups"]);
       expect(saved.actors.find((actor) => actor.table === "public.bookings").tables).not.toContain("public.invoice_groups");
       await expect(page.getByText("Arranging actors…")).toHaveCount(0);
-      await page.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
       await page.getByRole("button", { name: "Fit", exact: true }).click();
       await page.locator('[data-id="actor:public.invoice_groups"] strong').click();
       await diagramAction(page, "Edit or merge actor");
@@ -510,10 +518,12 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
   const definition = { ...bookingOverview(), abstraction: "high", reviewedTables: schema.tables.map((table) => table.qualifiedName) };
   const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  let owner: Awaited<ReturnType<typeof temporaryAiOwner>> | null = null;
   try {
     const page = await context.newPage();
     page.setDefaultTimeout(7000);
-    const turns = [];
+    owner = await temporaryAiOwner(page);
+    const turns = owner.temporary!.captured.temporaryTurns;
     await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await expect(page.getByText("Not yet reviewed: 0", { exact: true })).toBeVisible();
@@ -528,10 +538,7 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
     await overviewAction(page, "Reload overview");
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await expect(page.getByText("Not yet reviewed: 1", { exact: true })).toBeVisible();
-    const endpoint = `/vibe64/sessions/${directChatSessionId}/temporary-conversations`;
-    await routeApiEndpoint(page, endpoint, (route) => fulfillJson(route, { ok: true, conversationId: "overview-scope" }));
-    await routeApiEndpoint(page, `${endpoint}/overview-scope/turns`, (route) => { turns.push(route.request().postDataJSON()); return fulfillJson(route, { ok: true, runId: "scope-turn", status: "inProgress" }); });
-    await routeApiEndpoint(page, `${endpoint}/overview-scope`, (route) => fulfillJson(route, { ok: true, message: "Finished.", outcome: { kind: "complete" }, runId: "scope-turn", status: "completed" }));
+    owner.temporary!.captured.outcome = () => "complete";
     await overviewAction(page, "Review with AI");
     dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("radio", { name: "Process new tables only (1)", exact: true })).toBeChecked();
@@ -545,26 +552,22 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
     expect(turns[0].message).toContain("Not abstract (none)");
     expect(turns[0].message).toContain("including those deliberately left under Other tables");
     expect(JSON.parse(await server.readOverviewFile())).toEqual(definition);
-  } finally { await context.close(); await server.close(); }
+  } finally { await context.close(); await server.close(); await owner?.close(); }
 });
 
 for (const provider of ["codex", "opencode"]) {
   test(`@data-overview ${provider} receives the same source-write authoring task`, async ({ browser, baseURL }) => {
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), provider });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    let owner: Awaited<ReturnType<typeof temporaryAiOwner>> | null = null;
     try {
       const page = await context.newPage();
-      const created = [];
-      const turns = [];
+      owner = await temporaryAiOwner(page, provider);
+      const { temporaryCreates: created, temporaryTurns: turns } = owner.temporary!.captured;
+      // The task writes the overview source, then reports completion.
+      owner.temporary!.captured.beforeNativeTurn = async () => { await server.setOverview(bookingOverview()); };
+      owner.temporary!.captured.outcome = () => "complete";
       await openDiagram(page, server.url, { view: "Overview", waitForReady: false, provider });
-      const endpoint = `/vibe64/sessions/${directChatSessionId}/temporary-conversations`;
-      await routeApiEndpoint(page, endpoint, async (route) => { created.push(route.request().postDataJSON()); await fulfillJson(route, { ok: true, conversationId: "overview-ai" }); });
-      await routeApiEndpoint(page, `${endpoint}/overview-ai/turns`, async (route) => {
-        turns.push(route.request().postDataJSON());
-        await server.setOverview(bookingOverview());
-        await fulfillJson(route, { ok: true, runId: "overview-turn", status: "inProgress" });
-      });
-      await routeApiEndpoint(page, `${endpoint}/overview-ai`, (route) => fulfillJson(route, { ok: true, message: "Overview created.", outcome: { kind: "complete" }, runId: "overview-turn", status: "completed" }));
       await page.getByRole("button", { name: "Create with AI", exact: true }).click();
       await page.getByRole("button", { name: "Generate overview", exact: true }).click();
       await expect.poll(() => created.length).toBe(1);
@@ -575,12 +578,12 @@ for (const provider of ["codex", "opencode"]) {
       expect(turns[0].message).toContain("data-overview.json");
       expect(turns[0].message).toContain("several relationships away");
       expect(turns[0].message).toContain("do not change database records");
-      await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toContainText("Overview created.");
+      await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toContainText("Temporary recovery complete.");
       await overviewAction(page, "Reload overview");
       await expect(page.getByText("7 / 8 tables classified")).toBeVisible();
       await page.getByRole("button", { name: "Overview options", exact: true }).click();
       await expect(page.getByRole("button", { name: "Review with AI", exact: true })).toBeEnabled();
-    } finally { await context.close(); await server.close(); }
+    } finally { await context.close(); await server.close(); await owner?.close(); }
   });
 }
 
@@ -621,7 +624,7 @@ test("@data-overview actual local database schema and authored grouping remain c
       await expect(camera).toHaveAttribute("style", viewport!);
       if (actor === actors[0]) await page.screenshot({ path: testInfo.outputPath("local-database-actor-erd.png") });
       await testInfo.attach(`actor-${actor.name}-timing`, { body: JSON.stringify({ tables: ids.length, milliseconds: Date.now() - started }), contentType: "application/json" });
-      await page.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     }
     expect(rendered.sort()).toEqual(schema.tables.map(table => table.qualifiedName).sort());
     expect(server.saves).toHaveLength(0);
@@ -1057,7 +1060,7 @@ test("@data-overview defaults to Overview without SQL and keeps the AI-selected 
     actors = await boxes();
     expect(actors).toEqual(originalActors);
     expect(queries).toHaveLength(0);
-    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     await page.getByRole("button", { name: "Data", exact: true }).click();
     await expect.poll(() => queries.length).toBe(1);
   } finally { await context.close(); await server.close(); }
@@ -1168,7 +1171,7 @@ for (const view of ["Overview", "ERD"] as const) {
       if (view === "Overview") {
         await expect(page.locator(".database-overview__map")).toHaveCSS("opacity", "0.12");
         await diagram.locator('[data-id="public.checklists"] strong').click();
-        await page.getByRole("button", { name: "Close details", exact: true }).click();
+        await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
         await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
         await expect.poll(solidTables).toEqual(allTables);
         expect(server.saves).toHaveLength(0);
@@ -1202,7 +1205,7 @@ test("@data-overview main connections reduce clutter while all connections and p
     const details = page.locator(".database-overview__detail");
     await expect(details.locator(".vue-flow__edge")).toHaveCount(3);
     await expect(details.locator(".vue-flow__node-table")).toHaveCount(4);
-    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     await server.setOverview({ ...definition, mainRelationships: ["removed_fk"] });
     await overviewAction(page, "Reload overview");
     await expect(page.getByRole("alert").filter({ hasText: "main connections are missing" })).toBeVisible();
@@ -1236,9 +1239,18 @@ for (const width of [390, 768, 1600]) {
       await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
       await expect(overviewToolbar).toBeVisible();
       await expect(overviewToolbar.locator("strong")).toHaveText("Bookings");
-      expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
+      const headerAfter = (await overviewToolbar.boundingBox())!;
+      // Up to 700px the labelled Back to data overview control takes its own header row under the title
+      // (Program: database/diagram-exploration); the header grows by that row and the map below gives it up.
+      const grown = headerAfter.height - headerBefore!.height;
+      if (width <= 700) {
+        const back = (await overviewToolbar.getByRole("button", { name: "Back to data overview", exact: true }).boundingBox())!;
+        expect(back.y).toBeGreaterThanOrEqual(titleBefore!.y + titleBefore!.height);
+        expect(grown).toBeGreaterThanOrEqual(back.height);
+      } else expect(grown).toBe(0);
+      expect({ ...headerAfter, height: headerBefore!.height }).toEqual(headerBefore);
       expect((await overviewToolbar.locator("strong").boundingBox())!.y).toBe(titleBefore!.y);
-      expect(await map.boundingBox()).toEqual(mapBefore);
+      expect(await map.boundingBox()).toEqual({ ...mapBefore!, y: mapBefore!.y + grown, height: mapBefore!.height - grown });
       await expect(camera).toHaveAttribute("style", cameraBefore!);
       const details = page.getByRole("region", { name: "ERD for Bookings" });
       const toolbar = page.getByLabel("ERD controls");
@@ -1278,7 +1290,7 @@ for (const width of [390, 768, 1600]) {
         await expect(overviewToolbar.getByLabel("ERD controls")).toBeVisible();
         expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
       }
-      await page.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
       await expect(overviewToolbar).toBeVisible();
       expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
       expect(await map.boundingBox()).toEqual(mapBefore);
@@ -1367,7 +1379,7 @@ test("@data-overview dragging actors persists positions, reroutes connections an
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect(page.locator(".database-overview__detail .vue-flow__node-table")).toHaveCount(4);
     await expect(page.locator(".database-overview__detail .vue-flow__node-table.draggable")).toHaveCount(4);
-    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     await expect.poll(position).toBe(moved);
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await page.getByRole("checkbox", { name: "All connections", exact: true }).check();
@@ -1674,7 +1686,7 @@ test("@overview-transition details fade in at their final positions while the ov
     expect(await overview.boundingBox()).toEqual(before);
     await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
     await page.screenshot({ path: info.outputPath("ready.png") });
-    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect.poll(worker.pending).toBe(1);
     await expect(diagram).toHaveCSS("opacity", "0");
