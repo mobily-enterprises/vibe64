@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
-import { normalizeRepositoryUpdateCheck, REPOSITORY_UPDATE_RELATIONSHIPS } from "@local/vibe64-core/shared";
+import {
+  normalizeRepositoryUpdateCheck,
+  REPOSITORY_UPDATE_CHECK_METADATA,
+  REPOSITORY_UPDATE_RELATIONSHIPS
+} from "@local/vibe64-core/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionHasActiveAgentRun } from "./sessionRenewalRules.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
@@ -13,7 +17,6 @@ import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("./types.js").SessionWorkOperations} SessionWorkOperations */
 
-const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
 
 function repositoryUpdateCheckIsFresh(value, now = Date.now()) {

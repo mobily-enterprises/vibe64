@@ -1,5 +1,8 @@
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
+// The session metadata entry holding its last saved-version check.
+const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
+
 const REPOSITORY_UPDATE_RELATIONSHIPS = new Set([
   "ahead",
   "behind",
@@ -76,6 +79,7 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
 }
 
 export {
+  REPOSITORY_UPDATE_CHECK_METADATA,
   REPOSITORY_UPDATE_RELATIONSHIPS,
   normalizeRepositoryUpdateCheck,
   repositoryUpdateRelationship,

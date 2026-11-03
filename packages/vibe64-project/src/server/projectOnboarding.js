@@ -1,4 +1,5 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { readSessionUpdateFirst } from "@local/vibe64-core/shared";
 import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioProjectContext";
 import { bindingValuePresent, requiredAlternative } from "./resourceEnvironment.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
@@ -56,11 +57,16 @@ function createProjectOnboarding({
       }
       environmentSetup = { missingKeys: [...missingKeys], warning: resolved.warning };
     }
+    // Setup that needs attention is rechecked after Update while Update owns
+    // the session: a setup repair would redo or collide with its saved work.
+    const updateFirst = inspection.state === "attention" && source.sessionId
+      ? await readSessionUpdateFirst(selection.sessionStore(), source.sessionId) : null;
     return {
       ok: true,
       available: true,
       inspection,
       environmentSetup,
+      updateFirst,
       templates: pageTemplates ? templates.slice(templateOffset, templateOffset + 10) : templates,
       ...(pageTemplates ? { templateOffset, templateTotal: templates.length } : {}),
       source: { rootKind: source.rootKind, sessionId: source.sessionId }

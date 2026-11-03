@@ -1,6 +1,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { REPOSITORY_UPDATE_CHECK_METADATA } from "@local/vibe64-core/shared";
 import {
   assertSessionRepositoryReview,
   sessionConnectedContribution,
@@ -415,7 +416,7 @@ function createServiceSessionWork({
         await runtime.store.writeMetadataValue(sessionId, "github_pull_request", JSON.stringify(source));
         await runtime.store.writeMetadataValue(sessionId, "source_remote_url", `https://github.com/${source.headRepository}.git`);
         await runtime.store.writeMetadataValue(sessionId, "repository_mode", "github");
-        await runtime.store.writeMetadataValue(sessionId, "repository_update_check", "");
+        await runtime.store.writeMetadataValue(sessionId, REPOSITORY_UPDATE_CHECK_METADATA, "");
       });
       session = await runtime.getSessionWithoutSource(sessionId);
       const recorded = await writeSessionGitCommandActor({

@@ -86,6 +86,12 @@ test("onboarding tools share action authority and return bounded setup choices w
     assert.equal(response.diagnosticsTruncated, true);
     assert.equal(response.setupRequests[0].kind, "repair");
     assert.match(response.setupRequests[0].message, /do not downgrade/);
+    result.updateFirst = { reason: "failed", behind: 1, message: "This session's Update needs repair first.", error: "private-conflict" };
+    response = await read({ includeSetupRequests: true });
+    assert.deepEqual(response.setupRequestKinds, [], "Update owns the session: no setup repair is offered");
+    assert.deepEqual(response.setupRequests, []);
+    assert.deepEqual(response.updateFirst, { reason: "failed", message: "This session's Update needs repair first." });
+    delete result.updateFirst;
     result.inspection = { state: "ready", nextAction: "work", templateEligible: false, diagnostics: [] };
     result.environmentSetup = { missingKeys: Array.from({ length: 21 }, (_, index) => `KEY_${index}`), warning: "W".repeat(600), values: { SECRET: "private-value" } };
     response = await read();

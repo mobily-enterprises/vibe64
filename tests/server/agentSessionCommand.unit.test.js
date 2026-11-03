@@ -273,13 +273,19 @@ test("session status gives the assistant the stored reason a repository needs he
     source_path_authority: "managed_session_source" }, sessionId: "session-1" };
   const message = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
   const tasks = new Map([["update-session", { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" },
+    conflictPaths: ["package-lock.json", "package.json"],
     error: message, finishedAt: "2026-10-25T14:49:52.000Z", operationId: "update-1", status: "failed" }]]);
+  const saved = "a".repeat(40);
+  const incoming = { commit: "b".repeat(40), message: "Upgrade to JSKIT 0.3.0\n\nAll packages." };
+  let updateCheck = { ahead: 1, behind: 1, canonicalCommit: saved, checkedAt: "2026-10-25T14:49:00.000Z", incomingVersions: [incoming] };
   const service = createAgentSessionCommandService({ logger: silentLogger,
     project: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
           async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); return tasks.get(taskId) || null; },
-          async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
+          async readMetadataValue(_sessionId, name) {
+            return JSON.stringify(name === "repository_update_check" ? updateCheck : { status: "succeeded", recipeHash: "earlier" });
+          } };
       },
       async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
@@ -290,7 +296,18 @@ test("session status gives the assistant the stored reason a repository needs he
     }
   });
   await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
-  assert.deepEqual((await service.sessionStatus("session-1")).repository, {
+  const { updateFirst, ...problem } = (await service.sessionStatus("session-1")).repository;
+  assert.deepEqual(updateFirst, {
+    reason: "failed",
+    behind: 1,
+    canonicalCommit: saved,
+    incomingVersions: [{ shortCommit: "bbbbbbbb", message: incoming.message }],
+    incomingVersionsTruncated: false,
+    conflictPaths: ["package-lock.json", "package.json"],
+    error: message,
+    message: "This session's Update needs repair first. Use Fix it with AI on the Update notice; setup is checked again once Update succeeds."
+  });
+  assert.deepEqual(problem, {
     code: "vibe64_session_update_conflict",
     failedAt: "2026-10-25T14:49:52.000Z",
     label: "Repository needs help",
@@ -301,6 +318,10 @@ test("session status gives the assistant the stored reason a repository needs he
     status: "failed"
   });
   tasks.set("update-session", { ...tasks.get("update-session"), code: "", error: "", status: "ready" });
+  const behind = (await service.sessionStatus("session-1")).repository;
+  assert.deepEqual([behind.needsHelp, behind.updateFirst.reason, behind.updateFirst.incomingVersions.length], [false, "behind", 1],
+    "a session behind its saved version reports the incoming versions without a stored failure");
+  updateCheck = { ahead: 1, behind: 0, canonicalCommit: saved, checkedAt: "2026-10-25T14:50:00.000Z" };
   assert.deepEqual((await service.sessionStatus("session-1")).repository, { needsHelp: false });
 });
 

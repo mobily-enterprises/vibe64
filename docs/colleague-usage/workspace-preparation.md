@@ -95,6 +95,23 @@ The same recovery applies on desktop and mobile. Colleague can explain the
 warning and offer the supported repair flow; source edits and terminal commands
 belong to the coding assistant or the person, not Colleague.
 
+## Project setup waits for Update
+
+When the session's Update has failed, is running or is waiting (the session is
+behind its saved version), **Project setup needs attention** shows why, for
+example *This session's Update needs repair first*. It does not offer
+**Fix it with AI** for setup, and workspace preparation's **Fix it with AI** is
+unavailable. Setup is often blocked only by local work that the saved version
+already supersedes, such as a partial dependency bump, and repairing it here
+would redo that work.
+
+Bring the session up to date first: choose **Update**, or **Fix it with AI** on
+the Update notice when Update needs help. When the repair finishes, Vibe64 runs
+Update itself. When Update succeeds, Vibe64 prepares the workspace again and
+rechecks setup. Setup repair is offered again only if setup still needs
+attention. Colleague's onboarding read reports the same `updateFirst` state and
+offers no setup repair while it is present.
+
 ## Competing Stack proposals
 
 When two selected technologies propose different bodies for the same section,

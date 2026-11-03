@@ -14,12 +14,14 @@
       <template v-else>
         <p v-for="(diagnostic, index) in onboarding.inspection.diagnostics" :key="index">{{ diagnostic.message }}</p>
         <p v-if="onboarding.inspection.nextAction === 'update-genesis'">Use an installation with a newer Genesis version to update setup.</p>
+        <p v-if="updateFirst" data-testid="project-setup-update-first">{{ updateFirst.message }}</p>
       </template>
       <div class="project-preview__warning-actions">
         <v-btn :disabled="!enabled || resource.isFetching.value" size="small" variant="text" @click="resource.reload()">
           {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
         </v-btn>
         <Vibe64TemporaryAiFixAction
+          v-if="!updateFirst"
           :disabled="askDisabled"
           :pending="asking"
           title="Open Temporary AI to resolve project setup"
@@ -134,6 +136,11 @@ const props = defineProps({
   requestTemporaryAi: { type: Function, required: true },
   sessionId: { type: String, required: true }
 });
+// Setup is inspected again after a turn and after each Update outcome, so a
+// repair waiting for Update is offered against the updated session.
+const SETUP_RECHECK_REASONS = [
+  "temporary-agent-turn-idle", "session-update-started", "session-update-completed", "session-update-failed"
+];
 const projectSlug = useVibe64ProjectSlug();
 const purpose = ref("");
 const applying = ref("");
@@ -155,7 +162,7 @@ const resource = useEndpointResource({
     events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_SESSION_CHANGED_EVENT],
     matches: ({ event, payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }) &&
       (event === VIBE64_PROJECT_CHANGED_EVENT ||
-        (payload.sessionId === props.sessionId && payload.reason === "temporary-agent-turn-idle"))
+        (payload.sessionId === props.sessionId && SETUP_RECHECK_REASONS.includes(payload.reason)))
   },
   refreshOnPull: true,
   fallbackLoadError: "Project setup could not be read."
@@ -175,6 +182,8 @@ const command = useCommand({
 const onboarding = computed(() => resource.data.value?.ok === true ? resource.data.value : null);
 const state = computed(() => onboarding.value?.inspection?.state || "");
 const environmentSetup = computed(() => onboarding.value?.environmentSetup);
+// While Update owns the session, its Update notice is the one repair offered.
+const updateFirst = computed(() => onboarding.value?.updateFirst || null);
 const loadError = computed(() => vibe64ResourceResponseError(resource.data.value) || resource.loadError.value);
 const showPreview = computed(() => {
   if (props.archived || onboarding.value?.available === false || loadError.value) return true;
@@ -240,7 +249,7 @@ async function apply(template) {
 }
 
 async function ask(kind) {
-  if (askDisabled.value) return;
+  if (askDisabled.value || kind === "repair" && updateFirst.value) return;
   const inspection = onboarding.value?.inspection;
   const diagnostic = loadError.value || inspection?.diagnostics.map(({ message }) => message).join(" ");
   const request = projectOnboardingRequest(kind, { purpose: purpose.value, diagnostic, nextAction: inspection?.nextAction });

@@ -263,6 +263,64 @@ test("a temporary send waits for the session write lock as long as the service's
   });
 });
 
+test("every Fix it with AI turn carries the saved version it is behind, and a setup repair hands the session to Update first", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const settle = () => Object.assign(f.native, { status: "completed", admitted: false });
+    const saved = "c".repeat(40);
+    await f.store.writeMetadataValue("one", "repository_update_check", JSON.stringify({
+      ahead: 1, behind: 1, canonicalCommit: saved, checkedAt: "2026-11-03T12:00:00.000Z",
+      incomingVersions: [{ commit: "d".repeat(40), message: "Upgrade every JSKIT package to 0.3.0\n\nWith the lockfile." }]
+    }));
+    await f.store.writeBackgroundTaskEvent("one", "update-session", { patch: {
+      status: "failed", code: "vibe64_session_update_conflict", conflictPaths: ["package.json", "package-lock.json"],
+      error: "2 files need review before this session can update."
+    } });
+    await f.service.createTemporaryConversation("one", { conversationId: "setup", presentation: {
+      recoveryContext: "Inspect and update this project's Genesis setup."
+    } });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "setup", messageId: "setup-1",
+      message: "Inspect and update this project's Genesis setup.", displayMessage: "Fix project setup." });
+    const setup = f.native.lastInput.message;
+    assert.match(setup, /^\[Vibe64 saved version\]\nThis session's Update failed on: package\.json, package-lock\.json\. 2 files need review/);
+    assert.match(setup, /- dddddddd Upgrade every JSKIT package to 0\.3\.0\n/);
+    assert.match(setup, /check read-only whether the saved version already contains that change \(`git log HEAD\.\.cccccccccccc`/);
+    assert.match(setup, /resolved by taking the saved version\. Say so plainly in one sentence and do not ask the person to choose/);
+    assert.match(setup, /Update owns this session until it succeeds\. When this repair concerns project setup[^.]*, do not repair it in this chat now/);
+    assert.match(setup, /\[End Vibe64 saved version\]\n\n[^]*Inspect and update this project's Genesis setup\.$/);
+    const shown = JSON.stringify(await f.store.readConversationLog({ sessionId: "one", conversationId: "setup" }));
+    assert.match(shown, /Fix project setup\./);
+    assert.doesNotMatch(shown, /Vibe64 saved version/, "the brief is never shown as the person's message");
+
+    settle();
+    await f.service.createTemporaryConversation("one", { conversationId: "update", presentation: {
+      recoveryOperation: "update", recoveryContext: "Help resolve this Vibe64 Update problem."
+    } });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "update", messageId: "update-1",
+      message: "Help resolve this Vibe64 Update problem." });
+    assert.match(f.native.lastInput.message, /Update is this repair\. Prepare it so Update succeeds; Vibe64 runs Update itself afterwards\./);
+    assert.doesNotMatch(f.native.lastInput.message, /do not repair it in this chat now/);
+
+    settle();
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "chat-1", message: "What does Save do?" });
+    assert.doesNotMatch(f.native.lastInput.message, /Vibe64 saved version/, "an ordinary temporary chat carries no repair brief");
+
+    await f.store.writeBackgroundTaskEvent("one", "update-session", { patch: { status: "ready", code: "", conflictPaths: [], error: "" } });
+    await f.store.writeMetadataValue("one", "repository_update_check", JSON.stringify({
+      ahead: 1, behind: 0, canonicalCommit: saved, checkedAt: "2026-11-03T12:05:00.000Z"
+    }));
+    settle();
+    await f.service.createTemporaryConversation("one", { conversationId: "setup-after", presentation: {
+      recoveryContext: "Inspect and update this project's Genesis setup."
+    } });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "setup-after", messageId: "setup-2",
+      message: "Inspect and update this project's Genesis setup." });
+    assert.doesNotMatch(f.native.lastInput.message, /Vibe64 saved version/, "after Update the setup repair runs against the updated session");
+    await f.service.close();
+  });
+});
+
 test("temporary provisional rows require exact native admission across read failure and restart without replay", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);

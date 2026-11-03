@@ -115,6 +115,29 @@ Senior). A merge repair chat accepts only **Fix it with AI** or **Custom**. Auto
 is Main chat only. Colleague doesn't start an Update conflict's **Fix it with AI**
 repair itself: choose that button on the Update error.
 
+## Repairs check the saved version first
+
+Every **Fix it with AI** turn (setup, Update, Save, preview identity and the
+others) tells the AI whether this session is behind its saved version and lists
+the incoming versions, read again for each message. Before it changes
+dependencies or ports code, the AI checks whether the saved version already
+contains the change; if it does, the change arrives with Update and is not
+redone in the session.
+
+When local work is superseded by the saved version, such as a stale or partial
+dependency bump that the saved version completes, the repair takes the saved
+version and says so in one sentence. It does not ask you to choose between the
+versions, because Vibe64's checkpoint keeps your original. It asks only about
+real product decisions.
+
+While the session's Update has failed, is running or is waiting, Update is the
+one repair for the session. A setup, workspace preparation or verification
+repair that is already open tells you the session must be brought up to date
+first, then stops. Use **Fix it with AI** on the Update notice. After that
+repair, Vibe64 runs Update itself, and setup is checked again against the
+updated session. See
+[Project setup waits for Update](workspace-preparation.md#project-setup-waits-for-update).
+
 ## Work elsewhere while a chat runs
 
 Select **Main chat** or another temporary tab to continue elsewhere. The hidden

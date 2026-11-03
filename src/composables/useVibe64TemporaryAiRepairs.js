@@ -127,10 +127,16 @@ function useVibe64TemporaryAiRepairs(props, {
     !props.sessionSelectionArchived &&
     !repositoryOperationActive.value
   ));
+  // Update owns the session while it failed or is pending: Vibe64 prepares the
+  // workspace again against the updated session, so no preparation repair
+  // starts before it.
+  const updateOwnsSession = computed(() => Boolean(saveWork.saveWorkRequiresUpdate?.value ||
+    saveWork.saveWorkActivityIsUpdate?.value && saveWork.saveWorkFailure?.value));
   const workspaceSetupAskDisabled = computed(() => Boolean(
     !workspaceSetupNeedsAttention.value ||
     workspaceSetupFixSending.value ||
-    !temporaryAiAvailable.value
+    !temporaryAiAvailable.value ||
+    updateOwnsSession.value
   ));
 
   async function fixWorkspaceSetupWithTemporaryAi() {

@@ -135,6 +135,7 @@ test("onboarding preserves described, incomplete and incompatible Genesis source
         assert.equal(opening.inspection.templateEligible, false);
         assert.deepEqual(opening.templates, []);
         if (scenario.diagnostic) assert.equal(opening.inspection.diagnostics[0].code, scenario.diagnostic);
+        assert.equal(opening.updateFirst, null);
         if (scenario.state === "attention") assert.ok(opening.inspection.diagnostics.length > 0);
         else assert.deepEqual(opening.inspection.diagnostics, []);
         const rejected = await service.applyTemplate({ sessionId, templateId: "test:nodejs/public" });
@@ -145,6 +146,34 @@ test("onboarding preserves described, incomplete and incompatible Genesis source
       });
     });
   }
+});
+
+test("setup that needs attention waits for Update while it failed or the session is behind, then is offered again", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { root, service, store } = await fixture(targetRoot);
+    await addGenesisStack({ projectRoot: root, pieces: ["nodejs"] });
+    await writeFile(path.join(root, "genesis/blueprint.md"), "# Blueprint\n\nA command-line application for inspecting invoices.\n");
+    await unlink(path.join(root, "genesis/version"));
+    const saved = "e".repeat(40);
+    await store.writeMetadataValue(sessionId, "repository_update_check", JSON.stringify({ ahead: 1, behind: 2, canonicalCommit: saved,
+      checkedAt: "2026-11-03T12:00:00.000Z", incomingVersions: [{ commit: "f".repeat(40), message: "Port to JSKIT 0.3.0" }] }));
+    let opening = await service.readOnboarding({ sessionId });
+    assert.equal(opening.inspection.state, "attention");
+    assert.deepEqual([opening.updateFirst.reason, opening.updateFirst.behind, opening.updateFirst.incomingVersions[0].shortCommit],
+      ["behind", 2, "ffffffff"]);
+    assert.match(opening.updateFirst.message, /behind its saved version\. Update it first/);
+    await store.writeBackgroundTaskEvent(sessionId, "update-session", { patch: { status: "failed", code: "vibe64_session_update_conflict",
+      conflictPaths: ["package.json"], error: "1 file needs review before this session can update." } });
+    opening = await service.readOnboarding({ sessionId });
+    assert.equal(opening.updateFirst.reason, "failed");
+    assert.match(opening.updateFirst.message, /Update needs repair first/);
+    await store.writeBackgroundTaskEvent(sessionId, "update-session", { patch: { status: "ready", code: "", conflictPaths: [], error: "" } });
+    await store.writeMetadataValue(sessionId, "repository_update_check", JSON.stringify({ ahead: 1, behind: 0, canonicalCommit: saved,
+      checkedAt: "2026-11-03T12:05:00.000Z" }));
+    opening = await service.readOnboarding({ sessionId });
+    assert.equal(opening.inspection.state, "attention");
+    assert.equal(opening.updateFirst, null, "after Update succeeds, setup is inspected and repaired against the updated session");
+  });
 });
 
 test("existing source is adoption and a stale template request preserves it", async () => {

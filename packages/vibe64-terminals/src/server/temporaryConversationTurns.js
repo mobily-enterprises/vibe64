@@ -4,6 +4,7 @@ import { normalizeVibe64AgentTaskResult, vibe64AssistantSelectionFromMetadata } 
 import { assistantRoutingStatusIsPending, assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
+import { readSessionUpdateFirst, sessionUpdateFirstRepairBrief } from "@local/vibe64-core/shared";
 import {
   discardAssistantChangeoverMessage,
   requireCompletedConversationRewind,
@@ -546,6 +547,15 @@ function createTemporaryConversationTurns({
           durable: true,
           conversationId: record.conversationId
         });
+        // Every Fix it with AI turn reads the session's saved version afresh:
+        // whether it is behind, with which incoming versions, and whether
+        // Update owns the session, so the repair never redoes saved work.
+        if (input.presentation?.recoveryContext || record.recoveryContext) {
+          const brief = sessionUpdateFirstRepairBrief(await readSessionUpdateFirst(ctx.runtime.store, sessionId), {
+            updateRepair: (input.presentation?.recoveryOperation || record.recoveryOperation) === "update"
+          });
+          if (brief) prepared.message = `${brief}\n\n${prepared.message}`;
+        }
         const receipt = {
           messageId: input.messageId,
           text: input.displayMessage || input.message,

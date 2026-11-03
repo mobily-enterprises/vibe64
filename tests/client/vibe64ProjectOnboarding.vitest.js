@@ -437,6 +437,29 @@ describe("Preview project onboarding", () => {
     }
   });
 
+  it("offers no setup repair while Update owns the session and rechecks setup after each Update outcome", async () => {
+    const fixture = mountOnboarding();
+    const updated = { projectSlug: "project-a", sessionId: "session-a" };
+    try {
+      const attention = opening("attention");
+      attention.inspection.diagnostics = [{ message: "Workspace setup failed: npm ci could not resolve @jskit-ai/kernel@0.3.0." }];
+      attention.updateFirst = { reason: "failed",
+        message: "This session's Update needs repair first. Use Fix it with AI on the Update notice; setup is checked again once Update succeeds." };
+      await fixture.settleRead(0, attention);
+      const text = nodeText(fixture.container);
+      expect(text).toContain("This session's Update needs repair first.");
+      expect(text).toContain("Recheck setup");
+      expect(fixture.button("Fix it with AI")).toBeNull();
+      for (const [index, reason] of ["session-update-started", "session-update-failed", "session-update-completed"].entries()) {
+        await fixture.sessionChanged({ ...updated, reason });
+        expect(fixture.reads).toHaveLength(index + 2);
+        await fixture.settleRead(index + 1, reason === "session-update-completed" ? opening("attention") : attention);
+      }
+      expect(nodeText(fixture.container)).not.toContain("needs repair first");
+      expect(fixture.button("Fix it with AI").props.disabled).toBe(false);
+    } finally { fixture.close(); }
+  });
+
   it("opens separate repair conversations while the main assistant and a previous repair are working", async () => {
     expect(onboardingTag).toContain(':can-ask="assistantFixAllowed"');
     expect(onboardingTag).toContain(':request-temporary-ai="startTemporaryAiTask"');

@@ -11,6 +11,7 @@ import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import { sessionWorkProblem } from "../shared/sessionWorkProblem.js";
+import { REPOSITORY_UPDATE_CHECK_METADATA, sessionUpdateFirst } from "@local/vibe64-core/shared";
 import {
   WORKSPACE_SETUP_METADATA_NAME,
   workspaceSetupState,
@@ -353,14 +354,21 @@ function createAgentSessionCommandService({
       const [saveOperation, updateOperation] = await Promise.all([SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID]
         .map((taskId) => store.readBackgroundTask(sessionId, taskId)));
       const repositoryProblem = sessionWorkProblem({ operation: saveOperation, updateOperation });
+      // Whether this session is behind its saved version, with the incoming
+      // versions, so a repair checks them before redoing their work.
+      const updateFirst = sessionUpdateFirst({
+        updateCheck: await store.readMetadataValue(sessionId, REPOSITORY_UPDATE_CHECK_METADATA),
+        updateOperation
+      });
       return {
         ok: true,
         sessionId,
         project: toText(projectRecord.slug || projectRecord.name),
         environment,
-        repository: repositoryProblem
-          ? { needsHelp: true, ...repositoryProblem }
-          : { needsHelp: false },
+        repository: {
+          ...(repositoryProblem ? { needsHelp: true, ...repositoryProblem } : { needsHelp: false }),
+          ...(updateFirst ? { updateFirst } : {})
+        },
         workspaceSetup: {
           status: state.status,
           inspectionStatus: setup.status,
