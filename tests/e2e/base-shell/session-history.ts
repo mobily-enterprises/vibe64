@@ -20,7 +20,8 @@ test.describe("session history navigation", () => {
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history$`, "u"));
       await expectSessionHistoryRoute(page);
       await expect(page.getByText("Archived direct chat")).toBeVisible();
-      await expect(page.getByText(/^Archived /u)).toBeVisible();
+      // The card says when the chat was archived. (The page header's description also starts with "Archived".)
+      await expect(page.locator(".studio-archived-sessions__archived-at")).toHaveText(/^\s*Archived \S/u);
       await expect(page.getByText("source removed", { exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
       if (viewport.width > 980) {

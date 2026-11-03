@@ -1,53 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+import { parseStartupArgs } from "../../../bin/server.js";
 import { BASE_URL, DASHBOARD_PATH, DEVELOPMENT_PATH } from "../support/base-shell-data";
 import { expectSessionsRoute, showProjectPaneIfNeeded } from "../support/base-shell-assertions";
 import {
   mockCurrentAppInspection,
-  mockProjectGateReady,
-  trackStudioApiRequests
+  mockProjectGateReady
 } from "../support/base-shell-mocks";
 import { fulfillJson, routeApiEndpoint } from "../support/base-shell/http";
 
 test.describe("studio startup navigation", () => {
-  test("root opens the project picker when no project is selected", async ({ page }) => {
-    let projectSelectionRequests = 0;
-    await page.route("**/api/bootstrap", async (route) => {
-      await fulfillJson(route, {
-        app: {},
-        requestMeta: { hasRequest: false },
-        session: { authenticated: false },
-        surfaceAccess: {}
-      });
-    });
-    await page.route("**/api/vibe64/projects", async (route) => {
-      projectSelectionRequests += 1;
-      await fulfillJson(route, {
-        ok: true,
-        currentProject: null,
-        hasSelection: false,
-        projects: [{
-          external: false,
-          name: "demo-app",
-          path: "/workspace/vibe64/demo-app",
-          selected: false,
-          slug: "demo-app",
-          source: "workspace"
-        }],
-        projectsRoot: "/workspace/vibe64",
-        targetRoot: ""
-      });
-    });
-    const apiRequests = trackStudioApiRequests(page);
+  test("root opens the started project on a single-target server", async ({ page }) => {
+    // A local Vibe64 serves the one project it started with and has no Projects page, so "/" opens that
+    // project. The browser-test server starts like the harness does: on this checkout.
+    const { startupSlug } = parseStartupArgs(["--no-open", process.cwd()]);
 
     await page.goto(`${BASE_URL}/`);
 
-    await expect(page).toHaveURL(`${BASE_URL}/app`);
-    await expect(page.getByRole("heading", { name: "Choose a project", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /demo-app/u })).toBeVisible();
-    await expect(page.getByLabel("New project folder")).toBeVisible();
-    expect(projectSelectionRequests).toBeGreaterThanOrEqual(1);
-    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
+    await expect(page).toHaveURL(`${BASE_URL}/app/project/${startupSlug}`);
+    await expect(page.getByRole("heading", { name: "Choose a project", exact: true })).toHaveCount(0);
   });
 
   test("project workspace loads sessions directly after project selection", async ({ page }) => {
@@ -122,7 +93,7 @@ test.describe("studio startup navigation", () => {
     await showProjectPaneIfNeeded(page);
 
     await expect(page.getByRole("heading", { name: "Studio Health", exact: true })).toBeVisible();
-    await expect(page.getByText("All 1 platform checks passed.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Vibe64 has what it needs.", { exact: true })).toBeVisible();
     await expect(page.getByText("Genesis", { exact: true })).toBeVisible();
   });
 });
