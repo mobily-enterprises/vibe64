@@ -2102,7 +2102,7 @@ for (const { viewport, providerBatch } of [
         expect(file.extensions).toEqual(saved.extensions); expect(file.integrations["google-calendar"].displayName).toBe("After CLI update");
         const setup = panel.getByRole("button", { name: "Set up Workday", exact: true });
         if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
-        await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.lovable.dev/integrations/workday");
+        await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://doc.workday.com/peakon/en-us/workday-peakon-employee-voice/integrations/workday-integration/nfa1667304944189.html");
         await expect(panel.getByText("Register this confidential client without PKCE so Workday issues a Client Secret. Enter your application's exact backend callback URL.", { exact: true })).toBeVisible();
         await expect(panel.getByText(/For organization browsing, also select Organizations and Roles/)).toBeVisible();
         await expect(panel.getByText(/For time-off balances and entries, select Time Off and Leave/)).toBeVisible();
