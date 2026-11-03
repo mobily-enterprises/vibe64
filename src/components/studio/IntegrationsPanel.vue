@@ -314,8 +314,8 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
     <template v-else-if="configuration">
       <v-alert v-if="changedElsewhere" type="warning" variant="tonal">This configuration changed outside this form. Your draft is preserved. Reload before saving.</v-alert>
       <v-alert v-if="error" role="alert" type="error" variant="tonal">{{ error }}</v-alert>
-      <v-alert v-if="!production && requestedIntegration && configuration && !Object.hasOwn(configuration.integrations, requestedIntegration)" type="warning" variant="tonal">
-        The requested integration {{ requestedIntegration }} is not configured in this session. Return to the conversation to finish its setup.
+      <v-alert v-if="!production && requestedIntegration?.id && configuration && !Object.hasOwn(configuration.integrations, requestedIntegration.id)" type="warning" variant="tonal">
+        The requested integration {{ requestedIntegration.id }} is not configured in this session. Return to the conversation to finish its setup.
       </v-alert>
       <div class="integrations-panel__layout">
         <aside class="integrations-panel__catalogue" aria-label="Integrations catalogue">
