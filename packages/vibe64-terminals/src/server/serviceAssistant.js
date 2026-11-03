@@ -109,12 +109,24 @@ function createServiceAssistant({
   sessionPromptHints
 }) {
   /**
-   * A temporary send refused before admission uses Main's definite rejection.
+   * A temporary send refused before admission uses Main's definite rejection,
+   * and its failure is logged as Main's is, with the cause the person never sees.
    */
   async function startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
     try {
       return await sessionConversations.startTemporaryConversationTurn(sessionId, input, options);
     } catch (error) {
+      logOperationalEvent(logger, "warn", {
+        code: error?.code,
+        component: "vibe64.agent_message",
+        conversationId: input.conversationId,
+        delivery: error?.delivery,
+        error,
+        event: "vibe64.agent_message.delivery_failed",
+        messageId: input.messageId,
+        sessionId,
+        submissionKind: input.submissionKind
+      }, "Vibe64 temporary chat message delivery failed.");
       if (error?.delivery === "not-sent") throw notSentDeliveryError(error, input.messageId);
       throw error;
     }

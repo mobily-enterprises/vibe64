@@ -1628,24 +1628,52 @@ test("Claude refreshes changed system instructions while preserving the native c
   assert.equal(f.processes.length, 2);
 });
 
-test("rejecting an instruction change during work preserves the current steering binding", async (t) => {
+test("a steer during work keeps the running instructions and the next idle turn installs changed ones", async (t) => {
   const f = await fixture(t);
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "colleague_prompt_busy",
     assistantScope: { id: "colleague_prompt_busy", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "colleague-runtime"),
       stableContext: "Current instructions." } };
   const { conversationId } = await f.provider.createConversation(context, { persistent: true });
-  await f.provider.startConversationTurn(context, { conversationId, persistent: true, message: "Start", messageId: "busy-first" });
+  const first = await f.provider.startConversationTurn(context, { conversationId, persistent: true, message: "Start", messageId: "busy-first" });
   context.assistantScope.stableContext = "Changed instructions.";
-  await assert.rejects(f.provider.startConversationTurn(context, {
-    conversationId, persistent: true, message: "Change", messageId: "busy-change", steer: true
-  }), /Stop the current Claude turn/);
-  context.assistantScope.stableContext = "Current instructions.";
-  await f.provider.startConversationTurn(context, {
+  const steered = await f.provider.startConversationTurn(context, {
     conversationId, persistent: true, message: "Read first", messageId: "busy-steer", steer: true
   });
+  assert.deepEqual([steered.ok, steered.runId], [true, first.runId]);
   assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].stopped, false, "the steer never restarts running work");
   assert.equal(f.processes[0].lastInput.message, "Read first");
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done" });
+  await f.provider.startConversationTurn(context, { conversationId, persistent: true, message: "Next", messageId: "busy-next" });
+  assert.equal(f.processes.length, 2, "the next idle turn installs the changed instructions");
+  assert.equal(f.processes[1].options.instructionArguments[1], "Changed instructions.");
   await f.provider.stopConversation(context, { conversationId });
+});
+
+// The sas incident: a "Fix project setup" repair edits the project's Genesis
+// files during its own turn, which changes the guidance Vibe64 composes for
+// its chat. A message typed then must reach the running Claude, as in Main.
+test("a temporary Claude repair chat accepts a mid-turn message after its repair changed the project guidance", async (t) => {
+  const f = await fixture(t, { scopedConversations: true });
+  f.context.routingConversationId = "repair-chat";
+  const { conversationId } = await f.provider.createConversation(f.context, { persistent: true });
+  const first = await f.provider.startConversationTurn(f.context, {
+    conversationId, persistent: true, message: "Fix project setup.", messageId: "repair"
+  });
+  f.providerOptions.env.VIBE64_HOST_AGENT_GUIDANCE = "Guidance the repair changed during its own turn.";
+  const midTurn = await f.provider.startConversationTurn(f.context, {
+    conversationId, persistent: true, steer: true, message: "I thought the other AI ported racing fully", messageId: "midturn"
+  });
+  assert.deepEqual([midTurn.ok, midTurn.runId], [true, first.runId]);
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].stopped, false, "the message never restarts the running repair");
+  assert.equal(f.processes[0].lastInput.message, "I thought the other AI ported racing fully");
+  assert.doesNotMatch(f.processes[0].options.instructionArguments[1], /Guidance the repair changed/);
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done" });
+  await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, message: "Next", messageId: "next" });
+  assert.equal(f.processes.length, 2, "the next idle turn installs the changed guidance");
+  assert.match(f.processes[1].options.instructionArguments[1], /Guidance the repair changed during its own turn/);
+  await f.provider.stopConversation(f.context, { conversationId, persistent: true });
 });
 
 test("retained scoped Claude conversations survive restart without touching a development session", async (t) => {

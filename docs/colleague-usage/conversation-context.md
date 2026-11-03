@@ -97,7 +97,9 @@ While Claude is working, you can send a follow-up to steer the same conversation
 Claude moves its current command to the background, where it keeps running, and
 reads the follow-up within moments; sending it does not stop that command. Use **Stop** to cancel work.
 Updated project guidance is applied when a later turn starts idle; it must not
-block an ordinary follow-up or restart active work. Account changes and explicit
+block an ordinary follow-up or restart active work. This holds in Main, in
+Temporary chats and in Fix it with AI repair chats, including a repair that edits
+the project's Genesis files during its own turn. Account changes and explicit
 model settings still use their existing checks. If a message shows an error,
 keep its text and use **Retry** after the reported problem is resolved; a failed
 message does not mean Claude has stopped its previous task.

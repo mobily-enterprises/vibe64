@@ -56,7 +56,9 @@ Temporary chat.
 
 Guidance sent to a working Claude chat does not interrupt it: Claude moves its
 current command to the background, where it keeps running, and reads the
-guidance within moments. Output already shown remains
+guidance within moments. This includes a Fix it with AI repair chat whose repair
+changes the project's Genesis files while it works: the message joins the running
+repair, and the changed project guidance applies from the chat's next idle turn. Output already shown remains
 attached to its original request; the follow-up response belongs to the new request.
 Reloading the chat preserves that relationship and the recorded AI labels.
 After **Stop** confirms a Claude reply has stopped, text already shown remains
