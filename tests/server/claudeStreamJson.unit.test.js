@@ -103,7 +103,7 @@ function createClaudeSessionAgentProvider(options) {
   let provider;
   const conversations = options.conversationRuntime || createConversationRuntime({
     authorize: ({ context, conversationId }) => context.sessionId === conversationId,
-    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "runDetachedConversation"
+    host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "runDetachedConversation"
       ? prepareSessionDetachedConversationRun(provider, id, context, input, options) : operation === "releaseRenewalPredecessorProcessExitProof"
       ? prepareSessionConversationRenewalProof(provider, id, context, input, operation) : operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
       ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
@@ -839,7 +839,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
 });
 `, { mode: 0o700 });
   const observed = Promise.withResolvers();
-  const native = await createClaudeCodeProcess({ logger: silentLogger, command, workdir: root, credentialHome: { home: root },
+  const native = await createClaudeCodeProcess({ env: process.env, logger: silentLogger, command, workdir: root, credentialHome: { home: root },
     onEvent: (event) => observed.resolve(event) });
   t.after(() => native.stop());
   assert.equal(native.initialization.models[0].value, "fixture");
@@ -1892,7 +1892,7 @@ async function boundMainFixture(t, { configureProcess, runtimeFactory, actions, 
   let provider;
   const conversations = createConversationRuntime({ ...(actions ? { actions, toolPolicy } : {}),
     authorize: ({ context, conversationId }) => context.sessionId === conversationId,
-    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+    host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
       ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
         operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
@@ -3358,7 +3358,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
     await starting?.catch(() => {});
     await rm(root, { recursive: true, force: true });
   });
-  starting = createClaudeCodeProcess({ logger: silentLogger, command, workdir: root, credentialHome: { home: root },
+  starting = createClaudeCodeProcess({ env: process.env, logger: silentLogger, command, workdir: root, credentialHome: { home: root },
     async stopExecution(id, options) {
       stops.push(id);
       return stopVibe64Execution(id, options);

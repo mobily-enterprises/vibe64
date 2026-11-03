@@ -125,6 +125,9 @@ test("native Codex Stop kills current and late commands while preserving other w
   }
   const send = async (threadId, label) => (await client.request("turn/start", { threadId, input: [{ type: "text", text: `PROBE_${label}` }] })).turn.id;
   const completed = (turnId) => notifications.some((event) => event.method === "turn/completed" && event.params.turn.id === turnId);
+  // The provider tracks a native command from its startup notification until it completes.
+  const commandStarted = (turnId) => notifications.some((event) => event.method === "item/started" && event.params.turnId === turnId &&
+    event.params.item.type === "commandExecution" && event.params.item.processId && event.params.item.source === "unifiedExecStartup");
   const main = await startThread();
   const other = await startThread();
   const priorTurn = await send(main, "prior");
@@ -135,7 +138,7 @@ test("native Codex Stop kills current and late commands while preserving other w
     delayCommandStart = label === "late";
     const turnId = await send(main, label);
     await waitFor(() => exists(`${label}.started`), `${label} process startup`);
-    if (label === "current") await waitFor(() => provider.commandExecutions.size === 3, "native command notification");
+    if (label === "current") await waitFor(() => commandStarted(turnId), "native command notification");
     else await waitFor(() => delayedStarts.length === 1, "delayed native command notification");
     await provider.interruptTurn(main, turnId);
     // Model command execution is native; delay only delivery of its start event

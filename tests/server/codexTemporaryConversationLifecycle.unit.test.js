@@ -50,7 +50,7 @@ import {
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   codexAppServerRuntimeDir
 } from "../../packages/vibe64-runtime/src/server/codexAppServerAgent.js";
-import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
+import { controllessThreads, createCodexAppServerAgentProvider, hooklessWorktree } from "../fixtures/codexAppServerAgentProvider.js";
 import {
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
@@ -179,6 +179,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
         await captures.ensureAvailableWait;
       }
       await mkdir(captures.runtimeInfo.runtimeDir, { recursive: true });
+      return { ok: true };
     },
     async ensureRuntime() {
       calls.push(["ensureRuntime"]);
@@ -2086,6 +2087,8 @@ async function withAgentMessageController(operation, {
       const subscribers = new Set();
       captures.subscribers = subscribers;
       const provider = {
+        ...hooklessWorktree,
+        ...controllessThreads,
         closed: 0,
         status: "idle",
         threadCwd: "",
@@ -2094,7 +2097,13 @@ async function withAgentMessageController(operation, {
         close() {
           provider.closed += 1;
         },
-        async ensureAvailable() { if (provider.observationFailure) throw provider.observationFailure; },
+        currentConnectionGeneration() {
+          return provider.connectionGeneration;
+        },
+        async ensureAvailable() {
+          if (provider.observationFailure) throw provider.observationFailure;
+          return { ok: true };
+        },
         failObservation(error) {
           provider.observationFailure = error;
           return providerOptions.onObservationLost(error);
@@ -2475,7 +2484,7 @@ test("the common Codex entry uses the original main journal, receipt files and c
     const unrelatedActor = { preferredName: "Other", role: "owner", username: "other-owner" };
     const hostProvider = controller.conversationProvider;
     const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
-      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
         ? prepareSessionConversationDisposal(hostProvider, id, context, input)
         : createSessionConversationBinding(hostProvider, id, {
         ...context, prepareInput: async input => {
@@ -2596,7 +2605,7 @@ test("native main handles preserve a failed delivery with a known native turn id
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     const hostProvider = controller.conversationProvider;
     const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
-      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
         ? prepareSessionConversationDisposal(hostProvider, id, context, input)
         : createSessionConversationBinding(hostProvider, id, {
         ...context, prepareInput: async input => input
@@ -5214,12 +5223,13 @@ test("a changed session environment retires the previous provider for the same r
   const controller = createCodexTerminalController({
     codexAppServerProviderFactory(options) {
       const provider = {
+        ...hooklessWorktree,
         closed: 0,
         options,
         close() {
           provider.closed += 1;
         },
-        async ensureAvailable() {},
+        async ensureAvailable() { return { ok: true }; },
         async startThread() {
           return { id: `conversation-${providers.length + 1}` };
         }
@@ -5328,12 +5338,13 @@ test("Codex sessions retain one shared runtime and concurrent final closes stop 
   const controller = createCodexTerminalController({
     codexAppServerProviderFactory(options) {
       const provider = {
+        ...hooklessWorktree,
         closed: 0,
         options,
         close() {
           provider.closed += 1;
         },
-        async ensureAvailable() {},
+        async ensureAvailable() { return { ok: true }; },
         async startThread() {
           return { id: `conversation-${providers.length + 1}` };
         },
@@ -5473,6 +5484,8 @@ test("an active chat keeps one composed session context while authored turns sta
       const subscribers = new Set();
       const providerNumber = providers.length + 1;
       const provider = {
+        ...hooklessWorktree,
+        ...controllessThreads,
         closed: 0,
         options,
         resumedThreads: [],
@@ -5485,7 +5498,10 @@ test("an active chat keeps one composed session context while authored turns sta
         close() {
           provider.closed += 1;
         },
-        async ensureAvailable() {},
+        currentConnectionGeneration() {
+          return "";
+        },
+        async ensureAvailable() { return { ok: true }; },
         async ensureRuntime() {
           return {
             endpoint: `unix://${path.join(temporaryRoot, `provider-${providerNumber}.sock`)}`,
@@ -7682,6 +7698,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
     codexAppServerProviderFactory(providerOptions) {
       runtimeDir = providerOptions.runtimeDir;
       return {
+        ...hooklessWorktree,
         close() {},
         async ensureAvailable() {
           const lockDir = path.join(runtimeDir, "runtime.lock");
@@ -7718,6 +7735,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
             processIdentity
           })}\n`);
           await rm(lockDir, { force: true, recursive: true });
+          return { ok: true };
         },
         async startThread() {
           return { id: "owned-runtime-race-conversation" };
@@ -7840,6 +7858,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
     codexAppServerProviderFactory(providerOptions) {
       runtimeDir = providerOptions.runtimeDir;
       return {
+        ...hooklessWorktree,
         close() {},
         async ensureAvailable() {
           await mkdir(runtimeDir, { recursive: true });
@@ -7863,6 +7882,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
             pid: child.pid,
             processIdentity: await exactProcessIdentity(child.pid, runtimeToken, commandHash)
           })}\n`);
+          return { ok: true };
         },
         async startThread() {
           return { id: "owned-runtime-conversation" };
@@ -12406,7 +12426,7 @@ test("Main browser delivery inspection preserves original receipts while native 
     let authorized = true;
     const hostProvider = controller.conversationProvider;
     const common = createConversationRuntime({ engine: "codex", authorize: async () => authorized,
-      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
         ? prepareSessionConversationDisposal(hostProvider, id, context, input)
         : createSessionConversationBinding(hostProvider, id, {
         ...context, prepareInput: async input => input
@@ -13499,7 +13519,7 @@ test("Codex Main host and run owner share the original native conversation publi
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => {
     const provider = controller.conversationProvider;
     const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
-      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
         ? prepareSessionConversationDisposal(provider, id, context, input)
         : createSessionConversationBinding(provider, id, { ...context, prepareInput: async input => input }) }
     });
@@ -13913,7 +13933,7 @@ test("Main Codex switching uses its prepared shared runtime to transfer more tha
     await store.writeConversationThinkingMessage(sessionId, { messageId: "private-thought", text: "REASONING MUST NOT TRANSFER" });
     await store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify({ lastEngine: "claude", engines: { claude: { seen: {} } } }));
     const common = createConversationRuntime({ authorize: async () => true,
-      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
         ? prepareSessionConversationDisposal(controller.conversationProvider, id, context, input)
         : createSessionConversationBinding(controller.conversationProvider, id, { ...context, prepareInput: async input => input }) } });
     try {

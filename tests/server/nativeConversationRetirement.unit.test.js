@@ -295,7 +295,7 @@ test("OpenCode native export rejects incomplete pages, repeated history, caps an
   let pageCalls = 0;
   let native;
   const h = await controllerHarness({
-    serverClient: { health: async () => ({ healthy: true }), readSession: async () => {
+    serverClient: { health: async () => ({ healthy: true }), forDirectory() { return this; }, readSession: async () => {
       if (deleted) throw Object.assign(new Error("missing"), { statusCode: 404 });
       return native;
     },

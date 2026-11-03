@@ -9,7 +9,8 @@ import path from "node:path";
 import test from "node:test";
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 
-function harness({ status = "idle", historyMode = "paginated", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {} } = {}) {
+/** `controls`, when given, is the managed control environment every thread binding prepares instead of the rotating test one. */
+function harness({ status = "idle", historyMode = "paginated", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {}, controls = null } = {}) {
   const calls = [];
   const logs = [];
   let environment = { MARKER: "A", PRIVATE_VALUE: "must-not-be-logged" };
@@ -46,7 +47,7 @@ function harness({ status = "idle", historyMode = "paginated", goal = null, stay
     threadEnv: environment,
     threadControlTimeoutMs: 500,
     logger: { info: (fields) => logs.push(fields) },
-    prepareThreadEnvironment: async () => ({ ...environment })
+    prepareThreadEnvironment: async () => ({ ...(controls || environment) })
   });
   provider.activeClient = async () => client;
   return { provider, client, calls, logs, rotate: () => { environment = { ...environment, MARKER: "B" }; },
@@ -172,54 +173,67 @@ test("recovery waits for an admitted send and never replays an uncertain turn", 
   assert.equal(h.calls.filter((call) => call.method === "turn/start").length, 1);
 });
 
-test("control probe filtering preserves a concurrent native user's turn", () => {
-  const h = harness();
+test("control probe filtering preserves a concurrent native user's turn", async () => {
+  const h = harness({ controls: { VIBE64_TEST_CONTROL: "B" } });
   const forwarded = [];
   h.provider.subscribe((event) => forwarded.push(event));
-  h.provider.threadControlProbes.set("thread-1", { marker: "probe-marker", pending: [], verified: false, turnId: "" });
   const events = [
     { method: "thread/status/changed", params: { threadId: "thread-1", status: { type: "active" } } },
     { method: "turn/started", params: { threadId: "thread-1", turn: { id: "user-turn" } } },
-    { method: "item/started", params: { threadId: "thread-1", turnId: "user-turn", item: { type: "userMessage" } } }
+    { method: "item/started", params: { threadId: "thread-1", turnId: "user-turn", item: { type: "userMessage" } } },
+    // Once the turn is known to be the user's, the check stops holding its events back.
+    { method: "item/completed", params: { threadId: "thread-1", turnId: "user-turn", item: { type: "userMessage" } } }
   ];
-  events.forEach((event) => h.provider.publishNotification(event));
-  assert.deepEqual(forwarded, events);
-  assert.equal(h.provider.threadControlProbes.size, 0);
+  let forwardedDuringCheck;
+  const request = h.client.request;
+  h.client.request = async (method, params) => {
+    if (method !== "thread/shellCommand") return request(method, params);
+    // A native user's turn starts while the control check's own command is pending.
+    events.forEach((event) => h.provider.publishNotification(event));
+    forwardedDuringCheck = [...forwarded];
+    return {};
+  };
+  // The check's own command never reports, so the check ends at its deadline.
+  await assert.rejects(h.provider.ensureThreadControls("thread-1"), { code: "vibe64_agent_control_recovery_failed" });
+  assert.deepEqual(forwardedDuringCheck, events);
 });
 
 for (const valid of [true, false]) {
   test(`control verification uses its exact live completion and rejects an incorrect digest (valid: ${valid})`, async () => {
-    const h = harness();
+    const environment = { VIBE64_TEST_CONTROL: "B" };
+    const h = harness({ controls: environment });
     const forwarded = [];
     h.provider.subscribe((event) => forwarded.push(event));
-    const environment = { VIBE64_TEST_CONTROL: "B" };
-    h.provider.options.prepareThreadEnvironment = async () => environment;
+    const shellCommand = Promise.withResolvers();
     const request = h.client.request;
     h.client.request = async (method, params) => {
       assert.notEqual(method, "thread/turns/list", "a control check must not depend on saved history items");
       if (method !== "thread/shellCommand") return request(method, params);
-      const marker = params.command.match(/VIBE64_CONTROL_CHECK_[0-9a-f-]+:/u)?.[0];
-      assert.ok(marker);
-      const digest = createHash("sha256").update(JSON.stringify(Object.entries(environment))).digest("hex");
-      const item = { id: "probe-item", type: "commandExecution", command: params.command };
-      const emit = (method, fields) => h.provider.publishNotification({ method, params: { threadId: params.threadId, ...fields } });
-      emit("turn/started", { turn: { id: "probe-turn", status: "inProgress" } });
-      emit("item/started", { turnId: "probe-turn", item });
-      // A different item or turn cannot satisfy this check.
-      emit("item/completed", { turnId: "probe-turn", item: { ...item, id: "other-item", exitCode: 0, aggregatedOutput: `${marker}${digest}` } });
-      emit("turn/completed", { turn: { id: "other-turn", status: "completed" } });
-      const probe = h.provider.threadControlProbes.get(params.threadId);
-      assert.equal(probe.result, undefined);
-      assert.equal(probe.completed, undefined);
-      emit("item/completed", { turnId: "probe-turn", item: { ...item, exitCode: 0, aggregatedOutput: `${marker}${valid ? digest : "incorrect"}` } });
-      emit("turn/completed", { turn: { id: "probe-turn", status: "completed" } });
+      shellCommand.resolve(params);
       return {};
     };
+    const check = h.provider.ensureThreadControls("thread-1");
+    const settled = check.then(() => "resolved", () => "rejected");
+    const params = await shellCommand.promise;
+    const marker = params.command.match(/VIBE64_CONTROL_CHECK_[0-9a-f-]+:/u)?.[0];
+    assert.ok(marker);
+    const digest = createHash("sha256").update(JSON.stringify(Object.entries(environment))).digest("hex");
+    const item = { id: "probe-item", type: "commandExecution", command: params.command };
+    const emit = (method, fields) => h.provider.publishNotification({ method, params: { threadId: params.threadId, ...fields } });
+    emit("turn/started", { turn: { id: "probe-turn", status: "inProgress" } });
+    emit("item/started", { turnId: "probe-turn", item });
+    // A different turn's completion cannot finish this check after its own command reports.
+    emit("turn/completed", { turn: { id: "other-turn", status: "completed" } });
+    emit("item/completed", { turnId: "probe-turn", item: { ...item, exitCode: 0, aggregatedOutput: `${marker}${valid ? digest : "incorrect"}` } });
+    assert.equal(await Promise.race([settled, new Promise((resolve) => setTimeout(resolve, 100, "pending"))]), "pending");
+    // A different item's correct digest cannot replace the command's own result.
+    emit("item/completed", { turnId: "probe-turn", item: { ...item, id: "other-item", exitCode: 0, aggregatedOutput: `${marker}${digest}` } });
+    emit("turn/completed", { turn: { id: "probe-turn", status: "completed" } });
     if (valid) {
-      await h.provider.ensureThreadControls("thread-1");
+      await check;
       assert.equal(h.provider.conversationRuntime.bindingCount, 1);
     } else {
-      await assert.rejects(h.provider.ensureThreadControls("thread-1"), { code: "vibe64_agent_control_recovery_failed" });
+      await assert.rejects(check, { code: "vibe64_agent_control_recovery_failed" });
       assert.equal(h.provider.conversationRuntime.bindingCount, 0);
     }
     assert.deepEqual(forwarded, []);

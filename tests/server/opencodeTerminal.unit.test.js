@@ -2831,7 +2831,7 @@ async function boundMainOpenCodeFixture(t, options = {}) {
   const context = { runtime: harness.runtime, sessionId: suppliedRuntime ? harness.session.sessionId : "session-1", providerId: "opencode",
     vibe64User: { id: "owner", username: "Owner", role: "owner" } };
   conversations = createConversationRuntime({ authorize: ({ context, conversationId }) => context.sessionId === conversationId,
-    host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+    host: { env: process.env, nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
       ? prepareSessionConversationDisposal(provider, id, context, input)
       : createSessionConversationBinding(provider, id, {
       ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input

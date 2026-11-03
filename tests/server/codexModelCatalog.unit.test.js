@@ -13,7 +13,7 @@ async function fixture(t, source) {
   const command = path.join(runtimeDir, "codex");
   await writeFile(command, `#!${process.execPath}\n${source}\n`);
   await chmod(command, 0o700);
-  return { runtimeDir, command, additionalModels: codexProviderModelCatalog().models };
+  return { runtimeDir, command, additionalModels: codexProviderModelCatalog().models, codexHome: path.join(runtimeDir, "codex-home") };
 }
 
 test("startup exports current native metadata verbatim and adds every unique curated model", async (t) => {

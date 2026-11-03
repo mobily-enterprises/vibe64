@@ -47,7 +47,7 @@ test("a new chat turn claims its client message id and stable terminal outcomes 
   ), "utf8");
   // Native dispatch lives in the common driver; application checkpoint projection
   // lives in the shared checkpoint owner. Inspect each operation at its current owner.
-  const driverSource = await readFile(new URL("./providers/codexDriver.js",
+  const driverSource = await readFile(new URL("./providers/codexDriverTurns.js",
     import.meta.resolve("@jskit-ai/assistant-core/server/conversation")), "utf8");
   assert.match(driverSource, /owner\.dispatchMessage\(sessionId, input/u);
   assert.match(source, /checkpointCodexAppServerTurn\(sessionId/u);

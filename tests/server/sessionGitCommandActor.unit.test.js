@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { createOpenCodeSharedRuntime } from "@jskit-ai/assistant-core/server/opencode-process";
-
 import {
   recordSessionGitCommandActor
 } from "../../packages/vibe64-terminals/src/server/sessionGitCommandActor.js";
@@ -71,9 +69,10 @@ test("session Git actor changes only when a new turn explicitly replaces it", as
 });
 
 test("new assistant turns explicitly replace the session Git actor", async () => {
-  const [codexSource, openCodeSource] = await Promise.all([
+  const [codexSource, openCodeSource, sharedTurnsSource] = await Promise.all([
     readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationMessages.js"), "utf8"),
-    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationMessages.js"), "utf8")
+    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationMessages.js"), "utf8"),
+    readFile(new URL("./openCodeSessionTurns.js", import.meta.resolve("@jskit-ai/assistant-core/server/conversation")), "utf8")
   ]);
   assert.match(
     codexSource,
@@ -82,7 +81,7 @@ test("new assistant turns explicitly replace the session Git actor", async () =>
   // The shared owner supplies the original monitor-derived overwrite policy;
   // the application still owns Git identity and persistence.
   assert.match(
-    createOpenCodeSharedRuntime.toString(),
+    sharedTurnsSource,
     /let currentMonitor = monitors\.get\(key\);[\s\S]*?application\.prepare\(\{\s*overwrite: !currentMonitor,\s*threadId: currentThreadId\s*\}\)/u
   );
   assert.match(

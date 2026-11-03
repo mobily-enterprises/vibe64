@@ -4651,7 +4651,15 @@ test("Codex plan allowance ignores a read completed after an account switch", as
     FakeWebSocket.instances.at(-1).emit("message", { data: JSON.stringify({ method: "account/updated", params: { authMode: "chatgpt" } }) });
     finish({ rateLimits: { secondary: { usedPercent: 90, windowDurationMins: 10080 } } });
     assert.deepEqual(await read, { status: "unavailable", windows: [] });
-    assert.equal(provider.planUsage, null);
+    // The stale result is not kept: the next read asks Codex again.
+    let rateLimitReads = 0;
+    provider.client.request = async (method) => {
+      if (method === "account/read") return { account: { type: "chatgpt" } };
+      rateLimitReads += 1;
+      return { rateLimits: { secondary: { usedPercent: 10, windowDurationMins: 10080 } } };
+    };
+    await provider.readPlanUsage();
+    assert.equal(rateLimitReads, 1);
   } finally { provider.close(); }
 });
 

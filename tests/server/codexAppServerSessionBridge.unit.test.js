@@ -43,6 +43,7 @@ import {
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { configureVibe64Host } from "@local/vibe64-execution/server";
+import { availableConnection, hooklessWorktree } from "../fixtures/codexAppServerAgentProvider.js";
 
 // These tests describe a host with runtime packs.
 const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-test-packs-"));
@@ -1114,6 +1115,8 @@ test("codex app-server bridge starts a missing session thread and stores identit
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1159,6 +1162,7 @@ test("codex app-server bridge reuses an already-available runtime when ensuring 
   const runtime = fakeRuntime();
   let ensureRuntimeCalls = 0;
   const provider = {
+    ...hooklessWorktree,
     async ensureAvailable() {
       return {
         runtime: appServerRuntime()
@@ -1194,6 +1198,7 @@ test("codex app-server bridge activates exact project and managed command hooks 
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -1288,6 +1293,8 @@ test("codex app-server bridge resumes an existing session thread", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1341,6 +1348,8 @@ test("Codex changeover restores its saved conversation and pauses its goal befor
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     async ensureRuntime() { return appServerRuntime(); },
     async readGoal(id) { calls.push(["goal", id]); return { goal: { status: "active" } }; },
     async setGoalStatus(id, status) { calls.push(["pause", id, status]); },
@@ -1364,6 +1373,8 @@ test("returning to DeepSeek in Codex preserves the shared native history", async
     const runtime = fakeRuntime();
     const resumed = [];
     const provider = {
+      ...availableConnection,
+      ...hooklessWorktree,
       async ensureRuntime() { return { ...appServerRuntime(), modelProviderId: "openai" }; },
       async resumeThread(id) { resumed.push(id); return { id }; },
       async startThread() { assert.fail("Returning to Codex must resume its retained history"); }
@@ -1388,6 +1399,7 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -1509,6 +1521,8 @@ test("visible Codex terminals persist trust for the project hooks they already r
 test("codex app-server bridge preserves a missing binding and exposes resume failure without starting inference", async () => {
   const runtime = fakeRuntime();
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     async ensureRuntime() { return appServerRuntime(); },
     async resumeThread() { throw Object.assign(new Error("thread missing"), { code: -32600, method: "thread/resume" }); },
     async startThread() { assert.fail("A missing thread must not silently replace context"); },
@@ -1527,6 +1541,8 @@ test("codex app-server bridge preserves a readable thread after an invalid resum
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1595,6 +1611,8 @@ test("codex app-server bridge does not replace transport resume failures", async
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1647,6 +1665,8 @@ test("codex app-server bridge resumes an existing provider thread without workfl
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
+    ...availableConnection,
+    ...hooklessWorktree,
     ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1773,6 +1793,7 @@ test("codex app-server bridge starts plain threads without workflow tools", () =
 test("session renewal resumes and reads only the exact persisted main thread with normal settings", async () => {
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       calls.push(["ensureRuntime"]);
       return appServerRuntime();
@@ -1832,6 +1853,7 @@ test("session renewal resumes and reads only the exact persisted main thread wit
 test("session renewal reports an unreadable old thread distinctly and never replaces it", async () => {
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -1880,6 +1902,7 @@ test("session renewal starts a genuinely fresh successor thread and persists its
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       calls.push(["ensureRuntime"]);
@@ -1937,6 +1960,7 @@ test("session renewal accepts the exact pre-message thread/read state after veri
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -1990,6 +2014,7 @@ test("session renewal verifies thread status when Codex cannot list turns before
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -2039,6 +2064,7 @@ test("session renewal verifies thread status when Codex cannot list turns before
 test("session renewal rejects every other invalid pre-message thread/read response", async () => {
   let statusReads = 0;
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -2079,6 +2105,7 @@ test("session renewal rejects every other invalid pre-message thread/read respon
 
 test("session renewal rejects the exact pre-message state when status belongs to another source", async () => {
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -2125,6 +2152,7 @@ test("session renewal starts a fresh successor when the unreadable predecessor h
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       calls.push(["ensureRuntime"]);
@@ -2168,6 +2196,7 @@ test("session renewal retries only its already-persisted fresh successor thread"
   const runtime = fakeRuntime();
   const calls = [];
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -2213,6 +2242,7 @@ test("session renewal durably records a fresh thread before an unreadable snapsh
   const runtime = fakeRuntime();
   let starts = 0;
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -2272,6 +2302,7 @@ test("session renewal adopts the one thread started before an identity-persisten
   const discoveredThreadIds = [];
   let starts = 0;
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -2383,6 +2414,7 @@ test("session renewal adopts its atomic claim after partial identity persistence
   const discoveredThreadIds = [];
   let starts = 0;
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -2491,6 +2523,7 @@ test("session renewal can restart cleanly when its one atomic baseline write fai
   };
   let starts = 0;
   const provider = {
+    ...hooklessWorktree,
     ...renewalThreadInventory(),
     async ensureRuntime() {
       return appServerRuntime();
@@ -2536,6 +2569,7 @@ test("session renewal can restart cleanly when its one atomic baseline write fai
 test("session renewal fails closed when more than one thread appeared after its baseline", async () => {
   let starts = 0;
   const provider = {
+    ...hooklessWorktree,
     async ensureRuntime() {
       return appServerRuntime();
     },

@@ -352,7 +352,7 @@ test("native storage discovers and retires an archived native-only chat through 
   let preserved = false;
   const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
     createServerProcess: async () => ({
-      client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
+      client: { health: async () => ({ healthy: true }), forDirectory() { return this; }, sessionStatus: async () => ({ type: "idle" }),
         deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); },
         readConversationStorage: async (id) => {
           if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
@@ -403,7 +403,7 @@ test("native retirement reads no archive to learn its status, and works inside t
   let workdir;
   const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
     createServerProcess: async () => ({
-      client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
+      client: { health: async () => ({ healthy: true }), forDirectory() { return this; }, sessionStatus: async () => ({ type: "idle" }),
         deleteSession: async (id) => { ids.delete(id); },
         readConversationStorage: async (id) => {
           if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });

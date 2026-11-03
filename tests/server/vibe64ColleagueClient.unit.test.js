@@ -70,11 +70,14 @@ const { code: elementCode } = await transform(compileScript(elementDescriptor, {
 // From JSKIT 0.2 the element imports its own message module; load the real one.
 const elementI18nUrl = new URL("../i18n.js", elementFilename);
 const elementI18n = existsSync(elementI18nUrl) ? await import(elementI18nUrl) : null;
+// The element projects its transcript through its own display module; load the real one.
+const elementDisplay = await import(new URL("./conversationDisplay.js", elementFilename));
 const elementModule = { exports: {} };
 new Function("require", "module", "exports", elementCode)(name => {
   if (name === "vue") return vue;
   if (name === "@mdi/js") return mdi;
   if (name === "../i18n.js" && elementI18n) return elementI18n;
+  if (name === "./conversationDisplay.js") return elementDisplay;
   assert.ok(name.endsWith(".vue"), name);
   return { default: {} };
 }, elementModule, elementModule.exports);
