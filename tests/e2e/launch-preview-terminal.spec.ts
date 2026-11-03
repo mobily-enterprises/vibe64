@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Request as PlaywrightRequest, type Route } from "@playwright/test";
+import { expectSteady, openMenu } from "./support/settled-ui";
 import { createServer as createHttpServer, request as requestHttp, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFile, writeFile } from "node:fs/promises";
@@ -330,7 +331,7 @@ const PERSONAL_ASSISTANT_ACCESS = Object.freeze({
   ok: true,
   ownerOnly: true,
   purposes: Object.fromEntries(
-    ["junior", "senior", "helper", "source_explanation", "prompt_hint", "auto"].map((purpose) => [purpose, { available: true }])
+    ["junior", "senior", "helper", "fix", "source_explanation", "prompt_hint", "auto"].map((purpose) => [purpose, { available: true }])
   )
 });
 type SourceExplanationPayload = Record<string, unknown>;
@@ -1464,7 +1465,7 @@ for (const width of [390, 720, 768, 1280]) {
     if (width <= 760) {
       await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
       await page.getByRole("combobox", { name: "Dashboard section" }).press("Home");
-      await page.getByRole("option", { name: "Env", exact: true }).click();
+      await openMenu(page).getByRole("option", { name: "Env", exact: true }).click();
     } else {
       await page.getByRole("navigation", { name: "Dashboard sections" }).getByRole("link", { name: "Env", exact: true }).click();
     }
@@ -1496,7 +1497,7 @@ for (const route of ["session", "repository", "changes", "files", "database", "s
     }
     await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
     await page.getByRole("combobox", { name: "Dashboard section" }).press("Home");
-    await page.getByRole("option", { name: route === "settings" ? "Env" : "Project settings", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: route === "settings" ? "Env" : "Project settings", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/${route === "settings" ? "env" : "settings"}(?:\\?|$)`));
   });
 }
@@ -1538,9 +1539,9 @@ test("@temporary-model merge repair exposes the shared picker and retains Senior
   const dialog = page.getByRole("dialog", { name: "Custom AI" });
   await expect(dialog).toBeVisible();
   await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Orchestrator", exact: true }) }).click();
-  await page.getByRole("option", { name: "Codex", exact: true }).click();
+  await openMenu(page).getByRole("option", { name: "Codex", exact: true }).click();
   await dialog.getByRole("combobox", { name: "Model", exact: true }).fill("GPT");
-  await page.getByRole("option", { name: /GPT-5.6 Sol/ }).click();
+  await openMenu(page).getByRole("option", { name: /GPT-5.6 Sol/ }).click();
   await dialog.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(selections).toHaveLength(1);
@@ -1701,10 +1702,10 @@ test("@preview-lifecycle Codex interactive terminal keeps one attachment queue a
       dataTransfer: transfer
     }));
   });
-  const dropOverlay = terminal.locator(".vibe64-codex-session__drop-overlay");
+  const dropOverlay = terminal.locator(".vibe64-agent-terminal-drop-overlay");
   await expect(dropOverlay).toBeVisible();
   await expect(dropOverlay).toContainText("Drop temporary files for Codex");
-  await expect(dropOverlay.locator(".vibe64-codex-session__drop-card"))
+  await expect(dropOverlay.locator(".vibe64-agent-terminal-drop-overlay__card"))
     .toHaveClass(/elevation-4/u);
   await terminalRoot.evaluate((element, fileName) => {
     const transfer = new DataTransfer();
@@ -2132,8 +2133,7 @@ test("@preview-contention a genuine startup failure appears once and waits for a
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await expect(page.getByText(message, { exact: true })).toHaveCount(1);
   await expect(page.getByText(message, { exact: true })).toBeVisible();
-  await page.waitForTimeout(8500);
-  expect(starts).toBe(1);
+  await expectSteady(() => starts, 1, 8500);
   await page.getByRole("button", { name: "Restart preview", exact: true }).click();
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
   await expect(page.getByText(message, { exact: true })).toHaveCount(0);
@@ -2491,9 +2491,7 @@ test("@preview-lifecycle bounds automatic retries when an app module keeps faili
     hasText: "Preview could not load an application resource after retrying. Use Reload preview to try again."
   })).toBeVisible();
   await expect.poll(() => launchSession.getPreviewModuleRequestCount()).toBe(2);
-  await page.waitForTimeout(750);
-  expect(launchSession.getPreviewLoadCount()).toBe(2);
-  expect(launchSession.getPreviewModuleRequestCount()).toBe(2);
+  await expectSteady(() => [launchSession.getPreviewLoadCount(), launchSession.getPreviewModuleRequestCount()], [2, 2], 750);
   expect(launchSession.getPreviewModuleCompleted()).toBe(false);
 });
 
@@ -2526,8 +2524,7 @@ test("@preview-lifecycle token bootstrap redirects once without reloading the cl
       page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
     ).toBeVisible();
     await expect.poll(() => launchSession.getPreviewLoadCount()).toBe(2);
-    await page.waitForTimeout(500);
-    expect(launchSession.getPreviewLoadCount()).toBe(2);
+    await expectSteady(() => launchSession.getPreviewLoadCount(), 2, 500);
   } finally {
     await launchSession.close();
   }
@@ -2570,10 +2567,9 @@ test("@preview-lifecycle stays mounted without reloading while covered by dashbo
 
   await page.getByRole("tab", { name: "Dashboard" }).click();
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/env/?$`, "u"));
-  await page.waitForTimeout(5500);
+  await expectSteady(() => onboardingReads, 1, 5500);
 
   await expect(previewFrame).toHaveCount(1);
-  expect(onboardingReads).toBe(1);
   expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
   expect(launchSession.getPreviewLoadCount()).toBe(initialPreviewLoadCount);
 
@@ -2857,7 +2853,7 @@ test("mobile dashboard section links keep the active project slug", async ({ pag
     name: "Show project"
   }).click();
   await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
-  await page.getByRole("option", { name: "Project settings", exact: true }).click();
+  await openMenu(page).getByRole("option", { name: "Project settings", exact: true }).click();
 
   await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/settings`);
   expect(page.url()).not.toContain("[slug]");
@@ -3189,7 +3185,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 960, height: 900 
           const control = section.getByRole("combobox", { name: field.label, exact: true });
           await control.focus();
           await control.press("Enter");
-          const option = page.getByRole("option", { name: field.dirtyA, exact: true });
+          const option = openMenu(page).getByRole("option", { name: field.dirtyA, exact: true });
           await option.focus();
           await option.press("Enter");
           await expect(control).toHaveValue(field.dirtyA);
@@ -3227,7 +3223,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 960, height: 900 
           expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
           await control.focus();
           await control.press("Enter");
-          const option = page.getByRole("option", { name: field.dirtyB, exact: true });
+          const option = openMenu(page).getByRole("option", { name: field.dirtyB, exact: true });
           await option.focus();
           await option.press("Enter");
           await expect(control).toHaveValue(field.dirtyB);
@@ -3601,7 +3597,7 @@ for (const viewport of [{ width: 1280, height: 577 }, { width: 390, height: 844 
     await page.goto(filesUrl);
     await expect(page.getByLabel("Session source editor")).toBeVisible();
 
-    // Normal selection above remembers the session; reload must not wait for its list entry.
+    // The session list names the person's last opened session, so a reload reads it before the session's detail.
     const sessionsUrl = `${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions`;
     const sessionReads = new RegExp(`^${escapeRegExp(sessionsUrl)}(?:/${SESSION_ID})?(?:\\?.*)?$`, "u");
     const releaseReads = Promise.withResolvers<void>();
@@ -3613,7 +3609,7 @@ for (const viewport of [{ width: 1280, height: 577 }, { width: 390, height: 844 
     });
     try {
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect.poll(() => heldReads.includes(`${sessionsUrl}/${SESSION_ID}`)).toBe(true);
+      await expect.poll(() => heldReads.some((url) => new URL(url).pathname === new URL(sessionsUrl).pathname)).toBe(true);
       await expect(page).toHaveURL(filesUrl);
       // The session list owns initial loading (Program: sessions/workspaces); the
       // compact layout shows the Project pane, so the chat status is only attached.
@@ -5184,6 +5180,8 @@ function sourceEditorDirectoryPage(node: Record<string, unknown>, {
   };
 }
 
+// The bridge answers only the editors that asked for the Preview, as the proxy
+// injects it; here that is the editor page the test opens.
 function previewAppHtml({
   lateModule = false,
   targetOrigin = new URL(TARGET_APP_URL).origin
@@ -5197,6 +5195,7 @@ function previewAppHtml({
   return injectLaunchPreviewBridge(
     `<!doctype html><html><head><title>Preview</title>${moduleScript}</head><body><div id="app">Preview app</div></body></html>`,
     {
+      parentOrigins: [new URL(BASE_URL).origin],
       targetOrigin
     }
   );
