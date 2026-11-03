@@ -3817,7 +3817,9 @@ for (const { viewport, providerBatch } of [
         expect(await readFile(filePath, "utf8")).not.toContain("raw-v3-secret");
         await v3.fill("env:SEMRUSH_V3_KEY"); await save.click(); await expect(save).toBeDisabled();
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations.semrush.settings).toEqual({ v3ApiKeyRef: "env:SEMRUSH_V3_KEY" });
-        await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+        // Feedback drops a repeated "saved" message within two seconds of the first.
+        const repeatedSaveFeedback = page.getByRole("button", { name: "Dismiss", exact: true });
+        if (await repeatedSaveFeedback.isVisible()) await repeatedSaveFeedback.click();
         const connection = panel.getByRole("region", { name: "Application connection" });
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
         await connection.getByRole("button", { name: "Connect account", exact: true }).click();
