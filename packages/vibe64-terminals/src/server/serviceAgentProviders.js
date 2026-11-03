@@ -100,6 +100,7 @@ function createServiceAgentProviders({
     toolCatalog: assistantContext.mainToolCatalog,
     authorize: authorizeMainConversation,
     host: {
+      env,
       nativeTools: true,
       conversation: prepareMainConversationOperation
     }
