@@ -762,7 +762,8 @@ for (const width of [1280, 768, 390]) {
     await expect.poll(() => launch.getPreviewLoadCount()).toBe(initialLoads + 1);
     expect(reads).toBe(readsBeforeReload);
     expect(launch.getLaunchStartPayloads()).toHaveLength(0);
-    await expect(page.locator('.vibe64-launch-controls__dock button[title="Open browser"]')).toBeEnabled();
+    // With the Preview address bar showing, opening the app in a browser tab is one of its page actions.
+    await expect(page.getByRole("form", { name: "Preview page", exact: true }).getByRole("button", { name: "Open browser", exact: true })).toBeEnabled();
     if (width <= 960) await page.getByRole("button", { name: "Collapse preview controls", exact: true }).click();
     await expect(frame).toBeVisible();
     const warningBox = await warning.boundingBox();
