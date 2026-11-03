@@ -1145,7 +1145,7 @@ for (const { viewport, providerBatch } of [
         if (id === "firecrawl") {
           await expect(panel.getByText(/Select the team that will pay/)).toBeVisible();
           await expect(panel.getByText(/Crawls require an explicit page limit/)).toBeVisible();
-          await expect(panel.getByText(/Vibe64 does not supply a managed subscription/)).toBeVisible();
+          await expect(panel.getByText(/the connector does not supply a managed subscription/)).toBeVisible();
         }
         if (id === "elevenlabs") {
           await expect(panel.getByText(/Enable Voices write only if/)).toBeVisible();
@@ -1740,11 +1740,11 @@ for (const { viewport, providerBatch } of [
           const setup = panel.getByRole("button", { name: `Set up ${spec.name}`, exact: true });
           if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", spec.guide);
-          if (spec.id === "miro") await expect(panel.getByText(/LIMITATIONS: connecting does not attach Miro tools/)).toBeVisible();
+          if (spec.id === "miro") await expect(panel.getByText(/LIMITATIONS: connecting alone does not attach Miro tools/)).toBeVisible();
           if (spec.id === "figma") {
             await expect(panel.getByText(/Figma currently requires approval/)).toBeVisible();
             await expect(panel.getByText(/Desktop MCP must run beside the consuming desktop client/)).toBeVisible();
-            await expect(panel.getByText(/Vibe64 coding-assistant attachment is deferred/)).toBeVisible();
+            await expect(panel.getByText(/automatic assistant attachment are separate capabilities/)).toBeVisible();
           }
           if (spec.id === "miro") {
             await expect(panel.getByRole("textbox", { name: "Registration endpoint", exact: true })).toHaveValue("https://mcp.miro.com/register");
@@ -3085,7 +3085,7 @@ for (const { viewport, providerBatch } of [
         if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.sanity.io/docs/ai/mcp-server");
         await expect(panel.getByText(/For API key authentication instead/)).toBeVisible();
-        await expect(panel.getByText(/The editor coding-assistant attachment is deferred/)).toBeVisible();
+        await expect(panel.getByText(/The assistant host must explicitly attach and authorize these tools/)).toBeVisible();
       }
       if (providerBatch === "sentry") {
         await addIntegration(panel, "Sentry");
@@ -3133,7 +3133,7 @@ for (const { viewport, providerBatch } of [
         if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://mcp.sentry.dev/");
         await expect(panel.getByText(/This is assistant context, not application login/)).toBeVisible();
-        await expect(panel.getByText(/Editor coding-assistant attachment is deferred/)).toBeVisible();
+        await expect(panel.getByText(/automatic editor-tool attachment/)).toBeVisible();
       }
       if (["mcp", "n8n"].includes(providerBatch)) {
         for (const provider of [
@@ -3190,7 +3190,7 @@ for (const { viewport, providerBatch } of [
           const setup = panel.getByRole("button", { name: `Set up ${provider.name}`, exact: true });
           if (await setup.getAttribute("aria-expanded") !== "true") await setup.click();
           await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", provider.setupUrl);
-          if (provider.id === "n8n") await expect(panel.getByText(/LIMITATIONS: Automatic Vibe64 coding-chat attachment is deferred/)).toBeVisible();
+          if (provider.id === "n8n") await expect(panel.getByText(/LIMITATIONS: Assistant tool attachment requires explicit host integration\. A separately wired CLI or assistant host can discover and invoke exposed workflows/)).toBeVisible();
         }
       }
       if (providerBatch === "wordpress-com") {
