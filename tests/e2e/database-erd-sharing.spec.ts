@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { openMenu } from "./support/settled-ui";
 import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
 import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
@@ -127,6 +128,8 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
           project,
           sourceEditor,
           publishLayoutChanged: createDatabaseLayoutChangedPublisher(values.events),
+          // The copilot is available; its questions are answered by this server's /assistant route.
+          terminals: { resolveAssistantPurpose: async () => ({ available: true }) },
           withKnex: () => { throw new Error("Layout synchronization must not execute SQL"); }
         });
         return {};
@@ -164,7 +167,7 @@ async function openDiagram(page: Page, url: string, { waitForReady = true, view 
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/conversation-log`, (route) => fulfillJson(route, { ok: true, sessionId, conversationLog: [], pagination: { count: 0, hasMoreBefore: false, limit: 20, totalTurnCount: 0 } }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/work`, (route) => fulfillJson(route, { ok: true, sessionId, work: { active: false } }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/updates/check`, (route) => fulfillJson(route, { ok: true, sessionId, available: false }));
-  await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/assistant-access`, (route) => fulfillJson(route, { ok: true, available: true, canUse: true, canRequestMessage: false, ownerOnly: false }));
+  await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/assistant-access`, (route) => fulfillJson(route, { ok: true, available: true, canUse: true, canRequestMessage: false, ownerOnly: false, purposes: { fix: { available: true } } }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/source-editor/stars`, (route) => fulfillJson(route, { ok: true, files: [] }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/message-suggestions`, (route) => fulfillJson(route, { ok: true, suggestions: [] }));
   await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/renewal`, (route) => fulfillJson(route, { ok: true, renewal: null }));
@@ -446,7 +449,7 @@ test("@data-overview manual creation includes its main table and removal returns
     await dialog.getByRole("button", { name: "Add actor", exact: true }).click();
     await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Bookings");
     await dialog.getByRole("combobox", { name: "Main table", exact: true }).fill("public.bookings");
-    await page.getByRole("option", { name: "public.bookings", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "public.bookings", exact: true }).click();
     await dialog.getByRole("textbox", { name: "What this actor contains", exact: true }).fill("Booking information");
     await dialog.getByRole("button", { name: "Save actors", exact: true }).click();
     await expect(dialog).toHaveCount(0);
@@ -487,7 +490,7 @@ for (const width of [390, 1600]) {
       await page.locator('[data-id="actor:public.invoice_groups"] strong').click();
       await diagramAction(page, "Edit or merge actor");
       await dialog.getByRole("combobox", { name: "Merge into another actor", exact: true }).locator("..").click();
-      await page.getByRole("option", { name: "Bookings", exact: true }).click();
+      await openMenu(page).getByRole("option", { name: "Bookings", exact: true }).click();
       await dialog.getByRole("button", { name: "Merge actor and its tables", exact: true }).click();
       await dialog.getByRole("button", { name: "Save actors", exact: true }).click();
       await expect(dialog).toHaveCount(0);
@@ -533,8 +536,8 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
     dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("radio", { name: "Process new tables only (1)", exact: true })).toBeChecked();
     await dialog.getByRole("combobox", { name: "Abstraction", exact: true }).locator("..").click();
-    for (const label of ["Not abstract", "Balanced", "Very abstract"]) await expect(page.getByRole("option", { name: label, exact: true })).toBeVisible();
-    await page.getByRole("option", { name: "Not abstract", exact: true }).click();
+    for (const label of ["Not abstract", "Balanced", "Very abstract"]) await expect(openMenu(page).getByRole("option", { name: label, exact: true })).toBeVisible();
+    await openMenu(page).getByRole("option", { name: "Not abstract", exact: true }).click();
     await dialog.getByRole("button", { name: "Generate overview", exact: true }).click();
     await expect.poll(() => turns.length).toBe(1);
     expect(turns[0].message).toContain("Process only coverage.unreviewed");
@@ -1221,7 +1224,9 @@ for (const width of [390, 768, 1600]) {
       page.on("pageerror", error => errors.push(error.message));
       await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
       const overviewToolbar = page.getByLabel("Data overview controls");
-      await expect(overviewToolbar.getByRole("button")).toHaveCount(2);
+      // Review for the ungrouped tables, Fit and Overview options.
+      await expect(overviewToolbar.getByRole("button")).toHaveCount(3);
+      await expect(overviewToolbar.getByRole("button", { name: /^Review \d+ ungrouped tables$/u })).toBeVisible();
       const headerBefore = await overviewToolbar.boundingBox();
       const map = page.locator(".database-overview__map");
       const mapBefore = await map.boundingBox();
@@ -1259,9 +1264,9 @@ for (const width of [390, 768, 1600]) {
       await expect(options.getByRole("button", { name: "Saved views", exact: true })).toBeVisible();
       await expect(options.getByRole("button", { name: "Edit table groups", exact: true })).toBeVisible();
       await options.locator(".v-select").click({ timeout: 5000 });
-      await expect(page.getByRole("option", { name: "All tables with relationships", exact: true })).toBeVisible();
-      await expect(page.getByRole("option", { name: "Related tables", exact: true })).toHaveCount(0);
-      await page.getByRole("option", { name: "All tables", exact: true }).click();
+      await expect(openMenu(page).getByRole("option", { name: "All tables with relationships", exact: true })).toBeVisible();
+      await expect(openMenu(page).getByRole("option", { name: "Related tables", exact: true })).toHaveCount(0);
+      await openMenu(page).getByRole("option", { name: "All tables", exact: true }).click();
       await diagramAction(page, "All columns");
       await expect(details.locator('[data-id="public.checklists"]')).toContainText("notes");
       await page.screenshot({ path: testInfo.outputPath(`simplified-${width}.png`) });
@@ -1572,13 +1577,13 @@ test("@erd-controls saved views, groups, filters and fullscreen remain usable fr
     const groupDialog = page.getByRole("dialog");
     await groupDialog.getByRole("textbox", { name: "Group name", exact: true }).fill("Customers only");
     await groupDialog.getByRole("combobox", { name: "Tables in group", exact: true }).fill("customers");
-    await page.getByRole("option", { name: "customers", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "customers", exact: true }).click();
     await groupDialog.getByRole("button", { name: "Save group", exact: true }).click();
     await expect(groupDialog).toBeHidden();
     const options = page.locator(".database-erd__options");
     if (!await options.isVisible()) await page.getByRole("button", { name: "Diagram options", exact: true }).click();
     await options.locator(".v-select").click({ timeout: 5000 });
-    await page.getByRole("option", { name: "Customers only", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "Customers only", exact: true }).click();
     await expect(page.locator('.database-erd .vue-flow__node:visible')).toHaveCount(1);
     await options.getByRole("button", { name: "Saved views", exact: true }).click();
     await page.getByText("Save view…", { exact: true }).click();
@@ -1587,7 +1592,7 @@ test("@erd-controls saved views, groups, filters and fullscreen remain usable fr
     await expect(page.getByRole("dialog")).toBeHidden();
     if (!await options.isVisible()) await page.getByRole("button", { name: "Diagram options", exact: true }).click();
     await options.locator(".v-select").click({ timeout: 5000 });
-    await page.getByRole("option", { name: "All tables", exact: true }).click();
+    await openMenu(page).getByRole("option", { name: "All tables", exact: true }).click();
     await expect(page.locator('.database-erd .vue-flow__node:visible')).toHaveCount(2);
     await options.getByRole("button", { name: "Saved views", exact: true }).click();
     await page.getByText("Customer view", { exact: true }).click();
