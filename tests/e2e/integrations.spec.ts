@@ -2015,6 +2015,7 @@ for (const { viewport, providerBatch } of [
           await field.getByText(current, { exact: true }).click({ timeout: 10000 });
           for (const option of ["Ask each time", "Always allow", "Never allow"]) await expect(page.getByRole("option", { name: option, exact: true })).toBeVisible();
           await page.getByRole("option", { name: next, exact: true }).click();
+          await expect(page.getByRole("listbox")).toHaveCount(0);
         };
         await choose("Delete product", "Ask each time", "Never allow");
         await choose("Manage all permissions", "Ask each time", "Always allow");
