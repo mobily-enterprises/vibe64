@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { buildOverviewAssistantRequest } from "@local/vibe64-database-tools/shared/databaseOverviewPrompt";
 
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
@@ -11,8 +12,6 @@ const OVERVIEW_HANDOFF = [
 ].join("\n");
 const SCOPES = Object.freeze(["all", "new", "ungrouped"]);
 const VALID_MESSAGE = "The data overview is valid.";
-
-const text = value => String(value || "").trim();
 
 function overviewRetryMessage(diagnostic) {
   return [
@@ -32,13 +31,13 @@ function overviewRetryMessage(diagnostic) {
 function overviewCheckResult(scope, read) {
   if (read?.ok === false) {
     // The database itself could not be read: nothing in the overview for the AI to repair.
-    const error = text(read.error) || "The database could not be read.";
+    const error = normalizeText(read.error) || "The database could not be read.";
     return { passed: false, message: `The data overview could not be read: ${error} Check now once the database is available.`, retryKey: "", diagnostic: error };
   }
   const { overview = {}, coverage = {} } = read || {};
   const problems = [
     overview.present ? "" : "data-overview.json is missing.",
-    text(overview.error),
+    normalizeText(overview.error),
     coverage.missing?.length ? `Tables missing from the refreshed schema: ${coverage.missing.join(", ")}.` : "",
     coverage.missingRelationships?.length ? `Main connections missing from the refreshed schema: ${coverage.missingRelationships.join(", ")}.` : "",
     scope !== "ungrouped" && coverage.unreviewed?.length ? `Tables not yet reviewed: ${coverage.unreviewed.join(", ")}.` : ""
@@ -69,15 +68,15 @@ function createDatabaseOverviewKind({ databaseTools }) {
    */
   async function readOverviewProblem({ sessionId }, input) {
     const scope = SCOPES.includes(input.scope) ? input.scope : "all";
-    const tables = (Array.isArray(input.tables) ? input.tables : []).map(text).filter(Boolean).slice(0, 500);
+    const tables = (Array.isArray(input.tables) ? input.tables : []).map(normalizeText).filter(Boolean).slice(0, 500);
     if (scope === "ungrouped" && !tables.length) {
       throw new AppError(400, "Choose the ungrouped tables to review.", { code: "vibe64_ai_task_no_problem" });
     }
     const read = await databaseTools.readOverview({ sessionId });
     if (read?.ok === false) {
-      throw new AppError(409, text(read.error) || "The database could not be read.", { code: read.code || "vibe64_ai_task_no_problem" });
+      throw new AppError(409, normalizeText(read.error) || "The database could not be read.", { code: read.code || "vibe64_ai_task_no_problem" });
     }
-    const request = buildOverviewAssistantRequest({ abstraction: text(input.abstraction), scope, schemaTables: read.schema.tables, tables });
+    const request = buildOverviewAssistantRequest({ abstraction: normalizeText(input.abstraction), scope, schemaTables: read.schema.tables, tables });
     return {
       key: JSON.stringify(["database-overview", scope, request.abstraction, tables, read.overview.hash]),
       summary: request.displayMessage,

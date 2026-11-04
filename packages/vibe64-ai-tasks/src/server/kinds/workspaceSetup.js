@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("../types.js").AiTaskCheckResult} AiTaskCheckResult */
@@ -12,11 +13,9 @@ const SETUP_HANDOFF = [
 const SETUP_SUCCEEDED_MESSAGE = "Workspace preparation succeeded.";
 const NEEDS_ATTENTION = Object.freeze(["failed", "ambiguous", "required"]);
 
-const text = value => String(value || "").trim();
-
 /** The end of a long preparation transcript, which is where its failure is. */
 function recentTranscript(transcript) {
-  const value = text(transcript);
+  const value = normalizeText(transcript);
   return value.length > TRANSCRIPT_LIMIT ? `[Earlier preparation output omitted.]\n${value.slice(-TRANSCRIPT_LIMIT)}` : value;
 }
 
@@ -39,16 +38,16 @@ async function readSetupProblem({ runtime, sessionId }) {
     runtime.store.readBackgroundTask(sessionId, "update-session")
   ]);
   const setup = session.workspaceSetup || {};
-  const status = text(setup.status);
+  const status = normalizeText(setup.status);
   if (!NEEDS_ATTENTION.includes(status) || setup.connectedChoiceRequired === true) {
     throw new AppError(409, "Workspace preparation has no problem to fix right now.", { code: "vibe64_ai_task_no_problem" });
   }
   if (update?.status === "failed") {
     throw new AppError(409, "Fix Update first. Update prepares the workspace again.", { code: "vibe64_ai_task_update_first" });
   }
-  const diagnostic = text(setup.diagnostic) || "Workspace preparation did not complete.";
+  const diagnostic = normalizeText(setup.diagnostic) || "Workspace preparation did not complete.";
   return {
-    key: JSON.stringify(["workspace-setup", status, text(setup.updatedAt), diagnostic]),
+    key: JSON.stringify(["workspace-setup", status, normalizeText(setup.updatedAt), diagnostic]),
     summary: diagnostic.split("\n")[0],
     details: [diagnostic, recentTranscript(setup.transcript)].filter(Boolean).join("\n\n"),
     facts: { diagnostic, transcript: recentTranscript(setup.transcript) }
@@ -75,13 +74,13 @@ function setupContext() {
  */
 function setupCheckResult(result) {
   if (result?.ok === false) {
-    const error = text(result.error) || "Workspace preparation could not start.";
+    const error = normalizeText(result.error) || "Workspace preparation could not start.";
     if (result.code === "vibe64_workspace_setup_running") return { waiting: true, message: "Preparation is already running" };
     return { passed: false, message: `Workspace preparation still needs attention: ${error}`, retryKey: "", diagnostic: error };
   }
   const setup = result.workspaceSetup || {};
   if (setup.status === "succeeded") return { passed: true, message: SETUP_SUCCEEDED_MESSAGE };
-  const diagnostic = text(setup.diagnostic) || "Workspace preparation did not complete.";
+  const diagnostic = normalizeText(setup.diagnostic) || "Workspace preparation did not complete.";
   if (setup.status === "ambiguous") {
     return { passed: false, message: "Preparation needs your choice. Make it on the notice, then Check now.", retryKey: "", diagnostic };
   }

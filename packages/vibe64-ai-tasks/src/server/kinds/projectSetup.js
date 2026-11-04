@@ -1,11 +1,12 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { projectOnboardingRequest } from "@local/vibe64-project/shared/onboardingRequest";
 
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("../types.js").AiTaskCheckResult} AiTaskCheckResult */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
-const SETUP_HANDOFF = [
+const PROJECT_SETUP_HANDOFF = [
   "Return kind=complete with a factual report as soon as the project's setup is done. Vibe64 then inspects the project itself and returns anything still unset to this same conversation.",
   "Return kind=question whenever you need the person's answer, and ask that specific question. Return kind=cannot only when this cannot be done, and say why."
 ].join("\n");
@@ -21,14 +22,13 @@ const UNSET_STATES = Object.freeze(["attention", "new", "adoption"]);
 const READY_MESSAGE = "Project setup is ready.";
 const UPDATE_FIRST_MESSAGE = "Project setup waits for Update. Fix Update first, then Check now.";
 
-const text = value => String(value || "").trim();
-const diagnosticsOf = inspection => (inspection?.diagnostics || []).map(({ message }) => text(message)).filter(Boolean);
+const diagnosticsOf = inspection => (inspection?.diagnostics || []).map(({ message }) => normalizeText(message)).filter(Boolean);
 
 function setupRetryMessage(diagnostic) {
   return [
     "Vibe64 inspected the project after your work, and its setup still needs attention. Your edits remain. Fix only what is still unset.",
     `Latest inspection:\n${diagnostic}`,
-    SETUP_HANDOFF
+    PROJECT_SETUP_HANDOFF
   ].join("\n\n");
 }
 
@@ -39,10 +39,10 @@ function setupRetryMessage(diagnostic) {
  */
 function setupCheckResult(onboarding) {
   if (onboarding?.ok === false) {
-    const error = text(onboarding.error) || "Project setup could not be read.";
+    const error = normalizeText(onboarding.error) || "Project setup could not be read.";
     return { passed: false, message: `Project setup could not be read: ${error}`, retryKey: JSON.stringify([onboarding.code, error]), diagnostic: error };
   }
-  const state = text(onboarding?.inspection?.state);
+  const state = normalizeText(onboarding?.inspection?.state);
   if (!UNSET_STATES.includes(state)) return { passed: true, message: READY_MESSAGE };
   if (onboarding.updateFirst) return { passed: false, message: UPDATE_FIRST_MESSAGE, retryKey: "", diagnostic: UPDATE_FIRST_MESSAGE };
   const diagnostic = diagnosticsOf(onboarding.inspection).join("\n") || "The project still has no setup.";
@@ -55,11 +55,11 @@ function setupCheckResult(onboarding) {
 }
 
 function setupBrief(problem) {
-  return [problem.facts.message, SETUP_HANDOFF].join("\n\n");
+  return [problem.facts.message, PROJECT_SETUP_HANDOFF].join("\n\n");
 }
 
-function setupContext() {
-  return SETUP_HANDOFF;
+function projectSetupContext() {
+  return PROJECT_SETUP_HANDOFF;
 }
 
 /**
@@ -75,9 +75,9 @@ function createProjectSetupKind({ project }) {
    * @param {{ mode?: string, purpose?: string }} input
    */
   async function readSetupProblem({ sessionId }, input) {
-    const mode = text(input.mode);
+    const mode = normalizeText(input.mode);
     const expected = MODES[mode];
-    if (!expected) throw new AppError(400, "Choose what to do with this project's setup.", { code: "vibe64_ai_task_no_problem" });
+    if (!expected) throw new AppError(400, "Choose what to do with this project's setup.", { code: "vibe64_ai_task_setup_unknown" });
     const onboarding = await project.readOnboarding({ sessionId });
     const unreadable = onboarding?.ok === false;
     const inspection = unreadable ? { state: "attention", diagnostics: [], nextAction: "" } : onboarding?.inspection;
@@ -87,14 +87,12 @@ function createProjectSetupKind({ project }) {
     if (mode === "repair" && onboarding.updateFirst) {
       throw new AppError(409, "Fix Update first. Project setup waits for it.", { code: "vibe64_ai_task_update_first" });
     }
-    const diagnostics = unreadable ? [text(onboarding.error) || "Project setup could not be read."] : diagnosticsOf(inspection);
-    const purpose = text(input.purpose).slice(0, 2000);
-    let request;
-    try {
-      request = projectOnboardingRequest(mode, { purpose, diagnostic: diagnostics.join(" "), nextAction: inspection.nextAction });
-    } catch (error) {
-      throw new AppError(400, error.message, { code: "vibe64_ai_task_no_problem" });
+    const diagnostics = unreadable ? [normalizeText(onboarding.error) || "Project setup could not be read."] : diagnosticsOf(inspection);
+    const purpose = normalizeText(input.purpose).slice(0, 2000);
+    if (mode === "adopt" && !purpose) {
+      throw new AppError(400, "Describe the existing project before adopting it.", { code: "vibe64_ai_task_purpose_missing" });
     }
+    const request = projectOnboardingRequest(mode, { purpose, diagnostic: diagnostics.join(" "), nextAction: inspection.nextAction });
     return {
       key: JSON.stringify(["project-setup", mode, diagnostics, purpose]),
       summary: mode === "repair" ? diagnostics[0] || "Project setup needs attention." : request.displayMessage,
@@ -117,7 +115,7 @@ function createProjectSetupKind({ project }) {
     opening: "Set up this project.",
     problem: readSetupProblem,
     brief: setupBrief,
-    context: setupContext,
+    context: projectSetupContext,
     steps: ["The AI sets up the project", "Vibe64 inspects the project"],
     check: {
       by: "vibe64",

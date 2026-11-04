@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { REPOSITORY_GIT_BOUNDARY, conflictCount } from "./repository.js";
 
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
@@ -20,8 +21,6 @@ const PERSON_MESSAGES = Object.freeze({
 const RESOLVED_CODES = Object.freeze(["vibe64_incoming_repair_not_needed", "vibe64_incoming_repair_no_longer_needed"]);
 const CONFLICT_MARKER = /^\+(?:<{7} |>{7} |={7}$)/mu;
 
-const text = value => String(value || "").trim();
-
 function mergeRetryMessage(diagnostic) {
   return [
     "Vibe64 built the repaired merge after your repair, and it is not ready yet. Your edits remain. Repair only what still fails.",
@@ -38,12 +37,12 @@ function mergeRetryMessage(diagnostic) {
  */
 async function readMergeProblem(_context, input) {
   const source = input.review && typeof input.review === "object" ? input.review : {};
-  const review = Object.fromEntries(REVIEW_KEYS.map(key => [key, text(source[key]).slice(0, 200)]));
-  const paths = (Array.isArray(input.conflictPaths) ? input.conflictPaths : []).map(text).filter(Boolean).slice(0, 200);
+  const review = Object.fromEntries(REVIEW_KEYS.map(key => [key, normalizeText(source[key]).slice(0, 200)]));
+  const paths = (Array.isArray(input.conflictPaths) ? input.conflictPaths : []).map(normalizeText).filter(Boolean).slice(0, 200);
   if (!review.id || !review.activeHead || !paths.length) {
     throw new AppError(400, "Merge this contribution first, so Vibe64 knows its conflicts.", { code: "vibe64_ai_task_no_problem" });
   }
-  const checkpoint = text(input.checkpointCommit).slice(0, 64);
+  const checkpoint = normalizeText(input.checkpointCommit).slice(0, 64);
   const details = [
     `Receiving repository: ${review.repository}; target ${review.targetBranch} at ${review.targetHead}.`,
     `Contribution vibe64-incoming/${review.id} at ${review.activeHead}.`,
@@ -65,7 +64,7 @@ async function readMergeProblem(_context, input) {
  * @returns {AiTaskCheckResult}
  */
 function mergeCheckResult(target, result) {
-  const code = text(result?.code);
+  const code = normalizeText(result?.code);
   if (result?.ok !== false) {
     if (result?.status === "merged") return { passed: true, message: "This contribution is already merged." };
     if (CONFLICT_MARKER.test(String(result?.diff?.content || ""))) {
@@ -75,7 +74,7 @@ function mergeCheckResult(target, result) {
     return { passed: true, message: `The repaired merge is ready for your review. Check it, then choose Merge into ${target}.` };
   }
   if (RESOLVED_CODES.includes(code)) return { passed: true, message: `This contribution merges cleanly now. Choose Merge into ${target}.` };
-  const error = text(result.error) || "The repaired merge could not be built.";
+  const error = normalizeText(result.error) || "The repaired merge could not be built.";
   const person = PERSON_MESSAGES[code];
   return {
     passed: false,

@@ -1,4 +1,5 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("../types.js").AiTaskCheckResult} AiTaskCheckResult */
@@ -15,8 +16,6 @@ const PERSON_MESSAGES = Object.freeze({
   vibe64_preview_identity_command_unavailable: "This preview can't switch identity. Restart Preview, then Check now."
 });
 
-const text = value => String(value || "").trim();
-
 function identityRetryMessage(diagnostic) {
   return [
     "Vibe64 tried this preview identity after your repair, and the application still rejected it. Your edits remain. Repair only what still fails.",
@@ -32,14 +31,14 @@ function identityRetryMessage(diagnostic) {
  */
 async function readIdentityProblem(_context, input) {
   const identity = input.identity || {};
-  const name = text(identity.name);
+  const name = normalizeText(identity.name);
   if (!name) throw new AppError(400, "Choose the preview identity that failed.", { code: "vibe64_ai_task_no_problem" });
-  const error = text(input.error) || "The application rejected the identity.";
+  const error = normalizeText(input.error) || "The application rejected the identity.";
   return {
-    key: JSON.stringify(["preview-identity", text(identity.type), text(identity.value), error]),
+    key: JSON.stringify(["preview-identity", normalizeText(identity.type), normalizeText(identity.value), error]),
     summary: `Preview couldn't sign in as ${name}.`,
     details: error,
-    facts: { name, type: text(identity.type) || "selector", value: text(identity.value) || "unknown", error }
+    facts: { name, type: normalizeText(identity.type) || "selector", value: normalizeText(identity.value) || "unknown", error }
   };
 }
 
@@ -64,8 +63,8 @@ function identityContext() {
  */
 function identityCheckResult(name, result) {
   if (result?.ok !== false) return { passed: true, message: `Preview accepts ${name} now. Choose it again to sign in.` };
-  const code = text(result.code);
-  const error = text(result.error) || "The application rejected the identity.";
+  const code = normalizeText(result.code);
+  const error = normalizeText(result.error) || "The application rejected the identity.";
   const person = PERSON_MESSAGES[code];
   return {
     passed: false,

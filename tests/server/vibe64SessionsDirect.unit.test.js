@@ -4908,7 +4908,8 @@ test("source pin works during assistant preparation and retains closing and rene
 test("incoming change facades require a session before reaching Git", async () => {
   const calls = [];
   const service = createService({
-    project: {},
+    // A session with no AI task open.
+    project: { createRuntimeWithoutSource: async () => ({ store: { listSessionConversations: async () => [] } }) },
     terminals: {
       async inspectIncomingContributions(sessionId) {
         calls.push(["inspect", sessionId]);

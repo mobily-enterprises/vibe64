@@ -80,8 +80,9 @@ function createSessionRepositoryReads({ project, terminals }) {
 
   async function changeIncomingContribution(sessionId, input) {
     return sessionResult(async () => {
-      await refuseDuringRepositoryAiTask(await project.createRuntimeWithoutSource(), requiredIncomingSessionId(sessionId), input.aiTaskId);
-      const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
+      const incomingSessionId = requiredIncomingSessionId(sessionId);
+      await refuseDuringRepositoryAiTask(await project.createRuntimeWithoutSource(), incomingSessionId, input.aiTaskId);
+      const result = await terminals.changeIncomingContribution(incomingSessionId, {
         ...input,
         vibe64User: trustedAssistantUser(input)
       });
