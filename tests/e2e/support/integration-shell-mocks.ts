@@ -6,8 +6,8 @@ const owner = "integration-test-owner";
 
 /**
  * Answers every read the studio shell makes around a strict integration-panel page, as a ready direct-chat session
- * with nothing else configured: no Learning, Colleague, AI accounts, approvals, work plan or usage recording. A spec's
- * catch-all route still reports any other request as unexpected.
+ * with nothing else configured: no Learning, Colleague, AI accounts, AI tasks, approvals, work plan or usage
+ * recording. A spec's catch-all route still reports any other request as unexpected.
  */
 async function mockIntegrationShellReads(page: Page) {
   const session = `/vibe64/sessions/${directChatSessionId}`;
@@ -23,6 +23,7 @@ async function mockIntegrationShellReads(page: Page) {
     [`${session}/renewal`, { ok: true, renewal: null, viewerScope: owner }],
     [`${session}/source-editor/stars`, { ok: true, files: [] }],
     [`${session}/work-plan`, { ok: true, sessionId: directChatSessionId, available: false, current: null, history: [] }],
+    [`${session}/ai-tasks`, { ok: true, tasks: [], viewerId: owner }],
     [`${session}/main-chat-approvals`, { ok: true, sessionId: directChatSessionId, owner: true, practice: false,
       viewer: { id: owner, username: owner, displayName: owner }, ownerName: owner, entries: [] }],
     [`/vibe64/usage-recordings/sessions/${directChatSessionId}/current`, { recording: null, serverTime: new Date().toISOString() }],
