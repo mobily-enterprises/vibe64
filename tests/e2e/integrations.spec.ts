@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
-import { dismissFeedbackIfShown, expandPanel, openMenu } from "./support/settled-ui";
+import { dismissFeedbackIfShown, expandPanel, openMenu, waitForFeedbackToClear } from "./support/settled-ui";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -1029,6 +1029,7 @@ for (const { viewport, providerBatch } of [
           await connectionPanel.getByRole("button", { name: "Reconnect", exact: true }).click();
           await expect(connectionPanel.getByText("Connected", { exact: true })).toBeVisible();
           await connectionPanel.screenshot({ path: `/tmp/integration-connection-${viewport.name}.png` });
+          await waitForFeedbackToClear(page);
         }
         const file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations[id].authentication).toEqual({ method: "api-key", secretRef: reference });

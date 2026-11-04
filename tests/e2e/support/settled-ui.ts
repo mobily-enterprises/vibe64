@@ -19,6 +19,16 @@ async function dismissFeedbackIfShown(page: Page) {
 }
 
 /**
+ * Waits until feedback has timed out, so a control it covered receives the next click. The pointer leaves first: a
+ * message stays while the pointer rests on it, and a click aimed at a control it covers parks the pointer there.
+ */
+async function waitForFeedbackToClear(page: Page) {
+  await page.mouse.move(0, 0);
+  // Two queued messages show for five seconds each.
+  await expect(page.locator(".v-snackbar__content")).toBeHidden({ timeout: 15_000 });
+}
+
+/**
  * Opens an expansion panel through its title button and waits until its content has finished expanding, so a control
  * inside it receives the next click. While it expands, the panel clips its content: Playwright's scroll into view
  * scrolls that clip, which no pointer can do, and the next frame's growth carries the control out from under the
@@ -47,4 +57,4 @@ async function expectSteady<T>(read: () => T | Promise<T>, expected: T, duration
   expect(await read()).toEqual(expected);
 }
 
-export { dismissFeedbackIfShown, expandPanel, expectSteady, openMenu };
+export { dismissFeedbackIfShown, expandPanel, expectSteady, openMenu, waitForFeedbackToClear };
