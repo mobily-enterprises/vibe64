@@ -2,6 +2,7 @@
 import { ref } from "vue";
 
 // Dismissed for this page load, even if the Colleague panel remounts.
+// readable-check: allow module-state - shared resource: one dismissal on the page holds for every nudge, including one a remounted Colleague panel shows
 const dismissed = ref(false);
 </script>
 

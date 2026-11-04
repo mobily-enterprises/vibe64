@@ -1,5 +1,6 @@
 <script>
 // Auto-open happens at most once per page load, across remounts.
+// readable-check: allow module-state - shared resource: the page opens onboarding by itself once, however often its host remounts
 let autoOpened = false;
 </script>
 
@@ -64,7 +65,7 @@ async function close(reason) {
   else {
     // The opener may have left with its menu or dialog; listeners name a stand-in.
     const target = request?.returnFocus || opener;
-    if (target?.isConnected !== false) target?.focus?.({ preventScroll: true });
+    if (target?.isConnected !== false) target?.focus({ preventScroll: true });
   }
   opener = null;
   request = null;
