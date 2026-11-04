@@ -6,14 +6,19 @@ import {
 
 import { SQL_QUOTING } from "../shared/sqlQuoting.js";
 
-function defineDatabaseClientDialect(definition = {}) {
-  if (
-    !definition.codeMirrorDialect ||
-    typeof definition.quoteIdentifier !== "function" ||
-    typeof definition.stringLiteral !== "function"
-  ) {
-    throw new TypeError("A database client dialect must implement the complete UI adapter contract.");
-  }
+/**
+ * What the SQL editor and the Data view need from an engine: its CodeMirror dialect and its SQL quoting.
+ * @typedef {object} DatabaseClientDialect
+ * @property {import("@codemirror/lang-sql").SQLDialect} codeMirrorDialect
+ * @property {(name: string) => string} quoteIdentifier
+ * @property {(value: unknown) => string} stringLiteral
+ */
+
+/**
+ * An engine's client dialect, frozen.
+ * @param {DatabaseClientDialect} definition
+ */
+function defineDatabaseClientDialect(definition) {
   return Object.freeze(definition);
 }
 
@@ -32,6 +37,11 @@ const DATABASE_CLIENT_DIALECTS = Object.freeze({
   })
 });
 
+/**
+ * The client dialect of an engine; an engine the UI has no dialect for is refused.
+ * @param {string} [engine]
+ * @returns {DatabaseClientDialect}
+ */
 function databaseClientDialect(engine = "") {
   const candidate = String(engine || "").trim().toLowerCase();
   const dialect = DATABASE_CLIENT_DIALECTS[candidate];

@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DATABASE_CLIENT_DIALECTS,
-  databaseClientDialect,
-  defineDatabaseClientDialect
+  databaseClientDialect
 } from "../../packages/vibe64-database-tools/src/client/databaseDialect.js";
 import {
   SQL_QUOTING
@@ -47,6 +46,5 @@ describe("database client dialect registry", () => {
 
   it("fails visibly when the UI has no adapter for an engine", () => {
     expect(() => databaseClientDialect("unsupported")).toThrow(/Unsupported database client dialect/u);
-    expect(() => defineDatabaseClientDialect({})).toThrow(/complete UI adapter contract/u);
   });
 });

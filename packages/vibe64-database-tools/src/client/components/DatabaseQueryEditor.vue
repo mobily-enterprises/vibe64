@@ -121,8 +121,7 @@ const runButton = ref(null);
  * Moves focus from the editor to Run, so Tab then Enter runs the SQL.
  */
 function focusRunButton() {
-  const element = runButton.value?.$el || runButton.value;
-  element?.focus?.();
+  runButton.value?.$el.focus();
 }
 </script>
 

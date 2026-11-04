@@ -18,7 +18,13 @@ export const ERD_LAYOUT_OPTIONS = Object.freeze({
   "elk.randomSeed": "1"
 });
 
-export function buildErdLayoutGraph(nodes = [], edges = []) {
+/**
+ * The ELK graph for one group of tables: each table a node with its fixed relationship ports, and each relationship
+ * between two of them an edge from port to port.
+ * @param {Array<{ id: string, width?: number, height?: number, ports?: Array<Record<string, any>> }>} nodes
+ * @param {Array<{ id: string, source: string, target: string, sourceHandle?: string, targetHandle?: string }>} edges
+ */
+export function buildErdLayoutGraph(nodes, edges) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   return {
     children: nodes.map((node) => ({

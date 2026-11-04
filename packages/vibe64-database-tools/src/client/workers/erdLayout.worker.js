@@ -5,9 +5,15 @@ import { buildErdRelationshipRoutes } from "../../shared/erdRelationships.js";
 import { layoutErdGroups, layoutErdRings } from "./erdLayout.js";
 import { routeOverviewEdges } from "../dataOverviewModel.js";
 
+// readable-check: allow module-state - shared resource: every layout this worker answers uses one ELK engine, started on first need with its own nested worker
 let elk = null;
 
-self.addEventListener("message", async (event) => {
+/**
+ * Answers one request from the page: relationship routes, the overview's actor rings, a central table's rings, or
+ * an ELK arrangement of the table groups. A failure is answered too, so the page's request always settles.
+ * @param {MessageEvent} event
+ */
+async function answerLayoutRequest(event) {
   const request = event.data || {};
   try {
     const nodes = Array.isArray(request.nodes) ? request.nodes : [];
@@ -51,4 +57,7 @@ self.addEventListener("message", async (event) => {
       ok: false
     });
   }
-});
+}
+
+// readable-check: allow leaked-listener - platform object: this is the worker's own global scope, which ends with the worker when the page terminates it
+self.addEventListener("message", answerLayoutRequest);
