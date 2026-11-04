@@ -19,13 +19,13 @@ const OUTPUTS_REALTIME_REASONS = new Set([
 ]);
 
 function outputTargetWorktreePath(session = {}) {
-  return String(session?.sourcePath || "");
+  return String(session.sourcePath || "");
 }
 
 function launchControlsSessionCanRun(session = {}) {
-  const metadata = normalizeObject(session?.metadata);
+  const metadata = normalizeObject(session.metadata);
   return Boolean(
-    String(session?.sessionId || "").trim() &&
+    String(session.sessionId || "").trim() &&
     !isArchivedVibe64Session(session) &&
     !String(metadata.session_closing_reason || "").trim() &&
     outputTargetWorktreePath(session)

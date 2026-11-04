@@ -3,6 +3,7 @@
 // so the browser opens a normal tab with an editable address bar, not a popup.
 // A tab opened before the editor can reach the app shows "Starting app…" and
 // moves to the app's address once the Preview names it.
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { stableLocalStorageKeyPart } from "@/lib/browserLocalStorage.js";
 import {
   currentProjectSlugFromLocation,
@@ -14,9 +15,11 @@ import {
   resolveLaunchPreviewDestination
 } from "@/lib/vibe64LaunchPreviewDestination.js";
 
-function launchBrowserTargetName(session = {}, projectSlug = currentProjectSlugFromLocation()) {
+/** The tab's name: one per project, else per session; no session is selected (null) before one loads. */
+function launchBrowserTargetName(session, projectSlug = currentProjectSlugFromLocation()) {
+  const source = normalizeObject(session);
   const projectScope = String(projectSlug || "").trim() ||
-    String(session?.sessionId || session?.id || "project").trim();
+    String(source.sessionId || source.id || "project").trim();
   return `vibe64-launch-${stableLocalStorageKeyPart(projectScope)}`;
 }
 
@@ -69,9 +72,7 @@ function openLaunchBrowserTarget(
   } catch {
     // Browser window proxies can reject writes after cross-origin navigation.
   }
-  if (typeof openedWindow.focus === "function") {
-    openedWindow.focus();
-  }
+  openedWindow.focus();
   return openedWindow;
 }
 
@@ -98,17 +99,15 @@ function openPendingLaunchBrowserWindow(
 
   try {
     openedWindow.opener = null;
-    openedWindow.document?.write?.(
+    openedWindow.document.write(
       "<!doctype html><title>Starting app…</title>" +
       "<body style=\"font-family: system-ui, sans-serif; margin: 2rem\">Starting app…</body>"
     );
-    openedWindow.document?.close?.();
+    openedWindow.document.close();
   } catch {
     // A reused named browser window can already be cross-origin.
   }
-  if (typeof openedWindow.focus === "function") {
-    openedWindow.focus();
-  }
+  openedWindow.focus();
   return openedWindow;
 }
 
@@ -133,9 +132,7 @@ function openReadyLaunchBrowserTarget(
   } catch {
     return null;
   }
-  if (typeof pendingWindow.focus === "function") {
-    pendingWindow.focus();
-  }
+  pendingWindow.focus();
   return pendingWindow;
 }
 

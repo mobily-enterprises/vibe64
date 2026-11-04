@@ -82,11 +82,11 @@ function launchPreviewFromStatus(status = {}) {
 }
 
 function launchTerminalIsReady(metadata = {}) {
-  return metadata?.launchReady === true || metadata?.launchReady === "true";
+  return metadata.launchReady === true || metadata.launchReady === "true";
 }
 
 function launchPreviewRequiresProxy(metadata = {}) {
-  return Boolean(String(metadata?.previewAuth || "").trim());
+  return Boolean(String(metadata.previewAuth || "").trim());
 }
 
 export {
