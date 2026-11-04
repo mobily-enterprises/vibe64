@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { useAssistantSuggestions } from "@jskit-ai/assistant-core/client/conversation-suggestions";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   normalizedPromptHintDraft,
   normalizedPromptHintSuggestion,
@@ -21,11 +22,8 @@ import {
 const PROMPT_HINT_DEBOUNCE_MS = 5_000;
 const PROMPT_HINT_MIN_INTERVAL_MS = 30_000;
 const PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT = 8;
+// readable-check: allow module-state - shared resource: every session's prompt hints on the page draw operation ids from one sequence, so two requests in the same millisecond never share an id
 let promptHintOperationSequence = 0;
-
-function normalizedPromptHintText(value = "") {
-  return String(value || "").trim();
-}
 
 function promptHintOperationId() {
   promptHintOperationSequence += 1;
@@ -35,10 +33,10 @@ function promptHintOperationId() {
 function promptHintConversationFingerprint(turns = []) {
   const recentTurns = (Array.isArray(turns) ? turns : [])
     .slice(-PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT);
-  return JSON.stringify(recentTurns.map((turn = {}) => ({
-    assistant: normalizedPromptHintText(turn?.assistant?.text),
-    turnId: normalizedPromptHintText(turn?.turnId),
-    user: normalizedPromptHintText(turn?.user?.text)
+  return JSON.stringify(recentTurns.map((turn) => ({
+    assistant: normalizeText(turn.assistant?.text),
+    turnId: normalizeText(turn.turnId),
+    user: normalizeText(turn.user?.text)
   })));
 }
 
@@ -60,8 +58,8 @@ function useVibe64PromptHints({
 } = {}) {
   const originId = vibe64BrowserTabOriginId();
   const responseStatus = ref("idle");
-  const currentSessionId = computed(() => normalizedPromptHintText(readRefOrGetterValue(sessionId)));
-  const currentSessionsApiPath = computed(() => normalizedPromptHintText(readRefOrGetterValue(sessionsApiPath)));
+  const currentSessionId = computed(() => normalizeText(readRefOrGetterValue(sessionId)));
+  const currentSessionsApiPath = computed(() => normalizeText(readRefOrGetterValue(sessionsApiPath)));
   const currentPolicy = computed(() => readRefOrGetterValue(policy) || {});
   const controller = useAssistantSuggestions({
     active: computed(() => Boolean(

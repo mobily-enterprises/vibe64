@@ -9,11 +9,11 @@ import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 
 function normalizeCollaborationDraft(value = {}) {
   return {
-    tone: String(value?.tone || ""),
-    responseLength: String(value?.responseLength || ""),
-    experience: String(value?.experience || ""),
-    explanationStyle: String(value?.explanationStyle || ""),
-    requirements: String(value?.requirements || "")
+    tone: String(value.tone || ""),
+    responseLength: String(value.responseLength || ""),
+    experience: String(value.experience || ""),
+    explanationStyle: String(value.explanationStyle || ""),
+    requirements: String(value.requirements || "")
   };
 }
 

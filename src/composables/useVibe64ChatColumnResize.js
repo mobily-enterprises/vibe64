@@ -10,6 +10,7 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import { hasWindowFunction } from "@/lib/browser.js";
 
 const VIBE64_CHAT_COLUMN_STORAGE_KEY = "vibe64:studio-chat-column-width";
 const VIBE64_CHAT_COLUMN_DEFAULT_WIDTH_PX = 512;
@@ -134,7 +135,7 @@ function useVibe64ChatColumnResize() {
       const edge = pane.getBoundingClientRect().left + value - bar.getBoundingClientRect().left;
       bar.style.setProperty("--studio-home-chat-column-edge", `${Math.round(edge)}px`);
     }
-    separator.value?.setAttribute?.("aria-valuenow", String(value));
+    separator.value?.setAttribute("aria-valuenow", String(value));
   }
 
   function flushLayoutWidth() {
@@ -151,8 +152,7 @@ function useVibe64ChatColumnResize() {
     pendingLayoutWidth = value;
     if (
       resizeFrame !== null ||
-      typeof window === "undefined" ||
-      typeof window.requestAnimationFrame !== "function"
+      !hasWindowFunction("requestAnimationFrame")
     ) {
       if (resizeFrame === null) {
         flushLayoutWidth();
@@ -165,8 +165,7 @@ function useVibe64ChatColumnResize() {
   function cancelScheduledLayout() {
     if (
       resizeFrame !== null &&
-      typeof window !== "undefined" &&
-      typeof window.cancelAnimationFrame === "function"
+      hasWindowFunction("cancelAnimationFrame")
     ) {
       window.cancelAnimationFrame(resizeFrame);
     }
@@ -193,7 +192,7 @@ function useVibe64ChatColumnResize() {
     if (!completedDrag) {
       return;
     }
-    if (completedDrag.target?.hasPointerCapture?.(completedDrag.pointerId)) {
+    if (completedDrag.target.hasPointerCapture(completedDrag.pointerId)) {
       completedDrag.target.releasePointerCapture(completedDrag.pointerId);
     }
     cancelScheduledLayout();
@@ -227,7 +226,7 @@ function useVibe64ChatColumnResize() {
       width: width.value
     };
     resizing.value = true;
-    event.currentTarget?.setPointerCapture?.(event.pointerId);
+    event.currentTarget.setPointerCapture(event.pointerId);
     window.addEventListener("pointermove", moveResize);
     window.addEventListener("pointerup", stopResize);
     window.addEventListener("pointercancel", stopResize);
@@ -276,7 +275,7 @@ function useVibe64ChatColumnResize() {
   onBeforeUnmount(() => {
     stopResize();
     cancelScheduledLayout();
-    resizeObserver?.disconnect?.();
+    resizeObserver?.disconnect();
     resizeObserver = null;
     if (windowResizeFallbackActive && typeof window !== "undefined") {
       window.removeEventListener("resize", syncBounds);

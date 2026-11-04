@@ -1,3 +1,4 @@
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   vibe64BrowserTabOriginId
 } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -5,16 +6,12 @@ import {
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";
 
-function chatText(value = "") {
-  return String(value || "").trim();
-}
-
 function createChatMessageId({
   now = Date.now(),
   originId = vibe64BrowserTabOriginId(),
   sequence = 0
 } = {}) {
-  const origin = chatText(originId);
+  const origin = normalizeText(originId);
   const timestamp = Number(now);
   if (!origin || !Number.isFinite(timestamp)) {
     throw new TypeError("Chat message ids require a browser origin and timestamp.");
@@ -25,16 +22,16 @@ function createChatMessageId({
 }
 
 function chatMessagePayload(message = "", attachments = []) {
-  const text = chatText(message);
+  const text = normalizeText(message);
   if (!text) {
     return null;
   }
   const files = Array.isArray(attachments) ? attachments : [];
   const attachmentIds = files
-    .map((attachment) => chatText(attachment?.attachmentId))
+    .map((attachment) => normalizeText(attachment?.attachmentId))
     .filter(Boolean);
   const displayAttachments = normalizeVibe64ConversationAttachments(
-    files.filter((attachment) => chatText(attachment?.attachmentId))
+    files.filter((attachment) => normalizeText(attachment?.attachmentId))
   );
   return {
     ...(attachmentIds.length ? { attachmentIds } : {}),

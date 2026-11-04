@@ -1,11 +1,7 @@
-function plainObjectValue(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
-function sessionChangedReason(payload = {}) {
-  return String(payload?.reason || "").trim();
+function sessionChangedReason(payload) {
+  return String(payload.reason || "").trim();
 }
 
 function sessionRevision(value) {
@@ -13,14 +9,16 @@ function sessionRevision(value) {
   return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
 }
 
-function agentTurnRealtimeOverlayFromPayload(payload = {}, selectedSessionId = "") {
-  const changedSessionId = String(payload?.sessionId || payload?.entityId || "").trim();
+// A realtime payload is server data and may be null.
+function agentTurnRealtimeOverlayFromPayload(input, selectedSessionId = "") {
+  const payload = normalizeObject(input);
+  const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
   if (!changedSessionId || changedSessionId !== String(selectedSessionId || "").trim()) {
     return null;
   }
-  const agentSession = plainObjectValue(payload.agentSession);
-  const turn = plainObjectValue(agentSession.turn);
-  const run = plainObjectValue(payload.agentRun);
+  const agentSession = normalizeObject(payload.agentSession);
+  const turn = normalizeObject(agentSession.turn);
+  const run = normalizeObject(payload.agentRun);
   const revision = sessionRevision(payload.revision);
   if (revision === null || (!Object.keys(turn).length && !Object.keys(run).length)) {
     return null;
@@ -94,20 +92,20 @@ function sessionWithAgentTurnRealtimeOverlay(session = null, overlay = null) {
   ) {
     return session;
   }
-  const overlayAgentSession = plainObjectValue(overlay.agentSession);
+  const overlayAgentSession = normalizeObject(overlay.agentSession);
   return {
     ...session,
-    agentRuns: mergeAgentRunOverlay(session.agentRuns, plainObjectValue(overlay.agentRun)),
+    agentRuns: mergeAgentRunOverlay(session.agentRuns, normalizeObject(overlay.agentRun)),
     agentSession: {
-      ...plainObjectValue(session.agentSession),
+      ...normalizeObject(session.agentSession),
       ...overlayAgentSession,
       thread: {
-        ...plainObjectValue(session.agentSession?.thread),
-        ...plainObjectValue(overlayAgentSession.thread)
+        ...normalizeObject(session.agentSession?.thread),
+        ...normalizeObject(overlayAgentSession.thread)
       },
       turn: {
-        ...plainObjectValue(session.agentSession?.turn),
-        ...plainObjectValue(overlayAgentSession.turn),
+        ...normalizeObject(session.agentSession?.turn),
+        ...normalizeObject(overlayAgentSession.turn),
         active: overlay.active === true
       }
     },

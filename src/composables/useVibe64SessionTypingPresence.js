@@ -4,6 +4,7 @@ import {
   useRealtimeSocket
 } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   VIBE64_SESSION_PRESENCE_DEBOUNCE_MS,
@@ -19,10 +20,6 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-function presenceText(value = "") {
-  return String(value ?? "").trim();
-}
-
 function presenceTimestamp(value = "") {
   const timestamp = Date.parse(String(value || ""));
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -33,12 +30,12 @@ function sessionPresencePath(sessionsApiPath = "", sessionId = "") {
 }
 
 function normalizedRemotePresence(payload = {}, now = Date.now()) {
-  const actorId = presenceText(payload.actorId);
-  const displayName = presenceText(payload.displayName) || "Another user";
-  const originId = presenceText(payload.originId);
-  const projectSlug = presenceText(payload.projectSlug);
-  const sessionId = presenceText(payload.sessionId);
-  const conversationId = presenceText(payload.conversationId);
+  const actorId = toText(payload.actorId);
+  const displayName = toText(payload.displayName) || "Another user";
+  const originId = toText(payload.originId);
+  const projectSlug = toText(payload.projectSlug);
+  const sessionId = toText(payload.sessionId);
+  const conversationId = toText(payload.conversationId);
   const sequence = Number(payload.sequence);
   const updatedAt = presenceTimestamp(payload.updatedAt);
   const expiresAt = presenceTimestamp(payload.expiresAt);
@@ -72,7 +69,7 @@ function normalizedRemotePresence(payload = {}, now = Date.now()) {
 function typingPresenceLabel(people = []) {
   const visible = Array.isArray(people) ? people : [];
   if (visible.length === 1) {
-    return `${presenceText(visible[0]?.displayName) || "Another user"} is typing…`;
+    return `${toText(visible[0]?.displayName) || "Another user"} is typing…`;
   }
   return visible.length > 1 ? `${visible.length} people are typing…` : "";
 }
@@ -102,10 +99,10 @@ function useVibe64SessionTypingPresence({
 
   const currentContext = computed(() => Object.freeze({
     active: readRefOrGetterValue(active) !== false,
-    conversationId: presenceText(readRefOrGetterValue(conversationId)),
-    projectSlug: presenceText(readRefOrGetterValue(projectSlug)),
-    sessionId: presenceText(readRefOrGetterValue(sessionId)),
-    sessionsApiPath: presenceText(readRefOrGetterValue(sessionsApiPath))
+    conversationId: toText(readRefOrGetterValue(conversationId)),
+    projectSlug: toText(readRefOrGetterValue(projectSlug)),
+    sessionId: toText(readRefOrGetterValue(sessionId)),
+    sessionsApiPath: toText(readRefOrGetterValue(sessionsApiPath))
   }));
   const eligible = computed(() => Boolean(
     currentContext.value.active &&
@@ -253,7 +250,7 @@ function useVibe64SessionTypingPresence({
     realtimeSocket.off("disconnect", handleRealtimeDisconnect);
   });
 
-  return Object.freeze({
+  return {
     applyRemotePresence,
     blur: stopTyping,
     noteInputActivity,
@@ -261,7 +258,7 @@ function useVibe64SessionTypingPresence({
     submit: stopTyping,
     typingLabel,
     typingPeople
-  });
+  };
 }
 
 export {
