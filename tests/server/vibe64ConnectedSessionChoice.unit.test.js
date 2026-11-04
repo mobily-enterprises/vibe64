@@ -6,7 +6,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { ACTION_RETRY_WORKSPACE_SETUP, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
@@ -35,8 +35,8 @@ async function withConnectedLibrary(sessions, run, other) {
     const parent = { sessionId: "parent", sessionName: "Payments", status: "active", sourceReady: true, metadata: {
       assistant_routing: JSON.stringify({ mode: "senior", review: false })
     } };
-    const world = { created: [], library: new Map(sessions.map(session => [session.sessionId, session])), parent,
-      beforeBind: () => {}, failNextCreate: false };
+    const world = { aiRunning: false, created: [], library: new Map(sessions.map(session => [session.sessionId, session])), parent,
+      beforeBind: () => {}, failNextCreate: false, readWork: () => ({}), setupStarts: [] };
     const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: world.library,
       other: new Map((other || []).map(session => [session.sessionId, session])) };
     const runtimeFor = projectSlug => ({
@@ -85,13 +85,16 @@ async function withConnectedLibrary(sessions, run, other) {
     };
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
-      setupRunner: { start: async () => ({ completion: null }) },
+      setupRunner: { start: async (input) => { world.setupStarts.push(input); return { completion: null }; }, isRunning: () => false },
       terminals: {
         async inspectSessionWork(_id, { session, inspectContributionPublication }) {
-          return { ok: true, unsaved: false, ahead: 0, baseCommit: BASE, ...(inspectContributionPublication ? { publishedCommit: "" } : {}),
-            destination: sessionRepositoryDestination(await project.readCurrentProject(), session) };
+          return { ok: true, unsaved: false, ahead: 0, baseCommit: BASE, sessionHead: session.metadata.base_commit,
+            ...(inspectContributionPublication ? { publishedCommit: "" } : {}),
+            destination: sessionRepositoryDestination(await project.readCurrentProject(), session),
+            ...world.readWork(session) };
         },
         async agentSessionState() { return { turn: { active: false } }; },
+        async sessionAiWorkRunning() { return world.aiRunning; },
         async checkSessionUpdates() { return { ok: true, ahead: 0, behind: 0, canonicalCommit: BASE }; },
         async inspectIncomingContributions(_sessionId, { id }) {
           return { ok: true, repository: "example/library", contributions: [{ id, status: "discarded", activeHead: "",
@@ -121,12 +124,14 @@ async function withConnectedLibrary(sessions, run, other) {
     });
     const request = Object.assign(Object.create({ headers: { cookie: "original-connection" } }), { params: { slug } });
     const context = { channel: "api", surface: "app", requestMeta: { request } };
-    const action = (name, input = {}) => actions.execute({ actionId: `vibe64.sessions.connected.${name}`,
-      input: { sessionId: "parent", ...input }, context });
+    const action = (name, input = {}, channel = "api") => actions.execute({ actionId: `vibe64.sessions.connected.${name}`,
+      input: { sessionId: "parent", ...input }, context: { ...context, channel } });
     await run(Object.assign(world, {
       choices: () => action("choices"),
       link: (connectedSessionId, repository = "example/library") => action("link", { repository, connectedSessionId }),
-      prepare: () => action("prepare"),
+      prepare: channel => action("prepare", {}, channel),
+      retry: channel => actions.execute({ actionId: ACTION_RETRY_WORKSPACE_SETUP, input: { sessionId: "parent" },
+        context: { ...context, channel } }),
       replace: review => action("replace", { repository: "example/library", review })
     }));
   });
@@ -203,7 +208,8 @@ test("exactly one free session is linked by Prepare, which carries on and says w
       const prepared = await prepare();
       assert.equal(prepared.ok, true, JSON.stringify(prepared));
       assert.equal(prepared.prepared[0].sessionId, "only");
-      assert.deepEqual(prepared.linked, [{ repository: "example/library", projectSlug: "library", sessionId: "only", sessionName: "Library work" }]);
+      assert.deepEqual(prepared.linked, [{ reason: "", repository: "example/library", projectSlug: "library", sessionId: "only",
+        sessionName: "Library work" }]);
       const [binding] = sessionConnectedSources(parent);
       assert.equal(binding.contribution.sessionId, "only");
       assert.deepEqual(JSON.parse(library.get("only").metadata.connected_contribution), binding.contribution);
@@ -216,8 +222,40 @@ test("exactly one free session is linked by Prepare, which carries on and says w
     });
 });
 
-test("Retry after an archived link takes the only free session", async () => {
-  await withConnectedLibrary([librarySession("first"), librarySession("second")], async ({ created, library, link, parent, prepare }) => {
+for (const [name, change, reason] of [
+  ["commits of its own", world => { world.readWork = () => ({ sessionHead: "e".repeat(40), ahead: 1 }); }, "it has commits of its own."],
+  ["unsaved changes", world => { world.readWork = () => ({ unsaved: true }); }, "it has unsaved changes."],
+  ["AI work running", world => { world.aiRunning = true; }, "AI work is running in it."],
+  ["a pin", world => { world.library.get("only").pinnedSessionId = "only"; }, "it is pinned."],
+  ["a close under way", world => { world.library.get("only").metadata.session_closing_reason = "archiving"; }, "it is closing."],
+  ["a work check that fails", world => { world.readWork = () => ({ ok: false, error: "fatal: not a git repository" }); },
+    "its work could not be checked."],
+  ["a work check that throws", world => { world.readWork = () => { throw new Error("fatal: bad object HEAD"); }; },
+    "its work could not be checked."]
+]) {
+  test(`the only free session is left for a person with ${name}, who can still choose it knowingly`, async () => {
+    await withConnectedLibrary([librarySession("only", { sessionName: "Library work" })], async world => {
+      const { choices, created, library, link, parent, prepare } = world;
+      change(world);
+      const stopped = await prepare();
+      assert.equal(stopped.code, LINK_REQUIRED, "preparation never links on anything but a clear answer");
+      assert.equal(stopped.error, `library needs a connected session. Its only free session, Library work, was not linked by itself: ${reason} ` +
+        "Choose in the workspace preparation notice to continue.");
+      assert.deepEqual(stopped.linked, []);
+      assert.deepEqual(sessionConnectedSources(parent), [], "the refused link leaves no reservation");
+      assert.equal(library.get("only").metadata.connected_contribution, undefined);
+      assert.deepEqual((await choices()).choices[0].sessions, [{ sessionId: "only", sessionName: "Library work" }]);
+
+      assert.equal((await link("only")).ok, true, "the picker is unchanged: a person may take a session with work in it");
+      assert.equal(sessionConnectedSources(parent)[0].contribution.sessionId, "only");
+      assert.equal(created.length, 0);
+    });
+  });
+}
+
+test("Retry after an archived link takes the only free session and keeps the reason in its output", async () => {
+  await withConnectedLibrary([librarySession("first", { sessionName: "Library work" }), librarySession("second")],
+    async ({ created, library, link, parent, prepare }) => {
     assert.equal((await link("first")).ok, true);
     const stale = sessionConnectedSources(parent)[0].contribution.id;
     library.get("first").status = "archived";
@@ -226,10 +264,43 @@ test("Retry after an archived link takes the only free session", async () => {
     assert.equal(retried.ok, true, JSON.stringify(retried));
     assert.equal(retried.prepared[0].sessionId, "second");
     assert.deepEqual(retried.linked.map(item => item.sessionId), ["second"]);
+    assert.equal(retried.linked[0].reason, "Its connected session Library work in example/library was archived.");
     const bindings = sessionConnectedSources(parent);
     assert.equal(bindings.length, 1, "the new link replaces the stale one");
     assert.notEqual(bindings[0].contribution.id, stale);
     assert.equal(created.length, 0);
+  });
+});
+
+test("work already submitted to a project keeps its next session a person's choice, and its gate stays", async () => {
+  await withConnectedLibrary([librarySession("first"), librarySession("second")], async ({ library, link, parent, prepare }) => {
+    assert.equal((await link("first")).ok, true);
+    const [{ contribution }] = sessionConnectedSources(parent);
+    const gates = JSON.stringify({ schemaVersion: 1, submissions: [{ contribution, submittedCommit: "d".repeat(40) }] });
+    parent.metadata.connected_submissions = gates;
+    library.get("first").status = "archived";
+
+    const stopped = await prepare();
+    assert.equal(stopped.code, LINK_REQUIRED, "the new session decides whether the submitted work is in the Preview");
+    assert.match(stopped.error, /Its connected session first in example\/library was archived\. Its only free session, second, was not linked/u);
+    assert.match(stopped.error, /work this session already submitted there has to stay in view/u);
+
+    assert.equal((await link("second")).ok, true);
+    assert.equal(parent.metadata.connected_submissions, gates, "a new link does not lift what the old revision still requires");
+  });
+});
+
+test("only a person's own request lets preparation link by itself", async () => {
+  await withConnectedLibrary([librarySession("only")], async ({ library, parent, prepare, retry, setupStarts }) => {
+    parent.workspaceSetup = { status: "ambiguous", connectedChoiceRequired: true };
+    await retry("automation");
+    await retry("internal");
+    await retry("api");
+    assert.deepEqual(setupStarts.map(item => item.agentRequested), [true, true, false]);
+
+    assert.equal((await prepare("internal")).code, LINK_REQUIRED, "without a person the choice stays open");
+    assert.equal(library.get("only").metadata.connected_contribution, undefined);
+    assert.equal((await prepare("api")).ok, true);
   });
 });
 

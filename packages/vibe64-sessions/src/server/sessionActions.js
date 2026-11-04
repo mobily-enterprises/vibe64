@@ -420,7 +420,7 @@ function createSessionActions({ sessions }) {
         assistant: sessionTool(ASSISTANT_TOOL_DESCRIPTIONS.retryWorkspaceSetup),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => sessions.retryWorkspaceSetup(input.sessionId, input)
+      execute: (input, context) => sessions.retryWorkspaceSetup(input.sessionId, input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,

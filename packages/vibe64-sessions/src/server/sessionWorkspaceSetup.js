@@ -24,9 +24,9 @@ const STARTER_PREPARATION_WAIT_MS = 60_000;
 function createTerminalsSetupRunner({ terminals }) {
   const isRunning = (sessionId) => terminals.workspaceSetupIsRunning(sessionId);
 
-  const start = ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
+  const start = ({ agentRequested = false, retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
     session.sessionId,
-    { retry, runtime, session, waitMs }
+    { agentRequested, retry, runtime, session, waitMs }
   );
 
   const startRenewal = ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
@@ -107,7 +107,12 @@ function createSessionWorkspaceSetup({
     }
   }
 
-  async function retryWorkspaceSetup(sessionId, input) {
+  /**
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {{ channel?: string }} [context] only a person's own page request is a person
+   */
+  async function retryWorkspaceSetup(sessionId, input, context = {}) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         throw vibe64Error("Workspace preparation is already running.", "vibe64_workspace_setup_running", {
@@ -124,6 +129,7 @@ function createSessionWorkspaceSetup({
         );
       }
       const setup = await setupRunner.start({
+        agentRequested: context.channel !== "api",
         retry: true,
         runtime,
         session

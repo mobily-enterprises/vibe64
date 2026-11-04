@@ -321,6 +321,7 @@ const connectedSessionsInputValidator = actionInput({
 
 const connectedSessionBindInputValidator = actionInput({
   contribution: { type: "object", additionalProperties: true, required: true },
+  onlyIfUntouched: { type: "boolean", required: true },
   originIsContribution: { type: "boolean", required: true }
 });
 

@@ -56,16 +56,25 @@ function servedSessionName(session) {
 
 /**
  * The result that stops preparation until a person chooses a session for each
- * named connected project.
- * @param {string[]} names
+ * named connected project, with what stopped each one when there is a reason.
+ * A renewal's new session is hidden, so its choice happens back in this session.
+ * @param {{ name: string, why: string }[]} entries
+ * @param {boolean} renewal
  */
-function connectedChoiceResult(names) {
+function connectedChoiceResult(entries, renewal) {
+  const names = entries.map(entry => entry.name);
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+  const reasons = entries.filter(entry => entry.why).map(entry => names.length > 1 ? `${entry.name}: ${entry.why}` : entry.why);
   return {
     ok: false,
     code: CONNECTED_LINK_REQUIRED,
-    error: `${list} ${names.length > 1 ? "need connected sessions" : "needs a connected session"}. ` +
-      "Choose in the workspace preparation notice to continue."
+    error: [
+      `${list} ${names.length > 1 ? "need connected sessions" : "needs a connected session"}.`,
+      ...reasons,
+      renewal
+        ? "Cancel this renewal, choose in this session's workspace preparation notice, then renew it again."
+        : "Choose in the workspace preparation notice to continue."
+    ].join(" ")
   };
 }
 
@@ -297,10 +306,11 @@ function createConnectedContributions({
    * @param {{ runtime: Vibe64SessionRuntime, session: { sessionId: string } }} target
    * @param {object} input
    * @param {object} requestContext
-   * @param {{ onProgress?: (label: string) => Promise<void> }} [options]
+   * @param {{ automaticLink?: boolean, onProgress?: (label: string) => Promise<void>, renewal?: boolean }} [options]
+   *   `automaticLink` lets it take a project's only free session when that is untouched.
    */
   async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input, requestContext, options = {}) {
-    const { onProgress = reportNoProgress } = options;
+    const { automaticLink = false, onProgress = reportNoProgress, renewal = false } = options;
     const sessionId = session.sessionId;
     const prepared = [];
     const resolvedSources = [];
@@ -353,9 +363,9 @@ function createConnectedContributions({
       };
       /**
        * One connected project, up to date when that cannot affect anyone's
-       * work. With no usable link it takes the project's only free session;
-       * otherwise it stops here for a person's choice. Preparation never
-       * creates a session.
+       * work. With no usable link it may take the project's only free session
+       * while that is untouched; otherwise it stops here for a person's choice.
+       * Preparation never creates a session.
        */
       const prepareTarget = async (target, index) => {
         const repository = target.fullName;
@@ -383,10 +393,13 @@ function createConnectedContributions({
         }, requestContext);
         let allocation = binding ? await resolve() : { ok: false, code: CONNECTED_LINK_REQUIRED };
         if (allocation?.code === CONNECTED_LINK_REQUIRED) {
-          const link = await linkInTurn(target);
-          if (!link) return { repository, allocation };
+          const link = automaticLink ? await linkInTurn(target) : {};
+          if (!link.binding) {
+            return { repository, allocation, why: [allocation.details?.reason, link.why].filter(Boolean).join(" ") };
+          }
           binding = link.binding;
           linked.push({
+            reason: link.reason,
             repository,
             projectSlug: binding.projectSlug,
             sessionId: binding.contribution.sessionId,
@@ -432,9 +445,9 @@ function createConnectedContributions({
       for (const [index, target] of targets.entries()) {
         preparingRepository = target.repository;
         if (allocated[index].status === "rejected") throw allocated[index].reason;
-        const { repository, binding, allocation, update } = allocated[index].value;
+        const { repository, binding, allocation, update, why } = allocated[index].value;
         if (allocation?.code === CONNECTED_LINK_REQUIRED) {
-          needsChoice.push(names[index]);
+          needsChoice.push({ name: names[index], why });
           continue;
         }
         if (allocation?.ok === false) return { ...allocation, prepared };
@@ -456,7 +469,7 @@ function createConnectedContributions({
         resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: allocation });
       }
       preparingRepository = "";
-      if (needsChoice.length) return connectedChoiceResult(needsChoice);
+      if (needsChoice.length) return connectedChoiceResult(needsChoice, renewal);
       if (targets.length) report("Linking connected sources");
       const development = await project.prepareConnectedDevelopmentInputs({
         session: await runtime.getSessionWithoutSource(sessionId),
@@ -515,7 +528,9 @@ function createConnectedContributions({
     return sessionResult(() => terminals.runConnectedSourcePreparation(
       sessionId,
       input,
-      context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext)
+      context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext, {
+        automaticLink: requestContext.channel === "api"
+      })
     ));
   }
 

@@ -120,8 +120,10 @@ function connectedUpdateLine({ repository = "", update = null } = {}) {
  * The output line that keeps an automatic link from being silent.
  * @param {{ repository: string, sessionName: string }} link
  */
-function connectedLinkLine({ repository, sessionName }) {
-  return `[Connected] ${repository.split("/").pop()} is now linked to ${sessionName}, its only free session, which is used as it stands.`;
+function connectedLinkLine({ reason, repository, sessionName }) {
+  const name = repository.split("/").pop();
+  return `${reason ? `[Connected] ${name}'s earlier link no longer holds: ${reason}\n` : ""}` +
+    `[Connected] ${name} is now linked to ${sessionName}, its only free session, which has no work in it and is used as it stands.`;
 }
 
 function stepStatus(label = "", status = "", secrets = []) {

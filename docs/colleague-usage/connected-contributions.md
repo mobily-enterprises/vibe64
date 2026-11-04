@@ -9,22 +9,45 @@ that project's existing sessions, and what happens depends on how many are free
 when a session has no usable link yet: on its first connection, after its linked
 session was archived, and on **Retry**.
 
-- **Exactly one free session:** **Prepare workspace** links it by itself and
-  carries on. The output says so, for example `[Connected] vibe64 is now linked to
-  Payments, its only free session, which is used as it stands.` That session is
-  used exactly as it is, so if you want it on the latest main, open it and use
-  **Update this session (rebase)** before preparing, or start a second session
-  there so the choice is yours.
-- **Two or more free sessions:** preparation stops at **Workspace setup needs a
-  choice**. The notice names each project that needs a session and offers its free
-  sessions in **Session in** *project*, with the first free one already selected.
-  Pick one and choose **Link session**. Once the last project has its session,
-  preparation continues by itself.
+- **Exactly one free session, and it is untouched:** **Prepare workspace** links
+  it by itself and carries on. The output says so, for example `[Connected] vibe64
+  is now linked to Payments, its only free session, which has no work in it and is
+  used as it stands.` That session is used exactly as it is, so if you want it on
+  the latest main, open it and use **Update this session (rebase)** before
+  preparing, or start a second session there so the choice is yours.
+- **Exactly one free session with work in it:** preparation stops at **Workspace
+  setup needs a choice** and says why, for example `Its only free session, Payments,
+  was not linked by itself: it has unsaved changes.` You can still choose it, knowing
+  that.
+- **Two or more free sessions:** preparation stops the same way. The notice names
+  each project that needs a session and offers its free sessions in **Session in**
+  *project*, with the first free one already selected. Pick one and choose **Link
+  session**. Once the last project has its session, preparation continues by itself.
 - **No free session:** preparation stops the same way and creates nothing; see
   below.
 
 Each connected project is settled on its own, so one can link by itself while
 another waits for your choice.
+
+A session is untouched when all of this holds, checked at the moment of linking:
+
+- it has no commits beyond the main it started from;
+- it has no unsaved work, not counting files its own setup generates;
+- no AI turn, AI terminal or temporary AI task is running in it, and no Save or
+  Update either;
+- it is not pinned and not closing.
+
+If Vibe64 cannot finish this check, for example because it cannot read the session's
+Git state, it treats the session as not untouched and asks you. Preparation also
+asks instead of linking when this session has already submitted work to that
+project, because the next session decides whether that work is in your Preview, and
+when you confirmed a replacement there that has not finished. A renewal never
+links by itself.
+
+When preparation links again because an earlier link stopped working, the output
+says why first, for example `[Connected] vibe64's earlier link no longer holds: Its
+connected session Payments in example/vibe64 was archived on 2026-10-28.` Work in
+the archived session does not move to the new one.
 
 A session is free when it is open, its source is ready, it is not already linked
 to a contribution, and it does not work on its own branch or pull request. When
@@ -36,16 +59,14 @@ linking by itself, it stops for your choice instead of failing.
 
 When the project has no free session, the notice says so and creates nothing.
 Choose **Open** *project*, start a session there, then come back and choose
-**Retry**, which links that session when it is the only free one.
+**Retry**, which links that session when it is the only free one and untouched.
 
 Linking keeps the session's commits, unsaved work and name. It also changes where
 that session saves: from then on its Save goes to a contribution branch for review
 in the receiving project's **Incoming changes**, not straight to its main branch.
-This applies to a session preparation linked by itself too. It cannot be undone
-from the notice, so link a session you mean to use for this work, and keep a
-project's only free session out of the way if it is for something else. A working
-link is not changed from the notice either. A linked session stays
-on the commit it started from until its contribution is pushed, so when you need
+It cannot be undone from the notice, so when the session has work in it, link it
+only if you mean to use that work here. A working link is not changed from the
+notice either. A linked session stays on the commit it started from until its contribution is pushed, so when you need
 the project's latest commits, use **Update this session (rebase)** in that session
 before linking it.
 
@@ -53,9 +74,10 @@ Linking records your Git identity for that receiving session. You can inspect an
 save its contribution without first opening an AI conversation there. GitHub
 access is still checked when used.
 
-Colleague can explain this choice and offer **Retry**, which links a project's
-only free session as above. Choosing between sessions is yours: it cannot pick one
-for you.
+Colleague can explain this choice and run **Retry** when you ask. A Retry it runs
+never links a session by itself, not even an untouched one: linking cannot be
+undone, so it stops for you to choose in the notice. A **Retry** you press yourself
+follows the rules above.
 
 ## How connected sessions relate
 

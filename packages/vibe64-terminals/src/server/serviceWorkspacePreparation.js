@@ -59,6 +59,7 @@ function createServiceWorkspacePreparation({
 
   async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", options = {}) {
     const {
+      agentRequested = false,
       publish = false,
       renewal = false,
       rerunFailed = false,
@@ -70,6 +71,7 @@ function createServiceWorkspacePreparation({
     const runtime = existingRuntime || await project.createRuntimeWithoutSource();
     const session = existingSession || await runtime.getSessionWithoutSource(sessionId);
     const setup = await workspaceSetup.start({
+      agentRequested,
       renewal,
       rerunFailed,
       retry,

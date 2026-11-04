@@ -362,6 +362,22 @@ function createServiceAgentConversations({
     };
   }
 
+  /**
+   * Whether AI is at work in a session: its main turn, its AI terminal or a
+   * temporary AI task. A read that fails throws, so it never passes for idle.
+   */
+  async function sessionAiWorkRunning(sessionId, options = {}) {
+    const context = await sessionAccess.sessionContext(sessionId, options);
+    const [main, temporary] = await Promise.all([
+      sessionAgent.sessionState(sessionId, context),
+      sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context)
+    ]);
+    if (main?.ok === false || temporary?.ok === false) {
+      throw new Error(main?.error || temporary?.error || "This session's AI work could not be read.");
+    }
+    return main?.turn?.active === true || main?.terminal?.status === "running" || temporary?.active === true;
+  }
+
   function readEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
     return sessionAgent.readEphemeralConversation(scope, ephemeralInput(input), options);
   }
@@ -397,6 +413,7 @@ function createServiceAgentConversations({
   return Object.freeze({
     archiveSessionWorkPlan,
     assertSessionRenewalIdle,
+    sessionAiWorkRunning,
     createEphemeralAgentConversation,
     createSessionRenewalManualHandoverTemplate,
     deleteAgentAttachment,

@@ -2,13 +2,15 @@ import crypto from "node:crypto";
 import {
   serializeSessionConnectedSources,
   sessionConnectedContribution,
-  sessionConnectedSources
+  sessionConnectedSources,
+  sessionConnectedSubmissions
 } from "@local/vibe64-core/server/projectRepository";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_BIND_CONNECTED_SESSION, ACTION_INSPECT_CONNECTED_SESSIONS } from "./connectedContributionActions.js";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -16,9 +18,9 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 /**
  * Choosing connected sessions: which connected projects of a session need one,
- * saving what a person chose, and preparation's own link when only one session
- * is free. Each receiving project answers which of its sessions are free
- * (receivingContributions.js).
+ * saving what a person chose, and preparation's own link when the only free
+ * session is untouched. Each receiving project answers which of its sessions
+ * are free (receivingContributions.js).
  * @param {object} dependencies
  * @param {(projectSlug: string, actionId: string, input: object, requestContext?: object) => Promise<object>} dependencies.executeConnectedAction
  * @param {ProjectService} dependencies.project
@@ -90,13 +92,23 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
    * @param {object} link
    * @param {{ sessionId: string, baseCommit: string }} link.chosen
    * @param {{ source: object }} link.choice
+   * @param {boolean} [link.onlyIfUntouched] preparation's own link: refuse a session with work in it
    * @param {boolean} link.originIsContribution
    * @param {object} link.requestContext
    * @param {Vibe64SessionRuntime} link.runtime
    * @param {object} link.session
    * @param {{ fullName: string, projectSlug: string }} link.target
    */
-  async function linkChosenSession({ chosen, choice, originIsContribution, requestContext, runtime, session, target }) {
+  async function linkChosenSession({
+    chosen,
+    choice,
+    onlyIfUntouched = false,
+    originIsContribution,
+    requestContext,
+    runtime,
+    session,
+    target
+  }) {
     const binding = {
       projectSlug: target.projectSlug,
       contribution: {
@@ -116,6 +128,7 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
     try {
       bound = await executeConnectedAction(target.projectSlug, ACTION_BIND_CONNECTED_SESSION, {
         contribution: binding.contribution,
+        onlyIfUntouched,
         originIsContribution
       }, requestContext);
     } finally {
@@ -154,23 +167,43 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
   }
 
   /**
-   * Preparation's own link, inside this session's write lease: the only free
-   * session, from the list a person would be offered. Everything else stays a
-   * person's choice, including that session being taken at the last moment and
-   * a replacement the person confirmed but has not finished.
+   * Preparation's own link: the only free session, from the list a person would
+   * be offered, and only while it is untouched. Everything else stays a
+   * person's choice, including a session taken at the last moment, a
+   * replacement the person confirmed but has not finished, and a project this
+   * session already submitted work to: its next session decides whether that
+   * work is in the Preview, so it is not picked for them. `why` says what stopped
+   * a link a person would otherwise expect.
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId
    * @param {{ fullName: string, projectSlug: string }} target
    * @param {object} requestContext
-   * @returns {Promise<{ binding: object, sessionName: string } | null>}
+   * @returns {Promise<{ binding?: object, reason?: string, sessionName?: string, why?: string }>}
    */
   async function linkOnlyFreeSession(runtime, sessionId, target, requestContext) {
     const session = await runtime.getSessionWithoutSource(sessionId);
     const { choice, originIsContribution } = await connectedSessionChoice(session, target, requestContext);
-    if (choice?.ok !== true || choice.unfinishedReplacement || choice.sessions.length !== 1) return null;
+    if (choice?.ok !== true || choice.unfinishedReplacement || choice.sessions.length !== 1) return {};
     const [chosen] = choice.sessions;
-    const { binding, bound } = await linkChosenSession({ chosen, choice, originIsContribution, requestContext, runtime, session, target });
-    return bound.ok === true ? { binding, sessionName: chosen.sessionName } : null;
+    const notLinked = reason => ({ why: `Its only free session, ${chosen.sessionName}, was not linked by itself: ${reason}` });
+    if (sessionConnectedSubmissions(session).some(item => item.contribution.repository === target.fullName)) {
+      return notLinked("work this session already submitted there has to stay in view, so the choice is yours.");
+    }
+    try {
+      const { binding, bound } = await linkChosenSession({
+        chosen,
+        choice,
+        onlyIfUntouched: true,
+        originIsContribution,
+        requestContext,
+        runtime,
+        session,
+        target
+      });
+      return bound.ok === true ? { binding, reason: choice.reason, sessionName: chosen.sessionName } : notLinked(bound.error);
+    } catch (error) {
+      return notLinked(normalizeText(error?.message) || "the link could not be made.");
+    }
   }
 
   return Object.freeze({

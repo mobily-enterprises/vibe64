@@ -201,7 +201,7 @@ function createService({
    * @param {{ sessionId: string }} preparation.session
    * @param {((label: string) => Promise<void>) | null} [preparation.onProgress]
    */
-  async function prepareConnectedSources({ mode, runtime, session, onProgress }) {
+  async function prepareConnectedSources({ automaticLink, mode, onProgress, renewal, runtime, session }) {
     const requestContext = { requestMeta: currentProjectActionRequestMeta() };
     if (mode !== "prepare") return connected.inspectConnectedDevelopmentInputs(session.sessionId, {}, requestContext);
     const progress = onProgress ? {
@@ -214,7 +214,11 @@ function createService({
         });
       }
     } : {};
-    return connected.prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext, progress);
+    return connected.prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext, {
+      ...progress,
+      automaticLink,
+      renewal
+    });
   }
 
   const service = Object.freeze({

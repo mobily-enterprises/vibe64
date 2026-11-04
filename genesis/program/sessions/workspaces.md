@@ -215,15 +215,30 @@ branch list.
 
 Preparation never creates a session. A target with no binding, or whose binding's
 session is archived without a renewal, unfinished or gone, has no usable link. If
-exactly one session is free, preparation links it through the same reservation as a
-person's link, one target at a time because each rewrites the origin's bindings, and
-reports it in the result's `linked` list, which workspace setup writes to the output
-on success and on a stop alike. The session is used as it stands. The free list is
-the one a person is offered, so every rule applies equally. A refused link and an
-unfinished replacement stay a person's choice rather than failing or dropping the
-confirmed replacement. Otherwise the target returns `vibe64_connected_link_required`;
-every such project is named together and workspace setup records the `ambiguous`
-state with `connectedChoiceRequired`. `connected.choices` lists those projects with
+exactly one session is free and untouched, preparation links it through the same
+reservation as a person's link, one target at a time because each rewrites the
+origin's bindings, and reports it in the result's `linked` list, with the reason an
+earlier link stopped holding, which workspace setup writes to the output on success
+and on a stop alike. The session is used as it stands. The free list is the one a
+person is offered, so every rule applies equally.
+
+Untouched is decided by `bindConnectedSession` with `onlyIfUntouched`, under the
+receiving session's write lease and immediately before the link, so work started
+just before is seen: `HEAD` equals its `base_commit`, session work inspection reports
+nothing unsaved (it ignores Genesis derived artifacts and ignored files), no AI turn,
+AI terminal or temporary AI task runs, no Save or Update runs, and the session is
+neither pinned nor closing. A check that cannot finish counts as not untouched.
+
+Only a start a person can answer for may link: workspace setup passes
+`automaticLink` as false for a renewal and for a start an AI asked for (the Retry
+tool on any channel but `api`, and `vibe64-helper`), and `connected.replace` never
+asks for it. A refused link, a session with work in it, an unfinished replacement
+and a project this session has `connected_submissions` for stay a person's choice
+rather than failing or dropping what was confirmed; the new link leaves those
+submissions in place, because their revisions stay required. Otherwise the target
+returns `vibe64_connected_link_required`; every such project is named together with
+what stopped it, and workspace setup records the `ambiguous` state with
+`connectedChoiceRequired`. `connected.choices` lists those projects with
 each one's reason and free sessions, and `connected.link` saves one person's choice;
 both are public, human-only actions.
 The receiving project owns which sessions are free: active, source ready, unbound

@@ -121,10 +121,12 @@ test("connected preparation reauthorizes the receiver and uses the session a per
         async inspectSessionWork(id, { session, inspectContributionPublication }) {
           calls.push(`inspect work:${id}`);
           return { ok: true, unsaved: false, ahead: receiving.ahead, baseCommit: "a".repeat(40),
+            sessionHead: session.metadata.base_commit,
             ...(inspectContributionPublication ? { publishedCommit: receiving.published } : {}),
             destination: sessionRepositoryDestination(await project.readCurrentProject(), session) };
         },
         async agentSessionState() { return { turn: { active: receiving.agentActive } }; },
+        async sessionAiWorkRunning() { return false; },
         async checkSessionUpdates() {
           return { ok: true, ahead: receiving.ahead, behind: receiving.behind, canonicalCommit: "e".repeat(40) };
         },

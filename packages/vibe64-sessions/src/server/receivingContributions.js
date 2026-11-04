@@ -9,6 +9,7 @@ import {
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { VIBE64_SESSION_STATUS, vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
@@ -462,14 +463,50 @@ function createReceivingContributions({
   }
 
   /**
-   * Binds a person's chosen session to a contribution. The session's write
-   * lease makes this the one point that decides who gets it, so its freedom is
-   * checked again here rather than trusted from the list the person saw.
+   * Why preparation may not take this session by itself, or "" when it is
+   * untouched: no commits beyond the main it started from, no unsaved work
+   * beyond what its setup generates, and nothing running in it. Linking cannot
+   * be undone and changes where the session saves, so anything less than a
+   * clear answer, a check that cannot finish included, is left to a person.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   */
+  async function automaticLinkRefusal(runtime, session) {
+    const { sessionId } = session;
+    if (session.pinnedSessionId === sessionId) return "it is pinned.";
+    if (sessionIsClosing(session)) return "it is closing.";
+    if (workOperations.isRunning(sessionId)) return "a Save or Update is running in it.";
+    try {
+      if (await terminals.sessionAiWorkRunning(sessionId, { runtime, session })) return "AI work is running in it.";
+      const work = await terminals.inspectSessionWork(sessionId, { runtime, session });
+      if (work?.ok !== true) return "its work could not be checked.";
+      if (work.sessionHead !== session.metadata.base_commit) return "it has commits of its own.";
+      return work.unsaved === false ? "" : "it has unsaved changes.";
+    } catch (error) {
+      vibe64SessionDebugLog("server.sessions.connected.untouchedCheck.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+      return "its work could not be checked.";
+    }
+  }
+
+  /**
+   * Binds a chosen session to a contribution. The session's write lease makes
+   * this the one point that decides who gets it, so its freedom is checked
+   * again here rather than trusted from the list that offered it. Preparation's
+   * own link also asks for an untouched session; this is the latest moment that
+   * check can run, so work started just before it is seen.
    *
    * From here the session follows its contribution: its canonical source is
    * the contribution's base until the contribution is pushed, so a canonical
    * commit recorded from the integration branch no longer applies.
-   * @param {{ contribution: object, originIsContribution: boolean, vibe64User?: object | null }} input
+   * @param {{
+   *   contribution: object,
+   *   onlyIfUntouched: boolean,
+   *   originIsContribution: boolean,
+   *   vibe64User?: object | null
+   * }} input
    */
   async function bindConnectedSession(input) {
     return sessionResult(async () => {
@@ -482,6 +519,8 @@ function createReceivingContributions({
         if (session.metadata.base_commit !== contribution.baseCommit) {
           throw vibe64Error("That session moved to another commit. Choose again.", "vibe64_connected_session_not_free");
         }
+        const inUse = input.onlyIfUntouched ? await automaticLinkRefusal(runtime, session) : "";
+        if (inUse) throw vibe64Error(inUse, "vibe64_connected_session_in_use");
         const recorded = await terminals.recordSessionGitCommandActor(sessionId, {
           reason: "connected-contribution-session",
           runtime,

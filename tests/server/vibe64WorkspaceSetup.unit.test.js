@@ -327,11 +327,13 @@ test("a connected project with no usable link stops preparation for a person's c
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);
     let linked = false;
+    const automaticLinks = [];
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
       async finishWorkflow() {},
-      async connectedPreparation({ mode }) {
+      async connectedPreparation({ automaticLink, mode }) {
         if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
+        automaticLinks.push(automaticLink);
         return linked ? { ok: true, prepared: [], linked: [{ repository: "example/vibe64", sessionName: "Payments" }] }
           : { ok: false, code: "vibe64_connected_link_required", prepared: [],
             linked: [{ repository: "example/genesis", sessionName: "Tooling" }],
@@ -350,7 +352,7 @@ test("a connected project with no usable link stops preparation for a person's c
     assert.equal(stopped.connectedChoiceRequired, true);
     assert.equal(stopped.diagnostic, "vibe64 needs a connected session. Choose in the workspace preparation notice to continue.");
     assert.equal(stopped.transcript.trim().split("\n").at(-1), "[Prepare connected sources] Needs a choice.");
-    assert.ok(stopped.transcript.includes("[Connected] genesis is now linked to Tooling, its only free session, which is used as it stands."),
+    assert.ok(stopped.transcript.includes("[Connected] genesis is now linked to Tooling, its only free session, which has no work in it and is used as it stands."),
       "a stop still says what preparation linked by itself");
     const reread = workspaceSetupStateFromMetadata((await runtime.store.readSession(session.sessionId)).metadata);
     assert.equal(reread.connectedChoiceRequired, true, "the state survives a reload");
@@ -363,8 +365,13 @@ test("a connected project with no usable link stops preparation for a person's c
     })).completion;
     assert.equal(retried.status, "succeeded");
     assert.equal(retried.connectedChoiceRequired, undefined, "the next attempt clears the choice");
-    assert.ok(retried.transcript.includes("[Connected] vibe64 is now linked to Payments, its only free session, which is used as it stands."),
+    assert.ok(retried.transcript.includes("[Connected] vibe64 is now linked to Payments, its only free session, which has no work in it and is used as it stands."),
       "an automatic link is never silent");
+
+    const current = () => runtime.getSessionWithoutSource(session.sessionId);
+    await (await runner.start({ agentRequested: true, retry: true, runtime, session: await current() })).completion;
+    await (await runner.start({ renewal: true, retry: true, runtime, session: await current() })).completion;
+    assert.deepEqual(automaticLinks, [true, true, false, false], "an AI's request and a renewal never link by themselves");
   });
 });
 

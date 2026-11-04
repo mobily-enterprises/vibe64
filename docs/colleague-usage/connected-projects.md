@@ -136,7 +136,7 @@ Preview or tests use its changes.
 Use the existing **Prepare workspace** action (or its **Retry** action after a
 failure). When Stack declares `Connected development`, preparation uses the
 sessions linked for this task. Where a project has none, it links that project's
-only free session, used as it stands, or stops for you to
+only free session when that session is untouched, or stops for you to
 [choose one](connected-contributions.md#choose-a-connected-session). It then writes the declared source
 map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
 commands in order. Success requires those commands to succeed. If a non-custom

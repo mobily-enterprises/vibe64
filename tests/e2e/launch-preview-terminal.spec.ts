@@ -1695,7 +1695,7 @@ test("@preparation-notice an archived link says why, and a session taken meanwhi
 });
 
 test("@preparation-notice an automatic link is named in the output while another project stops for a choice", async ({ page }) => {
-  const line = "[Connected] genesis is now linked to Tooling, its only free session, which is used as it stands.";
+  const line = "[Connected] genesis is now linked to Tooling, its only free session, which has no work in it and is used as it stands.";
   const { choice, server } = await openConnectedChoice(page, [connectedChoice()], `${line}\n[Prepare connected sources] Needs a choice.`);
   await expect(choice).toHaveCount(1);
   await expect(choice).toContainText("vibe64 needs a connected session.");

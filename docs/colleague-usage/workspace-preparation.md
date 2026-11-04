@@ -28,10 +28,11 @@ its progress.
 
 Preparation never creates a session in a connected project. When a project has no
 linked session yet, or its session was archived, preparation links that project's
-session if exactly one is free, uses it as it stands and says so in the output.
-Update that session first if you want it on the latest main. With two or more free,
-or none, it stops at **Workspace setup needs a choice**, naming that project, and
-you settle it in the notice. See
+session if exactly one is free and it is untouched: no commits of its own, no unsaved
+work and nothing running in it. It uses that session as it stands and says so in the
+output, so update it first if you want it on the latest main. Otherwise, with work in
+that session, two or more free, or none, it stops at **Workspace setup needs a
+choice**, naming that project and why, and you settle it in the notice. See
 [Choose a connected session](connected-contributions.md#choose-a-connected-session).
 
 A successful result records the previous recipe execution. It does not prove

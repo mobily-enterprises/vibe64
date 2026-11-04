@@ -52,8 +52,10 @@ function createWorkspaceSetupStart({
   /**
    * `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
    * runs a failed recipe again instead of reporting the stored failure.
+   * `agentRequested` marks a start an AI asked for: linking a connected session
+   * cannot be undone, so that one stops for a person instead.
    */
-  async function start({ renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
+  async function start({ agentRequested = false, renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
     const sessionId = toText(session?.sessionId);
     if (!sessionId || !runtime?.store) {
       throw new TypeError("Workspace preparation requires a stored Vibe64 session.");
@@ -133,6 +135,7 @@ function createWorkspaceSetupStart({
     }
 
     const run = {
+      agentRequested,
       migrationStartedAt,
       migrationTranscript,
       projectContext,
@@ -198,6 +201,7 @@ function createWorkspaceSetupStart({
   }
 
   async function startRecipe({
+    agentRequested,
     attemptStarted = false,
     migrationStartedAt,
     migrationTranscript,
@@ -218,7 +222,14 @@ function createWorkspaceSetupStart({
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
-        const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
+        const prepared = await connectedPreparation({
+          automaticLink: !renewal && !agentRequested,
+          mode: "prepare",
+          onProgress,
+          renewal,
+          runtime,
+          session
+        });
         connectedLinks = (prepared?.linked || []).map(connectedLinkLine);
         if (prepared?.ok === false) {
           // Name the connected project that failed: its own message often cannot.
