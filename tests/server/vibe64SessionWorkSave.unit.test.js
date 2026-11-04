@@ -2970,6 +2970,42 @@ async function contributionFixture(t) {
     ref: `refs/heads/vibe64-incoming/${contribution.id}` };
 }
 
+test("a session linked after its own work and main moved on saves that work to the incoming ref, based where it started", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-linked-save-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fixture = await createRemoteFixture(root);
+  const session = await sessionForRemote(root, fixture);
+  const project = githubProject(root, fixture.remote);
+  await writeFile(path.join(session.sourcePath, "kept.txt"), "committed before linking\n");
+  await git(session.sourcePath, ["add", "kept.txt"]);
+  await git(session.sourcePath, ["commit", "-m", "Keep this work"]);
+  await writeFile(path.join(session.sourcePath, "edited.txt"), "unsaved before linking\n");
+  await writeFile(path.join(fixture.seed, "main.txt"), "main moved\n");
+  await git(fixture.seed, ["add", "main.txt"]);
+  await git(fixture.seed, ["commit", "-m", "Main moves on"]);
+  await git(fixture.seed, ["push", "origin", "main"]);
+  const mainHead = await git(fixture.seed, ["rev-parse", "HEAD"]);
+  const before = await checkSessionUpdates({ project, session, runCommand: commandRunner });
+  assert.equal(before.canonicalCommit, mainHead, "an ordinary session's canonical commit follows main");
+  session.metadata.canonical_commit = mainHead;
+
+  // What linking writes: the contribution starts at the session's own base.
+  const contribution = { schemaVersion: 1, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", sessionId: session.sessionId,
+    repository: "example/project", integrationBranch: "main", baseCommit: session.metadata.base_commit };
+  session.metadata.canonical_commit = contribution.baseCommit;
+  session.metadata.connected_contribution = JSON.stringify(contribution);
+
+  const check = await checkSessionUpdates({ project, session, runCommand: commandRunner });
+  assert.equal(check.behind, 0, "an unpublished contribution stays at its base until it is pushed");
+  const saved = await saveSessionWork({ project, session, runCommand: commandRunner });
+  const ref = `refs/heads/vibe64-incoming/${contribution.id}`;
+  assert.equal(await git(fixture.remote, ["rev-parse", ref]), saved.saveCommit);
+  assert.equal(await git(fixture.remote, ["rev-parse", "main"]), mainHead, "Save never moves the connected project's main");
+  assert.equal(await git(fixture.remote, ["show", `${ref}:kept.txt`]), "committed before linking");
+  assert.equal(await git(fixture.remote, ["show", `${ref}:edited.txt`]), "unsaved before linking");
+  await git(fixture.remote, ["merge-base", "--is-ancestor", fixture.baseCommit, saved.saveCommit]);
+});
+
 test("contribution Save creates only its incoming ref and carries authority through managed commands", async t => {
   const f = await contributionFixture(t);
   const { project, session } = f;

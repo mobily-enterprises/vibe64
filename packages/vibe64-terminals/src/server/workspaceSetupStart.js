@@ -1,11 +1,12 @@
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { CONNECTED_LINK_REQUIRED } from "@local/vibe64-core/server/projectRepository";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { GENESIS_STACK_SECTION_AMBIGUOUS } from "@local/vibe64-genesis/server";
 import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { loadProjectExecutionEnvRecords, projectExecutionEnvFromRecords } from "./projectExecutionEnv.js";
-import { failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
+import { connectedChoiceRequired, failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
 import {
   CONNECTED_PREPARATION_LABEL,
   appendWorkspaceSetupTranscript,
@@ -150,8 +151,18 @@ function createWorkspaceSetupStart({
     // can take minutes, and the session shows each step while it runs.
     const startedAt = migrationStartedAt || new Date().toISOString();
     const currentLabel = CONNECTED_PREPARATION_LABEL;
-    const state = await persist(runtime, sessionId, {
+    // The output starts this attempt at once, so an earlier attempt's last
+    // line is never shown as this one's progress.
+    const attemptBase = {
       ...stateBase,
+      transcript: appendWorkspaceSetupTranscript(
+        stateBase.transcript,
+        migrationTranscript ? "" : stateBase.transcript ? "Workspace preparation retry started." : "Workspace preparation started.",
+        stepStatus(currentLabel, "Running")
+      )
+    };
+    const state = await persist(runtime, sessionId, {
+      ...attemptBase,
       currentLabel,
       diagnostic: "",
       finishedAt: "",
@@ -160,8 +171,10 @@ function createWorkspaceSetupStart({
     }, renewal);
     const begin = () => startRecipe({
       ...run,
+      attemptStarted: true,
+      stateBase: attemptBase,
       onProgress: label => persist(runtime, sessionId, {
-        ...stateBase,
+        ...attemptBase,
         currentLabel: safeSetupLabel(label),
         diagnostic: "",
         finishedAt: "",
@@ -178,12 +191,13 @@ function createWorkspaceSetupStart({
       runtime,
       runKey,
       startedAt,
-      transcript: stateBase.transcript
+      transcript: attemptBase.transcript
     });
     return { completion, state };
   }
 
   async function startRecipe({
+    attemptStarted = false,
     migrationStartedAt,
     migrationTranscript,
     onProgress = doNothing,
@@ -203,18 +217,31 @@ function createWorkspaceSetupStart({
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
         const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
-        if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
+        if (prepared?.ok === false) {
+          // Name the connected project that failed: its own message often cannot.
+          const failedProject = toText(prepared.failedRepository).split("/").pop();
+          throw Object.assign(
+            new Error(failedProject ? `Connected project ${failedProject}: ${toText(prepared.error)}` : prepared.error),
+            { code: prepared.code }
+          );
+        }
         connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
         await onProgress("Checking connected sources");
         session = await runtime.getSessionWithoutSource(sessionId);
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {
-        const state = await failed(runtime, sessionId, {
+        const stopped = {
           currentLabel: "Prepare connected sources",
           diagnostic: toText(error?.message),
-          renewal
-        });
+          renewal,
+          // The output keeps the reason, so Expand and the next attempt's
+          // history show why, not only that this step stopped.
+          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message))
+        };
+        const state = error?.code === CONNECTED_LINK_REQUIRED
+          ? await connectedChoiceRequired(runtime, sessionId, stopped)
+          : await failed(runtime, sessionId, stopped);
         return { completion: null, state };
       }
     }
@@ -320,7 +347,7 @@ function createWorkspaceSetupStart({
     }
     const startedAt = migrationStartedAt || new Date().toISOString();
     const currentLabel = safeSetupLabel(recipe.steps[0].label);
-    const attemptLabel = migrationTranscript
+    const attemptLabel = migrationTranscript || attemptStarted
       ? ""
       : stateBase.transcript
         ? (retry === true || (rerunFailed === true && stateBase.status === "failed")

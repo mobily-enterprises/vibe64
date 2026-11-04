@@ -309,9 +309,25 @@ const incomingChangeInputValidator = actionInput({
   }
 });
 
-const connectedSourceAllocationInputValidator = actionInput({
+const connectedSourceInputValidator = actionInput({
   contribution: { type: "object", additionalProperties: true, required: true },
   sessionName: { type: "string", required: false, minLength: 1, maxLength: 120 }
+});
+
+const connectedSessionsInputValidator = actionInput({
+  contribution: { type: "object", additionalProperties: true, required: false },
+  originIsContribution: { type: "boolean", required: true }
+});
+
+const connectedSessionBindInputValidator = actionInput({
+  contribution: { type: "object", additionalProperties: true, required: true },
+  originIsContribution: { type: "boolean", required: true }
+});
+
+const connectedSessionLinkInputValidator = actionInput({
+  sessionId: sessionIdField,
+  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u },
+  connectedSessionId: sessionIdField
 });
 
 const connectedReplacementInspectionInputValidator = actionInput({
@@ -570,7 +586,10 @@ export {
   incomingReviewSchema,
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
-  connectedSourceAllocationInputValidator,
+  connectedSessionBindInputValidator,
+  connectedSessionLinkInputValidator,
+  connectedSessionsInputValidator,
+  connectedSourceInputValidator,
   connectedReplacementInspectionInputValidator,
   connectedReplacementInputValidator,
   connectedWorkInputValidator,

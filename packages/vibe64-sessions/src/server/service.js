@@ -236,17 +236,22 @@ function createService({
     retrySessionRenewal: renewal.retrySessionRenewal,
     updateSessionRenewalDraft: renewal.updateSessionRenewalDraft,
 
+    inspectConnectedChoices: connected.inspectConnectedChoices,
     inspectConnectedDevelopmentInputs: connected.inspectConnectedDevelopmentInputs,
+    linkConnectedSession: connected.linkConnectedSession,
     prepareConnectedSources: connected.prepareConnectedSources,
     replaceConnectedSource: connected.replaceConnectedSource,
     reviewConnectedReplacement: connected.reviewConnectedReplacement,
 
-    allocateConnectedSource: receiving.allocateConnectedSource,
+    bindConnectedSession: receiving.bindConnectedSession,
     checkContributionUpdates: receiving.checkContributionUpdates,
+    createConnectedReplacement: receiving.createConnectedReplacement,
     inspectConnectedContributionSource: receiving.inspectConnectedContributionSource,
+    inspectConnectedSessions: receiving.inspectConnectedSessions,
     inspectContributionIncoming: receiving.inspectContributionIncoming,
     inspectContributionInputs: receiving.inspectContributionInputs,
     inspectContributionWork: receiving.inspectContributionWork,
+    resolveConnectedSource: receiving.resolveConnectedSource,
     saveContributionWork: receiving.saveContributionWork,
     updateContributionWork: receiving.updateContributionWork,
 

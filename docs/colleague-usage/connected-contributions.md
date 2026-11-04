@@ -1,27 +1,55 @@
 # Connected contributions and saving
 
-This continues [Configure connected projects](connected-projects.md): how prepared sources become contributions, how they are saved, revised and integrated.
+This continues [Configure connected projects](connected-projects.md): how you choose each connected session, and how its contribution is saved, revised and integrated.
 
-Preparing a connected source records the creating user's Git identity for that
-receiving session. You can inspect and save its contribution without first
-opening an AI conversation there. GitHub access is still checked when used.
+## Choose a connected session
 
-A connected session takes the name of the session it was prepared for: that
-session's name, or its date when it has none yet. When the originating session
-is renamed, its connected sessions follow at the next workspace preparation. If
-you rename a connected session yourself, it keeps your name.
+Vibe64 never starts a session in a connected project on its own. You choose which
+of that project's existing sessions this session uses.
 
-Allocating a connected contribution creates its receiving checkout without
-automatically preparing that receiving project's own connections. The originating
-project's Stack recipe prepares its directly connected sources. This prevents
-automatic chains and cycles of extra contribution checkouts. A receiving session
-can still be prepared separately when you deliberately work in that project.
-If project A connects to B and B connects to A, preparing B's contribution creates
-a new A contribution; it does not attach the original A session. Each preparation
-owns its child contributions, and retry reuses those children. You cannot use
-these controls to make two existing contributions wait for each other. Split a
-shared library change from its consumer adaptation when they need separate
-acceptance steps.
+The first time a session prepares a connected project, **Prepare workspace** stops
+at **Workspace setup needs a choice**. The notice names each project that needs a
+session and offers its free sessions in **Session in** *project*, with the first
+free one already selected. Pick one and choose **Link session**. Once the last
+project has its session, preparation continues by itself.
+
+A session is free when it is open, its source is ready, it is not already linked
+to a contribution, and it does not work on its own branch or pull request. When
+this session is itself a contribution, a session that uses connected projects of
+its own is not free either. Vibe64 checks all this again when you link, so a
+session taken in the meantime is refused with **That session is no longer free.
+Choose again.** and leaves the list.
+
+When the project has no free session, the notice says so and creates nothing.
+Choose **Open** *project*, start a session there, then come back and choose
+**Retry**.
+
+Linking keeps the session's commits, unsaved work and name. It also changes where
+that session saves: from then on its Save goes to a contribution branch for review
+in the receiving project's **Incoming changes**, not straight to its main branch.
+This cannot be undone from the notice, so link a session you mean to use for this
+work. A working link is not changed from the notice either. A linked session stays
+on the commit it started from until its contribution is pushed, so when you need
+the project's latest commits, use **Update this session (rebase)** in that session
+before linking it.
+
+Linking records your Git identity for that receiving session. You can inspect and
+save its contribution without first opening an AI conversation there. GitHub
+access is still checked when used.
+
+Colleague can explain this choice and offer **Retry**, but choosing a session is
+yours: it cannot link one for you.
+
+## How connected sessions relate
+
+Linking a session does not prepare that receiving project's own connections. The
+originating project's Stack recipe prepares its directly connected sources. A
+receiving session can still be prepared separately when you deliberately work in
+that project, and it chooses its own connected sessions the same way. If project A
+connects to B and B connects to A, the A session that uses B's session is not
+offered back to it. You cannot use these controls to make two contributions wait
+for each other. Split a shared library change from its consumer adaptation when
+they need separate acceptance steps.
 
 A connected contribution session saves to its own receiving-repository branch,
 shown in the normal Save destination review. Its first Save creates that branch;
@@ -45,7 +73,9 @@ the repository, integration target and exact discarded commit, then choose
 **Create replacement contribution**. The same controls are available on phones.
 This creates a new receiving session and contribution ID, selects it for this
 originating task and updates the development source map. It does not push anything.
-Use **Open replacement session** to revise that source.
+It is the one time Vibe64 creates a connected session, because you confirmed it.
+The new session takes this session's name and follows later renames here until
+you rename it yourself. Use **Open replacement session** to revise that source.
 
 The replacement starts at the discarded commit. The old checkout, including
 unsaved edits, remains intact; copy any wanted unsaved edits into the replacement
@@ -59,9 +89,10 @@ Preview so it uses the replacement. Use **Save connected first** to submit the
 revision, merge it through the receiving project's Incoming changes, and Update
 the replacement session to the accepted target before Main Save. If creation's
 response is lost, retry the same confirmation: it reuses the reserved replacement.
-After reloading or closing that dialog, **Prepare workspace** also resumes the
-saved reservation. A changed review, revoked access or unavailable source stops
-preparation with an error and preserves both sources. Colleague can review and
+**Prepare workspace** never creates it for you: if the session was not created, it
+stops at **Workspace setup needs a choice** and the notice offers **Finish
+replacement** beside any free sessions. A changed review, revoked access or
+unavailable source stops with an error and preserves both sources. Colleague can review and
 create a replacement through the same actions after an explicit request; it
 cannot silently discard or move unsaved edits.
 
@@ -122,13 +153,17 @@ keeps its source available to the originating project.
 Avoid archiving a receiving contribution while another session still needs its
 checkout. Archive preserves its commits, changed files, untracked files and
 connection metadata through the existing recovery archive, then removes the live
-checkout. The originating project reports unavailable source; it does not select
-a different session or silently use an npm package. Use normal renewal when you
-want a fresh conversation that continues the same contribution. If already
-archived, retain the archive and ask the administrator to recover its source
-through the existing archive facilities before preparing the originating project
-again. Colleague can explain the error; it cannot substitute another checkout or
-clear the integration requirement to make Save succeed.
+checkout. Use normal renewal when you want a fresh conversation that continues the
+same contribution.
+
+If it was archived anyway, the next **Prepare workspace** stops at **Workspace
+setup needs a choice**, saying which session was archived and when. It does not
+select another session or silently use an npm package. Choose a free session, as
+in [Choose a connected session](#choose-a-connected-session); the archived work
+does not move there. To carry on with that work instead, retain the archive and
+ask the administrator to recover its source through the existing archive
+facilities. Colleague can explain the choice; it cannot substitute another
+checkout or clear the integration requirement to make Save succeed.
 
 After integration, the contribution session's existing update check follows the
 receiving integration branch. Its Save destination remains the reserved incoming

@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import {
   assertSessionRepositoryReview,
+  CONNECTED_LINK_REQUIRED,
+  contributionSessionId,
   serializeSessionConnectedSources,
   serializeSessionConnectedSubmissions,
   sessionConnectedSources,
@@ -9,15 +11,17 @@ import {
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  ACTION_ALLOCATE_CONNECTED_SOURCE,
   ACTION_CHECK_CONTRIBUTION_UPDATES,
+  ACTION_CREATE_CONNECTED_REPLACEMENT,
   ACTION_INSPECT_CONTRIBUTION_INCOMING,
   ACTION_INSPECT_CONTRIBUTION_INPUTS,
   ACTION_INSPECT_CONTRIBUTION_SOURCE,
   ACTION_INSPECT_CONTRIBUTION_WORK,
+  ACTION_RESOLVE_CONNECTED_SOURCE,
   ACTION_SAVE_CONTRIBUTION_WORK,
   ACTION_UPDATE_CONTRIBUTION_WORK
 } from "./connectedContributionActions.js";
+import { createConnectedSessionChoices } from "./connectedSessionChoices.js";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -42,6 +46,26 @@ function connectedUpdateOutcome(update, branch) {
   }
   if (update?.status === "skipped") return { status: "skipped", reason: normalizeText(update.reason) };
   return { status: "skipped", reason: normalizeText(update?.error) || `It could not be updated to ${branch}.` };
+}
+
+/** The name a receiving session takes when it has none of its own. */
+function servedSessionName(session) {
+  return (normalizeText(session.sessionName) || session.sessionId).slice(0, 120);
+}
+
+/**
+ * The result that stops preparation until a person chooses a session for each
+ * named connected project.
+ * @param {string[]} names
+ */
+function connectedChoiceResult(names) {
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+  return {
+    ok: false,
+    code: CONNECTED_LINK_REQUIRED,
+    error: `${list} ${names.length > 1 ? "need connected sessions" : "needs a connected session"}. ` +
+      "Choose in the workspace preparation notice to continue."
+  };
 }
 
 /**
@@ -102,7 +126,7 @@ function createConnectedContributions({
           details: {
             repository: binding.contribution.repository,
             projectSlug: binding.projectSlug,
-            sessionId: binding.contribution.id,
+            sessionId: contributionSessionId(binding.contribution),
             ...work?.details
           }
         });
@@ -300,11 +324,23 @@ function createConnectedContributions({
       const names = targets.map(target => target.repository.split("/").pop());
       if (targets.length) report(`Preparing connected projects: ${names.join(", ")}`);
       const remaining = new Set(names);
-      let reservation = Promise.resolve();
-      // Connected projects are independent, so each one is prepared at the same
-      // time. Reservations are written one at a time, each with every binding
-      // reserved so far; results are still reported in target order.
-      const allocated = await Promise.allSettled(targets.map(async (target, index) => {
+      const stopped = [];
+      let readyCount = 0;
+      const finish = (index, problem) => {
+        remaining.delete(names[index]);
+        if (problem) stopped.push(`${names[index]} ${problem}`);
+        else readyCount += 1;
+        if (remaining.size) {
+          report(`Preparing connected projects: ${[...remaining].join(", ")} ` +
+            `(${readyCount} of ${targets.length} ready${stopped.length ? `; ${stopped.join(", ")}` : ""})`);
+        }
+      };
+      /**
+       * One connected project, up to date when that cannot affect anyone's
+       * work. A project with no usable link stops here for a person's choice;
+       * preparation itself never creates or selects a session.
+       */
+      const prepareTarget = async (target, index) => {
         const repository = target.fullName;
         const source = await executeConnectedAction(target.projectSlug, ACTION_INSPECT_CONTRIBUTION_SOURCE, {}, requestContext);
         if (source.repository !== repository) {
@@ -314,7 +350,7 @@ function createConnectedContributions({
             { messageCode: "vibe64_connected_receiving_repository_changed" }
           );
         }
-        let binding = sources.find(item => item.contribution.repository === repository);
+        const binding = sources.find(item => item.contribution.repository === repository);
         if (binding &&
             (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
           throw vibe64Error(
@@ -324,31 +360,12 @@ function createConnectedContributions({
             { messageCode: "vibe64_connected_binding_conflict" }
           );
         }
-        if (!binding) {
-          binding = {
-            projectSlug: target.projectSlug,
-            contribution: {
-              schemaVersion: 1,
-              id: crypto.randomUUID(),
-              ...source
-            }
-          };
-          sources.push(binding);
-          // Reserve the exact identity before creation, so a lost response or
-          // partial preparation retries the same source instead of cloning again.
-          const write = reservation.then(() => {
-            const serialized = serializeSessionConnectedSources(sources);
-            return runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
-          });
-          // Queue tail: the write's own failure reaches this caller through `await write`.
-          reservation = write.catch(() => {});
-          await write;
-        }
-        const allocate = () => executeConnectedAction(binding.projectSlug, ACTION_ALLOCATE_CONNECTED_SOURCE, {
+        if (!binding) return { repository, allocation: { ok: false, code: CONNECTED_LINK_REQUIRED } };
+        const resolve = () => executeConnectedAction(binding.projectSlug, ACTION_RESOLVE_CONNECTED_SOURCE, {
           contribution: binding.contribution,
-          sessionName: (normalizeText(session.sessionName) || sessionId).slice(0, 120)
+          sessionName: servedSessionName(session)
         }, requestContext);
-        let allocation = await allocate();
+        let allocation = await resolve();
         let update = null;
         if (allocation?.ok !== false && allocation?.sourceReady === true) {
           // Bring the checkout up to its integration branch when that cannot
@@ -365,20 +382,33 @@ function createConnectedContributions({
           } catch (error) {
             update = { ok: false, error: normalizeText(error?.message) };
           }
-          if (update?.status === "updated") allocation = await allocate();
-        }
-        remaining.delete(names[index]);
-        if (remaining.size) {
-          report(
-            `Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`
-          );
+          if (update?.status === "updated") allocation = await resolve();
         }
         return { repository, binding, allocation, update };
+      };
+      // Connected projects are independent, so each one is prepared at the same
+      // time; results are still reported in target order.
+      const allocated = await Promise.allSettled(targets.map(async (target, index) => {
+        try {
+          const preparedTarget = await prepareTarget(target, index);
+          const { allocation } = preparedTarget;
+          finish(index, allocation?.code === CONNECTED_LINK_REQUIRED ? "needs a session"
+            : allocation?.ok === false || allocation?.sourceReady !== true ? "failed" : "");
+          return preparedTarget;
+        } catch (error) {
+          finish(index, "failed");
+          throw error;
+        }
       }));
+      const needsChoice = [];
       for (const [index, target] of targets.entries()) {
         preparingRepository = target.repository;
         if (allocated[index].status === "rejected") throw allocated[index].reason;
         const { repository, binding, allocation, update } = allocated[index].value;
+        if (allocation?.code === CONNECTED_LINK_REQUIRED) {
+          needsChoice.push(names[index]);
+          continue;
+        }
         if (allocation?.ok === false) return { ...allocation, prepared };
         prepared.push({
           repository,
@@ -397,8 +427,9 @@ function createConnectedContributions({
         }
         resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: allocation });
       }
-      if (targets.length) report("Linking connected sources");
       preparingRepository = "";
+      if (needsChoice.length) return connectedChoiceResult(needsChoice);
+      if (targets.length) report("Linking connected sources");
       const development = await project.prepareConnectedDevelopmentInputs({
         session: await runtime.getSessionWithoutSource(sessionId),
         projects: resolvedSources,
@@ -473,7 +504,8 @@ function createConnectedContributions({
       assertProjectEffectAdmission();
       const sources = sessionConnectedSources(session);
       const previous = sources.find(item => item.contribution.repository === input.repository);
-      // A lost allocation response retries the already reserved replacement.
+      let reserved = previous;
+      // A lost creation response retries the already reserved replacement.
       // Neither the discarded source nor prior submission requirements change.
       if (!previous || previous.contribution.replaces !== input.review.id ||
           previous.contribution.baseCommit !== input.review.discardedHead ||
@@ -487,19 +519,27 @@ function createConnectedContributions({
             { messageCode: "vibe64_connected_replacement_review_changed" }
           );
         }
-        const replacement = {
+        reserved = {
           ...binding,
           contribution: {
-            ...binding.contribution,
+            schemaVersion: 1,
             id: crypto.randomUUID(),
+            repository: binding.contribution.repository,
+            integrationBranch: binding.contribution.integrationBranch,
+            baseCommit: entry.discardedHead,
             replaces: binding.contribution.id,
-            baseCommit: entry.discardedHead
+            replacesSessionId: contributionSessionId(binding.contribution)
           }
         };
-        sources[sources.indexOf(previous)] = replacement;
+        sources[sources.indexOf(previous)] = reserved;
         const serialized = serializeSessionConnectedSources(sources);
         await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
       }
+      const created = await executeConnectedAction(reserved.projectSlug, ACTION_CREATE_CONNECTED_REPLACEMENT, {
+        contribution: reserved.contribution,
+        sessionName: servedSessionName(session)
+      }, requestContext);
+      if (created?.ok === false) return created;
       const current = await runtime.getSessionWithoutSource(sessionId);
       const result = await prepareConnectedSourcesInsideAgentWrite({ runtime, session: current }, input, requestContext);
       return { ...result, sessionId: result.prepared?.find(item => item.repository === input.repository)?.sessionId };
@@ -532,10 +572,14 @@ function createConnectedContributions({
     });
   }
 
+  const { inspectConnectedChoices, linkConnectedSession } = createConnectedSessionChoices({ executeConnectedAction, project, terminals });
+
   return Object.freeze({
     assertConnectedWorkSaved,
+    inspectConnectedChoices,
     inspectConnectedDevelopmentInputs,
     inspectConnectedWork,
+    linkConnectedSession,
     prepareConnectedSources,
     prepareConnectedSourcesInsideAgentWrite,
     replaceConnectedSource,

@@ -216,10 +216,33 @@ function projectRepositoryMetadataFromInput(input = {}, options = {}) {
   };
 }
 
+/** A connected project needs a person to choose its session; nothing else can settle it. */
+const CONNECTED_LINK_REQUIRED = "vibe64_connected_link_required";
+const CONTRIBUTION_KEYS = Object.freeze([
+  "schemaVersion",
+  "id",
+  "sessionId",
+  "repository",
+  "integrationBranch",
+  "baseCommit",
+  "replaces",
+  "replacesSessionId"
+]);
+const CONTRIBUTION_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+
 function projectRepositoryMetadataError(code = "", message = "") {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+/**
+ * The receiving session a contribution lives in: the session a person linked
+ * it to, or the replacement session created under the contribution's own ID.
+ * @param {{ id: string, sessionId?: string }} contribution
+ */
+function contributionSessionId(contribution) {
+  return contribution.sessionId || contribution.id;
 }
 
 function sessionConnectedContribution(session) {
@@ -230,10 +253,11 @@ function sessionConnectedContribution(session) {
     value = JSON.parse(serialized);
   } catch { /* Invalid authority must not fall back to main. */ }
   if (!isPlainObject(value) || value.schemaVersion !== 1 ||
-      Object.keys(value).some(key => !["schemaVersion", "id", "repository", "integrationBranch", "baseCommit", "replaces"].includes(key)) ||
+      Object.keys(value).some(key => !CONTRIBUTION_KEYS.includes(key)) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.id || "") ||
       (Object.hasOwn(value, "replaces") && (typeof value.replaces !== "string" || value.replaces === value.id ||
         !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.replaces || ""))) ||
+      ["sessionId", "replacesSessionId"].some(key => Object.hasOwn(value, key) && !CONTRIBUTION_SESSION_ID.test(value[key])) ||
       typeof value.repository !== "string" || !/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/u.test(value.repository) ||
       !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
       typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
@@ -427,6 +451,8 @@ export {
   saveProjectRepositoryWorkflow,
   validRepositoryBranch,
   assertSessionRepositoryReview,
+  CONNECTED_LINK_REQUIRED,
+  contributionSessionId,
   sessionRepositoryDestination,
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,

@@ -61,7 +61,9 @@ import {
   ACTION_WITHDRAW_MAIN_CHAT_APPROVAL
 } from "./sessionActions.js";
 import {
+  ACTION_INSPECT_CONNECTED_CHOICES,
   ACTION_INSPECT_CONNECTED_REPLACEMENT,
+  ACTION_LINK_CONNECTED_SESSION,
   ACTION_PREPARE_CONNECTED_SOURCES,
   ACTION_REPLACE_CONNECTED_SOURCE
 } from "./connectedContributionActions.js";
@@ -242,7 +244,18 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
   routes.actionRoute("POST", "/sessions/:sessionId/connected/prepare", {
     actionId: ACTION_PREPARE_CONNECTED_SOURCES,
     buildInput: sessionIdInput,
-    summary: "Prepare isolated contribution sources for the session's configured connected projects."
+    summary: "Prepare the linked contribution sources of the session's configured connected projects."
+  });
+
+  routes.actionRoute("GET", "/sessions/:sessionId/connected/choices", {
+    actionId: ACTION_INSPECT_CONNECTED_CHOICES,
+    buildInput: sessionIdInput,
+    summary: "List the connected projects that need a session chosen, with their free sessions."
+  });
+  routes.actionRoute("POST", "/sessions/:sessionId/connected/link", {
+    actionId: ACTION_LINK_CONNECTED_SESSION,
+    buildInput: sessionBodyWithoutUserInput,
+    summary: "Link an existing free session of a connected project to this session."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/connected/replacement", {

@@ -259,6 +259,109 @@ test("a requested connected preparation returns at once and records each progres
   });
 });
 
+test("a failed connected preparation names its project and reason, and its retry never shows that failure as progress", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const stored = async () => workspaceSetupStateFromMetadata(
+      (await runtime.store.readSession(session.sessionId)).metadata
+    );
+    const lastLine = text => text.trim().split("\n").at(-1);
+    let unavailable = true;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
+      async finishWorkflow() {},
+      async connectedPreparation({ mode, onProgress }) {
+        if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
+        if (unavailable) {
+          return { ok: false, code: "vibe64_connected_source_unavailable", prepared: [],
+            error: "This contribution's current session is unavailable.",
+            failedRepository: "https://github.com/example/vibe64" };
+        }
+        await onProgress("Preparing connected projects: vibe64 (1 of 2 ready)");
+        await gate;
+        return { ok: true, prepared: [
+          { repository: "example/jskit", update: { status: "current", commit: "1".repeat(40) } },
+          { repository: "example/vibe64", update: { status: "current", commit: "2".repeat(40) } }
+        ] };
+      },
+      project: {
+        inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
+        ...readyProject(),
+        async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
+      },
+      async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
+    });
+
+    const failed = await (await runner.start({ retry: true, runtime, session })).completion;
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.diagnostic, "Connected project vibe64: This contribution's current session is unavailable.",
+      "the diagnostic names the connected project that failed");
+    assert.match(failed.transcript, /\nConnected project vibe64: This contribution's current session is unavailable\.\n/u,
+      "the output keeps the reason, not only the failed step");
+    assert.equal(lastLine(failed.transcript), "[Prepare connected sources] Failed.");
+
+    unavailable = false;
+    const retried = await runner.start({
+      retry: true,
+      runtime,
+      session: await runtime.getSessionWithoutSource(session.sessionId)
+    });
+    assert.equal(lastLine(retried.state.transcript), "[Preparing connected projects] Running.",
+      "a retry's first progress is its own, never the earlier attempt's failure");
+    while ((await stored()).currentLabel !== "Preparing connected projects: vibe64 (1 of 2 ready)") {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(lastLine((await stored()).transcript), "[Preparing connected projects] Running.");
+    release();
+    const succeeded = await retried.completion;
+    assert.equal(succeeded.status, "succeeded");
+    assert.equal(succeeded.transcript.match(/Workspace preparation retry started\./gu)?.length, 1,
+      "the retry is recorded once");
+    assert.ok(succeeded.transcript.includes("[Connected] jskit is up to date."));
+  });
+});
+
+test("a connected project with no usable link stops preparation for a person's choice, not as a failure", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    let linked = false;
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
+      async finishWorkflow() {},
+      async connectedPreparation({ mode }) {
+        if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
+        return linked ? { ok: true, prepared: [] } : { ok: false, code: "vibe64_connected_link_required", prepared: [],
+          error: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." };
+      },
+      project: {
+        inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
+        ...readyProject(),
+        async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
+      },
+      async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
+    });
+
+    const stopped = await (await runner.start({ retry: true, runtime, session })).completion;
+    assert.equal(stopped.status, "ambiguous");
+    assert.equal(stopped.connectedChoiceRequired, true);
+    assert.equal(stopped.diagnostic, "vibe64 needs a connected session. Choose in the workspace preparation notice to continue.");
+    assert.equal(stopped.transcript.trim().split("\n").at(-1), "[Prepare connected sources] Needs a choice.");
+    const reread = workspaceSetupStateFromMetadata((await runtime.store.readSession(session.sessionId)).metadata);
+    assert.equal(reread.connectedChoiceRequired, true, "the state survives a reload");
+
+    linked = true;
+    const retried = await (await runner.start({
+      retry: true,
+      runtime,
+      session: await runtime.getSessionWithoutSource(session.sessionId)
+    })).completion;
+    assert.equal(retried.status, "succeeded");
+    assert.equal(retried.connectedChoiceRequired, undefined, "the next attempt clears the choice");
+  });
+});
+
 for (const [phase, change] of ["environment preparation", "admission"].flatMap((phase) =>
   ["command", "removed setup", "estimates", "removed estimates", "invalid estimates"].map((change) => [phase, change]))) {
   test(`workspace preparation rechecks ${change} after ${phase} before execution`, async () => {

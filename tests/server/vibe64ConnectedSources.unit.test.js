@@ -5,13 +5,13 @@ import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
+import { contributionSessionId, sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { createSessionRenewalDraft, createSessionRenewalState } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
-test("connected preparation reauthorizes the receiver and retries its reserved source through normal session creation", async () => {
+test("connected preparation reauthorizes the receiver and uses the session a person linked", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
     await mkdir(path.join(projectContext.projectsRoot, "library"));
     const actor = { username: "developer", role: "owner" };
@@ -19,7 +19,10 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const parent = { sessionId: "parent", status: "active", sourceReady: true, metadata: {
       assistant_routing: JSON.stringify({ mode: "senior", review: false })
     } };
-    const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: new Map() };
+    const librarySession = { sessionId: "library-session", status: "active", sourceReady: true, metadata: { base_commit: source.baseCommit } };
+    const returnSession = { sessionId: "return-session", status: "active", sourceReady: true, metadata: { base_commit: source.baseCommit } };
+    const sessionsByProject = { [slug]: new Map([["parent", parent], ["return-session", returnSession]]),
+      library: new Map([["library-session", librarySession]]) };
     const sourceFor = projectSlug => ({ ...source, repository: `example/${projectSlug}` });
     let preparingSession = parent;
     let preparingProject = slug;
@@ -30,7 +33,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const calls = [];
     let allowReceiver = false;
     let allowWrite = true;
-    let loseCreateResponse = true;
+    let loseCreateResponse = false;
     let createCount = 0;
     let includeOther = false;
     let connectedPreparation;
@@ -51,12 +54,17 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); },
         async listSessionsForRenewal() { return []; }
       },
-      async getSession(id) { return structuredClone(sessionsByProject[projectSlug].get(id) || null); },
+      async getSession(id) {
+        const session = sessionsByProject[projectSlug].get(id);
+        if (!session) throw Object.assign(new Error("Session not found."), { code: "vibe64_session_not_found" });
+        return structuredClone(session);
+      },
       getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
-      async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()]; },
+      async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()].filter(session => session.status === "active"); },
       async createSession(input) {
         createCount++;
         assert.notEqual(projectSlug, preparingProject);
+        assert.ok(JSON.parse(input.metadata.connected_contribution).replaces, "only a confirmed replacement creates a session");
         assert.equal(input.sourceContext.expectedCommit, JSON.parse(input.metadata.connected_contribution).baseCommit);
         assert.equal(input.sourceContext.vibe64User.username, actor.username);
         assert.equal(sessionConnectedSources(preparingSession).length, 1, "reserve the origin binding before creating source");
@@ -72,7 +80,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       async inspectConnectedDevelopmentInputs({ session, projects }) {
         assert.equal(session.sessionId, preparingSession.sessionId);
         assert.equal(projects.length, 1);
-        assert.equal(projects[0].session.sessionId, expectedSourceSessionId || sessionConnectedSources(session)[0].contribution.id);
+        assert.equal(projects[0].session.sessionId, expectedSourceSessionId || contributionSessionId(sessionConnectedSources(session)[0].contribution));
         calls.push("inspect connected source inputs");
         return { sourcesFile: ".development/sources.json", status: "inputs-prepared", recipeHash: "test-recipe" };
       },
@@ -132,7 +140,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
           assert.equal(input.destinationReview.sessionId, id);
           return { ok: true, saveCommit: "d".repeat(40), reconciled: true, status: "saved" };
         },
-        async inspectIncomingContributions(id) {
+        async inspectIncomingContributions(_sessionId, { id }) {
           assert.equal(currentProjectRequestContext().slug, "library");
           assert.equal(id, incomingReview.id);
           return { ok: true, repository: source.repository, contributions: [{ id, status: incomingState,
@@ -141,11 +149,11 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         setConnectedPreparation(prepare) { connectedPreparation = prepare; },
         openBrowserConversation() { throw new Error("Source preparation must not start a conversation."); },
         async runConnectedSourcePreparation(id, _input, operation) {
-          assert.equal(currentProjectRequestContext().slug, preparingProject);
-          assert.equal(id, preparingSession.sessionId);
-          const source = { runtime: runtimeFor(preparingProject), session: preparingSession };
+          const projectSlug = currentProjectRequestContext().slug;
+          const source = { runtime: runtimeFor(projectSlug), session: sessionsByProject[projectSlug].get(id) };
           return automaticMode ? connectedPreparation({ ...source, mode: automaticMode }) : operation(source);
         },
+        async recordSessionGitCommandActor() { return { ok: true }; },
         async resolveAssistantPurpose() { return { available: true, connectionIdentity: "account", effectiveSelection: {
           agentId: "build", catalogRevision: `sha256:${"b".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
           modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: ""
@@ -164,7 +172,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       async authorizeProject({ slug: target, definition }) {
         calls.push(`${definition.id}:${target}`);
         if (target === "other") throw Object.assign(new Error("Other project access unavailable"), { code: "other_unavailable" });
-        if (target === "library" && (definition.id.endsWith(".allocate") || definition.id.includes(".work.")) && !allowReceiver) {
+        if (target === "library" && !definition.id.endsWith(".connected.source") && !allowReceiver) {
           throw Object.assign(new Error("Receiving project access revoked"), { code: "receiver_forbidden" });
         }
       }
@@ -172,38 +180,39 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const request = Object.assign(Object.create({ headers: { cookie: "original-connection" } }), { params: { slug } });
     const context = { channel: "api", surface: "app", requestMeta: { request } };
     const prepare = () => actions.execute({ actionId: "vibe64.sessions.connected.prepare", input: { sessionId: "parent" }, context });
-    const denied = await prepare();
-    assert.equal(denied.code, "receiver_forbidden");
-    assert.deepEqual(denied.prepared, []);
-    assert.equal(denied.failedRepository, "https://github.com/example/library");
-    assert.equal(createCount, 0);
+    const link = connectedSessionId => actions.execute({ actionId: "vibe64.sessions.connected.link",
+      input: { sessionId: "parent", repository: source.repository, connectedSessionId }, context });
+    const stopped = await prepare();
+    assert.equal(stopped.code, "vibe64_connected_link_required");
+    assert.deepEqual(stopped.prepared, []);
+    assert.equal(parent.metadata.connected_sources, undefined, "preparation alone reserves nothing");
+    assert.equal((await link("library-session")).code, "receiver_forbidden");
+    assert.equal(parent.metadata.connected_sources, undefined);
+
+    allowReceiver = true;
+    const linked = await link("library-session");
+    assert.deepEqual(linked, { ok: true, repository: source.repository, sessionId: "library-session" });
     const reserved = parent.metadata.connected_sources;
     const [binding] = sessionConnectedSources(parent);
     assert.equal(binding.projectSlug, "library");
-    assert.deepEqual(Object.keys(binding.contribution).sort(), ["baseCommit", "id", "integrationBranch", "repository", "schemaVersion"]);
-
-    allowReceiver = true;
-    const interrupted = await prepare();
-    assert.equal(interrupted.ok, false);
-    assert.match(interrupted.error, /lost creation acknowledgement/u);
-    assert.equal(createCount, 1);
-    assert.equal(parent.metadata.connected_sources, reserved);
+    assert.deepEqual(Object.keys(binding.contribution).sort(), ["baseCommit", "id", "integrationBranch", "repository", "schemaVersion", "sessionId"]);
+    assert.equal(binding.contribution.sessionId, "library-session");
+    assert.notEqual(binding.contribution.id, "library-session", "the contribution keeps its own identity for its branch");
     const result = await prepare();
     assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.prepared[0].sessionId, binding.contribution.id);
+    assert.equal(result.prepared[0].sessionId, "library-session");
     assert.equal(result.prepared[0].sourceReady, true);
     assert.equal(result.development.status, "inputs-prepared");
     assert.equal(result.development.sourcesFile, ".development/sources.json");
-    assert.equal(createCount, 1, "retry reuses the exact existing source");
+    assert.equal(createCount, 0, "preparation uses the linked session");
     assert.equal(parent.metadata.connected_sources, reserved);
-    assert.ok(calls.includes("receiving capacity admission"));
 
     const inspectInputs = () => actions.execute({ actionId: "vibe64.sessions.connected.inputs.inspect",
       input: { sessionId: "parent" }, context: { ...context, channel: "internal" } });
     const beforeInspection = calls.filter(value => value === "project connected source inputs").length;
     assert.equal((await inspectInputs()).status, "inputs-prepared");
     assert.equal(calls.filter(value => value === "project connected source inputs").length, beforeInspection);
-    assert.equal(createCount, 1, "readiness inspection neither allocates nor prepares source");
+    assert.equal(createCount, 0, "readiness inspection neither creates nor prepares source");
     allowReceiver = false;
     assert.equal((await inspectInputs()).code, "receiver_forbidden", "readiness reauthorizes the receiving project");
     allowReceiver = true;
@@ -226,14 +235,14 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(parent.metadata.connected_sources, reserved);
     includeOther = false;
 
-    const received = sessionsByProject.library.get(binding.contribution.id);
+    const received = librarySession;
     received.sourceReady = false;
     const unavailable = await prepare();
     assert.equal(unavailable.ok, false);
     assert.equal(unavailable.code, "vibe64_connected_source_unavailable");
-    assert.equal(unavailable.prepared[0].sessionId, binding.contribution.id);
+    assert.equal(unavailable.prepared[0].sessionId, "library-session");
     assert.equal(unavailable.prepared[0].sourceReady, false);
-    assert.equal(createCount, 1, "failed source remains owned by its original recovery session");
+    assert.equal(createCount, 0, "failed source remains owned by its original recovery session");
     received.sourceReady = true;
 
     const updateOf = async () => (await prepare()).prepared[0].update;
@@ -272,12 +281,12 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
 
     allowWrite = false;
     assert.equal((await prepare()).code, "vibe64_contribution_access_required");
-    assert.equal(createCount, 1);
+    assert.equal(createCount, 0);
     allowWrite = true;
     received.metadata.connected_contribution = JSON.stringify({ ...binding.contribution, baseCommit: "c".repeat(40) });
     assert.equal((await prepare()).code, "vibe64_contribution_authority_changed");
-    assert.equal(createCount, 1);
-    await assert.rejects(actions.execute({ actionId: "vibe64.sessions.connected.allocate",
+    assert.equal(createCount, 0);
+    await assert.rejects(actions.execute({ actionId: "vibe64.sessions.connected.resolve",
       input: { projectSlug: "library", contribution: binding.contribution }, context: { ...context, requestMeta: undefined } }));
 
     received.metadata.connected_contribution = JSON.stringify(binding.contribution);
@@ -313,16 +322,18 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const replacementBinding = sessionConnectedSources(parent)[0];
     assert.notEqual(replacementBinding.contribution.id, binding.contribution.id);
     assert.equal(replacementBinding.contribution.replaces, binding.contribution.id);
+    assert.equal(replacementBinding.contribution.replacesSessionId, "library-session");
+    assert.equal(replacementBinding.contribution.sessionId, undefined, "a replacement gets a session of its own");
     assert.equal(replacementBinding.contribution.baseCommit, incomingReview.discardedHead);
-    assert.equal(createCount, 2);
+    assert.equal(createCount, 1);
     allowWrite = false;
     assert.equal((await replace()).code, "vibe64_contribution_access_required", "retry rechecks receiving write access");
     allowWrite = true;
     const replacement = await replace();
     assert.equal(replacement.ok, true, JSON.stringify(replacement));
     assert.equal(replacement.prepared[0].sessionId, replacementBinding.contribution.id);
-    assert.equal(createCount, 2, "retry reuses the replacement reserved before allocation");
-    assert.deepEqual(sessionsByProject.library.get(binding.contribution.id), oldSource);
+    assert.equal(createCount, 1, "retry reuses the replacement reserved before creation");
+    assert.deepEqual(librarySession, oldSource);
     assert.equal(parent.metadata.connected_submissions, originalSubmissions, "replacement cannot erase the original integration gate");
     assert.equal((await prepare()).prepared[0].sessionId, replacementBinding.contribution.id);
 
@@ -348,9 +359,9 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const firstSuccessor = completeRenewal(sessionsByProject.library.get(replacementBinding.contribution.id), "renewed-library-1");
     const successor = completeRenewal(firstSuccessor, "renewed-library-2");
     expectedSourceSessionId = successor.sessionId;
-    assert.equal((await prepare()).prepared[0].sessionId, successor.sessionId, "allocation follows completed reciprocal renewals");
+    assert.equal((await prepare()).prepared[0].sessionId, successor.sessionId, "preparation follows completed reciprocal renewals");
     assert.equal((await inspectInputs()).status, "inputs-prepared");
-    assert.equal(createCount, 2, "renewal never creates a new contribution or checkout during allocation");
+    assert.equal(createCount, 1, "renewal never creates a new contribution or checkout during preparation");
     const connectedWork = operation => actions.execute({ actionId: `vibe64.sessions.connected.work.${operation}`,
       input: { projectSlug: "library", contribution: replacementBinding.contribution,
         ...(operation === "save" ? { destinationReview: { sessionId: successor.sessionId, mode: "github",
@@ -390,10 +401,10 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal((await prepare()).code, "vibe64_contribution_authority_changed");
     successor.metadata.connected_contribution = JSON.stringify(replacementBinding.contribution);
     successor.status = "archived";
-    assert.equal((await prepare()).code, "vibe64_connected_source_unavailable", "ordinary archive is not a renewal alias");
+    assert.equal((await prepare()).code, "vibe64_connected_link_required", "ordinary archive is not a renewal alias");
     successor.status = "active";
     sessionsByProject.library.delete(successor.sessionId);
-    assert.equal((await prepare()).code, "vibe64_connected_source_unavailable", "missing successor cannot fall back to the old checkout");
+    assert.equal((await prepare()).code, "vibe64_connected_link_required", "missing successor cannot fall back to the old checkout");
     sessionsByProject.library.set(successor.sessionId, successor);
     assert.equal((await prepare()).prepared[0].sessionId, successor.sessionId);
 
@@ -406,24 +417,28 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     } } };
     const prepareReturn = () => actions.execute({ actionId: "vibe64.sessions.connected.prepare",
       input: { sessionId: successor.sessionId }, context: returningContext });
-    loseCreateResponse = true;
-    assert.match((await prepareReturn()).error, /lost creation acknowledgement/u);
+    const returnInput = connectedSessionId => ({ sessionId: successor.sessionId, repository: `example/${slug}`, connectedSessionId });
+    const linkReturn = connectedSessionId => actions.execute({ actionId: "vibe64.sessions.connected.link",
+      input: returnInput(connectedSessionId), context: returningContext });
+    assert.equal((await prepareReturn()).code, "vibe64_connected_link_required");
+    const returnChoices = await actions.execute({ actionId: "vibe64.sessions.connected.choices",
+      input: { sessionId: successor.sessionId }, context: returningContext });
+    assert.deepEqual(returnChoices.choices[0].sessions.map(item => item.sessionId), ["return-session"],
+      "B connecting back to repository A cannot attach A's originating session");
+    assert.equal((await linkReturn("parent")).code, "vibe64_connected_session_not_free");
+    assert.equal((await linkReturn("return-session")).ok, true);
     const returnBinding = sessionConnectedSources(successor)[0];
     assert.equal(returnBinding.contribution.repository, `example/${slug}`);
-    assert.notEqual(returnBinding.contribution.id, parent.sessionId, "B connecting back to repository A cannot attach A's originating session");
     assert.notEqual(returnBinding.contribution.id, replacementBinding.contribution.id);
-    assert.notEqual(returnBinding.contribution.id, successor.sessionId);
-    const returnedSource = sessionsByProject[slug].get(returnBinding.contribution.id);
-    assert.equal(returnedSource.metadata.connected_sources, undefined);
-    assert.equal(returnedSource.metadata.connected_submissions, undefined);
+    assert.equal(returnSession.metadata.connected_sources, undefined);
+    assert.equal(returnSession.metadata.connected_submissions, undefined);
     assert.equal(setupStarts, setupStartsBeforeReturn, "A→B→A configuration never automatically recurses into the next contribution's setup");
-    assert.equal((await prepareReturn()).prepared[0].sessionId, returnBinding.contribution.id);
-    assert.equal(createCount, 3, "retry reuses the newly reserved A contribution after acknowledgement loss");
+    assert.equal((await prepareReturn()).prepared[0].sessionId, "return-session");
     preparingProject = slug;
     preparingSession = parent;
     assert.equal((await prepare()).prepared[0].sessionId, successor.sessionId);
     assert.equal(parent.metadata.connected_sources, originalBindings);
-    assert.equal(createCount, 3, "the original A→B edge also keeps its reserved contribution on retry");
+    assert.equal(createCount, 1, "linking back creates nothing on either side");
 
     const original = sessionsByProject.library.get(replacementBinding.contribution.id);
     const cycle = completeRenewal(successor, original.sessionId);

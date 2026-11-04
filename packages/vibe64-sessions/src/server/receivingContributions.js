@@ -1,12 +1,15 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  CONNECTED_LINK_REQUIRED,
+  contributionSessionId,
   parseSessionConnectedContribution,
-  sessionConnectedContribution
+  sessionConnectedContribution,
+  sessionConnectedSources
 } from "@local/vibe64-core/server/projectRepository";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
+import { VIBE64_SESSION_STATUS, vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
@@ -24,11 +27,63 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
 
+/** A session as people know it: its name, or its identity when it has none. */
+function connectedSessionLabel(session) {
+  return normalizeText(session.sessionName) || session.sessionId;
+}
+
+/**
+ * A session, or null when it no longer exists.
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ */
+async function sessionIfPresent(runtime, sessionId) {
+  try {
+    return await runtime.getSessionWithoutSource(sessionId);
+  } catch (error) {
+    if (error.code !== "vibe64_session_not_found") throw error;
+    return null;
+  }
+}
+
+/**
+ * The refusal that sends a person to choose a session for this project.
+ * `reason` is the part a choice shows beside this project's name.
+ * @param {string} reason
+ * @param {{ unfinishedReplacement?: boolean }} [options]
+ */
+function connectedLinkRequired(reason, { unfinishedReplacement = false } = {}) {
+  return vibe64Error(`${reason} Run Prepare workspace and choose a session for it.`, CONNECTED_LINK_REQUIRED, {
+    details: { reason, unfinishedReplacement }
+  });
+}
+
+/**
+ * Why a session cannot take a contribution, or "" when it is free: an active
+ * session with its source, on this project's own branch, and bound to no
+ * contribution.
+ *
+ * Save waits for a session's connected sessions, so links must never form a
+ * cycle. Nothing links to a session unbound before now, so only a contribution
+ * can close one, and it can only do that through a session that uses others.
+ * @param {object} session
+ * @param {boolean} originIsContribution whether the asking session is itself a contribution
+ */
+function linkRefusal(session, originIsContribution) {
+  const metadata = session.metadata || {};
+  if (session.status !== VIBE64_SESSION_STATUS.ACTIVE || metadata.renewed_to) return "That session is no longer open.";
+  if (!session.sourceReady || !metadata.base_commit) return "That session's source is not ready.";
+  if (metadata.connected_contribution !== undefined) return "That session is already linked to another contribution.";
+  if (metadata.github_pull_request || metadata.repository_branch) return "That session works on its own branch or pull request.";
+  if (originIsContribution && sessionConnectedSources(session).length) return "That session uses connected sessions of its own.";
+  return "";
+}
+
 /**
  * The receiving side of connected contributions: the session that holds an
- * originating project's contribution in this project, allocated, inspected,
- * saved, checked and updated for that project through this project's own
- * internal actions.
+ * originating project's contribution in this project, chosen, linked,
+ * inspected, saved, checked and updated for that project through this
+ * project's own internal actions.
  * @param {object} dependencies
  * @param {SessionCreation} dependencies.creation
  * @param {ProjectService} dependencies.project
@@ -59,7 +114,9 @@ function createReceivingContributions({
     while (session) {
       if (visited.has(session.sessionId)) break;
       visited.add(session.sessionId);
-      if (!isDeepStrictEqual(sessionConnectedContribution(session), contribution)) {
+      const saved = sessionConnectedContribution(session);
+      if (!saved) throw connectedLinkRequired(`The link to ${connectedSessionLabel(session)} in ${contribution.repository} was not finished.`);
+      if (!isDeepStrictEqual(saved, contribution)) {
         throw vibe64Error(
           "The receiving source binding changed. Preserve its checkout and review the connection.",
           "vibe64_contribution_authority_changed",
@@ -68,14 +125,20 @@ function createReceivingContributions({
       }
       const successorId = normalizeText(session.metadata?.renewed_to);
       if (vibe64SessionStatusIsOpen(session.status) && !successorId) return session;
-      if (session.status !== "archived" || !successorId) break;
+      if (session.status === VIBE64_SESSION_STATUS.ARCHIVED && !successorId) {
+        const archivedOn = normalizeText(session.archivedAt).slice(0, 10);
+        throw connectedLinkRequired(`Its connected session ${connectedSessionLabel(session)} in ${contribution.repository} ` +
+          `was archived${archivedOn ? ` on ${archivedOn}` : ""}.`);
+      }
+      if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) break;
       const state = await readSessionRenewalState(runtime, session.sessionId);
       if (state?.status !== SESSION_RENEWAL_STATUS.COMPLETED || !state.predecessorArchivedAt ||
           !state.successor?.availableAt || state.successor.sessionId !== successorId ||
           state.commit?.successorSessionId !== successorId ||
           state.renewalId !== session.metadata.renewal_id) break;
-      const successor = await runtime.getSessionWithoutSource(successorId);
-      if (successor?.metadata?.renewed_from !== session.sessionId) break;
+      const successor = await sessionIfPresent(runtime, successorId);
+      if (!successor) throw connectedLinkRequired(`The connected session in ${contribution.repository} no longer exists.`);
+      if (successor.metadata?.renewed_from !== session.sessionId) break;
       session = successor;
     }
     throw vibe64Error(
@@ -86,6 +149,23 @@ function createReceivingContributions({
         messageCode: "vibe64_connected_receiving_session_unavailable"
       }
     );
+  }
+
+  /**
+   * The session a contribution's binding points at. A binding whose session is
+   * gone needs a person's choice, never a quiet replacement.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} contribution
+   */
+  async function linkedSession(runtime, contribution) {
+    const session = await sessionIfPresent(runtime, contributionSessionId(contribution));
+    if (session) return session;
+    if (contribution.replaces) {
+      throw connectedLinkRequired(`The replacement contribution for ${contribution.repository} was confirmed but not created.`, {
+        unfinishedReplacement: true
+      });
+    }
+    throw connectedLinkRequired(`The connected session in ${contribution.repository} no longer exists.`);
   }
 
   /**
@@ -105,11 +185,7 @@ function createReceivingContributions({
         { messageCode: "vibe64_connected_receiving_binding_changed" }
       );
     }
-    const session = await resolveConnectedSession(
-      runtime,
-      contribution,
-      await runtime.getSessionWithoutSource(contribution.id)
-    );
+    const session = await resolveConnectedSession(runtime, contribution, await linkedSession(runtime, contribution));
     return { contribution, runtime, session };
   }
 
@@ -247,92 +323,190 @@ function createReceivingContributions({
     return project.connectedContributionSource(input);
   }
 
-  async function allocateConnectedSource(input) {
+  /**
+   * A working session's contribution, admitted and checked against this
+   * project's current repository and integration target.
+   * @param {{ contribution: object }} input
+   */
+  async function admittedContribution(input) {
+    assertProjectEffectAdmission();
+    if (currentProjectRequestContext()?.learningScope) throw new TypeError("Learning cannot use working contribution sources.");
+    const contribution = parseSessionConnectedContribution(input.contribution);
+    if (!contribution) throw new TypeError("A connected source requires an exact saved binding.");
+    const source = await project.connectedContributionSource(input);
+    if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
+      throw vibe64Error(
+        "The receiving repository or integration target changed. Review the source binding.",
+        "vibe64_contribution_authority_changed",
+        { messageCode: "vibe64_connected_receiving_target_changed" }
+      );
+    }
+    return { contribution, runtime: await project.createRuntimeWithoutSource() };
+  }
+
+  /**
+   * A receiving session carries the name of the session it serves when it has
+   * none of its own; its identity means nothing to people. It follows that
+   * name on later preparations until someone renames the receiving session.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   * @param {string} [servedName]
+   */
+  async function withServedName(runtime, session, servedName) {
+    const sessionId = session?.sessionId;
+    if (!servedName || !sessionId || session.sessionName === servedName) return session;
+    try {
+      const assigned = await runtime.store.readMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA);
+      if (session.sessionName && session.sessionName !== assigned) return session;
+      const sessionName = await runtime.store.writeSessionLabel(sessionId, servedName);
+      await runtime.store.writeMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA, sessionName);
+      await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
+      return { ...session, sessionName };
+    } catch (error) {
+      vibe64SessionDebugLog("server.sessions.connected.name.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+      return session;
+    }
+  }
+
+  /**
+   * The session a contribution is linked to, for workspace preparation.
+   * Preparation never creates one: a missing or archived link is a person's choice.
+   * @param {{ contribution: object, sessionName?: string }} input
+   */
+  async function resolveConnectedSource(input) {
     return sessionResult(async () => {
-      assertProjectEffectAdmission();
-      if (currentProjectRequestContext()?.learningScope) throw new TypeError("Learning cannot allocate working contribution sources.");
-      const contribution = parseSessionConnectedContribution(input.contribution);
-      if (!contribution) throw new TypeError("Contribution allocation requires an exact saved binding.");
-      const source = await project.connectedContributionSource(input);
-      if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
+      const { contribution, runtime } = await admittedContribution(input);
+      const session = await resolveConnectedSession(runtime, contribution, await linkedSession(runtime, contribution));
+      return withServedName(runtime, publicSession(session), input.sessionName);
+    });
+  }
+
+  /**
+   * The new session of a replacement the person reviewed and confirmed, the
+   * only contribution session this project ever creates. A retry finds the
+   * session its reserved identity already made.
+   * @param {{ contribution: object, sessionName?: string }} input
+   */
+  async function createConnectedReplacement(input) {
+    return sessionResult(async () => {
+      const { contribution, runtime } = await admittedContribution(input);
+      if (!contribution.replaces) throw new TypeError("Only a confirmed replacement creates a contribution session.");
+      const original = await runtime.getSessionWithoutSource(contribution.replacesSessionId || contribution.replaces);
+      const saved = sessionConnectedContribution(original);
+      if (!saved || saved.repository !== contribution.repository || saved.integrationBranch !== contribution.integrationBranch) {
         throw vibe64Error(
-          "The receiving repository or integration target changed. Review the source binding.",
+          "The replacement's original source binding changed. Preserve both sources and review the connection.",
           "vibe64_contribution_authority_changed",
-          { messageCode: "vibe64_connected_receiving_target_changed" }
+          { messageCode: "vibe64_connected_replacement_binding_changed" }
         );
       }
-      const runtime = await project.createRuntimeWithoutSource();
-      let predecessor;
-      if (contribution.replaces) {
-        predecessor = await runtime.getSessionWithoutSource(contribution.replaces);
-        const saved = sessionConnectedContribution(predecessor);
-        if (!saved || saved.repository !== contribution.repository || saved.integrationBranch !== contribution.integrationBranch) {
-          throw vibe64Error(
-            "The replacement's original source binding changed. Preserve both sources and review the connection.",
-            "vibe64_contribution_authority_changed",
-            { messageCode: "vibe64_connected_replacement_binding_changed" }
-          );
-        }
-      }
-      /**
-       * A receiving session carries the name of the session it serves; its
-       * random identity means nothing to people. It follows that name on later
-       * preparations until someone renames the receiving session itself.
-       */
-      const named = async (allocated) => {
-        const sessionId = allocated?.sessionId;
-        if (!input.sessionName || !sessionId || allocated.sessionName === input.sessionName) return allocated;
-        try {
-          const assigned = await runtime.store.readMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA);
-          if (allocated.sessionName && allocated.sessionName !== assigned) return allocated;
-          const sessionName = await runtime.store.writeSessionLabel(sessionId, input.sessionName);
-          await runtime.store.writeMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA, sessionName);
-          await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
-          return { ...allocated, sessionName };
-        } catch (error) {
-          vibe64SessionDebugLog("server.sessions.connected.name.error", {
-            error: vibe64SessionDebugError(error),
-            sessionId: allocated.sessionId
-          });
-          return allocated;
-        }
-      };
-      let existing;
-      try {
-        existing = await runtime.getSessionWithoutSource(contribution.id);
-      } catch (error) {
-        if (error.code !== "vibe64_session_not_found") throw error;
-      }
+      const existing = await sessionIfPresent(runtime, contribution.id);
       if (existing) {
-        return named(publicSession(await resolveConnectedSession(runtime, contribution, existing)));
+        return withServedName(runtime, publicSession(await resolveConnectedSession(runtime, contribution, existing)), input.sessionName);
       }
-      if (contribution.replaces) {
-        predecessor = await resolveConnectedSession(runtime, sessionConnectedContribution(predecessor), predecessor);
-        const incoming = await repositoryReads.inspectIncomingContributions(predecessor.sessionId, { id: contribution.replaces });
-        const entry = incoming.contributions?.find(item => item.id === contribution.replaces);
-        if (incoming.ok !== true || entry?.activeHead || entry?.discardedHead !== contribution.baseCommit) {
-          throw vibe64Error(
-            "The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch.",
-            "vibe64_connected_replacement_changed",
-            { messageCode: "vibe64_connected_replacement_source_changed" }
-          );
-        }
+      const predecessor = await resolveConnectedSession(runtime, saved, original);
+      const incoming = await repositoryReads.inspectIncomingContributions(predecessor.sessionId, { id: contribution.replaces });
+      const entry = incoming.contributions?.find(item => item.id === contribution.replaces);
+      if (incoming.ok !== true || entry?.activeHead || entry?.discardedHead !== contribution.baseCommit) {
+        throw vibe64Error(
+          "The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch.",
+          "vibe64_connected_replacement_changed",
+          { messageCode: "vibe64_connected_replacement_source_changed" }
+        );
       }
-      return named(await creation.createSession({ vibe64User: trustedAssistantUser(input) }, {
+      return withServedName(runtime, await creation.createSession({ vibe64User: trustedAssistantUser(input) }, {
         sessionId: contribution.id,
         expectedCommit: contribution.baseCommit,
         connectedContribution: contribution
-      }));
+      }), input.sessionName);
+    });
+  }
+
+  /**
+   * What a person needs to choose a session here: whether the saved link still
+   * holds and, when it does not, why, and this project's free sessions.
+   * @param {{ contribution?: object, originIsContribution: boolean }} input
+   */
+  async function inspectConnectedSessions(input) {
+    return sessionResult(async () => {
+      let reason = "";
+      let unfinishedReplacement = false;
+      if (input.contribution) {
+        try {
+          await contributionSession(input);
+          return { ok: true, linked: true, reason, sessions: [], unfinishedReplacement };
+        } catch (error) {
+          if (error.code !== CONNECTED_LINK_REQUIRED) throw error;
+          ({ reason, unfinishedReplacement } = error.details);
+        }
+      }
+      const source = await project.connectedContributionSource(input);
+      const runtime = await project.createRuntimeWithoutSource();
+      const open = await runtime.listSessionSummaries({ statusGroup: "open" });
+      return {
+        ok: true,
+        linked: false,
+        reason,
+        sessions: open.filter(session => !linkRefusal(session, input.originIsContribution)).map(session => ({
+          sessionId: session.sessionId,
+          sessionName: connectedSessionLabel(session),
+          baseCommit: session.metadata.base_commit
+        })),
+        source,
+        unfinishedReplacement
+      };
+    });
+  }
+
+  /**
+   * Binds a person's chosen session to a contribution. The session's write
+   * lease makes this the one point that decides who gets it, so its freedom is
+   * checked again here rather than trusted from the list the person saw.
+   *
+   * From here the session follows its contribution: its canonical source is
+   * the contribution's base until the contribution is pushed, so a canonical
+   * commit recorded from the integration branch no longer applies.
+   * @param {{ contribution: object, originIsContribution: boolean, vibe64User?: object | null }} input
+   */
+  async function bindConnectedSession(input) {
+    return sessionResult(async () => {
+      const { contribution } = await admittedContribution(input);
+      const sessionId = contributionSessionId(contribution);
+      return terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
+        if (isDeepStrictEqual(sessionConnectedContribution(session), contribution)) return publicSession(session);
+        const refusal = linkRefusal(session, input.originIsContribution);
+        if (refusal) throw vibe64Error(`${refusal} Choose again.`, "vibe64_connected_session_not_free");
+        if (session.metadata.base_commit !== contribution.baseCommit) {
+          throw vibe64Error("That session moved to another commit. Choose again.", "vibe64_connected_session_not_free");
+        }
+        const recorded = await terminals.recordSessionGitCommandActor(sessionId, {
+          reason: "connected-contribution-session",
+          runtime,
+          vibe64User: trustedAssistantUser(input)
+        });
+        if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
+        await runtime.store.writeMetadataValue(sessionId, "canonical_commit", contribution.baseCommit);
+        await runtime.store.writeMetadataValue(sessionId, "connected_contribution", JSON.stringify(contribution));
+        const linked = await runtime.getSessionWithoutSource(sessionId);
+        await publishSessionChanged(sessionId, { operation: "updated", reason: "session-connected-linked", session: linked });
+        return publicSession(linked);
+      });
     });
   }
 
   return Object.freeze({
-    allocateConnectedSource,
+    bindConnectedSession,
     checkContributionUpdates,
+    createConnectedReplacement,
     inspectConnectedContributionSource,
+    inspectConnectedSessions,
     inspectContributionIncoming,
     inspectContributionInputs,
     inspectContributionWork,
+    resolveConnectedSource,
     saveContributionWork,
     updateContributionWork
   });

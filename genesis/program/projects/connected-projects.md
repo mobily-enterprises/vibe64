@@ -72,7 +72,7 @@ bytes reject the write. Ordinary atomic source publication preserves unrelated
 files. Symbolic links and oversized connection files are rejected. No new
 runtime queue or historical metadata repair is introduced by configuration.
 
-During workspace preparation or explicit connected-source allocation, Sessions supplies freshly authorized
+During workspace preparation or explicit connected-source preparation, Sessions supplies freshly authorized
 receiving sessions to Project's `prepareConnectedDevelopmentInputs`. Under the
 existing origin admission and project source lock, Project checks the current
 connection list against retained contribution bindings and ready receiving
@@ -95,7 +95,7 @@ the workspace runner's preflight facility. It revalidates access before each
 command and when accepting cached preparation. It has no HTTP route or
 Colleague tool projection. Project combines the ordinary and connected recipes
 with the exact projected source selection to form one preparation identity;
-Sessions supplies the existing authorized allocation operation under the
+Sessions supplies the existing authorized preparation operation under the
 runner's originating agent-write lease.
 
 The shared action boundary admits owner actions for the explicitly opened local

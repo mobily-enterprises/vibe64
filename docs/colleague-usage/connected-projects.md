@@ -32,7 +32,8 @@ session unless **Allow multiple sessions with this shared database** is enabled,
 including connected contributions and libraries with no database. With project
 scope already selected, enable the override and choose **Save database choice**
 without closing work; all sessions share data and the ordinary three-session cap
-still applies. Then use workspace preparation **Retry**. Disabling the override
+still applies. Then start the session you want to connect and use workspace
+preparation **Retry**. Disabling the override
 preserves existing sessions but blocks additional creation. Preparation never
 archives existing work or changes this preference for you.
 
@@ -133,8 +134,10 @@ executable or library to the app, and verify the app uses that build. It need
 not appear in `node_modules`. A cloned repository alone does not establish that
 Preview or tests use its changes.
 Use the existing **Prepare workspace** action (or its **Retry** action after a
-failure). When Stack declares `Connected development`, preparation creates or
-reuses the task's authorized contribution sources, writes the declared source
+failure). When Stack declares `Connected development`, preparation uses the
+sessions you linked for this task, stopping for you to
+[choose one](connected-contributions.md#choose-a-connected-session) where a project
+has none. It then writes the declared source
 map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
 commands in order. Success requires those commands to succeed. If a non-custom
 connection exists without a Verify command, preparation is blocked with
@@ -170,7 +173,10 @@ declares and verifies its own commands.
 For API clients, the explicit **Prepare connected sources** operation is
 `POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare`. It uses the
 session's configured list and requires access to each registered receiving
-project plus GitHub write access. The returned `prepared` entries identify the
+project plus GitHub write access. When a project has no usable link it fails with
+`vibe64_connected_link_required`: `GET .../connected/choices` lists the projects
+that need a session and their free sessions, and `POST .../connected/link` saves
+one choice as `{ repository, connectedSessionId }`. The returned `prepared` entries identify the
 receiving project/session and report source readiness and workspace setup.
 Once every receiving source is ready, the operation writes the Stack's
 `Sources file` and returns `development.status: "inputs-prepared"`. The JSON
@@ -192,8 +198,8 @@ An internal readiness check can recheck receiving access and compare the map
 with the task's saved bindings without changing files. The workspace runner uses that check before running
 commands and before accepting cached preparation. `inputs-prepared` still does
 not mean the Stack's development commands have run.
-After failure or a lost response, retry the same originating session: its saved
-reservation prevents duplicate source creation. A failure retains the earlier
+After failure or a lost response, retry the same originating session; it creates
+no source. A failure retains the earlier
 `prepared` entries and identifies the receiving repository that failed. If an
 entry reports `sourceReady: false`, open that receiving session and use its
 source recovery controls before retrying; preparation does not replace the

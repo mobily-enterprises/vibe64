@@ -17,11 +17,19 @@ database steps and connected-source Prepare/Verify commands. It is unavailable
 while another assistant or repository operation is active, or for archived sessions.
 
 A new session with connected projects starts preparation automatically. Its
-first step, **Preparing connected projects**, creates or reuses each connected
-project's contribution session at the same time and lists the ones still in
-progress, then **Linking connected sources** and **Checking connected sources**
-while it rechecks access to each one. If one fails, the notice names that repository; earlier prepared
-sources are kept and **Retry** reuses them instead of copying them again.
+first step, **Preparing connected projects**, checks each connected project's
+linked session at the same time and lists the ones still in progress, for example
+**(1 of 3 ready; vibe64 failed)**, then **Linking connected sources** and **Checking
+connected sources** while it rechecks access to each one. If one fails, the notice
+names the project and the reason, and the output keeps them; earlier prepared
+sources are kept and **Retry** reuses them instead of copying them again. Each
+retry starts its own lines in the output, so an earlier failure is never shown as
+its progress.
+
+Preparation never creates a session in a connected project. When a project has no
+linked session yet, or its session was archived, it stops at **Workspace setup
+needs a choice**, naming that project, and you pick its session in the notice. See
+[Choose a connected session](connected-contributions.md#choose-a-connected-session).
 
 A successful result records the previous recipe execution. It does not prove
 that custom compiled outputs still match later source or script edits. Rerun

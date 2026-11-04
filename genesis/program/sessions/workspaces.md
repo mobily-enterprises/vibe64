@@ -26,6 +26,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
 - `packages/vibe64-sessions/src/server/sessionStartupRecovery.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
+- `packages/vibe64-sessions/src/server/connectedSessionChoices.js`
 - `packages/vibe64-sessions/src/server/receivingContributions.js`
 - `packages/vibe64-sessions/src/server/connectedContributionActions.js`
 - `packages/vibe64-sessions/src/server/sessionResults.js`
@@ -41,6 +42,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/sessionRenewalAccess.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalRules.js`
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
+- `src/components/studio/vibe64-session/Vibe64ConnectedSessionPicker.vue`
+- `src/composables/useVibe64ConnectedSessionChoices.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionRuntimeRenewal.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
@@ -196,7 +199,7 @@ repository/target or mixed branch/PR authority refuses rather than falling back
 to main. Renewal retains this binding. Preparation creates no remote branch.
 Client-supplied creation arguments cannot grant contribution authority.
 
-Explicit connected preparation allocates these sessions through the receiving
+Explicit connected preparation resolves these sessions through the receiving
 owner. Contribution publication and the retained-revision Main Save gate reuse
 the original Git owner. Ordinary workspace preparation calls the same connected
 preparation owner, then Project materializes its authorized per-session source
@@ -204,35 +207,48 @@ selection for the declared preparation recipe. Connected-first Save publishes
 those owned contributions sequentially and leaves the main push to a separate
 action.
 
-Connected projects are prepared concurrently: each target resolves its receiving
-source, reserves its binding and allocates its session independently. Binding
-reservations are written one at a time, each containing every binding reserved
-so far. Results are still evaluated in target order, so the first failing
-repository is reported and earlier prepared sources are retained. The receiving
-source reads only its integration branch from GitHub, not the full branch list.
+Connected projects are prepared concurrently: each target resolves its linked
+session independently. Results are still evaluated in target order, so the first
+failing repository is reported and earlier prepared sources are retained. The
+receiving source reads only its integration branch from GitHub, not the full
+branch list.
 
-Allocation also carries the originating session's display name (its label, or
-its identity). The receiving session takes it as its label and records it as
-`connected_session_name`; later allocations update the label only while it still
-equals that recorded value, so a person's own rename is kept.
+Preparation never creates or selects a session. A target with no binding, or
+whose binding's session is archived without a renewal, unfinished or gone,
+returns `vibe64_connected_link_required`; every such project is named together
+and workspace setup records the `ambiguous` state with `connectedChoiceRequired`.
+`connected.choices` lists those projects with each one's reason and free sessions,
+and `connected.link` saves one person's choice; both are public, human-only actions.
+The receiving project owns which sessions are free: active, source ready, unbound
+and on no branch or pull request of their own. A link reserves a fresh contribution
+UUID, whose optional `sessionId` names the chosen session and whose `baseCommit` is
+that session's own `base_commit`. A binding with no `sessionId` means the session
+with the contribution's own ID, as replacements still create. The reservation is
+written first, then the receiving session's write lease re-checks its freedom and
+base, resets `canonical_commit` to that base and writes `connected_contribution`,
+so concurrent links cannot share a session. A refusal restores the earlier
+bindings; a crash leaves a binding the next Prepare reports as not finished.
 
-Every new connected binding reserves a fresh contribution UUID. Its receiving
-session starts without the origin's connected-source or submission metadata;
-receiving allocation does not recursively prepare more connections. Explicitly
-preparing a receiver creates its own fresh child contributions. Repository-level
-cycles therefore create distinct descendants, never a requirement edge back to
-an existing ancestor. Retry reuses the reserved child; replacement creates a new
-child and renewal preserves the existing logical contribution. No supported
-operation attaches an arbitrary existing contribution as a dependency. Any
-future operation allowing that attachment must check contribution cycles before
-persisting the edge; renewal-chain cycle checks protect a different lifecycle.
+A linked session's work stays as it was, and it then follows its contribution:
+Save publishes to the incoming branch, and renewal preserves the logical
+contribution. Linking prepares no further connections. Save waits for connected
+sessions, so links must never form a cycle: nothing links to an unbound session,
+so only a contribution can close one, and a contribution may therefore link only
+a session that uses no connected sessions of its own. Replacement creates a new
+child on the person's confirmation, the only way a contribution session is
+created; renewal-chain cycle checks protect a different lifecycle.
+
+A replacement session takes the originating session's display name (its label, or
+its identity) and records it as `connected_session_name`; later preparations update
+the label only while it still equals that recorded value, so a person's own rename
+is kept. A linked session keeps its own name.
 
 Archiving one session remains local to its existing lifecycle owner. Connected
 bindings and submitted revisions remain in the full archive metadata, while
 commits, dirty patches and untracked files use the existing source-recovery
 artifacts. Neither child checkouts nor incoming refs are removed by originating
 session archival. A receiving contribution archived without a renewal successor
-is unavailable for connected preparation and Save; it is not silently replaced.
+stops connected preparation for a person's choice; it is not silently replaced.
 Source recovery is explicit through the existing archive facilities.
 Sources: `packages/vibe64-core/src/server/projectRepository.js`, the original
 Sessions/Runtime/source owners above, and focused contribution cases in
@@ -860,13 +876,16 @@ closing rechecks the pin under the same session-mutation boundary before teardow
 The originating session's `connected.replacement.inspect` action reauthorizes
 its configured receiving repository and reads the exact discarded contribution
 through Incoming's existing Git owner. `connected.replace` repeats that review
-under ordinary originating source-write admission, reserves a new binding before
-allocation, then calls ordinary connected preparation. Retry reuses that binding.
+under ordinary originating source-write admission, reserves a new binding, creates
+its session through `connected.replacement.create`, then calls ordinary connected
+preparation. Retry reuses that binding, and a reservation whose session was never
+created offers its rebuilt review as **Finish replacement** in the session picker.
 Old receiving sessions and `connected_submissions` are preserved. The new binding's
-optional `replaces` UUID identifies its predecessor; its base is the reviewed
-published discarded commit, never the predecessor's dirty worktree. Allocation
-checks the predecessor's saved repository/target and exact discarded ref before
-creating source. Existing completed allocation remains retryable independently.
+optional `replaces` UUID identifies its predecessor, and `replacesSessionId` the
+predecessor's session when it was linked; its base is the reviewed published
+discarded commit, never the predecessor's dirty worktree. Creation checks the
+predecessor's saved repository/target and exact discarded ref before creating
+source, and finds the session it already made on a retry.
 
 Core maps initial source preparation to that reserved discarded branch. The
 existing clone/frozen-commit check rejects missing or unrelated history. A renewal

@@ -54,6 +54,10 @@ function useVibe64WorkspaceSetupActivity(props, {
   const workspaceSetupNeedsAttention = computed(() => (
     ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
   ));
+  // Preparation is waiting for a person to choose connected sessions.
+  const workspaceSetupConnectedChoice = computed(() => (
+    workspaceSetupStatus.value === "ambiguous" && workspaceSetup.value?.connectedChoiceRequired === true
+  ));
   const workspaceSetupDiagnostic = computed(() => (
     workspaceSetupRetryError.value || text(workspaceSetup.value?.diagnostic)
   ));
@@ -120,6 +124,7 @@ function useVibe64WorkspaceSetupActivity(props, {
     workspaceSetup,
     workspaceSetupActionVisible,
     workspaceSetupActivityKey,
+    workspaceSetupConnectedChoice,
     workspaceSetupCurrentLabel,
     workspaceSetupDiagnostic,
     workspaceSetupDismissed,

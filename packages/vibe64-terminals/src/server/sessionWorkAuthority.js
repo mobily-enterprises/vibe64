@@ -406,7 +406,7 @@ async function assertConnectedWorkSnapshotsUnchanged(runCommand, snapshots, opti
         throw saveError(
           `Connected work in ${contribution.repository} changed during Save. Inspect and save it before retrying Main Save.`,
           "vibe64_connected_save_required",
-          { repository: contribution.repository, sessionId: contribution.id }
+          { repository: contribution.repository, sessionId: snapshot.sessionId }
         );
       }
     } catch (error) {
@@ -414,7 +414,7 @@ async function assertConnectedWorkSnapshotsUnchanged(runCommand, snapshots, opti
       throw saveError(
         `Connected work in ${contribution.repository} could not be rechecked. Restore source access and retry Save.`,
         "vibe64_connected_source_recheck_failed",
-        { repository: contribution.repository, sessionId: contribution.id }
+        { repository: contribution.repository, sessionId: snapshot.sessionId }
       );
     }
   }

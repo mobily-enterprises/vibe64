@@ -179,7 +179,7 @@
           Prepare workspace
         </v-btn>
         <Vibe64TemporaryAiFixAction
-          v-else
+          v-else-if="!workspaceSetupConnectedChoice"
           :disabled="workspaceSetupAskDisabled"
           :pending="workspaceSetupFixSending"
           :title="assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage"
@@ -187,6 +187,12 @@
         />
       </template>
     </Vibe64TemporaryActionTerminal>
+    <Vibe64ConnectedSessionPicker
+      v-if="workspaceSetupConnectedChoice && !workspaceSetupDismissed"
+      :project-slug="projectSlug" :session-id="sessionId" :revision="props.session.workspaceSetup.updatedAt"
+      :disabled="workspaceSetupRetryDisabled"
+      @resolved="retryWorkspaceSetup"
+    />
     <WorkspaceSetupToolRows
       v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed"
       :active="workspaceSetupStatus === 'failed'"
@@ -210,6 +216,7 @@ import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/Workspace
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue";
+import Vibe64ConnectedSessionPicker from "@/components/studio/vibe64-session/Vibe64ConnectedSessionPicker.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
 // Session activity above the chat: connection recovery, the recovery
@@ -232,7 +239,8 @@ const {
   saveWorkOutput, saveWorkRetryable, saveWorkSending, saveWorkStage, saveWorkStandInIdentity, saveWorkStatus,
   sessionId, sessionPullRequest, sourceOperationsSuspended, temporaryAiWorkspace, testApproval,
   updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey, workspaceSetupAskDisabled,
-  workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError, workspaceSetupFixSending,
+  workspaceSetupConnectedChoice, workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
+  workspaceSetupFixSending,
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning, workspaceSetupStatus, workspaceSetupTitle
 } = view;
