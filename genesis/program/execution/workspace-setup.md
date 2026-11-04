@@ -35,6 +35,7 @@ contract transported by the project's Stack.
 - `src/composables/useVibe64WorkspaceSetupActivity.js`
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64TemporaryAi.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/workspaceSetup.js`
 
 ## Public contract
 
@@ -187,25 +188,22 @@ until dismissed. The browser remembers that dismissal across reloads for the
 exact preparation attempt without changing its result; a new attempt is visible
 again. A successful preparation left compact disappears when it finishes; a
 failure remains visible with direct Retry and Fix it with AI actions until
-dismissed, without requiring the person to expand terminal details. Fix it
-opens a workspace-writing Temporary AI task with the current diagnostic and
-bounded transcript, selects and focuses that separate chat, and presents a
-concise visible request instead of the complete operational prompt. A compact
-heading shows repair status while the AI works; the result appears afterward. Every
-product surface that offers this ephemeral repair path uses the same Fix it with
-AI control and handoff presentation.
+dismissed, without requiring the person to expand terminal details. Fix it with
+AI starts the `workspace-setup` [AI task](../conversation/ai-tasks.md), which
+reads the current diagnostic and bounded transcript on the server. Retry is
+hidden while an AI task is open. While Update is failed the task refuses to
+start: Update prepares the workspace again itself, so its fix comes first.
 The shared action banner fits its containing pane, wraps failure messages, and
 keeps Retry, details, Dismiss and Fix it with AI independently usable. Narrow
 panes give actions their own wrapping row; the repair control can wrap its label
 when magnification leaves less room than its usual width.
 
-After an accepted repair turn completes or fails, Vibe64—not the assistant—runs
-the deterministic preparation retry and records its result. This includes a
-provider timeout after edits may already have landed; an explicit user stop is
-not treated as permission to retry. A repair that changed nothing simply
-returns to the same authoritative setup failure. If the assistant needs human
-input, that question remains in the temporary conversation instead of being
-mistaken for a completed repair.
+When the repair turn completes, the task's check—not the assistant—runs the
+deterministic preparation retry on the server as a person's Prepare would, waits
+for it and reads its result. Success ends the task Done; another failure returns
+to the same conversation, and a choice only a person can make stops at
+`needs_you`. The retry is refused to everyone else while the task changes the
+repository.
 
 
 Successful setup may record the resource provider's opaque identity in its existing

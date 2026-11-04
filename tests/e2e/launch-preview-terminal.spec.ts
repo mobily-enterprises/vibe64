@@ -1002,8 +1002,9 @@ for (const width of [390, 1440]) {
       width
     });
     await mockLaunchTerminalSocket(page);
-    const temporaryCreates: Record<string, unknown>[] = [];
+    const aiTaskStarts: Record<string, unknown>[] = [];
     const launchSession = await mockLaunchSession(page, {
+      aiTaskStarts,
       previewIdentity: previewIdentityCapability(),
       previewIdentityExchange: (selection) => {
         if (selection.selector?.value === "missing@example.com") {
@@ -1024,8 +1025,7 @@ for (const width of [390, 1440]) {
           },
           ok: true
         };
-      },
-      temporaryCreates
+      }
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1062,42 +1062,20 @@ for (const width of [390, 1440]) {
       })
       .click();
 
-    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    await expect(chat).toBeVisible();
-    if (width === 390) {
-      await expect(project).toBeHidden();
-      await expect.poll(async () => Math.round((await chat.boundingBox())?.width || 0)).toBe(width);
-    } else {
-      await expect(project).toBeVisible();
-    }
-    await expect(workspace).toBeVisible();
-    await expect(workspace.getByRole("button", {
-      name: "Fix preview identity",
-      exact: true
-    })).toBeVisible();
-    await expect(workspace.getByRole("button", {
-      name: "Read/write: temporary AI may edit this session",
-      exact: true
-    })).toHaveCount(0);
-
-    const expectedRecoveryPrompt = [
-      "The managed preview could not sign in as `missing` (email: `missing@example.com`):",
-      "User not found.",
-      "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
-    ].join("\n\n");
-    await expect.poll(() => temporaryCreates).toHaveLength(1);
-    expect(temporaryCreates[0]).not.toHaveProperty("policy");
-    expect(temporaryCreates[0].presentation).toEqual(expect.objectContaining({
-      title: "Fix preview identity",
-      recoveryContext: expectedRecoveryPrompt
-    }));
+    // The failed identity is all the sign-in fix needs from this page; ai-task-kinds.spec.ts runs the task.
+    await expect.poll(() => aiTaskStarts).toEqual([{
+      kind: "preview-identity",
+      input: {
+        error: "User not found.",
+        identity: expect.objectContaining({ name: "missing", type: "email", value: "missing@example.com" })
+      }
+    }]);
     await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.screenshot({
       path: testInfo.outputPath(`preview-identity-recovery-${width}.png`),
       animations: "disabled"
     });
 
-    await page.getByRole("button", { name: chatToggle, exact: true }).click();
     await page.getByRole("button", {
       name: "Preview identity failed: User not found."
     }).click();
@@ -4452,6 +4430,7 @@ async function mockLaunchSession(page: Page, {
   sessionListDelayMs = 0,
   sharedDevelopmentDatabase = false,
   temporaryCreates = null,
+  aiTaskStarts = null,
   realChat = conversationLog.length > 0
 }: {
   agentTerminalControlOutcomes?: Array<"failure" | "success">;
@@ -4479,6 +4458,8 @@ async function mockLaunchSession(page: Page, {
   sessionListDelayMs?: number;
   sharedDevelopmentDatabase?: boolean;
   temporaryCreates?: Record<string, unknown>[] | null;
+  // AI task starts; each is refused, so the page stays where it was.
+  aiTaskStarts?: Record<string, unknown>[] | null;
   // Serve the chat from the real conversation owner (needed to show or send messages).
   realChat?: boolean;
 } = {}) {
@@ -4702,6 +4683,11 @@ async function mockLaunchSession(page: Page, {
     }
     if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
       await fulfillJson(route, assistantAccess);
+      return;
+    }
+    if (aiTaskStarts && method === "POST" && url.pathname.endsWith("/ai-tasks")) {
+      aiTaskStarts.push(request.postDataJSON() as Record<string, unknown>);
+      await fulfillJson(route, { ok: false, error: "This fixture runs no AI tasks." }, { status: 409 });
       return;
     }
     if (temporaryCreates && method === "POST" && url.pathname.endsWith("/temporary-conversations")) {

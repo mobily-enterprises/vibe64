@@ -56,9 +56,10 @@ function useAiTaskHost({
   /**
    * @param {string} kind
    * @param {HTMLElement} opener
+   * @param {object} input what only the page knows about the problem, such as a failed sign-in
    */
-  async function start(kind, opener) {
-    const task = await tasks.start(kind, {});
+  async function start(kind, opener, input) {
+    const task = await tasks.start(kind, input);
     if (task) await nextTick();
     if (task) taskWindow.show(opener);
     else toast.value = { text: tasks.error.value, action: false };

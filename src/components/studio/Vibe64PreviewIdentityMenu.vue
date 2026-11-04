@@ -59,11 +59,11 @@
         v-if="previewIdentityFixAvailable"
         class="vibe64-launch-controls__identity-recovery"
       >
-        <Vibe64TemporaryAiFixAction
-          :disabled="previewIdentityFixSending"
-          :pending="previewIdentityFixSending"
-          title="Open Temporary AI to resolve preview identity"
-          @click="requestCodexPreviewIdentityFix"
+        <Vibe64AiTaskButton
+          :allowed="previewIdentityFixAllowed"
+          :input="{ error: previewIdentityError, identity: previewIdentityFailedSelection }"
+          kind="preview-identity"
+          title="Fix preview sign-in with the AI"
         />
       </div>
     </v-card>
@@ -71,20 +71,21 @@
 </template>
 
 <script setup>
-// The Preview's signed-in application identity, and the Temporary AI repair
-// offered when selecting a configured identity fails.
+// The Preview's signed-in application identity, and the AI fix offered when
+// selecting a configured identity fails.
 import { computed, ref, watch } from "vue";
 import {
   mdiAccountCircleOutline,
   mdiAccountOffOutline,
   mdiAccountSwitchOutline
 } from "@mdi/js";
-import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
+import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
 
 const props = defineProps({
-  fixPreviewIdentityWithTemporaryAi: {
-    default: null,
-    type: Function
+  // Whether this person may hand a failed sign-in to the AI.
+  previewIdentityFixAllowed: {
+    required: true,
+    type: Boolean
   },
   surface: {
     required: true,
@@ -108,12 +109,7 @@ const {
 } = props.surface;
 
 const previewIdentityFailedSelection = ref(null);
-const previewIdentityFixSending = ref(false);
-const previewIdentityFixAvailable = computed(() => Boolean(
-  previewIdentityError.value &&
-  previewIdentityFailedSelection.value &&
-  typeof props.fixPreviewIdentityWithTemporaryAi === "function"
-));
+const previewIdentityFixAvailable = computed(() => Boolean(previewIdentityError.value && previewIdentityFailedSelection.value));
 
 async function selectPreviewIdentityFromMenu(identity = {}) {
   previewIdentityFailedSelection.value = identity;
@@ -122,21 +118,6 @@ async function selectPreviewIdentityFromMenu(identity = {}) {
     previewIdentityFailedSelection.value = null;
   }
   return selected;
-}
-
-async function requestCodexPreviewIdentityFix() {
-  if (!previewIdentityFixAvailable.value || previewIdentityFixSending.value) {
-    return false;
-  }
-  previewIdentityFixSending.value = true;
-  try {
-    return await props.fixPreviewIdentityWithTemporaryAi({
-      error: previewIdentityError.value,
-      identity: previewIdentityFailedSelection.value
-    });
-  } finally {
-    previewIdentityFixSending.value = false;
-  }
 }
 
 watch(previewIdentityError, (error) => {

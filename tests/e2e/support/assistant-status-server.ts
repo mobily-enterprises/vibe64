@@ -147,14 +147,28 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const aiTaskWorld = {
     updates: [] as Record<string, unknown>[],
     saves: [] as Record<string, unknown>[],
+    setups: [] as Record<string, unknown>[],
+    signIns: [] as Record<string, unknown>[],
+    // The session's workspace preparation, as a session read carries it.
+    workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
     update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     save: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
+    setup: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
+    signIn: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     boot() {
-      aiTaskService = createAiTasksService({ logger: silentLogger, project: temporary!.project,
+      const runtime = async () => {
+        const real = await temporary!.project.createRuntimeWithoutSource();
+        return { ...real, getSessionWithoutSource: async (id: string) => ({
+          ...await real.getSessionWithoutSource(id), workspaceSetup: aiTaskWorld.workspaceSetup }) };
+      };
+      aiTaskService = createAiTasksService({ logger: silentLogger, project: { createRuntime: runtime, createRuntimeWithoutSource: runtime },
         // A scenario moves a task from outside any request, so nothing names the project for it.
         publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, { projectSlug: WORKSPACE_SLUG, ...event }),
-        terminals: temporary!.terminals,
+        terminals: { ...temporary!.terminals, verifyPreviewIdentity: (_sessionId, input) => {
+          aiTaskWorld.signIns.push(input);
+          return aiTaskWorld.signIn(input);
+        } },
         sessions: {
           updateSessionWork: (_sessionId, input) => {
             aiTaskWorld.updates.push(input);
@@ -164,9 +178,15 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
             aiTaskWorld.saves.push(input);
             return aiTaskWorld.save(input);
           },
-          inspectSessionWork: () => aiTaskWorld.inspect()
+          inspectSessionWork: () => aiTaskWorld.inspect(),
+          retryWorkspaceSetup: (_sessionId, input) => {
+            aiTaskWorld.setups.push(input);
+            return aiTaskWorld.setup(input);
+          }
         } });
     },
+    // What a person's own Fix it with AI sends, for a kind whose notice this fixture doesn't draw.
+    start: (kind: string, input: Record<string, unknown>) => aiTaskService.start(session.sessionId, { kind, input, vibe64User: owner }),
     // A new server over the same records and the same AI, as a restart leaves them.
     async restart() {
       aiTaskService.closeRunner();

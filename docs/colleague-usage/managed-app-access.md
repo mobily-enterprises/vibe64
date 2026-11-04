@@ -25,6 +25,12 @@ after the exchange succeeds; the selected identity name alone is not proof of
 access. If a protected page still returns to login, ask the coding agent to inspect
 the exchange and subsequent application requests without exposing cookie values.
 
+When the application refuses an identity, the identity menu shows its error with
+**Fix it with AI**. It opens the [AI task window](ai-tasks.md): the AI makes the
+app's own development seed create that account, then Vibe64 signs in as it on the
+server. The fix is **Done** once the app accepts the identity; choose it again in
+the menu to sign Preview in.
+
 The configuration is part of the selected session's source. Use the ordinary
 Save workflow when it should become saved project work. Source Save, application
 account creation and browser sign-in have distinct effects. If the application

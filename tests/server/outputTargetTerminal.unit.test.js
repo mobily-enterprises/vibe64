@@ -64,7 +64,7 @@ process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);
 
-test("preview status, open, and identity selection reject frozen sessions before project access", async (t) => {
+test("preview status, open, identity selection and its check reject frozen sessions before project access", async (t) => {
   let projectReads = 0;
   const frozen = {
     code: "vibe64_session_renewal_quiesced",
@@ -91,12 +91,14 @@ test("preview status, open, and identity selection reject frozen sessions before
   const identity = await controller.selectPreviewIdentity("session-frozen", {
     identity: "guest"
   });
+  const verified = await controller.verifyPreviewIdentity("session-frozen", { identityName: "developer" });
 
   assert.deepEqual(status, frozen);
   assert.deepEqual(start, frozen);
   assert.deepEqual(opened, frozen);
   assert.equal(identity.ok, false);
   assert.equal(identity.code, frozen.code);
+  assert.deepEqual([verified.ok, verified.code], [false, frozen.code]);
   assert.equal(projectReads, 0);
 });
 

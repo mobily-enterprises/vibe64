@@ -45,6 +45,9 @@ Vibe64 does not automatically rebuild custom connections.
 An actual failed command or failure to start preparation still displays an error
 and its diagnostic. Use the available retry or **Fix it with AI** action to deal
 with that failure; do not assume a required preparation step has already failed.
+**Fix it with AI** opens the [AI task window](ai-tasks.md): the AI repairs the
+workspace, then Vibe64 runs preparation itself and the fix is **Done** only when
+it succeeds. A failure goes back to the same conversation.
 
 ## Retrying a failed setup
 

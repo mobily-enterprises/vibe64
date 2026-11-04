@@ -1354,50 +1354,6 @@ test.describe("direct chat", () => {
     });
   }
 
-  for (const recovery of [
-    {
-      diagnostic: "Dependency installation exited with code 1.",
-      expectedPrompt: [
-        "Workspace preparation needs attention.",
-        "Diagnostic:\nDependency installation exited with code 1.",
-        "Diagnose and repair the current workspace while preserving its existing work.",
-        "When your turn finishes, Vibe64 will automatically rerun its deterministic workspace preparation. Do not merely tell the user to retry.",
-        "If the repair needs information only the user can provide, ask for it in this temporary conversation."
-      ].join("\n\n"),
-      status: "failed"
-    },
-    {
-      diagnostic: "Two Stack components declare different setup recipes.",
-      expectedPrompt: [
-        "Workspace preparation needs attention.",
-        "Diagnostic:\nTwo Stack components declare different setup recipes.",
-        "Diagnose and repair the current workspace while preserving its existing work.",
-        "When your turn finishes, Vibe64 will automatically rerun its deterministic workspace preparation. Do not merely tell the user to retry.",
-        "If the repair needs information only the user can provide, ask for it in this temporary conversation."
-      ].join("\n\n"),
-      status: "ambiguous"
-    }
-  ]) {
-    temporaryTest(`routes ${recovery.status} workspace preparation through Temporary AI`, async ({ page, hintRealtime }) => {
-      await mockDirectChat(page, {
-        temporaryOwner: true,
-        workspaceSetup: {
-          diagnostic: recovery.diagnostic,
-          status: recovery.status,
-          updatedAt: "2026-08-23T12:00:00.000Z"
-        }
-      });
-
-      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
-
-      await expectTemporaryRecovery(page, hintRealtime, {
-        expectedPrompt: recovery.expectedPrompt,
-        promptLabel: "Fix workspace preparation"
-      });
-    });
-  }
-
   for (const width of [390, 1600]) {
     hintTest(`renders numbered question Markdown at ${width}px`, async ({ page, hintRealtime }, testInfo) => {
       await page.setViewportSize({ height: 900, width });
@@ -1654,7 +1610,6 @@ async function mockDirectChat(page: Page, {
   onSave = () => undefined,
   sessionMetadata = {},
   temporaryOwner = false,
-  workspaceSetup = null,
   workState = {
     operation: null,
     unsaved: true,
@@ -1670,7 +1625,6 @@ async function mockDirectChat(page: Page, {
   sessionMetadata?: Record<string, unknown>;
   // True in a temporaryTest, whose conversation owner serves Temporary AI.
   temporaryOwner?: boolean;
-  workspaceSetup?: Record<string, unknown> | null;
   workState?: Record<string, unknown>;
 } = {}) {
   await mockProjectGateReady(page);
@@ -1678,8 +1632,7 @@ async function mockDirectChat(page: Page, {
     agentActive,
     agentTurn,
     includeWorktreePaths,
-    metadata: sessionMetadata,
-    workspaceSetup
+    metadata: sessionMetadata
   });
   const sessions = [
     session,
@@ -1687,8 +1640,7 @@ async function mockDirectChat(page: Page, {
       agentActive: false,
       includeWorktreePaths,
       sessionId,
-      sessionName: index === 0 ? "Second session" : `Session ${index + 2}`,
-      workspaceSetup
+      sessionName: index === 0 ? "Second session" : `Session ${index + 2}`
     }))
   ];
   let selectedSessionId = SESSION_ID;
@@ -1852,8 +1804,7 @@ function directSession({
   includeWorktreePaths = false,
   metadata = {},
   sessionId = SESSION_ID,
-  sessionName = "Direct chat",
-  workspaceSetup = null
+  sessionName = "Direct chat"
 }: {
   agentActive?: boolean;
   agentTurn?: Record<string, unknown> | null;
@@ -1861,7 +1812,6 @@ function directSession({
   metadata?: Record<string, unknown>;
   sessionId?: string;
   sessionName?: string;
-  workspaceSetup?: Record<string, unknown> | null;
 } = {}) {
   const createdAt = "2026-08-14T00:00:00.000Z";
   const sessionRoot = sessionRuntimeRoot(sessionId);
@@ -1914,45 +1864,12 @@ function directSession({
     stateRoot: `${sessionRoot}/state`,
     status: "active",
     targetRoot: "/workspace/example-target-app",
-    updatedAt: createdAt,
-    ...(workspaceSetup ? { workspaceSetup } : {})
+    updatedAt: createdAt
   };
 }
 
 function sessionIdFromApiPath(pathname: string) {
   return decodeURIComponent(pathname.match(/\/sessions\/([^/]+)/u)?.[1] || "");
-}
-
-// The repair reaches Temporary AI's conversation owner, never Main chat.
-async function expectTemporaryRecovery(page: Page, realtime: Awaited<ReturnType<typeof assistantStatusServer>>, {
-  expectedPrompt,
-  promptLabel
-}: {
-  expectedPrompt: string;
-  promptLabel: string;
-}) {
-  const captured = realtime.temporary!.captured;
-  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-  await expect(workspace).toBeVisible();
-  await expect.poll(() => captured.temporaryCreates).toHaveLength(1);
-  expect(captured.temporaryCreates[0]).not.toHaveProperty("policy");
-  await expect.poll(() => captured.temporaryTurns).toHaveLength(1);
-  expect(captured.temporaryTurns[0]).toEqual(expect.objectContaining({
-    message: expectedPrompt,
-    promptLabel
-  }));
-  await expect(workspace.getByText("Temporary recovery complete.", { exact: true })).toBeVisible();
-  await expect(workspace.getByRole("button", {
-    name: promptLabel,
-    exact: true
-  })).toBeVisible();
-  await expect(workspace.getByRole("button", {
-    name: "Read/write: temporary AI may edit this session",
-    exact: true
-  })).toHaveCount(0);
-  expect(captured.temporaryCreates).toHaveLength(1);
-  expect(captured.temporaryTurns).toHaveLength(1);
-  expect(realtime.state.messages).toHaveLength(0);
 }
 
 function requestBodyWithoutOrigin(request: Request) {

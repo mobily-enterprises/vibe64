@@ -7,7 +7,11 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64Result } from "./terminalShared.js";
 import { inspectVibe64OutputsForContext, normalizedRuntimeRequirements } from "./vibe64OutputTargets.js";
 import { listOutputResults } from "./outputResults.js";
-import { previewAuthForLaunchTerminal, previewIdentitySelection } from "./launchPreviewAuth.js";
+import {
+  previewAuthForLaunchTerminal,
+  previewIdentityCommandRunnerForLaunchTerminal,
+  previewIdentitySelection
+} from "./launchPreviewAuth.js";
 import { outputTargetFromMetadata, previewStopState } from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 import { outputStatusResponseFromPreviewStatus } from "./launchPreviewStatus.js";
@@ -29,7 +33,8 @@ import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContex
 function createOutputTargetLaunchStatus({
   state,
   launchCoordination,
-  project
+  project,
+  runCommand
 }) {
   /**
    * The launch status of the session's outputs; launchStatus reads it under
@@ -120,6 +125,50 @@ function createOutputTargetLaunchStatus({
   }
 
   /**
+   * Runs the application's identity command for a configured identity, as the preview's sign-in does, and
+   * says whether the application accepted it. An AI task's check uses it, so no browser takes part.
+   * @param {string} sessionId
+   * @param {{ identityName: string }} input
+   */
+  async function verifyPreviewIdentity(sessionId, { identityName }) {
+    return vibe64Result(async () => {
+      const status = await launchStatus(sessionId);
+      if (status?.ok === false) {
+        throw vibe64Error(status.error || "Preview identity is unavailable.", status.code || "vibe64_preview_identity_unavailable");
+      }
+      if (!["ready", "stale"].includes(String(status.preview?.state || ""))) {
+        throw vibe64Error(
+          status.preview?.message || "Run the preview before selecting an identity.",
+          "vibe64_preview_identity_preview_not_ready"
+        );
+      }
+      const runner = previewIdentityCommandRunnerForLaunchTerminal({
+        context: await readLaunchContext(project, sessionId),
+        runCommand,
+        targetHref: status.preview.targetHref,
+        terminal: status.activeTerminal || null
+      });
+      if (!runner) {
+        throw vibe64Error(
+          "This preview does not support application identity switching.",
+          "vibe64_preview_application_identity_unsupported"
+        );
+      }
+      const identity = previewIdentitySelection({ identityName, mode: "identity" }, {
+        identities: status.previewIdentity?.identities || []
+      });
+      const result = await runner(identity.selection);
+      if (result?.ok !== true) {
+        throw vibe64Error(
+          String(result?.error || "Application preview identity was rejected."),
+          String(result?.code || "vibe64_preview_identity_application_rejected")
+        );
+      }
+      return { ok: true };
+    });
+  }
+
+  /**
    * The Output targets a usage recording may launch, with their declared
    * runtimes, and which web target a Preview restart runs.
    */
@@ -182,6 +231,7 @@ function createOutputTargetLaunchStatus({
   return Object.freeze({
     launchStatus,
     selectPreviewIdentity,
+    verifyPreviewIdentity,
     usageRecordingTargets,
     openOutputTarget
   });

@@ -40,10 +40,32 @@ export async function saveTaskWorld(page: Page, server: StatusServer, failure: R
   return repositoryWorld(page, server, failure, "save");
 }
 
-async function repositoryWorld(page: Page, server: StatusServer, failure: Record<string, any>, kind: "update" | "save") {
+export const SETUP_FAILURE = {
+  status: "failed",
+  diagnostic: "npm ci failed: ERESOLVE could not resolve the dependency tree.",
+  transcript: "$ npm ci\nnpm error ERESOLVE could not resolve",
+  updatedAt: "2026-11-04T10:00:00.000Z"
+};
+
+/** A session whose workspace preparation has failed. `world.updated` here means preparation has since succeeded. */
+export async function workspaceSetupWorld(page: Page, server: StatusServer, failure: Record<string, any> = SETUP_FAILURE) {
+  return repositoryWorld(page, server, failure, "workspace-setup");
+}
+
+/** A session with nothing failed, for a kind whose notice lives elsewhere. */
+export async function quietWorld(page: Page, server: StatusServer) {
+  return repositoryWorld(page, server, {}, "");
+}
+
+async function repositoryWorld(page: Page, server: StatusServer, failure: Record<string, any>, kind: "update" | "save" | "workspace-setup" | "") {
   const world = { updated: false, operationEvents: [] as { at: string; message: string }[] };
   const update = kind === "update";
-  await server.temporary!.store.writeBackgroundTaskEvent(directChatSessionId, update ? "update-session" : "save-work", { patch: failure });
+  const save = kind === "save";
+  if (update || save) {
+    await server.temporary!.store.writeBackgroundTaskEvent(directChatSessionId, update ? "update-session" : "save-work", { patch: failure });
+  }
+  if (kind === "workspace-setup") server.aiTasks.workspaceSetup = failure;
+  const workspaceSetup = () => kind === "workspace-setup" && !world.updated ? failure : { status: "unconfigured" };
   await mockProjectGateReady(page);
   await relayConversation(page, server);
   await routeApiEndpoint(page, "/vibe64/repository", async (route) => {
@@ -80,21 +102,21 @@ async function repositoryWorld(page: Page, server: StatusServer, failure: Record
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/work")) {
-      const failed = world.updated ? null : {
+      const failed = world.updated || !(update || save) ? null : {
         operationId: `failed-${kind}`, kind, status: "failed", code: failure.code,
         error: failure.error, conflictRecovery: failure.conflictRecovery, events: world.operationEvents
       };
-      await fulfillJson(route, { ahead: update ? 0 : 1, behind: update && !world.updated ? 1 : 0, ok: true,
-        unsaved: update || !world.updated, updateAvailable: update && !world.updated,
-        operation: update ? null : failed, updateOperation: update ? failed : null });
+      await fulfillJson(route, { ahead: save ? 1 : 0, behind: update && !world.updated ? 1 : 0, ok: true,
+        unsaved: update || (save && !world.updated), updateAvailable: update && !world.updated,
+        operation: save ? failed : null, updateOperation: update ? failed : null });
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
-      await fulfillJson(route, { ...directChatSessionPayload, workspaceSetup: { status: "unconfigured" } });
+      await fulfillJson(route, { ...directChatSessionPayload, workspaceSetup: workspaceSetup() });
       return;
     }
     await fulfillJson(route, { creation: { canCreate: true, mode: "direct" }, limits: { openSessionCount: 1 }, ok: true,
-      sessions: [{ ...directChatSessionPayload, workspaceSetup: { status: "unconfigured" } }] });
+      sessions: [{ ...directChatSessionPayload, workspaceSetup: workspaceSetup() }] });
   }, { prefix: true });
   return world;
 }
@@ -113,6 +135,14 @@ export async function openFix(page: Page, server: StatusServer, arrive: () => Pr
   await button.click();
   await expect(taskWindow(page)).toBeVisible();
   return taskIdOf(page);
+}
+
+/** Starts a task on the server, as its own notice does, and opens the session at its window. */
+export async function openStarted(page: Page, server: StatusServer, kind: string, input: Record<string, unknown>) {
+  const { task } = await server.aiTasks.start(kind, input);
+  await page.goto(`${server.url}${DASHBOARD_PATH}/repository?aiTask=${encodeURIComponent(task.id)}`);
+  await expect(taskWindow(page)).toBeVisible();
+  return task.id as string;
 }
 
 export function taskIdOf(page: Page) {

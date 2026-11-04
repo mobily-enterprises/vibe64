@@ -1,17 +1,26 @@
+import { createPreviewIdentityKind } from "./kinds/previewIdentity.js";
 import { createSaveKind } from "./kinds/save.js";
 import { createUpdateKind } from "./kinds/update.js";
+import { createWorkspaceSetupKind } from "./kinds/workspaceSetup.js";
 
 /** @typedef {import("./types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 /**
  * Every kind of AI task. A check calls its owner directly: this package sits above them all.
  * @param {object} dependencies
  * @param {SessionsService} dependencies.sessions
+ * @param {TerminalsService} dependencies.terminals
  * @returns {Record<string, AiTaskKind>}
  */
-function createAiTaskKinds({ sessions }) {
-  const kinds = [createUpdateKind({ sessions }), createSaveKind({ sessions })];
+function createAiTaskKinds({ sessions, terminals }) {
+  const kinds = [
+    createUpdateKind({ sessions }),
+    createSaveKind({ sessions }),
+    createWorkspaceSetupKind({ sessions }),
+    createPreviewIdentityKind({ terminals })
+  ];
   return Object.freeze(Object.fromEntries(kinds.map(kind => [kind.id, kind])));
 }
 

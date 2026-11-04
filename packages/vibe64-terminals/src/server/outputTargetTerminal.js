@@ -83,7 +83,8 @@ function createOutputTargetTerminalController({
   const outputStatus = createOutputTargetLaunchStatus({
     state,
     launchCoordination,
-    project
+    project,
+    runCommand
   });
   const terminalSessions = createOutputTargetTerminalSessions({
     state,
@@ -99,6 +100,7 @@ function createOutputTargetTerminalController({
     closeTerminal: terminalSessions.closeTerminal,
     launchStatus: outputStatus.launchStatus,
     selectPreviewIdentity: outputStatus.selectPreviewIdentity,
+    verifyPreviewIdentity: outputStatus.verifyPreviewIdentity,
     ensurePreview: launchStart.ensurePreview,
     withPreviewTarget: previewTests.withPreviewTarget,
     retryPreviewTestCleanup: previewTests.retryPreviewTestCleanup,

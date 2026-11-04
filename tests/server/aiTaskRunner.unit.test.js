@@ -37,8 +37,10 @@ const conflictResult = (reviewId = "review-2", paths = ["a.js"]) => ({
 const never = () => new Promise(() => {});
 
 const saveFailure = { status: "failed", code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed.", operationId: "save-1" };
+const setupFailure = { status: "failed", diagnostic: "npm ci failed: ERESOLVE could not resolve.", transcript: "$ npm ci\nnpm error ERESOLVE", updatedAt: "t1" };
+const DEVELOPER = { name: "developer", type: "username", value: "developer" };
 
-async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null } = {}) {
+async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null, setupFailed = null } = {}) {
   const selection = { engineId: "codex", modelProviderId: "openai", agentId: "codex", modelId: "main-model", variantId: "high",
     catalogRevision: `sha256:${"a".repeat(64)}` };
   const capabilities = { engineId: "codex", transportId: "codex_app_server", revision: `sha256:${"b".repeat(64)}`, defaults: selection,
@@ -51,7 +53,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
   if (updateFailure) await store.writeBackgroundTaskEvent(SESSION, "update-session", { patch: updateFailure });
   if (saveFailed) await store.writeBackgroundTaskEvent(SESSION, "save-work", { patch: saveFailed });
   const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: id => store.readSession(id),
-    getSessionWithoutSource: id => store.readSession(id),
+    getSessionWithoutSource: async id => ({ ...await store.readSession(id), workspaceSetup: server.workspaceSetup }),
     listSessionSummaries: async () => [{ sessionId: SESSION }] };
   const project = { createRuntime: async () => runtime, createRuntimeWithoutSource: async () => runtime };
   const attachments = createSessionAttachments({ project, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
@@ -91,10 +93,15 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
   const updates = [];
   const published = [];
   const saves = [];
+  const setups = [];
+  const signIns = [];
   const server = {
     update: async () => ({ ok: true }),
     save: async () => ({ ok: true }),
-    inspect: async () => ({ ok: true, unsaved: true, destination: { mode: "github", branch: "main" } })
+    inspect: async () => ({ ok: true, unsaved: true, destination: { mode: "github", branch: "main" } }),
+    setup: async () => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
+    signIn: async () => ({ ok: true }),
+    workspaceSetup: setupFailed || { status: "succeeded" }
   };
 
   /** A fresh server over the same store and the same AI. `terminalsWrap` injects a crash. */
@@ -138,14 +145,21 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
           saves.push(input);
           return server.save(input);
         },
-        inspectSessionWork: () => server.inspect()
+        inspectSessionWork: () => server.inspect(),
+        async retryWorkspaceSetup(sessionId, input, context) {
+          setups.push({ input, context });
+          return server.setup(input);
+        }
       },
-      terminals: terminalsWrap(conversations)
+      terminals: { ...terminalsWrap(conversations), async verifyPreviewIdentity(sessionId, input) {
+        signIns.push(input);
+        return server.signIn(input);
+      } }
     });
     return { aiTasks, conversations };
   }
 
-  const start = (aiTasks, by = OWNER, kind = "update") => aiTasks.start(SESSION, { kind, input: {}, vibe64User: by });
+  const start = (aiTasks, by = OWNER, kind = "update", input = {}) => aiTasks.start(SESSION, { kind, input, vibe64User: by });
   const quiet = aiTasks => aiTasks.resumeInterruptedTasks();
   const task = async id => (await store.readSessionConversation(SESSION, id))?.task;
 
@@ -157,7 +171,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     await quiet(running.aiTasks);
   }
 
-  return { boot, finishTurn, native, published, quiet, saves, server, start, store, task, updates };
+  return { boot, finishTurn, native, published, quiet, saves, server, setups, signIns, start, store, task, updates };
 }
 
 function withFixture(run, options) {
@@ -235,6 +249,56 @@ test("work a person saved meanwhile ends the Save fix Done without saving again"
   assert.equal((await f.task(task.id)).phase, "done");
   assert.equal(f.saves.length, 0);
 }, { updateFailure: null, saveFailed: saveFailure }));
+
+test("a completed preparation repair runs preparation on the server as a person's Prepare, and the task ends Done", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "workspace-setup");
+  assert.equal(task.title, "Fix workspace preparation");
+  assert.equal(task.problem.summary, "npm ci failed: ERESOLVE could not resolve.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /Recent preparation output:\n\$ npm ci/);
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "Workspace preparation succeeded.");
+  assert.equal(f.setups.length, 1);
+  assert.equal(f.setups[0].input.aiTaskId, task.id);
+  assert.equal(f.setups[0].context.channel, "api");
+}, { updateFailure: null, setupFailed: setupFailure }));
+
+test("a preparation fix waits for Update's own fix, which prepares the workspace again", () => withFixture(async (f) => {
+  const { aiTasks } = f.boot();
+  await assert.rejects(f.start(aiTasks, OWNER, "workspace-setup"), error => error.code === "vibe64_ai_task_update_first");
+}, { setupFailed: setupFailure }));
+
+test("a completed sign-in repair signs in as that identity on the server, and the task ends Done", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "preview-identity", { identity: DEVELOPER, error: "Login failed." });
+  assert.equal(task.problem.summary, "Preview couldn't sign in as developer.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /could not sign in as `developer` \(username: `developer`\)/);
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "Preview accepts developer now. Choose it again to sign in.");
+  assert.deepEqual(f.signIns, [{ identityName: "developer" }]);
+}, { updateFailure: null }));
+
+test("a sign-in check with Preview stopped stops at the person, and Check now passes once it runs", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "preview-identity", { identity: DEVELOPER, error: "Login failed." });
+  await f.quiet(running.aiTasks);
+  f.server.signIn = async () => ({ ok: false, code: "vibe64_preview_identity_preview_not_ready", error: "Preview is stopped." });
+  await f.finishTurn(running);
+  const stuck = await f.task(task.id);
+  assert.equal(stuck.phase, "needs_you");
+  assert.equal(stuck.message, "Preview isn't running. Start it, then Check now.");
+  f.server.signIn = async () => ({ ok: true });
+  await running.aiTasks.check(SESSION, { taskId: task.id });
+  await waitFor(async () => (await f.task(task.id)).phase === "done");
+  assert.deepEqual(f.signIns.map(input => input.identityName), ["developer", "developer"]);
+  assert.equal(f.native.turns.length, 1, "the AI was not asked again");
+}, { updateFailure: null }));
 
 test("a failed check goes back to the same conversation as a recorded message, and passes on the next try", () => withFixture(async (f) => {
   const running = f.boot();

@@ -22,6 +22,8 @@ users without turning that convenience into a production sign-in mechanism.
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
 - `packages/vibe64-terminals/src/server/launchPreviewAuth.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/previewIdentity.js`
+- `src/components/studio/Vibe64PreviewIdentityMenu.vue`
 - `src/components/studio/PreviewIdentitySettings.vue`
 - `packages/vibe64-project/src/shared/onboardingRequest.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
@@ -58,6 +60,15 @@ session). A newer saved list from another tab, Colleague or the agent replaces
 the draft only while it has no edits; under edits the page shows that the saved
 identities changed, disables Save and offers **Reload saved identities**
 (`tests/client/previewIdentitySettings.vitest.js`).
+
+When the application refuses an identity, Preview's identity menu shows its
+error with Fix it with AI. It starts the `preview-identity`
+[AI task](../conversation/ai-tasks.md) with the failed identity and error: the
+AI makes the application's own idempotent development seed create that account,
+and the task's check runs the same identity command a sign-in runs, on the
+server with no browser (`verifyPreviewIdentity`). Done means the application
+accepts the identity; the person chooses it again to sign Preview in. A stopped
+or identity-less Preview stops at `needs_you` without asking the AI again.
 
 When a
 web-presented Vibe64 Outputs target declares

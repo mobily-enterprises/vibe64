@@ -35,6 +35,11 @@ const props = defineProps({
   title: {
     required: true,
     type: String
+  },
+  // What only this page knows about the problem; most kinds read it all on the server.
+  input: {
+    required: true,
+    type: Object
   }
 });
 
@@ -52,7 +57,7 @@ const disabled = computed(() => !own.value && (!props.allowed || tasks.starting)
 function activate(event) {
   const opener = /** @type {HTMLElement} */ (event.currentTarget);
   if (own.value) tasks.show(opener);
-  else void tasks.start(props.kind, opener);
+  else void tasks.start(props.kind, opener, props.input);
 }
 </script>
 

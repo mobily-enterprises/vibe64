@@ -94,10 +94,16 @@ const conversation = useAiTaskConversation({
 const commentary = computed(() => (conversation.task.value?.messages || [])
   .filter(({ role, text }) => role === "commentary" && text?.trim())
   .map(({ at, text }) => ({ at, text: text.trim() })));
-const checkOutput = computed(() => (viewProps.workState?.updateOperation?.events || [])
-  .map(event => String(event.message || "").trim())
-  .filter(Boolean)
-  .join("\n"));
+// What the check's own run printed, read where that run reports it to the page anyway.
+const checkOutput = computed(() => {
+  const kind = host.task?.kind;
+  if (kind === "workspace-setup") return String(viewProps.session?.workspaceSetup?.transcript || "").trim();
+  const operation = { save: viewProps.workState?.operation, update: viewProps.workState?.updateOperation }[kind];
+  return (operation?.events || [])
+    .map(event => String(event.message || "").trim())
+    .filter(Boolean)
+    .join("\n");
+});
 </script>
 
 <style scoped>

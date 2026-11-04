@@ -18,7 +18,7 @@
         :button-size="buttonSize"
         :button-variant="buttonVariant"
         :embedded-preview="embeddedPreview"
-        :fix-preview-identity-with-temporary-ai="fixPreviewIdentityWithTemporaryAi"
+        :preview-identity-fix-allowed="previewIdentityFixAllowed"
         :surface="surface"
       />
     </Teleport>
@@ -172,9 +172,10 @@ const emit = defineEmits([
 ]);
 
 const props = defineProps({
-  fixPreviewIdentityWithTemporaryAi: {
-    default: null,
-    type: Function
+  // Whether this person may hand a failed preview sign-in to the AI.
+  previewIdentityFixAllowed: {
+    required: true,
+    type: Boolean
   },
   attachPreviewFile: {
     default: null,

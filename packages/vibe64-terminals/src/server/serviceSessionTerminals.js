@@ -446,6 +446,11 @@ function createServiceSessionTerminals({
     return outputTarget.selectPreviewIdentity(sessionId, { identityName, mode }, { publicHost, publicProtocol });
   }
 
+  /** @param {string} sessionId @param {{ identityName: string }} input */
+  function verifyPreviewIdentity(sessionId, { identityName }) {
+    return outputTarget.verifyPreviewIdentity(sessionId, { identityName });
+  }
+
   function startAgentTerminal(sessionId, input) {
     assertProjectEffectAdmission();
     return sessionAccess.runMainAgentWrite(sessionId, { vibe64User: input.vibe64User || null }, async (context) => {
@@ -569,6 +574,7 @@ function createServiceSessionTerminals({
     resizeOutputTargetTerminal,
     resumeTestApproval,
     selectPreviewIdentity,
+    verifyPreviewIdentity,
     startAgentTerminal,
     startGlobalCodexTerminal,
     startOutputTargetTerminal,

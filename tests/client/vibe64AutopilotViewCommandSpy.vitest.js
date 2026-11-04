@@ -862,9 +862,9 @@ describe("Vibe64 direct session view", () => {
     );
     const fixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
 
-    expect(autopilot.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
-    expect(autopilot.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
-    expect(outputControls.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
+    expect(autopilot).not.toContain("<Vibe64TemporaryAiFixAction");
+    expect(autopilot.match(/<Vibe64AiTaskButton/gu)).toHaveLength(2);
+    expect(outputControls.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect(repository.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect([autopilot, outputControls, repository].join("\n")).not.toContain(
       "Fix with temporary AI"
@@ -962,7 +962,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(repairs).toContain("Vibe64—not Temporary AI—owns every repository operation");
     expect(component).toContain(":kind=\"saveWorkActivityIsUpdate ? 'update' : 'save'\"");
-    expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage\"");
+    expect(component).toContain('kind="workspace-setup"');
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
     expect(repairs).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
@@ -1008,7 +1008,6 @@ describe("Vibe64 direct session view", () => {
     const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
     expect(component).toContain("Open temporary AI");
-    expect(component).toContain("<Vibe64TemporaryAiFixAction");
     expect(temporaryAiFixAction).toContain("Fix it with AI");
     expect(component).toContain("<Vibe64TemporaryAiWorkspace");
     expect(temporaryAi).toContain("grid-row: 3 / -1");
@@ -1181,7 +1180,7 @@ describe("Vibe64 direct session view", () => {
     expect(activityStart).toBeLessThan(conversationStart);
     expect(conversationStart).toBeLessThan(projectStart);
     expect(component).toContain(':title="workspaceSetupTitle"');
-    expect(component).toContain("<Vibe64TemporaryAiFixAction");
+    expect(component).toContain('kind="workspace-setup"');
     expect(component).toContain('@retry="retryWorkspaceSetup"');
     const preparationActions = component.slice(chatStart, activityStart);
     expect(preparationActions.match(/data-vibe64-prepare-workspace/gu)).toHaveLength(2);
@@ -1199,21 +1198,17 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toMatch(/workspace.*(?:dialog|stepper)|(?:dialog|stepper).*workspace/iu);
   });
 
-  it("turns a rejected managed preview identity into a Temporary AI repair request", () => {
+  it("turns a rejected managed preview identity into a preview sign-in AI task", () => {
     const component = readAutopilotViewSource();
-    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
     const launchControls = fs.readFileSync(
       path.resolve("src/components/studio/Vibe64PreviewIdentityMenu.vue"),
       "utf8"
     );
 
-    expect(component).toContain(":fix-preview-identity-with-temporary-ai=\"assistantFixAllowed ? fixPreviewIdentityWithTemporaryAi : null\"");
+    expect(component).toContain(":preview-identity-fix-allowed=\"assistantFixAllowed\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
-    expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
-    expect(launchControls).toContain("previewIdentityFixSending");
-    expect(repairs).not.toContain("sendChatPayload");
-    expect(repairs).toContain("app-owned, idempotent development seed");
-    expect(repairs).toContain("Keep preview authentication material host-managed");
+    expect(launchControls).toContain("kind=\"preview-identity\"");
+    expect(launchControls).toContain(":input=\"{ error: previewIdentityError, identity: previewIdentityFailedSelection }\"");
   });
 
   it("uses multiline Enter and moves Tab directly from chat input to Send", () => {

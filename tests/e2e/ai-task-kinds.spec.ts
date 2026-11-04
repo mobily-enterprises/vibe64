@@ -1,16 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 import { assistantStatusServer } from "./support/assistant-status-server";
-import { endTurn, expectPhase, openFix, saveTaskWorld, taskWindow } from "./support/ai-task-world";
+import {
+  endTurn, expectPhase, openFix, openStarted, quietWorld, saveTaskWorld, taskWindow, workspaceSetupWorld
+} from "./support/ai-task-world";
 
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
 
 /**
  * Every kind of AI task, end to end once: it opens from its own notice with its problem, the AI finishes,
- * Vibe64 proves it, and Close ends it. Update's full matrix is in ai-task-window.spec.ts.
+ * Vibe64 proves it, and Close ends it. Update's full matrix is in ai-task-window.spec.ts. A kind whose notice
+ * this page doesn't draw starts as its notice would; its notice's own spec proves what that sends.
  */
 const KINDS: {
   kind: string;
   world: (page: Page, server: StatusServer) => Promise<unknown>;
+  open?: (page: Page, server: StatusServer) => Promise<string>;
   problem: string;
   done: string;
   proof: (server: StatusServer, taskId: string) => void;
@@ -23,6 +27,27 @@ const KINDS: {
     proof(server, taskId) {
       expect(server.aiTasks.saves).toHaveLength(1);
       expect(server.aiTasks.saves[0]).toMatchObject({ aiTaskId: taskId, destinationReview: { mode: "local" } });
+    }
+  },
+  {
+    kind: "workspace-setup",
+    world: (page, server) => workspaceSetupWorld(page, server),
+    problem: "npm ci failed: ERESOLVE could not resolve the dependency tree.",
+    done: "Workspace preparation succeeded.",
+    proof(server, taskId) {
+      expect(server.aiTasks.setups).toEqual([expect.objectContaining({ aiTaskId: taskId })]);
+    }
+  },
+  {
+    kind: "preview-identity",
+    world: (page, server) => quietWorld(page, server),
+    open: (page, server) => openStarted(page, server, "preview-identity", {
+      error: "User not found.", identity: { name: "missing", type: "email", value: "missing@example.com" }
+    }),
+    problem: "Preview couldn't sign in as missing.",
+    done: "Preview accepts missing now. Choose it again to sign in.",
+    proof(server) {
+      expect(server.aiTasks.signIns).toEqual([{ identityName: "missing" }]);
     }
   }
 ];
@@ -46,7 +71,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     for (const row of KINDS) {
       test(`${row.kind}: opens from its notice and ends Done once Vibe64 proves it`, async ({ page }) => {
         await row.world(page, shared.server);
-        const taskId = await openFix(page, shared.server);
+        const taskId = await (row.open || openFix)(page, shared.server);
         await expectPhase(page, "working");
         const window = taskWindow(page);
         await expect(window.getByText(row.problem).first()).toBeVisible();

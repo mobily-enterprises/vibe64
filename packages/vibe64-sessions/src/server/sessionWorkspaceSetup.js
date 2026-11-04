@@ -120,7 +120,7 @@ function createSessionWorkspaceSetup({
         });
       }
       const runtime = await project.createRuntimeWithoutSource();
-      await refuseDuringRepositoryAiTask(runtime, sessionId);
+      await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
       const session = await runtime.getSessionWithoutSource(sessionId);
       const status = normalizeText(session.workspaceSetup?.status);
       if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
@@ -148,6 +148,11 @@ function createSessionWorkspaceSetup({
       observeWorkspaceSetup(sessionId, setup.completion, {
         originId: input.originId
       });
+      // An AI task's check waits for the run it started: how preparation ended is its answer.
+      if (input.aiTaskId) {
+        await setup.completion;
+        return { ok: true, workspaceSetup: (await runtime.getSessionWithoutSource(sessionId)).workspaceSetup || null };
+      }
       return publicSession(currentSession);
     }, "Vibe64 could not retry workspace preparation.");
   }

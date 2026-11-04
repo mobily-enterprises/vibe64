@@ -87,7 +87,7 @@
 
       <div class="vibe64-launch-controls__secondary-actions">
         <Vibe64PreviewIdentityMenu
-          :fix-preview-identity-with-temporary-ai="fixPreviewIdentityWithTemporaryAi"
+          :preview-identity-fix-allowed="previewIdentityFixAllowed"
           :surface="surface"
         />
 
@@ -307,9 +307,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
-  fixPreviewIdentityWithTemporaryAi: {
-    default: null,
-    type: Function
+  // Whether this person may hand a failed preview sign-in to the AI.
+  previewIdentityFixAllowed: {
+    required: true,
+    type: Boolean
   },
   surface: {
     required: true,

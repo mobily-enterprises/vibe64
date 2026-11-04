@@ -53,7 +53,7 @@ function presentAiTask({ conversationId, task }) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createAiTasksService({ logger, project, publishSessionChanged, sessions, terminals }) {
-  const kinds = createAiTaskKinds({ sessions });
+  const kinds = createAiTaskKinds({ sessions, terminals });
   const runner = createAiTaskRunner({ kinds, logger, project, publishSessionChanged, terminals, present: presentAiTask });
 
   async function taskRecords(sessionId) {

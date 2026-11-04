@@ -119,6 +119,7 @@
         <Vibe64AiTaskButton
           v-if="saveWorkCanResolveWithTemporaryAi"
           :allowed="assistantFixAllowed"
+          :input="{}"
           :kind="saveWorkActivityIsUpdate ? 'update' : 'save'"
           :title="assistantFixAllowed
             ? `Fix this ${saveWorkActivityIsUpdate ? 'Update' : 'Save'} with the AI` : assistantFixRestrictionMessage"
@@ -145,7 +146,7 @@
       height="clamp(8rem, 22vh, 14rem)"
       :operation-key="workspaceSetupActivityKey"
       :output="workspaceSetupOutput"
-      :retryable="workspaceSetupNeedsAttention && workspaceSetupStatus !== 'required' && !workspaceSetupRetryDisabled && !resourceRetryBusy"
+      :retryable="workspaceSetupNeedsAttention && workspaceSetupStatus !== 'required' && !workspaceSetupRetryDisabled && !resourceRetryBusy && !aiTaskOpen"
       :stage="workspaceSetupCurrentLabel"
       :starting="workspaceSetupRunning || workspaceSetupRetrying"
       :status="workspaceSetupStatus"
@@ -178,12 +179,13 @@
         >
           Prepare workspace
         </v-btn>
-        <Vibe64TemporaryAiFixAction
+        <Vibe64AiTaskButton
           v-else-if="!workspaceSetupConnectedChoice"
-          :disabled="workspaceSetupAskDisabled"
-          :pending="workspaceSetupFixSending"
-          :title="assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage"
-          @click="fixWorkspaceSetupWithTemporaryAi"
+          :allowed="assistantFixAllowed && !updateOwnsSession"
+          :input="{}"
+          kind="workspace-setup"
+          :title="!assistantFixAllowed ? assistantFixRestrictionMessage
+            : updateOwnsSession ? 'Update first: it prepares the workspace again' : 'Fix workspace preparation with the AI'"
         />
       </template>
     </Vibe64TemporaryActionTerminal>
@@ -214,7 +216,6 @@ import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnec
 import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/WorkspaceSetupToolRows.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
-import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue";
 import Vibe64ConnectedSessionPicker from "@/components/studio/vibe64-session/Vibe64ConnectedSessionPicker.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
@@ -231,22 +232,24 @@ const {
   agentActive, assistantAccountMessage, assistantAccountUnavailable, assistantFixAllowed,
   assistantFixRestrictionMessage, checkpointFailure, checkpointFailureReason, checkpointFailureVisible,
   connectionRecoveryVisible, createPullRequestOpen, dismissCheckpointFailure, dismissSaveWorkActivity,
-  dismissWorkspaceSetupActivity, fixWorkspaceSetupWithTemporaryAi, githubProject,
+  dismissWorkspaceSetupActivity, githubProject,
   projectSlug, props, requestSessionRenewal, resourceRecoveryControl,
   retrySaveWork, retryWorkspaceSetup, reviewResolvedUpdate, saveWorkActivityDismissed,
   saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithTemporaryAi,
   saveWorkConnectedResults, saveWorkDisabled, saveWorkError, saveWorkFailure, saveWorkOperationActive,
-  saveWorkOutput, saveWorkRetryable, saveWorkSending, saveWorkStage, saveWorkStandInIdentity, saveWorkStatus,
+  saveWorkOutput, saveWorkRequiresUpdate, saveWorkRetryable, saveWorkSending, saveWorkStage,
+  saveWorkStandInIdentity, saveWorkStatus,
   sessionId, sessionPullRequest, sourceOperationsSuspended, temporaryAiWorkspace, testApproval,
-  updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey, workspaceSetupAskDisabled,
+  updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey,
   workspaceSetupConnectedChoice, workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
-  workspaceSetupFixSending,
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning, workspaceSetupStatus, workspaceSetupTitle
 } = view;
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // While an AI task owns the problem, Retry and the manual route wait: its window offers them.
 const aiTaskOpen = computed(() => Boolean(aiTasks.task) && !aiTasks.projection.ended);
+// Update owns a session it hasn't finished: it prepares the workspace again itself.
+const updateOwnsSession = computed(() => saveWorkRequiresUpdate.value || (saveWorkActivityIsUpdate.value && Boolean(saveWorkFailure.value)));
 const resourceRetryBusy = ref(false);
 // A missing Stack tool is fixed first; the database panel waits for it.
 const workspaceSetupToolsMissing = ref(false);

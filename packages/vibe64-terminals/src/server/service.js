@@ -628,6 +628,7 @@ function createService({
     removeOutputResultsForSession: terminals.removeOutputResultsForSession,
     removeSessionCommandHelpers: terminals.removeSessionCommandHelpers,
     selectPreviewIdentity: terminals.selectPreviewIdentity,
+    verifyPreviewIdentity: terminals.verifyPreviewIdentity,
     startAgentTerminal: terminals.startAgentTerminal,
     startEphemeralAgentConversationTurn: agentConversations.startEphemeralAgentConversationTurn,
     stopEphemeralAgentConversation: agentConversations.stopEphemeralAgentConversation,

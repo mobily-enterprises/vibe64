@@ -186,7 +186,7 @@
         :session-id="selectedAssistantSessionId"
       >
         <Vibe64OutputControls
-          :fix-preview-identity-with-temporary-ai="assistantFixAllowed ? fixPreviewIdentityWithTemporaryAi : null"
+          :preview-identity-fix-allowed="assistantFixAllowed"
           :attach-preview-file="attachPreviewFile"
           :prepare-preview-file="attachPreviewFileProducer"
           :auto-start-managed-preview="!props.sessionSelectionArchived"
@@ -240,7 +240,7 @@ const {
   agentActive, askAssistantAboutFile, assistantAccessScopeKey, assistantCanUsePurpose,
   assistantDraftAvailable, assistantFixAllowed, assistantPurposes, backToDashboard, backToSystemFromEditor,
   composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
-  describeSubsystems, emit, fileBookmarks, fixPreviewIdentityWithTemporaryAi, lessonShown,
+  describeSubsystems, emit, fileBookmarks, lessonShown,
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,

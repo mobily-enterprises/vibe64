@@ -135,6 +135,7 @@
           <Vibe64AiTaskButton
             v-if="canResolveUpdateWithAi && typeof dashboard.requestTemporaryAi === 'function'"
             :allowed="dashboard.assistantFixAllowed !== false"
+            :input="{}"
             kind="update"
             :title="dashboard.assistantFixAllowed === false
               ? dashboard.assistantFixRestrictionMessage
