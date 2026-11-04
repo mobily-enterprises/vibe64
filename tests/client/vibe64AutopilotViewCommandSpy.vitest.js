@@ -29,38 +29,10 @@ const composablePaths = [
 ].map((file) => path.resolve(file));
 const saveWorkComposablePath = path.resolve("src/composables/useVibe64SessionSaveWork.js");
 const workspaceSetupComposablePath = path.resolve("src/composables/useVibe64WorkspaceSetupActivity.js");
-const temporaryAiRepairsPath = path.resolve("src/composables/useVibe64TemporaryAiRepairs.js");
 const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
 const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue");
-const temporaryAiPath = path.resolve(
-  "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"
-);
-// The workspace view and the children and composables it is built from.
-const temporaryAiViewPaths = [
-  "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue",
-  "src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue",
-  "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue",
-  "src/composables/useVibe64TemporaryAiColleagueView.js",
-  "src/composables/useVibe64TemporaryAiNewTask.js",
-  "src/composables/useVibe64TemporaryAiRename.js",
-  "src/composables/useVibe64TemporaryAiStopAndClose.js",
-  "src/composables/useVibe64TemporaryAiTaskElements.js"
-].map((file) => path.resolve(file));
-const temporaryAiRecoveryRowPath = path.resolve(
-  "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue"
-);
-const temporaryAiComposablePaths = [
-  "src/composables/useVibe64TemporaryAi.js",
-  "src/composables/useVibe64TemporaryAiMessages.js",
-  "src/composables/useVibe64TemporaryAiRestore.js",
-  "src/composables/useVibe64TemporaryAiTaskRecords.js",
-  "src/lib/vibe64TemporaryAiTasks.js"
-].map((file) => path.resolve(file));
-const temporaryAiFixActionPath = path.resolve(
-  "src/components/studio/Vibe64TemporaryAiFixAction.vue"
-);
 
 // Match the original Colleague client renderer: compile the actual SFC setup,
 // use the real Vue instance and the published voice launcher and controls, and
@@ -197,32 +169,6 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
 }
 
 describe("Vibe64 direct session view", () => {
-  it("admits every repair on Fix it with AI and refuses it without Fix access or on an archived session", async () => {
-    const component = readAutopilotViewSource();
-    const owner = component.match(/async function startTemporaryAiTask\(options = \{\}\) \{[\s\S]*?\n\}/u)?.[0];
-    expect(owner).toBeTruthy();
-    const allowed = new Set(["fix"]);
-    const assistantCanUsePurpose = vi.fn(purpose => allowed.has(purpose));
-    const props = { sessionSelectionArchived: false };
-    const emit = vi.fn();
-    const startTask = vi.fn(async () => ({ ok: true }));
-    const temporaryAiWorkspace = vue.ref({ startTask });
-    const start = new Function("assistantCanUsePurpose", "props", "emit", "temporaryAiWorkspace",
-      `${owner}\nreturn startTemporaryAiTask;`)(assistantCanUsePurpose, props, emit, temporaryAiWorkspace);
-    const incoming = { title: "Resolve Incoming merge" };
-    expect(await start(incoming)).toEqual({ ok: true });
-    expect(startTask).toHaveBeenCalledExactlyOnceWith(incoming);
-    expect(assistantCanUsePurpose).toHaveBeenLastCalledWith("fix");
-    expect(emit).toHaveBeenCalledExactlyOnceWith("chat-attention");
-    expect(await start({ recoveryOperation: "update" })).toEqual({ ok: true });
-    props.sessionSelectionArchived = true;
-    expect(await start(incoming)).toBe(false);
-    props.sessionSelectionArchived = false;
-    allowed.clear();
-    expect(await start(incoming)).toBe(false);
-    expect(startTask).toHaveBeenCalledTimes(2);
-  });
-
   it("sends implementation as new human work and uses the workflow action for stage continuation", async () => {
     const component = readAutopilotViewSource();
     const owner = component.match(/async function sendRoutingAction\(action\) \{[\s\S]*?\n\}/u)?.[0];
@@ -860,17 +806,13 @@ describe("Vibe64 direct session view", () => {
       path.resolve("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
       "utf8"
     );
-    const fixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
 
-    expect(autopilot).not.toContain("<Vibe64TemporaryAiFixAction");
     expect(autopilot.match(/<Vibe64AiTaskButton/gu)).toHaveLength(2);
     expect(outputControls.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect(repository.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect([autopilot, outputControls, repository].join("\n")).not.toContain(
       "Fix with temporary AI"
     );
-    expect(fixAction).toContain('aria-label="Fix it with AI"');
-    expect(fixAction).toContain('{{ pending ? "Opening…" : "Fix it with AI" }}');
   });
 
   it("is chat-first and contains no workflow state-machine surface", () => {
@@ -937,8 +879,7 @@ describe("Vibe64 direct session view", () => {
     const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
     const saveWork = fs.readFileSync(saveWorkComposablePath, "utf8");
-    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
-    const combined = `${component}\n${composable}\n${saveWork}\n${repairs}`;
+    const combined = `${component}\n${composable}\n${saveWork}`;
 
     expect(component).toContain('v-if="saveWorkHeaderVisible"');
     expect(component).toContain("saveWorkHeaderAriaLabel");
@@ -960,21 +901,13 @@ describe("Vibe64 direct session view", () => {
     expect(saveWork).toContain("const saveWorkOperationActive = computed");
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
-    expect(repairs).toContain("Vibe64—not Temporary AI—owns every repository operation");
     expect(component).toContain(":kind=\"saveWorkActivityIsUpdate ? 'update' : 'save'\"");
     expect(component).toContain('kind="workspace-setup"');
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
-    expect(repairs).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
-    expect(repairs).toContain("leave both byte-for-byte unchanged");
-    expect(repairs).toContain("Resolve only by editing the conflicting working-tree files");
-    expect(repairs).toContain("Preserve the intended behavior of both the latest saved work and this session");
     expect(component).toContain('@click="requestSessionSaveWork"');
-    expect(component).toContain('@check-update="checkTemporaryAiUpdate"');
-    expect(component).toContain("temporaryAiWorkspace.value?.updateRepairTask");
-    expect(repairs).toContain("{ force: true }");
     expect(component).toContain(':active="saveWorkOperationActive || saveWorkSending"');
-    expect(component).toContain(':dismissed="saveWorkActivityDismissed || updateHandledInRepair"');
+    expect(component).toContain(':dismissed="saveWorkActivityDismissed"');
     expect(component).toContain(':operation-key="saveWorkActivityKey"');
     expect(component).toContain('@dismiss="dismissSaveWorkActivity"');
     expect(composable).toContain("SHORT_ACTION_DISMISSALS_STORAGE_PREFIX");
@@ -997,76 +930,6 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).toContain('height="var(--session-action-size, 36px)"');
     expect(sessionHeader).toContain('width="var(--session-action-size, 36px)"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
-  });
-
-  it("keeps temporary AI separate, restorable, multi-task, and attachment-owned", () => {
-    const component = readAutopilotViewSource();
-    const temporaryAiWorkspace = fs.readFileSync(temporaryAiPath, "utf8");
-    const temporaryAi = temporaryAiViewPaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
-    const temporaryAiComposable = temporaryAiComposablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
-    const temporaryAiFixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
-    const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
-
-    expect(component).toContain('aria-label="New AI task"');
-    expect(temporaryAiFixAction).toContain("Fix it with AI");
-    expect(component).toContain("<Vibe64TemporaryAiWorkspace");
-    expect(temporaryAi).toContain("grid-row: 3 / -1");
-    expect(temporaryAi).not.toContain("position: sticky");
-    expect(fs.readFileSync(temporaryAiRecoveryRowPath, "utf8")).toContain("data-temporary-ai-check-update");
-    expect(temporaryAiWorkspace.indexOf("<Vibe64TemporaryAiRecoveryRow")).toBeLessThan(
-      temporaryAiWorkspace.indexOf("<Vibe64EphemeralConversationMessages")
-    );
-    // The header's New AI task opens the task form, not the temporary workspace.
-    expect(component).not.toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
-    expect(component).toContain("<Vibe64NewAiTaskDialog");
-    // Switching sessions retains the temporary workspace; Main chat closes it.
-    expect(component).not.toContain("activateRealSession");
-    expect(component).toContain("@select-main-chat=\"showMainChat\"");
-    expect(component).toContain("@task-finished=\"finishTemporaryAiTask\"");
-    expect(temporaryAiRepairs).toContain("reportTaskRecovery");
-    expect(temporaryAiRepairs).toContain("Workspace preparation succeeded. Vibe64 independently verified the AI repair.");
-    expect(component).toContain("temporaryAiWorkspace.value?.closeWorkspace?.()");
-    expect(component).toContain("mainChat.value?.focus?.({ preventScroll: true })");
-    expect(temporaryAi).toContain("Main chat");
-    expect(temporaryAi).toContain("data-temporary-ai-main-chat");
-    expect(temporaryAi).toContain("Main and temporary conversations");
-    expect(temporaryAi).toContain('aria-label="New temporary AI task"');
-    expect(temporaryAi).toContain("function showWorkspace()");
-    expect(temporaryAi).toContain("startTask");
-    expect(temporaryAi).not.toContain("Not saved to session history");
-    expect(temporaryAi).not.toContain("vibe64-temporary-ai__header");
-    expect(temporaryAi).not.toMatch(/R\/W|R\/O|updatePolicy/u);
-    expect(temporaryAi).not.toContain("Read-only guidance");
-    expect(temporaryAi).not.toContain("Allow edits");
-    expect(temporaryAi).toContain('v-for="task in temporary.tasks.value"');
-    expect(temporaryAi).toContain("<Vibe64AgentSettingsMenu");
-    expect(temporaryAi).toContain("<Vibe64AutopilotPromptTextarea");
-    expect(temporaryAi).toContain("data-temporary-ai-recovery");
-    expect(temporaryAi).toContain("AI repair in progress");
-    expect(temporaryAi).toContain("The repair was independently verified.");
-    expect(temporaryAi).toContain("activeTaskRecoveryStatus");
-    expect(temporaryAi).toContain("AI is working…");
-    expect(temporaryAi).toContain('class="vibe64-temporary-ai__activity"');
-    expect(temporaryAi).toContain('role="status"');
-    expect(temporaryAi).toContain("vibe64.temporary-ai.feedback");
-    expect(temporaryAi).toContain("finished. Review the result before continuing.");
-    expect(temporaryAi).toContain('aria-label="Attach preview screenshot"');
-    expect(temporaryAi).toContain('aria-label="Attach console and network diagnostics"');
-    expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
-    expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
-    expect(temporaryAiComposable).not.toContain("beforeunload");
-    expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)]");
-    expect(temporaryAiComposable).toContain("() => void restoreTasks(), { immediate: true });");
-    expect(temporaryAiComposable).toContain("for (const taskId of new Set([...saveTimers.keys(), ...unsentSaveFields.keys()])) void saveTask(taskId, { flush: true });");
-    expect(temporaryAiComposable).toContain("task.attachments.map((attachment) => attachment.attachmentId)");
-    expect(temporaryAiComposable).toContain("attachments: record.attachments || []");
-    expect(temporaryAiComposable).toContain("function showWorkspace()");
-    expect(temporaryAiComposable).toContain("async function startTask(options = {})");
-    expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
-    expect(temporaryAiComposable).toContain("useAssistantConversationFactory");
-    expect(temporaryAiComposable).toContain("temporaryAiMessages(runtime.turns.value)");
-    expect(temporaryAiComposable).toContain("displayMessage: draftPayload.displayMessage");
-    expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });
 
   it("keeps direct files, architecture, preview, terminal, and close controls", () => {
@@ -1168,10 +1031,9 @@ describe("Vibe64 direct session view", () => {
     );
   });
 
-  it("keeps workspace preparation status in chat while routing recovery to Temporary AI", () => {
+  it("keeps workspace preparation status in chat while routing recovery to an AI task", () => {
     const component = readAutopilotViewSource();
     const workspaceSetup = fs.readFileSync(workspaceSetupComposablePath, "utf8");
-    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
     const chatStart = component.indexOf("class=\"studio-autopilot__chat-panel\"");
     const projectStart = component.indexOf("class=\"studio-autopilot__project-panel\"");
@@ -1191,12 +1053,6 @@ describe("Vibe64 direct session view", () => {
     expect(preparationActions).toContain('v-if="connectedUpdateActionVisible"');
     expect(workspaceSetup).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");
     expect(component).not.toContain(':error-messages="composerError"');
-    expect(repairs).toContain("requestTemporaryAi({");
-    expect(repairs).not.toContain('policy: "workspace_write"');
-    expect(repairs).toContain("handleTemporaryAiTaskFinished");
-    expect(repairs).toContain("Vibe64 will automatically rerun its deterministic workspace preparation");
-    expect(repairs.match(/recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE/gu)).toHaveLength(3);
-    expect(repairs).not.toContain("sendChatPayload");
     expect(component).not.toMatch(/workspace.*(?:dialog|stepper)|(?:dialog|stepper).*workspace/iu);
   });
 

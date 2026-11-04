@@ -22,6 +22,7 @@ import { upgradeTeamSetupRouting } from "@local/vibe64-accounts/server/teamSetup
 import { upgradeTeamSetupSessions } from "@local/vibe64-terminals/server/teamSetupSessionUpgrade";
 import { removeUnusedCodexCaches } from "@local/vibe64-core/server/codexCacheUpgrade";
 import { removeSessionClonedDefaultBranches } from "@local/vibe64-terminals/server/clonedDefaultBranchUpgrade";
+import { closeOldTemporaryConversations } from "@local/vibe64-terminals/server/temporaryConversationsClosedUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -83,6 +84,7 @@ try {
     env: process.env,
     removeUnusedCodexCaches,
     removeSessionClonedDefaultBranches,
+    closeOldTemporaryConversations,
     report
   });
 } catch (error) {

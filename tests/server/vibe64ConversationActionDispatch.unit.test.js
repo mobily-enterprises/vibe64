@@ -165,11 +165,9 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       ["POST", "/sessions/:sessionId/workspace-setup/retry", "vibe64.sessions.workspace-setup.retry", {}, "retryWorkspaceSetup"],
       ["POST", "/sessions/:sessionId/preview-state", "vibe64.sessions.preview-state.broadcast", { projectSlug: slug, route: "/preview", originId: "browser" }, "broadcastSessionPreviewState"],
       ["GET", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.list", {}, "listTemporaryConversations"],
-      ["POST", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.create", {}, "createTemporaryConversation"],
       ["GET", "/sessions/:sessionId/temporary-conversations/:conversationId", "vibe64.terminals.temporary-conversation.read", {}, "readTemporaryConversation"],
       ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", "vibe64.terminals.temporary-conversation.turn.start", { message: "What is happening?", messageId: "msg-1" }, "startTemporaryConversationTurn"],
-      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", "vibe64.terminals.temporary-conversation.stop", {}, "stopTemporaryConversation"],
-      ["DELETE", "/sessions/:sessionId/temporary-conversations/:conversationId", "vibe64.terminals.temporary-conversation.delete", {}, "deleteTemporaryConversation"]
+      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", "vibe64.terminals.temporary-conversation.stop", {}, "stopTemporaryConversation"]
     ];
     for (const [method, suffix, actionId, body, serviceMethod] of cases) {
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
@@ -210,6 +208,10 @@ test("conversation HTTP handlers and automation execute the same authorized acti
           assert.equal(authority.requestContext.vibe64Action, undefined, "Cached grants are not retained");
         }
         assert.equal(fromHttp.args[2].browserAuthority.requestContext.requestMeta.request.vibe64User, user);
+        assert.deepEqual({ ...fromAutomation, args: fromAutomation.args.slice(0, 2) },
+          { ...fromHttp, args: fromHttp.args.slice(0, 2) });
+      } else if (serviceMethod === "retryWorkspaceSetup") {
+        // Workspace setup also receives each caller's own request context.
         assert.deepEqual({ ...fromAutomation, args: fromAutomation.args.slice(0, 2) },
           { ...fromHttp, args: fromHttp.args.slice(0, 2) });
       } else assert.deepEqual(fromAutomation, fromHttp);

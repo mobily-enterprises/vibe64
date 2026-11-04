@@ -62,9 +62,98 @@ The window opens on **Chat** when the AI asked you something or you have to deci
 how the fix ends, and on **Progress** otherwise. It never switches view by itself
 after that, so what you are reading stays put.
 
-You can write to the AI while it works. Your message joins the running fix. Chat's
-**Chat mode** icon changes the model the same way it does in a temporary chat; see
-[Hand a merge repair to another model](temporary-chats.md#hand-a-merge-repair-to-another-model).
+You can write to the AI while it works. Your message joins the running fix.
+
+## Chat
+
+Chat's message box works like Main chat's. The round Send arrow sends. While the AI is
+working, the diagonal arrow sends guidance to its running turn, and the square **Stop**
+interrupts that turn without ending the task. While a message is being delivered you can
+type and send another; it shows **Pending** until the earlier delivery settles. You can
+attach files, a Preview screenshot, or Preview's console and network diagnostics. They
+belong to this task's conversation and are deleted when you close it. Goals are not
+offered in an AI task. The controls are the same in narrow layouts.
+
+Guidance sent to a working Claude turn does not interrupt it: Claude moves its current
+command to the background, where it keeps running, and reads the guidance within
+moments. This includes a repair that changes the project's Genesis files while it works:
+the message joins the running repair, and the changed project guidance applies from its
+next idle turn. Output already shown stays attached to its original request, and the
+follow-up response belongs to the new request, also after reload. **Reply ready ·
+background task still running…** means the answer is shown but a background command
+Claude started is still running; a later follow-up reply appears after the answer without
+replacing it. Completed replies and progress updates are saved about a second after they
+finish, even while nobody has the window open, so other viewers and a later reopen see
+them with their actual timing.
+
+After **Stop** confirms a Claude reply has stopped, text already shown remains under
+**Show all … progress updates** on its original request. It is an interrupted partial
+reply, not a completed answer. It remains after reload, is not replayed as a new answer
+and is not doubled when Claude saved more of it while Stop was finishing. Claude's
+internal no-response placeholder after Stop or a model change is not an AI reply; actual
+replies and provider errors stay visible, even when their wording is similar.
+
+Replies show their recorded AI and model, while streaming and in reopened history. Hover
+the label to see its provider. An older reply without a recorded selection says **agent**
+rather than claiming today's choice.
+
+**Chat mode**, the icon inside the message box, offers **Fix it with AI**, the model AI
+setup chose for fixes (it may run in a different tool from Main chat), and **Choose
+model**, which opens **Orchestrator**, **Model** and **Thinking**. Select an available
+connection and model, then **Apply**. The next message uses that choice with the
+conversation's history so far; earlier replies keep their labels, and Main chat's
+selection is unchanged. Only available models can be selected. Auto is Main chat only.
+
+While Save or Update changes the session's source, the task's messages stay readable and
+you can keep typing. The draft saves on its own and stays after reload; its saving,
+saved or error indicator follows that draft only. A failed draft save keeps your text,
+but don't count on it surviving a reload until it saves. A model choice on its own saves
+for the next turn; a failed one stays pending and its error clears once it saves.
+Sending, changing attachments, stopping and closing wait for Save or Update to finish. If
+one of them says another operation is starting, try again once it has settled, and don't
+resend a message whose delivery is uncertain.
+
+Every open tab and every member viewing the session sees the same conversation and
+progress. A tab that lost its connection catches up when it reconnects, and **AI is
+working…** clears everywhere when the reply arrives. **Hide** keeps the draft and the
+settings you just changed.
+
+## Hand a merge repair to another model
+
+**Fix it with AI** for an Update conflict starts on the Fix it with AI model and sends the
+repair instructions once. Main chat's history is unchanged. To hand the repair to Codex:
+
+1. If the AI is working, press **Stop** in **Chat** and wait for it to stop.
+2. Open **Chat mode** and choose **Choose model**.
+3. Select **Codex**, the model and thinking level, then **Apply**.
+4. Send a follow-up asking it to inspect the current edits and continue the repair.
+
+The repair instructions, messages and work already in the session remain. A model change
+does not undo edits or prove the merge correct: Vibe64 still runs Update when the AI says
+it has finished. If the repair is already complete, **Review resolved conflicts** (in the
+footer, or on the Update error without opening the window) lists the files; then choose
+**I've resolved these conflicts — apply Update**. This also works after edits made in
+Main chat, with no further AI turn. See
+[Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts).
+
+## Repairs check the saved version first
+
+Every **Fix it with AI** turn tells the AI whether this session is behind its saved
+version and lists the incoming versions, read again for each message. Before it changes
+dependencies or ports code, the AI checks whether the saved version already contains the
+change; if it does, the change arrives with Update and is not redone in the session.
+
+When local work is superseded by the saved version, such as a stale or partial dependency
+bump that the saved version completes, the repair takes the saved version and says so in
+one sentence. It does not ask you to choose between the versions, because Vibe64's
+checkpoint keeps your original. It asks only about real product decisions.
+
+While the session's Update has failed, is running or is waiting, Update is the one repair
+for the session: a project setup or workspace preparation repair tells you the session
+must be brought up to date first, then stops. Fix Update first (see
+[Project setup waits for Update](workspace-preparation.md#project-setup-waits-for-update)).
+After that, Vibe64 checks Update again, and setup is checked again against the updated
+session.
 
 ## When Vibe64 needs you
 
@@ -192,3 +281,51 @@ when the AI finishes, exactly as when you start it yourself. A Colleague assignm
 review is the session's AI task while the assignment runs; it ends when the work is
 ready or cancelled. Because a session has one AI task at a time, Colleague gets the same
 refusal you would and tells you which task to finish first.
+
+## Recover a lost delivery confirmation
+
+If the AI finishes just as you send guidance, a confirmed rejection before delivery lets
+that same message continue once as a new request. Stop, cancellation and uncertain
+delivery never trigger that automatic retry. An earlier answer stays attached to its
+original message even when a later message is rejected; the rejected message and its
+recovery controls stay visible.
+
+If a send fails before Vibe64 accepts it, **Retry** sends the original message with its
+original settings and files. Anything you typed or attached afterwards stays in the
+message box; accepted files leave it.
+
+**Retry** on a message first checks whether that exact message reached the AI. If it did,
+nothing is sent again. If the AI proves it never received it, Retry sends it once with its
+original settings; while delivery is still unknown, nothing is sent. If the connection
+can't read the AI's receipt, retry the check after reconnecting. **Cancel** is always
+available on a pending, unconfirmed or failed message, including while **Checking…** is
+shown (it ends that check). The message shows **Cancelling…** until the server confirms,
+then leaves the conversation for good, and the server stops any work it started. If the
+server can't be reached, the message stays with **Couldn't reach the server — Cancel
+again**, and the window retries after reconnecting. If the AI had already received it, its
+answer still appears. A failed message that never reached the AI, for example because the
+task's conversation could not start, has nothing on the server to cancel: **Cancel**
+removes it at once, and **Edit** returns its text to the message box.
+
+**Close** removes the task only after its AI work and attachments are cleaned up. If you
+used more than one AI in the task, Close cleans up each one's conversation. A failed Close
+can be retried; the retry continues the unfinished cleanup without repeating what was
+already removed.
+
+During an Update repair, **Checking Update…** means the repository operation is not yet
+confirmed. After a disconnect or reload an uncertain result shows as unconfirmed, not as
+success or failure; only its confirmed result clears it.
+
+## Typing and message order
+
+Typing in Chat tells other viewers you are typing, in one small update at most every five
+seconds, without sending your draft; the indicator expires within ten seconds of the last
+update. Prompt suggestions wait for a five-second typing pause and at least thirty seconds
+between suggestions; refocusing doesn't generate new ones.
+
+Messages and replies appear together in time order, including guidance sent while the AI
+is working, on desktop and phone. Reopening or reloading shows the same history without
+resending anything.
+
+Colleague can explain any of this. Choosing a model, stopping work and closing a task stay
+your actions in the window, or separate requests to Colleague.

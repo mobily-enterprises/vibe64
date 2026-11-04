@@ -1,6 +1,6 @@
 # Recover coding-agent connections and delivery
 
-Use these steps for Main and temporary conversations. Keep the original request
+Use these steps for Main chat and AI tasks' Chat. Keep the original request
 and inspect its delivery before retrying. For ordinary controls, see
 [Coding agents](coding-agents.md).
 
@@ -99,7 +99,7 @@ project chat share this service: closing either one leaves the other available.
 If recovery has to stop the shared service, inspect both chats before retrying.
 A failed OpenCode **Stop** leaves the current turn available for another **Stop**
 attempt. After Stop succeeds, **Send** starts the next turn in the same conversation.
-The same Stop and retry rules apply to temporary chats.
+The same Stop and retry rules apply in an AI task's Chat.
 If OpenCode reports **Project guidance could not load**, its project instructions
 were unavailable; this is not confirmation that your API key failed. Ask the
 installation owner to check the installed Genesis runtime and project hook. Once
@@ -113,7 +113,7 @@ session contribution, give the installation owner the error and byte limit.
 Genesis compiler 1.8.5 accepts up to 24 KiB of that contribution without
 truncation. The owner can align the installed compiler or shorten the host
 guidance before you retry; Colleague can explain the recovery.
-A temporary message may appear before the assistant confirms receiving it.
+A message in an AI task's Chat may appear before the assistant confirms receiving it.
 If it still shows **Retry**, use that control and keep the same request;
 its visible bubble alone is not confirmation. An unavailable receipt stays
 unconfirmed and keeps its files and any newer composer draft. Checking does not

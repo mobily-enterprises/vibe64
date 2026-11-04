@@ -41,7 +41,6 @@ DELETE /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId public app - v
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.delete
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/terminal public app - vibe64.terminals.output-terminal.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId public app 131072 vibe64.source-editor.explanation.delete
-DELETE /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId public app - vibe64.terminals.temporary-conversation.delete
 DELETE /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId public app - vibe64.usage-recording.delete
 DELETE /api/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.cancel
 GET /api/app/:slug/studio/current-app public app - vibe64.current-app.read
@@ -287,7 +286,6 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/stream
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/file public app 32768 vibe64.source-editor.file.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/resolve-path public app 32768 vibe64.source-editor.path.resolve
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/stars public app 16384 vibe64.source-editor.star.set
-POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations public app - vibe64.terminals.temporary-conversation.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/stop public app - vibe64.terminals.temporary-conversation.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns public app - vibe64.terminals.temporary-conversation.turn.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/updates/apply public app - vibe64.sessions.updates.apply

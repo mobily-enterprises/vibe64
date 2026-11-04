@@ -18,12 +18,11 @@ export const VIBE64_COLLEAGUE_LAUNCHER_KEY = Symbol("vibe64.colleague.launcher")
 // The app bar's place for the selected session's AI task chip.
 export const VIBE64_AI_TASK_TRAY_KEY = Symbol("vibe64.ai-task.tray");
 
-// An optional workspace conversation contributed by the composing host.
-export const VIBE64_HOST_CONVERSATION_KEY = Symbol("vibe64.host.conversation");
-
 // Optional reactive host identity for actor-specific AI response caches.
 // null means signed out; standalone editors use their local identity.
 export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
+// The viewer of a standalone editor, which has no host identity.
+export const LOCAL_ASSISTANT_VIEWER = Object.freeze({ actorKey: "local" });
 
 // The shared Learning environment (L) controller (createVibe64Learning), provided
 // by the assistant shell context of each host as the controller itself.

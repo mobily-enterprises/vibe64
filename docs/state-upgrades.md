@@ -1646,3 +1646,59 @@ interrupted after removal). Run it as the OS user that owns the session state,
 with Vibe64 and every session process stopped. Focused evidence:
 `clonedDefaultBranchUpgrade.unit.test.js`, `vibe64SessionSourceGit.unit.test.js`
 and `stateUpgrades.unit.test.js`.
+
+## Old temporary conversations closed (`20261104-temporary-conversations-closed`)
+
+AI tasks replaced temporary conversations. This upgrade follows
+`20261030-cloned-default-branch` and deletes every temporary conversation
+recorded before them (Update, Save and other repair chats, and free "Temporary
+AI" chats): every conversation record without a `task` field, deleted as Close
+deletes one. Records with `task` are AI tasks and stay. The owner is Terminals'
+`temporaryConversationsClosedUpgrade.js`, supplied by the candidate CLI; the
+script refuses to run without it. Runtime's session store
+(`prepareTemporaryConversationRemoval`) inventories and stages the files, and
+Core's `publishStateUpgradeFiles` backs them up and publishes them.
+
+It visits every project's active and closing sessions and the archives a
+renewal prepared (`sessions/archived/.renewals/`). Other archived sessions are
+not visited and keep their temporary conversations. For each conversation it
+deletes the record's folder (`conversations/<id>/`: record, transcript and
+presentation), the session attachments whose `attachment.json` names it, the
+session metadata of its Claude binding (`claude_conversation_<nativeId>`) and
+Claude's native history, through JSKIT's `retireClaudeConversationHistory`
+(the transcript and its `file-history`, `image-cache` and `uploads` folders).
+That history is found from the saved `nativeWorkdir`, else the session's
+managed source; one with neither is reported as a warning and left. A prepared
+archive is repacked without the deleted folders.
+
+Codex threads and OpenCode sessions can be deleted only by their running
+engine, and no offline owner exists, so their native conversations stay in the
+engine's own storage. The report counts how many Claude, Codex and OpenCode
+native conversations it leaves. The engine upload copies of the attachments are
+not visited: offline their folder cannot be named, and the server's startup
+sweep expires every copy after 30 minutes.
+
+A record that cannot be read or whose identity does not match its folder, an
+unreadable `task` or native binding, an unknown engine, a Claude id that is not
+a UUID, or a Claude conversation shared with the session's main chat (current
+or retired) or an AI task stops the upgrade before anything changes.
+
+Backups go under `upgrades/backups/20261104-temporary-conversations-closed/`.
+`sessions/` is the publisher's manifest, with the before copy of every deleted
+file and prepared archive and the after copy of each repacked archive; copy
+`sessions/before/<path>` back to `<systemRoot>/<path>` to restore one. `claude/`
+holds every deleted Claude file at its path inside Claude's storage, copied
+privately and verified before deletion.
+
+Check is read-only: per project it reports how many conversations would be
+deleted (in live sessions and prepared archives), their attachments and the AI
+tasks kept, then the native counts and the number of state files to change.
+Apply deletes Claude's history first, then publishes the record deletions, then
+removes the conversation and attachment folders they emptied. A rerun before
+publication starts inventories again, finding deleted Claude history absent; a
+rerun after it starts finishes publication; a later run changes nothing. A
+Claude history that cannot be deleted is reported as a warning and stays. Run it
+as the OS user that owns the session state and Claude's storage
+(`CLAUDE_CONFIG_DIR` or `~/.claude`), with Vibe64 and every session process
+stopped. Focused evidence: `temporaryConversationsClosedUpgrade.unit.test.js`
+and `stateUpgrades.unit.test.js`.

@@ -24,6 +24,7 @@ import {
   metadataFilePath,
   readDirectoryEntries,
   readTextIfExists,
+  renewalArchiveStagingRoot,
   runCommand,
   sortedDirectoryNames
 } from "./sessionStoreLayout.js";
@@ -281,9 +282,11 @@ function createSessionStateUpgrades({
   }
 
   /**
-   * Stage through the session/archive owner. The offline publisher owns backups.
+   * Stage through the session/archive owner, which the offline publisher backs up. `finishArchive` runs before repacking.
    */
-  async function prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord }) {
+  async function prepareSessionStateUpgrade({
+    temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord, preparedRenewalsOnly = false, finishArchive = null
+  }) {
     const relativeScratch = path.relative(state.normalizedStateRoot, temporaryRoot || state.normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
         !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
@@ -370,6 +373,7 @@ function createSessionStateUpgrades({
             await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
             await writeFile(change.filePath, change.contents, { mode: 0o600 });
           }
+          if (finishArchive) await finishArchive(sessionPaths);
           const replacementPath = path.join(temporaryRoot, `${randomUUID()}.tar.gz`);
           const result = await runCommand("tar", ["-czf", replacementPath, "-C", path.dirname(sessionPaths.sessionRoot), "."], {
             allowedRoots: [temporaryRoot],
@@ -410,7 +414,7 @@ function createSessionStateUpgrades({
         }
       }
     }
-    await inspectArchives(rootPaths.archivedSessionsRoot);
+    await inspectArchives(preparedRenewalsOnly ? renewalArchiveStagingRoot(rootPaths) : rootPaths.archivedSessionsRoot);
     return updates;
   }
 
@@ -689,7 +693,8 @@ function createSessionStateUpgrades({
     prepareAssistantRoutingStateUpgrade,
     prepareConversationMessageDataUpgrade,
     prepareConversationStorageUpgrade,
-    prepareLearningSessionBindingUpgrade
+    prepareLearningSessionBindingUpgrade,
+    prepareSessionStateUpgrade
   });
 }
 

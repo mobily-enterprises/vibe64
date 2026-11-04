@@ -92,7 +92,7 @@
     </v-alert>
     <Vibe64TemporaryActionTerminal
       :active="saveWorkOperationActive || saveWorkSending"
-      :dismissed="saveWorkActivityDismissed || updateHandledInRepair"
+      :dismissed="saveWorkActivityDismissed"
       :error="saveWorkError"
       :error-title="`${saveWorkActivityLabel} needs attention`"
       height="clamp(8rem, 22vh, 14rem)"
@@ -108,16 +108,16 @@
       @dismiss="dismissSaveWorkActivity"
       @retry="retrySaveWork"
     >
-      <template v-if="saveWorkError && (saveWorkCanResolveWithTemporaryAi || saveWorkCanCreatePullRequest)" #error-actions>
+      <template v-if="saveWorkError && (saveWorkCanResolveWithAi || saveWorkCanCreatePullRequest)" #error-actions>
         <v-btn
           v-if="updateConflictRecovery && !aiTaskOpen" variant="tonal" height="48"
-          :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
+          :disabled="updateWorkDisabled || sourceOperationsSuspended"
           @click="reviewResolvedUpdate"
         >
           Review resolved conflicts
         </v-btn>
         <Vibe64AiTaskButton
-          v-if="saveWorkCanResolveWithTemporaryAi"
+          v-if="saveWorkCanResolveWithAi"
           :allowed="assistantFixAllowed"
           :input="{}"
           :kind="saveWorkActivityIsUpdate ? 'update' : 'save'"
@@ -235,11 +235,11 @@ const {
   dismissWorkspaceSetupActivity, githubProject,
   projectSlug, props, requestSessionRenewal, resourceRecoveryControl,
   retrySaveWork, retryWorkspaceSetup, reviewResolvedUpdate, saveWorkActivityDismissed,
-  saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithTemporaryAi,
+  saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithAi,
   saveWorkConnectedResults, saveWorkDisabled, saveWorkError, saveWorkFailure, saveWorkOperationActive,
   saveWorkOutput, saveWorkRequiresUpdate, saveWorkRetryable, saveWorkSending, saveWorkStage,
   saveWorkStandInIdentity, saveWorkStatus,
-  sessionId, sessionPullRequest, sourceOperationsSuspended, temporaryAiWorkspace, testApproval,
+  sessionId, sessionPullRequest, sourceOperationsSuspended, testApproval,
   updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey,
   workspaceSetupConnectedChoice, workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
@@ -255,9 +255,6 @@ const resourceRetryBusy = ref(false);
 const workspaceSetupToolsMissing = ref(false);
 const LocalDatabaseServer = defineAsyncComponent(() => (
   import("@local/vibe64-database-tools/client").then((module) => module.loadLocalDatabaseServer())
-));
-const updateHandledInRepair = computed(() => Boolean(
-  (saveWorkActivityIsUpdate.value || saveWorkError.value) && temporaryAiWorkspace.value?.updateRepairVisible
 ));
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");

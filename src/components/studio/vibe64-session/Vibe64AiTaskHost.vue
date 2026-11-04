@@ -3,7 +3,7 @@
   <template v-if="host.task">
     <Vibe64AiTaskWindow :commentary="commentary" :output="Boolean(checkOutput)" :source="host">
       <template #check-output><pre class="ai-task-host__output">{{ checkOutput }}</pre></template>
-      <template #chat>
+      <template #chat="{ visible }">
         <Vibe64AiTaskChat
           :assistant-selection="assistantSelection"
           :can-configure-routing="canConfigureRouting"
@@ -12,6 +12,8 @@
           :preview-attachment-state="previewAttachmentState"
           :projection="host.projection"
           :session-id="sessionId"
+          :visible="visible"
+          @composer="setComposer"
         />
       </template>
     </Vibe64AiTaskWindow>
@@ -39,7 +41,7 @@ import { useAiTaskHost, VIBE64_AI_TASKS_KEY, Vibe64AiTaskTray, Vibe64AiTaskWindo
 import { useAiTaskConversation } from "@/composables/useAiTaskConversation.js";
 import { VIBE64_AI_TASK_TRAY_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
-import { temporaryAiRequest } from "@/lib/vibe64TemporaryAiTasks.js";
+import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import Vibe64AiTaskChat from "./Vibe64AiTaskChat.vue";
 
@@ -53,7 +55,7 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  assistantCanConfigureRouting, connectionRecoveryVisible, mainChat, previewAttachmentState: attachmentState,
+  aiTaskComposer, assistantCanConfigureRouting, connectionRecoveryVisible, mainChat, previewAttachmentState: attachmentState,
   projectSlug, props: viewProps, reviewResolvedUpdate, sessionId: sessionIdRef
 } = view;
 
@@ -67,7 +69,7 @@ const host = useAiTaskHost({
   projectSlug,
   enabled,
   active: () => viewProps.active,
-  request: temporaryAiRequest,
+  request: aiTaskRequest,
   route: useRoute(),
   router: useRouter(),
   openAiSetup: () => requestVibe64AccountConnectionsDialog({}),
@@ -91,6 +93,10 @@ const conversation = useAiTaskConversation({
   composerOpen: () => host.projection?.composerOpen === true,
   connectionUnavailable
 });
+/** @param {object | null} composer the task chat's composer while that chat is shown */
+function setComposer(composer) {
+  aiTaskComposer.value = composer;
+}
 const commentary = computed(() => (conversation.task.value?.messages || [])
   .filter(({ role, text }) => role === "commentary" && text?.trim())
   .map(({ at, text }) => ({ at, text: text.trim() })));

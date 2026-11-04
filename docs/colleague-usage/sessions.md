@@ -119,9 +119,9 @@ small, light outline icons. Update uses a vertical line through a circle,
 distinct from the branching pull-request icon. Hover or focus a control to read
 its action label.
 
-During a session **Save** or **Update**, you can still open existing temporary
-chats, read their saved history and keep a plain text draft. The draft's save
-state appears in that chat. Sending or changing assistant work waits for the
+During a session **Save** or **Update**, you can still open an AI task,
+read its Chat and keep a plain text draft. The draft's save
+state appears in that Chat. Sending or changing assistant work waits for the
 repository operation to finish. If an Update response is lost, use the saved
 Update status and recovery controls before requesting another Update; a reload
 does not establish that the first one failed.
@@ -168,7 +168,7 @@ so it does not contain an archived session's unsaved work.
 An OpenCode session can be archived before its main chat has started; an idle
 assistant with no native conversation does not need a main-turn Stop request.
 Its helper conversations and terminals still go through normal cleanup.
-Archiving also cancels pending Main and temporary-chat routing, waits for its
+Archiving also cancels pending Main and AI task routing, waits for its
 owned helpers to stop, then closes native work through the normal cleanup path.
 You do not need to send the pending request or change AI accounts to close it.
 If routing cleanup takes longer than 30 seconds, the session stays available
@@ -202,9 +202,7 @@ The error then names each part that could not stop, such as
 `Database copilot: The database copilot helper could not be closed: <reason>.
 Retry before asking again.`, and a source explanation or copilot that could not
 close is kept so the retry closes it. Resolve the named reason, often an AI
-account to reconnect, then retry **Archive session**. Archiving also closes the
-session's open temporary chats in the browser; their saved history stays with
-the archived session. If a [Fix it with AI task](ai-tasks.md) is running, the dialog
+account to reconnect, then retry **Archive session**. If a [Fix it with AI task](ai-tasks.md) is running, the dialog
 says **An AI task is still running. Archiving cancels it.** and archiving ends that
 fix as **Not done**.
 If the last open session cannot be archived, its chat is selected again so you

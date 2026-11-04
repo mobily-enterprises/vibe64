@@ -1,0 +1,257 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { promisify } from "node:util";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import upgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261104-temporary-conversations-closed.js";
+import { closeOldTemporaryConversations } from "../../packages/vibe64-terminals/src/server/temporaryConversationsClosedUpgrade.js";
+
+const exec = promisify(execFile);
+const claudeId = (number) => `0b5b8c55-0000-4000-8000-00000000000${number}`;
+const ids = { main: claudeId(1), live: claudeId(2), task: claudeId(3), closing: claudeId(4), prepared: claudeId(5), archived: claudeId(6) };
+const attachments = { live: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", task: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+const selection = (engineId) => ({ engineId, modelId: `${engineId}-model` });
+const claudeChat = (conversationId) => ({ providerConversationId: conversationId, assistantSelection: selection("claude") });
+
+async function snapshot(root) {
+  const entries = {};
+  async function walk(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const filePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        entries[path.relative(root, filePath)] = "directory";
+        await walk(filePath);
+      } else {
+        entries[path.relative(root, filePath)] = createHash("sha256").update(await readFile(filePath)).digest("hex");
+      }
+    }
+  }
+  await walk(root);
+  return entries;
+}
+
+async function exists(filePath) {
+  return lstat(filePath).then(() => true, (error) => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
+}
+
+async function fixture(t) {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversations-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const systemRoot = path.join(root, "state"), configRoot = path.join(root, "claude"), workdir = path.join(root, "source");
+  await mkdir(workdir);
+  const managedSource = (sessionId) => path.join(root, "managed", "sessions", "active", sessionId, "source");
+  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(systemRoot, "projects", "example") });
+  const claudeHistory = {};
+  async function writeClaudeHistory(directory, conversationId) {
+    const filePath = path.join(configRoot, "projects", directory.replace(/[^a-zA-Z0-9]/gu, "-"), `${conversationId}.jsonl`);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify({ type: "user", uuid: conversationId, message: { content: "Fix the build" } })}\n`);
+    claudeHistory[conversationId] = filePath;
+  }
+  async function writeChat(sessionId, conversationId, record, transcript = true) {
+    await store.writeSessionConversation(sessionId, conversationId, record);
+    if (!transcript) return;
+    const log = path.join(store.paths(sessionId).conversationsRoot, conversationId, "conversation-log");
+    await mkdir(log, { recursive: true });
+    await writeFile(path.join(log, "transcript.json"), JSON.stringify({ version: 1, turns: [] }));
+  }
+  async function writeAttachment(sessionId, attachmentId, conversationId) {
+    const directory = path.join(store.paths(sessionId).artifactsRoot, "attachments", attachmentId);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "attachment.json"), JSON.stringify({ attachmentId, fileName: "notes.txt", conversationId }));
+    await writeFile(path.join(directory, "file"), "attached bytes");
+  }
+  async function createSession(sessionId) {
+    await store.createSession({ sessionId, runtimeKind: "genesis" });
+    for (const [name, value] of Object.entries({
+      source_path: managedSource(sessionId),
+      source_path_authority: "managed_session_source",
+      source_kind: "session_clone"
+    })) await store.writeMetadataValue(sessionId, name, value);
+  }
+  const savedClaude = (sessionId, conversationId) =>
+    store.writeMetadataValue(sessionId, `claude_conversation_${conversationId}`, JSON.stringify({ nativeWorkdir: workdir }));
+
+  // A live session: a Claude repair chat (with Codex retained), a free OpenCode chat and an AI task.
+  await createSession("live");
+  await store.writeMetadataValue("live", "claude_conversation_id", ids.main);
+  await savedClaude("live", ids.main);
+  await savedClaude("live", ids.live);
+  await writeChat("live", "repair", { ...claudeChat(ids.live),
+    nativeBindings: { codex: { conversationId: "019a7c55-codex-thread", assistantSelection: selection("codex") } } });
+  await writeChat("live", "free", { providerConversationId: "ses_free", assistantSelection: selection("opencode") });
+  await writeChat("live", "task", { ...claudeChat(ids.task), task: { kind: "update" } });
+  await writeAttachment("live", attachments.live, "repair");
+  await writeAttachment("live", attachments.task, "task");
+  for (const id of [ids.main, ids.live, ids.task]) await writeClaudeHistory(workdir, id);
+
+  // A closing session whose repair chat has no saved Claude folder, so its managed source names it.
+  await createSession("closing");
+  await writeChat("closing", "repair", claudeChat(ids.closing));
+  await writeClaudeHistory(managedSource("closing"), ids.closing);
+  const closingRoot = path.join(store.paths().closingSessionsRoot, "closing");
+  await mkdir(path.dirname(closingRoot), { recursive: true });
+  await rename(store.paths("closing").sessionRoot, closingRoot);
+
+  // A renewal's prepared archive and an ordinary archive.
+  for (const sessionId of ["renewed", "archived"]) {
+    await createSession(sessionId);
+    await savedClaude(sessionId, ids[sessionId === "renewed" ? "prepared" : "archived"]);
+    await writeChat(sessionId, "repair", claudeChat(ids[sessionId === "renewed" ? "prepared" : "archived"]));
+    await writeChat(sessionId, "task", { ...claudeChat(claudeId(sessionId === "renewed" ? 7 : 8)), task: { kind: "save" } }, false);
+    await writeClaudeHistory(workdir, ids[sessionId === "renewed" ? "prepared" : "archived"]);
+    await store.writeStatus(sessionId, "archived");
+    await store.publishSessionArchive(sessionId);
+  }
+  const archivedRoot = store.paths().archivedSessionsRoot;
+  const preparedRoot = path.join(archivedRoot, ".renewals", "renewed");
+  await mkdir(preparedRoot, { recursive: true });
+  for (const suffix of [".tar.gz", ".json"]) await rename(path.join(archivedRoot, `renewed${suffix}`), path.join(preparedRoot, `renewed${suffix}`));
+
+  // Engine-owned native storage the upgrade must never touch.
+  const codexRollout = path.join(root, "codex/sessions/2026/11/04/rollout-2026-11-04T00-00-00-019a7c55-codex-thread.jsonl");
+  const opencodeDatabase = path.join(root, "opencode/opencode.db");
+  for (const filePath of [codexRollout, opencodeDatabase]) {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, "engine-owned");
+  }
+
+  const backupRoot = path.join(systemRoot, "upgrades/backups/20261104-temporary-conversations-closed");
+  const reports = [];
+  const report = (level, message) => reports.push(`${level}: ${message}`);
+  return {
+    root, systemRoot, store, backupRoot, reports, claudeHistory, codexRollout, opencodeDatabase,
+    livePaths: store.paths("live"),
+    closingRoot,
+    preparedArchive: path.join(preparedRoot, "renewed.tar.gz"),
+    ordinaryArchive: path.join(archivedRoot, "archived.tar.gz"),
+    run: (apply, reporter = report) => closeOldTemporaryConversations({
+      systemRoot, apply, backupRoot, report: reporter,
+      env: { CLAUDE_CONFIG_DIR: configRoot }
+    })
+  };
+}
+
+async function archiveMembers(archive) {
+  return (await exec("tar", ["-tzf", archive])).stdout.split("\n").filter(Boolean);
+}
+
+async function assertClosed(f, { ordinaryArchive, claudeBytes }) {
+  const live = f.livePaths;
+  assert.equal(await exists(path.join(live.conversationsRoot, "repair")), false);
+  assert.equal(await exists(path.join(live.conversationsRoot, "free")), false);
+  assert.equal(await exists(path.join(live.conversationsRoot, "task/conversation.json")), true);
+  assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.live)), false);
+  assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.task, "file")), true);
+  assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.live}`)), false);
+  assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.main}`)), true);
+  assert.equal(await exists(path.join(f.closingRoot, "conversations/repair")), false);
+  const members = await archiveMembers(f.preparedArchive);
+  assert.ok(members.some((name) => name.endsWith("/conversations/task/conversation.json")));
+  assert.ok(!members.some((name) => name.includes("/conversations/repair")));
+  assert.ok(!members.some((name) => name.endsWith(`/claude_conversation_${ids.prepared}`)));
+  assert.deepEqual(await readFile(f.ordinaryArchive), ordinaryArchive);
+  for (const id of [ids.live, ids.closing, ids.prepared]) {
+    assert.equal(await exists(f.claudeHistory[id]), false);
+    const backup = path.join(f.backupRoot, "claude", path.relative(path.join(f.root, "claude"), f.claudeHistory[id]));
+    assert.deepEqual(await readFile(backup), claudeBytes[id]);
+  }
+  for (const id of [ids.main, ids.task, ids.archived]) assert.deepEqual(await readFile(f.claudeHistory[id]), claudeBytes[id]);
+  assert.equal(await readFile(f.codexRollout, "utf8"), "engine-owned");
+  assert.equal(await readFile(f.opencodeDatabase, "utf8"), "engine-owned");
+}
+
+async function originals(f) {
+  const claudeBytes = {};
+  for (const [id, filePath] of Object.entries(f.claudeHistory)) claudeBytes[id] = await readFile(filePath);
+  return {
+    ordinaryArchive: await readFile(f.ordinaryArchive),
+    claudeBytes,
+    repairRecord: await readFile(path.join(f.livePaths.conversationsRoot, "repair/conversation.json"))
+  };
+}
+
+test("old temporary conversations are found read-only, then deleted with their attachments and Claude history", async (t) => {
+  const f = await fixture(t);
+  const before = await originals(f);
+  const tree = await snapshot(f.root);
+  await f.run(false);
+  assert.deepEqual(await snapshot(f.root), tree);
+  assert.deepEqual(f.reports, [
+    "info: example: 4 old temporary conversation(s) to delete (3 in live sessions, 1 in prepared renewal archives) with " +
+      "1 attachment(s); 2 AI task conversation(s) kept.",
+    "info: Native conversations of these chats: 3 Claude to delete from Claude's own storage; 0 Claude, 1 Codex and 1 OpenCode " +
+      "left in their engine's own storage, which only the running engine can delete.",
+    "info: 10 state file(s) to change."
+  ]);
+
+  f.reports.length = 0;
+  await f.run(true);
+  await assertClosed(f, before);
+  assert.deepEqual(
+    await readFile(path.join(f.backupRoot, "sessions/before", path.relative(f.systemRoot, f.livePaths.conversationsRoot), "repair/conversation.json")),
+    before.repairRecord
+  );
+  assert.ok(f.reports.includes("info: Deleted 3 Claude native conversation(s); their files are kept in this upgrade's claude/ backup."));
+  assert.ok(f.reports.includes("info: Removed 4 emptied conversation and attachment folder(s)."));
+  assert.ok(!f.reports.some((message) => message.startsWith("warning:")));
+
+  const closed = await snapshot(f.root);
+  await f.run(true);
+  assert.deepEqual(await snapshot(f.root), closed);
+});
+
+for (const stage of ["state file(s) to change", "Published state:"]) {
+  test(`an apply interrupted at "${stage}" finishes on its rerun`, async (t) => {
+    const f = await fixture(t);
+    const before = await originals(f);
+    let interrupted = false;
+    await assert.rejects(f.run(true, (_level, message) => {
+      if (!interrupted && message.includes(stage)) {
+        interrupted = true;
+        throw new Error("interrupted");
+      }
+    }), /interrupted/);
+    await f.run(true);
+    await assertClosed(f, before);
+    const closed = await snapshot(f.root);
+    await f.run(true);
+    assert.deepEqual(await snapshot(f.root), closed);
+  });
+}
+
+for (const [label, change, expected] of [
+  ["shares the main chat's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.main)),
+    /also the main chat's or an AI task's/],
+  ["shares an AI task's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.task)),
+    /also the main chat's or an AI task's/],
+  ["has unreadable native bindings", (f) => f.store.writeSessionConversation("live", "repair", { nativeBindings: "lost" }),
+    /native bindings are unreadable/],
+  ["names an unknown engine", (f) => f.store.writeSessionConversation("live", "repair", { assistantSelection: selection("other") }),
+    /native conversation Vibe64 does not know/],
+  ["has an unreadable AI task", (f) => f.store.writeSessionConversation("live", "task", { task: "update" }),
+    /AI task is unreadable/]
+]) {
+  test(`a temporary conversation that ${label} stops the upgrade before any change`, async (t) => {
+    const f = await fixture(t);
+    await change(f);
+    const tree = await snapshot(f.root);
+    await assert.rejects(f.run(true), expected);
+    assert.deepEqual(await snapshot(f.root), tree);
+  });
+}
+
+test("the numbered upgrade requires its Terminals owner and passes the runner's context through", async () => {
+  await assert.rejects(upgrade.run({ systemRoot: "/state" }), /candidate upgrade-state command/);
+  const calls = [];
+  await upgrade.run({ systemRoot: "/state", apply: true, closeOldTemporaryConversations: async (context) => calls.push(context) });
+  assert.deepEqual(calls, [{ systemRoot: "/state", apply: true }]);
+  assert.equal(upgrade.id, "20261104-temporary-conversations-closed");
+});

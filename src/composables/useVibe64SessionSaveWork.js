@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
 
@@ -301,8 +301,8 @@ function useVibe64SessionSaveWork(props, {
     "vibe64_session_update_conflict",
     "vibe64_session_update_history_diverged"
   ].includes(String(saveWorkFailure.value?.code || "")));
-  // Any reported Save or Update problem can be handed to temporary AI.
-  const saveWorkCanResolveWithTemporaryAi = computed(() => Boolean(saveWorkError.value));
+  // Any reported Save or Update problem can be handed to Fix it with AI.
+  const saveWorkCanResolveWithAi = computed(() => Boolean(saveWorkError.value));
   const updateConflictRecovery = computed(() => {
     const recovery = saveWorkFailure.value?.details?.conflictRecovery;
     return saveWorkFailure.value?.code === "vibe64_session_update_conflict" &&
@@ -319,6 +319,26 @@ function useVibe64SessionSaveWork(props, {
     const { reviewId, conflictPaths } = updateConflictRecovery.value;
     resolvedUpdateReview.value = { reviewId, conflictPaths: [...conflictPaths] };
     return true;
+  }
+
+  // Runs Update with the resolution the person reviewed. It answers false when
+  // that review no longer applies, and "repository-update" once Update ran for
+  // the same session.
+  function applyResolvedUpdate() {
+    const review = resolvedUpdateReview.value;
+    if (updateWorkDisabled.value || repositoryOperationActive.value || props.sessionRenewal?.sourceOperationsSuspended ||
+        !review || review.reviewId !== updateConflictRecovery.value?.reviewId) return false;
+    resolvedUpdateReview.value = null;
+    return runReviewedUpdate(review.reviewId);
+  }
+
+  async function runReviewedUpdate(reviewedConflictId) {
+    const checkingSessionId = sessionId.value;
+    const checkingProjectSlug = projectSlug.value;
+    await updateBeforeSave({ reviewedConflictId });
+    if (typeof props.refreshSessionWork === "function") await props.refreshSessionWork().catch(() => null);
+    await nextTick();
+    return checkingSessionId === sessionId.value && checkingProjectSlug === projectSlug.value ? "repository-update" : false;
   }
 
   const saveWorkRetryable = computed(() => Boolean(
@@ -456,6 +476,7 @@ function useVibe64SessionSaveWork(props, {
   });
 
   return {
+    applyResolvedUpdate,
     cancelSaveWork,
     confirmSaveWork,
     dismissSaveWorkActivity,
@@ -468,7 +489,7 @@ function useVibe64SessionSaveWork(props, {
     saveWorkActivityIsUpdate,
     saveWorkActivityKey,
     saveWorkActivityLabel,
-    saveWorkCanResolveWithTemporaryAi,
+    saveWorkCanResolveWithAi,
     saveWorkConfirmOpen,
     saveWorkConflictFailure,
     saveWorkConnectedResults,

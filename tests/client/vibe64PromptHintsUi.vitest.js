@@ -152,9 +152,6 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot.indexOf("<AssistantComposerSupport")).toBeLessThan(
       autopilot.indexOf('class="studio-autopilot__composer"')
     );
-    expect(autopilot.indexOf("<AssistantComposerSupport")).toBeLessThan(
-      autopilot.indexOf("<Vibe64TemporaryAiWorkspace")
-    );
     expect(autopilot).not.toContain("studio-autopilot__thinking-mark");
   });
 

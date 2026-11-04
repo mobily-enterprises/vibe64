@@ -133,7 +133,7 @@
       >
         <template #actions>
           <Vibe64AiTaskButton
-            v-if="canResolveUpdateWithAi && typeof dashboard.requestTemporaryAi === 'function'"
+            v-if="canResolveUpdateWithAi"
             :allowed="dashboard.assistantFixAllowed !== false"
             :input="{}"
             kind="update"

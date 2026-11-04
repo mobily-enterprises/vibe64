@@ -91,8 +91,8 @@ that nothing was pushed, the original rejection remains visible or an
 uncertain attempt becomes explicitly retryable. Colleague can inspect work and
 explain that result; a new Save still requires your instruction.
 
-Save and Update can take time. Existing temporary chats remain readable, and
-plain text typed in an existing chat is saved without waiting for the source
+Save and Update can take time. An open [AI task](ai-tasks.md)'s Chat stays readable, and
+plain text typed in it is saved without waiting for the source
 operation. A new assistant send or change to its model or attachments waits
 until that operation finishes. If the Update request loses its response, inspect
 the current Update operation in this session before starting another one; a
@@ -173,8 +173,7 @@ another AI request. Successful Update may still require workspace preparation;
 its result does not establish that application tests passed.
 
 The window's **Check now** is a plain retry, not an acknowledgement that
-conflicting files are resolved; so is **Check Update** on a repair chat started
-before the window existed. A completed **Fix it with AI**
+conflicting files are resolved. A completed **Fix it with AI**
 repair still submits its recorded review by itself on the server, whether or not
 anyone is watching, subject to the same repository checks.
 

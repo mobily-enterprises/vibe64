@@ -168,7 +168,7 @@ lesson.
 Signing out, losing access to the target, or leaving the page releases its
 resources. A project agent remains the selected voice target even if its text
 view is no longer mounted; the retained voice window then shows recognized-word
-and answer captions, without redirecting the conversation. Temporary and host-owned repair chats do not have a
+and answer captions, without redirecting the conversation. AI tasks and host-owned repair chats do not have a
 project voice launcher.
 
 Desktop and mobile use the same controls; the conversation fills the screen on

@@ -73,7 +73,7 @@ function createTemporaryConversationLifecycle({
           ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
           : { mode: "senior", override: parentSelection };
       }
-      const fixRequired = input.presentation?.recoveryOperation === "update" || task?.turn.routing === "fix";
+      const fixRequired = task?.turn.routing === "fix";
       const requestedPreferences = fixRequired ? { mode: "fix" } : input.assistantRouting || inheritedPreferences;
       if (requestedPreferences.mode === "auto") throw temporaryAutoModeRefusal();
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();

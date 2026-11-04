@@ -560,66 +560,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value).toEqual([]);
   });
 
-  it("starts subsystem map work in a temporary task and preserves the main draft", async () => {
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "subsystem-task" }));
-    const { view, props } = await createViewWithProps({}, { requestTemporaryAi });
-    view.composerDraft.value = "Keep this main-chat draft.";
-    expect(await view.describeSubsystems()).toBe(true);
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Subsystem map",
-      dedupeKey: "subsystem-map:session-1"
-    }));
-    expect(requestTemporaryAi.mock.calls[0][0].message).toContain("genesis/subsystems.md");
-    expect(requestTemporaryAi.mock.calls[0][0]).not.toHaveProperty("agentSettings");
-    expect(requestTemporaryAi.mock.calls[0][0]).not.toHaveProperty("executionProfile");
-    expect(view.composerDraft.value).toBe("Keep this main-chat draft.");
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
-    expect(await view.handleTemporaryAiTaskFinished({
-      id: "subsystem-task", sessionId: "session-1", dedupeKey: "subsystem-map:session-1", status: "completed"
-    })).toBe("subsystem-map");
-    expect(view.systemReloadVersion.value).toBe(1);
-    await view.handleTemporaryAiTaskFinished({
-      id: "other-task", sessionId: "session-2", dedupeKey: "subsystem-map:session-2", status: "completed"
-    });
-    expect(view.systemReloadVersion.value).toBe(1);
-  });
-
-  it("uses Fix it with AI availability for generated work while the main personal chat is restricted", async () => {
-    const canCode = ref(true);
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "shared-code-task" }));
-    const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
-      workspaceSetup: { status: "failed", diagnostic: "Install failed." }
-    } }, { assistantCanUseAi: ref(false), assistantCanUseFix: canCode, requestTemporaryAi });
-    view.composerDraft.value = "Keep my draft.";
-    expect(view.assistantDirectAllowed.value).toBe(false);
-    expect(view.workspaceSetupAskDisabled.value).toBe(false);
-    expect(await view.fixWorkspaceSetupWithTemporaryAi()).toBe(true);
-    expect(await view.fixPreviewIdentityWithTemporaryAi({ error: "Login failed." })).toBe(true);
-    expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(true);
-    expect(await view.describeSubsystems()).toBe(true);
-    expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.composerDraft.value).toBe("Keep my draft.");
-    canCode.value = false;
-    expect(view.workspaceSetupAskDisabled.value).toBe(true);
-    expect(await view.fixPreviewIdentityWithTemporaryAi({ error: "Login failed." })).toBe(false);
-    expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(false);
-    expect(await view.describeSubsystems()).toBe(false);
-    expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
-  });
-
-  it("admits merge repair through Fix it with AI even when the main model is unavailable", async () => {
-    const fix = ref(true);
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseFix: fix, requestTemporaryAi });
-    const conflict = { code: "vibe64_session_update_conflict", error: "Keep both changes." };
-    expect(await view.fixRepositoryError(conflict)).toBe(true);
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({ recoveryOperation: "update" }));
-    fix.value = false;
-    expect(await view.fixRepositoryError(conflict)).toBe(false);
-    expect(requestTemporaryAi).toHaveBeenCalledOnce();
-  });
-
   it("treats required preparation neutrally but exposes actual setup and start failures", async () => {
     const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
       workspaceSetup: { status: "required", diagnostic: "Install updated dependencies.", transcript: "Previous setup output." }
@@ -668,13 +608,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     await view.submitComposerMessage();
     expect(props.sendAgentMessage).toHaveBeenCalledOnce();
     expect(props.sendAgentMessage.mock.calls[0][0].submissionKind).toBe("send");
-  });
-
-  it("does not start subsystem map work without assistant access", async () => {
-    const requestTemporaryAi = vi.fn();
-    const view = await createView({}, { requestTemporaryAi, assistantCanUseAi: ref(false) });
-    expect(await view.describeSubsystems()).toBe(false);
-    expect(requestTemporaryAi).not.toHaveBeenCalled();
   });
 
   it("shows reasoning activity only for a confirmed active reasoning phase", async () => {
@@ -1812,7 +1745,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.workspaceSetupRunning.value).toBe(true);
     expect(view.workspaceSetupNeedsAttention.value).toBe(false);
     expect(view.workspaceSetupTitle.value).toBe("Waiting for session update…");
-    expect(view.workspaceSetupAskDisabled.value).toBe(true);
     props.session.workspaceSetup = { status: "running", currentLabel: "Install dependencies" };
     props.workState.updateOperation.status = "ready";
     await nextTick();
@@ -1863,255 +1795,10 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(retryWorkspaceSetup).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    ["required", "Workspace preparation required", "Source updated; preparation is required."],
-    ["failed", "Workspace preparation failed", "Dependency installation exited with code 1."],
-    ["ambiguous", "Workspace setup needs a choice", "Two Stack components declare different setup recipes."]
-  ])("routes %s workspace recovery through Temporary AI", async (status, title, diagnostic) => {
-    const sendAgentMessage = vi.fn(async () => true);
-    const requestTemporaryAi = vi.fn(async () => ({
-      ok: true,
-      taskId: "workspace-fix-1"
-    }));
-    const view = await createView({
-      sendAgentMessage,
-      session: {
-        ...viewProps().session,
-        workspaceSetup: {
-          diagnostic,
-          status,
-          updatedAt: "2026-08-23T12:00:00.000Z"
-        }
-      }
-    }, {
-      requestTemporaryAi
-    });
-    const originalTurns = [...view.chatTurns.value];
-
-    expect(view.workspaceSetupTitle.value).toBe(title);
-    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
-
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
-      completionMessage: "AI repair finished. Vibe64 is verifying workspace preparation now.",
-      dedupeKey: expect.stringContaining(`workspace-setup|session-1|${status}|`),
-      displayMessage: "Fix workspace preparation.",
-      failureMessage: expect.stringContaining("Vibe64 is checking whether its edits repaired"),
-      message: expect.stringContaining(diagnostic),
-      nextStepMessage: expect.stringContaining("automatically retry workspace preparation"),
-      recoveryNotice: expect.stringContaining("separate temporary chat"),
-      title: "Fix workspace preparation"
-    }));
-    expect(requestTemporaryAi.mock.calls[0][0].message).toContain("preserving its existing work");
-    expect(requestTemporaryAi.mock.calls[0][0].message).toContain(
-      "Vibe64 will automatically rerun its deterministic workspace preparation"
-    );
-    expect(sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.chatTurns.value).toEqual(originalTurns);
-  });
-
-  it("reruns deterministic workspace preparation after its Temporary AI repair completes or times out", async () => {
-    const retryWorkspaceSetup = vi.fn(async () => true);
-    const requestTemporaryAi = vi.fn(async () => ({
-      ok: true,
-      taskId: "workspace-fix-1"
-    }));
-    const view = await createView({
-      retryWorkspaceSetup,
-      session: {
-        ...viewProps().session,
-        workspaceSetup: {
-          diagnostic: "The deployment command is not configured.",
-          status: "failed",
-          transcript: "[Inspect deployment] Failed."
-        }
-      }
-    }, { requestTemporaryAi });
-
-    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
-    expect(requestTemporaryAi.mock.calls[0][0].message).toContain(
-      "Recent preparation output:\n[Inspect deployment] Failed."
-    );
-    await expect(view.handleTemporaryAiTaskFinished({
-      id: "another-task",
-      status: "completed"
-    })).resolves.toBe(false);
-    await expect(view.handleTemporaryAiTaskFinished({
-      id: "workspace-fix-1",
-      status: "failed"
-    })).resolves.toBe("workspace-setup");
-    expect(retryWorkspaceSetup).toHaveBeenCalledTimes(1);
-
-    await expect(view.handleTemporaryAiTaskFinished({
-      id: "workspace-fix-1",
-      status: "completed"
-    })).resolves.toBe(false);
-    expect(retryWorkspaceSetup).toHaveBeenCalledTimes(1);
-
-    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
-    await expect(view.handleTemporaryAiTaskFinished({
-      id: "workspace-fix-1",
-      status: "completed"
-    })).resolves.toBe("workspace-setup");
-    expect(retryWorkspaceSetup).toHaveBeenCalledTimes(2);
-  });
-
-  it("checks the actual Update after repair and reports failure before a successful follow-up", async () => {
-    const pending = deferredResult();
-    const updateSessionWork = vi.fn()
-      .mockImplementationOnce(() => pending.promise)
-      .mockResolvedValueOnce({ ok: true, status: "updated" });
-    const view = await createView({ updateSessionWork });
-    const report = vi.fn();
-    const task = {
-      id: "update-repair", runId: "repair-1", sessionId: "session-1",
-      recoveryOperation: "update", status: "completed", outcomeKind: "complete",
-      runConflictId: "reviewed-conflict", recoveryConflictId: "newer-conflict"
-    };
-    const checking = view.handleTemporaryAiTaskFinished(task, report);
-    expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({ status: "checking",
-      message: "Checking Update…", recoveryRequestId: expect.any(String) }));
-    await expect(view.handleTemporaryAiTaskFinished(task, report)).resolves.toBe(false);
-    expect(updateSessionWork).toHaveBeenCalledTimes(1);
-    expect(updateSessionWork).toHaveBeenLastCalledWith(expect.objectContaining({ reviewedConflictId: "reviewed-conflict",
-      requestId: expect.any(String) }));
-    pending.reject(Object.assign(new Error("Document still conflicts."), { code: "vibe64_session_update_conflict" }));
-    await expect(checking).resolves.toBe("repository-update");
-    expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({
-      status: "failed", message: "Update still needs attention: Document still conflicts."
-    }));
-    await view.handleTemporaryAiTaskFinished({ ...task, runId: "repair-2" }, report);
-    expect(updateSessionWork).toHaveBeenCalledTimes(2);
-    expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({ status: "succeeded" }));
-  });
-
-  it.each([
-    { status: "failed" }, { status: "interrupted" }, { outcomeKind: "continue" },
-    { outcomeKind: "" }, { sessionId: "another-session" }, { recoveryOperation: "" }, { runId: "" },
-    { recoveryOutcome: "checking" }, { recoveryOutcome: "unconfirmed" }
-  ])("does not apply Update for an unverified repair completion: %j", async (override) => {
-    const updateSessionWork = vi.fn();
-    const view = await createView({ updateSessionWork });
-    const report = vi.fn();
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1",
-      recoveryOperation: "update", status: "completed", outcomeKind: "complete", ...override
-    }, report);
-    expect(updateSessionWork).not.toHaveBeenCalled();
-    expect(report).not.toHaveBeenCalled();
-  });
-
-  it("does not start another Update while an earlier result remains unconfirmed", async () => {
-    const updateSessionWork = vi.fn();
-    const view = await createView({ updateSessionWork });
-    const task = {
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "continue", recoveryOutcome: "unconfirmed"
-    };
-    await expect(view.handleTemporaryAiTaskFinished(task, vi.fn(), { force: true })).resolves.toBe(false);
-    expect(updateSessionWork).not.toHaveBeenCalled();
-  });
-
-  it("does not start Update when its recovery checkpoint cannot be saved", async () => {
-    const updateSessionWork = vi.fn();
-    const view = await createView({ updateSessionWork });
-    const report = vi.fn().mockResolvedValueOnce(false);
-    await expect(view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete"
-    }, report)).resolves.toBe(false);
-    expect(updateSessionWork).not.toHaveBeenCalled();
-    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "failed" }));
-  });
-
-  it("uses a matching durable operation after the Update response is lost", async () => {
-    let requestId = "";
-    const updateSessionWork = vi.fn(async ({ requestId: id }) => {
-      requestId = id;
-      throw new Error("Connection lost.");
-    });
-    const refreshSessionWork = vi.fn(async () => ({ updateOperation: { requestId, status: "ready" } }));
-    const view = await createView({ updateSessionWork, refreshSessionWork });
-    const report = vi.fn();
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete"
-    }, report);
-    expect(updateSessionWork).toHaveBeenCalledTimes(1);
-    expect(refreshSessionWork).toHaveBeenCalledTimes(1);
-    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "succeeded" }));
-  });
-
-  it("does not apply a saved repair checkpoint to a different selected session", async () => {
-    const checkpoint = deferredResult();
-    const updateSessionWork = vi.fn();
-    const { view, props } = await createViewWithProps({ updateSessionWork });
-    const report = vi.fn(() => checkpoint.promise);
-    const checking = view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete"
-    }, report);
-    expect(report).toHaveBeenCalledTimes(1);
-    props.session = { ...props.session, sessionId: "session-2" };
-    checkpoint.resolve(true);
-    await checking;
-    expect(updateSessionWork).not.toHaveBeenCalled();
-    expect(report).toHaveBeenCalledTimes(1);
-  });
-
-  it("prefers a matching durable Update failure over a stale successful response", async () => {
-    const updateSessionWork = vi.fn(async () => ({ ok: true }));
-    const refreshSessionWork = vi.fn(async () => ({ updateOperation: {
-      requestId: updateSessionWork.mock.calls[0][0].requestId,
-      status: "failed", error: "Preparation failed."
-    } }));
-    const view = await createView({ updateSessionWork, refreshSessionWork });
-    const report = vi.fn();
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete"
-    }, report);
-    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({
-      status: "failed", message: "Update still needs attention: Preparation failed."
-    }));
-  });
-
-  it("checks a prepared continue result on explicit request without starting another repair", async () => {
-    const pending = deferredResult();
-    const updateSessionWork = vi.fn(() => pending.promise);
-    const view = await createView({ updateSessionWork });
-    const report = vi.fn();
-    const task = {
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "continue", runConflictId: "unresolved-conflict"
-    };
-    const checking = view.handleTemporaryAiTaskFinished(task, report, { force: true });
-    expect(updateSessionWork).toHaveBeenLastCalledWith(expect.objectContaining({ reviewedConflictId: "",
-      requestId: expect.any(String) }));
-    await expect(view.handleTemporaryAiTaskFinished(task, report, { force: true })).resolves.toBe(false);
-    expect(updateSessionWork).toHaveBeenCalledTimes(1);
-    pending.resolve({ ok: true, status: "updated" });
-    await checking;
-    expect(report).toHaveBeenLastCalledWith(task.id, {
-      status: "succeeded", message: "Session updated. Your changes were preserved. Nothing was pushed."
-    });
-  });
-
-  it("keeps explicit Check Update a plain retry even after a completed AI repair", async () => {
-    const updateSessionWork = vi.fn().mockResolvedValue({ ok: true });
-    const view = await createView({ updateSessionWork });
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete", runConflictId: "previous-review"
-    }, vi.fn(), { force: true });
-    expect(updateSessionWork).toHaveBeenCalledWith(expect.objectContaining({ reviewedConflictId: "",
-      requestId: expect.any(String) }));
-  });
-
   it("applies a human-reviewed conflict without an AI chat and ignores duplicate confirmation", async () => {
     const pending = deferredResult();
     const updateSessionWork = vi.fn(() => pending.promise);
-    const requestTemporaryAi = vi.fn();
-    const view = await createView({ updateSessionWork }, { requestTemporaryAi });
+    const view = await createView({ updateSessionWork });
     view.saveWorkFailure.value = {
       code: "vibe64_session_update_conflict",
       details: { conflictRecovery: { reviewId: "review-1", conflictPaths: ["src/app.js", "tests/app.js"] } }
@@ -2127,7 +1814,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     await applying;
     expect(view.resolvedUpdateReview.value).toBeNull();
     expect(view.saveWorkFailure.value).toBeNull();
-    expect(requestTemporaryAi).not.toHaveBeenCalled();
   });
 
   it("discards a conflict acknowledgement when the conflict or selected session changes", async () => {
@@ -2155,262 +1841,22 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.saveWorkFailure.value = { code: "vibe64_session_update_conflict",
       details: { conflictRecovery: { reviewId: "old-review", conflictPaths: ["app.js"] } } };
     view.reviewResolvedUpdate();
-    const report = vi.fn();
-    await view.applyResolvedUpdate({ id: "repair", sessionId: "session-1",
-      recoveryOperation: "update", status: "interrupted", outcomeKind: "", runConflictId: "older-review" }, report);
-    expect(updateSessionWork).toHaveBeenCalledWith(expect.objectContaining({ reviewedConflictId: "old-review",
-      requestId: expect.any(String) }));
-    expect(report).toHaveBeenLastCalledWith("repair", {
-      status: "failed", message: "Update still needs attention: Repository changed; review again.",
-      recoveryConflictId: "new-review"
-    });
+    await view.applyResolvedUpdate();
+    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "old-review" });
     expect(view.resolvedUpdateReview.value).toBeNull();
     expect(view.reviewResolvedUpdate()).toBe(true);
     expect(view.resolvedUpdateReview.value.conflictPaths).toEqual(["app.js", "new.js"]);
   });
 
-  it("blocks a reviewed Update while the coding agent or repair is busy", async () => {
+  it("blocks a reviewed Update while the coding agent is busy", async () => {
     const { view, props } = await createViewWithProps();
     view.saveWorkFailure.value = { code: "vibe64_session_update_conflict",
       details: { conflictRecovery: { reviewId: "review", conflictPaths: ["app.js"] } } };
     view.reviewResolvedUpdate();
     props.agentConnectionStatus = "reconciling";
     expect(view.applyResolvedUpdate()).toBe(false);
-    props.agentConnectionStatus = "connected";
-    expect(view.applyResolvedUpdate({ id: "repair", sessionId: "session-1", recoveryOperation: "update", busy: true })).toBe(false);
     expect(props.updateSessionWork).not.toHaveBeenCalled();
     expect(view.resolvedUpdateReview.value.reviewId).toBe("review");
-  });
-
-  it("allows an explicit Update check even when the current session has no work to save", async () => {
-    const updateSessionWork = vi.fn().mockResolvedValue({ ok: true, status: "already_current" });
-    const view = await createView({ updateSessionWork, workState: { unsaved: false, updateAvailable: false } });
-    expect(view.saveWorkDisabled.value).toBe(true);
-    expect(view.updateWorkDisabled.value).toBe(false);
-    const report = vi.fn();
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "continue"
-    }, report, { force: true });
-    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "succeeded" }));
-  });
-
-  it.each([{ busy: true }, { status: "inProgress" }, { sessionId: "other" }])(
-    "does not force an Update over an active or different session repair: %j", async (override) => {
-      const updateSessionWork = vi.fn();
-      const view = await createView({ updateSessionWork });
-      await expect(view.handleTemporaryAiTaskFinished({
-        id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-        status: "completed", outcomeKind: "continue", ...override
-      }, vi.fn(), { force: true })).resolves.toBe(false);
-      expect(updateSessionWork).not.toHaveBeenCalled();
-    }
-  );
-
-  it("hands remaining conflicts back with their identity and an explicit same-chat completion contract", async () => {
-    const failure = Object.assign(new Error("Remaining conflict: messages.vue"), {
-      code: "vibe64_session_update_conflict",
-      details: { conflictPaths: ["messages.vue"], conflictRecovery: { canonicalCommit: "canonical-2" } }
-    });
-    const view = await createView({ updateSessionWork: vi.fn().mockRejectedValue(failure) });
-    const report = vi.fn();
-    await view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "complete"
-    }, report);
-    const outcome = report.mock.calls.at(-1)[1];
-    expect(outcome.status).toBe("failed");
-    expect(JSON.parse(outcome.retryKey)).toEqual([failure.code, "canonical-2", ["messages.vue"]]);
-    expect(outcome.retryMessage).toContain(failure.message);
-    expect(outcome.retryMessage).toContain("Return kind=complete");
-    expect(outcome.retryMessage).toContain("this same conversation");
-  });
-
-  it.each(["success", "failure"])("does not report an old Update %s into another session", async (outcome) => {
-    const pending = deferredResult();
-    const { view, props } = await createViewWithProps({ updateSessionWork: () => pending.promise });
-    const report = vi.fn();
-    const checking = view.handleTemporaryAiTaskFinished({
-      id: "repair", runId: "turn", sessionId: "session-1",
-      recoveryOperation: "update", status: "completed", outcomeKind: "complete"
-    }, report);
-    props.session = { ...props.session, sessionId: "session-2" };
-    await nextTick();
-    if (outcome === "success") {
-      pending.resolve({ ok: true });
-    } else {
-      pending.reject(new Error("Old session failed."));
-    }
-    await checking;
-    expect(view.saveWorkError.value).toBe("");
-    expect(view.saveWorkSending.value).toBe(false);
-    expect(report).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps a workspace recovery action pending and ignores a rapid duplicate activation", async () => {
-    let resolveRecovery;
-    const requestTemporaryAi = vi.fn(() => new Promise((resolve) => {
-      resolveRecovery = resolve;
-    }));
-    const view = await createView({
-      session: {
-        ...viewProps().session,
-        workspaceSetup: {
-          diagnostic: "Dependency installation exited with code 1.",
-          status: "failed"
-        }
-      }
-    }, { requestTemporaryAi });
-
-    const firstRequest = view.fixWorkspaceSetupWithTemporaryAi();
-    expect(view.workspaceSetupFixSending.value).toBe(true);
-    expect(view.workspaceSetupAskDisabled.value).toBe(true);
-    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(false);
-    expect(requestTemporaryAi).toHaveBeenCalledTimes(1);
-
-    resolveRecovery({ ok: true });
-    await expect(firstRequest).resolves.toBe(true);
-    expect(view.workspaceSetupFixSending.value).toBe(false);
-  });
-
-  it("routes a rejected preview identity through Temporary AI without touching direct chat", async () => {
-    const sendAgentMessage = vi.fn(async () => true);
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const view = await createView({ sendAgentMessage }, { requestTemporaryAi });
-    const originalTurns = [...view.chatTurns.value];
-
-    await expect(view.fixPreviewIdentityWithTemporaryAi({
-      error: "User not found.",
-      identity: {
-        name: "Admin",
-        type: "email",
-        value: "ada@example.test"
-      }
-    })).resolves.toBe(true);
-
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
-      dedupeKey: expect.stringContaining("preview-identity|session-1|email|ada@example.test|User not found."),
-      message: expect.stringContaining("app-owned, idempotent development seed"),
-      title: "Fix preview identity"
-    }));
-    expect(requestTemporaryAi.mock.calls[0][0].message).toContain("User not found.");
-    expect(sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.chatTurns.value).toEqual(originalTurns);
-  });
-
-  it.each([
-    ["vibe64_session_save_history_diverged", "Save", "operation"],
-    ["vibe64_session_update_conflict", "Update", "updateOperation"],
-    ["vibe64_session_update_history_diverged", "Update", "updateOperation"]
-  ])("routes %s chat recovery through Temporary AI", async (code, action, operationKey) => {
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const sendAgentMessage = vi.fn(async () => true);
-    const diagnostic = `${action} could not preserve the changed history.`;
-    const view = await createView({
-      sendAgentMessage,
-      workState: {
-        [operationKey]: {
-          code,
-          ...(code === "vibe64_session_update_conflict" ? {
-            conflictPaths: ["data-overview.json"],
-            conflictRecovery: { reviewId: "persisted-conflict" }
-          } : {}),
-          error: diagnostic,
-          operationId: `operation-${code}`,
-          status: "failed"
-        }
-      }
-    }, { requestTemporaryAi });
-    const originalTurns = [...view.chatTurns.value];
-
-    expect(view.saveWorkCanResolveWithTemporaryAi.value).toBe(true);
-    await expect(view.fixRepositoryActionError()).resolves.toBe(true);
-
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
-      dedupeKey: `repository-recovery|session-1|${code}|${diagnostic}`,
-      message: expect.stringContaining(diagnostic),
-      recoveryConflictId: code === "vibe64_session_update_conflict" ? "persisted-conflict" : "",
-      title: `Resolve ${action}`
-    }));
-    const prompt = requestTemporaryAi.mock.calls[0][0].message;
-    expect(prompt).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(prompt).toContain("Do not run git add, commit, checkout");
-    expect(sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.chatTurns.value).toEqual(originalTurns);
-  });
-
-  it.each([
-    "vibe64_session_update_conflict",
-    "vibe64_session_update_history_diverged"
-  ])("routes %s Dashboard recovery through Temporary AI", async (code) => {
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const sendAgentMessage = vi.fn(async () => true);
-    const diagnostic = `Repository update failed with ${code}.`;
-    const view = await createView({ sendAgentMessage }, { requestTemporaryAi });
-    const originalTurns = [...view.chatTurns.value];
-
-    await expect(view.fixRepositoryError({
-      code,
-      error: diagnostic,
-      title: "Resolve repository update"
-    })).resolves.toBe(true);
-
-    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
-      dedupeKey: `repository-recovery|session-1|${code}|${diagnostic}`,
-      message: expect.stringContaining(diagnostic),
-      title: "Resolve repository update"
-    }));
-    expect(sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.chatTurns.value).toEqual(originalTurns);
-  });
-
-  it("opens Incoming conflict repair with Fix it with AI and requires a separate reviewed Merge", async () => {
-    const senior = ref(true);
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "incoming-repair" }));
-    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseFix: senior, requestTemporaryAi });
-    const input = { code: "vibe64_incoming_merge_conflict", error: "Exact target abc and contribution def; shared.txt.", title: "Resolve Incoming merge" };
-    expect(await view.fixRepositoryError(input)).toBe(true);
-    const task = requestTemporaryAi.mock.calls[0][0];
-    expect(task.initialRouting).toBeUndefined();
-    expect(task.recoveryOperation).toBe("");
-    expect(task.message).toContain("Repair only the listed conflicting files");
-    expect(task.message).toContain("Do not commit, merge, rebase or push");
-    expect(task.message).toContain("Review resolved conflicts");
-    expect(await view.handleTemporaryAiTaskFinished({ id: "incoming-repair", sessionId: "session-1", status: "completed" })).toBe(false);
-    senior.value = false;
-    expect(await view.fixRepositoryError(input)).toBe(false);
-    expect(requestTemporaryAi).toHaveBeenCalledOnce();
-  });
-
-  it("shares one recovery identity between chat and Dashboard for the same update failure", async () => {
-    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const code = "vibe64_session_update_conflict";
-    const diagnostic = "One file needs review.";
-    const view = await createView({
-      workState: {
-        updateOperation: {
-          code,
-          error: diagnostic,
-          operationId: "update-1",
-          status: "failed"
-        }
-      }
-    }, { requestTemporaryAi });
-
-    await expect(view.fixRepositoryActionError()).resolves.toBe(true);
-    await expect(view.fixRepositoryError({
-      code,
-      error: `  ${diagnostic}  `,
-      title: "Resolve repository update"
-    })).resolves.toBe(true);
-
-    const [chatRecovery, dashboardRecovery] = requestTemporaryAi.mock.calls.map(([request]) => request);
-    expect(chatRecovery.dedupeKey).toBe(
-      `repository-recovery|session-1|${code}|${diagnostic}`
-    );
-    expect(dashboardRecovery.dedupeKey).toBe(chatRecovery.dedupeKey);
-    expect(chatRecovery.title).toBe("Resolve Update");
-    expect(dashboardRecovery.title).toBe("Resolve repository update");
   });
 
   it("sends a normal chat message and shows it optimistically", async () => {
@@ -3006,7 +2452,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkRequiresUpdate.value).toBe(true);
     expect(view.saveWorkError.value).toBe("");
     expect(view.saveWorkFailure.value).toBeNull();
-    expect(view.saveWorkCanResolveWithTemporaryAi.value).toBe(false);
+    expect(view.saveWorkCanResolveWithAi.value).toBe(false);
   });
 
   it("lets members save source without access to the personal AI connection", async () => {

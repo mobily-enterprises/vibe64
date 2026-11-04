@@ -28,9 +28,8 @@ reserved contribution branches, merge them while preserving their history, or
 discard them while retaining the work on a renamed branch. An interrupted discard
 remains visible for recovery. An explicit replacement starts a new contribution
 from the discarded revision, preserving the old source and integration requirements.
-Conflicting contributions can use the existing
-Temporary AI chat in the receiving session, with a private checkpoint preserving
-its original work. People review the repaired result and explicitly merge it;
+Conflicting contributions can use an incoming-merge AI task in the receiving
+session, with a private checkpoint preserving its original work. People review the repaired result and explicitly merge it;
 AI completion does not publish. Save checks any retained submitted revisions against
 their receiving integration branches before publishing the originating project.
 The connection list alone does not establish contribution source preparation or
@@ -58,10 +57,10 @@ Declared development commands select explicit language toolchains supplied by
 the host. Missing tooling remains a preparation error; a successful toolchain
 check is separate from proving the application's connected-source resolution.
 
-Main and temporary chat history load ten real messages at a time. A request and its answer count
+Main chat and AI task history load ten real messages at a time. A request and its answer count
 separately; reasoning and progress stay visible without consuming that allowance.
 
-When creating a temporary chat, people can explicitly include up to forty recent
+When starting a New AI task, people can explicitly include up to forty recent
 visible Main messages as bounded text context. The copy is fixed at creation,
 excludes hidden reasoning and internal instructions, and reports any size-based
 omission. Main and the new conversation continue independently while sharing the
@@ -186,7 +185,7 @@ exists, without sending an AI request. Stopping or steering clears unfinished te
 Colleague can browse open and archived sessions beyond the first page, while
 reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
-to watch Main or temporary conversations for completed responses even while a
+to watch Main or AI task conversations for completed responses even while a
 goal continues, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake
 Colleague. It can also watch a host's workspace conversation without a project, using that
@@ -564,7 +563,7 @@ including after reload. Unfinished cleanup or uncertain delivery stays visible.
 Repair conversations keep their input and action buttons visible on small screens.
 Required workspace preparation is a neutral action notice with one Prepare
 workspace control; actual setup or startup failures retain error diagnostics.
-Main and temporary chat restore uploaded files visibly alongside saved drafts.
+Main chat and AI tasks restore uploaded files visibly alongside saved drafts.
 New uploads keep existing files, and removing one updates its numbered references.
 Long drafts scroll inside the input; repair details start collapsed, and a shared
 connection notice replaces repeated reconnection warnings. Failed automatic repair
@@ -583,15 +582,15 @@ needed. They stay aligned right to preserve space for session labels. Update's
 vertical commit symbol is distinct from the branching pull-request action.
 New replies retain their answering orchestrator, model and thinking level when
 the selection changes, formatted as `Orchestrator (model thinking)`.
-Temporary replies keep that identity across tool progress and the final answer,
+AI task replies keep that identity across tool progress and the final answer,
 independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Reply labels put the role first, followed by the orchestrator, model and saved
 thinking level alone. An explicitly empty choice says "default"; missing
 thinking information stays unknown rather than using the current settings.
 Older replies without a saved AI identity simply say "agent".
-Main chat offers Custom, Senior, Junior and Auto; ordinary temporary chats offer
-Custom, Senior and Junior. Custom appears first and opens three fields:
+Main chat offers Custom, Senior, Junior and Auto; an AI task's Chat offers Fix it
+with AI and Choose model (Custom). Custom appears first and opens three fields:
 Orchestrator, Model, Thinking. Apply saves the exact choice; Cancel keeps the
 previous mode. Custom does not require configured role assignments or a Router.
 Main chat's Senior, Junior and Auto modes run in the tool of the owner's Senior;
@@ -634,16 +633,14 @@ A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
 left empty. New main chats start with Senior, with Auto review off.
-User-created temporary chats inherit Main chat's role and custom model
-choice when created. Main's Auto mode starts them as Senior. Each temporary chat
-then keeps its own selection and can change role independently; later changes in
-Main do not retarget existing temporary chats. Automatic implementation tasks
-retain explicit Junior assignments; merge-repair chats always use Senior and
-check Senior access. After stopping a repair, the user can choose another
-orchestrator, model and thinking level for that chat while keeping its Senior
-role, repair instructions and history. Bounded background tasks use Quick helper.
-There is no temporary-chat default setting.
-Temporary chats never run Auto, working plans or automatic review.
+A New AI task inherits Main chat's role and custom model choice when started;
+Main's Auto mode starts it as Senior, and a team member's starts on Fix it with
+AI. Each task then keeps its own selection; later changes in Main do not retarget
+it. Repairs start on Fix it with AI. After stopping a repair, the user can choose
+another orchestrator, model and thinking level for it while keeping its repair
+instructions and history. Automatic implementation tasks retain explicit Junior
+assignments. Bounded background tasks use Quick helper.
+AI tasks never run Auto, working plans or automatic review.
 Models is one screen with two setups: the owner's (Senior, Junior and Router
 for main chat, then the helpers Colleague, Fix it with AI, Explain & check and
 Quick helper) and the team members' (helpers only, Workspace-use models only).
@@ -739,7 +736,7 @@ host's own navigation. Their tab disappears when returning to another chat;
 ordinary chat controls do not retain a permanent shortcut, including headers
 shown during archiving or after the last session closes.
 Main's voice launcher is available on its own chat. An already-open voice session
-retains its explicit Main target when a temporary or host-provided view is selected.
+retains its explicit Main target while an AI task window is open.
 On narrow screens, swiping left shows the selected Preview or Dashboard and
 swiping right returns to chat. The header supports either gesture, including
 above an embedded preview; ordinary chat and dashboard areas support them too.
@@ -833,7 +830,7 @@ Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
 Save and Update wait for active assistant preparation to finish. During either
-operation, an existing temporary chat's saved history remains readable and its plain
+operation, an open AI task's saved history remains readable and its plain
 text draft can be saved. Assistant sends, model or attachment changes and chat
 lifecycle actions still use source coordination. A lost Update response remains
 unconfirmed until the saved operation identity and status resolve it; reload
@@ -1173,7 +1170,7 @@ formats, and the Codex identity upgrade does not rewrite project source.
 An overdue AI-settings upgrade reports the administrator's stop, upgrade and
 restart steps in the affected screen instead of a generic server error.
 Routing upgrades preserve saved destinations, conversation identities and
-delivery evidence, including archived and temporary conversations. An old helper
+delivery evidence, including archived conversations and AI task conversations. An old helper
 choice still awaiting owner review became Quick helper off, with a warning. Interrupted publication
 resumes from the same prepared changes and retains the original backups.
 
@@ -1460,7 +1457,7 @@ Project-understanding warnings do not replace the application preview. People
 can read a persistent warning, recheck setup, and keep using the preview's URL,
 reload, and navigation controls. Starting an application still requires valid
 launch settings.
-Setup help opens a new Temporary AI conversation even while the main assistant
+Setup help opens a Project setup AI task even while the main assistant
 is working. This applies to setup warnings, inspection failures, starting through
 conversation and adopting an existing project. The request includes the reported
 problem or project purpose and preserves the main conversation and its draft.
@@ -1482,24 +1479,16 @@ the progress in a separate view, and the result. Vibe64 proves Done by running U
 itself on the server, and only a person decides Not done, so the window closes only
 once the fix is one or the other.
 
-Other temporary repair chats, and Update repair chats saved before that window
-existed, keep progress collapsible inside the conversation and
-show one plain working status above the composer. Switching sessions preserves
-the selected temporary chat and its reply draft. Closing an incomplete Update
-repair warns that partial edits remain, waits for the AI to stop, and keeps the
-chat available when stopping or closing fails. A completed Update repair is
-verified by Vibe64 running Update, with the actual result shown in that chat.
-A request for a decision waits for the person's reply before verification.
-Remaining conflicts return to the same repair conversation instead of opening
-another task. Automatic repair is bounded and pauses on repeated failure. A
-persistent Check Update action retries without acknowledging conflicts;
-the header's Update action checks the existing repair too. People can review the
-affected files and explicitly apply a resolved Update whether the repair was made
-manually, in Main chat, or in a temporary chat. No new AI conversation or successful
+Every other Fix it with AI, project setup, the Data overview, New AI task and
+Colleague's own tasks use the same window. A request for a decision waits for the
+person's reply before verification. Remaining conflicts return to the same repair
+conversation instead of opening another task. Automatic repair is bounded to three
+checks and then waits for the person. Check now retries without acknowledging
+conflicts. People can review the affected files and explicitly apply a resolved
+Update whether the repair was made manually, in Main chat, or in an AI task. No new AI conversation or successful
 AI turn is required. Changed conflicts require a fresh review, and a failed manual
 acknowledgement does not start AI work. Update progress stays
-visible above both main and temporary chats. Conversation tab buttons align above
-their scrollbar, and Main chat remains visible while the other tabs scroll.
+visible above Main chat and in the AI task window.
 Only a successful Update is presented as finished; it does not publish work.
 When updated source needs workspace preparation, a direct Prepare workspace
 action runs the project's declared setup steps. The notice does not claim the
@@ -1724,41 +1713,39 @@ The next message or explicit Resume uses the currently authorized account while
 preserving the goal's model, role and conversation. Work already being delivered
 retains its account checks.
 
-Main conversation, temporary assistance, and database copilot share the same
-conversation presentation. User-facing temporary chats have main chat's tools,
+Main conversation, AI tasks, and database copilot share the same
+conversation presentation. AI tasks have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
 modes.
-Temporary model and thinking choices come from the connected service's current
-catalogue, including new Codex models and OpenCode models. Each chat retains its own role and selected model without changing Main chat.
+An AI task's model and thinking choices come from the connected service's current
+catalogue, including new Codex models and OpenCode models. Each task retains its own selected model without changing Main chat.
 A Fix it with AI or Custom turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
-returning restores the same chats. Reload opens Main chat; saved temporary chats
-remain available through Temporary AI with their drafts and history intact.
-Returning from another chat shows Main's latest messages. A server restart retains their history and
+returning restores the same task, with its draft and history intact. A server restart retains their history and
 stops any work whose observation was lost until an explicit Send or Resume.
-People can keep typing and use Steer during active temporary work, with Stop
+People can keep typing and use Steer while an AI task works, with Stop
 still available. Guidance reaches the current native conversation; it does not
 switch its model, re-prepare project source or add messages to main History.
-A composing host may contribute a distinctly coloured workspace conversation
-beside Main and temporary chats, including before a project session is open.
-The host owns that conversation's permissions, persistence and actions.
-Their messages stay out of main History. Close stops the conversation and any
+A composing host may present a task of its own in the same AI task window,
+including before a project session is open. The host owns that task's
+permissions, persistence and actions.
+Task messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.
 Closed Claude chats stay closed through assistant changeover and server shutdown.
 Shutdown can also stop retained Claude processes after Main moves to another AI,
 while preserving the new selection and conversation history.
-Successful Close removes that chat from other connected browsers; reconnecting
+Successful Close removes that task from other connected browsers; reconnecting
 reconciles missed closures. Draft saves wait for brief assistant-operation
 contention and retry automatically when it remains busy.
 Opening a new session keeps main chat visible while the assistant prepares.
-Temporary-chat restoration waits for confirmed assistant readiness on startup
+AI task conversation restoration waits for confirmed assistant readiness on startup
 and reconnect, then retries any remaining assistant-operation contention
 automatically. This expected wait shows no error and needs no Try again.
 Genuine load failures remain visible and retryable.
-Main and temporary chats keep an ordinary send pending until delivery is confirmed.
+Main chat and AI tasks keep an ordinary send pending until delivery is confirmed.
 An interrupted attempt shows compact red error text and Retry inside its message.
 Retry keeps the original identity: Main resubmits through the existing coordinator
 when no matching route is recorded; an attempted native dispatch checks its receipt
@@ -1767,16 +1754,14 @@ Confirmed preparation refusals before
 admission keep the original request available for Retry after preparation is ready;
 unknown delivery checks do not authorize another send. A late receipt clears stale delivery warnings.
 
-Sending a temporary message shows it immediately, including while its conversation
+Sending a message in an AI task shows it immediately, including while its conversation
 is being created. Sending and assistant work have distinct status labels. Failed
 messages retain Resend, Edit and Cancel; retry preserves the original request
 and leaves a newer draft and its attachments intact.
-Temporary chats show who is typing in that same conversation, using the main
-chat's indicator. Switching chats, sending, or leaving clears that presence.
-New Temporary AI replies received while that conversation is hidden mark its
-tab and the top incognito icon, or the session-actions menu when collapsed.
-The indicator clears for each conversation when it is viewed; opening the menu
-alone does not clear it or any session-renewal reminder.
+AI tasks show who is typing in that same conversation, using the main
+chat's indicator. Sending or leaving clears that presence.
+While the window is hidden, the tray chip shows when the task needs the person,
+and a Chat dot shows that the AI is waiting for an answer.
 Internal helpers retain their deliberate execution restrictions.
 
 If Codex or OpenCode loses its server-side observation of a conversation, Vibe64
@@ -1986,7 +1971,7 @@ a short refresh notice while Engine browsing remains available.
 Main-chat delivery recovery offers immediate Cancel for failed local attempts
 and reconciles successful Retry receipts so stale error controls do not remain.
 
-Main and Temporary chat present timestamped messages in chronological order,
+Main chat and AI tasks present timestamped messages in chronological order,
 including replies streamed while follow-up questions are sent.
 
 With the person’s authorization, an assistant can send another open project a

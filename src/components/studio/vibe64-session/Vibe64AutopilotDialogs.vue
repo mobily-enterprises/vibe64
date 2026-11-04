@@ -17,7 +17,7 @@
         <v-btn @click="resolvedUpdateReview = null">Cancel</v-btn>
         <v-btn
           color="primary" variant="flat" height="auto" min-height="48" style="max-width: 100%"
-          :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
+          :disabled="updateWorkDisabled || sourceOperationsSuspended"
           @click="confirmResolvedUpdate"
         >
           <span class="text-wrap">I've resolved these conflicts — apply Update</span>
@@ -117,15 +117,15 @@ const { view } = defineProps({
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   applyResolvedUpdate, cancelSaveWork, confirmSaveWork, contextFullFailure, createPullRequestOpen,
-  githubProject, props, reportTemporaryRecovery, resolvedUpdateReview, retryContextFull, saveWorkConfirmOpen,
+  githubProject, props, resolvedUpdateReview, retryContextFull, saveWorkConfirmOpen,
   saveWorkConnectedReview, saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
-  selectSessionTool, sessionPullRequest, sourceOperationsSuspended, temporaryAiWorkspace, updateWorkDisabled
+  selectSessionTool, sessionPullRequest, sourceOperationsSuspended, updateWorkDisabled
 } = view;
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // An open Update task runs its own check: the person's review just tells it which one.
 function confirmResolvedUpdate() {
   if (!aiTasks.task || aiTasks.projection.ended) {
-    applyResolvedUpdate(temporaryAiWorkspace.value?.updateRepairTask, reportTemporaryRecovery);
+    void applyResolvedUpdate();
     return;
   }
   const { reviewId } = resolvedUpdateReview.value;

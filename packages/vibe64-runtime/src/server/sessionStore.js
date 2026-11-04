@@ -27,6 +27,7 @@ import { createSessionListing } from "./sessionListing.js";
 import { createSessionCreation } from "./sessionCreation.js";
 import { createSessionRenewalTransitions } from "./sessionRenewalTransitions.js";
 import { createSessionStateUpgrades } from "./sessionStateUpgrades.js";
+import { createSessionTemporaryConversationRemoval } from "./sessionTemporaryConversationRemoval.js";
 
 /**
  * A project runtime's session store. Each concern is built once, in
@@ -118,6 +119,11 @@ function createVibe64SessionStore(options = {}) {
     archiveAccess,
     conversationStore
   });
+  const temporaryConversationRemoval = createSessionTemporaryConversationRemoval({
+    storePaths,
+    recordFiles,
+    prepareSessionStateUpgrade: upgrades.prepareSessionStateUpgrade
+  });
 
   return Object.freeze({
     assertSessionCreationAbsent: storePaths.assertSessionCreationAbsent,
@@ -132,6 +138,8 @@ function createVibe64SessionStore(options = {}) {
     prepareConversationStorageUpgrade: upgrades.prepareConversationStorageUpgrade,
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
+    prepareTemporaryConversationRemoval: temporaryConversationRemoval.prepareTemporaryConversationRemoval,
+    removeEmptyConversationFolders: temporaryConversationRemoval.removeEmptyConversationFolders,
     conversationMessageIdExists: conversationStore.conversationMessageIdExists,
     conversationMessageIdExistsForRenewal: conversationStore.conversationMessageIdExistsForRenewal,
     findSubmittedConversationTurn: conversationStore.findSubmittedConversationTurn,

@@ -41,7 +41,7 @@ import ChangesPage from "../../src/pages/app/project/[slug]/dashboard/changes/in
 
 const ROOT = new URL("../../", import.meta.url);
 
-// Exercise real repository setup/templates and realtime; stub Vuetify presentation and Temporary AI.
+// Exercise real repository setup/templates and realtime; stub Vuetify presentation and the AI task window.
 for (const [component, file] of [
   [Vibe64RepositoryWorkspace, "src/components/studio/repository/Vibe64RepositoryWorkspace.vue"],
   [Vibe64RepositoryFileBrowser, "src/components/studio/repository/Vibe64RepositoryFileBrowser.vue"],
@@ -645,18 +645,12 @@ describe("Vibe64 Repository workspace", () => {
   });
 
   it("exposes repository conflict recovery only through the AI task window", async () => {
-    const [repositoryWorkspace, autopilotView] = await Promise.all([
-      repositoryWorkspaceSource(),
-      source("src/components/studio/vibe64-session/Vibe64AutopilotView.vue")
-    ]);
+    const repositoryWorkspace = await repositoryWorkspaceSource();
 
     expect(repositoryWorkspace).toContain("<Vibe64AiTaskButton");
     expect(repositoryWorkspace).toContain(':allowed="dashboard.assistantFixAllowed !== false"');
     expect(repositoryWorkspace).toContain("dashboard.assistantFixRestrictionMessage");
     expect(repositoryWorkspace).not.toMatch(/resolve conflict manually|accept incoming|accept current/iu);
-    expect(autopilotView).toContain("requestTemporaryAi: fixRepositoryError");
-    expect(autopilotView).toContain("workspace.startTask(options)");
-    expect(autopilotView).toContain('emit("chat-attention")');
   });
 
   it("uses Fix it with AI for merge repair without restricting native Save and Update", async () => {

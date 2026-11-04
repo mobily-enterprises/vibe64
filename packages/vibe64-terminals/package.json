@@ -33,6 +33,7 @@
     "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js",
     "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js",
     "./server/clonedDefaultBranchUpgrade": "./src/server/clonedDefaultBranchUpgrade.js",
+    "./server/temporaryConversationsClosedUpgrade": "./src/server/temporaryConversationsClosedUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
     "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",
     "./server/types": "./src/server/types.js"

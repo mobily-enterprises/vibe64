@@ -52,7 +52,7 @@
 
 <script setup>
 import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
-import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch, watchEffect } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch, watchEffect } from "vue";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -99,7 +99,8 @@ const composerInput = ref(null);
 const mainChat = ref(null);
 const approvalsPanel = ref(null);
 const { xs: phoneLayout } = useDisplay();
-const temporaryAiWorkspace = ref(null);
+// The AI task chat's composer while that chat is shown, which preview attachments go to.
+const aiTaskComposer = shallowRef(null);
 const testApproval = ref(null);
 function updateTestApproval(value) {
   if (value.sessionId === props.session?.sessionId) testApproval.value = value.approval;
@@ -201,13 +202,11 @@ const autopilotView = useVibe64AutopilotView(props, emit, {
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   mainChatApprovals,
-  onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
-  requestTemporaryAi: startTemporaryAiTask,
-  temporaryAiWorkspace
+  onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds })
 });
 const {
   agentActive, assistantDirectAllowed, assistantDraftAvailable, assistantFixAllowed, chatCollapsed,
-  dashboardSessionContext, fixRepositoryError, openSourceEditorFile, prefillComposer, projectSlug,
+  dashboardSessionContext, openSourceEditorFile, prefillComposer, projectSlug,
   selectSessionTool, sessionGithubActor, sessionGithubActorHeaderVisible, sessionId, sourceEditorOpenRequest
 } = autopilotView;
 function openUsage({ entryId = "", mode = "recording", recordingId = "" } = {}) {
@@ -255,21 +254,8 @@ const dashboardContext = computed(() => ({
   assistantRestrictionMessage: assistantRestrictionMessage.value,
   requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
-  requestTemporaryAi: fixRepositoryError,
   sourceOperationsSuspended: sourceOperationsSuspended.value
 }));
-
-async function startTemporaryAiTask(options = {}) {
-  if (!assistantCanUsePurpose("fix") || props.sessionSelectionArchived) {
-    return false;
-  }
-  emit("chat-attention");
-  const workspace = temporaryAiWorkspace.value;
-  if (typeof workspace?.startTask !== "function") {
-    return false;
-  }
-  return workspace.startTask(options);
-}
 
 function requestSessionRenewal(returnFocusTarget = null) {
   props.sessionRenewal?.request?.({
@@ -290,18 +276,18 @@ function openWorkingFile(path) {
 // chat-wide state this component owns.
 const view = {
   ...autopilotView,
-  approvalsPanel, assistantAccessError, assistantAccessLoading, assistantAccessScopeKey,
+  aiTaskComposer, approvalsPanel, assistantAccessError, assistantAccessLoading, assistantAccessScopeKey,
   assistantCanConfigureRouting, assistantCanUsePurpose, assistantFixRestrictionMessage, assistantPurposes,
   assistantRestrictionMessage, composerInput, createPullRequestOpen, dashboardContext, emit, fileBookmarks,
   githubProject, lessonShown, mainChat, mainChatApprovals, openUsage, openWorkingFile, phoneLayout, props,
   reloadAssistantAccess, requestSessionRenewal, resourceRecoveryControl, revealApprovals,
   selectedAssistantSessionId, sessionPullRequest, sessionPullRequestTarget, sourceOperationsSuspended,
-  startTemporaryAiTask, temporaryAiWorkspace, testApproval, updateTestApproval, usageOpenRequest
+  testApproval, updateTestApproval, usageOpenRequest
 };
 
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
-const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
+const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
 

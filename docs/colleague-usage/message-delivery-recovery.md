@@ -47,7 +47,7 @@ while a goal is open, or when another assistant operation in the session is
 still starting. **Cancel** removes it once the server confirms; **Edit** returns
 its text to the composer.
 
-A send in a temporary chat waits, as Main chat does, while another chat in the
+A send in an AI task's Chat waits, as Main chat does, while another chat in the
 same session starts its assistant (a slow Claude start can take 15–20 seconds).
 It shows **Pending** meanwhile and is refused only if that start takes longer
 than a minute.
@@ -60,8 +60,8 @@ while the message waits, it stays **Pending** and is sent once the chat
 reconnects. Choose **Cancel** on it if you no longer want it sent. This works
 the same on desktop and mobile.
 
-The assistant is shown as working (the animated indicator and the **Assistant
-working** dot on a temporary chat tab) only while its turn is actually
+The assistant is shown as working (the animated indicator and the AI task's
+working status) only while its turn is actually
 running. Sending, choosing a recipient, connecting and an unconfirmed delivery
 have their own labels and never show the assistant as working. **Stop** stays
 available while a request is being routed or sent.
@@ -92,6 +92,6 @@ the same message identity and tries ordinary Send once. A timeout or uncertain
 receipt is still checked rather than resent. If ordinary Send fails, **Retry**
 keeps the request as Send instead of targeting the finished turn again.
 
-This recovery applies to project chats and temporary conversations such as
+This recovery applies to project chats and AI tasks such as
 **Fix it with AI**. A completed turn allows the one ordinary-send retry; stopped,
 failed or unverified turns do not silently restart through this recovery.

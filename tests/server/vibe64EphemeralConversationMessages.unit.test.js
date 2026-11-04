@@ -6,17 +6,17 @@ import {
   parseLongTextReviewBlocks
 } from "@jskit-ai/assistant-core/shared/conversation";
 
-test("temporary conversations use the same element and retain app-owned attachment and system slots", async () => {
-  const source = await readFile(new URL(
-    "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue", import.meta.url
+test("an AI task chat uses the shared element and keeps app-owned attachment and system slots", async () => {
+  const chat = await readFile(new URL(
+    "../../src/components/studio/vibe64-session/Vibe64AiTaskChat.vue", import.meta.url
   ), "utf8");
-  assert.match(source, /<AssistantConversationElement :adapter="displayAdapter">/u);
-  assert.match(source, /const supplied = props\.adapter;/u);
-  assert.match(source, /supplied\.conversation\.turns/u);
-  assert.doesNotMatch(source, /conversationTurnsFromMessages/u);
-  assert.match(source, /#system-message/u);
-  assert.match(source, /#attachments/u);
-  assert.doesNotMatch(source, /v-html/u);
+  const transcript = await readFile(new URL("../../src/lib/vibe64AiTaskConversation.js", import.meta.url), "utf8");
+  assert.match(chat, /<AssistantConversationElement v-else :adapter="transcript">/u);
+  assert.match(transcript, /adapter\.conversation\.turns/u);
+  assert.doesNotMatch(transcript, /conversationTurnsFromMessages/u);
+  assert.match(chat, /#system-message/u);
+  assert.match(chat, /#attachments/u);
+  assert.doesNotMatch(chat, /v-html/u);
 });
 
 test("the reported repair reply renders its list, bold labels, and inline code as structured blocks", () => {

@@ -31,7 +31,7 @@
           :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
           data-vibe64-guide="save"
           :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
-          :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
+          :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable)"
           height="var(--session-action-size, 36px)"
           icon
           :title="saveWorkHeaderHint"
@@ -256,13 +256,13 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  chatTurns, checkTemporaryAiUpdate, connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
+  chatTurns, connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,
   retryWorkspaceSetup, revealApprovals, saveConnectedFirst, saveWorkActivityLabel, saveWorkDisabled,
   saveWorkError, saveWorkHeaderAriaLabel, saveWorkHeaderVisible, saveWorkOperationActive,
   saveWorkRequiresUpdate, saveWorkSending, saveWorkTitle, saveWorkUnsaved, sessionId, sessionPullRequest,
   sessionPullRequestTarget, sessionToolbarVisible, showSaveWorkActivity, sourceOperationsSuspended,
-  temporaryAiWorkspace, workspaceSetupActionVisible, workspaceSetupRetryDisabled, workspaceSetupRetrying,
+  workspaceSetupActionVisible, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning
 } = view;
 const sessionRenewalActionPresentation = computed(() => (
@@ -381,11 +381,6 @@ async function requestSessionSaveWork() {
       saveWorkChecking.value = false;
     }
     return;
-  }
-  const repair = temporaryAiWorkspace.value?.updateRepairTask;
-  if (saveWorkRequiresUpdate.value && repair) {
-    temporaryAiWorkspace.value?.selectTask?.(repair.id);
-    return checkTemporaryAiUpdate(repair);
   }
   return requestSaveWork();
 }

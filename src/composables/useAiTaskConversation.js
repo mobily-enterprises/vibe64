@@ -1,19 +1,22 @@
-import { computed, ref, toValue, watch } from "vue";
+import { computed, ref, toValue } from "vue";
+import { normalizeVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
+import { useAiTaskConversationMessages } from "@/composables/useAiTaskConversationMessages.js";
+import { useAiTaskConversationRecord } from "@/composables/useAiTaskConversationRecord.js";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
-import { useVibe64TemporaryAi } from "@/composables/useVibe64TemporaryAi.js";
+import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
+import { vibe64TemporaryConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const SENDING_LABEL = "Sending to assistant…";
 const WORKING_LABEL = "AI is working…";
 const BACKGROUND_LABEL = "Reply ready · background task still running…";
 const NOT_STEERABLE = "You cannot steer this turn's AI connection. You can send a new request when it finishes.";
 const MODE_UNAVAILABLE = "This mode is unavailable. Choose another chat mode.";
-
-const ownsAiTaskRecord = record => Boolean(record.task);
+const RESTORE_FAILED = "The conversation could not be loaded:";
 
 /**
- * The AI task's conversation: its messages, draft, attachments, Stop and delivery recovery are
- * Temporary AI's, so a chat behaves the same wherever it is. Only the task's own chats are bound here.
+ * The AI task's conversation as its chat uses it: messages, draft, attachments, steering, Stop and delivery
+ * recovery, over the task's own saved conversation.
  * @param {object} options
  * @param {import("vue").MaybeRefOrGetter<string>} options.taskId
  * @param {import("vue").MaybeRefOrGetter<string>} options.sessionId
@@ -28,18 +31,12 @@ const ownsAiTaskRecord = record => Boolean(record.task);
 function useAiTaskConversation({
   taskId, sessionId, sessionsApiPath, projectSlug, assistantSelection, assistantReady, windowOpen, composerOpen, connectionUnavailable
 }) {
-  const temporary = useVibe64TemporaryAi({
-    active: () => toValue(windowOpen),
-    agentSettings: computed(() => {
-      const selection = toValue(assistantSelection);
-      return { providerId: selection.engineId, model: selection.modelId, thinking: selection.variantId };
-    }),
-    assistantReady: () => toValue(assistantReady),
-    ownsRecord: ownsAiTaskRecord,
-    sessionId: computed(() => toValue(sessionId)),
-    sessionsApiPath: computed(() => toValue(sessionsApiPath))
+  const record = useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, projectSlug, assistantReady });
+  const { conversation, saves } = record;
+  const messages = useAiTaskConversationMessages({
+    conversation, saves, stoppingIds: record.stoppingIds, isDisposed: record.isDisposed
   });
-  const task = computed(() => temporary.tasks.value.find(candidate => candidate.id === toValue(taskId)) || null);
+  const task = computed(() => conversation.value?.id === toValue(taskId) ? conversation.value : null);
   const stopping = ref(false);
   const actionError = ref("");
   const routingRequest = computed(() => assistantRoutingRequestForDisplay(task.value?.routingMetadata));
@@ -49,6 +46,7 @@ function useAiTaskConversation({
     agentSession: { goal: task.value?.goal || null },
     metadata: task.value?.routingMetadata || {}
   }));
+  const loadError = computed(() => record.restoreError.value ? `${RESTORE_FAILED} ${record.restoreError.value}` : "");
 
   const accessReason = computed(() => {
     const current = task.value;
@@ -84,10 +82,10 @@ function useAiTaskConversation({
    * @param {{ attachmentsCanSubmit: () => boolean }} prompt the composer, which owns attachments still uploading
    * @param {{ retryMessageId?: string }} [options]
    */
-  async function send(prompt, options = {}) {
+  async function send(prompt, { retryMessageId = "" } = {}) {
     if (toValue(connectionUnavailable) || inputDisabled.value || !prompt.attachmentsCanSubmit()) return;
     typingPresence.submit();
-    await temporary.send(task.value.id, { ...options, attachmentOwner: prompt });
+    await messages.send({ retryMessageId, attachmentOwner: prompt });
   }
 
   async function stop() {
@@ -95,7 +93,7 @@ function useAiTaskConversation({
     stopping.value = true;
     actionError.value = "";
     try {
-      await temporary.stopTask(task.value.id);
+      await messages.stop();
     } catch (failure) {
       actionError.value = failure.message;
     } finally {
@@ -103,18 +101,48 @@ function useAiTaskConversation({
     }
   }
 
-  // A task the server has just started: its chat appears in the next saved list.
-  watch(() => toValue(taskId), (id) => {
-    if (id && !task.value) void temporary.restoreTasks();
-  });
+  /** @param {string} draft */
+  function updateDraft(draft) {
+    if (task.value) saves.updateConversation(task.value.id, { draft });
+  }
+
+  /** @param {Array<{ attachmentId: string }>} attachments */
+  function updateAttachments(attachments) {
+    if (task.value) saves.updateConversation(task.value.id, { attachments });
+  }
+
+  /**
+   * @param {string} parameterId
+   * @param {string} value
+   */
+  function updateAgentSetting(parameterId, value) {
+    const current = task.value;
+    if (!current) return;
+    const settings = normalizeVibe64AgentSettings({ ...current.agentSettings, [parameterId]: value });
+    saves.updateConversation(current.id, { agentSettings: settings, settingsToSave: settings });
+  }
+
+  /** @param {object} preferences the chat mode, review and custom selection to route the next request with */
+  async function updateRouting(preferences) {
+    const current = task.value;
+    const result = await aiTaskRequest(vibe64TemporaryConversationPath(current.apiPath, current.sessionId, current.conversationId), {
+      method: "PATCH", body: { assistantRouting: preferences }
+    });
+    if (saves.canApply(current)) {
+      saves.updateConversation(current.id, { routingMetadata: result.routingMetadata, purposes: result.purposes });
+      void current.binding.runtime.value.reload();
+    }
+    return result;
+  }
 
   return {
     activityLabel,
     assistantReason: accessReason,
-    cancelMessage: id => temporary.cancelMessage(task.value.id, id),
-    editMessage: id => temporary.editMessage(task.value.id, id),
+    cancelMessage: messages.cancelMessage,
+    editMessage: messages.editMessage,
     error,
     inputDisabled,
+    loadError,
     modeSession,
     routingRequest,
     send,
@@ -122,10 +150,10 @@ function useAiTaskConversation({
     stopping,
     task,
     typingPresence,
-    updateAgentSetting: (parameterId, value) => temporary.updateAgentSetting(task.value.id, parameterId, value),
-    updateAttachments: attachments => temporary.updateAttachments(task.value.id, attachments),
-    updateDraft: draft => temporary.updateDraft(task.value.id, draft),
-    updateRouting: preferences => temporary.updateRouting(task.value.id, preferences)
+    updateAgentSetting,
+    updateAttachments,
+    updateDraft,
+    updateRouting
   };
 }
 

@@ -90,15 +90,15 @@ checks the original receipt without rebuilding or duplicating the request.
 These steps are the same on desktop and phone. Colleague can explain this dialog;
 selecting its buttons requires the person's interaction.
 
-This policy concerns ordinary Main chat. Learning's tool-bound context, temporary
-chat context copying and Colleague's own history policy are separate.
+This policy concerns ordinary Main chat. Learning's tool-bound context, an AI task's
+copy of recent chat context and Colleague's own history policy are separate.
 
 While Claude is working, you can send a follow-up to steer the same conversation.
 Claude moves its current command to the background, where it keeps running, and
 reads the follow-up within moments; sending it does not stop that command. Use **Stop** to cancel work.
 Updated project guidance is applied when a later turn starts idle; it must not
-block an ordinary follow-up or restart active work. This holds in Main, in
-Temporary chats and in Fix it with AI repair chats, including a repair that edits
+block an ordinary follow-up or restart active work. This holds in Main and in
+[AI tasks](ai-tasks.md), including a repair that edits
 the project's Genesis files during its own turn. Account changes and explicit
 model settings still use their existing checks. If a message shows an error,
 keep its text and use **Retry** after the reported problem is resolved; a failed

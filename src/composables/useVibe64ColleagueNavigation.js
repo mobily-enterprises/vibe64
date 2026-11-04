@@ -55,14 +55,13 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
         const view = currentView.value;
         const conversationId = typeof route.query.conversation === "string" ? route.query.conversation : "";
         if (!view?.ready || view.sessionId !== route.query.session || (!conversationId && route.query.chat !== "main")) return;
-        if (!view.hostConversationSelected && view.conversationId === conversationId && (conversationId || !view.temporarySelected)) return;
+        if (view.conversationId === conversationId) return;
         const revision = view.selectionRevision;
-        const hostSelected = view.hostConversationSelected;
         restoringSelection.value = true;
         try {
           await view.openConversation(conversationId, () => current && currentView.value === view);
         } catch (error) {
-          if (current && view.selectionRevision === revision && view.hostConversationSelected === hostSelected) {
+          if (current && view.selectionRevision === revision) {
             selectionError.value = error.message || "The selected conversation could not be opened.";
           }
         } finally {
@@ -77,22 +76,18 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
       ready: currentView.value?.ready,
       revision: currentView.value?.selectionRevision,
       conversationId: currentView.value?.conversationId,
-      temporarySelected: currentView.value?.temporarySelected,
-      hostSelected: currentView.value?.hostConversationSelected,
       restoring: restoringSelection.value,
       path: route.path,
       routeSession: route.query.session
     }), (selection, previous) => {
       if (!selection.ready || !selection.sessionId || (selection.routeSession && selection.routeSession !== selection.sessionId)) return;
       const manual = selection.view === previous?.view && selection.revision !== previous.revision;
-      if ((selection.restoring || selectionError.value) && !manual && !selection.hostSelected) return;
+      if ((selection.restoring || selectionError.value) && !manual) return;
       const query = { ...route.query, session: selection.sessionId };
       delete query.conversation;
       delete query.chat;
-      if (!selection.hostSelected) {
-        if (selection.conversationId) query.conversation = selection.conversationId;
-        else if (!selection.temporarySelected) query.chat = "main";
-      }
+      if (selection.conversationId) query.conversation = selection.conversationId;
+      else query.chat = "main";
       if (query.session !== route.query.session || query.conversation !== route.query.conversation || query.chat !== route.query.chat) {
         void router.replace({ path: route.path, query });
       }
@@ -252,9 +247,8 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
         const displayed = focus.value;
         if (!learningPanelMatches(command, displayed)) return false;
         if (!owner || !(openChat ? owner.chatVisible : owner.projectVisible)) return false;
-        if (command.sessionId && (!view?.ready || restoringSelection.value || view.hostConversationSelected ||
-            view.sessionId !== command.sessionId || view.conversationId !== (command.conversationId || "") ||
-            (!command.conversationId && view.temporarySelected))) return false;
+        if (command.sessionId && (!view?.ready || restoringSelection.value ||
+            view.sessionId !== command.sessionId || view.conversationId !== (command.conversationId || ""))) return false;
         if (command.databaseView && (database.value?.screen !== "workspace" || (!command.databaseTable && database.value.view !== command.databaseView))) return false;
         if (command.planView && !plan.value?.ready) return false;
         return !integrationSelection || Boolean(panel?.ready && panel.environment === integrationEnvironment &&

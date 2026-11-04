@@ -11,11 +11,8 @@ import {
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
-const textFields = [
-  "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
-  "recoveryNotice", "recoveryOperation", "recoveryConflictId", "recoveryContext", "recoveryOutcome",
-  "recoveryOutcomeMessage", "recoveryRequestId", "runConflictId"
-];
+// A conversation's presentation is its title and its unsent draft.
+const textFields = ["title", "draft"];
 const messageFields = Object.keys(temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions())
   .filter(key => !["sessionId", "conversationId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"].includes(key));
 /**
@@ -86,14 +83,6 @@ function presentation(input = {}) {
         params: { max: TITLE_MAX_LENGTH }
       });
     }
-  }
-  if (Object.hasOwn(input, "recoveryAutoPaused")) result.recoveryAutoPaused = input.recoveryAutoPaused === true;
-  if (Object.hasOwn(input, "recoveryRetryKeys")) {
-    if (!Array.isArray(input.recoveryRetryKeys) || input.recoveryRetryKeys.length > 3 ||
-        input.recoveryRetryKeys.some((key) => typeof key !== "string" || key.length > 1000)) {
-      throw new AppError(400, "Invalid conversation repair retries.", { code: "vibe64_conversation_repair_retries_invalid" });
-    }
-    result.recoveryRetryKeys = input.recoveryRetryKeys;
   }
   return result;
 }

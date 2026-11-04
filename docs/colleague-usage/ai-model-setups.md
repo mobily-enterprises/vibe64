@@ -23,11 +23,16 @@ models read-only.
 **Helpers**
 
 - **Colleague**: The default for Colleague. Each person can change their own.
-- **Fix it with AI**: Repair chats opened from errors and conflicts. Can run in a
-  different tool from the chat it fixes.
+- **Fix it with AI**: Repairs opened from errors and conflicts, in the
+  [AI task window](ai-tasks.md). Can run in a different tool from the chat it fixes.
 - **Explain & check**: Explain this code, the database assistant and Check my
   work.
 - **Quick helper**: Titles, commit messages, prompt hints and summaries.
+
+Background helper work keeps the model chosen for it (**Quick helper** or **Explain &
+check**) and its workload limits, and does not add its exchanges to Main. A profile
+audit identifies the selected request; it is not independent proof that the provider
+enforced it or that the work succeeded, so wait for the result before reporting success.
 
 Main chat always runs in your Senior's tool (Claude Code, Codex or OpenCode);
 Senior and Junior must run in the same tool. A chat that last ran in another

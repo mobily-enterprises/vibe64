@@ -1435,58 +1435,6 @@ test("@preview-lifecycle reduced motion keeps unknown upload progress stationary
   expect(Math.abs(activeHeight - readyHeight)).toBeLessThanOrEqual(6);
 });
 
-test("@preview-lifecycle Temporary AI keeps its shared upload queue across task switches on mobile", async ({ page }) => {
-  await page.setViewportSize({ height: 844, width: 390 });
-  await mockLaunchTerminalSocket(page);
-  const launchSession = await mockLaunchSession(page, {
-    attachmentUploadResponseDelayMs: 1000,
-    realChat: true,
-    temporaryCreates: []
-  });
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  // Temporary AI is the header's first action, so it stays inline on a phone.
-  await page.getByRole("button", { name: /^Open temporary AI/ }).click();
-
-  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-  const navigation = workspace.getByRole("navigation", {
-    name: "Main and temporary conversations"
-  });
-  await workspace.getByLabel("Message temporary AI").fill("Inspect the attached file.");
-  const send = workspace.getByRole("button", { name: "Send message", exact: true });
-  const fileName = "temporary-ai-progress.bin";
-  const fileContents = Buffer.alloc(256 * 1024, 0x62);
-  const chooserPromise = page.waitForEvent("filechooser");
-  await workspace.getByRole("button", { name: "Attach files" }).click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles({
-    buffer: fileContents,
-    mimeType: "application/octet-stream",
-    name: fileName
-  });
-
-  const queue = workspace.getByRole("region", { name: "Message attachments" });
-  const row = queue.locator(".assistant-attachment-queue__item", { hasText: fileName });
-  await expect(row).toContainText("Uploading");
-  await expect(send).toBeDisabled();
-
-  await navigation.getByRole("button", {
-    name: "New temporary AI task",
-    exact: true
-  }).click();
-  await navigation.getByRole("button", { name: "Temporary 1", exact: true }).click();
-  await expect(row).toBeVisible();
-  await expect(row).toContainText("Ready", { timeout: 12_000 });
-  await expect(send).toBeEnabled();
-
-  const rowBounds = await row.boundingBox();
-  expect(rowBounds).not.toBeNull();
-  expect(Number(rowBounds?.x || 0) + Number(rowBounds?.width || 0)).toBeLessThanOrEqual(391);
-  await navigation.getByRole("button", { name: "Close Temporary 1", exact: true }).click();
-  await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveCount(0);
-  // The closed chat keeps its completed upload with its saved draft.
-  expect(launchSession.getAttachmentDeletes()).toEqual([]);
-});
-
 for (const width of [390, 720, 768, 1280]) {
   test(`@mobile-navigation AI Terminal has a non-destructive way out at ${width}px`, async ({ page }, testInfo) => {
     page.setDefaultTimeout(10_000);
@@ -1553,55 +1501,6 @@ for (const route of ["session", "repository", "changes", "files", "database", "s
     await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/${route === "settings" ? "env" : "settings"}(?:\\?|$)`));
   });
 }
-
-test("@temporary-model merge repair exposes the shared picker and retains Senior after Apply", async ({ page }, testInfo) => {
-  page.setDefaultTimeout(10_000);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await mockLaunchTerminalSocket(page);
-  const catalog = assistantCatalogPayload({ includeOpenCode: true });
-  const codex = sessionPayload().assistantSelection;
-  const previous = { ...codex, engineId: "opencode", agentId: "build", modelProviderId: "zai-coding-plan", modelId: "glm-5.3", variantId: "high" };
-  await mockLaunchSession(page, { assistantCatalog: catalog });
-  const record = { conversationId: "repair-model", state: "open", title: "Resolve Update", status: "completed", messages: [],
-    assistantSelection: previous, agentSettings: { model: previous.modelId, thinking: "high" },
-    recoveryOperation: "update", recoveryContext: "Preserve booking validation.",
-    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false }) },
-    purposes: { senior: { available: true, effectiveSelection: previous } } };
-  const selections: any[] = [];
-  await page.route("**/temporary-conversations", (route) => fulfillJson(route, { ok: true, conversations: [record] }));
-  await page.route("**/temporary-conversations/repair-model", async (route) => {
-    if (route.request().method() === "PATCH") {
-      const input = route.request().postDataJSON();
-      if (input.assistantRouting) {
-        selections.push(input.assistantRouting);
-        record.routingMetadata.assistant_routing = JSON.stringify({ ...input.assistantRouting, mode: "senior", review: false });
-        record.purposes.senior.effectiveSelection = input.assistantRouting.override;
-      }
-    }
-    await fulfillJson(route, { ok: true, ...record });
-  });
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
-  // Temporary AI is the header's first action, so it stays inline on a phone.
-  await page.getByRole("button", { name: /^Open temporary AI/ }).click();
-  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-  await workspace.getByRole("button", { name: "Resolve Update", exact: true }).click();
-  await workspace.getByRole("button", { name: /^Chat mode/ }).click();
-  await expect(page.getByRole("button", { name: /^Junior/ })).toHaveCount(0);
-  await page.getByRole("button", { name: /^Choose model/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom AI" });
-  await expect(dialog).toBeVisible();
-  await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Orchestrator", exact: true }) }).click();
-  await openMenu(page).getByRole("option", { name: "Codex", exact: true }).click();
-  await dialog.getByRole("combobox", { name: "Model", exact: true }).fill("GPT");
-  await openMenu(page).getByRole("option", { name: /GPT-5.6 Sol/ }).click();
-  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(selections).toHaveLength(1);
-  expect(selections[0].override.engineId).toBe("codex");
-  expect(record.recoveryContext).toBe("Preserve booking validation.");
-  await expect(workspace.getByRole("button", { name: /^Chat mode: Senior.*Codex/ })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("repair-model-changed.png") });
-});
 
 test("@session-toolbar gives names and Save room first, then overflows the lowest-priority actions", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -4421,7 +4320,6 @@ async function mockLaunchSession(page: Page, {
   sessionCreationOutcomes = [],
   sessionListDelayMs = 0,
   sharedDevelopmentDatabase = false,
-  temporaryCreates = null,
   aiTaskStarts = null,
   realChat = conversationLog.length > 0
 }: {
@@ -4449,7 +4347,6 @@ async function mockLaunchSession(page: Page, {
   sessionCreationOutcomes?: Array<"failure" | "success">;
   sessionListDelayMs?: number;
   sharedDevelopmentDatabase?: boolean;
-  temporaryCreates?: Record<string, unknown>[] | null;
   // AI task starts; each is refused, so the page stays where it was.
   aiTaskStarts?: Record<string, unknown>[] | null;
   // Serve the chat from the real conversation owner (needed to show or send messages).
@@ -4680,12 +4577,6 @@ async function mockLaunchSession(page: Page, {
     if (aiTaskStarts && method === "POST" && url.pathname.endsWith("/ai-tasks")) {
       aiTaskStarts.push(request.postDataJSON() as Record<string, unknown>);
       await fulfillJson(route, { ok: false, error: "This fixture runs no AI tasks." }, { status: 409 });
-      return;
-    }
-    if (temporaryCreates && method === "POST" && url.pathname.endsWith("/temporary-conversations")) {
-      const body = request.postDataJSON() as Record<string, unknown>;
-      temporaryCreates.push(body);
-      await fulfillJson(route, { ok: true, conversationId: body.conversationId, number: temporaryCreates.length });
       return;
     }
     if (

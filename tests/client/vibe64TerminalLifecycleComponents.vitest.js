@@ -63,7 +63,6 @@ vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
 
 import Vibe64LongRunningTerminal from "../../src/components/studio/Vibe64LongRunningTerminal.vue";
 import Vibe64TemporaryActionTerminal from "../../src/components/studio/Vibe64TemporaryActionTerminal.vue";
-import Vibe64TemporaryAiFixAction from "../../src/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64TerminalSurface from "../../src/components/studio/Vibe64TerminalSurface.vue";
 
 for (const [component, componentPath, id] of [
@@ -76,11 +75,6 @@ for (const [component, componentPath, id] of [
     Vibe64TemporaryActionTerminal,
     "src/components/studio/Vibe64TemporaryActionTerminal.vue",
     "vibe64-temporary-action-terminal-lifecycle-test"
-  ],
-  [
-    Vibe64TemporaryAiFixAction,
-    "src/components/studio/Vibe64TemporaryAiFixAction.vue",
-    "vibe64-temporary-ai-fix-action-lifecycle-test"
   ],
   [
     Vibe64TerminalSurface,
@@ -366,7 +360,7 @@ describe("Vibe64 terminal lifecycle components", () => {
         status: "failed",
         title: "Workspace preparation"
       }, {
-        "error-actions": () => h(Vibe64TemporaryAiFixAction, { onClick: fix })
+        "error-actions": () => h("button", { "aria-label": "Fix it with AI", onClick: fix }, "Fix it with AI")
       })
     }));
 

@@ -20,9 +20,7 @@ import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
-  ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
-  ACTION_DELETE_TEMPORARY_CONVERSATION,
   ACTION_READ_TEMPORARY_CONVERSATION,
   ACTION_START_TEMPORARY_CONVERSATION_TURN,
   ACTION_STOP_TEMPORARY_CONVERSATION,
@@ -64,14 +62,6 @@ test("Main and temporary browser history default to ten messages and forward opa
 test("temporary conversation actions use durable conversation ownership", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const terminals = {
-    async createTemporaryConversation(...args) {
-      calls.push(["create", ...args]);
-      return { conversationId: "temporary-1", ok: true };
-    },
-    async deleteTemporaryConversation(...args) {
-      calls.push(["delete", ...args]);
-      return { ok: true };
-    },
     async readTemporaryConversation(...args) {
       calls.push(["read", ...args]);
       return { ok: true };
@@ -87,10 +77,6 @@ test("temporary conversation actions use durable conversation ownership", async 
   };
   const actions = createTerminalActions({ terminals });
 
-  await actionById(actions, ACTION_CREATE_TEMPORARY_CONVERSATION).execute({
-    agentSettings: { model: "gpt-test" },
-    sessionId: "session-1"
-  });
   await actionById(actions, ACTION_READ_TEMPORARY_CONVERSATION).execute({
     conversationId: "temporary-1",
     sessionId: "session-1"
@@ -105,19 +91,9 @@ test("temporary conversation actions use durable conversation ownership", async 
     runId: "turn-1",
     sessionId: "session-1"
   });
-  await actionById(actions, ACTION_DELETE_TEMPORARY_CONVERSATION).execute({
-    conversationId: "temporary-1",
-    sessionId: "session-1"
-  });
 
-  assert.equal(calls[0][0], "create");
-  assert.equal(calls[0][1], "session-1");
-  assert.deepEqual(calls[0][2], {
-    agentSettings: { model: "gpt-test" },
-    sessionId: "session-1"
-  });
-  assert.deepEqual(calls.slice(1).map((entry) => entry[0]), ["read", "start", "stop", "delete"]);
-  for (const call of calls.slice(1)) {
+  assert.deepEqual(calls.map((entry) => entry[0]), ["read", "start", "stop"]);
+  for (const call of calls) {
     assert.equal(call[2].ephemeral, undefined);
   }
 }));
@@ -264,64 +240,6 @@ test("a temporary send waits for the session write lock as long as the service's
   });
 });
 
-test("every Fix it with AI turn carries the saved version it is behind, and a setup repair hands the session to Update first", async () => {
-  await withTemporaryRoot(async (root) => {
-    const f = await conversationFixture(root);
-    const settle = () => Object.assign(f.native, { status: "completed", admitted: false });
-    const saved = "c".repeat(40);
-    await f.store.writeMetadataValue("one", "repository_update_check", JSON.stringify({
-      ahead: 1, behind: 1, canonicalCommit: saved, checkedAt: "2026-11-03T12:00:00.000Z",
-      incomingVersions: [{ commit: "d".repeat(40), message: "Upgrade every JSKIT package to 0.3.0\n\nWith the lockfile." }]
-    }));
-    await f.store.writeBackgroundTaskEvent("one", "update-session", { patch: {
-      status: "failed", code: "vibe64_session_update_conflict", conflictPaths: ["package.json", "package-lock.json"],
-      error: "2 files need review before this session can update."
-    } });
-    await f.service.createTemporaryConversation("one", { conversationId: "setup", presentation: {
-      recoveryContext: "Inspect and update this project's Genesis setup."
-    } });
-    await f.service.startTemporaryConversationTurn("one", { conversationId: "setup", messageId: "setup-1",
-      message: "Inspect and update this project's Genesis setup.", displayMessage: "Fix project setup." });
-    const setup = f.native.lastInput.message;
-    assert.match(setup, /^\[Vibe64 saved version\]\nThis session's Update failed on: package\.json, package-lock\.json\. 2 files need review/);
-    assert.match(setup, /- dddddddd Upgrade every JSKIT package to 0\.3\.0\n/);
-    assert.match(setup, /check read-only whether the saved version already contains that change \(`git log HEAD\.\.cccccccccccc`/);
-    assert.match(setup, /resolved by taking the saved version\. Say so plainly in one sentence and do not ask the person to choose/);
-    assert.match(setup, /Update owns this session until it succeeds\. When this repair concerns project setup[^.]*, do not repair it in this chat now/);
-    assert.match(setup, /\[End Vibe64 saved version\]\n\n[^]*Inspect and update this project's Genesis setup\.$/);
-    const shown = JSON.stringify(await f.store.readConversationLog({ sessionId: "one", conversationId: "setup" }));
-    assert.match(shown, /Fix project setup\./);
-    assert.doesNotMatch(shown, /Vibe64 saved version/, "the brief is never shown as the person's message");
-
-    settle();
-    await f.service.createTemporaryConversation("one", { conversationId: "update", presentation: {
-      recoveryOperation: "update", recoveryContext: "Help resolve this Vibe64 Update problem."
-    } });
-    await f.service.startTemporaryConversationTurn("one", { conversationId: "update", messageId: "update-1",
-      message: "Help resolve this Vibe64 Update problem." });
-    assert.match(f.native.lastInput.message, /Update is this repair\. Prepare it so Update succeeds; Vibe64 will check Update after the repair\./);
-    assert.doesNotMatch(f.native.lastInput.message, /do not repair it in this chat now/);
-
-    settle();
-    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
-    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "chat-1", message: "What does Save do?" });
-    assert.doesNotMatch(f.native.lastInput.message, /Vibe64 saved version/, "an ordinary temporary chat carries no repair brief");
-
-    await f.store.writeBackgroundTaskEvent("one", "update-session", { patch: { status: "ready", code: "", conflictPaths: [], error: "" } });
-    await f.store.writeMetadataValue("one", "repository_update_check", JSON.stringify({
-      ahead: 1, behind: 0, canonicalCommit: saved, checkedAt: "2026-11-03T12:05:00.000Z"
-    }));
-    settle();
-    await f.service.createTemporaryConversation("one", { conversationId: "setup-after", presentation: {
-      recoveryContext: "Inspect and update this project's Genesis setup."
-    } });
-    await f.service.startTemporaryConversationTurn("one", { conversationId: "setup-after", messageId: "setup-2",
-      message: "Inspect and update this project's Genesis setup." });
-    assert.doesNotMatch(f.native.lastInput.message, /Vibe64 saved version/, "after Update the setup repair runs against the updated session");
-    await f.service.close();
-  });
-});
-
 test("temporary provisional rows require exact native admission across read failure and restart without replay", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
@@ -428,7 +346,7 @@ test("a fresh Update repair routes independently of its parent's older Codex his
     for (const [key, value] of Object.entries(parentHistory)) await f.store.writeMetadataValue("one", key, value);
     const parent = await f.store.readSession("one");
     const service = f.restart({ prepareSelection: prepareCodexModelRouting });
-    await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
+    await service.createTemporaryConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
     await service.startTemporaryConversationTurn("one", {
       conversationId: "repair", messageId: "fix-update", message: "Fix this Update problem without losing work."
     });
@@ -800,7 +718,7 @@ test("a queued draft merges into current lifecycle state and refuses a renewed s
     } });
     const saving = queuedService.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Later draft" } });
     await entered.promise;
-    const lifecycle = { status: "completed", recoveryOutcome: "succeeded", providerConversationId: "existing-native",
+    const lifecycle = { status: "completed", providerConversationId: "existing-native",
       runId: "existing-run", attachments: [{ attachmentId: "retained-file" }], routingMetadata: { retained: "policy" } };
     try { await f.store.writeSessionConversation("one", "chat", lifecycle); }
     finally { release.resolve(); }
@@ -1045,12 +963,6 @@ test("temporary conversations survive a new service, stream and reconcile withou
     }
     await restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "hidden context" });
     assert.equal(native.starts, 1, "an admitted retry must not start another turn");
-    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: {
-      recoveryOutcome: "succeeded", recoveryOutcomeMessage: "Update verified."
-    } });
-    const verified = (await restart().listTemporaryConversations("one")).conversations[0];
-    assert.equal(verified.messages.at(-1).id, "recovery_turn-1");
-    assert.equal(verified.messages.at(-1).text, "Update verified.");
     assert.deepEqual(await store.readConversationLog("one"), main);
   });
 });
@@ -1401,13 +1313,14 @@ test("team members' temporary chats and every repair chat use Fix it with AI", a
     await assert.rejects(f.service.createTemporaryConversation("one", { conversationId: "generated",
       assistantRouting: { mode: "junior", review: false } }, f.options),
     { message: /Senior and Junior are for the workspace owner/, statusCode: 403, code: "vibe64_assistant_owner_required" });
-    for (const input of [{ conversationId: "generated" }, { conversationId: "repair", presentation: { recoveryOperation: "update" } }]) {
-      const created = await f.service.createTemporaryConversation("one", input, f.options);
+    for (const [input, options] of [[{ conversationId: "generated" }, f.options],
+      [{ conversationId: "repair" }, { ...f.options, aiTask: () => ({ turn: { routing: "fix", structured: true } }) }]]) {
+      const created = await f.service.createTemporaryConversation("one", input, options);
       assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
       assert.equal(created.purposes.fix.effectiveSelection.engineId, "opencode");
     }
-    const ownerRepair = await f.service.createTemporaryConversation("one", { conversationId: "owner-repair",
-      presentation: { recoveryOperation: "update" } }, { vibe64User: { username: "owner", role: "owner" } });
+    const ownerRepair = await f.service.createTemporaryConversation("one", { conversationId: "owner-repair" },
+      { vibe64User: { username: "owner", role: "owner" }, aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
     assert.deepEqual(JSON.parse(ownerRepair.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
     assert.equal(ownerRepair.purposes.fix.effectiveSelection.modelId, "deepseek-flash");
     assert.equal(f.calls.starts.length, 0);
@@ -1834,7 +1747,7 @@ test("inherited temporary choices stay independent across Main changes and resta
     await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);
     const explicit = await service.createTemporaryConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });
     assert.equal(JSON.parse(explicit.routingMetadata.assistant_routing).mode, "junior");
-    const repair = await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
+    const repair = await service.createTemporaryConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
     assert.equal(JSON.parse(repair.routingMetadata.assistant_routing).mode, "fix");
   });
 });
@@ -1854,7 +1767,7 @@ test("a Main chat without routing preferences passes its exact AI into a new tem
 test("existing idle merge repairs use Fix it with AI without rewriting saved preferences on read", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root);
-    await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update" });
+    await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
     const before = await f.record();
     const observed = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.equal(JSON.parse(observed.routingMetadata.assistant_routing).mode, "fix");
@@ -1887,14 +1800,14 @@ test("a repair can move to a chosen Codex model after Stop and retains history a
     await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "original", message: "Preserve the booking validation while repairing this merge."
     }, f.options);
-    await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update", recoveryContext: "Keep both versions' validation." });
+    await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
     await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
     const changed = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", override: f.senior } }, f.options);
     const preferences = JSON.parse(changed.routingMetadata.assistant_routing);
     assert.equal(preferences.mode, "custom");
     assert.equal(preferences.override.modelId, "gpt-6-astra");
-    assert.equal((await f.record()).recoveryContext, "Keep both versions' validation.");
+    assert.deepEqual((await f.record()).task, { turn: { routing: "fix", structured: true } });
     const result = await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "take-over", message: "Check the merge and finish it correctly."
     }, f.options);
@@ -2290,7 +2203,7 @@ test("temporary repair model preferences survive recovered completion in either 
       await f.service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "original", message: "Preserve the booking validation."
       }, f.options);
-      await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update" });
+      await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
       // Native completion was missed; leave the accepted request for read recovery.
       f.native.get((await f.record()).providerConversationId).status = "completed";
       assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "working");
@@ -2494,14 +2407,14 @@ test("mixed temporary settings updates retain source exclusion while settings-on
     try {
       for (const patch of [
         { agentSettings: {}, attachmentIds: [] },
-        { assistantRouting: { mode: "junior" }, presentation: { recoveryOutcome: "failed" } }
+        { assistantRouting: { mode: "junior" }, presentation: { draft: "Blocked draft" } }
       ]) {
         const result = await service.updateTemporaryConversation("one", { conversationId: "chat", ...patch }, { lockWaitMs: 0 });
         assert.equal(result.code, "vibe64_agent_write_mode_busy");
         assert.equal(result.retryable, true);
       }
       assert.equal(prepared, 0, "blocked mixed input cannot prepare attachments");
-      assert.equal((await f.store.readSessionConversation("one", "chat")).recoveryOutcome, undefined);
+      assert.equal((await f.store.readSessionConversation("one", "chat")).draft, undefined);
       assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", agentSettings: {} })).ok, true);
       assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior" } })).ok, true);
       assert.equal(JSON.parse((await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing).mode, "junior");

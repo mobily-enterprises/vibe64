@@ -224,7 +224,7 @@ function createTemporaryConversationInteraction({
       if (input.assistantRouting) {
         const requested = assistantRoutingPreferences(input.assistantRouting);
         if (requested.mode === "auto") throw temporaryAutoModeRefusal();
-        const fixRequired = record.recoveryOperation === "update" || record.task?.turn.routing === "fix";
+        const fixRequired = record.task?.turn.routing === "fix";
         if (fixRequired && !["fix", "custom"].includes(requested.mode)) {
           throw new AppError(400, "Repair chats use Fix it with AI. Choose Custom to pick a different model.", {
             code: "vibe64_repair_chat_mode_invalid"
@@ -290,12 +290,6 @@ function createTemporaryConversationInteraction({
         if (Object.hasOwn(patch, "draft") || Object.hasOwn(patch, "attachments")) patch.draftRevision = randomUUID();
         return patch;
       }, { requireOpen: true });
-      if (fields.recoveryOutcome === "succeeded") {
-        await ctx.runtime.store.writeConversationSystemMessage({ sessionId, conversationId: record.conversationId }, {
-          messageId: `recovery_${record.runId || record.conversationId}`,
-          text: fields.recoveryOutcomeMessage || "Repair verified."
-        });
-      }
       return {
         ok: true,
         ...(fields.routingMetadata ? { routingMetadata: saved.routingMetadata, purposes: await chatRecords.purposes(ctx, saved) } : {})

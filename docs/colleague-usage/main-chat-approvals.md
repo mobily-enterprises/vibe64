@@ -5,7 +5,7 @@ member writes in Main chat, the message does not reach the assistant straight
 away: it waits in **Messages for approval** until the owner approves, edits or
 declines it. The owner's own messages are sent as usual and never wait.
 
-Temporary chats, Colleague and the other assistants a member uses run on that
+AI tasks, Colleague and the other assistants a member uses run on that
 member's own team setup; only Main chat waits for approval.
 
 A team member's own lesson is the exception. A practice project is private to

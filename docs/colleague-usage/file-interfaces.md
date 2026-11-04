@@ -100,7 +100,7 @@ readable. Choose the **Explain & check** model in **Models** and connect its acc
 While generating, the field shows **Generating explanation…**, **Stop**, and any
 actual Helper progress. No transcript, user prompt or follow-up composer appears
 in the document. Stopping or a failure retains earlier saved text and offers
-**Retry**. To discuss the code, use the coding agent or a temporary conversation.
+**Retry**. To discuss the code, use the coding agent or a **New AI task**.
 The Code editor's existing **Explain file or selection** conversation remains a
 separate facility. Closing one of its explanations also closes its Helper. If
 that close fails, the error reads `The source explanation helper could not be

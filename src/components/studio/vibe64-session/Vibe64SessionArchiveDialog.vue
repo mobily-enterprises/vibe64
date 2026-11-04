@@ -72,7 +72,7 @@
 import { computed, ref, useId, watch } from "vue";
 import { mdiArchiveOutline } from "@mdi/js";
 import { sessionArchiveWorkNotice } from "@/lib/vibe64SessionRepositoryWorkState.js";
-import { temporaryAiRequest } from "@/lib/vibe64TemporaryAiTasks.js";
+import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const props = defineProps({
@@ -100,7 +100,7 @@ watch(() => props.archive.open, async (open) => {
   aiTaskRunning.value = false;
   if (!open) return;
   const path = `${readRefOrGetterValue(props.sessionsApiPath)}/${encodeURIComponent(props.archive.sessionId)}/ai-tasks`;
-  const answer = await temporaryAiRequest(path, { method: "GET" }).catch(() => ({ tasks: [] }));
+  const answer = await aiTaskRequest(path, { method: "GET" }).catch(() => ({ tasks: [] }));
   aiTaskRunning.value = answer.tasks.some(task => task.active);
 });
 

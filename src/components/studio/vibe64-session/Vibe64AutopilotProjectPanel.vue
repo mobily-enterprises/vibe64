@@ -124,10 +124,8 @@
         :open-program-request="architectureProgramRequest"
         :usage-open-request="usageOpenRequest"
         @select-preview="selectPreview"
-        :reload-version="systemReloadVersion"
         :project-slug="projectSlug"
         @open-table="openSubsystemTable"
-        @describe-subsystems="describeSubsystems"
         :session-id="sessionId"
         @inspect-file="architectureFileRequest = { ...$event, presentation: 'interface' }"
         @open-source-file-immersive="openSourceEditorFile"
@@ -241,12 +239,12 @@ const { view } = defineProps({
 const {
   agentActive, askAssistantAboutFile, assistantAccessScopeKey, assistantCanUsePurpose,
   assistantDraftAvailable, assistantFixAllowed, assistantPurposes, backToDashboard, backToSystemFromEditor,
-  composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
-  describeSubsystems, emit, fileBookmarks, lessonShown,
+  aiTaskComposer, composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
+  emit, fileBookmarks, lessonShown,
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
-  systemBackAvailable, systemReloadVersion, systemRestoreRequest, temporaryAiWorkspace,
+  systemBackAvailable, systemRestoreRequest,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
@@ -294,7 +292,7 @@ function selectPreview() {
 }
 
 async function attachPreviewFile(file) {
-  const composer = temporaryAiWorkspace.value?.composer || composerInput.value;
+  const composer = aiTaskComposer.value || composerInput.value;
   const uploaded = await composer?.attachFiles?.([file]);
   if (!Array.isArray(uploaded) || uploaded.length < 1) {
     throw new Error("Open the chat composer before attaching a preview file.");
@@ -303,7 +301,7 @@ async function attachPreviewFile(file) {
 }
 
 async function attachPreviewFileProducer(options = {}) {
-  const composer = temporaryAiWorkspace.value?.composer || composerInput.value;
+  const composer = aiTaskComposer.value || composerInput.value;
   const uploaded = await composer?.attachFileProducer?.(options);
   return Array.isArray(uploaded) && uploaded.length > 0 ? uploaded[0] : null;
 }

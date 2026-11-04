@@ -17,7 +17,7 @@ describe("session header priority overflow", () => {
     expect(SESSION_HEADER_ACTION_PRIORITY).not.toContain("save");
   });
 
-  it("moves Prepare workspace first and Temporary AI last", () => {
+  it("keeps New AI task inline longest and overflows Prepare workspace first", () => {
     expect(splitVibe64SessionHeaderActions(ALL, Infinity)).toEqual({ inline: SESSION_HEADER_ACTION_PRIORITY, overflow: [] });
     expect(splitVibe64SessionHeaderActions(ALL, 4)).toEqual({
       inline: ["new-ai-task", "renew", "pin", "pull-request"], overflow: ["prepare-workspace"]

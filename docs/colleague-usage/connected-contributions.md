@@ -35,7 +35,7 @@ A session is untouched when all of this holds, checked at the moment of linking:
 
 - it has no commits beyond the main it started from;
 - it has no unsaved work, not counting files its own setup generates;
-- no AI turn, AI terminal or temporary AI task is running in it, and no Save or
+- no AI turn, AI terminal or AI task is running in it, and no Save or
   Update either;
 - it is not pinned and not closing.
 

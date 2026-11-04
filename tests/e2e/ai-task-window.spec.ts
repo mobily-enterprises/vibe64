@@ -491,10 +491,90 @@ test.describe("what the rest of the page does", () => {
     expect(shared.server.temporary!.captured.temporaryCreates).toHaveLength(1);
   });
 
-  test("a chat of an AI task never appears as a temporary chat", async ({ page }) => {
+  test("the task chat queues several files for a reply and keeps its draft", async ({ page }) => {
+    const release = Promise.withResolvers<void>();
+    const received: string[] = [];
+    const names = ["bookings.HTML", "customers.csv", "pricing.js"];
     await aiTaskWorld(page, shared.server);
-    await openFix(page, shared.server);
-    await expectPhase(page, "working");
-    await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toHaveCount(0);
+    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/agent-attachments`, async route => {
+      const form = await new globalThis.Response(route.request().postDataBuffer(), {
+        headers: { "Content-Type": route.request().headers()["content-type"] }
+      }).formData();
+      const file = form.get("file") as File;
+      received.push(file.name);
+      if (received.length === 1) await release.promise;
+      await fulfillJson(route, { ok: true, attachmentId: `attachment-${received.length}`, fileName: file.name,
+        path: `/tmp/vibe64-attachments/${file.name}`, size: file.size });
+    });
+    try {
+      const taskId = await openFix(page, shared.server);
+      await endTurn(shared.server, taskId, "question", "Which price table should stay?");
+      await expectPhase(page, "needs_you", "question");
+      const window = taskWindow(page);
+      await window.locator("[data-vibe64-ai-task-action='answer']").click();
+      const input = window.getByRole("textbox", { name: "Message the AI" });
+      const send = window.getByRole("button", { name: "Send message", exact: true });
+      await input.fill("These are the files.");
+      const chooser = page.waitForEvent("filechooser");
+      await window.getByRole("button", { name: "Attach files", exact: true }).click();
+      await (await chooser).setFiles(names.map(name => ({ name, mimeType: "text/plain", buffer: Buffer.from(`Contents of ${name}`) })));
+      const queue = window.getByRole("region", { name: "Message attachments" });
+      await expect(queue.locator(".assistant-attachment-queue__item")).toHaveCount(3);
+      await expect.poll(() => received.length).toBe(1);
+      await expect(send).toBeDisabled();
+      release.resolve();
+      await expect(queue.locator(".assistant-attachment-queue__item--ready")).toHaveCount(3);
+      await expect(send).toBeEnabled();
+      // The draft keeps its text, and each file adds its reference after it.
+      await expect(input).toHaveValue(/^These are the files\.\s+\[File #1\]\s+\[File #2\]\s+\[File #3\]\s*$/u);
+      expect(received).toEqual(names);
+      await expectNoSidewaysScroll(page);
+      // Send carries every file with the reply.
+      const { captured } = shared.server.temporary!;
+      const sent = captured.temporaryTurns.length;
+      await send.click();
+      await expect.poll(() => captured.temporaryTurns.length).toBe(sent + 1);
+      expect((captured.temporaryTurns.at(-1) as Record<string, unknown>).attachmentIds)
+        .toEqual(["attachment-1", "attachment-2", "attachment-3"]);
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("a reply that could not start offers Edit and Retry, and Retry resends that reply once", async ({ page }) => {
+    const captured = shared.server.temporary!.captured;
+    // The person's two sends (turns 2 and 3) fail before reaching the AI; the Retry goes through.
+    captured.beforeNativeTurn = async (turn) => {
+      if (turn !== 2 && turn !== 3) return;
+      throw Object.assign(new Error("Assistant could not start."), {
+        code: "conversation_busy", statusCode: 409, delivery: "not-sent"
+      });
+    };
+    await aiTaskWorld(page, shared.server);
+    const taskId = await openFix(page, shared.server);
+    await endTurn(shared.server, taskId, "question", "Which price table should stay?");
+    await expectPhase(page, "needs_you", "question");
+    const window = taskWindow(page);
+    await window.locator("[data-vibe64-ai-task-action='answer']").click();
+    const transcript = window.locator(".assistant-transcript");
+    const input = window.getByRole("textbox", { name: "Message the AI" });
+    const send = window.getByRole("button", { name: "Send message", exact: true });
+    await input.fill("Keep the newer one.");
+    await send.click();
+    await expect(transcript.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+    await transcript.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(input).toHaveValue("Keep the newer one.");
+    await expect(transcript.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+    await send.click();
+    await expect(transcript.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await input.fill("A newer draft.");
+    await transcript.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect.poll(() => captured.temporaryTurns.length).toBe(4);
+    await expect(transcript.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+    await expect(input).toHaveValue("A newer draft.");
+    const [, , failed, retry] = captured.temporaryTurns as Array<Record<string, any>>;
+    expect(retry.messageId).toBe(failed.messageId);
+    expect(retry.displayMessage).toBe("Keep the newer one.");
+    expect(retry.presentation.draft).toBe("A newer draft.");
   });
 });

@@ -38,7 +38,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
 // Its turns report a structured result, so their raw JSON never reaches the transcript.
-const reportsStructuredResult = record => record.recoveryOperation === "update" || record.task?.turn.structured === true;
+const reportsStructuredResult = record => record.task?.turn.structured === true;
 
 // A turn without an event stream may carry onEvent: null (the provider call context sets it so).
 const onCompletedMessage = (ctx, onComplete) => {
@@ -578,13 +578,6 @@ function createTemporaryConversationTurns({
           durable: true,
           conversationId: record.conversationId
         });
-        // Every Fix it with AI turn reads the session's saved version afresh:
-        // whether it is behind, with which incoming versions, and whether
-        // Update owns the session, so the repair never redoes saved work.
-        if (input.presentation?.recoveryContext || record.recoveryContext) {
-          const updateRepair = (input.presentation?.recoveryOperation || record.recoveryOperation) === "update";
-          prepared.message = await withUpdateFirstBrief(ctx, sessionId, prepared.message, updateRepair);
-        }
         if (record.task) await prepareAiTaskMessage(sessionId, input, record, ctx, prepared);
         const receipt = {
           messageId: input.messageId,

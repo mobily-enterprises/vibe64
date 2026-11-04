@@ -33,7 +33,6 @@ import { useVibe64MainChatDelivery } from "@/composables/useVibe64MainChatDelive
 import { useVibe64SessionSaveWork } from "@/composables/useVibe64SessionSaveWork.js";
 import { useVibe64SessionToolPane } from "@/composables/useVibe64SessionToolPane.js";
 import { useVibe64ShortActionDismissals } from "@/composables/useVibe64ShortActionDismissals.js";
-import { useVibe64TemporaryAiRepairs } from "@/composables/useVibe64TemporaryAiRepairs.js";
 import { useVibe64WorkspaceSetupActivity } from "@/composables/useVibe64WorkspaceSetupActivity.js";
 
 const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";
@@ -70,9 +69,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   mainChatApprovals = null,
-  onAttachmentsAccepted = null,
-  requestTemporaryAi = null,
-  temporaryAiWorkspace = null
+  onAttachmentsAccepted = null
 } = {}) {
   const router = useRouter();
   const projectSlug = useVibe64ProjectSlug();
@@ -99,7 +96,7 @@ function useVibe64AutopilotView(props, emit, {
   const assistantDirectAllowed = computed(() => (
     !assistantAccessConfigured || unref(assistantCanUseAi) === true
   ));
-  // Temporary AI repairs run on the Fix it with AI model.
+  // Fix it with AI runs on its own model.
   const assistantFixAllowed = computed(() => assistantCanUseFix === null
     ? assistantDirectAllowed.value : unref(assistantCanUseFix) === true);
   const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
@@ -374,17 +371,6 @@ function useVibe64AutopilotView(props, emit, {
     )),
     sessionId
   });
-  const temporaryAiRepairs = useVibe64TemporaryAiRepairs(props, {
-    actorKey,
-    assistantFixAllowed,
-    projectSlug,
-    repositoryOperationActive,
-    requestTemporaryAi,
-    saveWork,
-    sessionId,
-    temporaryAiWorkspace,
-    workspaceSetupActivity
-  });
 
   function updateComposerAttachments(attachments = []) {
     composerAttachments.value = Array.isArray(attachments) ? attachments : [];
@@ -548,7 +534,6 @@ function useVibe64AutopilotView(props, emit, {
   return {
     ...saveWork,
     ...workspaceSetupActivity,
-    ...temporaryAiRepairs,
     ...sessionToolPane,
     ...chatPane,
     ...delivery,

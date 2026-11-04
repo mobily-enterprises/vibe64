@@ -35,7 +35,8 @@ export default [
   ...clientFeaturesConfig([
     "packages/vibe64-ai-tasks/src/client/**",
     "src/components/studio/vibe64-session/Vibe64AiTask*.vue",
-    "src/composables/useAiTaskConversation.js"
+    "src/composables/useAiTaskConversation*.js",
+    "src/lib/vibe64AiTaskConversation.js"
   ]),
   ...webConfig,
   ...nodeConfig,

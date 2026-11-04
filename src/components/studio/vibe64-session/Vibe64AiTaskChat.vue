@@ -1,19 +1,13 @@
 <template>
   <div class="ai-task-chat">
-    <p v-if="!task" class="ai-task-chat__loading" role="status">{{ WORDS.chat.loading }}</p>
-    <Vibe64EphemeralConversationMessages
-      v-else
-      assistant-label="AI"
-      :adapter="task.adapter"
-      empty-message=""
-      :routing-request="conversation.routingRequest.value"
-      :scroll-key="task.id"
-      :session-id="sessionId"
-      :working="task.nativeWorking"
-      @cancel="conversation.cancelMessage"
-      @edit="conversation.editMessage"
-      @resend="conversation.send(prompt, { retryMessageId: $event })"
-    >
+    <p v-if="!task" class="ai-task-chat__loading" role="status">{{ conversation.loadError.value || WORDS.chat.loading }}</p>
+    <AssistantConversationElement v-else :adapter="transcript">
+      <template #attachments="{ items }">
+        <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
+      </template>
+      <template #system-message="{ message }">
+        <Vibe64ConversationStatus :message="message" @check-delivery="resend" />
+      </template>
       <template #hints>
         <div v-if="conversation.error.value || conversation.activityLabel.value" class="ai-task-chat__feedback">
           <p v-if="conversation.error.value" class="ai-task-chat__error" role="alert">{{ conversation.error.value }}</p>
@@ -121,7 +115,7 @@
           </template>
         </Vibe64AutopilotPromptTextarea>
       </template>
-    </Vibe64EphemeralConversationMessages>
+    </AssistantConversationElement>
     <Vibe64SessionAssistantMenu
       v-if="task && !projection.ended"
       v-model="customOpen"
@@ -135,14 +129,16 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { mdiCameraOutline, mdiConsoleNetworkOutline, mdiPaperclip } from "@mdi/js";
-import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
+import { AssistantComposerSupport, AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
+import { aiTaskTranscript } from "@/lib/vibe64AiTaskConversation.js";
 import Vibe64AgentSettingsMenu from "./Vibe64AgentSettingsMenu.vue";
 import Vibe64AutopilotPromptTextarea from "./Vibe64AutopilotPromptTextarea.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
-import Vibe64EphemeralConversationMessages from "./Vibe64EphemeralConversationMessages.vue";
+import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
+import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 
 const props = defineProps({
@@ -158,6 +154,11 @@ const props = defineProps({
   sessionId: {
     required: true,
     type: String
+  },
+  // Whether the window shows this chat now.
+  visible: {
+    required: true,
+    type: Boolean
   },
   assistantSelection: {
     required: true,
@@ -192,11 +193,27 @@ const WORDS = {
     loading: "Loading the conversation…"
   }
 };
+// composer: the composer that takes preview screenshots and diagnostics while this chat is shown, or null.
+const emit = defineEmits(["composer"]);
 const task = computed(() => props.conversation.task.value);
 const prompt = ref(null);
+const transcript = computed(() => task.value && aiTaskTranscript(task.value.adapter, {
+  routingRequest: props.conversation.routingRequest.value,
+  working: task.value.nativeWorking,
+  scrollKey: task.value.id,
+  actions: { resend, cancel: props.conversation.cancelMessage, edit: props.conversation.editMessage }
+}));
 const sendButton = ref(null);
 const customOpen = ref(false);
 const customTarget = ref(null);
+
+/** @param {string} messageId the failed or unconfirmed message to send again with its own id */
+function resend(messageId) {
+  void props.conversation.send(prompt.value, { retryMessageId: messageId });
+}
+
+watch([() => props.visible, prompt], ([visible, composer]) => emit("composer", visible ? composer : null), { immediate: true });
+onBeforeUnmount(() => emit("composer", null));
 
 // The dialog's focus trap reads this same Tab key after us, and would wrap Send, its last control, to the top.
 function focusSend() {

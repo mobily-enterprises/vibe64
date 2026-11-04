@@ -98,7 +98,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       "output-target.open", "output-target.start", "output-target.stop", "output-terminal.close",
       "output-terminal.read", "outputs.read", "preview-diagnostics.record", "preview-identity.select",
       "project-runtime.close", "project-runtime.open", "prompt-hints.cancel", "prompt-hints.generate",
-      "temporary-conversation.create", "temporary-conversation.delete", "temporary-conversation.list", "temporary-conversation.read",
+      "temporary-conversation.list", "temporary-conversation.read",
       "temporary-conversation.stop", "temporary-conversation.turn.start", "temporary-conversation.update", "work-plan.archive",
       "work-plan.read", "work-plan.restore"
     ].map((operation) => `vibe64.terminals.${operation}`));
@@ -192,9 +192,9 @@ test("Colleague's temporary-chat tools offer every routing choice with the team-
     assert.match(description, pattern);
   }
   assert.match(description, /repair chat.*only fix or custom/su);
-  // Colleague starts and closes these conversations as AI tasks.
+  // Colleague starts and closes these conversations as AI tasks, so there is no action to create or delete one.
   for (const operation of ["create", "delete"]) {
-    assert.equal(definitions.get(`vibe64.terminals.temporary-conversation.${operation}`).extensions.assistant.exclude, true, operation);
+    assert.equal(definitions.has(`vibe64.terminals.temporary-conversation.${operation}`), false, operation);
   }
 });
 
