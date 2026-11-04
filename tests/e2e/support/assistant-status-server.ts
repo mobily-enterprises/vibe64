@@ -505,6 +505,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: state.conversationLog, pagination: { count: state.conversationLog.length, totalTurnCount: state.conversationLog.length, hasMoreBefore: false, limit: 20 } };
       else if (route === `${sessionRoute}/assistant-access`) result = state.assistantAccess;
       else if (route === `${sessionRoute}/ai-task-conversations`) result = { ok: true, conversations: [] };
+      else if (route === `${sessionRoute}/ai-tasks`) result = { ok: true, tasks: [], viewerId: String(owner.uid) };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/work-plan`) result = { ok: true, sessionId: session.sessionId, available: false, current: null, history: [] };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
