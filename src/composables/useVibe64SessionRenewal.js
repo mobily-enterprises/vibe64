@@ -14,6 +14,7 @@ import {
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { browserTabSessionStorage, vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { pageRandomUUID } from "@/lib/browser.js";
 import {
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
   sessionRenewalAdvisoryPresentation,
@@ -55,16 +56,28 @@ function keepRenewalHandoverValidationInContext(error = null) {
   }
 }
 
+/**
+ * The selected session's renewal: its dialog, handover draft, progress and the fresh session it opens.
+ * @param {object} options
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.active] Whether this session's host is the active one.
+ * @param {Storage | null} [options.draftStorage] Where unsent handover drafts survive a reload of this tab.
+ * @param {(sessionId: string) => Promise<boolean>} options.focusSession Places focus in the fresh session once it mounts.
+ * @param {(options?: Record<string, any>) => Promise<unknown>} options.refreshSessionData Rereads the session list.
+ * @param {(sessionId: string) => void} options.selectSession Opens the fresh session.
+ * @param {import("vue").MaybeRefOrGetter<Record<string, any> | null>} options.selectedSession
+ * @param {import("vue").MaybeRefOrGetter<string>} options.selectedSessionId
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath
+ */
 function useVibe64SessionRenewal({
   active = true,
   draftStorage = browserTabSessionStorage(),
-  focusSession = async () => null,
-  refreshSessionData = async () => null,
-  selectSession = () => null,
+  focusSession,
+  refreshSessionData,
+  selectSession,
   selectedSession,
   selectedSessionId,
   sessionsApiPath
-} = {}) {
+}) {
   const projectSlug = useVibe64ProjectSlug();
   const hostActive = computed(() => readRefOrGetterValue(active) !== false);
   const sessionId = computed(() => String(readRefOrGetterValue(selectedSessionId) || "").trim());
@@ -76,7 +89,7 @@ function useVibe64SessionRenewal({
       : ""
   ));
   const open = ref(false);
-  const triggerFocusTarget = shallowRef(null);
+  const triggerFocusTarget = shallowRef(/** @type {HTMLElement | null} */ (null));
   const pendingActionState = ref(null);
   const localOperationKey = ref("");
   const snapshot = ref(null);
@@ -290,7 +303,7 @@ function useVibe64SessionRenewal({
   }
 
   function createOperationKey() {
-    const randomId = globalThis.crypto?.randomUUID?.() || "";
+    const randomId = pageRandomUUID();
     localOperationKey.value = sessionRenewalOperationKey(sessionId.value, { randomId });
     return localOperationKey.value;
   }
@@ -301,7 +314,7 @@ function useVibe64SessionRenewal({
     }
     manualReloading.value = true;
     try {
-      await resource.reload?.();
+      await resource.reload();
       return renewal.value;
     } finally {
       manualReloading.value = false;
@@ -445,12 +458,15 @@ function useVibe64SessionRenewal({
     );
   }
 
+  /**
+   * Opens the dialog; closing it later returns focus to the control that asked for it.
+   * @param {{ returnFocusTarget?: HTMLElement | null }} [options]
+   */
   function request({ returnFocusTarget = null } = {}) {
     if (!visible.value || !hostActive.value) {
       return;
     }
-    const target = returnFocusTarget?.$el || returnFocusTarget;
-    triggerFocusTarget.value = typeof target?.focus === "function" ? target : null;
+    triggerFocusTarget.value = returnFocusTarget;
     open.value = true;
     void reload().catch(() => null);
   }
@@ -466,7 +482,7 @@ function useVibe64SessionRenewal({
     }
     const target = triggerFocusTarget.value;
     triggerFocusTarget.value = null;
-    if (target?.isConnected !== true || typeof target.focus !== "function") {
+    if (target?.isConnected !== true) {
       return false;
     }
     target.focus({ preventScroll: true });

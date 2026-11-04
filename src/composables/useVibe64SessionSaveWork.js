@@ -1,10 +1,7 @@
 import { computed, nextTick, ref, watch } from "vue";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 const EVENT_TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 const EVENT_DATE_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -14,8 +11,8 @@ const EVENT_DATE_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
 // An event's stored ISO time in the person's own clock: the time alone today,
 // with the date otherwise. Anything unparseable is shown as stored.
 function eventTimeLabel(at = "", now = new Date()) {
-  const date = new Date(text(at));
-  if (!text(at) || Number.isNaN(date.getTime())) return text(at);
+  const date = new Date(normalizeText(at));
+  if (!normalizeText(at) || Number.isNaN(date.getTime())) return normalizeText(at);
   return (date.toDateString() === now.toDateString() ? EVENT_TIME_FORMAT : EVENT_DATE_TIME_FORMAT).format(date);
 }
 
@@ -227,7 +224,7 @@ function useVibe64SessionSaveWork(props, {
     );
   });
   const saveWorkActivityKey = computed(() => {
-    const operationId = text(saveWorkOperation.value?.operationId);
+    const operationId = normalizeText(saveWorkOperation.value?.operationId);
     if (!operationId) {
       return "";
     }
@@ -246,8 +243,8 @@ function useVibe64SessionSaveWork(props, {
   ));
   const saveWorkOutput = computed(() => (Array.isArray(saveWorkOperation.value?.events)
     ? saveWorkOperation.value.events
-      .filter((event) => text(event.message))
-      .map((event) => [eventTimeLabel(event.at), text(event.message)].filter(Boolean).join("  "))
+      .filter((event) => normalizeText(event.message))
+      .map((event) => [eventTimeLabel(event.at), normalizeText(event.message)].filter(Boolean).join("  "))
       .join("\n")
     : ""));
   const saveWorkStatus = computed(() => String(
@@ -336,7 +333,7 @@ function useVibe64SessionSaveWork(props, {
     const checkingSessionId = sessionId.value;
     const checkingProjectSlug = projectSlug.value;
     await updateBeforeSave({ reviewedConflictId });
-    if (typeof props.refreshSessionWork === "function") await props.refreshSessionWork().catch(() => null);
+    await props.refreshSessionWork().catch(() => null);
     await nextTick();
     return checkingSessionId === sessionId.value && checkingProjectSlug === projectSlug.value ? "repository-update" : false;
   }

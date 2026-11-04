@@ -32,9 +32,23 @@ function reloadPage() {
   }
 }
 
+/**
+ * Writes text to the page's clipboard. Outside a browser there is no clipboard (false); a page without the clipboard
+ * API, which browsers offer only on https or localhost pages, writes nothing (undefined).
+ * @param {string} text
+ */
+function writePageClipboardText(text) {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  // readable-check: allow method-probe - platform object: browsers offer navigator.clipboard only on secure (https or localhost) pages
+  return typeof navigator.clipboard?.writeText === "function" ? navigator.clipboard.writeText(text) : undefined;
+}
+
 export {
   browserSessionStorage,
   hasWindowFunction,
   pageRandomUUID,
-  reloadPage
+  reloadPage,
+  writePageClipboardText
 };

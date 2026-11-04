@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -19,6 +20,7 @@ import {
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+import { writePageClipboardText } from "@/lib/browser.js";
 
 const SESSION_WORK_TASK_IDS = ["codex_turn_checkpoint", "save-work", "update-session"];
 
@@ -31,8 +33,8 @@ async function focusRuntimeSessionChat(sessionId = "", root = globalThis.documen
   await nextTick();
   const runtime = [...root.querySelectorAll("[data-vibe64-session-runtime-id]")]
     .find((element) => element.getAttribute("data-vibe64-session-runtime-id") === normalizedId);
-  const target = runtime?.querySelector?.(".studio-autopilot__chat-panel");
-  target?.focus?.({ preventScroll: true });
+  const target = runtime?.querySelector(".studio-autopilot__chat-panel");
+  target?.focus({ preventScroll: true });
   return Boolean(target);
 }
 
@@ -81,8 +83,9 @@ function runtimeHostAgentWorking({
 
 const ACTIVE_WORK_TASK_STATUSES = ["queued", "running", "starting"];
 
-function workTaskActive(task = {}) {
-  return ACTIVE_WORK_TASK_STATUSES.includes(String(task?.status || "").trim().toLowerCase());
+// A Save or Update task the session has not started is absent (null).
+function workTaskActive(task) {
+  return ACTIVE_WORK_TASK_STATUSES.includes(String(normalizeObject(task).status || "").trim().toLowerCase());
 }
 
 // Inspection reads repository files, so it follows changes that can alter them:
@@ -93,8 +96,10 @@ function runtimeHostWorkInspectionRevision(session = {}) {
   return runtimeHostWorkTaskRevision(session, { progress: false });
 }
 
-function runtimeHostWorkTaskRevision(session = {}, { progress = true } = {}) {
-  return (Array.isArray(session?.backgroundTasks) ? session.backgroundTasks : [])
+// The selected session is null until it loads.
+function runtimeHostWorkTaskRevision(session, { progress = true } = {}) {
+  const backgroundTasks = normalizeObject(session).backgroundTasks;
+  return (Array.isArray(backgroundTasks) ? backgroundTasks : [])
     .filter((task) => SESSION_WORK_TASK_IDS.includes(String(task?.id || "")))
     .map((task) => {
       if (!progress && task.id !== "codex_turn_checkpoint" && workTaskActive(task)) {
@@ -116,8 +121,9 @@ function runtimeHostWorkTaskRevision(session = {}, { progress = true } = {}) {
     .join("|");
 }
 
-function runtimeHostWorkTaskState(session = {}) {
-  const tasks = Array.isArray(session?.backgroundTasks) ? session.backgroundTasks : [];
+function runtimeHostWorkTaskState(session) {
+  const backgroundTasks = normalizeObject(session).backgroundTasks;
+  const tasks = Array.isArray(backgroundTasks) ? backgroundTasks : [];
   const operation = tasks.find((task) => String(task?.id || "") === "save-work") || null;
   const updateOperation = tasks.find((task) => String(task?.id || "") === "update-session") || null;
   const activeOperation = [operation, updateOperation].find(workTaskActive);
@@ -264,7 +270,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function refreshSessionData(options = {}) {
-    const includeList = options?.includeList === true;
+    const includeList = options.includeList === true;
     if (!includeList) {
       return mounted.refresh(options);
     }
@@ -325,9 +331,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   ));
   const guardedPage = computed(() => ({
     busy: Boolean(mounted.detailState.value?.loading),
-    copyText: async (value = "") => typeof navigator === "undefined"
-      ? false
-      : navigator.clipboard?.writeText?.(String(value || "")),
+    copyText: async (value = "") => writePageClipboardText(String(value || "")),
     error: pageError.value,
     launchBusy: Boolean(mounted.detailState.value?.loading)
   }));

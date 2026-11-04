@@ -7,6 +7,7 @@ import * as realtime from "../../src/lib/vibe64RepositoryRealtime.js";
 import * as visibility from "../../src/lib/vibe64SessionToolbarVisibility.js";
 import { readRefOrGetterValue } from "../../src/lib/vueRefOrGetterValue.js";
 import { vibe64ApiResponseError } from "../../src/lib/vibe64ApiResponses.js";
+import { hasWindowFunction } from "../../src/lib/browser.js";
 
 // Exercise the real registry and Vue scheduling with controlled HTTP/realtime boundaries.
 const source = (await readFile(new URL("../../src/composables/useVibe64SessionRepositoryStatusRegistry.js", import.meta.url), "utf8"))
@@ -19,7 +20,7 @@ function fixture(t, { suspended = false } = {}) {
   const access = vue.ref(suspended);
   const dependencies = {
     computed: vue.computed, onScopeDispose: vue.onScopeDispose, watch: vue.watch,
-    ...realtime, ...visibility, readRefOrGetterValue, vibe64ApiResponseError,
+    ...realtime, ...visibility, hasWindowFunction, readRefOrGetterValue, vibe64ApiResponseError,
     useRealtimeEvent: () => {},
     useVibe64ProjectWatch: () => {},
     VIBE64_SESSION_SUMMARY_CHANGED_EVENT: "vibe64.session.summary.changed",

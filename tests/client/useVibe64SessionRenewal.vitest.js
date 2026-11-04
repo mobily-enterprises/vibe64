@@ -465,7 +465,7 @@ describe("useVibe64SessionRenewal", () => {
       isConnected: true
     };
 
-    controller.request({ returnFocusTarget: { $el: trigger } });
+    controller.request({ returnFocusTarget: trigger });
     expect(controller.open.value).toBe(true);
     expect(controller.restoreTriggerFocus()).toBe(false);
 

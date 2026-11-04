@@ -20,6 +20,7 @@ import {
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { useVibe64ProjectWatch } from "@/composables/useVibe64ProjectWatch.js";
+import { hasWindowFunction } from "@/lib/browser.js";
 
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
@@ -32,28 +33,48 @@ const DEFAULT_STALE_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_SETTLE_MS = 1_000;
 const DEFAULT_MAX_SETTLE_MS = 5_000;
 
-// Inspects each session's work, at most `maxConcurrency` sessions at a time.
-// A session has at most one inspection running and one requested: requests
-// made while it runs become exactly one follow-up, because the running read
-// may predate their change. A request with `settle` waits for its burst to
-// settle; one without starts as soon as a slot frees and takes the burst's
-// settling requests with it.
+/**
+ * @typedef {object} Vibe64SessionWorkReport
+ * @property {string} sessionId
+ * @property {Record<string, any>} workState
+ */
+
+/** A caller that does not follow each session's work state. */
+function ignoreSessionWorkReport() {}
+
+/**
+ * Inspects each session's work, at most `maxConcurrency` sessions at a time.
+ * A session has at most one inspection running and one requested: requests
+ * made while it runs become exactly one follow-up, because the running read
+ * may predate their change. A request with `settle` waits for its burst to
+ * settle; one without starts as soon as a slot frees and takes the burst's
+ * settling requests with it.
+ * @param {object} options
+ * @param {(timer: ReturnType<typeof setTimeout>) => void} [options.clearTimer]
+ * @param {number} [options.maxConcurrency]
+ * @param {number} [options.maxSettleMs]
+ * @param {() => number} [options.now]
+ * @param {(report: Vibe64SessionWorkReport) => void} [options.onInspected] Each inspection's result.
+ * @param {(report: Vibe64SessionWorkReport) => void} [options.onState] Each session's new work state.
+ * @param {(sessionId: string) => boolean} [options.prioritized]
+ * @param {(sessionId: string) => Promise<Record<string, any>>} options.requestWork Reads one session's work.
+ * @param {(callback: () => void, delay: number) => ReturnType<typeof setTimeout>} [options.setTimer]
+ * @param {number} [options.settleMs]
+ * @param {number} [options.staleAfterMs]
+ */
 function createVibe64SessionRepositoryStatusQueue({
   clearTimer = (timer) => clearTimeout(timer),
   maxConcurrency = DEFAULT_MAX_CONCURRENCY,
   maxSettleMs = DEFAULT_MAX_SETTLE_MS,
   now = () => Date.now(),
-  onInspected = () => null,
-  onState = () => null,
+  onInspected = ignoreSessionWorkReport,
+  onState = ignoreSessionWorkReport,
   prioritized = () => false,
   requestWork,
   setTimer = (callback, delay) => setTimeout(callback, delay),
   settleMs = DEFAULT_SETTLE_MS,
   staleAfterMs = DEFAULT_STALE_AFTER_MS
-} = {}) {
-  if (typeof requestWork !== "function") {
-    throw new TypeError("Session repository status requires a work inspector.");
-  }
+}) {
   const concurrency = Math.max(1, Number(maxConcurrency || 0));
   const records = new Map();
   // Each session's requested inspection that has not started:
@@ -334,7 +355,7 @@ function createVibe64SessionRepositoryStatusQueue({
     return new Promise((resolve) => idleWaiters.add(resolve));
   }
 
-  return {
+  return Object.freeze({
     dispose,
     confirmCanonical,
     enqueue,
@@ -344,18 +365,28 @@ function createVibe64SessionRepositoryStatusQueue({
     observe,
     removeExcept,
     waitForIdle
-  };
+  });
 }
 
+/**
+ * @param {object} options
+ * @param {number} [options.maxVisibleSessions]
+ * @param {(report: Vibe64SessionWorkReport) => void} [options.onState] Each session's new work state.
+ * @param {import("vue").MaybeRefOrGetter<string>} [options.projectSlug]
+ * @param {import("vue").MaybeRefOrGetter<string>} options.selectedSessionId
+ * @param {(sessionId: string) => boolean} [options.sessionSourceOperationsSuspended]
+ * @param {import("vue").MaybeRefOrGetter<Array<Record<string, any>>>} options.sessions
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath
+ */
 function useVibe64SessionRepositoryStatusRegistry({
   maxVisibleSessions = DEFAULT_VISIBLE_SESSION_LIMIT,
-  onState = () => null,
+  onState = ignoreSessionWorkReport,
   projectSlug = "",
   selectedSessionId,
   sessionSourceOperationsSuspended = () => false,
   sessions,
   sessionsApiPath
-} = {}) {
+}) {
   const visibleSessions = computed(() => visibleVibe64ToolbarSessions({
     limit: maxVisibleSessions,
     selectedSessionId: readRefOrGetterValue(selectedSessionId),
@@ -634,14 +665,15 @@ function useVibe64SessionRepositoryStatusRegistry({
   });
 
   const browserDocument = typeof document === "undefined" ? null : document;
-  const interval = typeof window === "undefined"
-    ? null
-    : window.setInterval(() => {
-        if (browserDocument?.visibilityState === "hidden") {
-          return;
-        }
-        inspectVisible();
-      }, DEFAULT_STALE_CHECK_INTERVAL_MS);
+  let interval = null;
+  if (hasWindowFunction("setInterval")) {
+    interval = window.setInterval(() => {
+      if (browserDocument?.visibilityState === "hidden") {
+        return;
+      }
+      inspectVisible();
+    }, DEFAULT_STALE_CHECK_INTERVAL_MS);
+  }
 
   // While this page has the project open, visible or in a background tab, it
   // watches the project: the server checks every session for updates every
