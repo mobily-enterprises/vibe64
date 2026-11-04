@@ -8,7 +8,8 @@
     ".": "./src/index.js",
     "./client": "./src/client/index.js",
     "./server/types": "./src/server/types.js",
-    "./shared": "./src/shared/index.js"
+    "./shared": "./src/shared/index.js",
+    "./server/actions": "./src/server/aiTaskActions.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -17,7 +18,13 @@
         "vibe64.ai-tasks"
       ],
       "requires": [
-        "runtime.logger"
+        "runtime.env",
+        "runtime.events",
+        "runtime.http",
+        "runtime.logger",
+        "vibe64.project",
+        "vibe64.sessions",
+        "vibe64.terminals"
       ]
     },
     "runtime": {
@@ -38,7 +45,12 @@
     },
     "metadata": {
       "apiSummary": {
-        "surfaces": [],
+        "surfaces": [
+          {
+            "subpath": "./server/actions",
+            "summary": "Defines the actions that start, read, cancel, check, continue, finish and close a session's AI tasks."
+          }
+        ],
         "capabilities": [
           "vibe64.ai-tasks"
         ]
@@ -47,6 +59,12 @@
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.2.4",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-project": "0.1.0",
+    "@local/vibe64-runtime": "0.1.0",
+    "@local/vibe64-sessions": "0.1.0",
+    "@local/vibe64-terminals": "0.1.0",
+    "json-rest-schema": "^1.0.16",
     "vue": "^3.5.44",
     "vuetify": "^4.0.0"
   }

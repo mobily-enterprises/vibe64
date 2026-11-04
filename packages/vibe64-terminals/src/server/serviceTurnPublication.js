@@ -11,6 +11,7 @@ import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 /** @typedef {import("./types.js").ServiceWorkspacePreparation} ServiceWorkspacePreparation */
 /** @typedef {import("./types.js").SessionConversations} SessionConversations */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
+/** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
 const MAIN_TURN_IDLE_REASONS = Object.freeze([
   "claude-stream-turn-idle",
@@ -30,6 +31,7 @@ const MAIN_TURN_IDLE_REASONS = Object.freeze([
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {ServiceState} dependencies.state
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
 function createServiceTurnPublication({
   afterTemporaryTurn,
@@ -39,7 +41,8 @@ function createServiceTurnPublication({
   providerUsage,
   publishSessionChanged,
   state,
-  workspacePreparation
+  workspacePreparation,
+  conversationTurns
 }) {
   /**
    * Keeps a turn's follow-up work in flight until it settles, so shutdown can wait for it.
@@ -113,7 +116,14 @@ function createServiceTurnPublication({
     if (!MAIN_TURN_IDLE_REASONS.includes(String(payload.reason || "").trim())) {
       return;
     }
-    trackCompletion(followMainTurn(sessionId, payload));
+    trackCompletion(followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64.conversation",
+        event: "vibe64.conversation.turn_settled_failed",
+        sessionId,
+        code: error.code
+      }, "A finished Main turn could not be announced.");
+    }));
   }
 
   return Object.freeze({

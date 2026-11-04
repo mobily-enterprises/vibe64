@@ -6,6 +6,7 @@ import {
 import { createTerminalActions } from "./terminalActions.js";
 import { prepareCodexAttachmentStorage } from "./codexAttachments.js";
 import {
+  createConversationTurnPublishers,
   createProjectRuntimeChangedPublisher,
   createTerminalSessionChangedPublishers
 } from "./events.js";
@@ -94,6 +95,7 @@ const Vibe64TerminalsFeature = defineFeature({
       project,
       publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
       publishSessionChanged: createTerminalSessionChangedPublishers(events),
+      conversationTurns: createConversationTurnPublishers(events),
       runtimeProfile: projectContext.runtimeProfile,
       savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS
     });

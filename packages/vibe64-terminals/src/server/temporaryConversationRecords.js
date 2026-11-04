@@ -105,7 +105,8 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
       agent_identity_conversation_id: record.providerConversationId || "",
       agent_identity_model_provider: record.providerConversationId ? selection.modelProviderId : ""
     });
-    if (record.recoveryOperation === "update" && assistantRoutingFromMetadata(metadata)?.mode !== "custom") {
+    const fixRequired = record.recoveryOperation === "update" || record.task?.turn.routing === "fix";
+    if (fixRequired && assistantRoutingFromMetadata(metadata)?.mode !== "custom") {
       // Enforce repair policy for future turns without rewriting saved requests or history.
       metadata.assistant_routing = JSON.stringify(assistantRoutingPreferences({ mode: "fix" }));
     }

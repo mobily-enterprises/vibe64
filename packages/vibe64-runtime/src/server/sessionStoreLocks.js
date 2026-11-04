@@ -19,6 +19,18 @@ const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();
 const sessionExclusiveContext = new AsyncLocalStorage();
 
+/**
+ * Starts `operation` without the session locks its caller holds. Work a lock
+ * holder only schedules (it does not wait for it) then waits for those locks
+ * like any other caller, instead of joining the holder's lock as nested work.
+ * @template T
+ * @param {() => T} operation
+ * @returns {T}
+ */
+function outsideSessionLocks(operation) {
+  return sessionExclusiveContext.exit(operation);
+}
+
 function enqueueSessionMutation(key, operation) {
   const previous = sessionMutationChains.get(key) || Promise.resolve();
   const queued = previous.catch(() => null).then(operation);
@@ -205,5 +217,6 @@ function createSessionStoreLocks({ state, storePaths }) {
 export {
   createSessionStoreLocks,
   SESSION_MUTATION_LOCK_WAIT_MS,
-  enqueueSessionMutation
+  enqueueSessionMutation,
+  outsideSessionLocks
 };

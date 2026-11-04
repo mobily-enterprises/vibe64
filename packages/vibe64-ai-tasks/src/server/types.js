@@ -27,11 +27,13 @@
  * @property {string} kind
  * @property {string} title
  * @property {"fix"|"task"} noun
+ * @property {string} tray what the app bar says while the task runs
  * @property {string[]} steps
- * @property {{ by: string, label: string, retryLimit: number }} check
+ * @property {{ by: string, label: string, retryLimit: number, output: string, unstoppable: string }} check
  * @property {AiTaskTurn} turn
  * @property {string} doneMessage
  * @property {boolean} repository whether this task changes the repository: direct Update, Save and Prepare wait for it
+ * @property {number} revision each change counts up, so a late answer never replaces a newer one
  * @property {string} phase
  * @property {boolean} active
  * @property {string} reason
@@ -80,6 +82,8 @@
  * @typedef {{ by: "agent" } | { by: "person" } | {
  *   by: "vibe64",
  *   label: string,
+ *   output: string,
+ *   unstoppable: string,
  *   run: (context: { runtime: object, sessionId: string, taskId: string }, task: AiTask) => Promise<AiTaskCheckResult>,
  *   retry: { limit: number, display: string, message: (diagnostic: string) => string }
  * }} AiTaskCheck
@@ -90,6 +94,7 @@
  * @property {string} id
  * @property {string} title header, tray and outcome: "Fix Update"
  * @property {"fix"|"task"} noun "Cancel fix" or "Cancel task"
+ * @property {string} tray what the app bar says while the task runs
  * @property {"fix"|"inherit"} routing
  * @property {string} opening what the chat shows of the opening message
  * @property {string} busy why another task can't start while this one is open

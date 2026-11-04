@@ -35,11 +35,14 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     kind: kind.id,
     title: kind.title,
     noun: kind.noun,
+    tray: kind.tray,
     steps: [...kind.steps],
     check: {
       by: check.by,
       label: check.by === AI_TASK_CHECKERS.VIBE64 ? check.label : "",
-      retryLimit: check.by === AI_TASK_CHECKERS.VIBE64 ? check.retry.limit : 0
+      retryLimit: check.by === AI_TASK_CHECKERS.VIBE64 ? check.retry.limit : 0,
+      output: check.output || "",
+      unstoppable: check.unstoppable || ""
     },
     turn: {
       context: kind.context(problem),
@@ -49,6 +52,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     },
     doneMessage: kind.done,
     repository: kind.repository === true,
+    revision: 0,
     phase: PHASES.STARTING,
     active: true,
     reason: "",
@@ -76,7 +80,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
  * @returns {AiTask}
  */
 function moved(task, patch, event, logText) {
-  const next = { ...task, ...patch };
+  const next = { ...task, ...patch, revision: task.revision + 1 };
   next.active = AI_TASK_ACTIVE_PHASES.includes(next.phase);
   next.log = logText ? [...task.log, { at: event.at, text: logText }].slice(-LOG_LIMIT) : task.log;
   return next;

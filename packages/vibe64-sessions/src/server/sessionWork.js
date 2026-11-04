@@ -3,7 +3,7 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionConnectedSubmissions } from "@local/vibe64-core/server/projectRepository";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
-import { sessionResult } from "./sessionResults.js";
+import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -227,6 +227,7 @@ function createSessionWork({
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
       const runtime = await project.createRuntimeWithoutSource();
+      await refuseDuringRepositoryAiTask(runtime, sessionId);
       let session = await runtime.getSessionWithoutSource(sessionId);
       const previous = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       if (previous?.status === "failed" && (
@@ -377,6 +378,7 @@ function createSessionWork({
   async function updateWork(sessionId, input, connectedRefresh) {
     return sessionResult(async () => {
       const runtime = await project.createRuntimeWithoutSource();
+      await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
       const session = await runtime.getSessionWithoutSource(sessionId);
       const reviewedConflictId = normalizeText(input.reviewedConflictId);
       // Ordinary Rebase starts over; only an explicit repair check resumes a conflict.

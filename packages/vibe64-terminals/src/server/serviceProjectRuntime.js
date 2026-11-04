@@ -15,6 +15,7 @@ import { PROJECT_RUNTIME_IDLE_TIMEOUT_REASON, projectRuntimeDormancyState } from
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";
 import { closeProjectScopedTerminalNamespaces } from "./serviceSessionTerminals.js";
+import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {ReturnType<typeof import("./serviceSessionTerminals.js").createServiceSessionTerminals>} ServiceSessionTerminals */
@@ -193,17 +194,19 @@ function createServiceProjectRuntime({
         projectContextRoot: context.projectContextRoot
       };
     }
+    const { store } = await project.createRuntimeWithoutSource();
     for (const session of sessions) {
       // A session whose source was never created has run no assistant.
       if (session.sourceReady === false && session.purpose !== "learning") continue;
-      let temporary;
+      let active;
       try {
-        temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
+        const temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
+        active = temporary.active || await sessionHasActiveAiTask(store, session.sessionId);
       } catch (error) {
         sessionStateFailure(session, error);
         continue;
       }
-      if (temporary.active) {
+      if (active) {
         return {
           dormancy,
           dormant: false,

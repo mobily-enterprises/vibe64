@@ -24,7 +24,8 @@ export {
 } from "./agentSettings.js";
 export {
   normalizeVibe64AgentTaskResult,
-  VIBE64_AGENT_TASK_RESULT_SCHEMA
+  VIBE64_AGENT_TASK_RESULT_SCHEMA,
+  VIBE64_AI_TASK_RESULT_SCHEMA
 } from "./agentTasks.js";
 export {
   assertCanUseVibe64Assistant,

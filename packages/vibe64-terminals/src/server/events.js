@@ -3,6 +3,9 @@ import { createSessionChangedPublisher } from "@local/vibe64-core/server/session
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 
+const VIBE64_CONVERSATION_TURN_STARTING_EVENT = "vibe64.conversation.turn-starting";
+const VIBE64_CONVERSATION_TURN_SETTLED_EVENT = "vibe64.conversation.turn-settled";
+
 /** @param {RuntimeEvents} events */
 function createProjectRuntimeChangedPublisher(events) {
   const publishProjectChanged = createVibe64ProjectChangedPublisher({ events });
@@ -41,7 +44,31 @@ function createTerminalSessionChangedPublishers(events) {
   });
 }
 
+/**
+ * What other features learn about a turn. `starting` is awaited before a message is sent, so a
+ * listener can refuse it by throwing. `settled` says a turn ended and carries no result: a listener
+ * reads the conversation. `conversationId` is empty for Main; `failure` names a message that never reached the AI.
+ * @param {RuntimeEvents} events
+ */
+function createConversationTurnPublishers(events) {
+  function starting(sessionId, turn) {
+    return events.publish({ type: VIBE64_CONVERSATION_TURN_STARTING_EVENT, sessionId, ...turn });
+  }
+
+  function settled(sessionId, conversationId, failure = null) {
+    return events.publish({ type: VIBE64_CONVERSATION_TURN_SETTLED_EVENT, sessionId, conversationId, failure });
+  }
+
+  return Object.freeze({
+    starting,
+    settled
+  });
+}
+
 export {
+  VIBE64_CONVERSATION_TURN_SETTLED_EVENT,
+  VIBE64_CONVERSATION_TURN_STARTING_EVENT,
+  createConversationTurnPublishers,
   createProjectRuntimeChangedPublisher,
   createTerminalSessionChangedPublishers
 };

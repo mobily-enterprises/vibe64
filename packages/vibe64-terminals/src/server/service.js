@@ -40,6 +40,7 @@ import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 /** @typedef {import("./types.js").ServiceMainConversationHost} ServiceMainConversationHost */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").SessionConversations} SessionConversations */
+/** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -81,6 +82,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {ProjectService} dependencies.project
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
@@ -99,6 +101,7 @@ function createService({
   project,
   publishProjectRuntimeChanged,
   publishSessionChanged,
+  conversationTurns,
   runCodexGitGatewayCommand,
   runtimeProfile,
   savedEnvValueLinks
@@ -162,7 +165,8 @@ function createService({
     providerUsage,
     publishSessionChanged,
     state,
-    workspacePreparation
+    workspacePreparation,
+    conversationTurns
   });
   const commands = createServiceCommandServices({
     env,
@@ -321,7 +325,8 @@ function createService({
     }),
     prepareAgentSkills: assistantPreparation.prepareAgentSkillsInsideAgentWrite,
     publishSessionChanged: publishAgentSessionChanged,
-    publishConversation: event => mainConversations.publishNative(event)
+    publishConversation: event => mainConversations.publishNative(event),
+    conversationTurns
   });
   const terminals = createServiceSessionTerminals({
     state,
@@ -481,6 +486,7 @@ function createService({
     cancelTemporaryConversationMessage: sessionConversations.cancelTemporaryConversationMessage,
     cancelTemporaryConversationRouting: sessionConversations.cancelTemporaryConversationRouting,
     stopTemporaryConversation: sessionConversations.stopTemporaryConversation,
+    readConversationTurn: sessionConversations.readConversationTurn,
     deleteTemporaryConversation: sessionConversations.deleteTemporaryConversation,
     retireTemporaryConversations: sessionConversations.retireTemporaryConversations,
     afterTemporaryTurn: sessionConversations.afterTemporaryTurn,

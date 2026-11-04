@@ -23,6 +23,7 @@ import {
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
+/** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
 /**
  * A temporary chat from creation to Close: creating, listing and reading chats, stopping a turn,
@@ -36,6 +37,7 @@ import {
  * @param {number} dependencies.temporaryCompletionAttempts
  * @param {number} dependencies.temporaryCompletionRetryMs
  * @param {AssistantRouting} dependencies.routing
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
 function createTemporaryConversationLifecycle({
   chatRecords,
@@ -45,7 +47,8 @@ function createTemporaryConversationLifecycle({
   publishSessionChanged,
   temporaryCompletionAttempts,
   temporaryCompletionRetryMs,
-  routing
+  routing,
+  conversationTurns
 }) {
   /**
    * `options.aiTask`, from the AI tasks feature only, makes this chat that task's conversation: it receives
@@ -177,10 +180,35 @@ function createTemporaryConversationLifecycle({
 
   async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
-    return chatTurns.write(sessionId, options, async (ctx) => {
+    const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
       const record = await chatRecords.recordFor(ctx, input.conversationId);
       const result = await conversationRuntime.stopPersistentConversation(chatTurns.persistentConversationOptions(ctx, record));
       return { ...result, routingMetadata: record.routingMetadata };
+    });
+    await conversationTurns.settled(sessionId, input.conversationId);
+    return stopped;
+  }
+
+  /**
+   * How a chat's turn stands, read from its assistant as a turn's end reads it; null once the chat is closed.
+   * @param {string} sessionId
+   * @param {string} conversationId
+   * @param {object} [options]
+   */
+  function readConversationTurn(sessionId, conversationId, options = {}) {
+    return chatTurns.write(sessionId, options, async (ctx) => {
+      const record = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
+      if (!record) return null;
+      const observed = await chatTurns.snapshot(ctx, record);
+      const saved = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
+      return {
+        status: observed.status,
+        messageId: saved?.messageId || record.messageId || "",
+        outcome: observed.outcome || null,
+        error: observed.error || "",
+        readError: observed.readError === true,
+        routingPending: observed.routingPending === true
+      };
     });
   }
 
@@ -260,6 +288,7 @@ function createTemporaryConversationLifecycle({
             ...options,
             conversationId: record.conversationId
           });
+          await conversationTurns.settled(sessionId, record.conversationId);
         }
         return;
       } catch (error) {
@@ -274,6 +303,7 @@ function createTemporaryConversationLifecycle({
     listTemporaryConversations,
     readTemporaryConversation,
     stopTemporaryConversation,
+    readConversationTurn,
     deleteTemporaryConversation,
     retireTemporaryConversations,
     afterTemporaryTurn

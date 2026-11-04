@@ -237,6 +237,7 @@ async function conversationFixture(root, engineId = "codex") {
         return result.value;
       },
       publishSessionChanged: async (...args) => { events.push(args); },
+      conversationTurns: { starting: async () => {}, settled: async () => {} },
       prepareSelection: async () => {},
       publishConversation: async () => {},
       actions: NO_ACTIONS,

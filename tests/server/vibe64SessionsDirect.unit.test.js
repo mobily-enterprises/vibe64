@@ -939,6 +939,7 @@ test("session work inspection includes the durable native Save operation", async
           },
           getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
+            async listSessionConversations() { return []; },
             async readBackgroundTask(sessionId, taskId) {
               assert.equal(sessionId, "session-1");
               assert.ok(["save-work", "update-session"].includes(taskId));
@@ -978,7 +979,7 @@ test("overlapping work reads share one inspection only for the same project and 
             return { sessionId, metadata: { canonical_commit: canonicalCommit }, status: "active" };
           },
           getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
-          store: { async readBackgroundTask() { return null; } }
+          store: { async listSessionConversations() { return []; }, async readBackgroundTask() { return null; } }
         };
       },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); }
@@ -1042,6 +1043,7 @@ test("session work inspection returns operations read after repository inspectio
           },
           getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
+            async listSessionConversations() { return []; },
             async readBackgroundTask(_sessionId, taskId) {
               return taskId === "save-work" ? saveTask : updateTask;
             },
@@ -1102,6 +1104,7 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return taskId === "save-work"
           ? saveTask
@@ -1170,6 +1173,7 @@ test("unknown Save publication survives failed recovery and service restart with
     async getSession() { return { sessionId: "session-1", status: "active", metadata: { ...metadata } }; },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_id, key) { return key === "save-work" ? task : null; },
       async writeBackgroundTaskEvent(_id, _key, { patch }) { task = { ...task, ...patch }; return task; },
       async writeMetadataValue(_id, key, value) { metadata[key] = value; }
@@ -1241,6 +1245,7 @@ test("work inspection recovers an interrupted prepared Update and advances its b
     },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return taskId === "update-session"
           ? updateTask
@@ -1325,6 +1330,7 @@ test("work inspection observes a live Save without mistaking it for an interrupt
       return [{ sessionId: "session-1", status: "active" }];
     },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return taskId === "save-work"
           ? backgroundTask
@@ -1408,6 +1414,7 @@ test("members can Save and create pull requests independently of AI access", asy
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return []; },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(...args) {
         taskEvents.push(args);
@@ -1478,6 +1485,7 @@ test("Save authority races become a ready update requirement rather than an AI f
     },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(_sessionId, taskId, input) {
         backgroundTask = {
@@ -1545,6 +1553,7 @@ test("native Save persists bounded progress and advances the session base only a
       return [...sessions.values()];
     },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask() { return { assistantHelper: { scope: { id: "pending-naming-cleanup" }, conversationId: "retained-native-id" } }; },
       async writeBackgroundTaskEvent(sessionId, taskId, input) {
         assert.equal(sessionId, "session-1");
@@ -1736,6 +1745,7 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
       return [{ agentRuns: [], sessionId: "session-1", status: "active" }];
     },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask() {
         return null;
       },
@@ -1824,6 +1834,7 @@ test("a reconciled Save supersedes an older failed session update", async () => 
       return [{ agentRuns: [], sessionId: "session-1", status: "active" }];
     },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
       },
@@ -1899,6 +1910,7 @@ test("work inspection repairs a failed update superseded by a later reconciled S
     },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
       },
@@ -1961,6 +1973,7 @@ function failedUpdateInspection(evidence) {
     },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
       },
@@ -2070,6 +2083,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
       return [session];
     },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
       },
@@ -2621,7 +2635,7 @@ test("native Save rejects every active provider state before touching Git", asyn
             };
           },
           getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
-          store: { async readBackgroundTask() { return null; } }
+          store: { async listSessionConversations() { return []; }, async readBackgroundTask() { return null; } }
         };
       },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); }
@@ -4238,7 +4252,8 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
     async getSession() {
       return session();
     },
-    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: { async listSessionConversations() { return []; } }
   };
   const service = createService({
     project: {
@@ -4941,6 +4956,7 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return [session()]; },
     store: {
+      async listSessionConversations() { return []; },
       async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(_sessionId, taskId, input) { return { ...input.patch, id: taskId, events: [input.event] }; },
       async writeMetadataValue() {}

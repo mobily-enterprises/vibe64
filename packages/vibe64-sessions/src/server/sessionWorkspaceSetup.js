@@ -4,7 +4,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { publicSession, sessionResult } from "./sessionResults.js";
+import { publicSession, refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -120,6 +120,7 @@ function createSessionWorkspaceSetup({
         });
       }
       const runtime = await project.createRuntimeWithoutSource();
+      await refuseDuringRepositoryAiTask(runtime, sessionId);
       const session = await runtime.getSessionWithoutSource(sessionId);
       const status = normalizeText(session.workspaceSetup?.status);
       if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {

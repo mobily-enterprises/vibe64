@@ -1,9 +1,14 @@
 import { isDeepStrictEqual } from "node:util";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
-import { normalizeVibe64AgentTaskResult, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AI_TASK_RESULT_SCHEMA,
+  normalizeVibe64AgentTaskResult,
+  vibe64AssistantSelectionFromMetadata
+} from "@local/vibe64-runtime/shared";
 import { assistantRoutingStatusIsPending, assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
+import { outsideSessionLocks } from "@local/vibe64-runtime/server/sessionStoreLocks";
 import { readSessionUpdateFirst, sessionUpdateFirstRepairBrief } from "@local/vibe64-core/shared";
 import {
   discardAssistantChangeoverMessage,
@@ -30,6 +35,10 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
+
+// Its turns report a structured result, so their raw JSON never reaches the transcript.
+const reportsStructuredResult = record => record.recoveryOperation === "update" || record.task?.turn.structured === true;
 
 // A turn without an event stream may carry onEvent: null (the provider call context sets it so).
 const onCompletedMessage = (ctx, onComplete) => {
@@ -64,6 +73,23 @@ const reboundNativeConversation = (retained, assistantSelection) => ({
   agentSettings: { model: assistantSelection.modelId, thinking: assistantSelection.variantId }
 });
 
+async function withUpdateFirstBrief(ctx, sessionId, message, updateRepair) {
+  const brief = sessionUpdateFirstRepairBrief(await readSessionUpdateFirst(ctx.runtime.store, sessionId), { updateRepair });
+  return brief ? `${brief}\n\n${message}` : message;
+}
+
+/**
+ * A turn of an AI task carries what its record says: Update's own brief, the reminder above the
+ * person's message, and the result schema. Vibe64's own messages already say all of it.
+ */
+async function prepareAiTaskMessage(sessionId, input, record, ctx, prepared) {
+  const { turn, pending } = record.task;
+  const own = pending?.id === input.messageId;
+  if (!own && turn.context) prepared.message = `${turn.context}\n\nUser message:\n${prepared.message}`;
+  if (turn.updateRepair) prepared.message = await withUpdateFirstBrief(ctx, sessionId, prepared.message, true);
+  if (turn.structured) prepared.outputSchema = VIBE64_AI_TASK_RESULT_SCHEMA;
+}
+
 /**
  * A temporary chat's turns on the shared conversation runtime: the facilities it lends that runtime,
  * snapshots, the session write coordinator, coalesced output saves, and the chat's own routing with
@@ -82,6 +108,7 @@ const reboundNativeConversation = (retained, assistantSelection) => ({
  * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {number} dependencies.temporarySaveDelayMs
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
 function createTemporaryConversationTurns({
   chatRecords,
@@ -96,7 +123,8 @@ function createTemporaryConversationTurns({
   prepareSelection,
   publishSessionChanged,
   temporarySaveDelayMs,
-  logger
+  logger,
+  conversationTurns
 }) {
   if (!Number.isSafeInteger(routingWaitMs) || routingWaitMs < 0) {
     throw new TypeError("Temporary conversations require the assistant routing lock wait.");
@@ -435,12 +463,12 @@ function createTemporaryConversationTurns({
               ...(route?.resolvedMode ? { assistantRouting: { resolvedMode: route.resolvedMode } } : {})
             }
           };
-          if (record.recoveryOperation !== "update" || (message.role || "assistant") !== "assistant") return attributed;
+          if (!reportsStructuredResult(record) || (message.role || "assistant") !== "assistant") return attributed;
           const outcome = normalizeVibe64AgentTaskResult(message.text);
           return outcome ? { ...attributed, text: outcome.message, delta: undefined } : null;
         }
         const outcome = message.role === "assistant" ? normalizeVibe64AgentTaskResult(message.text) : null;
-        if (phase === "incomplete" && message.role === "assistant" && record.recoveryOperation === "update" && !outcome) return null;
+        if (phase === "incomplete" && message.role === "assistant" && reportsStructuredResult(record) && !outcome) return null;
         return {
           ...message,
           text: outcome?.message || message.text,
@@ -469,17 +497,20 @@ function createTemporaryConversationTurns({
           }, {
             ...ctx,
             conversationId: record.conversationId
-          }, { recovered: true }).catch((error) => logOperationalEvent(logger, "warn", {
-            component: "vibe64.temporary_conversation",
-            event: "vibe64.temporary_conversation.recovered_turn_failed",
-            sessionId: sessionId,
-            code: error?.code,
-            error: error?.message
-          }, "A recovered temporary chat turn could not be routed; the next read retries it."));
+          }, { recovered: true }).then(() => outsideSessionLocks(() => conversationTurns.settled(sessionId, record.conversationId)))
+            .catch((error) => logOperationalEvent(logger, "warn", {
+              component: "vibe64.temporary_conversation",
+              event: "vibe64.temporary_conversation.recovered_turn_failed",
+              sessionId: sessionId,
+              code: error?.code,
+              error: error?.message
+            }, "A recovered temporary chat turn could not be routed; the next read retries it."));
         }
         const page = readPage ? await readPage() : null;
         return {
           ...record,
+          // A browser learns only that this chat belongs to an AI task, never what its task carries.
+          ...(record.task ? { task: { kind: record.task.kind, turn: { routing: record.task.turn.routing } } } : {}),
           ...response,
           ...(page ? { conversationLog: page.conversationLog, pagination: page.pagination } : {}),
           outcome,
@@ -551,11 +582,10 @@ function createTemporaryConversationTurns({
         // whether it is behind, with which incoming versions, and whether
         // Update owns the session, so the repair never redoes saved work.
         if (input.presentation?.recoveryContext || record.recoveryContext) {
-          const brief = sessionUpdateFirstRepairBrief(await readSessionUpdateFirst(ctx.runtime.store, sessionId), {
-            updateRepair: (input.presentation?.recoveryOperation || record.recoveryOperation) === "update"
-          });
-          if (brief) prepared.message = `${brief}\n\n${prepared.message}`;
+          const updateRepair = (input.presentation?.recoveryOperation || record.recoveryOperation) === "update";
+          prepared.message = await withUpdateFirstBrief(ctx, sessionId, prepared.message, updateRepair);
         }
+        if (record.task) await prepareAiTaskMessage(sessionId, input, record, ctx, prepared);
         const receipt = {
           messageId: input.messageId,
           text: input.displayMessage || input.message,

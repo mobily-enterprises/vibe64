@@ -18,7 +18,7 @@ function kindCheckedBy(by) {
     context: problem => `Context: ${problem.summary}`,
     steps: ["The AI repairs the conflicts", "Vibe64 runs Update"],
     check: by === "vibe64"
-      ? { by, label: "Running Update…", retry: { limit: 3 } }
+      ? { by, label: "Running Update…", output: "Update output", unstoppable: "Update can't be interrupted.", retry: { limit: 3 } }
       : { by },
     done: "Session updated."
   };
@@ -176,7 +176,14 @@ test("AI task machine: a new task owes its opening message and carries what term
     structured: true,
     updateRepair: true
   });
-  assert.deepEqual(task.check, { by: "vibe64", label: "Running Update…", retryLimit: 3 });
+  assert.deepEqual(task.check, {
+    by: "vibe64",
+    label: "Running Update…",
+    retryLimit: 3,
+    output: "Update output",
+    unstoppable: "Update can't be interrupted."
+  });
+  assert.equal(task.revision, 0);
   assert.equal(taskIn("starting", {}, "person").turn.structured, false);
 });
 

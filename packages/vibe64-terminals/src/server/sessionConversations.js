@@ -34,6 +34,7 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {PublishNativeConversation} dependencies.publishConversation
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  * @param {number} [dependencies.temporarySaveDelayMs]
  * @param {number} [dependencies.temporaryCompletionAttempts]
  * @param {number} [dependencies.temporaryCompletionRetryMs]
@@ -51,6 +52,7 @@ function createSessionConversations({
   prepareSelection,
   publishSessionChanged,
   publishConversation,
+  conversationTurns,
   logger,
   temporarySaveDelayMs = 1_000,
   temporaryCompletionAttempts = 6,
@@ -70,7 +72,8 @@ function createSessionConversations({
     prepareSelection,
     publishSessionChanged,
     temporarySaveDelayMs,
-    logger
+    logger,
+    conversationTurns
   });
   const chatLifecycle = createTemporaryConversationLifecycle({
     chatRecords,
@@ -80,7 +83,8 @@ function createSessionConversations({
     publishSessionChanged,
     temporaryCompletionAttempts,
     temporaryCompletionRetryMs,
-    routing: chatTurns.routing
+    routing: chatTurns.routing,
+    conversationTurns
   });
   const chatInteraction = createTemporaryConversationInteraction({
     chatRecords,
@@ -92,7 +96,8 @@ function createSessionConversations({
     attachments,
     readSessionContext,
     publishSessionChanged,
-    routing: chatTurns.routing
+    routing: chatTurns.routing,
+    conversationTurns
   });
 
   return Object.freeze({
@@ -109,6 +114,7 @@ function createSessionConversations({
     cancelTemporaryConversationMessage: chatInteraction.cancelTemporaryConversationMessage,
     cancelTemporaryConversationRouting: chatInteraction.cancelTemporaryConversationRouting,
     stopTemporaryConversation: chatLifecycle.stopTemporaryConversation,
+    readConversationTurn: chatLifecycle.readConversationTurn,
     deleteTemporaryConversation: chatLifecycle.deleteTemporaryConversation,
     retireTemporaryConversations: chatLifecycle.retireTemporaryConversations,
     afterTemporaryTurn: chatLifecycle.afterTemporaryTurn

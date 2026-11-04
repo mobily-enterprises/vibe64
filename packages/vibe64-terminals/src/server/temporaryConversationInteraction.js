@@ -37,6 +37,7 @@ import {
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
+/** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 /** @typedef {ReturnType<typeof import("./temporaryConversationLifecycle.js").createTemporaryConversationLifecycle>} TemporaryConversationLifecycle */
 
 /**
@@ -53,6 +54,7 @@ import {
  * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {AssistantRouting} dependencies.routing
+ * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
 function createTemporaryConversationInteraction({
   chatRecords,
@@ -64,7 +66,8 @@ function createTemporaryConversationInteraction({
   attachments,
   readSessionContext,
   publishSessionChanged,
-  routing
+  routing,
+  conversationTurns
 }) {
   const temporaryConversationDataSchema = createSchema(Object.fromEntries(messageFields.map(key =>
     [key, temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions()[key]])));
@@ -221,7 +224,8 @@ function createTemporaryConversationInteraction({
       if (input.assistantRouting) {
         const requested = assistantRoutingPreferences(input.assistantRouting);
         if (requested.mode === "auto") throw temporaryAutoModeRefusal();
-        if (record.recoveryOperation === "update" && !["fix", "custom"].includes(requested.mode)) {
+        const fixRequired = record.recoveryOperation === "update" || record.task?.turn.routing === "fix";
+        if (fixRequired && !["fix", "custom"].includes(requested.mode)) {
           throw new AppError(400, "Repair chats use Fix it with AI. Choose Custom to pick a different model.", {
             code: "vibe64_repair_chat_mode_invalid"
           });
@@ -316,11 +320,18 @@ function createTemporaryConversationInteraction({
   }
 
   async function startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
-    return routing.send(sessionId, input, {
-      ...options,
-      conversationId: input.conversationId,
-      vibe64User: input.vibe64User || options.vibe64User
-    });
+    const { conversationId, messageId } = input;
+    await conversationTurns.starting(sessionId, { conversationId, messageId });
+    try {
+      return await routing.send(sessionId, input, {
+        ...options,
+        conversationId,
+        vibe64User: input.vibe64User || options.vibe64User
+      });
+    } catch (error) {
+      await conversationTurns.settled(sessionId, conversationId, { messageId, code: error?.code, error: error?.message });
+      throw error;
+    }
   }
 
   /**

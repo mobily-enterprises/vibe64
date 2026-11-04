@@ -42,6 +42,7 @@ const NOT_ACCESS = Object.freeze({ includeAccess: false });
 // Live presentation of a session's work: streamed text, progress and output
 // targets. They invalidate no client read.
 const PRESENTATION_REASONS = Object.freeze([
+  "ai-task-changed",
   "assistant-response-bundle",
   "codex-app-server-commentary",
   "codex-app-server-live-progress",

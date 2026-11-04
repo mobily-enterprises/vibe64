@@ -15,6 +15,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate } from "./sessionRenewalHandover.js";
 import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
+import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
@@ -211,7 +212,9 @@ function createServiceAgentConversations({
           fail("Stop native work and close its terminal before replacing context.");
         }
         const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
-        if (temporary?.ok === false || temporary?.active) fail("Finish temporary assistant work before replacing native context.");
+        if (temporary?.ok === false || temporary?.active || await sessionHasActiveAiTask(context.runtime.store, sessionId)) {
+          fail("Finish temporary assistant work before replacing native context.");
+        }
       }
       const conversation = await mainConversations.open({ id: sessionId, context: { ...context, sessionId }, representation: "native" });
       const result = await replaceNativeConversation(sessionId, input, context, sessionAgent, conversation);
@@ -351,7 +354,7 @@ function createServiceAgentConversations({
         session
       }
     );
-    if (conversation?.active === true) {
+    if (conversation?.active === true || records.some(record => record.task?.active === true)) {
       throw Object.assign(new AppError(409, "Wait for the temporary assistant task to finish before renewing this session.", {
         code: "vibe64_session_renewal_temporary_ai_active"
       }), { retryable: true });

@@ -25,6 +25,40 @@ const VIBE64_AGENT_TASK_RESULT_SCHEMA = Object.freeze({
   type: "object"
 });
 
+// What an AI task's turn reports. Main keeps its own schema above.
+const VIBE64_AI_TASK_RESULT_KINDS = Object.freeze({
+  CANNOT: "cannot",
+  COMPLETE: "complete",
+  QUESTION: "question"
+});
+
+const VIBE64_AI_TASK_RESULT_SCHEMA = Object.freeze({
+  additionalProperties: false,
+  properties: {
+    kind: {
+      description: "complete when the work is ready for Vibe64 to check, question when you need the person's decision, cannot when you cannot finish this.",
+      enum: Object.values(VIBE64_AI_TASK_RESULT_KINDS),
+      type: "string"
+    },
+    message: {
+      description: "Normal Markdown shown to the user for this task turn. For question, the question. For cannot, why.",
+      type: "string"
+    },
+    report: {
+      description: "What you did, in a few plain sentences, when the task is complete; otherwise an empty string.",
+      type: "string"
+    }
+  },
+  required: ["kind", "message", "report"],
+  type: "object"
+});
+
+const VIBE64_TASK_RESULT_KINDS = Object.freeze([
+  ...Object.values(VIBE64_AGENT_TASK_RESULT_KINDS),
+  VIBE64_AI_TASK_RESULT_KINDS.QUESTION,
+  VIBE64_AI_TASK_RESULT_KINDS.CANNOT
+]);
+
 function normalizeVibe64AgentTaskResult(value = null) {
   let source = value;
   if (typeof source === "string") {
@@ -40,7 +74,7 @@ function normalizeVibe64AgentTaskResult(value = null) {
   const kind = toText(source.kind);
   const message = toText(source.message);
   const report = toText(source.report);
-  if (!Object.values(VIBE64_AGENT_TASK_RESULT_KINDS).includes(kind) || !message) {
+  if (!VIBE64_TASK_RESULT_KINDS.includes(kind) || !message) {
     return null;
   }
   if (kind === VIBE64_AGENT_TASK_RESULT_KINDS.COMPLETE && !report) {
@@ -55,5 +89,6 @@ function normalizeVibe64AgentTaskResult(value = null) {
 
 export {
   VIBE64_AGENT_TASK_RESULT_SCHEMA,
+  VIBE64_AI_TASK_RESULT_SCHEMA,
   normalizeVibe64AgentTaskResult
 };

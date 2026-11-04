@@ -6,6 +6,7 @@ import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { registerRoutes as registerStudioHealthRoutes } from "../../packages/studio-health/src/server/registerRoutes.js";
 import { registerRoutes as registerCurrentAppRoutes } from "../../packages/current-app/src/server/registerRoutes.js";
 import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { registerRoutes as registerAiTaskRoutes } from "../../packages/vibe64-ai-tasks/src/server/registerRoutes.js";
 import { registerRoutes as registerColleagueRoutes } from "../../packages/vibe64-colleague/src/server/registerRoutes.js";
 import { registerRoutes as registerDatabaseRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
@@ -36,6 +37,7 @@ DELETE /api/app/:slug/vibe64/publishing/share public app 65536 vibe64.publicatio
 DELETE /api/app/:slug/vibe64/publishing/targets/:targetId public app 65536 vibe64.publication.target.remove
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/agent-attachments/:attachmentId public app - vibe64.terminals.agent-attachment.delete
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId public app - vibe64.terminals.agent-terminal.close
+DELETE /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId public app - vibe64.ai-tasks.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.delete
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/terminal public app - vibe64.terminals.output-terminal.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId public app 131072 vibe64.source-editor.explanation.delete
@@ -90,6 +92,8 @@ GET /api/app/:slug/vibe64/sessions/:sessionId/agent-plan-usage public app - vibe
 GET /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId public app - vibe64.terminals.agent-terminal.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/quiet public app - vibe64.terminals.agent-terminal.control.snapshot
 GET /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/snapshot public app - vibe64.terminals.agent-terminal.control.snapshot
+GET /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks public app - vibe64.ai-tasks.list
+GET /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId public app - vibe64.ai-tasks.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/assistant-access public app - vibe64.sessions.assistant-access.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/changes public app - vibe64.sessions.changes.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/changes/diff public app - vibe64.sessions.changes.diff.inspect
@@ -237,6 +241,11 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/key public app - vibe64.terminals.agent-terminal.control.key
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/text public app - vibe64.terminals.agent-terminal.control.text
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-turn/interrupt public app - vibe64.sessions.agent-turn.interrupt
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks public app - vibe64.ai-tasks.start
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/cancel public app - vibe64.ai-tasks.cancel
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/check public app - vibe64.ai-tasks.check
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/continue public app - vibe64.ai-tasks.continue
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/finish public app - vibe64.ai-tasks.finish
 POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/link public app - vibe64.sessions.connected.link
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare public app - vibe64.sessions.connected.prepare
@@ -354,6 +363,7 @@ function routeTable(projectContext) {
   registerDatabaseRoutes(http, { localhostCheckBypassed, projectContext });
   registerProjectRoutes(http, { localhostCheckBypassed, projectContext });
   registerPublishingRoutes(http, { localhostCheckBypassed, projectContext, publishing: {} });
+  registerAiTaskRoutes(http, { localhostCheckBypassed, projectContext });
   registerSessionRoutes(http, { localhostCheckBypassed, projectContext });
   registerSourceEditorRoutes(http, { localhostCheckBypassed, projectContext, sourceEditor: { readTree() {} } });
   registerSystemGraphRoutes(http, { localhostCheckBypassed, projectContext });

@@ -1,3 +1,4 @@
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 
 /**
@@ -18,4 +19,17 @@ function publicSession(session = {}, extra = {}) {
   };
 }
 
-export { publicSession, sessionResult };
+/**
+ * An AI task that changes the repository runs its own Update, Save or preparation;
+ * nothing else may run one meanwhile. The task's own check names itself.
+ * @param {{ store: object }} runtime
+ * @param {string} sessionId
+ * @param {string} [aiTaskId]
+ */
+async function refuseDuringRepositoryAiTask(runtime, sessionId, aiTaskId = "") {
+  const conversations = await runtime.store.listSessionConversations(sessionId);
+  const running = conversations.find(({ conversationId, task }) => task?.active && task.repository && conversationId !== aiTaskId);
+  if (running) throw vibe64Error(`${running.task.title} is still running. Wait for it to finish first.`, "vibe64_ai_task_active");
+}
+
+export { publicSession, refuseDuringRepositoryAiTask, sessionResult };

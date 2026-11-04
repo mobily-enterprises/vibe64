@@ -40,6 +40,15 @@ function prepareCopiedSessionConversation(record) {
   return copy;
 }
 
+/**
+ * Whether an AI task of this session has something running. This one saved flag is all terminals reads of a task's progress.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
+async function sessionHasActiveAiTask(store, sessionId) {
+  return (await store.listSessionConversations(sessionId)).some(record => record.task?.active === true);
+}
+
 const TITLE_MAX_LENGTH = 80;
 const LEGACY_DEFAULT_TITLE = /^Temporary \d+$/;
 
@@ -166,6 +175,7 @@ export {
   messageFields,
   numberedConversations,
   prepareCopiedSessionConversation,
+  sessionHasActiveAiTask,
   presentation,
   recentChatContext,
   requireSuccess,
