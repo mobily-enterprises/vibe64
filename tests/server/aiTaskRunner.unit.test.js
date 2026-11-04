@@ -872,7 +872,8 @@ test("archiving ends an open task before the session goes", () => withFixture(as
 
 // The upgrade that deleted the old temporary chats left ordinary archived sessions as they were, so their
 // records can still carry the client-writable recovery fields AI tasks removed. Every reader must still
-// read such a session, and none may present those fields or take the chat for a task.
+// read such a session, and none may take the old chat for a task. (A chat's snapshot passes its stored
+// record through, old fields included; no client reads them any more.)
 const OLD_RECOVERY_FIELDS = {
   displayMessage: "Fix Update", completionMessage: "Update finished.", dedupeKey: "update:conflict-1",
   failureMessage: "", nextStepMessage: "Run Update again.", recoveryNotice: "Update found conflicts.",
@@ -881,20 +882,17 @@ const OLD_RECOVERY_FIELDS = {
   recoveryAutoPaused: true, recoveryRetryKeys: ["update:conflict-1"]
 };
 
-test("an archived session whose old repair chat keeps its recovery fields still reads, and nothing presents them", () => withFixture(async (f) => {
+test("an archived session whose old repair chat keeps its recovery fields still reads, and no reader takes it for a task", () => withFixture(async (f) => {
   const { aiTasks, conversations } = f.boot();
   await f.store.writeConversationUserMessage(SESSION, { text: "Main question", messageId: "main" });
   await conversations.createAiTaskConversation(SESSION, {
     conversationId: "old-repair", presentation: { title: "Fix Update", draft: "Leftover draft" }, vibe64User: OWNER
   });
   await f.store.writeSessionConversation(SESSION, "old-repair", OLD_RECOVERY_FIELDS);
-  const unpresented = view => Object.keys(OLD_RECOVERY_FIELDS).filter(key => Object.hasOwn(view, key));
   const listed = await conversations.listAiTaskConversations(SESSION);
   assert.deepEqual(listed.conversations.map(chat => [chat.conversationId, chat.title, chat.draft]),
     [["old-repair", "Fix Update", "Leftover draft"]]);
-  assert.deepEqual(unpresented(listed.conversations[0]), [], "the chat's list presents no removed recovery field");
-  assert.deepEqual(unpresented(await conversations.readAiTaskConversation(SESSION, { conversationId: "old-repair" })), [],
-    "nor does its read");
+  assert.notEqual((await conversations.readAiTaskConversation(SESSION, { conversationId: "old-repair" })).ok, false);
 
   await f.store.writeStatus(SESSION, "archived");
   await f.store.publishSessionArchive(SESSION);
