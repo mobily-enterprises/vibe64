@@ -104,7 +104,7 @@ function passthroughComponent(element) {
 
 const renderer = createRenderer({
   createComment: (text) => ({ children: [], props: {}, style: {}, text, type: "comment" }),
-  createElement: (type) => ({ children: [], parent: null, props: {}, style: {}, type }),
+  createElement: (type) => ({ children: [], focus() {}, parent: null, props: {}, style: {}, type }),
   createText: (text) => ({ children: [], props: {}, style: {}, text, type: "text" }),
   insert(child, parent, anchor = null) {
     child.parent = parent;
