@@ -84,6 +84,14 @@ function redirectPreviewTokenBootstrap(response, options = {}) {
   response.end();
 }
 
+/**
+ * What a page request gets while the target can't be reached, such as in the
+ * gap of a development server's restart. The editor requests the frame only
+ * when Preview becomes ready, so nothing else would replace this page: it asks
+ * for its own address once a second and reloads only when the answer is no
+ * longer this 503, so it stays still until then. A redirect stays unfollowed:
+ * one to another origin would read as a network error, and it is an answer.
+ */
 function previewStartingHtml() {
   return `<!doctype html>
 <html>
@@ -154,6 +162,15 @@ function previewStartingHtml() {
     <div class="preview-starting__icon" aria-hidden="true"></div>
     <div class="preview-starting__text">Starting preview.</div>
   </div>
+  <script>
+    const wait = () => setTimeout(check, 1000);
+    const check = () => fetch(location.href, {
+      cache: "no-store",
+      headers: { Accept: "text/html" },
+      redirect: "manual"
+    }).then((response) => response.status === 503 ? wait() : location.reload(), wait);
+    wait();
+  </script>
 </body>
 </html>`;
 }

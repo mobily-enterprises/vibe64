@@ -103,6 +103,13 @@ will retry automatically.** This refusal happens before the app starts; it does
 not create another lesson attempt. Other startup errors still require an explicit
 retry after you inspect the failure.
 
+If the page opens while the application cannot be reached, for example during the
+second or two a development server takes to restart after an Env change, Preview
+shows **Starting preview.** and waits. It checks about once a second and opens the
+page by itself as soon as the application answers, so you do not need to reload.
+If it keeps waiting, the application is not answering: use **Show run output** to
+see why.
+
 **Reload preview** refreshes the embedded page. **Restart preview** starts the
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not

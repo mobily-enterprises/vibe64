@@ -10,6 +10,9 @@ import {
   injectLaunchPreviewBridge
 } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 import {
+  createLaunchPreviewProxyRegistry
+} from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+import {
   PREVIEW_IDENTITY_CONTROL_PATH
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
@@ -560,6 +563,57 @@ test("@preview-lifecycle renders through the proxy and displays the target URL",
   await expect(
     page.locator(".studio-home-shell-preview-toolbar-host .vibe64-launch-controls__toolbar")
   ).toBeVisible();
+});
+
+test("@preview-lifecycle a page caught while the target is down opens the app by itself once the target answers", async ({ page }) => {
+  const target = createHttpServer((request, response) => {
+    response.setHeader("content-type", "text/html");
+    response.end(request.url === "/next"
+      ? "<h1>Next page</h1>"
+      : '<h1>App is back</h1><a href="/next">Next page</a>');
+  });
+  await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+  const { port } = target.address() as AddressInfo;
+  await new Promise((resolve) => target.close(resolve));
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
+  try {
+    // The real proxy connects to the real target and presents the address the mocked status names.
+    const proxy = await registry.ensure({
+      editorOrigin: BASE_URL,
+      sessionId: SESSION_ID,
+      targetHref: TARGET_APP_URL
+    }, `http://127.0.0.1:${port}/home`);
+    const proxyOrigin = new URL(proxy.href).origin;
+    const requests: PlaywrightRequest[] = [];
+    page.on("request", (request) => {
+      if (request.url().startsWith(proxyOrigin)) requests.push(request);
+    });
+    const documents = () => requests.filter((request) => request.isNavigationRequest()).length;
+    await mockLaunchTerminalSocket(page);
+    await mockLaunchSession(page, { initialLaunchStatus: launchStatusPayload({ previewHref: proxy.href }) });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const preview = page.frameLocator(".vibe64-launch-controls__preview-frame");
+    await expect(preview.getByText("Starting preview.", { exact: true })).toBeVisible();
+    // It checks again and again while staying the same page: nothing blinks.
+    const loaded = documents();
+    await expect.poll(() => requests.filter((request) => request.resourceType() === "fetch").length).toBeGreaterThan(2);
+    expect(documents()).toBe(loaded);
+
+    await new Promise<void>((resolve) => target.listen(port, "127.0.0.1", resolve));
+
+    await expect(preview.getByRole("heading", { name: "App is back" })).toBeVisible();
+    // The editor still follows the page, so it treated the reload as its own frame's.
+    await preview.getByRole("link", { name: "Next page" }).click();
+    await expect(preview.getByRole("heading", { name: "Next page" })).toBeVisible();
+    await expect(page.getByLabel("Preview URL")).toHaveValue("/next");
+  } finally {
+    await page.unrouteAll({ behavior: "wait" });
+    await registry.closeAll();
+    target.closeAllConnections();
+    await new Promise((resolve) => target.close(resolve));
+  }
 });
 
 test("@render-recovery keeps GitHub sessions and preview alive through navigation and resize", async ({ page }) => {

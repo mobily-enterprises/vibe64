@@ -1744,6 +1744,37 @@ test("launch preview token appending preserves valueless query parameters", () =
   );
 });
 
+/**
+ * Runs the starting page's script with each check answered in turn, its timers
+ * firing at once, until it reloads or the answers run out.
+ */
+async function startingPageOutcome(html, answers) {
+  const script = /<script>(?<source>.*)<\/script>/su.exec(html).groups.source;
+  const pending = [...answers];
+  const outcome = { reloads: 0, requests: [], waits: [] };
+  await new Promise((finished) => {
+    vm.runInNewContext(script, {
+      fetch(href, options) {
+        outcome.requests.push({ ...options, headers: { ...options.headers }, href });
+        return pending.shift()();
+      },
+      location: {
+        href: "http://preview.test/home",
+        reload() {
+          outcome.reloads += 1;
+          finished();
+        }
+      },
+      setTimeout(check, delay) {
+        outcome.waits.push(delay);
+        if (pending.length > 0) check();
+        else finished();
+      }
+    });
+  });
+  return outcome;
+}
+
 test("launch preview proxy serves stable starting HTML while the target is unavailable", async () => {
   const registry = createLaunchPreviewProxyRegistry({ env: process.env });
   try {
@@ -1774,6 +1805,23 @@ test("launch preview proxy serves stable starting HTML while the target is unava
     assert.equal(htmlResponse.status, 503);
     assert.match(html, /Starting preview\./u);
     assert.doesNotMatch(html, /http-equiv="refresh"/u);
+
+    const answers = (status) => async () => ({ status });
+    const waiting = await startingPageOutcome(html, [answers(503), async () => {
+      throw new TypeError("Failed to fetch");
+    }]);
+    assert.equal(waiting.reloads, 0);
+    assert.deepEqual(waiting.waits, [1000, 1000, 1000]);
+    assert.deepEqual(waiting.requests[0], {
+      cache: "no-store",
+      headers: { Accept: "text/html" },
+      href: "http://preview.test/home",
+      redirect: "manual"
+    });
+    // A redirect left unfollowed reads as status 0.
+    for (const status of [200, 404, 0]) {
+      assert.equal((await startingPageOutcome(html, [answers(503), answers(status)])).reloads, 1);
+    }
 
     const apiResponse = await fetch(previewPath(preview.href, "/api/ping"), {
       headers: {
