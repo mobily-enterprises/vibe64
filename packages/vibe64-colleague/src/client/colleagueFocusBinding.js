@@ -1,5 +1,13 @@
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focusRealtime.js";
 
+/**
+ * Keeps the server's record of this browser's Colleague focus current over the
+ * realtime socket: sent on every connect and on demand, released on close.
+ * @param {object} options
+ * @param {import("@jskit-ai/realtime/client/types").RealtimeSocket} options.socket
+ * @param {() => { clientId: string, focus: object }} options.readFocus
+ * @param {(message: string) => void} options.onError
+ */
 function createColleagueFocusBinding({
   socket,
   readFocus,
@@ -20,15 +28,20 @@ function createColleagueFocusBinding({
     revision += 1;
     if (socket.connected) socket.emit(COLLEAGUE_FOCUS_RELEASE, { clientId: readFocus().clientId });
   }
-  socket.on("connect", update);
-  socket.on("disconnect", disconnected);
-  return { update, release, close() {
+  function close() {
     closed = true;
     revision += 1;
     socket.off("connect", update);
     socket.off("disconnect", disconnected);
     release();
-  } };
+  }
+  socket.on("connect", update);
+  socket.on("disconnect", disconnected);
+  return Object.freeze({
+    update,
+    release,
+    close
+  });
 }
 
 export { createColleagueFocusBinding };

@@ -72,7 +72,12 @@ function createColleagueModel({
     reopenConversation();
     await focusConversationComposer();
   }
-  return Object.freeze({ current, select, sayHello, reveal });
+  return Object.freeze({
+    current,
+    select,
+    sayHello,
+    reveal
+  });
 }
 
 export { createColleagueModel };

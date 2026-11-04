@@ -1,6 +1,9 @@
 import { computed, ref } from "vue";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 
+/** A history page read with no transcript waiting on it. */
+function ignoreHistoryPageRead() {}
+
 /**
  * Colleague's Previous conversations: the read-only list of archived
  * conversations and the pages of one of them, with its unconfirmed words.
@@ -59,9 +62,9 @@ function useColleagueHistory({ actorKey, requestColleague, isMounted }) {
       if (expectedHistory === historyRevision) historyLoading.value = false;
     }
   }
-  async function readHistoryPage(conversationId, { more = false, complete } = {}) {
+  async function readHistoryPage(conversationId, { more = false, complete = ignoreHistoryPageRead } = {}) {
     if (historyLoading.value) {
-      complete?.({ changed: false });
+      complete({ changed: false });
       return;
     }
     let changed = false;
@@ -88,7 +91,7 @@ function useColleagueHistory({ actorKey, requestColleague, isMounted }) {
       if (isMounted() && expectedActor === actorKey.value && expectedHistory === historyRevision) historyError.value = error.message;
     } finally {
       if (expectedHistory === historyRevision) historyLoading.value = false;
-      complete?.({ changed });
+      complete({ changed });
     }
   }
   return { historyOpen, historyLoading, historyError, historyConversations, historyHasMore, historyId, historyPages,
