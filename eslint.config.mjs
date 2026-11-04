@@ -1,4 +1,33 @@
-import { baseConfig, clientFeaturesConfig, formatterConfig, nodeConfig, sizeLimitsConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
+import {
+  baseConfig,
+  clientFeaturesConfig,
+  formatterConfig,
+  nodeConfig,
+  sizeLimitsConfig,
+  typedFeaturesConfig,
+  vueConfig,
+  webConfig
+} from "@jskit-ai/config-eslint/server";
+
+// The checks of https://mobily-enterprises.github.io/jskit-ai/guide/framework/typed-features and
+// https://mobily-enterprises.github.io/jskit-ai/guide/framework/client-features, as errors.
+const SERVER_SOURCES = ["packages/*/src/server/**", "packages/*/src/shared/**"];
+const CLIENT_SOURCES = ["packages/*/src/client/**", "src/**"];
+// JSKIT's file and function size limits over all hand-written code, client and host scripts included.
+const HAND_WRITTEN_SOURCES = [
+  "packages/*/src/**",
+  "packages/*/bin/**",
+  "packages/*/runtime/**",
+  "src/**",
+  "server/**",
+  "server.js",
+  "bin/**",
+  "config/**",
+  "tooling/**",
+  "docs/site/**",
+  "examples/**",
+  "*.config.mjs"
+];
 
 export default [
   {
@@ -31,57 +60,13 @@ export default [
   },
   ...baseConfig,
   ...vueConfig,
-  // Client code held to the typed client standard; the rest of the client converts one area at a time.
-  ...clientFeaturesConfig([
-    "packages/vibe64-ai-tasks/src/client/**",
-    "src/components/studio/vibe64-session/Vibe64AiTask*.vue",
-    "src/composables/useAiTaskConversation*.js",
-    "src/lib/vibe64AiTaskConversation.js"
-  ]),
+  ...clientFeaturesConfig(CLIENT_SOURCES),
   ...webConfig,
   ...nodeConfig,
-  // Server packages converted to typed features; the base config warns for the rest.
-  ...typedFeaturesConfig([
-    "packages/current-app/src/server/**",
-    "packages/studio-health/src/server/**",
-    "packages/studio-terminal-core/src/server/**",
-    "packages/vibe64-accounts/src/server/**",
-    "packages/vibe64-ai-tasks/src/server/**",
-    "packages/vibe64-colleague/src/server/**",
-    "packages/vibe64-core/src/server/**",
-    "packages/vibe64-database-tools/src/server/**",
-    "packages/vibe64-execution/src/server/**",
-    "packages/vibe64-genesis/src/server/**",
-    "packages/vibe64-packaging/src/server/**",
-    "packages/vibe64-project/src/server/**",
-    "packages/vibe64-publishing/src/server/**",
-    "packages/vibe64-runtime/src/server/**",
-    "packages/vibe64-sessions/src/server/**",
-    "packages/vibe64-source-editor/src/server/**",
-    "packages/vibe64-system-graph/src/server/**",
-    "packages/vibe64-terminals/src/server/**",
-    "packages/vibe64-training/src/server/**",
-    "packages/vibe64-usage-recording/src/server/**",
-    "packages/vibe64-voice/src/server/**",
-    "packages/*/src/shared/**"
-  ]),
-  // JSKIT's file and function size limits over all hand-written code, client and host scripts included.
-  ...sizeLimitsConfig([
-    "packages/*/src/**",
-    "packages/*/bin/**",
-    "packages/*/runtime/**",
-    "src/**",
-    "server/**",
-    "server.js",
-    "bin/**",
-    "config/**",
-    "tooling/**",
-    "docs/site/**",
-    "examples/**",
-    "*.config.mjs"
-  ]),
+  ...typedFeaturesConfig(SERVER_SOURCES),
+  ...sizeLimitsConfig(HAND_WRITTEN_SOURCES),
   // JSKIT's one formatter config over server and shared code; published state-upgrade scripts are immutable.
-  ...formatterConfig(["packages/*/src/server/**", "packages/*/src/shared/**", "server/**", "server.js"], {
+  ...formatterConfig([...SERVER_SOURCES, "server/**", "server.js"], {
     ignores: ["packages/vibe64-core/src/server/stateUpgrades/**"]
   })
 ];
