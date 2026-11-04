@@ -76,7 +76,9 @@ function createDatabaseOverviewKind({ databaseTools }) {
     if (read?.ok === false) {
       throw new AppError(409, normalizeText(read.error) || "The database could not be read.", { code: read.code || "vibe64_ai_task_no_problem" });
     }
-    const request = buildOverviewAssistantRequest({ abstraction: normalizeText(input.abstraction), scope, schemaTables: read.schema.tables, tables });
+    const request = buildOverviewAssistantRequest({
+      abstraction: normalizeText(input.abstraction), scope, schemaTables: read.schema.tables, tables
+    });
     return {
       key: JSON.stringify(["database-overview", scope, request.abstraction, tables, read.overview.hash]),
       summary: request.displayMessage,

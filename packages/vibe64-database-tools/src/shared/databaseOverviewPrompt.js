@@ -18,8 +18,8 @@ function buildOverviewAssistantRequest({ abstraction, scope, schemaTables, table
   const scopeInstruction = scope === "ungrouped"
     ? `Review only these currently ungrouped tables: ${JSON.stringify(tableReferences)}. Preserve existing actors, names, descriptions, memberships and manual choices. Classify these tables into existing or new actors where appropriate. Explain any deliberately retained under Other tables. Preserve reviewedTables and record this review.`
     : scope === "new"
-    ? "Process only coverage.unreviewed tables. Preserve existing actors, names, descriptions, memberships and manual choices. New tables may join an existing actor or form a new one. Preserve reviewedTables and add the newly reviewed tables, including those deliberately left under Other tables."
-    : "Regenerate the whole grouping at the selected abstraction level, replacing existing actor choices as needed. Review every current table and record every one in reviewedTables, including those deliberately left under Other tables.";
+      ? "Process only coverage.unreviewed tables. Preserve existing actors, names, descriptions, memberships and manual choices. New tables may join an existing actor or form a new one. Preserve reviewedTables and add the newly reviewed tables, including those deliberately left under Other tables."
+      : "Regenerate the whole grouping at the selected abstraction level, replacing existing actor choices as needed. Review every current table and record every one in reviewedTables, including those deliberately left under Other tables.";
   const scopeLabel = scope === "ungrouped"
     ? `Review ${tableReferences.length} ungrouped tables`
     : scope === "new" ? "Process new tables only" : "Regenerate the data overview";
