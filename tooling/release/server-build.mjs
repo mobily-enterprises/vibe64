@@ -393,6 +393,10 @@ async function prepareServerBuild({ appRoot }) {
   };
 }
 
+/**
+ * Bundles the application's static server entry into one file.
+ * @param {{ appRoot: string, outputPath?: string, extraExternals?: string[], minify?: boolean }} options
+ */
 async function buildServerBundle({ appRoot, outputPath = path.join(appRoot, SERVER_BUNDLE_PATH), extraExternals = [], minify = true }) {
   await prepareServerBuild({ appRoot });
   const result = await buildNodeBundle({

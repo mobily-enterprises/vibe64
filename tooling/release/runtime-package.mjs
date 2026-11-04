@@ -59,6 +59,10 @@ async function packageRoot(name, from) {
   throw new Error(`Runtime dependency ${name} is not installed for ${from}.`);
 }
 
+/**
+ * Bundles each runtime entry into the release directory; bin/server.js loads the server bundle `serverEntry`.
+ * @param {{ appRoot: string, releaseAppRoot: string, extraEntries?: string[], extraExternals?: string[], serverEntry?: string }} options
+ */
 async function buildRuntimeBundles({ appRoot, releaseAppRoot, extraEntries = [], extraExternals = [], serverEntry = "server.bundle.mjs" }) {
   if (!appRoot || !releaseAppRoot || await realpath(appRoot) === await realpath(releaseAppRoot)) {
     throw new Error("Runtime bundling requires a separate materialized release directory.");
@@ -93,8 +97,13 @@ async function buildRuntimeBundles({ appRoot, releaseAppRoot, extraEntries = [],
   return { outputPaths, results };
 }
 
-// A release is assembled from build inputs and explicit external dependencies.
-// Source checkouts and their node_modules are never pruned or rewritten.
+/**
+ * Assembles a release from build inputs and explicit external dependencies. Source checkouts and their node_modules
+ * are never pruned or rewritten.
+ * @param {{ appRoot: string, releaseAppRoot: string, extraEntries?: string[], extraExternals?: string[],
+ *   runtimeDependencies?: string[], minify?: boolean }} options
+ */
+// readable-check: allow dependency-default - data: extra entry paths and external package names, none for a release without extras
 async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = [], extraExternals = [], runtimeDependencies = [], minify = true }) {
   appRoot = path.resolve(appRoot);
   releaseAppRoot = path.resolve(releaseAppRoot);

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const SYSTEM_ROOTS = Object.freeze(["/var/lib", "/var/cache", "/opt", "/etc", "/usr/lib", "/run"]);
 // The person's own runtime folder is theirs to use.
+// readable-check: allow optional-call - platform object: process.getuid() and process.getgid() exist only on POSIX
 const OWN_RUNTIME_ROOT = `/run/user/${process.getuid?.() ?? os.userInfo().uid}`;
 // Functions that change a path, with the argument indexes of the paths they change.
 const WRITES = Object.freeze({
@@ -93,7 +94,7 @@ function guardFs(target) {
     const base = name.replace(/Sync$/u, "");
     const check = Object.hasOwn(WRITES, base) ? checkWrite : base === "open" ? checkOpen : null;
     const descriptor = Object.getOwnPropertyDescriptor(target, name);
-    if (!check || !descriptor || typeof descriptor.value !== "function" || !descriptor.writable) continue;
+    if (!check || !descriptor || !descriptor.writable) continue;
     target[name] = guardFunction(descriptor.value, name, check);
   }
 }
@@ -106,12 +107,10 @@ if (!globalThis[GUARDED]) {
     childProcess[name] = guardFunction(childProcess[name], name, checkChildProcess);
   }
   // An env file from a system location would configure tests as that machine.
-  if (typeof process.loadEnvFile === "function") {
-    process.loadEnvFile = guardFunction(process.loadEnvFile, "loadEnvFile", (args, operation) => {
-      const systemPath = systemPathOf(args[0] ?? ".env");
-      if (systemPath) refuse(systemPath, operation);
-    });
-  }
+  process.loadEnvFile = guardFunction(process.loadEnvFile, "loadEnvFile", (args, operation) => {
+    const systemPath = systemPathOf(args[0] ?? ".env");
+    if (systemPath) refuse(systemPath, operation);
+  });
   syncBuiltinESMExports();
   // Nor the person's own live session state: a test that names no session
   // state root keeps its agent helpers and uploads in a private temporary one.
