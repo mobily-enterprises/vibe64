@@ -181,6 +181,7 @@ import Vibe64UsageEntryRail from "./Vibe64UsageEntryRail.vue";
 import Vibe64UsageFunctionPanel from "./Vibe64UsageFunctionPanel.vue";
 import Vibe64UsageRecordingResults from "./Vibe64UsageRecordingResults.vue";
 import Vibe64UsageWebCanvas from "./Vibe64UsageWebCanvas.vue";
+import { hasWindowFunction } from "../browser.js";
 import {
   MORE_NODES,
   NOT_IGNORED_TEXT,
@@ -342,9 +343,10 @@ function openSource(location) {
   emit("open-source-file", { ...location, presentation: "code", origin: "system", systemContext: { usage: { ...props.state, view: "usage" } } });
 }
 
+// Outside Recording nothing ran, so no function is counted.
 const ranCounts = computed(() => (mode.value === "recording" && recorded.value
   ? new Map(recorded.value.nodes.filter((node) => node.functionId).map((node) => [node.functionId, node.count]))
-  : null));
+  : new Map()));
 const panelBindings = computed(() => ({
   node: selected.value,
   ran: ranCounts.value,
@@ -375,7 +377,7 @@ const pickerLabel = computed(() => {
 let observer = null;
 watch(root, (element) => {
   observer?.disconnect();
-  if (!element || typeof ResizeObserver !== "function") return;
+  if (!element || !hasWindowFunction("ResizeObserver")) return;
   observer = new ResizeObserver(() => {
     const width = element.clientWidth;
     if (!width) return;

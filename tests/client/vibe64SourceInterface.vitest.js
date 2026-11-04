@@ -140,7 +140,7 @@ it('saved file overviews remain accessible without a Helper, separate from funct
 it('file icons distinguish the explicit main source from same-named and shared supporting files', async () => {
   const program = { id: 'run', title: 'Run work', mainSource: 'app/run.py' };
   const items = ['app/run.py', 'shared/run.py', 'shared/math.rs'].map(path => ({ id: path, kind: 'file', name: path.split('/').pop(), file: { path, sourceLines: 10 }, reasons: [], volume: .5, programs: [program] }));
-  const html = await renderToString(Vue.createSSRApp(TreeBranch, { items }));
+  const html = await renderToString(Vue.createSSRApp(TreeBranch, { items, folderState: new Map() }));
   expect(html.match(/subsystem-tree__file--main/gu)).toHaveLength(1);
   expect(html).toContain('Main ·');
   expect(html.match(/Part of ·/gu)).toHaveLength(2);
@@ -155,7 +155,7 @@ it('many memberships cannot bury the main marker or repeat capability bodies', a
   expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Other capability'));
   expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Another capability'));
   expect(html).not.toContain('Long repeated body.');
-  const icons = await renderToString(Vue.createSSRApp(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }] }));
+  const icons = await renderToString(Vue.createSSRApp(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }], folderState: new Map() }));
   expect(icons.indexOf('Main ·')).toBeLessThan(icons.indexOf('Part of ·'));
   expect(icons).toContain('2 Programs');
 });

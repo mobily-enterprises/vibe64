@@ -28,6 +28,7 @@ function latestRead(load) {
 
   async function run(...args) {
     const current = ++sequence;
+    // readable-check: allow optional-collaborator - platform object: the read's AbortController exists only once a read has started, and only where the host has one
     controller?.abort();
     controller = typeof AbortController === "function" ? new AbortController() : null;
     loading.value = true;
@@ -50,6 +51,7 @@ function latestRead(load) {
 
   function reset() {
     sequence += 1;
+    // readable-check: allow optional-collaborator - platform object: the read's AbortController exists only once a read has started, and only where the host has one
     controller?.abort();
     data.value = null;
     loading.value = false;
@@ -112,8 +114,11 @@ function requestPages(load) {
   return { data, loading: read.loading, error: read.error, errorCode: read.errorCode, run, more, refresh };
 }
 
-// Reads for the usage view: entries, Imports/Calls webs, one function, and a
-// recording's requests joined to the call web. The view owns what is shown.
+/**
+ * Reads for the usage view: entries, Imports/Calls webs, one function, and a recording's requests joined to the
+ * call web. The view owns what is shown.
+ * @param {{ sessionId: import("vue").MaybeRef<string> }} options
+ */
 function useVibe64UsageWeb({ sessionId }) {
   const paths = usePaths();
   const client = getHttpWebClient();

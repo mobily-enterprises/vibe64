@@ -28,7 +28,7 @@
           <h4 class="text-title-small">{{ group.title }}</h4>
           <v-list density="compact" class="usage-panel__list">
             <v-list-item v-for="(row, position) in group.rows" :key="position" rounded="lg" lines="two" @click="emit('select', row.fn)">
-              <v-list-item-title class="text-body-medium">{{ functionLabel(row.fn) }}<span v-if="ran?.has(row.fn.id)" class="usage-panel__ran"> · {{ ranLabel(ran.get(row.fn.id)) }}</span></v-list-item-title>
+              <v-list-item-title class="text-body-medium">{{ functionLabel(row.fn) }}<span v-if="ran.has(row.fn.id)" class="usage-panel__ran"> · {{ ranLabel(ran.get(row.fn.id)) }}</span></v-list-item-title>
               <v-list-item-subtitle class="usage-panel__callee"><code>{{ row.callee }}</code><span v-if="methodText(row)"> · {{ methodText(row) }}</span></v-list-item-subtitle>
               <template #append>
                 <v-chip size="x-small" :variant="row.certainty === 'exact' ? 'tonal' : 'outlined'" class="mr-1">{{ CERTAINTY_TEXT[row.certainty] }}</v-chip>
@@ -64,8 +64,8 @@ const props = defineProps({
   detail: { type: /** @type {import("vue").PropType<import("./usageModel.js").UsageFunctionDetail | null>} */ (Object), default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: "" },
-  // In Recording: function id → times it ran in the request (null: ran, not counted).
-  ran: { type: Map, default: null }
+  // In Recording: function id → times it ran in the request (null: ran, not counted); empty elsewhere.
+  ran: { type: /** @type {import("vue").PropType<Map<string, number | null>>} */ (Map), required: true }
 });
 const emit = defineEmits(["close", "select", "open-source", "retry"]);
 

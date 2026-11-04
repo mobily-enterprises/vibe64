@@ -151,9 +151,9 @@ describe("Imports and Calls states", () => {
 
   it("says why a function that ran has no calls: Git, or its language", async () => {
     const node = { id: "ran:0", functionId: null, title: "handler", subtitle: "app/main.py:3", file: "app/main.py", start: { line: 3, column: 1 }, join: "none" };
-    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "language" } }))
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "language" }, ran: new Map() }))
       .toContain("The scan reads calls only in the languages of the project&#39;s Stack components, and this file&#39;s language is not among them.");
-    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "not-ignored" } })).toContain("Add /.genesis/call-web.json to the project&#39;s .gitignore");
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "not-ignored" }, ran: new Map() })).toContain("Add /.genesis/call-web.json to the project&#39;s .gitignore");
     const canvas = await render(Vibe64UsageWebCanvas, { mode: "recording", zoomedId: "directory:app", subsystems: [], nodes: [{ ...node, reason: "language", depth: 0, count: 1, outCount: 0, inCount: 0 }], edges: [] });
     expect(canvas).toContain("Calls not read in this file&#39;s language");
   });
@@ -300,7 +300,7 @@ describe("Recording states", () => {
     expect(detail.calls.some((row) => ran.has(row.target.id))).toBe(true);
     const node3 = { id: caller, functionId: caller, title: "x", subtitle: "", file: detail.function.file, start: detail.function.start };
     expect(await render(Vibe64UsageFunctionPanel, { node: node3, detail, ran })).toMatch(/· ran (?:\d+ times?)?<\/span>/u);
-    expect(await render(Vibe64UsageFunctionPanel, { node: node3, detail })).not.toContain("· ran");
+    expect(await render(Vibe64UsageFunctionPanel, { node: node3, detail, ran: new Map() })).not.toContain("· ran");
   });
 });
 
@@ -308,11 +308,11 @@ describe("parts", () => {
   it("shows a function's calls by certainty, unresolved calls and Open source", async () => {
     const detail = readFunction(index, calls, { functionId: callWeb.functions.find((fn) => fn.name === "runAction").id });
     const node = { id: detail.function.id, functionId: detail.function.id, title: "runAction", subtitle: `${detail.function.file}:${detail.function.start.line}`, file: detail.function.file, start: detail.function.start };
-    const html = await render(Vibe64UsageFunctionPanel, { node, detail });
+    const html = await render(Vibe64UsageFunctionPanel, { node, detail, ran: new Map() });
     expect(html).toContain("Open source");
     expect(html).toMatch(/Calls \((exact|probable)\)|Called by \((exact|probable)\)/u);
     const withUnresolved = { ...detail, unresolved: [{ callee: "systemGraph[method](input)", start: { line: 4, column: 3 } }], totals: { ...detail.totals, unresolved: 1 } };
-    expect(await render(Vibe64UsageFunctionPanel, { node, detail: withUnresolved })).toContain("Unresolved call: <code>systemGraph[method](input)</code>");
+    expect(await render(Vibe64UsageFunctionPanel, { node, detail: withUnresolved, ran: new Map() })).toContain("Unresolved call: <code>systemGraph[method](input)</code>");
   });
 
   it("lists the zoomed web by depth with certainty, call counts and unresolved calls on a phone", async () => {

@@ -14,7 +14,7 @@
         </v-card-text>
       </v-card>
     </v-dialog>
-    <section ref="filesElement"><h3>Source files <small>{{ files.length }}</small></h3><Vibe64SubsystemTreeBranch :items="[...mainFiles, ...supportingFiles]" @inspect="$emit('inspect', $event)" /></section>
+    <section ref="filesElement"><h3>Source files <small>{{ files.length }}</small></h3><Vibe64SubsystemTreeBranch :items="[...mainFiles, ...supportingFiles]" :folder-state="folderState" @inspect="$emit('inspect', $event)" /></section>
   </section>
 </template>
 <script setup>
@@ -23,6 +23,8 @@ import Vibe64SubsystemTreeBranch from './Vibe64SubsystemTreeBranch.vue';
 const props = defineProps({ program: { type: Object, required: true }, architecture: { type: Object, required: true }, owner: { type: Object, default: null }, active: { type: Boolean, default: true } });
 defineEmits(['inspect']);
 const filesElement = ref(null);
+// A Program lists its files without folders; its tree still keeps which folders are open.
+const folderState = new Map();
 const explanationOpen = ref(false);
 const dialogTitleId = useId();
 const preview = computed(() => props.program.description.trim().split(/\n\s*\n/u)[0]);

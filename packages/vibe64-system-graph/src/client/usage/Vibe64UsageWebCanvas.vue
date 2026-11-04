@@ -135,6 +135,8 @@
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { mdiArrowLeft, mdiCheck } from "@mdi/js";
 
+import { hasWindowFunction } from "../browser.js";
+
 import {
   COUNT_KEYS,
   NODE,
@@ -192,8 +194,11 @@ function measureScroll() {
 let resizeObserver = null;
 watch(scroller, (element) => {
   resizeObserver?.disconnect();
-  resizeObserver = element && typeof ResizeObserver === "function" ? new ResizeObserver(measureScroll) : null;
-  resizeObserver?.observe(element);
+  resizeObserver = null;
+  if (element && hasWindowFunction("ResizeObserver")) {
+    resizeObserver = new ResizeObserver(measureScroll);
+    resizeObserver.observe(element);
+  }
   measureScroll();
 }, { flush: "post" });
 watch(plan, () => nextTick(measureScroll));

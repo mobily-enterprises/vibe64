@@ -25,7 +25,14 @@
 <script setup>
 import { mdiCodeJson, mdiConsoleLine, mdiFileCodeOutline, mdiFileCogOutline, mdiFileDocumentOutline, mdiFileImageOutline, mdiFileTableOutline, mdiFolderOutline, mdiStarOutline,
   mdiLanguageCpp, mdiLanguageCsharp, mdiLanguageCss3, mdiLanguageGo, mdiLanguageHtml5, mdiLanguageJava, mdiLanguageJavascript, mdiLanguageKotlin, mdiLanguagePhp, mdiLanguagePython, mdiLanguageRuby, mdiLanguageRust, mdiLanguageTypescript, mdiVuejs } from '@mdi/js';
-defineProps({ items: { type: Array, required: true }, depth: { type: Number, default: 0 }, selectedId: { type: String, default: '' }, searching: Boolean, folderState: { type: Map, default: () => new Map() } });
+defineProps({
+  items: { type: Array, required: true },
+  depth: { type: Number, default: 0 },
+  selectedId: { type: String, default: '' },
+  searching: Boolean,
+  // Which folders are open, by path: one map for every branch of a tree, kept by the tree's owner.
+  folderState: { type: /** @type {import('vue').PropType<Map<string, boolean>>} */ (Map), required: true }
+});
 defineEmits(['select', 'inspect']);
 // File-name decoration only. Analysers, not these icons, identify code semantics.
 const icons = [

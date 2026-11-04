@@ -27,9 +27,18 @@ function systemQueryKey(projectSlug, sessionId = "", resource = "") {
 }
 
 function cityAvailable(status = {}, kind = "") {
-  return status?.cities?.[kind]?.available === true;
+  return status.cities?.[kind]?.available === true;
 }
 
+/**
+ * Architecture's reads for one session: the index status, the architecture snapshot, and a project re-scan with
+ * its progress, cancellation and failure output. A hidden reader keeps its data and reads nothing; a scan another
+ * reader started is followed through the session's change events.
+ * @param {object} [options]
+ * @param {import("vue").MaybeRef<boolean>} [options.active] whether the view is showing
+ * @param {import("vue").MaybeRef<number>} [options.reloadVersion] raised by the host to read again
+ * @param {import("vue").MaybeRef<string>} [options.sessionId] the session whose architecture is read
+ */
 function useVibe64SystemGraph({
   active = true,
   reloadVersion = 0,
