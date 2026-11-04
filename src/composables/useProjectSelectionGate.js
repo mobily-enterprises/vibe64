@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -30,6 +31,12 @@ const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
 // The server's refusal for a team member while the team AI setup has no Workspace-use model.
 const TEAM_AI_REQUIRED_CODE = "vibe64_team_ai_required";
 
+/**
+ * The project selection gate: the projects a person can open, the selected one, creating a project and the Learning
+ * and team AI blocks; it emits ready, missing, deleted or error as the selection resolves.
+ * @param {(event: "ready" | "missing" | "deleted" | "error", payload?: unknown) => void} emit
+ * @param {{ scopeSelectionToCurrentProject?: boolean }} [options]
+ */
 function useProjectSelectionGate(emit, {
   scopeSelectionToCurrentProject = false
 } = {}) {
@@ -276,7 +283,7 @@ function useProjectSelectionGate(emit, {
 // the practice project a page shows; reading, step and learning-mode changes
 // never do, and ordinary project pages ignore every Learning change.
 function isPracticeNoticeForProject(payload = {}, slug = "") {
-  return payload?.reason === "practice" && isPracticeProjectSlug(slug);
+  return normalizeObject(payload).reason === "practice" && isPracticeProjectSlug(slug);
 }
 
 function projectSelectionGateEndpoint({

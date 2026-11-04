@@ -355,9 +355,9 @@ function pickFiles(event) {
 
 // Esc returns to the folder and the arrow keys walk its images.
 function previewKey(event) {
-  if (!file.value?.image || event.defaultPrevented || event.target.closest?.("input, textarea, [role='dialog'], .v-overlay")) return;
+  if (!file.value?.image || event.defaultPrevented || event.target.closest("input, textarea, [role='dialog'], .v-overlay")) return;
   // At actual size the arrow keys scroll the image instead.
-  if (event.key !== "Escape" && event.target.closest?.(".vibe64-image-preview__stage--actual")) return;
+  if (event.key !== "Escape" && event.target.closest(".vibe64-image-preview__stage--actual")) return;
   if (event.key === "Escape") void closeFile();
   else if (event.key === "ArrowLeft") stepImage(-1);
   else if (event.key === "ArrowRight") stepImage(1);

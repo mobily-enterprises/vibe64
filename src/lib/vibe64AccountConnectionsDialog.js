@@ -1,3 +1,5 @@
+import { hasWindowFunction } from "@/lib/browser.js";
+
 const VIBE64_ACCOUNT_CONNECTIONS_OPEN_EVENT = "vibe64:account-connections:open";
 
 function requestVibe64AccountConnectionsDialog({
@@ -8,7 +10,7 @@ function requestVibe64AccountConnectionsDialog({
   refresh = true,
   section = ""
 } = {}) {
-  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") {
+  if (!hasWindowFunction("dispatchEvent")) {
     return false;
   }
   window.dispatchEvent(new CustomEvent(VIBE64_ACCOUNT_CONNECTIONS_OPEN_EVENT, {
@@ -25,7 +27,7 @@ function requestVibe64AccountConnectionsDialog({
 }
 
 function onVibe64AccountConnectionsDialogRequested(handler) {
-  if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+  if (!hasWindowFunction("addEventListener")) {
     return () => null;
   }
   window.addEventListener(VIBE64_ACCOUNT_CONNECTIONS_OPEN_EVENT, handler);

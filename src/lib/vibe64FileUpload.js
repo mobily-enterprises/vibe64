@@ -92,8 +92,8 @@ function uploadFileRequest({
       }
     };
     const cleanup = () => {
-      signal?.removeEventListener?.("abort", abortHandler);
-      request.upload?.removeEventListener?.("progress", progressHandler);
+      signal?.removeEventListener("abort", abortHandler);
+      request.upload.removeEventListener("progress", progressHandler);
       request.onload = null;
       request.onerror = null;
       request.onabort = null;
@@ -144,8 +144,8 @@ function uploadFileRequest({
       request.ontimeout = () => {
         settle(reject, new Error(`${failure} The request timed out.`));
       };
-      request.upload?.addEventListener?.("progress", progressHandler);
-      signal?.addEventListener?.("abort", abortHandler, { once: true });
+      request.upload.addEventListener("progress", progressHandler);
+      signal?.addEventListener("abort", abortHandler, { once: true });
       if (signal?.aborted) {
         abortHandler();
         return;

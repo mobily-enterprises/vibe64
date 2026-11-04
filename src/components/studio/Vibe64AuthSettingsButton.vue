@@ -351,7 +351,7 @@ async function openDialog(options = {}) {
 
 async function focusPreferredName() {
   await nextTick();
-  preferredNameField.value?.focus?.();
+  preferredNameField.value?.focus();
 }
 
 async function savePreferredName() {

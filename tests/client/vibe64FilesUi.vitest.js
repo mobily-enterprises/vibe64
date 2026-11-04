@@ -156,7 +156,7 @@ describe("Files area", () => {
     expect(mocks.requests).toHaveLength(before);
     expect(state.imageSiblings.map((entry) => entry.name)).toEqual(["a.png", "b.svg"]);
 
-    const key = (name) => ({ key: name, target: {}, preventDefault: vi.fn(), defaultPrevented: false });
+    const key = (name) => ({ key: name, target: { closest: () => null }, preventDefault: vi.fn(), defaultPrevented: false });
     state.previewKey(key("ArrowRight"));
     await settle();
     expect(state.file.path).toBe("b.svg");

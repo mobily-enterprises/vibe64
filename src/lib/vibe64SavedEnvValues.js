@@ -15,7 +15,7 @@ export const VIBE64_SAVED_ENV_VALUES_KEY = Symbol("vibe64.saved-env-values");
 export { SAVED_ENV_VALUE_SOURCE };
 
 export function recordIsSavedEnvValue(record = {}) {
-  return record?.source === SAVED_ENV_VALUE_SOURCE && record?.editable !== true;
+  return record.source === SAVED_ENV_VALUE_SOURCE && record.editable !== true;
 }
 
 export function savedEnvValueEnvironment(environmentLabel = "") {

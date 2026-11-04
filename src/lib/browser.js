@@ -79,8 +79,19 @@ function videoFrameCallbacksAvailable(video) {
   return typeof video.requestVideoFrameCallback === "function";
 }
 
+/**
+ * The file system entry a dragged item stands for (its isDirectory says whether it is a folder); undefined where the
+ * browser offers no entries.
+ * @param {DataTransferItem} item
+ */
+function dataTransferItemEntry(item) {
+  // readable-check: allow optional-call - platform object: DataTransferItem.webkitGetAsEntry is a prefixed API that not every browser has
+  return item.webkitGetAsEntry?.();
+}
+
 export {
   browserSessionStorage,
+  dataTransferItemEntry,
   followMediaQuery,
   hasWindowFunction,
   pageRandomUUID,

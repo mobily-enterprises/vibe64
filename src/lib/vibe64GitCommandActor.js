@@ -1,12 +1,8 @@
-function normalizedGitActorText(value = "") {
-  return String(value || "").trim();
-}
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function sessionUsesGithub(session = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
-    ? session.metadata
-    : {};
-  const remoteUrl = normalizedGitActorText(
+  const metadata = normalizeObject(session.metadata);
+  const remoteUrl = normalizeText(
     metadata.source_remote_url ||
     metadata.github_repository ||
     session.sourceRemoteUrl ||
@@ -15,7 +11,7 @@ function sessionUsesGithub(session = {}) {
   if (!remoteUrl) {
     return false;
   }
-  if (normalizedGitActorText(metadata.github_repository || session.githubRepository)) {
+  if (normalizeText(metadata.github_repository || session.githubRepository)) {
     return true;
   }
   try {
@@ -27,11 +23,9 @@ function sessionUsesGithub(session = {}) {
 }
 
 function sessionGithubCommandActor(session = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
-    ? session.metadata
-    : {};
-  const scope = normalizedGitActorText(metadata.session_git_command_actor_scope);
-  const userKey = normalizedGitActorText(metadata.session_git_command_actor_user_key);
+  const metadata = normalizeObject(session.metadata);
+  const scope = normalizeText(metadata.session_git_command_actor_scope);
+  const userKey = normalizeText(metadata.session_git_command_actor_user_key);
   const account = scope === "local" ? "local GitHub" : userKey;
   const available = sessionUsesGithub(session);
   if (!account) {

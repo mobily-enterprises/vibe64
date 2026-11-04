@@ -1,3 +1,5 @@
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+
 // Session-change reasons, as the sessions and terminals servers publish them,
 // after which a session's repository status may differ.
 const REPOSITORY_STATUS_SESSION_REASONS = new Set([
@@ -31,16 +33,18 @@ const REPOSITORY_CANONICAL_RECHECK_REASONS = new Set([
   "session-update-failed"
 ]);
 
+// A realtime payload is the server's event object; anything else names no session and no reason.
 function repositoryStatusSessionId(payload = {}) {
-  return String(payload?.sessionId || payload?.session?.sessionId || "").trim();
+  const event = normalizeObject(payload);
+  return String(event.sessionId || event.session?.sessionId || "").trim();
 }
 
 function repositoryStatusRealtimeShouldRefresh(payload = {}) {
-  return REPOSITORY_STATUS_SESSION_REASONS.has(String(payload?.reason || "").trim());
+  return REPOSITORY_STATUS_SESSION_REASONS.has(String(normalizeObject(payload).reason || "").trim());
 }
 
 function repositoryStatusRealtimeNeedsCanonicalCheck(payload = {}) {
-  return REPOSITORY_CANONICAL_RECHECK_REASONS.has(String(payload?.reason || "").trim());
+  return REPOSITORY_CANONICAL_RECHECK_REASONS.has(String(normalizeObject(payload).reason || "").trim());
 }
 
 export {

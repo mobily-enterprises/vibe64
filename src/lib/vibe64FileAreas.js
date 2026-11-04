@@ -5,6 +5,7 @@ import {
   mdiSourceRepository,
   mdiTrayArrowUp
 } from "@mdi/js";
+import { dataTransferItemEntry } from "@/lib/browser.js";
 
 // What each Files area is called and promises, in one place for the session
 // Files tool, the project Files page and the move-or-copy destinations.
@@ -38,7 +39,7 @@ function vibe64FileTransferMessage({ destination, item, mode, path: placed = "",
 
 // The files in a drop. Uploads take files, so a dropped folder is refused.
 function vibe64DroppedFiles(dataTransfer) {
-  if ([...(dataTransfer?.items || [])].some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
+  if ([...(dataTransfer?.items || [])].some((item) => dataTransferItemEntry(item)?.isDirectory)) {
     throw new Error("Drop files rather than folders, or upload a zip of the folder.");
   }
   return [...(dataTransfer?.files || [])];
