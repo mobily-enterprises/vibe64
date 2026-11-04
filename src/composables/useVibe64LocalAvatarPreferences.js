@@ -20,7 +20,9 @@ function readStoredVisibility() {
   return Object.freeze(Object.fromEntries(Object.keys(VIBE64_DEFAULT_AVATARS).map(target => [target, stored?.[target] !== false])));
 }
 
+// readable-check: allow module-state - shared resource: the browser's one remembered avatar per assistant target, which the voice host, its settings and the Colleague host read and change together
 let avatars = null;
+// readable-check: allow module-state - shared resource: the browser's one remembered face visibility per assistant target, which the voice host shows and changes for every consumer on the page
 let visibility = null;
 
 function useVibe64LocalAvatarPreferences() {
