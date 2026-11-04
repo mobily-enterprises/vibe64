@@ -7,6 +7,7 @@ import {
   useSlots
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { followMediaQuery, hasWindowFunction } from "@/lib/browser.js";
 import {
   normalizeRoutePath,
   routePathContainsSection
@@ -36,7 +37,7 @@ const slots = useSlots();
 const route = useRoute();
 const router = useRouter();
 const mobileSectionLayout = ref(initialMobileSectionLayout());
-let mobileSectionMediaQuery = null;
+let stopFollowingMobileSectionLayout = () => {};
 const resolvedTitle = computed(() => String(props.title || "").trim());
 const resolvedSubtitle = computed(() => String(props.subtitle || "").trim());
 const hasHeading = computed(() => Boolean(resolvedTitle.value || resolvedSubtitle.value));
@@ -62,14 +63,10 @@ const activeMobileSection = computed(() => {
 const activeMobileSectionValue = computed(() => activeMobileSection.value?.to || null);
 
 function initialMobileSectionLayout() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (!hasWindowFunction("matchMedia")) {
     return false;
   }
   return window.matchMedia(MOBILE_SECTION_MEDIA_QUERY).matches;
-}
-
-function syncMobileSectionLayout() {
-  mobileSectionLayout.value = Boolean(mobileSectionMediaQuery?.matches);
 }
 
 function selectMobileSection(value = "") {
@@ -85,25 +82,13 @@ function selectMobileSection(value = "") {
 }
 
 onMounted(() => {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return;
-  }
-  mobileSectionMediaQuery = window.matchMedia(MOBILE_SECTION_MEDIA_QUERY);
-  syncMobileSectionLayout();
-  if (typeof mobileSectionMediaQuery.addEventListener === "function") {
-    mobileSectionMediaQuery.addEventListener("change", syncMobileSectionLayout);
-  } else {
-    mobileSectionMediaQuery.addListener?.(syncMobileSectionLayout);
-  }
+  stopFollowingMobileSectionLayout = followMediaQuery(MOBILE_SECTION_MEDIA_QUERY, (matches) => {
+    mobileSectionLayout.value = matches;
+  });
 });
 
 onBeforeUnmount(() => {
-  if (typeof mobileSectionMediaQuery?.removeEventListener === "function") {
-    mobileSectionMediaQuery.removeEventListener("change", syncMobileSectionLayout);
-  } else {
-    mobileSectionMediaQuery?.removeListener?.(syncMobileSectionLayout);
-  }
-  mobileSectionMediaQuery = null;
+  stopFollowingMobileSectionLayout();
 });
 </script>
 

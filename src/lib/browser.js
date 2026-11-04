@@ -19,10 +19,13 @@ function browserSessionStorage() {
   return window.sessionStorage;
 }
 
-/** A random UUID from the browser; empty where the page has none (crypto.randomUUID needs https or localhost). */
-function pageRandomUUID() {
+/**
+ * A random UUID from the browser; empty where the page has none (crypto.randomUUID needs https or localhost).
+ * @param {{ crypto?: Crypto }} [root] the page's global object
+ */
+function pageRandomUUID(root = globalThis) {
   // readable-check: allow method-probe - platform object: browsers offer crypto.randomUUID only on secure (https or localhost) pages
-  return typeof globalThis.crypto?.randomUUID === "function" ? globalThis.crypto.randomUUID() : "";
+  return typeof root.crypto?.randomUUID === "function" ? root.crypto.randomUUID() : "";
 }
 
 /** Reloads the page, after a change only a fresh page shows; outside a browser there is no page to reload. */
@@ -45,8 +48,30 @@ function writePageClipboardText(text) {
   return typeof navigator.clipboard?.writeText === "function" ? navigator.clipboard.writeText(text) : undefined;
 }
 
+/**
+ * Calls sync(matches) now and whenever the media query's answer changes; returns the function that stops following
+ * it. Outside a browser, or where the page has no matchMedia, nothing is followed.
+ * @param {string} query
+ * @param {(matches: boolean) => void} sync
+ * @returns {() => void}
+ */
+function followMediaQuery(query, sync) {
+  if (!hasWindowFunction("matchMedia")) return () => {};
+  const media = window.matchMedia(query);
+  const listener = () => sync(Boolean(media.matches));
+  listener();
+  // readable-check: allow method-probe - platform object: Safari before 14 reports a media query's changes only through addListener
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }
+  media.addListener(listener);
+  return () => media.removeListener(listener);
+}
+
 export {
   browserSessionStorage,
+  followMediaQuery,
   hasWindowFunction,
   pageRandomUUID,
   reloadPage,

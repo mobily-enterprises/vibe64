@@ -1,4 +1,4 @@
-import { onBeforeUnmount, watchEffect } from "vue";
+import { onBeforeUnmount, toValue, watchEffect } from "vue";
 import { useShellLayoutState } from "@jskit-ai/shell-web/client/composables/useShellLayoutState";
 
 const DRAWER_HIDDEN_CLASS = "studio-shell-drawer-hidden";
@@ -10,6 +10,10 @@ function setDrawerToggleHidden(hidden) {
   document.body.classList.toggle(DRAWER_HIDDEN_CLASS, Boolean(hidden));
 }
 
+/**
+ * Hides the shell's navigation drawer and its toggle while `hidden` is true, and restores them on unmount.
+ * @param {{ hidden: import("vue").MaybeRefOrGetter<boolean> }} options
+ */
 export function useStudioShellDrawer({ hidden }) {
   const {
     drawerDefaultOpen,
@@ -19,7 +23,7 @@ export function useStudioShellDrawer({ hidden }) {
   const originalDrawerDefaultOpen = drawerDefaultOpen.value;
 
   watchEffect(() => {
-    const drawerHidden = Boolean(typeof hidden === "function" ? hidden() : hidden);
+    const drawerHidden = Boolean(toValue(hidden));
     setDrawerToggleHidden(drawerHidden);
     if (drawerHidden) {
       setDrawerDefaultOpen(false);

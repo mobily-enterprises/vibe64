@@ -10,11 +10,13 @@ import {
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
+import { followMediaQuery } from "@/lib/browser.js";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries, invalidateGithubProjectQueries } from "@/lib/vibe64GithubProject.js";
 import { normalizeRoutePath, routePathContainsSection } from "@/lib/routeActiveState.js";
 import { vibe64SessionToolIdFromDashboardPath } from "@/lib/vibe64SessionToolDefinitions.js";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -483,18 +485,20 @@ function useVibe64AppPage() {
   }
 }
 
-function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "", { practice = false } = {}) {
+function projectRuntimeClosedPayloadMatches(payload, currentSlug = "", { practice = false } = {}) {
+  // A realtime event's payload, which may be missing.
+  const event = normalizeObject(payload);
   const projectSlug = String(currentSlug || "").trim();
-  if (!projectSlug || String(payload?.projectSlug || "").trim() !== projectSlug) {
+  if (!projectSlug || String(event.projectSlug || "").trim() !== projectSlug) {
     return false;
   }
   // Deleting an open practice project closes its runtime first. The project
   // page's selection gate then shows "This practice project is gone", so
   // the page must not leave for the host's project list or /app.
-  if (practice && String(payload?.runtimeCloseReason || "").trim() === "project-delete") {
+  if (practice && String(event.runtimeCloseReason || "").trim() === "project-delete") {
     return false;
   }
-  return String(payload?.action || "").trim() === "runtime-closed" && payload?.runtime?.open === false;
+  return String(event.action || "").trim() === "runtime-closed" && event.runtime?.open === false;
 }
 
 function openProjectSwitcherProjects(projects = []) {
@@ -504,21 +508,6 @@ function openProjectSwitcherProjects(projects = []) {
   return projects
     .filter((project) => project?.runtime?.open === true)
     .sort((left, right) => String(left?.slug || "").localeCompare(String(right?.slug || "")));
-}
-
-// Calls sync(matches) now and whenever the media query's answer changes;
-// returns the function that stops following it.
-function followMediaQuery(query, sync) {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
-  const media = window.matchMedia(query);
-  const listener = () => sync(Boolean(media.matches));
-  listener();
-  if (typeof media.addEventListener === "function") {
-    media.addEventListener("change", listener);
-    return () => media.removeEventListener("change", listener);
-  }
-  media.addListener?.(listener);
-  return () => media.removeListener?.(listener);
 }
 
 function previewToolbarTargetVisible({
@@ -547,14 +536,12 @@ function dashboardReturnRoute({
     : { path: `${base}/env` };
 }
 
-function selectedProjectSlug(selection = {}) {
-  const currentProject = selection?.currentProject && typeof selection.currentProject === "object" && !Array.isArray(selection.currentProject)
-    ? selection.currentProject
-    : {};
+function selectedProjectSlug(selection) {
+  const currentProject = normalizeObject(selection.currentProject);
   return String(
     currentProject.slug ||
-    selection?.projectSlug ||
-    selection?.slug ||
+    selection.projectSlug ||
+    selection.slug ||
     ""
   ).trim();
 }

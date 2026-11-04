@@ -54,7 +54,13 @@ import {
 const props = defineProps({
   dashboardContext: {
     default: () => ({}),
-    type: Object
+    type: /** @type {import("vue").PropType<{
+      session?: { status?: string } | null,
+      projectContext?: object,
+      statusColor?: string,
+      statusLabel?: string,
+      copyText?: ((value: string) => unknown) | null
+    }>} */ (Object)
   }
 });
 
@@ -72,6 +78,7 @@ const copyContext = computed(() => vibe64SessionInfoText(facts.value, {
 }));
 
 function copyText(value = "") {
+  // readable-check: allow method-probe - optional operation: a Dashboard outside a session view, or over a page that cannot copy, has no copyText, so nothing is copied
   return typeof dashboard.value.copyText === "function"
     ? dashboard.value.copyText(value)
     : false;

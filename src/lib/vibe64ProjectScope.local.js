@@ -50,7 +50,12 @@ function currentProjectSlugFromLocation(browserWindow = globalThis.window) {
   return projectSlugFromPathname(browserWindow?.location?.pathname || "");
 }
 
-function projectSlugFromRoute(route = {}) {
+/**
+ * The route's project slug, else the location's. A view outside a router has no route
+ * (useRoute() answers undefined there), so it reads the location alone.
+ * @param {{ params?: Record<string, unknown> } | undefined} route a router route or route location
+ */
+function projectSlugFromRoute(route) {
   return firstRouteParam(route?.params?.slug) || currentProjectSlugFromLocation();
 }
 

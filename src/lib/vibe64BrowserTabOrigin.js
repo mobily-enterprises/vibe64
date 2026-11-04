@@ -1,14 +1,13 @@
+import { normalizeText as normalizeOriginId } from "@jskit-ai/kernel/shared/support/normalize";
+import { pageRandomUUID } from "@/lib/browser.js";
+
 const VIBE64_BROWSER_TAB_ORIGIN_KEY = "__vibe64BrowserTabOriginId";
 const VIBE64_BROWSER_TAB_ORIGIN_STORAGE_KEY = "vibe64:browser-tab-origin-id";
 
-function normalizeOriginId(value = "") {
-  return String(value || "").trim();
-}
-
 function createBrowserTabOriginId(root = globalThis) {
-  const cryptoApi = root?.crypto;
-  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
-    return `tab:${cryptoApi.randomUUID()}`;
+  const uuid = pageRandomUUID(root);
+  if (uuid) {
+    return `tab:${uuid}`;
   }
   return `tab:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
 }
@@ -68,10 +67,10 @@ function vibe64RealtimeOriginPayload(fields = {}, root = globalThis) {
   };
 }
 
-function vibe64RealtimePayloadFromCurrentTab(payload = {}, {
+function vibe64RealtimePayloadFromCurrentTab(payload, {
   originId = vibe64BrowserTabOriginId()
 } = {}) {
-  const payloadOriginId = normalizeOriginId(payload?.originId);
+  const payloadOriginId = normalizeOriginId(payload.originId);
   const currentOriginId = normalizeOriginId(originId);
   return Boolean(payloadOriginId && currentOriginId && payloadOriginId === currentOriginId);
 }

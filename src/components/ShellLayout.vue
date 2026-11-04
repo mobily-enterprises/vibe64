@@ -10,13 +10,16 @@ export default {
   name: "ShellLayout",
   inheritAttrs: false,
   setup(_, { attrs, slots }) {
+    // A page's own content for one of the header's places, read at each render; a page passes only what it has.
+    // readable-check: allow optional-call - optional operation: a page fills only the header places it has content for
+    const pageSlot = (name, slotProps) => slots[name]?.(slotProps);
     return () => h(PackageShellLayout, attrs, {
       ...slots,
       // The L button leads every management page header, as in the Studio shell.
-      "top-left": (slotProps) => [h(Vibe64LearningButton), slots["top-left"]?.(slotProps)],
+      "top-left": (slotProps) => [h(Vibe64LearningButton), pageSlot("top-left", slotProps)],
       "top-right": (slotProps) => [
         h(ShellOutlet, { target: "shell-layout:top-right" }),
-        slots["top-right"]?.(slotProps),
+        pageSlot("top-right", slotProps),
         h(Vibe64AiTaskTrayTarget),
         h(Vibe64ColleagueLauncherTarget)
       ]

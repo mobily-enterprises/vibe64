@@ -8,7 +8,7 @@ export function useVibe64InAppLinks() {
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
     }
-    const anchor = event.target?.closest?.("a[href]");
+    const anchor = event.target.closest("a[href]");
     if (!anchor || anchor.hasAttribute("download") || anchor.relList.contains("external")) {
       return;
     }
