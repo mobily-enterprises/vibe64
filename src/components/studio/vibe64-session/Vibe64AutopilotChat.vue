@@ -152,7 +152,7 @@
                     title="Attach files"
                     type="button"
                     variant="text"
-                    @click="composerInput?.openFilePicker?.()"
+                    @click="composerInput?.openFilePicker()"
                   >
                     Attach files
                   </v-btn>
@@ -203,7 +203,7 @@
                 :changes-disabled="sourceOperationsSuspended"
                 :session="props.session"
                 :sessions-api-path="props.sessionsApiPath"
-                @saved="props.refreshSessionData?.(); reloadAssistantAccess()"
+                @saved="props.refreshSessionData(); reloadAssistantAccess()"
               />
               <v-btn
                 v-if="approvalMode" ref="composerSendButton"
@@ -439,7 +439,7 @@ const composerSupportStatusVisible = computed(() => Boolean(
 ));
 
 async function sendComposerMessage() {
-  if (conversationView.value?.composerBlocked || composerInput.value?.attachmentsCanSubmit?.() === false) {
+  if (conversationView.value?.composerBlocked || composerInput.value?.attachmentsCanSubmit() === false) {
     return false;
   }
   stopTypingOnSubmit();
@@ -447,30 +447,35 @@ async function sendComposerMessage() {
 }
 
 async function continueConversation() {
-  composerInput.value?.focus?.();
+  composerInput.value?.focus();
   if (composerDraft.value.trim() || composerAttachments.value.length) return;
   composerDraft.value = "Continue.";
   await nextTick();
   if (composerCanSubmit.value) await sendComposerMessage();
 }
 
+// The send button is Vuetify's button while messages wait for approval, and the delivery footer otherwise.
 function focusComposerSendButton() {
-  composerSendButton.value?.focus?.() ?? composerSendButton.value?.$el?.focus?.();
+  if (approvalMode.value) {
+    composerSendButton.value?.$el.focus();
+    return;
+  }
+  composerSendButton.value?.focus();
 }
 
-function updateComposerAttachmentState(state = {}) {
+function updateComposerAttachmentState(state) {
   composerAttachmentState.value = {
-    count: Number(state?.count || 0),
-    hasUnresolved: state?.hasUnresolved === true,
-    uploading: state?.uploading === true
+    count: Number(state.count || 0),
+    hasUnresolved: state.hasUnresolved === true,
+    uploading: state.uploading === true
   };
 }
 
 function focusTargetInside(target, selector) {
-  return Boolean(target?.closest?.(selector));
+  return Boolean(target?.closest(selector));
 }
 
-function handleComposerBlur(event = {}) {
+function handleComposerBlur(event) {
   stopTypingOnBlur();
   if (focusTargetInside(
     event.relatedTarget,
@@ -481,9 +486,9 @@ function handleComposerBlur(event = {}) {
   blurPromptHints();
 }
 
-function handleComposerRegionFocusOut(event = {}) {
+function handleComposerRegionFocusOut(event) {
   if (
-    event.currentTarget?.contains?.(event.relatedTarget) ||
+    event.currentTarget.contains(event.relatedTarget) ||
     focusTargetInside(event.relatedTarget, "[data-assistant-composer-support]")
   ) {
     return;
@@ -491,9 +496,9 @@ function handleComposerRegionFocusOut(event = {}) {
   blurPromptHints();
 }
 
-function handlePromptHintsFocusOut(event = {}) {
+function handlePromptHintsFocusOut(event) {
   if (
-    event.currentTarget?.contains?.(event.relatedTarget) ||
+    event.currentTarget.contains(event.relatedTarget) ||
     focusTargetInside(event.relatedTarget, ".studio-autopilot-prompt-textarea")
   ) {
     return;
@@ -502,7 +507,7 @@ function handlePromptHintsFocusOut(event = {}) {
 }
 
 function dismissPromptHintsAndFocus() {
-  composerInput.value?.focus?.({ preventScroll: true });
+  composerInput.value?.focus({ preventScroll: true });
   dismissPromptHints();
 }
 
@@ -512,11 +517,11 @@ function applyPromptHint(text = "") {
     return false;
   }
   if (composerDraft.value !== suggestion) {
-    composerInput.value?.preserveHeightForNextModelValue?.();
+    composerInput.value?.preserveHeightForNextModelValue();
     composerDraft.value = suggestion;
   }
   void nextTick(() => {
-    composerInput.value?.focus?.({ preventScroll: true });
+    composerInput.value?.focus({ preventScroll: true });
   });
   return true;
 }
@@ -524,7 +529,7 @@ function applyPromptHint(text = "") {
 async function showMainChat() {
   temporaryAiWorkspace.value?.closeWorkspace?.();
   await nextTick();
-  mainChat.value?.focus?.({ preventScroll: true });
+  mainChat.value?.focus({ preventScroll: true });
 }
 </script>
 

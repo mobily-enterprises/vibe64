@@ -235,12 +235,14 @@ const { view } = defineProps({
   // members are read once.
   view: { type: Object, required: true }
 });
+// project-attention: Preview was chosen, which a phone shows in place of the chat.
+const emit = defineEmits(["project-attention"]);
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   agentActive, askAssistantAboutFile, assistantAccessScopeKey, assistantCanUsePurpose,
   assistantDraftAvailable, assistantFixAllowed, assistantPurposes, backToDashboard, backToSystemFromEditor,
   aiTaskComposer, composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
-  emit, fileBookmarks, lessonShown,
+  fileBookmarks, lessonShown,
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
@@ -294,7 +296,7 @@ function selectPreview() {
 
 async function attachPreviewFile(file) {
   const composer = aiTaskComposer.value || temporaryAiWorkspace.value?.composer || composerInput.value;
-  const uploaded = await composer?.attachFiles?.([file]);
+  const uploaded = await composer?.attachFiles([file]);
   if (!Array.isArray(uploaded) || uploaded.length < 1) {
     throw new Error("Open the chat composer before attaching a preview file.");
   }
@@ -303,7 +305,7 @@ async function attachPreviewFile(file) {
 
 async function attachPreviewFileProducer(options = {}) {
   const composer = aiTaskComposer.value || temporaryAiWorkspace.value?.composer || composerInput.value;
-  const uploaded = await composer?.attachFileProducer?.(options);
+  const uploaded = await composer?.attachFileProducer(options);
   return Array.isArray(uploaded) && uploaded.length > 0 ? uploaded[0] : null;
 }
 </script>

@@ -94,7 +94,7 @@ function useVibe64MainChatDelivery(props, emit, {
     questionText = ""
   } = {}) {
     if (!props.conversationRuntime?.canSubmit.value || (composerSending.value && !composerQueueing.value) ||
-      !normalizeText(payload?.message)) {
+      !normalizeText(payload.message)) {
       return false;
     }
     const messageId = String(existingMessageId || "").trim() || nextMessageId();
@@ -116,7 +116,7 @@ function useVibe64MainChatDelivery(props, emit, {
         reportActivity("message-sent", { projectSlug: sendingProjectSlug, sessionId: sendingSessionId });
       }
       if (accepted && payload.attachmentIds?.length) {
-        onAttachmentsAccepted?.(payload.attachmentIds);
+        onAttachmentsAccepted(payload.attachmentIds);
       }
       return accepted;
     } catch (error) {

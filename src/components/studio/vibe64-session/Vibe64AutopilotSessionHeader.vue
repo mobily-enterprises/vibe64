@@ -189,7 +189,7 @@
             :prepend-icon="mdiAutorenew"
             :subtitle="sessionRenewalActionPresentation.reason"
             :title="sessionRenewalActionPresentation.label"
-            @click="requestSessionRenewal(sessionActionsTrigger)"
+            @click="requestSessionRenewal(sessionActionsTrigger?.$el)"
           />
           <Vibe64SessionPin
             v-if="headerActions.overflow.includes('pin')"
@@ -258,9 +258,11 @@ const { view } = defineProps({
   // members are read once.
   view: { type: Object, required: true }
 });
+// chat-attention: a dismissed Save or Update notice is shown again in the chat.
+const emit = defineEmits(["chat-attention"]);
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
+  connectedUpdateActionVisible, createPullRequestOpen, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,
   retryWorkspaceSetup, revealApprovals, saveConnectedFirst, saveWorkActivityLabel, saveWorkDisabled,
   saveWorkError, saveWorkHeaderAriaLabel, saveWorkHeaderVisible, saveWorkOperationActive,
@@ -352,8 +354,7 @@ const saveWorkChecking = ref(false);
 const saveWorkCheckAvailable = computed(() => Boolean(
   saveWorkDisabled.value && !saveWorkRequiresUpdate.value &&
   !saveWorkSending.value && !repositoryOperationActive.value &&
-  !sourceOperationsSuspended.value && !props.sessionSelectionArchived &&
-  typeof props.sessionToolbar?.refreshRepositoryState === "function"
+  !sourceOperationsSuspended.value && !props.sessionSelectionArchived
 ));
 const saveWorkHeaderHint = computed(() => {
   if (saveConnectedFirst.value) return saveWorkTitle.value;

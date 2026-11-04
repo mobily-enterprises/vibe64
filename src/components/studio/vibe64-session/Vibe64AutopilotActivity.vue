@@ -74,8 +74,8 @@
         :admission-id="testApproval.admissionId"
         :session-id="sessionId"
         :disabled="testApproval.state !== 'waiting'"
-        @retry-result="props.refreshSessionData?.()"
-        @recheck="props.refreshSessionData?.()"
+        @retry-result="props.refreshSessionData()"
+        @recheck="props.refreshSessionData()"
       />
     </v-sheet>
     <GitStandInIdentityNotice v-if="saveWorkStandInIdentity" @close="saveWorkStandInIdentity = false" />
@@ -135,7 +135,7 @@
     <Vibe64ConnectedReplacement
       :project-slug="projectSlug" :session-id="sessionId" :failure="saveWorkFailure"
       :disabled="saveWorkSending || saveWorkOperationActive || sourceOperationsSuspended || agentActive"
-      @replaced="props.refreshSessionData?.(); props.refreshSessionWork?.()"
+      @replaced="props.refreshSessionData(); props.refreshSessionWork()"
     />
 
     <Vibe64TemporaryActionTerminal
@@ -165,7 +165,7 @@
           :session-id="sessionId"
           :disabled="workspaceSetupRetryDisabled && !resourceRetryBusy"
           @busy="resourceRetryBusy = $event"
-          @retry-result="props.refreshSessionData?.()"
+          @retry-result="props.refreshSessionData()"
           @recheck="retryWorkspaceSetup"
         />
         <v-btn

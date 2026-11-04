@@ -58,12 +58,7 @@ function useVibe64AutopilotChatPane(props, {
   const conversationLogVisible = computed(() => Boolean(props.active));
   const conversationScrollKey = computed(() => sessionId.value);
   const chatReloading = ref(false);
-  const chatReloadAvailable = computed(() => Boolean(
-    props.active && props.session && (
-      typeof props.refreshSessionData === "function" ||
-      typeof props.conversationLog?.reload === "function"
-    )
-  ));
+  const chatReloadAvailable = computed(() => Boolean(props.active && props.session));
 
   async function reloadChatPane() {
     if (!chatReloadAvailable.value || chatReloading.value) {
@@ -72,8 +67,8 @@ function useVibe64AutopilotChatPane(props, {
     chatReloading.value = true;
     try {
       await Promise.allSettled([
-        props.refreshSessionData?.(),
-        props.conversationLog?.reload?.()
+        props.refreshSessionData(),
+        props.conversationLog.reload()
       ]);
       return true;
     } finally {
@@ -82,9 +77,7 @@ function useVibe64AutopilotChatPane(props, {
   }
 
   async function loadMoreChatTurns(request = {}) {
-    return typeof props.conversationLog?.loadMore === "function"
-      ? props.conversationLog.loadMore(request)
-      : false;
+    return props.conversationLog.loadMore(request);
   }
 
   return {

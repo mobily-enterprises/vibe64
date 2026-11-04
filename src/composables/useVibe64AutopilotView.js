@@ -30,6 +30,7 @@ import {
 import { useVibe64AgentTurnState } from "@/composables/useVibe64AgentTurnState.js";
 import { emptyConversationWelcomeText, useVibe64AutopilotChatPane } from "@/composables/useVibe64AutopilotChatPane.js";
 import { useVibe64MainChatDelivery } from "@/composables/useVibe64MainChatDelivery.js";
+import { useVibe64PreviewAttachmentState } from "@/composables/useVibe64PreviewAttachmentState.js";
 import { useVibe64SessionSaveWork } from "@/composables/useVibe64SessionSaveWork.js";
 import { useVibe64SessionToolPane } from "@/composables/useVibe64SessionToolPane.js";
 import { useVibe64ShortActionDismissals } from "@/composables/useVibe64ShortActionDismissals.js";
@@ -42,6 +43,9 @@ const NUMBERED_QUESTION_UNSURE_CHOICE = Object.freeze({
   selectLabel: NUMBERED_QUESTION_UNSURE_VALUE,
   value: NUMBERED_QUESTION_UNSURE_VALUE
 });
+
+// Without a composer to clear, accepted attachments need nothing more.
+function ignoreAcceptedAttachments() {}
 
 function agentConnectionThinkingLabel({
   active = false,
@@ -61,6 +65,42 @@ function agentConnectionThinkingLabel({
     : "Assistant status could not be verified.";
 }
 
+// What the composer's submit button tells a screen reader in each submit mode.
+function composerSubmitAriaLabelFor(mode, approvalOwner) {
+  return ({
+    approval: `Send to ${approvalOwner} for approval`,
+    "approval-sending": `Sending to ${approvalOwner} for approval`,
+    routing: "Preparing the message recipient",
+    failed: "Assistant unavailable",
+    unavailable: "Connect your AI account to send messages",
+    initializing: "Waiting for the assistant to load",
+    reconnecting: "Waiting for the connection to recover",
+    retry: "Retry guidance to assistant",
+    sending: "Sending message",
+    steer: "Steer assistant",
+    steering: "Sending guidance to assistant",
+    waiting: "Waiting for the assistant to accept guidance"
+  })[mode] || "Send message";
+}
+
+// The composer's submit button title in each submit mode.
+function composerSubmitTitleFor(mode, approvalOwnerSentence) {
+  return ({
+    approval: `${approvalOwnerSentence} approves each message before it reaches main chat`,
+    "approval-sending": "Keep typing while this message is sent for approval",
+    routing: "Keep typing while this request is routed",
+    failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
+    unavailable: "Go to AI Accounts to connect your assistant. Your draft is kept.",
+    initializing: "Keep typing while the assistant loads",
+    reconnecting: "Your draft is kept while the connection recovers",
+    retry: "Retry the same guidance without duplicating it",
+    sending: "Keep typing while this message is sent",
+    steer: "Send this guidance to the active assistant turn",
+    steering: "Keep typing while this guidance is sent",
+    waiting: "Keep typing while the assistant becomes ready"
+  })[mode] || "Send message";
+}
+
 function useVibe64AutopilotView(props, emit, {
   assistantAccessLoading = null,
   assistantCanUseAi = null,
@@ -69,7 +109,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   mainChatApprovals = null,
-  onAttachmentsAccepted = null
+  onAttachmentsAccepted = ignoreAcceptedAttachments
 } = {}) {
   const router = useRouter();
   const projectSlug = useVibe64ProjectSlug();
@@ -157,14 +197,9 @@ function useVibe64AutopilotView(props, emit, {
     Boolean(routingRequest.value?.messageId) &&
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
   const interrupting = ref(false);
-  const previewAttachmentState = ref({
-    attachDiagnostics: null,
-    capture: null,
-    captureAvailable: false,
-    captureBusy: false,
-    diagnosticsAvailable: false,
-    diagnosticsBusy: false
-  });
+  const {
+    attachPreviewDiagnostics, captureVisiblePreview, previewAttachmentState, updatePreviewAttachmentState
+  } = useVibe64PreviewAttachmentState();
 
   const dismissals = useVibe64ShortActionDismissals(projectSlug, sessionId);
 
@@ -251,34 +286,8 @@ function useVibe64AutopilotView(props, emit, {
     }
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
-  const composerSubmitAriaLabel = computed(() => ({
-    approval: `Send to ${approvalOwner.value} for approval`,
-    "approval-sending": `Sending to ${approvalOwner.value} for approval`,
-    routing: "Preparing the message recipient",
-    failed: "Assistant unavailable",
-    unavailable: "Connect your AI account to send messages",
-    initializing: "Waiting for the assistant to load",
-    reconnecting: "Waiting for the connection to recover",
-    retry: "Retry guidance to assistant",
-    sending: "Sending message",
-    steer: "Steer assistant",
-    steering: "Sending guidance to assistant",
-    waiting: "Waiting for the assistant to accept guidance"
-  })[composerSubmitMode.value] || "Send message");
-  const composerSubmitTitle = computed(() => ({
-    approval: `${approvalOwnerSentence.value} approves each message before it reaches main chat`,
-    "approval-sending": "Keep typing while this message is sent for approval",
-    routing: "Keep typing while this request is routed",
-    failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
-    unavailable: "Go to AI Accounts to connect your assistant. Your draft is kept.",
-    initializing: "Keep typing while the assistant loads",
-    reconnecting: "Your draft is kept while the connection recovers",
-    retry: "Retry the same guidance without duplicating it",
-    sending: "Keep typing while this message is sent",
-    steer: "Send this guidance to the active assistant turn",
-    steering: "Keep typing while this guidance is sent",
-    waiting: "Keep typing while the assistant becomes ready"
-  })[composerSubmitMode.value] || "Send message");
+  const composerSubmitAriaLabel = computed(() => composerSubmitAriaLabelFor(composerSubmitMode.value, approvalOwner.value));
+  const composerSubmitTitle = computed(() => composerSubmitTitleFor(composerSubmitMode.value, approvalOwnerSentence.value));
   const composerCanSubmit = computed(() => {
     if (approvalMode.value) return !composerDisabled.value && !mainChatApprovals.sending && Boolean(composerDraft.value.trim());
     if (!props.conversationRuntime?.canSubmit.value || composerDisabled.value ||
@@ -378,24 +387,6 @@ function useVibe64AutopilotView(props, emit, {
     composerAttachments.value = Array.isArray(attachments) ? attachments : [];
   }
 
-  function updatePreviewAttachmentState(state = {}) {
-    previewAttachmentState.value = {
-      attachDiagnostics: typeof state.attachDiagnostics === "function" ? state.attachDiagnostics : null,
-      capture: typeof state.capture === "function" ? state.capture : null,
-      captureAvailable: state.captureAvailable === true,
-      captureBusy: state.captureBusy === true,
-      diagnosticsAvailable: state.diagnosticsAvailable === true,
-      diagnosticsBusy: state.diagnosticsBusy === true
-    };
-  }
-
-  function captureVisiblePreview() {
-    return previewAttachmentState.value.capture?.() ?? false;
-  }
-
-  function attachPreviewDiagnostics() {
-    return previewAttachmentState.value.attachDiagnostics?.() ?? false;
-  }
   async function requestAgentInterrupt() {
     if (!agentStopEnabled.value) {
       return false;
@@ -454,10 +445,17 @@ function useVibe64AutopilotView(props, emit, {
     return Boolean(props.active && !props.sessionSelectionArchived && request.sessionId === sessionId.value);
   }
 
-  // `action` is connect, check, cancel, skip or resume.
   function runIntegrationRequest({ action, ...request }) {
     if (!integrationRequestAllowed(request)) return false;
-    return props.conversationLog?.[`${action}IntegrationRequest`]?.(request) || false;
+    const log = props.conversationLog;
+    switch (action) {
+      case "connect": return log.connectIntegrationRequest(request);
+      case "check": return log.checkIntegrationRequest(request);
+      case "cancel": return log.cancelIntegrationRequest(request);
+      case "skip": return log.skipIntegrationRequest(request);
+      case "resume": return log.resumeIntegrationRequest(request);
+      default: return false;
+    }
   }
 
   function openIntegrationRequest(request) {
@@ -534,11 +532,99 @@ function useVibe64AutopilotView(props, emit, {
   }, { immediate: true });
 
   return {
-    ...saveWork,
-    ...workspaceSetupActivity,
-    ...sessionToolPane,
-    ...chatPane,
-    ...delivery,
+    // Save and Update
+    applyResolvedUpdate: saveWork.applyResolvedUpdate,
+    cancelSaveWork: saveWork.cancelSaveWork,
+    confirmSaveWork: saveWork.confirmSaveWork,
+    dismissSaveWorkActivity: saveWork.dismissSaveWorkActivity,
+    requestSaveWork: saveWork.requestSaveWork,
+    resolvedUpdateReview: saveWork.resolvedUpdateReview,
+    retrySaveWork: saveWork.retrySaveWork,
+    reviewResolvedUpdate: saveWork.reviewResolvedUpdate,
+    saveConnectedFirst: saveWork.saveConnectedFirst,
+    saveWorkActivityDismissed: saveWork.saveWorkActivityDismissed,
+    saveWorkActivityIsUpdate: saveWork.saveWorkActivityIsUpdate,
+    saveWorkActivityKey: saveWork.saveWorkActivityKey,
+    saveWorkActivityLabel: saveWork.saveWorkActivityLabel,
+    saveWorkCanResolveWithAi: saveWork.saveWorkCanResolveWithAi,
+    saveWorkConfirmOpen: saveWork.saveWorkConfirmOpen,
+    saveWorkConflictFailure: saveWork.saveWorkConflictFailure,
+    saveWorkConnectedResults: saveWork.saveWorkConnectedResults,
+    saveWorkConnectedReview: saveWork.saveWorkConnectedReview,
+    saveWorkDisabled: saveWork.saveWorkDisabled,
+    saveWorkError: saveWork.saveWorkError,
+    saveWorkFailure: saveWork.saveWorkFailure,
+    saveWorkHeaderAriaLabel: saveWork.saveWorkHeaderAriaLabel,
+    saveWorkHeaderVisible: saveWork.saveWorkHeaderVisible,
+    saveWorkOperation: saveWork.saveWorkOperation,
+    saveWorkOperationActive: saveWork.saveWorkOperationActive,
+    saveWorkOutput: saveWork.saveWorkOutput,
+    saveWorkRequiresUpdate: saveWork.saveWorkRequiresUpdate,
+    saveWorkRetryable: saveWork.saveWorkRetryable,
+    saveWorkReview: saveWork.saveWorkReview,
+    saveWorkSending: saveWork.saveWorkSending,
+    saveWorkStage: saveWork.saveWorkStage,
+    saveWorkStandInIdentity: saveWork.saveWorkStandInIdentity,
+    saveWorkStatus: saveWork.saveWorkStatus,
+    saveWorkTitle: saveWork.saveWorkTitle,
+    saveWorkUnsaved: saveWork.saveWorkUnsaved,
+    showSaveWorkActivity: saveWork.showSaveWorkActivity,
+    updateBeforeSave: saveWork.updateBeforeSave,
+    updateConflictRecovery: saveWork.updateConflictRecovery,
+    updateWorkDisabled: saveWork.updateWorkDisabled,
+    // Workspace preparation
+    connectedUpdateActionVisible: workspaceSetupActivity.connectedUpdateActionVisible,
+    dismissWorkspaceSetupActivity: workspaceSetupActivity.dismissWorkspaceSetupActivity,
+    retryWorkspaceSetup: workspaceSetupActivity.retryWorkspaceSetup,
+    workspaceSetup: workspaceSetupActivity.workspaceSetup,
+    workspaceSetupActionVisible: workspaceSetupActivity.workspaceSetupActionVisible,
+    workspaceSetupActivityKey: workspaceSetupActivity.workspaceSetupActivityKey,
+    workspaceSetupConnectedChoice: workspaceSetupActivity.workspaceSetupConnectedChoice,
+    workspaceSetupCurrentLabel: workspaceSetupActivity.workspaceSetupCurrentLabel,
+    workspaceSetupDiagnostic: workspaceSetupActivity.workspaceSetupDiagnostic,
+    workspaceSetupDismissed: workspaceSetupActivity.workspaceSetupDismissed,
+    workspaceSetupError: workspaceSetupActivity.workspaceSetupError,
+    workspaceSetupNeedsAttention: workspaceSetupActivity.workspaceSetupNeedsAttention,
+    workspaceSetupOutput: workspaceSetupActivity.workspaceSetupOutput,
+    workspaceSetupRetryDisabled: workspaceSetupActivity.workspaceSetupRetryDisabled,
+    workspaceSetupRetrying: workspaceSetupActivity.workspaceSetupRetrying,
+    workspaceSetupRunning: workspaceSetupActivity.workspaceSetupRunning,
+    workspaceSetupStatus: workspaceSetupActivity.workspaceSetupStatus,
+    workspaceSetupTitle: workspaceSetupActivity.workspaceSetupTitle,
+    // The project side's tools
+    backToDashboard: sessionToolPane.backToDashboard,
+    backToSystemFromEditor: sessionToolPane.backToSystemFromEditor,
+    dashboardRouteVisible: sessionToolPane.dashboardRouteVisible,
+    dashboardSessionContext: sessionToolPane.dashboardSessionContext,
+    dashboardShellVisible: sessionToolPane.dashboardShellVisible,
+    databaseOpenRequest: sessionToolPane.databaseOpenRequest,
+    openSourceEditorFile: sessionToolPane.openSourceEditorFile,
+    openSubsystemTable: sessionToolPane.openSubsystemTable,
+    rightPaneTab: sessionToolPane.rightPaneTab,
+    rightPaneTabMounted: sessionToolPane.rightPaneTabMounted,
+    selectSessionTool: sessionToolPane.selectSessionTool,
+    sourceEditorOpenRequest: sessionToolPane.sourceEditorOpenRequest,
+    sourceToolLoading: sessionToolPane.sourceToolLoading,
+    systemBackAvailable: sessionToolPane.systemBackAvailable,
+    systemRestoreRequest: sessionToolPane.systemRestoreRequest,
+    // The chat transcript pane
+    chatReloading: chatPane.chatReloading,
+    chatTurns: chatPane.chatTurns,
+    conversationLogVisible: chatPane.conversationLogVisible,
+    conversationScrollKey: chatPane.conversationScrollKey,
+    emptyConversationWelcome: chatPane.emptyConversationWelcome,
+    loadMoreChatTurns: chatPane.loadMoreChatTurns,
+    reloadChatPane: chatPane.reloadChatPane,
+    // Message delivery
+    cancelOptimisticMessage: delivery.cancelOptimisticMessage,
+    contextFullFailure: delivery.contextFullFailure,
+    conversationFollowLatestKey: delivery.conversationFollowLatestKey,
+    editOptimisticMessage: delivery.editOptimisticMessage,
+    resendOptimisticMessage: delivery.resendOptimisticMessage,
+    retryContextFull: delivery.retryContextFull,
+    sendLessonMessage: delivery.sendLessonMessage,
+    submitComposerMessage: delivery.submitComposerMessage,
+    // This view's own state and actions
     Vibe64OutputControls,
     assistantDirectAllowed,
     assistantFixAllowed,

@@ -223,11 +223,11 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot).toContain("promptHintPreview.value");
     expect(autopilot).toContain("composerDraft.value = suggestion;");
     expect(autopilot).toContain(
-      "composerInput.value?.preserveHeightForNextModelValue?.();"
+      "composerInput.value?.preserveHeightForNextModelValue();"
     );
     expect(autopilot.indexOf("preserveHeightForNextModelValue"))
       .toBeLessThan(autopilot.indexOf("composerDraft.value = suggestion;"));
-    expect(autopilot).toContain("composerInput.value?.focus?.({ preventScroll: true });");
+    expect(autopilot).toContain("composerInput.value?.focus({ preventScroll: true });");
     expect(autopilot).not.toMatch(/function applyPromptHint[\s\S]{0,500}submitComposerMessage/gu);
     expect(promptTextarea).toContain('"attachment-state-change"');
     expect(promptTextarea).toContain('"escape"');

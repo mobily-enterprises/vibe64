@@ -29,14 +29,14 @@
         aria-label="Session chat"
         tabindex="-1"
       >
-        <Vibe64AutopilotSessionHeader :view="view" />
+        <Vibe64AutopilotSessionHeader :view="view" @chat-attention="emit('chat-attention')" />
 
         <Vibe64AutopilotActivity :view="view" />
 
         <Vibe64AutopilotChat :view="view" />
       </section>
 
-      <Vibe64AutopilotProjectPanel :view="view">
+      <Vibe64AutopilotProjectPanel :view="view" @project-attention="emit('project-attention')">
         <template #dashboard="dashboardSlotProps">
           <slot name="dashboard" v-bind="dashboardSlotProps" />
         </template>
@@ -191,7 +191,7 @@ const mainChatApprovals = reactive(useVibe64MainChatApprovals({
   sessionsApiPath: () => readRefOrGetterValue(props.sessionsApiPath),
   onReview(reviewedSessionId) {
     if (reviewedSessionId && reviewedSessionId !== selectedAssistantSessionId.value) {
-      props.sessionToolbar?.selectSession?.(reviewedSessionId);
+      props.sessionToolbar.selectSession(reviewedSessionId);
     }
     void nextTick(revealApprovals);
   }
@@ -205,7 +205,7 @@ const autopilotView = useVibe64AutopilotView(props, emit, {
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   mainChatApprovals,
-  onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds })
+  onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments({ attachmentIds })
 });
 const {
   agentActive, assistantDirectAllowed, assistantDraftAvailable, assistantFixAllowed, chatCollapsed,
@@ -260,10 +260,9 @@ const dashboardContext = computed(() => ({
   sourceOperationsSuspended: sourceOperationsSuspended.value
 }));
 
-function requestSessionRenewal(returnFocusTarget = null) {
-  props.sessionRenewal?.request?.({
-    returnFocusTarget: returnFocusTarget?.$el || returnFocusTarget
-  });
+// returnFocusTarget: the element that opened renewal, focused again when it closes.
+function requestSessionRenewal(returnFocusTarget) {
+  props.sessionRenewal.request({ returnFocusTarget });
   return true;
 }
 
@@ -281,7 +280,7 @@ const view = {
   ...autopilotView,
   aiTaskComposer, approvalsPanel, assistantAccessError, assistantAccessLoading, assistantAccessScopeKey,
   assistantCanConfigureRouting, assistantCanUsePurpose, assistantFixRestrictionMessage, assistantPurposes,
-  assistantRestrictionMessage, composerInput, createPullRequestOpen, dashboardContext, emit, fileBookmarks,
+  assistantRestrictionMessage, composerInput, createPullRequestOpen, dashboardContext, fileBookmarks,
   githubProject, lessonShown, mainChat, mainChatApprovals, openUsage, openWorkingFile, phoneLayout, props,
   reloadAssistantAccess, requestSessionRenewal, resourceRecoveryControl, revealApprovals,
   selectedAssistantSessionId, sessionPullRequest, sessionPullRequestTarget, sourceOperationsSuspended,
