@@ -6,6 +6,16 @@ import {
 } from "./support/ai-task-world";
 
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
+
+async function openNewAiTask(page: Page) {
+  // The header settles its actions after it measures: New AI task is inline, or in Session actions.
+  const inline = page.locator("[data-vibe64-header-action=new-ai-task]");
+  const menu = page.getByRole("button", { name: /^Session actions(?::|$)/u });
+  await expect(inline.or(menu).first()).toBeVisible();
+  if (!(await inline.isVisible())) await menu.click();
+  await page.locator("[data-vibe64-new-ai-task-action]:visible").first().click();
+}
+
 const INCOMING_REVIEW = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40), id: "contribution-1",
   activeHead: "b".repeat(40), discardedHead: "" };
 
@@ -131,10 +141,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     test("free: New AI task starts the person's request, and the person's Finish ends it Done", async ({ page }) => {
       await quietWorld(page, shared.server);
       await page.goto(`${shared.server.url}${DASHBOARD_PATH}/repository`);
-      if (!(await page.locator("[data-vibe64-header-action=new-ai-task]").isVisible())) {
-        await page.getByRole("button", { name: /^Session actions(?::|$)/u }).click();
-      }
-      await page.locator("[data-vibe64-new-ai-task-action]:visible").first().click();
+      await openNewAiTask(page);
       const form = page.locator("[data-vibe64-new-ai-task]");
       await form.getByLabel("What should the AI do?").fill("Tidy the README.");
       await form.getByRole("button", { name: "Start", exact: true }).click();

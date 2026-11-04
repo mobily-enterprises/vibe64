@@ -946,7 +946,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain("saveWorkTeleportTarget");
     expect(component).toContain(':aria-busy="saveWorkSending ? \'true\' : undefined"');
     expect(component).not.toContain(':loading="saveWorkSending"');
-    expect(component).toContain(":icon=\"mdiIncognito\"");
+    expect(component).toContain(":icon=\"mdiRobotOutline\"");
     expect(component).toContain("@click=\"confirmSaveWork\"");
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(
@@ -1016,7 +1016,9 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiWorkspace.indexOf("<Vibe64TemporaryAiRecoveryRow")).toBeLessThan(
       temporaryAiWorkspace.indexOf("<Vibe64EphemeralConversationMessages")
     );
-    expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
+    // The header's New AI task opens the task form, not the temporary workspace.
+    expect(component).not.toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
+    expect(component).toContain("<Vibe64NewAiTaskDialog");
     // Switching sessions retains the temporary workspace; Main chat closes it.
     expect(component).not.toContain("activateRealSession");
     expect(component).toContain("@select-main-chat=\"showMainChat\"");

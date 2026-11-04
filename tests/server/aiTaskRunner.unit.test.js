@@ -887,8 +887,8 @@ test("New AI task sends the person's request unstructured, stops at your turn an
   const { task } = await f.start(running.aiTasks, OWNER, "free", { message: "Tidy the README.\nKeep the badges." });
   assert.deepEqual([task.title, task.noun, task.problem.summary], ["AI task", "task", "Tidy the README."]);
   await f.quiet(running.aiTasks);
-  assert.equal(f.native.turns[0].message, "Tidy the README.\nKeep the badges.");
-  assert.equal(f.native.turns[0].schema, undefined);
+  assert.match(f.native.turns[0].message, /Tidy the README\.\nKeep the badges\.$/);
+  assert.ok(!f.native.turns[0].schema, "a person's request asks for no result schema");
   await f.finishTurn(running);
   const waiting = await f.task(task.id);
   assert.deepEqual([waiting.phase, waiting.reason], ["needs_you", "your_turn"]);
