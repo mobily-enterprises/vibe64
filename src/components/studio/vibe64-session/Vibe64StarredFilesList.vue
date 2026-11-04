@@ -42,7 +42,7 @@ import { computed } from "vue";
 import { mdiStar } from "@mdi/js";
 
 const props = defineProps({
-  bookmarks: { type: Object, required: true },
+  bookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles>} */ (Object), required: true },
   compact: { type: Boolean, default: false },
   files: { type: Array, default: null }
 });

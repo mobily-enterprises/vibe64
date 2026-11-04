@@ -188,9 +188,10 @@ const props = defineProps({
   collapsed: { type: Boolean, default: false },
   displayedPath: { type: String, default: "" },
   // The source editor composable's state and operations.
-  editor: { type: Object, required: true },
+  editor: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64SourceEditor>} */ (Object), required: true },
   expandedPaths: { type: Array, default: () => [] },
-  fileBookmarks: { type: Object, default: null },
+  // readable-check: allow collaborator-prop - optional operation: the source editor hands on its starred files, which the architecture file viewer does not have
+  fileBookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles | null>} */ (Object), default: null },
   filesActions: { type: Boolean, default: false }
 });
 const emit = defineEmits([

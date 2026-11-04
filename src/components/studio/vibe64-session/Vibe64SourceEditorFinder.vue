@@ -83,7 +83,7 @@ import { basename } from "@/lib/vibe64SourceFilePaths.js";
 // results the file list shows.
 const props = defineProps({
   // The source editor composable's state and operations.
-  editor: { type: Object, required: true }
+  editor: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64SourceEditor>} */ (Object), required: true }
 });
 
 const fastOpenPanelVisible = computed(() => Boolean(props.editor.fileQuery.value));

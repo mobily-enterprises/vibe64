@@ -381,7 +381,7 @@ function queueThreadBottomScroll({
 }
 
 function updateThreadFollowState(event = {}) {
-  followingLatest.value = scrollElementNearBottom(event?.currentTarget || threadElement.value);
+  followingLatest.value = scrollElementNearBottom(event.currentTarget || threadElement.value);
 }
 
 function handleExplanationLinkClick(payload = {}) {
@@ -389,8 +389,8 @@ function handleExplanationLinkClick(payload = {}) {
   if (!target) {
     return;
   }
-  payload.event?.preventDefault?.();
-  payload.event?.stopPropagation?.();
+  payload.event.preventDefault();
+  payload.event.stopPropagation();
   emit("open-source-link", target);
 }
 

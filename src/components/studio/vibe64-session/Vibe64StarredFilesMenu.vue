@@ -54,7 +54,7 @@ import { VBottomSheet, VMenu } from "vuetify/components";
 import { mdiClose, mdiMagnify, mdiStarOutline } from "@mdi/js";
 import Vibe64StarredFilesList from "./Vibe64StarredFilesList.vue";
 
-const props = defineProps({ bookmarks: { type: Object, required: true } });
+const props = defineProps({ bookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles>} */ (Object), required: true } });
 const emit = defineEmits(["open-file"]);
 const { xs: mobile } = useDisplay();
 const opened = ref(false);

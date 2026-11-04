@@ -3,6 +3,7 @@
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 
+// readable-check: allow module-state - shared resource: every source editor on the page draws explanation and message ids from one sequence, so two editors open at once never issue the same id in the same millisecond
 let sourceExplanationClientIdCounter = 0;
 
 function normalizeExplanationEntry(entry, { status } = {}) {

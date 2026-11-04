@@ -49,7 +49,7 @@ function compactSourcePath(path = "", {
 }
 
 function sourceRangePathDisplayLabel(range = {}) {
-  const path = normalizeSourceEditorPath(range?.path);
+  const path = normalizeSourceEditorPath(range.path);
   if (!path) {
     return "Source";
   }
@@ -57,7 +57,7 @@ function sourceRangePathDisplayLabel(range = {}) {
 }
 
 function sourceRangeDisplayLabel(range = {}) {
-  const path = normalizeSourceEditorPath(range?.path);
+  const path = normalizeSourceEditorPath(range.path);
   if (!path) {
     return "Source";
   }

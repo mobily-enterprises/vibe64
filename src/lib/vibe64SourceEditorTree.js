@@ -40,7 +40,7 @@ function normalizeTreeNode(value = null) {
   };
 }
 
-function mergeDirectoryChildren(existingChildren = [], pageChildren = [], append = false) {
+function mergeDirectoryChildren(existingChildren, pageChildren = [], append = false) {
   const byKey = new Map((existingChildren || []).map((child) => [treeNodeKey(child), child]));
   const mergedChildren = pageChildren.map((child) => {
     const previous = byKey.get(treeNodeKey(child));

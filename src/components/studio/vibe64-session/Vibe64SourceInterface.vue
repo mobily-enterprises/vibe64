@@ -62,7 +62,7 @@ const orderedPrograms = computed(() => [...props.programs.filter(program => prog
 function openProgramLink(payload = {}) {
   const target = sourceEditorLinkTarget(payload);
   if (!target) return;
-  payload.event?.preventDefault?.();
+  payload.event.preventDefault();
   const program = props.programs.find(program => program.path === target.path);
   if (program) emit('open-program', program.id);
   else emit('open-source', target);

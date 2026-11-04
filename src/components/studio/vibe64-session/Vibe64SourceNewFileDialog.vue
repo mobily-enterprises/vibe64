@@ -61,7 +61,7 @@ import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 // it with open(directoryPath) and hears `created` with the new file's path.
 const props = defineProps({
   // The source editor composable's state and operations.
-  editor: { type: Object, required: true }
+  editor: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64SourceEditor>} */ (Object), required: true }
 });
 const emit = defineEmits(["created"]);
 

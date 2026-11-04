@@ -196,8 +196,9 @@ const props = defineProps({
   displayedPath: { type: String, default: "" },
   downloadingPath: { type: String, default: "" },
   // The source editor composable's state and operations.
-  editor: { type: Object, required: true },
-  fileBookmarks: { type: Object, default: null },
+  editor: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64SourceEditor>} */ (Object), required: true },
+  // readable-check: allow collaborator-prop - optional operation: the architecture file viewer passes no starred files, so its header shows no star
+  fileBookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles | null>} */ (Object), default: null },
   markdownRenderable: { type: Boolean, default: false },
   mobile: { type: Boolean, default: false },
   selectedFileName: { type: String, default: "" },
