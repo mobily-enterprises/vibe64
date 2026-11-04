@@ -507,6 +507,16 @@ function controlledVoiceBrowserEndpoints() {
     restore: () => vi.unstubAllGlobals() };
 }
 
+// A project voice binding is frozen; the controller is handed a copy whose getters and operations are the
+// binding's own closures, so a test can spy on the copy's retain and release.
+function spyableBinding(binding) {
+  const descriptors = Object.getOwnPropertyDescriptors(binding);
+  for (const descriptor of Object.values(descriptors)) {
+    descriptor.configurable = true;
+    if ("value" in descriptor) descriptor.writable = true;
+  }
+  return Object.defineProperties({}, descriptors);
+}
 
 describe("actual shared VoiceHost restores loaded saved review policy before replacing a Main target", () => {
   it("keeps the existing controller target and capture until preparation publishes edit, then maps it for Main and Colleague", async () => {
@@ -519,13 +529,13 @@ describe("actual shared VoiceHost restores loaded saved review policy before rep
     const mounted = await mountedOriginalMainVoice({ preferences, preparePreferences });
     try {
       const f = fixture({ projectSlug: "alpha", sessionId: "before-settings", beforeMount: mounted.beforeMount });
-      const before = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const before = spyableBinding(createProjectVoiceBinding(f.runtime.value, { presentation: "inline" }));
       const release = vi.spyOn(before, "release");
       expect(await mounted.voice.open(before)).toBe(true);
       const originalSession = mounted.voice.controller.state.session;
       const capture = before.captureContext();
       f.selected.sessionId = "after-settings"; await nextTick();
-      const target = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const target = spyableBinding(createProjectVoiceBinding(f.runtime.value, { presentation: "inline" }));
       const retain = vi.spyOn(target, "retain");
       wait = true;
       const pending = mounted.voice.open(target);
@@ -561,12 +571,12 @@ describe("actual shared VoiceHost restores loaded saved review policy before rep
       preparePreferences: async () => { if (wait) await gate.promise; return "owner"; } });
     try {
       const f = fixture({ projectSlug: "alpha", sessionId: "original", beforeMount: mounted.beforeMount });
-      const before = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const before = spyableBinding(createProjectVoiceBinding(f.runtime.value, { presentation: "inline" }));
       const released = vi.spyOn(before, "release");
       expect(await mounted.voice.open(before)).toBe(true);
       const session = mounted.voice.controller.state.session;
       f.selected.sessionId = "retired"; await nextTick();
-      const target = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const target = spyableBinding(createProjectVoiceBinding(f.runtime.value, { presentation: "inline" }));
       const retained = vi.spyOn(target, "retain"); wait = true;
       const pending = mounted.voice.open(target);
       const rejection = expect(pending).rejects.toThrow(/no longer available/);

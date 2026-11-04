@@ -11,7 +11,27 @@ export function projectVoiceState(runtime) {
 export function createProjectVoiceBinding(runtime, view = {}) {
   const identity = runtime.identity;
   let retained;
-  return {
+  function captureContext() {
+    return { ...identity };
+  }
+  function retain() {
+    retained = runtime.retain();
+    runtime = retained.runtime;
+  }
+  function release() {
+    retained?.release();
+    retained = null;
+  }
+  function submitText(text, { messageId, context } = {}) {
+    if (context?.actorKey !== identity.actorKey || context?.sessionId !== identity.sessionId || context?.projectSlug !== identity.projectSlug) {
+      throw new Error("This recording belongs to another conversation.");
+    }
+    return runtime.send({ message: text, agentSettings: runtime.agentSettings.requestSettings.value }, { messageId });
+  }
+  function cancelWork() {
+    return runtime.interrupt();
+  }
+  return Object.freeze({
     preferenceTarget: "coding",
     defaults: { readAloud: true },
     id: JSON.stringify(["project", identity.actorKey, identity.projectSlug, identity.sessionId]),
@@ -34,15 +54,10 @@ export function createProjectVoiceBinding(runtime, view = {}) {
     get adapter() { return view.adapter || null; },
     get presentation() { return view.presentation || "dialog"; },
     get onTranscript() { return view.onTranscript; },
-    captureContext: () => ({ ...identity }),
-    retain() { retained = runtime.retain(); runtime = retained.runtime; },
-    release() { retained?.release(); retained = null; },
-    submitText(text, { messageId, context } = {}) {
-      if (context?.actorKey !== identity.actorKey || context?.sessionId !== identity.sessionId || context?.projectSlug !== identity.projectSlug) {
-        throw new Error("This recording belongs to another conversation.");
-      }
-      return runtime.send({ message: text, agentSettings: runtime.agentSettings.requestSettings.value }, { messageId });
-    },
-    cancelWork: () => runtime.interrupt()
-  };
+    captureContext,
+    retain,
+    release,
+    submitText,
+    cancelWork
+  });
 }

@@ -4,7 +4,8 @@ import { createVoiceConversationController, VoiceConversationHost } from "@jskit
 import { VIBE64_VOICE_KEY } from "./voiceHost.js";
 const props = defineProps({
   preferences: { type: Object, default: () => ({}) },
-  preparePreferences: { type: Function, default: null }
+  // readable-check: allow collaborator-prop - optional operation: only a host that keeps voice preferences on its server prepares them before a voice chat; the local host keeps none
+  preparePreferences: { type: /** @type {import("vue").PropType<((target: string) => Promise<string>) | null>} */ (Function), default: null }
 });
 const emit = defineEmits(["read-aloud-change", "avatar-visibility-change", "playback"]);
 const controller = createVoiceConversationController({ connectSpeech(binding) {
@@ -13,8 +14,9 @@ const controller = createVoiceConversationController({ connectSpeech(binding) {
 } });
 const launcher = shallowRef(null);
 const slots = useSlots();
-const Avatar = visual => slots.avatar?.(visual);
-const Settings = settings => slots.settings?.(settings);
+// Each is handed out only when the host fills that slot.
+const Avatar = visual => slots.avatar(visual);
+const Settings = settings => slots.settings(settings);
 function preferencesFor(conversation) {
   return props.preferences[conversation.preferenceTarget] || {};
 }
@@ -51,6 +53,7 @@ provide(VIBE64_VOICE_KEY, {
         if (!actorKey || props.preferences.actorKey !== actorKey || conversation.available === false) {
           throw new Error("This conversation is no longer available for voice.");
         }
+        // readable-check: allow optional-call - optional operation: a binding prepares its own voice connection only when it needs to; Colleague's and the project bindings have no prepareVoice
         await conversation.prepareVoice?.();
         if (props.preferences.actorKey !== actorKey || conversation.available === false) {
           throw new Error("This conversation is no longer available for voice.");
@@ -88,10 +91,12 @@ provide(VIBE64_VOICE_KEY, {
       },
       onReadAloudChange(value) {
         emit("read-aloud-change", value, { target: conversation.preferenceTarget, actorKey });
+        // readable-check: allow optional-call - optional operation: a binding hears the read-aloud change only when it keeps its own copy; Colleague's and the project bindings have no onReadAloudChange
         return conversation.onReadAloudChange?.(value);
       },
       onPlayback(event) {
         emit("playback", event);
+        // readable-check: allow optional-call - optional operation: a binding follows playback only when it shows it; Colleague's and the project bindings have no onPlayback
         return conversation.onPlayback?.(event);
       },
       get avatar() { return preferencesFor(conversation).avatar || conversation.avatar; }
