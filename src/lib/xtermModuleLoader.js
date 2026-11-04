@@ -1,3 +1,4 @@
+// readable-check: allow module-state - shared resource: every terminal on the page loads the one xterm module once, and a failed load is retried by the next terminal
 let xtermModulePromise = null;
 
 async function loadXtermModules() {
