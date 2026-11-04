@@ -1,10 +1,22 @@
 import { computed, ref, watch } from "vue";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
-function text(value = "") {
-  return String(value || "").trim();
-}
-
-/** The selected session's workspace preparation status, its activity card and Retry. */
+/**
+ * The selected session's workspace preparation status, its activity card and Retry.
+ * @param {{
+ *   retryWorkspaceSetup: () => Promise<unknown>,
+ *   session: object | null,
+ *   sessionSelectionArchived: boolean,
+ *   workState: object
+ * }} props
+ * @param {{
+ *   actorKey: import("vue").Ref<string>,
+ *   dismissals: ReturnType<typeof import("@/composables/useVibe64ShortActionDismissals.js").useVibe64ShortActionDismissals>,
+ *   projectSlug: import("vue").Ref<string>,
+ *   retryBlocked: import("vue").Ref<boolean>,
+ *   sessionId: import("vue").Ref<string>
+ * }} options
+ */
 function useVibe64WorkspaceSetupActivity(props, {
   actorKey,
   dismissals,
@@ -19,16 +31,16 @@ function useVibe64WorkspaceSetupActivity(props, {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   });
   const workspaceSetupStatus = computed(() => {
-    const status = text(workspaceSetup.value?.status);
+    const status = normalizeText(workspaceSetup.value?.status);
     if (status === "required" && ["queued", "running", "starting"].includes(
-      text(props.workState?.updateOperation?.status)
+      normalizeText(props.workState?.updateOperation?.status)
     )) return "pending";
     return ["ambiguous", "failed", "required", "running", "succeeded"].includes(status)
       ? status
       : "unconfigured";
   });
   const workspaceSetupActivityKey = computed(() => {
-    const operationKey = text(
+    const operationKey = normalizeText(
       workspaceSetup.value?.startedAt || workspaceSetup.value?.updatedAt
     );
     return operationKey ? `workspace-setup:${operationKey}` : "";
@@ -59,10 +71,10 @@ function useVibe64WorkspaceSetupActivity(props, {
     workspaceSetupStatus.value === "ambiguous" && workspaceSetup.value?.connectedChoiceRequired === true
   ));
   const workspaceSetupDiagnostic = computed(() => (
-    workspaceSetupRetryError.value || text(workspaceSetup.value?.diagnostic)
+    workspaceSetupRetryError.value || normalizeText(workspaceSetup.value?.diagnostic)
   ));
   const workspaceSetupOutput = computed(() => (
-    text(workspaceSetup.value?.transcript) || workspaceSetupDiagnostic.value
+    normalizeText(workspaceSetup.value?.transcript) || workspaceSetupDiagnostic.value
   ));
   const workspaceSetupTitle = computed(() => ({
     ambiguous: "Workspace setup needs a choice",
@@ -75,7 +87,7 @@ function useVibe64WorkspaceSetupActivity(props, {
   const workspaceSetupCurrentLabel = computed(() => {
     if (workspaceSetupStatus.value === "required") return workspaceSetupDiagnostic.value;
     if (workspaceSetupStatus.value === "pending") return "Workspace preparation will start automatically after the update.";
-    return workspaceSetupRunning.value ? text(workspaceSetup.value?.currentLabel) : "";
+    return workspaceSetupRunning.value ? normalizeText(workspaceSetup.value?.currentLabel) : "";
   });
   const workspaceSetupError = computed(() => workspaceSetupRetryError.value ||
     (workspaceSetupNeedsAttention.value && workspaceSetupStatus.value !== "required" ? workspaceSetupDiagnostic.value : ""));
@@ -97,7 +109,7 @@ function useVibe64WorkspaceSetupActivity(props, {
     try {
       return await props.retryWorkspaceSetup() !== false;
     } catch (error) {
-      workspaceSetupRetryError.value = text(error?.message || error) ||
+      workspaceSetupRetryError.value = normalizeText(error?.message || error) ||
         "Workspace preparation could not be started.";
       return false;
     } finally {
