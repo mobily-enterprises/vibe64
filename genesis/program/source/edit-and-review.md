@@ -109,6 +109,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SessionToolPane.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
+- `src/lib/vibe64RepositoryStatusText.js`
 - `src/components/studio/repository/Vibe64RepositoryHistoryList.vue`
 - `src/components/studio/repository/Vibe64RepositoryVersionDialog.vue`
 - `src/lib/vibe64RepositoryVersionLabels.js`

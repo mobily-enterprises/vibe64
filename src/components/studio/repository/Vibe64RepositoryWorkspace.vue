@@ -252,8 +252,13 @@ import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64Re
 import Vibe64RepositoryHistoryList from "@/components/studio/repository/Vibe64RepositoryHistoryList.vue";
 import Vibe64RepositoryVersionDialog from "@/components/studio/repository/Vibe64RepositoryVersionDialog.vue";
 import { useVibe64RepositoryWorkspace } from "@/composables/useVibe64RepositoryWorkspace.js";
-import { repositoryUpdateRelationship } from "@local/vibe64-core/shared";
-import { formatVersionDate } from "@/lib/vibe64RepositoryVersionLabels.js";
+import {
+  incomingVersions,
+  summaryDetail,
+  summaryTitle,
+  updateDetail,
+  updateTitle
+} from "@/lib/vibe64RepositoryStatusText.js";
 
 const props = defineProps({
   dashboardContext: { default: () => ({}), type: Object },
@@ -324,140 +329,26 @@ const repositoryOperationBusy = computed(() => Boolean(
 ));
 const saveWorkTitle = computed(() => saveWorkBlockedReason.value || "Review changes and choose where to commit them");
 
-const repositorySummaryTitle = computed(() => {
-  if (!sessionId.value) {
-    return "Project versions";
-  }
-  if (changes.loading) {
-    return "Checking this session…";
-  }
-  if (updates.checking || updates.canonicalChangePending) {
-    return "Checking the latest saved project version…";
-  }
-  if (updates.error || !updates.payload) {
-    return "Saved project status unavailable";
-  }
-  if (changes.error || !changes.payload) {
-    return "Save status unavailable";
-  }
-  return changes.payload?.unsaved ? "This session has unsaved work" : "This session is saved";
-});
-const repositorySummaryDetail = computed(() => {
-  if (!sessionId.value) {
-    return "Select a session to see its work. Saved project history remains available.";
-  }
-  if (changes.loading) {
-    return "Comparing this session with the project’s saved version.";
-  }
-  if (updates.checking || updates.canonicalChangePending) {
-    return "Save will be available after the latest project version has been checked.";
-  }
-  if (updates.error || !updates.payload) {
-    return "Save is unavailable until Vibe64 can safely compare this session with the saved project.";
-  }
-  if (changes.error || !changes.payload) {
-    return "Check for updates to compare this session with the project’s saved version.";
-  }
-  const count = Number(changes.payload?.totalCount || 0);
-  const behind = Number(repositoryStatus.value?.behind || 0);
-  if (behind > 0) {
-    if (changes.payload?.unsaved === true) {
-      return `${behind} newer saved ${behind === 1 ? "version is" : "versions are"} available. Updating this session will preserve its unsaved work.`;
-    }
-    return `${behind} newer saved ${behind === 1 ? "version is" : "versions are"} available. ${sessionUpdateLabel.value} to use ${behind === 1 ? "it" : "them"}.`;
-  }
-  if (count > 0) {
-    return `${count} ${count === 1 ? "file differs" : "files differ"} from the project’s saved version.`;
-  }
-  return "No files differ from the project’s saved version.";
-});
-const repositoryUpdateTitle = computed(() => {
-  if (!sessionId.value) {
-    return "No session selected";
-  }
-  if (updates.checking) {
-    return "Checking for updates…";
-  }
-  if (updates.error) {
-    return "Update status unavailable";
-  }
-  if (history.loading && !history.payload) {
-    return "Loading update status…";
-  }
-  if (!repositoryStatus.value) {
-    return "Updates have not been checked";
-  }
-  const relationship = repositoryUpdateRelationship(
-    repositoryStatus.value.ahead,
-    repositoryStatus.value.behind
-  );
-  const ahead = Number(repositoryStatus.value.ahead || 0);
-  const behind = Number(repositoryStatus.value.behind || 0);
-  if (updates.payload?.historyReview) return "The local project history was rewritten";
-  if (relationship === "diverged") {
-    return "This session and the saved project have both changed";
-  }
-  if (behind > 0) {
-    return `${behind} ${behind === 1 ? "update" : "updates"} available`;
-  }
-  if (relationship === "ahead" && ahead > 0) {
-    return "This session has work not in the saved project";
-  }
-  return "This session is up to date";
-});
-const repositoryIncomingVersions = computed(() => {
-  const relationship = repositoryUpdateRelationship(
-    repositoryStatus.value?.ahead,
-    repositoryStatus.value?.behind
-  );
-  return relationship === "behind" && Array.isArray(repositoryStatus.value?.incomingVersions)
-    ? repositoryStatus.value.incomingVersions
-    : [];
-});
+// What the status texts read.
+function statusState() {
+  return {
+    changes,
+    history,
+    repositoryStatus: repositoryStatus.value,
+    sessionId: sessionId.value,
+    sessionUpdateLabel: sessionUpdateLabel.value,
+    updates
+  };
+}
+const repositorySummaryTitle = computed(() => summaryTitle(statusState()));
+const repositorySummaryDetail = computed(() => summaryDetail(statusState()));
+const repositoryUpdateTitle = computed(() => updateTitle(statusState()));
+const repositoryIncomingVersions = computed(() => incomingVersions(repositoryStatus.value));
 const repositoryIncomingVersionsRemainder = computed(() => Math.max(
   0,
   Number(repositoryStatus.value?.behind || 0) - repositoryIncomingVersions.value.length
 ));
-const repositoryUpdateDetail = computed(() => {
-  if (!sessionId.value) {
-    return "Select a session to check it against the project’s saved version.";
-  }
-  if (updates.checking) {
-    return "Reading the latest saved project version.";
-  }
-  if (updates.error) {
-    return "Review the problem below, then try checking again.";
-  }
-  if (history.loading && !history.payload) {
-    return "Reading the last successful update check for this session.";
-  }
-  if (!repositoryStatus.value) {
-    return "Use Check for updates to compare this session with the latest saved project version.";
-  }
-  const relationship = repositoryUpdateRelationship(
-    repositoryStatus.value.ahead,
-    repositoryStatus.value.behind
-  );
-  const ahead = Number(repositoryStatus.value.ahead || 0);
-  const behind = Number(repositoryStatus.value.behind || 0);
-  if (updates.payload?.historyReview) return "Review this session’s retained changes before reconciling them with the new project history.";
-  const checked = repositoryStatus.value.checkedAt
-    ? ` Last checked ${formatVersionDate(repositoryStatus.value.checkedAt)}.`
-    : "";
-  if (relationship === "diverged") {
-    return `Someone saved new project work after this session started, and this session also has its own saved work. Vibe64 cannot simply move it forward. Updating this session will try to combine both without discarding either. If the same files conflict, nothing changes and Fix it with AI can help.${checked}`;
-  }
-  if (behind > 0) {
-    const updateEffect = changes.payload?.unsaved === true
-      ? "will replay its unsaved work on the latest saved version before Save is allowed"
-      : "will move it to the latest saved version";
-    return `This session is ${behind} saved ${behind === 1 ? "version" : "versions"} behind. Updating this session ${updateEffect}.${checked}`;
-  }
-  if (relationship === "ahead" && ahead > 0) {
-    return `There are no incoming updates. This session contains ${ahead} ${ahead === 1 ? "version" : "versions"} not yet in the saved project.${checked}`;
-  }
-  return `It already includes the latest saved project version.${checked}`;
-});
+const repositoryUpdateDetail = computed(() => updateDetail(statusState()));
 const canResolveUpdateWithAi = computed(() => [
   "vibe64_session_update_conflict",
   "vibe64_session_update_history_diverged"

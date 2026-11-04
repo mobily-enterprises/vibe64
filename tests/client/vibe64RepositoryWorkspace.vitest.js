@@ -69,6 +69,7 @@ async function source(relativePath) {
 async function repositoryWorkspaceSource() {
   return (await Promise.all([
     source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
+    source("src/lib/vibe64RepositoryStatusText.js"),
     source("src/components/studio/repository/Vibe64RepositoryHistoryList.vue"),
     source("src/components/studio/repository/Vibe64RepositoryVersionDialog.vue")
   ])).join("\n");
