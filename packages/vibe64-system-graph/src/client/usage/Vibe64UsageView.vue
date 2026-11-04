@@ -195,8 +195,8 @@ import {
   requestTitle,
   webNodes
 } from "./usageModel.js";
-import { useVibe64UsageEntries } from "./useVibe64UsageEntries.js";
-import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
+import { useVibe64UsageEntryReads } from "./useVibe64UsageEntryReads.js";
+import { useVibe64UsageRecordingReads } from "./useVibe64UsageRecordingReads.js";
 import { useVibe64UsageWeb } from "./useVibe64UsageWeb.js";
 
 const COMPACT_WIDTH = 600;
@@ -259,7 +259,7 @@ function closePanel() {
 
 // ---------------------------------------------------------------- entries, Imports and Calls
 
-const { search, kind, exactOnly, maxNodes, loadEntries, selectEntry, loadWeb, webData, webEntry, webFresh } = useVibe64UsageEntries({
+const { search, kind, exactOnly, maxNodes, loadEntries, selectEntry, loadWeb, webData, webEntry, webFresh } = useVibe64UsageEntryReads({
   props, usage, mode, compact, pickerOpen, update, closePanel
 });
 const noEntries = computed(() => notScanned.value || (!usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value)));
@@ -289,7 +289,7 @@ const railHandlers = {
 const {
   recordings, unavailable, loadRecordings, loadResult, resultFresh, recorded, changedSinceRecording,
   requestRows, selectedRequest, selectedInteraction, recordingBindings, recordingHandlers, recordingStarted
-} = useVibe64UsageRecording({ props, usage, mode, pickerOpen, update, closePanel });
+} = useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, closePanel });
 
 // ---------------------------------------------------------------- the web
 

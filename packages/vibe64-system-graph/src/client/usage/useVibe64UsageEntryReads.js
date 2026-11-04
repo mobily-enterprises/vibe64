@@ -15,7 +15,7 @@ import { MAX_NODES, SEARCH_DELAY_MS } from "./usageModel.js";
  * @param {(patch: Partial<import("./usageModel.js").UsageState>) => void} options.update changes the view's address state
  * @param {() => void} options.closePanel closes the selected function's panel
  */
-function useVibe64UsageEntries({ props, usage, mode, compact, pickerOpen, update, closePanel }) {
+function useVibe64UsageEntryReads({ props, usage, mode, compact, pickerOpen, update, closePanel }) {
   const search = ref("");
   const kind = ref("");
   const exactOnly = ref(false);
@@ -107,4 +107,4 @@ function useVibe64UsageEntries({ props, usage, mode, compact, pickerOpen, update
   };
 }
 
-export { useVibe64UsageEntries };
+export { useVibe64UsageEntryReads };

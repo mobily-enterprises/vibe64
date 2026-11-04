@@ -16,7 +16,7 @@ const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
  * @param {(patch: Partial<import("./usageModel.js").UsageState>) => void} options.update changes the view's address state
  * @param {() => void} options.closePanel closes the selected function's panel
  */
-function useVibe64UsageRecording({ props, usage, mode, pickerOpen, update, closePanel }) {
+function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, closePanel }) {
   const requestSearch = ref("");
   const includeEmpty = ref(false);
   const recordings = computed(() => usage.recordings.data.value?.recordings || []);
@@ -155,4 +155,4 @@ function useVibe64UsageRecording({ props, usage, mode, pickerOpen, update, close
   };
 }
 
-export { useVibe64UsageRecording };
+export { useVibe64UsageRecordingReads };
