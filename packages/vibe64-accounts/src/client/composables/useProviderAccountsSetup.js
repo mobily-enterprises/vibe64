@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref, unref, watch } from "vue";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { useAccountAuthSessions } from "./useAccountAuthSessions.js";
 import { useVibe64Terminal } from "/src/composables/useVibe64Terminal.js";
 import { createWebSocketTerminalDriver } from "/src/lib/vibe64TerminalDriver.js";
@@ -307,20 +308,22 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
     }
   }
 
-  function isCodexDeviceSession(session = {}) {
-    return String(session?.account?.id || "") === "codex" &&
-      session?.mode === "device";
+  // A row without a sign-in in progress passes null.
+  function isCodexDeviceSession(session) {
+    const { account, mode } = normalizeObject(session);
+    return String(account?.id || "") === "codex" &&
+      mode === "device";
   }
 
   function codexAuthStep(session = {}) {
-    if (!isCodexDeviceSession(session) || !session?.id) {
+    if (!isCodexDeviceSession(session) || !session.id) {
       return "authorize";
     }
     return codexAuthStepsBySessionId[session.id] || "settings";
   }
 
   function setCodexAuthStep(session = {}, step = "settings") {
-    if (!isCodexDeviceSession(session) || !session?.id) {
+    if (!isCodexDeviceSession(session) || !session.id) {
       return;
     }
     codexAuthStepsBySessionId[session.id] = step === "authorize" ? "authorize" : "settings";
@@ -339,11 +342,11 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
   }
 
   function authTerminalVisible(session = {}) {
-    return Boolean(session?.id && authTerminalSessionId.value === session.id);
+    return Boolean(session.id && authTerminalSessionId.value === session.id);
   }
 
   async function openAuthTerminal(session = {}) {
-    if (!session?.id) {
+    if (!session.id) {
       return;
     }
     if (authTerminalSessionId.value !== session.id) {
@@ -399,15 +402,15 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
   }
 
   function authSessionUserCode(session = {}) {
-    const existing = String(session?.userCode || "").trim();
+    const existing = String(session.userCode || "").trim();
     if (existing) {
       return existing.toUpperCase();
     }
-    if (session?.mode !== "device") {
+    if (session.mode !== "device") {
       return "";
     }
     const output = [
-      session?.output || "",
+      session.output || "",
       authTerminalVisible(session) ? authTerminal.terminalOutput.value : ""
     ].join("\n");
     return deviceUserCode(output);
@@ -517,7 +520,7 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
   watch(
     () => activeAuthSessions().map((session) => [
       session.id,
-      session.account?.id || session.account || "",
+      session.account?.id || "",
       session.mode || "",
       session.status || "",
       session.terminalStatus || "",

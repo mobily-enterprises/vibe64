@@ -308,6 +308,8 @@ function useVibe64Accounts({
   };
 }
 
+/** @typedef {ReturnType<typeof useVibe64Accounts>} Vibe64Accounts */
+
 export {
   statusWithAccount,
   statusWithCodexReconnectRequired,

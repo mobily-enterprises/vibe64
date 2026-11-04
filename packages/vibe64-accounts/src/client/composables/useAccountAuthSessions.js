@@ -1,4 +1,5 @@
 import { computed, reactive, ref, unref } from "vue";
+import { isRecord, normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   isVibe64BrowserFlagEnabled
@@ -8,6 +9,7 @@ import {
 } from "../lib/accountsGateApi.js";
 import { cleanAuthOutput, deviceUserCode, redactedAuthOutputTail } from "../../shared/authOutput.js";
 import { validateGitIdentityInputs } from "../../shared/gitIdentityInput.js";
+import { pageClipboard } from "../browser.js";
 
 const DEFAULT_RECOVERY_POLL_INTERVAL_MS = 30_000;
 const MAX_POLL_FAILURE_BACKOFF_MS = 5 * 60_000;
@@ -31,15 +33,32 @@ function authDebug(event, fields = {}) {
   })}`);
 }
 
+function ignoreConnected() {}
+
+/**
+ * The sign-in sessions of a setup screen's accounts: starting, following, cancelling and copying them, and signing
+ * out. The browser window, clipboard, clock and interval are the page's own unless a test supplies them.
+ * @param {import("./useVibe64Accounts.js").Vibe64Accounts} accounts
+ * @param {{
+ *   accountRows: import("vue").MaybeRef<object[]>,
+ *   browserWindow?: Window | null,
+ *   clearIntervalFn?: (timer: unknown) => void,
+ *   clipboard?: Clipboard | null,
+ *   nowFn?: () => number,
+ *   onConnected?: (account: object) => void,
+ *   pollIntervalMs?: number,
+ *   setIntervalFn?: (callback: () => void, delayMs: number) => unknown
+ * }} options
+ */
 function useAccountAuthSessions(
   accounts,
   {
     accountRows,
     browserWindow = defaultBrowserWindow(),
     clearIntervalFn,
-    clipboard = defaultClipboard(browserWindow),
+    clipboard = pageClipboard(browserWindow),
     nowFn = Date.now,
-    onConnected = () => {},
+    onConnected = ignoreConnected,
     pollIntervalMs = DEFAULT_RECOVERY_POLL_INTERVAL_MS,
     setIntervalFn
   } = {}
@@ -77,7 +96,7 @@ function useAccountAuthSessions(
     async onEvent({ payload } = {}) {
       const sessionId = authSessionIdFromRealtimePayload(payload);
       const session = await accounts.readAuthSession(sessionId);
-      if (!isPlainAuthSession(session) || !session.id) {
+      if (!isRecord(session) || !session.id) {
         return;
       }
       authDebug("client.auth.realtime.session", authSessionDebugFields(session));
@@ -150,7 +169,7 @@ function useAccountAuthSessions(
 
     try {
       const startArgs = [accountId, mode];
-      if (Object.keys(authOptions || {}).length) {
+      if (Object.keys(authOptions).length) {
         startArgs.push(authOptions);
       }
       const session = await accounts.startAuth(...startArgs);
@@ -211,7 +230,7 @@ function useAccountAuthSessions(
     if (!sessionId || !url) {
       return false;
     }
-    if (typeof clipboard?.writeText !== "function") {
+    if (!clipboard) {
       localError.value = "Auth link could not be copied because clipboard access is unavailable.";
       return false;
     }
@@ -232,7 +251,7 @@ function useAccountAuthSessions(
     if (!sessionId || !userCode) {
       return false;
     }
-    if (typeof clipboard?.writeText !== "function") {
+    if (!clipboard) {
       localError.value = "One-time code could not be copied because clipboard access is unavailable.";
       return false;
     }
@@ -263,7 +282,7 @@ function useAccountAuthSessions(
       try {
         const nextSession = await accounts.readAuthSession(session.id);
         authDebug("client.auth.poll.response", authSessionDebugFields(nextSession));
-        if (!isPlainAuthSession(nextSession) || !nextSession.id) {
+        if (!isRecord(nextSession) || !nextSession.id) {
           throw new Error("Account login session did not return status.");
         }
         await handleAuthSessionUpdate(nextSession, {
@@ -273,7 +292,7 @@ function useAccountAuthSessions(
       } catch (error) {
         const message = String(error?.message || error || "Login polling failed.");
         authDebug("client.auth.poll.error", {
-          accountId: session.account?.id || session.account || "",
+          accountId: session.account?.id || "",
           message,
           sessionId: session.id
         });
@@ -301,7 +320,7 @@ function useAccountAuthSessions(
   }
 
   async function runPollTick() {
-    const now = Number(typeof nowFn === "function" ? nowFn() : Date.now());
+    const now = Number(nowFn());
     if (pollInFlight || (nextPollAllowedAt && now < nextPollAllowedAt)) {
       authDebug("client.auth.poll.skip_tick", {
         inFlight: pollInFlight,
@@ -371,7 +390,7 @@ function useAccountAuthSessions(
       return;
     }
 
-    browserWindow?.open?.(url, "_blank", "noopener");
+    browserWindow?.open(url, "_blank", "noopener");
   }
 
   function authSessionNeedsTerminalAttention(session = {}) {
@@ -381,7 +400,7 @@ function useAccountAuthSessions(
 
   function rememberAuthSession(session = {}) {
     const enrichedSession = enrichAuthSession(session);
-    const accountId = enrichedSession.account?.id || enrichedSession.account || "";
+    const accountId = enrichedSession.account?.id || "";
     if (!accountId || !enrichedSession.id) {
       authDebug("client.auth.session.remember_skip", {
         hasAccountId: Boolean(accountId),
@@ -395,7 +414,7 @@ function useAccountAuthSessions(
   }
 
   function forgetSession(session = {}) {
-    const accountId = session.account?.id || session.account || "";
+    const accountId = session.account?.id || "";
     if (!accountId) {
       return;
     }
@@ -443,9 +462,9 @@ function pollFailureBackoffMs(failureCount = 1, pollIntervalMs = DEFAULT_RECOVER
 }
 
 function authSessionDebugFields(session = {}) {
-  const normalizedSession = plainAuthSession(session);
+  const normalizedSession = normalizeObject(session);
   return {
-    accountId: normalizedSession.account?.id || normalizedSession.account || "",
+    accountId: normalizedSession.account?.id || "",
     authUrlPresent: Boolean(normalizedSession.authUrl),
     exitCode: normalizedSession.exitCode ?? null,
     hasOutput: Boolean(normalizedSession.output),
@@ -460,7 +479,7 @@ function authSessionDebugFields(session = {}) {
 }
 
 function authSessionUserCode(session = {}) {
-  const normalizedSession = plainAuthSession(session);
+  const normalizedSession = normalizeObject(session);
   const existing = String(normalizedSession.userCode || "").trim();
   if (existing) {
     return existing.toUpperCase();
@@ -472,19 +491,17 @@ function authSessionUserCode(session = {}) {
 }
 
 function authSessionAccountId(session = {}) {
-  const normalizedSession = plainAuthSession(session);
-  return String(normalizedSession.account?.id || normalizedSession.account || "").trim();
+  const normalizedSession = normalizeObject(session);
+  return String(normalizedSession.account?.id || "").trim();
 }
 
 function authSessionIdFromRealtimePayload(payload = {}) {
-  const source = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? payload
-    : {};
+  const source = normalizeObject(payload);
   return String(source.sessionId || source.session?.id || source.id || "").trim();
 }
 
 function codexAuthSessionNeedsTerminalAttention(session = {}) {
-  if (authSessionAccountId(session) !== "codex" || !session?.id || session.status === "connected") {
+  if (authSessionAccountId(session) !== "codex" || !session.id || session.status === "connected") {
     return false;
   }
   if (session.status === "failed" || session.terminalStatus === "exited") {
@@ -504,7 +521,7 @@ function codexAuthSessionNeedsTerminalAttention(session = {}) {
 }
 
 function enrichAuthSession(session = {}) {
-  if (!session || typeof session !== "object" || Array.isArray(session)) {
+  if (!isRecord(session)) {
     return {};
   }
   const userCode = authSessionUserCode(session);
@@ -518,20 +535,8 @@ function enrichAuthSession(session = {}) {
   };
 }
 
-function plainAuthSession(session = {}) {
-  return session && typeof session === "object" && !Array.isArray(session) ? session : {};
-}
-
-function isPlainAuthSession(session) {
-  return Boolean(session && typeof session === "object" && !Array.isArray(session));
-}
-
 function defaultBrowserWindow() {
   return typeof window === "undefined" ? null : window;
-}
-
-function defaultClipboard(browserWindow) {
-  return browserWindow?.navigator?.clipboard || globalThis.navigator?.clipboard || null;
 }
 
 function createScheduler({

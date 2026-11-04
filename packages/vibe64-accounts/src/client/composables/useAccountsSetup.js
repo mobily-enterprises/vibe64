@@ -1,4 +1,5 @@
 import { computed, ref, watch } from "vue";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64Accounts } from "./useVibe64Accounts.js";
 
@@ -28,8 +29,9 @@ const accountsSetupProps = {
     default: "Accounts needed",
     type: String
   },
+  // Called once for each account that connects, so the host can act on it.
   onAccountConnected: {
-    default: null,
+    required: true,
     type: Function
   },
   providerIds: {
@@ -66,6 +68,12 @@ const fallbackProviderRows = Object.freeze({
   }
 });
 
+/**
+ * The accounts a setup screen asks for, as rows: with autoContinueWhenReady it continues once all are connected,
+ * otherwise it tells the host about each account that connects.
+ * @param {Readonly<import("vue").ExtractPropTypes<typeof accountsSetupProps>>} props
+ * @param {(event: "continue") => void} emit
+ */
 function useAccountsSetup(props, emit) {
   const accounts = useVibe64Accounts({
     client: props.accountsClient
@@ -129,10 +137,6 @@ function useAccountsSetup(props, emit) {
   }
 
   async function notifyConnectedRows(rows = []) {
-    if (typeof props.onAccountConnected !== "function") {
-      return;
-    }
-
     for (const row of rows) {
       if (row?.connected !== true) {
         continue;
@@ -155,10 +159,12 @@ function normalizeProviderId(providerId = "") {
   return String(providerId || "").trim().toLowerCase();
 }
 
-function accountRowsForStatus(status = {}, providerIds = [], {
+// The status is null until accounts have been read.
+function accountRowsForStatus(status, providerIds = [], {
   includeFallbackRows = false
 } = {}) {
-  const rows = Array.isArray(status?.accounts) ? status.accounts : [];
+  const { accounts } = normalizeObject(status);
+  const rows = Array.isArray(accounts) ? accounts : [];
   const rowsById = new Map(rows.map((account) => [normalizeProviderId(account?.id), account]));
   return providerIds
     .map((providerId) => rowsById.get(providerId) || (includeFallbackRows ? fallbackProviderRows[providerId] : null))

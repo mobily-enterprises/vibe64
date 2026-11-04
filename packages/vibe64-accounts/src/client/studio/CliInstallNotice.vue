@@ -31,9 +31,12 @@
 </template>
 
 <script>
-// An AI tool that is missing or did not start; signing in cannot help until it runs.
-export function cliProblem(account = {}) {
-  return account?.connected !== true && ["not_installed", "unavailable"].includes(account?.status);
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+
+// An AI tool that is missing or did not start; signing in cannot help until it runs. An account not read yet is null.
+export function cliProblem(account) {
+  const { connected, status } = normalizeObject(account);
+  return connected !== true && ["not_installed", "unavailable"].includes(status);
 }
 </script>
 
