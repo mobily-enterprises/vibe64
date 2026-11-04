@@ -237,7 +237,7 @@ test("Teach me without a usable AI model opens Colleague, says so and sends noth
 
 test("on a phone, the learner's own L hiding Learning opened from Colleague returns to Colleague's dialog", async t => {
   const learning = vue.reactive({ coursesOpen: false, hiddenBy: "", surface: "courses", mode: { on: true, currentAttemptId: "" }, stepId: "",
-    lesson: null, results: [], show() { learning.coursesOpen = true; learning.hiddenBy = ""; },
+    lesson: null, results: [], colleagueRequest: { value: null }, consumeColleagueRequest: () => null, show() { learning.coursesOpen = true; learning.hiddenBy = ""; },
     minimise(by = "") { learning.hiddenBy = by; learning.coursesOpen = false; },
     openCourses() { learning.show(); }, closeCourses() { learning.minimise("learner"); } });
   const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
@@ -1088,7 +1088,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   app.provide("jskit.shell-web.runtime.web-placement.client", placement);
   if (viewer) app.provide(assistantHostKeys.VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   // What every host's shell context provides; a test passes its own learning controller or selected view.
-  app.provide(assistantHostKeys.VIBE64_LEARNING_KEY, learning || vue.reactive({}));
+  app.provide(assistantHostKeys.VIBE64_LEARNING_KEY, learning || vue.reactive({ colleagueRequest: { value: null }, consumeColleagueRequest: () => null }));
   app.provide(assistantHostKeys.VIBE64_COLLEAGUE_VIEW_KEY, companionView || vue.shallowRef(null));
   app.provide(assistantHostKeys.VIBE64_COLLEAGUE_LAUNCHER_KEY, vue.shallowRef(null));
   app.provide(assistantHostKeys.VIBE64_PAGE_ACTIVITY_KEY, { report() {}, subscribe: () => () => {} });
@@ -1722,6 +1722,7 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   const calls = [];
   const learning = vue.reactive({ coursesOpen: true, surface: "courses",
     mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, stepId: "open-preview", lesson: null, results: [],
+    colleagueRequest: { value: null }, consumeColleagueRequest: () => null,
     show(input) { calls.push(["show", input]); this.coursesOpen = true; },
     minimise(by = "") { calls.push(["minimise", by]); this.coursesOpen = false; } });
   const view = mount(t, async (url, options) => {
@@ -1759,7 +1760,8 @@ test("the header's current-step button follows the shared Learning controller an
   const calls = [];
   const controller = vue.reactive({ coursesOpen: false, surface: "courses", mode: { on: true, currentAttemptId: "" }, stepId: "",
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
-    results: [], show() { throw new Error("the step button never opens Courses"); }, openLesson(input) { calls.push(input); }, minimise() {} });
+    results: [], colleagueRequest: { value: null }, consumeColleagueRequest: () => null,
+    show() { throw new Error("the step button never opens Courses"); }, openLesson(input) { calls.push(input); }, minimise() {} });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();

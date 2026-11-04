@@ -1,10 +1,18 @@
 import { watch } from "vue";
 
-// Teach me (and I'm stuck) on a lesson step asks this host's one Colleague to
-// open and send the step's fixed message; a lesson beat's open request only opens it. Learning only records the request; Colleague owns
-// revealing its conversation (refreshed first, so it is the lesson's Learn
-// thread) and the ordinary send. A request for another signed-in person is
-// never sent by this Colleague.
+/**
+ * Teach me (and I'm stuck) on a lesson step asks this host's one Colleague to
+ * open and send the step's fixed message; a lesson beat's open request only opens it. Learning only records the request; Colleague owns
+ * revealing its conversation (refreshed first, so it is the lesson's Learn
+ * thread) and the ordinary send. A request for another signed-in person is
+ * never sent by this Colleague.
+ * @param {object} options
+ * @param {import("/src/types.js").Vibe64Learning} options.learning
+ * @param {() => string} options.actorKey
+ * @param {() => Promise<boolean | void>} options.reveal
+ * @param {(message: string) => Promise<unknown>} options.send
+ * @param {(error: unknown) => void} options.report
+ */
 function watchColleagueLearningRequests({
   learning,
   actorKey,
@@ -12,7 +20,6 @@ function watchColleagueLearningRequests({
   send,
   report
 }) {
-  if (!learning?.colleagueRequest || typeof learning.consumeColleagueRequest !== "function") return () => {};
   let running = "";
   return watch(() => learning.colleagueRequest.value, async request => {
     if (!request?.id || running === request.id) return;

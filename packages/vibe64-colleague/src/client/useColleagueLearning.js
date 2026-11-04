@@ -6,7 +6,7 @@ import { applyLearningNavigation } from "../shared/learningFocus.js";
  * header's current-step button, and on a phone giving way to Courses and
  * coming back when the learner closes it.
  * @param {object} options
- * @param {import("vue").ComputedRef<object | null>} options.learningController
+ * @param {import("vue").ComputedRef<import("/src/types.js").Vibe64Learning>} options.learningController
  * @param {import("vue").Ref<boolean>} options.xs
  * @param {import("vue").ComputedRef<boolean>} options.shown
  * @param {() => Promise<void>} options.toggleConversation
@@ -19,10 +19,10 @@ function useColleagueLearning({ learningController, xs, shown, toggleConversatio
   const learningStep = computed(() => {
     const controller = learningController.value;
     // Only Learn mode teaches; Develop's Colleague shows no lesson step.
-    const mode = unref(controller?.mode);
+    const mode = unref(controller.mode);
     const attemptId = mode?.on === true ? unref(controller.lessonAttemptId) ?? mode.currentAttemptId : "";
-    const stepId = unref(controller?.stepId);
-    const lesson = unref(controller?.lesson);
+    const stepId = unref(controller.stepId);
+    const lesson = unref(controller.lesson);
     const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
     const index = steps.findIndex(step => step?.id === stepId);
     if (!attemptId || !stepId || index < 0 || lesson.attempt?.ended) return null;
@@ -63,11 +63,11 @@ function useColleagueLearning({ learningController, xs, shown, toggleConversatio
     returnFromLearning = true;
     return toggleConversation();
   }
-  watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
+  watch(() => unref(learningController.value.coursesOpen) === true, (learningOpen, wasOpen) => {
     // On a phone, Colleague's dialog comes back when the learner closes the
     // Courses it gave way to.
     if (learningOpen || !wasOpen) return;
-    const back = returnFromLearning && learningController.value?.hiddenBy === "learner";
+    const back = returnFromLearning && learningController.value.hiddenBy === "learner";
     returnFromLearning = false;
     if (back && xs.value) reopenConversation();
   });
