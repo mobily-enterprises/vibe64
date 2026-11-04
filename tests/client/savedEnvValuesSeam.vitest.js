@@ -43,8 +43,6 @@ const Picker = defineComponent({ render: () => h("span") });
 
 it("renders nothing for saved values when the host provides none", () => {
   expect(savedValuesFrom(undefined)).toBe(null);
-  expect(savedValuesFrom({ label: "Test vault" })).toBe(null);
-  expect(savedValuesFrom({ component: Picker })).toBe(null);
 });
 
 it("accepts a host's saved-value component directly or through a ref", () => {

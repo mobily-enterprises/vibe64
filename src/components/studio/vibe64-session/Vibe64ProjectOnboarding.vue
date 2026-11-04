@@ -135,6 +135,7 @@ const props = defineProps({
   canAsk: Boolean,
   sessionId: { type: String, required: true }
 });
+/** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // Setup is inspected again after a turn and after each Update outcome, so a
 // repair waiting for Update is offered against the updated session.
@@ -188,7 +189,8 @@ const showPreview = computed(() => {
   if (props.archived || onboarding.value?.available === false || loadError.value) return true;
   return onboarding.value !== null && state.value !== "new" && state.value !== "adoption";
 });
-const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
+/** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedPreview>} */
+const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY);
 const displayedPreview = {
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return props.sessionId; },
@@ -201,12 +203,11 @@ const displayedPreview = {
   }
 };
 watchEffect(() => {
-  if (!colleaguePreview) return;
   if (props.active) colleaguePreview.value = displayedPreview;
   else if (colleaguePreview.value === displayedPreview) colleaguePreview.value = null;
 });
 onBeforeUnmount(() => {
-  if (colleaguePreview?.value === displayedPreview) colleaguePreview.value = null;
+  if (colleaguePreview.value === displayedPreview) colleaguePreview.value = null;
 });
 const pending = computed(() => Boolean(applying.value || aiTasks.starting));
 const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);

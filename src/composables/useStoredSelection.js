@@ -1,11 +1,5 @@
 import { computed, ref, unref, watch } from "vue";
-
-function browserSessionStorage() {
-  if (typeof window === "undefined" || !window.sessionStorage) {
-    return null;
-  }
-  return window.sessionStorage;
-}
+import { browserSessionStorage } from "@/lib/browser.js";
 
 function readStoredValue(storageKey = "") {
   try {

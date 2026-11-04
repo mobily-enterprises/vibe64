@@ -6,7 +6,7 @@ import { useRouter } from "vue-router";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
 import {
@@ -79,13 +79,15 @@ function useVibe64AutopilotView(props, emit, {
     minHeight: "10rem"
   });
   const agentSettings = computed(() => props.conversationRuntime?.agentSettings);
+  /** @type {import("vue").Ref<string | undefined>} */
   const preferredName = inject(VIBE64_WELCOME_NAME_KEY, () => {
     const accounts = useVibe64Accounts();
     return computed(() => accounts.status.value?.personalProfile?.preferredName);
   }, true);
   const requestAgentSettings = computed(() => agentSettings.value?.requestSettings.value || null);
   const sessionId = computed(() => normalizeText(props.session?.sessionId));
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   // What the person did here, for a lesson's do beats.
   const reportActivity = usePageActivity();
   const actorKey = computed(() => unref(viewer)?.actorKey || "");

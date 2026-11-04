@@ -93,7 +93,7 @@ function sourcePathReferenceAtEvent(view, event = {}) {
  * file, reports edits to the editor, and opens source paths clicked in the code.
  * @param {object} options
  * @param {() => boolean} options.active
- * @param {ReturnType<typeof import("@/composables/useVibe64SourceEditor.js").useVibe64SourceEditor>} options.editor
+ * @param {import("@/types.js").Vibe64SourceEditor} options.editor
  * @param {import("vue").Ref<HTMLElement | null>} options.element The element the view is placed in.
  * @param {import("vue").Ref<string>} options.filePresentation
  * @param {() => boolean} options.sourcePathClickWithoutModifier

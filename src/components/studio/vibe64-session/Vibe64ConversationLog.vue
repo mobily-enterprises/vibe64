@@ -265,7 +265,7 @@ globalThis.document?.addEventListener("visibilitychange", updatePageVisibility);
 function setVoiceFeedbackTarget(element) { voiceFeedbackTarget.value = element; }
 const voiceBinding = computed(() => {
   const runtime = props.voiceRuntime;
-  if (!voice || !runtime) return null;
+  if (!runtime) return null;
   return createProjectVoiceBinding(runtime, {
     get eligible() { return mounted.value && props.visible && props.voiceRuntime === runtime && pageVisible.value; },
     onTranscript(transcript, { canTake = false } = {}) {
@@ -277,7 +277,7 @@ const voiceBinding = computed(() => {
 });
 const voiceSession = computed(() => {
   const binding = voiceBinding.value;
-  const state = voice?.controller.state;
+  const state = voice.controller.state;
   return binding && state?.binding?.id === binding.id && state.binding.conversationId === binding.conversationId
     ? state.session : null;
 });

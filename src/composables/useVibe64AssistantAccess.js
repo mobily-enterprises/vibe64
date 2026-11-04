@@ -1,7 +1,12 @@
 import { computed, hasInjectionContext, inject, unref } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+
+/** @returns {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+function injectViewer() {
+  return inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
+}
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 
@@ -32,7 +37,7 @@ function useVibe64AssistantAccess({
   const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
     : computed(() => readRefOrGetterValue(projectSlugInput));
   const viewer = viewerInput === undefined
-    ? (hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" })
+    ? (hasInjectionContext() ? injectViewer() : LOCAL_ASSISTANT_VIEWER)
     : viewerInput;
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const currentSessionId = computed(() => assistantAccessText(

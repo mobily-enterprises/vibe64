@@ -9,7 +9,8 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, unref, wat
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { useVibe64Learning } from "/src/composables/useVibe64Learning.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
@@ -44,43 +45,48 @@ const open = ref(false);
 const { xs } = useDisplay();
 const voice = useVibe64Voice();
 const isColleagueBinding = binding => binding?.socketUrl === COLLEAGUE_VOICE_SOCKET_URL;
-const inlineVoice = computed(() => voice?.controller.state.binding?.presentation === "inline"
+const inlineVoice = computed(() => voice.controller.state.binding?.presentation === "inline"
   && !isColleagueBinding(voice.controller.state.binding)
   && !voice.controller.state.nextTarget);
-const shown = computed(() => open.value || Boolean(voice?.controller.state.visible && !inlineVoice.value));
-const minimizedVoice = computed(() => Boolean(voice?.controller.state.session && !shown.value && !inlineVoice.value));
+const shown = computed(() => open.value || Boolean(voice.controller.state.visible && !inlineVoice.value));
+const minimizedVoice = computed(() => Boolean(voice.controller.state.session && !shown.value && !inlineVoice.value));
 const listeningVoice = computed(() => Boolean(minimizedVoice.value && voice.controller.state.session.voice.listening.value && !voice.controller.state.session.microphoneMuted.value));
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+/** @type {import("/src/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
 const voiceTranscript = ref(null);
-const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-// Opening Colleague is page activity a lesson's do beat can wait for.
-const pageActivity = inject(VIBE64_PAGE_ACTIVITY_KEY, null);
+/** @type {import("/src/lib/vibe64AssistantHost.js").ShellSlot<any>} */
+const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY);
+/**
+ * Opening Colleague is page activity a lesson's do beat can wait for.
+ * @type {import("/src/types.js").PageActivity}
+ */
+const pageActivity = inject(VIBE64_PAGE_ACTIVITY_KEY);
 watch(shown, (value, was) => {
-  if (value !== was) pageActivity?.report(value ? "colleague-opened" : "colleague-minimised", { projectSlug: props.focus?.projectSlug });
+  if (value !== was) pageActivity.report(value ? "colleague-opened" : "colleague-minimised", { projectSlug: props.focus?.projectSlug });
 });
-// The shared Learning controller (L and Courses), when this host provides one.
-const learningOwner = inject(VIBE64_LEARNING_KEY, null);
-const learningController = computed(() => unref(learningOwner) || null);
+// The shared Learning controller (L and Courses).
+const learning = useVibe64Learning();
+const learningController = computed(() => learning);
 const { learningStep, stepButton, showLearningStep, leaveForLearning } = useColleagueLearning({
   learningController, xs, shown, toggleConversation, reopenConversation, reportFailure
 });
 /** Shows Colleague again, revealing its own voice chat when one holds the conversation. */
 function reopenConversation() {
   if (shown.value) return;
-  if (voice?.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
+  if (voice.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
   else open.value = true;
 }
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
-  open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
+  open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice.controller.state.session, onError: reportFailure
 });
 async function toggleConversation() {
   const opening = !shown.value;
   if (shown.value) {
-    voice?.controller.minimize();
+    voice.controller.minimize();
     open.value = false;
     launcher.value?.$el?.focus();
-  } else if (voice?.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
+  } else if (voice.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
   else if (voice) {
     open.value = true;
     await openVoice();
@@ -88,7 +94,7 @@ async function toggleConversation() {
   if (opening && bodyVisible.value) await focusConversationComposer();
 }
 async function openVoice() {
-  if (!voice || freshOperation.value || freshBusy.value) return false;
+  if (freshOperation.value || freshBusy.value) return false;
   if (!conversation.runtime.value) await refresh();
   const target = conversation.runtime.value;
   if (!target) throw new Error(connectionError.value || "Colleague is not connected yet. Try again.");
@@ -127,12 +133,13 @@ async function openVoice() {
 }
 async function closeText() {
   try {
-    if (voice?.controller.state.session) await voice.controller.end({ discard: true });
+    if (voice.controller.state.session) await voice.controller.end({ discard: true });
     open.value = false;
     launcher.value?.$el?.focus();
   } catch (error) { reportFailure(error); }
 }
-const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY, null);
+/** @type {import("/src/lib/vibe64AssistantHost.js").ShellSlot<HTMLElement>} */
+const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY);
 const launcher = ref(null);
 const composerInput = ref(null);
 async function focusConversationComposer() {
@@ -145,10 +152,10 @@ const conversationTarget = computed(() => xs.value ? panelTarget.value : desktop
 const voicePanelTarget = ref(null);
 const voiceToolsTarget = ref(null);
 // The face starts as the person last left it; only Minimise and Show change it.
-const avatarVisible = computed(() => voice?.avatarVisibleFor("colleague") ?? null);
+const avatarVisible = computed(() => voice.avatarVisibleFor("colleague") ?? null);
 const avatarSize = computed({
   get: () => avatarVisible.value === false ? "hidden" : "compact",
-  set: size => voice?.setAvatarVisible("colleague", size !== "hidden")
+  set: size => voice.setAvatarVisible("colleague", size !== "hidden")
 });
 const product = ref({ conversationId: "", error: "" });
 const productError = ref("");
@@ -215,7 +222,7 @@ async function navigateBrowser(command) {
   }
   if (!command.guide) return props.navigate(command);
   return runTrainingGuideCommand(command, { navigateBrowser: props.navigate, view: { openFile(path) {
-    const view = companionView?.value;
+    const view = companionView.value;
     return view?.projectSlug === command.projectSlug && view.sessionId === command.sessionId &&
       typeof view.openFile === "function" && view.openFile(path) === true;
   } } });
@@ -245,7 +252,7 @@ const conversation = useAssistantConversation({
   socket: realtimeSocket,
   api: { ...api, sendConversationMessage(id, input) {
     emit("message-submit", input.messageId);
-    const activeVoice = voice?.controller.state;
+    const activeVoice = voice.controller.state;
     if (isColleagueBinding(activeVoice?.binding)) activeVoice.session.inviteSpeech(input.messageId);
     return api.sendConversationMessage(id, input);
   } },
@@ -281,7 +288,7 @@ const conversation = useAssistantConversation({
   })
 });
 const voiceSession = computed(() => {
-  const state = voice?.controller.state;
+  const state = voice.controller.state;
   const identity = conversation.runtime.value?.identity;
   return isColleagueBinding(state?.binding) &&
     state.binding.conversationId === identity?.conversationId &&
@@ -289,7 +296,7 @@ const voiceSession = computed(() => {
 });
 // Colleague's voice controls belong to one conversation. After a thread switch
 // (L, another lesson) they still hold the previous thread's conversation.
-const staleVoice = computed(() => isColleagueBinding(voice?.controller.state.binding) && !voiceSession.value);
+const staleVoice = computed(() => isColleagueBinding(voice.controller.state.binding) && !voiceSession.value);
 // A shown Colleague stays shown and its voice controls follow to the new thread.
 watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) => {
   if (!id || !previous || !staleVoice.value || !voice.controller.state.visible) return;
@@ -449,12 +456,12 @@ onMounted(() => {
   window.addEventListener("pagehide", cancelAvatarPress);
 });
 onBeforeUnmount(() => {
-  if (voice?.launcher.value === launcher.value?.$el) voice.launcher.value = null;
+  if (voice.launcher.value === launcher.value?.$el) voice.launcher.value = null;
   realtimeSocket.off("connect", refresh);
   focusBinding.close();
   unregisterModel?.();
   mounted = false;
-  if (isColleagueBinding(voice?.controller.state.binding)) void voice.controller.end({ discard: true });
+  if (isColleagueBinding(voice.controller.state.binding)) void voice.controller.end({ discard: true });
   cancelAvatarPress();
   revision += 1;
   window.removeEventListener("blur", cancelAvatarPress);
@@ -467,7 +474,7 @@ onBeforeUnmount(() => {
     <v-btn
       ref="launcher" class="vibe64-colleague__launcher" :class="{ 'vibe64-colleague__launcher--floating': !launcherTarget, 'vibe64-colleague__launcher--listening': holdingAvatar }"
       icon variant="text" width="48" height="48" data-vibe64-guide="colleague"
-      :aria-label="shown ? `Minimize ${voice?.controller.state.binding?.label || name}` : minimizedVoice ? `Reopen ${voice.controller.state.binding.label || 'Assistant'} voice chat${listeningVoice ? ' · Listening' : ''}` : `Open ${name}`"
+      :aria-label="shown ? `Minimize ${voice.controller.state.binding?.label || name}` : minimizedVoice ? `Reopen ${voice.controller.state.binding.label || 'Assistant'} voice chat${listeningVoice ? ' · Listening' : ''}` : `Open ${name}`"
       :title="shown ? 'Minimize conversation' : listeningVoice ? 'Listening · Reopen voice chat' : minimizedVoice ? 'Reopen voice chat' : holdToTalk ? `${name} · Hold to talk` : name" aria-haspopup="dialog"
       :aria-expanded="shown"
       @pointerdown="startAvatarPress" @pointerup="endAvatarPress" @pointercancel="cancelAvatarPress" @lostpointercapture="cancelAvatarPress"

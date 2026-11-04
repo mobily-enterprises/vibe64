@@ -75,7 +75,7 @@ function normalizeResolvedSourceEditorPath(value = {}) {
  * @param {string} options.originId
  * @param {(() => string) | null} options.readCurrentText
  * @param {import("vue").Ref<string>} options.selectedPath
- * @param {ReturnType<typeof import("./useVibe64SourceEditorTree.js").useVibe64SourceEditorTree>} options.tree
+ * @param {import("@/types.js").Vibe64SourceEditorTree} options.tree
  */
 function useVibe64SourceEditorFile({
   canLoad,

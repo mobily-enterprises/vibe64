@@ -21,11 +21,11 @@ import {
  * resource failures, bridge request answers, Learning's orientation, and the
  * page's location (published as the session's Preview state).
  * @param {{
- *   address: ReturnType<typeof import("./useVibe64PreviewAddress.js").useVibe64PreviewAddress>,
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
- *   pick: ReturnType<typeof import("./useVibe64PreviewPick.js").useVibe64PreviewPick>,
- *   reload: ReturnType<typeof import("./useVibe64PreviewReload.js").useVibe64PreviewReload>
+ *   address: import("@/types.js").Vibe64PreviewAddress,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
+ *   pick: import("@/types.js").Vibe64PreviewPick,
+ *   reload: import("@/types.js").Vibe64PreviewReload
  * }} options
  */
 function useVibe64PreviewMessages({ address, frame, outputs, pick, reload }) {

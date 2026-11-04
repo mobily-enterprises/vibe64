@@ -3,7 +3,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
 
 // The Courses overlay's adapter. It owns neither admission nor progress:
@@ -12,7 +12,8 @@ import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vi
 // are made only while it is open, and it stays above the app, so app
 // navigation behind it does not retire them.
 export function useVibe64LearningCourses({ active } = {}) {
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
   const open = computed(() => toValue(active) === true);
   let generation = 0;

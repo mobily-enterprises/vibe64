@@ -93,4 +93,6 @@
  * @property {() => HTMLElement | null} returnFocusTarget
  */
 
+/** @typedef {import("./useAiTaskHost.js").AiTaskHost} AiTaskHost */
+
 export {};

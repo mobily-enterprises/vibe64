@@ -1,4 +1,4 @@
-import { computed, inject, isRef } from "vue";
+import { computed, inject, unref } from "vue";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/shared/contracts";
 
 // A host that keeps saved values (the vibe64.saved-env-values.v1 contract) may
@@ -22,10 +22,25 @@ export function savedEnvValueEnvironment(environmentLabel = "") {
   return String(environmentLabel).toLowerCase() === "production" ? "production" : "development";
 }
 
+/**
+ * What a host offers to fill Env values from.
+ * @typedef {object} SavedEnvValuesHost
+ * @property {string} label
+ * @property {import("vue").Component | null} component
+ */
+
+/** What an application without saved values supplies: nothing to offer. */
+export const NO_SAVED_ENV_VALUES = Object.freeze({ label: "", component: null });
+
+/**
+ * The host's saved-value picker, or null when it offers none (it may provide null while it has nothing).
+ * @returns {import("vue").ComputedRef<SavedEnvValuesHost | null>}
+ */
 export function useVibe64SavedEnvValues() {
-  const provided = inject(VIBE64_SAVED_ENV_VALUES_KEY, null);
+  /** @type {import("vue").MaybeRef<SavedEnvValuesHost | null>} */
+  const provided = inject(VIBE64_SAVED_ENV_VALUES_KEY, NO_SAVED_ENV_VALUES);
   return computed(() => {
-    const host = isRef(provided) ? provided.value : provided;
-    return host && host.component && typeof host.label === "string" ? host : null;
+    const host = unref(provided);
+    return host === NO_SAVED_ENV_VALUES ? null : host;
   });
 }

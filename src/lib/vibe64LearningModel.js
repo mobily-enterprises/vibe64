@@ -144,7 +144,7 @@ const EMPTY_PRACTICE = Object.freeze({ current: null, archived: Object.freeze([]
 
 /** @typedef {typeof import("@local/vibe64-training/client/guide").runTrainingGuideCommand} LearningGuideRunner */
 /** @typedef {import("vue-router").Router} LearningRouter */
-/** @typedef {ReturnType<typeof import("./vibe64PageActivity.js").createPageActivity>} LearningPageActivity */
+/** @typedef {import("@/types.js").PageActivity} LearningPageActivity */
 /** @typedef {ReturnType<typeof createPendingRequestIds>} LearningPendingRequestIds */
 
 const text = value => typeof value === "string" && value.length > 0;

@@ -9,9 +9,9 @@ const PREVIEW_RESOURCE_RETRY_LIMIT = 1;
  * application resource (with a notice either way), by hand with Reload
  * preview, and when a suspended Preview resumes.
  * @param {{
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
- *   identity: ReturnType<typeof import("./useVibe64PreviewIdentity.js").useVibe64PreviewIdentity>,
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
+ *   identity: import("@/types.js").Vibe64PreviewIdentity,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   projectSlug: import("vue").Ref<string>,
  *   props: { session?: object | null }
  * }} options

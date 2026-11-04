@@ -1,6 +1,6 @@
 import { computed, inject, ref, unref, watch } from "vue";
 import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { aiTeamSetupSnoozed, snoozeAiTeamSetup } from "./useAiOnboarding.js";
 
 /**
@@ -28,7 +28,8 @@ function useAiTeamSetupOffer({
   connect,
   go
 }) {
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  /** @type {import("/src/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   // The team card: snoozed, filling the team setup, and its outcome.
   const teamSnoozed = ref(false);
   const teamBusy = ref(false);

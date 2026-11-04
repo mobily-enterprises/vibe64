@@ -13,12 +13,12 @@ function validName(name) {
  * file, a new text file, a new folder, renaming or deleting an item, and
  * copying the AI path. It also reports a finished move or copy.
  * @param {object} options
- * @param {ReturnType<typeof import("@/composables/useVibe64FileAreaBrowser.js").useVibe64FileAreaBrowser>} options.browser
+ * @param {import("@/types.js").Vibe64FileAreaBrowser} options.browser
  * @param {import("vue").Ref<boolean>} options.busy Whether a file operation runs.
  * @param {(event: "transferred", payload: object) => void} options.emit The area's emit.
  * @param {{ error: (error: unknown, fallback?: string) => void, success: (message: string) => void }} options.feedback
  * @param {import("vue").Ref<HTMLElement | null>} options.fileHeading The open file's name.
- * @param {ReturnType<typeof import("@/composables/useVibe64FileAreaFocus.js").useVibe64FileAreaFocus>} options.focus
+ * @param {import("@/types.js").Vibe64FileAreaFocus} options.focus
  * @param {{ area: string, base: string }} options.props The area's props.
  */
 function useVibe64FileAreaCommands({

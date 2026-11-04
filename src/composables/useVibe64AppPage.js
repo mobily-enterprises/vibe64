@@ -187,7 +187,8 @@ function useVibe64AppPage() {
   // project name with that side's controls, so the Lesson toggle is on the
   // step bar there (`lessonToggleOnBar`), on both sides.
   const lessonToggleVisible = computed(() => Boolean(projectSlug.value) && lessonPaneAvailable.value && !mobilePaneLayout.value);
-  const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+  /** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof layoutOwner>} */
+  const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
     get ready() { return projectPaneNavigationVisible.value; },
@@ -292,11 +293,11 @@ function useVibe64AppPage() {
     if (mobilePaneLayout.value && vibe64SessionToolIdFromDashboardPath(route.path, dashboardBasePath.value)) {
       setChatCollapsed(true);
     }
-    if (colleagueLayout) colleagueLayout.value = layoutOwner;
+    colleagueLayout.value = layoutOwner;
   });
 
   onBeforeUnmount(() => {
-    if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
+    if (colleagueLayout.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
     setHomeShellActive(false);
     for (const stop of stopMediaQueries.splice(0)) stop();

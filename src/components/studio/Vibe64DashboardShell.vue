@@ -11,7 +11,8 @@ import {
   useVibe64DashboardPage
 } from "@/composables/useVibe64DashboardPage.js";
 import {
-  VIBE64_ACTIVE_SESSION_NAV_KEY
+  VIBE64_ACTIVE_SESSION_NAV_KEY,
+  VIBE64_INCOMING_PENDING_COUNT_KEY
 } from "@/lib/vibe64ActiveSessionNav.js";
 
 const props = defineProps({
@@ -39,7 +40,7 @@ const incoming = useEndpointResource({ path: incomingPath, readQuery: incomingQu
   queryOptions: { retry: false, staleTime: 30_000, refetchInterval: 60_000 }
 });
 const incomingCount = computed(() => incoming.loadError.value ? null : incoming.data.value?.pendingCount ?? null);
-provide("vibe64.incoming.pendingCount", incomingCount);
+provide(VIBE64_INCOMING_PENDING_COUNT_KEY, incomingCount);
 const githubBrowserOpen = computed(() => /\/dashboard\/(issues|pull-requests)\/?$/u.test(route.path));
 
 const { dashboardSectionLinks } = useVibe64DashboardPage({

@@ -1,6 +1,7 @@
 // When a session's Preview starts by itself, and the per-tab record that keeps
 // a recent automatic attempt from starting it again too soon.
 import { stableLocalStorageKeyPart } from "@/lib/browserLocalStorage.js";
+import { browserSessionStorage } from "@/lib/browser.js";
 
 const AUTO_START_ATTEMPT_COOLDOWN_MS = 7000;
 const AUTO_START_STABILITY_DELAY_MS = 750;
@@ -39,13 +40,6 @@ function autoStartOutputsLoading({
   outputTargetsSettled = false
 } = {}) {
   return Boolean(outputTargetsLoading || !outputTargetsSettled);
-}
-
-function browserSessionStorage() {
-  if (typeof window === "undefined" || !window.sessionStorage) {
-    return null;
-  }
-  return window.sessionStorage;
 }
 
 function launchAutoStartAttemptStorageKey(key = "") {

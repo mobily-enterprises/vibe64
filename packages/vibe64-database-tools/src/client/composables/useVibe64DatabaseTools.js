@@ -9,7 +9,7 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../../shared/events.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 
 const DATABASE_API_SUFFIX = "/vibe64/database";
@@ -29,7 +29,9 @@ function useVibe64DatabaseTools({
   sessionId = ""
 } = {}) {
   const paths = usePaths();
-  const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
+  const viewer = hasInjectionContext()
+    ? /** @type {import("/src/lib/vibe64AssistantHost.js").AssistantViewerSource} */ (inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER))
+    : LOCAL_ASSISTANT_VIEWER;
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
   const normalizedProjectSlug = computed(() => String(unref(projectSlug) || "").trim());

@@ -8,7 +8,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { findVibe64AgentProvider, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
@@ -20,7 +20,8 @@ const props = defineProps({
   sessionsApiPath: { type: [Function, Object, String], default: "" }
 });
 const projectSlug = useVibe64ProjectSlug();
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+/** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionsPath = computed(() => String(readRefOrGetterValue(props.sessionsApiPath) || "").trim());

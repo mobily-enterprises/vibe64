@@ -6,10 +6,10 @@ import { computed, ref, watch } from "vue";
  * remembered for the target. The dialog closes when the project, session or
  * declared targets change.
  * @param {{
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   projectSlug: import("vue").Ref<string>,
  *   props: { session?: object | null },
- *   targets: ReturnType<typeof import("./useVibe64PreviewTargets.js").useVibe64PreviewTargets>
+ *   targets: import("@/types.js").Vibe64PreviewTargets
  * }} options
  */
 function useVibe64OutputOptions({ outputs, projectSlug, props, targets }) {

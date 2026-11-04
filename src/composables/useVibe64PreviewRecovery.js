@@ -7,10 +7,10 @@ import { computed, nextTick, ref, watch } from "vue";
  * by hand, rechecks a refused resource admission, and retries status loads and
  * workspace setup.
  * @param {{
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   projectSlug: import("vue").Ref<string>,
  *   props: { busy?: boolean, embeddedPreview?: boolean, session?: object | null, sourceOperationsSuspended?: boolean },
- *   targets: ReturnType<typeof import("./useVibe64PreviewTargets.js").useVibe64PreviewTargets>
+ *   targets: import("@/types.js").Vibe64PreviewTargets
  * }} options
  */
 function useVibe64PreviewRecovery({ outputs, projectSlug, props, targets }) {

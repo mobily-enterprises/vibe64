@@ -22,6 +22,7 @@ import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 // mode, colours the app bar in Learn mode, and mounts the one global teacher
 // guide overlay of that host.
 const learning = useVibe64Learning();
+/** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY);
 const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
 watch(actorKey, value => learning.setViewer(value), { immediate: true });

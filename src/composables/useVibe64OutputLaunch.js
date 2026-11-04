@@ -33,8 +33,8 @@ function delay(milliseconds = 0) {
  * @param {{
  *   busy: unknown,
  *   embeddedPreview: unknown,
- *   outputs: ReturnType<typeof import("./useVibe64OutputStatus.js").useVibe64OutputStatus>,
- *   outputTerminal: ReturnType<typeof import("./useVibe64OutputTerminal.js").useVibe64OutputTerminal>,
+ *   outputs: import("@/types.js").Vibe64OutputStatus,
+ *   outputTerminal: import("@/types.js").Vibe64OutputTerminal,
  *   projectSlug: import("vue").Ref<string>
  * }} options
  */

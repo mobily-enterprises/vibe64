@@ -11,12 +11,13 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const props = defineProps({ active: Boolean, busy: Boolean, session: { type: Object, default: null },
   sessionsApiPath: { type: [Function, Object, String], default: "" } });
 const projectSlug = useVibe64ProjectSlug();
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+/** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionsPath = computed(() => String(readRefOrGetterValue(props.sessionsApiPath) || ""));
@@ -81,7 +82,8 @@ function showPlan(requestedView = "default") {
 }
 defineExpose({ showPlan });
 
-const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY, null);
+/** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof planViewer>} */
+const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
 const planViewer = {
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return sessionId.value; },
@@ -108,12 +110,11 @@ const planViewer = {
   }
 };
 watchEffect(() => {
-  if (!colleaguePlan) return;
   if (enabled.value) colleaguePlan.value = planViewer;
   else if (colleaguePlan.value === planViewer) colleaguePlan.value = null;
 });
 onBeforeUnmount(() => {
-  if (colleaguePlan?.value === planViewer) colleaguePlan.value = null;
+  if (colleaguePlan.value === planViewer) colleaguePlan.value = null;
 });
 async function changePlan(operation) {
   if (!canChangePlan.value) return;

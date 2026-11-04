@@ -145,7 +145,7 @@ const props = defineProps({
   // What useAiTaskConversation returned.
   conversation: {
     required: true,
-    type: /** @type {import("vue").PropType<ReturnType<typeof import("@/composables/useAiTaskConversation.js").useAiTaskConversation>>} */ (Object)
+    type: /** @type {import("vue").PropType<import("@/types.js").AiTaskConversation>} */ (Object)
   },
   projection: {
     required: true,

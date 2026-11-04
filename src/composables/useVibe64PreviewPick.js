@@ -20,7 +20,7 @@ import {
  * in order, and the bridge is told which interaction number comes next.
  * `usage` is as `useVibe64OutputControlsSurface` receives it.
  * @param {{
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
  *   props: { session?: object | null },
  *   usage: { openUsage?: Function | null, readUsageEntries?: Function | null, recordInteraction?: Function | null, recording?: unknown }
  * }} options

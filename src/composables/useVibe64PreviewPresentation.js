@@ -13,13 +13,13 @@ import {
  * text in an empty Preview, the issue and notice that stopped it with their
  * recovery actions, the toolbar dock, and where the run log shows.
  * @param {{
- *   address: ReturnType<typeof import("./useVibe64PreviewAddress.js").useVibe64PreviewAddress>,
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
- *   identity: ReturnType<typeof import("./useVibe64PreviewIdentity.js").useVibe64PreviewIdentity>,
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   address: import("@/types.js").Vibe64PreviewAddress,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
+ *   identity: import("@/types.js").Vibe64PreviewIdentity,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   props: { embeddedPreview?: boolean, session?: object | null },
- *   recovery: ReturnType<typeof import("./useVibe64PreviewRecovery.js").useVibe64PreviewRecovery>,
- *   targets: ReturnType<typeof import("./useVibe64PreviewTargets.js").useVibe64PreviewTargets>
+ *   recovery: import("@/types.js").Vibe64PreviewRecovery,
+ *   targets: import("@/types.js").Vibe64PreviewTargets
  * }} options
  */
 function useVibe64PreviewPresentation({ address, frame, identity, outputs, props, recovery, targets }) {

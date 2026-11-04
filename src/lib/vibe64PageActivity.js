@@ -22,10 +22,14 @@ function createPageActivity() {
   });
 }
 
-// For a view: report one activity to the shell's channel, if there is one.
+/**
+ * For a view: report one activity to the shell's channel, which every host's shell context provides.
+ * @returns {(name: string, detail?: { projectSlug?: string, sessionId?: string, path?: string }) => void}
+ */
 function usePageActivity() {
-  const activity = inject(VIBE64_PAGE_ACTIVITY_KEY, null);
-  return (name, detail) => activity?.report(name, detail);
+  /** @type {ReturnType<typeof createPageActivity>} */
+  const activity = inject(VIBE64_PAGE_ACTIVITY_KEY);
+  return (name, detail) => activity.report(name, detail);
 }
 
 export { createPageActivity, usePageActivity };

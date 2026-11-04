@@ -1,6 +1,7 @@
 <script setup>
-import { computed, inject, unref } from "vue";
+import { computed, inject } from "vue";
 import {
+  NO_ACTIVE_SESSION_NAV,
   VIBE64_ACTIVE_SESSION_NAV_KEY
 } from "@/lib/vibe64ActiveSessionNav.js";
 
@@ -39,12 +40,10 @@ const props = defineProps({
   }
 });
 
-const injectedSessionNav = inject(VIBE64_ACTIVE_SESSION_NAV_KEY, null);
+/** @type {Readonly<import("vue").Ref<import("@/lib/vibe64ActiveSessionNav.js").ActiveSessionNav | null>>} */
+const injectedSessionNav = inject(VIBE64_ACTIVE_SESSION_NAV_KEY, NO_ACTIVE_SESSION_NAV);
 
-const sessionNav = computed(() => {
-  const value = unref(injectedSessionNav);
-  return value && typeof value === "object" ? value : {};
-});
+const sessionNav = computed(() => injectedSessionNav.value || {});
 const tools = computed(() => Array.isArray(sessionNav.value.tools) ? sessionNav.value.tools : []);
 const tool = computed(() => {
   const toolId = String(props.toolId || "").trim();

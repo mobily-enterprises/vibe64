@@ -13,8 +13,8 @@ import {
  * reloads the frame; each new Preview lifecycle starts in the default identity
  * once its page is ready.
  * @param {{
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   props: { embeddedPreview?: boolean }
  * }} options
  */

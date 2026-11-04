@@ -245,6 +245,7 @@ const {
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning, workspaceSetupStatus, workspaceSetupTitle
 } = view;
+/** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // While an AI task owns the problem, Retry and the manual route wait: its window offers them.
 const aiTaskOpen = computed(() => Boolean(aiTasks.task) && !aiTasks.projection.ended);

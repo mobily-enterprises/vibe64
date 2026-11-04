@@ -26,7 +26,7 @@ import { computed, inject, reactive, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
-import { VIBE64_ACTIVE_SESSION_NAV_KEY } from "@/lib/vibe64ActiveSessionNav.js";
+import { NO_ACTIVE_SESSION_NAV, VIBE64_ACTIVE_SESSION_NAV_KEY } from "@/lib/vibe64ActiveSessionNav.js";
 import { vibe64FileArea as areaInfo } from "@/lib/vibe64FileAreas.js";
 import Vibe64FileArea from "./Vibe64FileArea.vue";
 
@@ -37,7 +37,8 @@ const props = defineProps({
   projectSlug: { type: String, default: "" }
 });
 const { smAndDown: mobile } = useDisplay();
-const activeSession = inject(VIBE64_ACTIVE_SESSION_NAV_KEY, null);
+/** @type {Readonly<import("vue").Ref<import("@/lib/vibe64ActiveSessionNav.js").ActiveSessionNav | null>>} */
+const activeSession = inject(VIBE64_ACTIVE_SESSION_NAV_KEY, NO_ACTIVE_SESSION_NAV);
 const projectFilesBase = computed(() => scopedDevelopmentApiUrl("/api/vibe64/project-files", props.projectSlug));
 const area = ref(AREAS[0]);
 const visited = ref([]);
@@ -46,7 +47,7 @@ watch(area, (value) => {
 }, { immediate: true });
 const refreshKeys = reactive({});
 const destinations = computed(() => {
-  const session = activeSession?.value?.visible ? activeSession.value : null;
+  const session = activeSession.value?.visible ? activeSession.value : null;
   const sessionsBase = scopedDevelopmentApiUrl("/api/vibe64/sessions", props.projectSlug);
   return [
     ...AREAS.map((value) => ({ key: value, area: value, base: `${projectFilesBase.value}/${value}`, ...areaInfo(value) })),

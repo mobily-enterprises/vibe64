@@ -5,7 +5,7 @@ import { cancelOwnsMessage, routedChatMessage, trackRoutedMessage } from "@/lib/
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
 import { aiTaskMessageId, aiTaskRequestError } from "@/lib/vibe64AiTaskConversation.js";
 
-/** @typedef {ReturnType<typeof import("./useAiTaskConversationSaves.js").useAiTaskConversationSaves>} AiTaskConversationSaves */
+/** @typedef {import("@/types.js").AiTaskConversationSaves} AiTaskConversationSaves */
 
 /**
  * The AI task conversation's messages: sending the draft or retrying a message, cancelling or editing a

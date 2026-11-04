@@ -128,7 +128,7 @@ import {
   mdiRefresh,
   mdiWebClock
 } from "@mdi/js";
-import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
+import { NO_RESOURCE_RECOVERY_CONTROL, VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 
 const props = defineProps({
   session: {
@@ -172,7 +172,9 @@ const {
   showLaunchLog
 } = props.surface;
 
-const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+/** @type {import("vue").Component} */
+const providedRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, NO_RESOURCE_RECOVERY_CONTROL);
+const resourceRecoveryControl = providedRecoveryControl === NO_RESOURCE_RECOVERY_CONTROL ? null : providedRecoveryControl;
 const resourceRetryBusy = ref(false);
 function setResourceRetryBusy(value) {
   if (!value && !resourceRetryBusy.value) return;

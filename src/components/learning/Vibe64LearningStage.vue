@@ -38,8 +38,11 @@ watch(() => [route.path, lessonShownIn(route.query)], ([path, shown], [previousP
   void router.replace({ path, query: { ...route.query, lesson: "1" } });
 }, { flush: "post" });
 
-// A studio page owns the Learn layout while it shows: no project, no chat
-// column, the page (or the lesson over it) always visible.
+/**
+ * A studio page owns the Learn layout while it shows: no project, no chat
+ * column, the page (or the lesson over it) always visible.
+ * @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof owner>}
+ */
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY);
 const owner = {
   studio: true,

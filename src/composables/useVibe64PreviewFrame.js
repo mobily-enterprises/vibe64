@@ -41,7 +41,7 @@ const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
  *   identityBusy: () => boolean,
  *   followIdentityReload: (frameRequestId: number) => void,
  *   identityFrameReady: (frameRequestId: number) => void,
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   projectSlug: import("vue").Ref<string>,
  *   props: { embeddedPreview?: boolean, previewDisplayed?: boolean, session?: object | null, windowDisplayed?: boolean },
  *   resourceRetryCount: () => number

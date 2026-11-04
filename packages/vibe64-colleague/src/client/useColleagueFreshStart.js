@@ -7,7 +7,7 @@ import { computed, ref, shallowRef } from "vue";
  * the original server owner. A lost answer is retried by the same operation.
  * @param {object} options
  * @param {{ runtime: import("vue").Ref<object | null> }} options.conversation
- * @param {object | null} options.voice
+ * @param {import("@local/vibe64-voice/client").Vibe64Voice} options.voice
  * @param {import("vue").ComputedRef<object | null>} options.voiceSession
  * @param {import("vue").Ref<object | null>} options.voiceTranscript
  * @param {import("vue").ComputedRef<string>} options.actorKey
@@ -39,7 +39,7 @@ function useColleagueFreshStart({
     if (!runtime?.current.value || working.value || sending.value || runtime.stopping.value) {
       return "Wait for the current request or Stop to finish before starting fresh.";
     }
-    if (voice?.controller.state.busy || voice?.controller.state.nextTarget) return "Finish the pending voice switch before starting fresh.";
+    if (voice.controller.state.busy || voice.controller.state.nextTarget) return "Finish the pending voice switch before starting fresh.";
     const session = voiceSession.value;
     if (!session) return "";
     if (session.starting?.value || session.capturing?.value || session.sending.value) {
@@ -118,8 +118,8 @@ function useColleagueFreshStart({
         productError.value = "";
         open.value = true;
         voiceTranscript.value = null;
-        const controller = voice?.controller;
-        if (controller && !controller.state.session && !controller.state.binding && !controller.state.busy && !controller.state.nextTarget) {
+        const controller = voice.controller;
+        if (!controller.state.session && !controller.state.binding && !controller.state.busy && !controller.state.nextTarget) {
           // Restore the original controls with a paused binding. Archive success
           // is already committed; presentation failure must not repeat it.
           try { await openVoice(); }

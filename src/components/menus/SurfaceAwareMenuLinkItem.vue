@@ -1,6 +1,7 @@
 <script setup>
 import ShellSurfaceAwareMenuLinkItem from "@jskit-ai/shell-web/client/components/ShellSurfaceAwareMenuLinkItem";
 import { computed, inject } from "vue";
+import { NO_INCOMING_PENDING_COUNT, VIBE64_INCOMING_PENDING_COUNT_KEY } from "@/lib/vibe64ActiveSessionNav.js";
 
 const props = defineProps({
   label: {
@@ -45,7 +46,9 @@ const linkProps = computed(() => {
   const { guideId, ...value } = props;
   return value;
 });
-const incomingCount = inject("vibe64.incoming.pendingCount", null);
+/** @type {Readonly<import("vue").Ref<number | null>>} */
+const pendingCount = inject(VIBE64_INCOMING_PENDING_COUNT_KEY, NO_INCOMING_PENDING_COUNT);
+const incomingCount = computed(() => pendingCount.value);
 const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/incoming"));
 </script>
 

@@ -8,9 +8,9 @@ import { watch } from "vue";
  * stream and `display` its screen.
  * @param {{
  *   driver: { startSession?: Function, closeSession?: Function },
- *   terminal: ReturnType<typeof import("./useVibe64Terminal.js").createVibe64TerminalState>,
- *   connection: ReturnType<typeof import("./useVibe64TerminalConnection.js").useVibe64TerminalConnection>,
- *   display: ReturnType<typeof import("./useVibe64TerminalDisplay.js").useVibe64TerminalDisplay>
+ *   terminal: import("@/types.js").Vibe64TerminalState,
+ *   connection: import("@/types.js").Vibe64TerminalConnection,
+ *   display: import("@/types.js").Vibe64TerminalDisplay
  * }} options
  */
 function useVibe64TerminalLifecycle({ driver, terminal, connection, display }) {

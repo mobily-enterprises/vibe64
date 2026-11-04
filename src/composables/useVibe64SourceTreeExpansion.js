@@ -40,7 +40,7 @@ function parentDirectoryPathsFor(filePath = "") {
  * The source tree's open folders, remembered in this browser per session. The
  * folders that reveal the selected file, or a newly created one, open too.
  * @param {object} options
- * @param {ReturnType<typeof import("@/composables/useVibe64SourceEditor.js").useVibe64SourceEditor>} options.editor
+ * @param {import("@/types.js").Vibe64SourceEditor} options.editor
  * @param {{ sessionId: string, sessionsApiPath: string }} options.props The source editor's props.
  */
 function useVibe64SourceTreeExpansion({

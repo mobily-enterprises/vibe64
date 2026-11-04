@@ -9,7 +9,7 @@ import {
  * target (the requested one, else the managed or preferred web target), the
  * target its options and routes belong to, and whether Run and Start show.
  * @param {{
- *   outputs: ReturnType<typeof import("./useVibe64OutputControls.js").useVibe64OutputControls>,
+ *   outputs: import("@/types.js").Vibe64OutputControls,
  *   props: { autoStartManagedPreview?: boolean, autoStartTargetId?: string, embeddedPreview?: boolean }
  * }} options
  */

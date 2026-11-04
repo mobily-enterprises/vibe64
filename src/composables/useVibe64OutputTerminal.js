@@ -11,7 +11,7 @@ import { launchTerminalIsReady } from "@/lib/vibe64LaunchPreview.js";
  * presented (docked or expanded) and its log. It follows the status's active
  * terminal, attaching to a new run and clearing one that is gone.
  * @param {{
- *   outputs: ReturnType<typeof import("./useVibe64OutputStatus.js").useVibe64OutputStatus>,
+ *   outputs: import("@/types.js").Vibe64OutputStatus,
  *   projectSlug: import("vue").Ref<string>
  * }} options
  */

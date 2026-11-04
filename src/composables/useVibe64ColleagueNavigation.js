@@ -16,6 +16,8 @@ import {
   VIBE64_PAGE_FOCUS_KEY
 } from "@/lib/vibe64AssistantHost.js";
 
+/** @template T @typedef {import("@/lib/vibe64AssistantHost.js").ShellSlot<T>} ShellSlot */
+
 const NAVIGATION_TIMEOUT_MS = 15000;
 const TARGET_CHANGED = "The browser navigation target changed before it opened.";
 
@@ -26,17 +28,24 @@ const TARGET_CHANGED = "The browser navigation target changed before it opened."
 function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = null, conversationQuery = false } = {}) {
   const route = useRoute();
   const router = useRouter();
-  const assistantLayer = inject(VIBE64_ASSISTANT_HOST_KEY, null);
+  /** @type {ShellSlot<{ sessionId: string }>} */
+  const assistantLayer = inject(VIBE64_ASSISTANT_HOST_KEY);
+  /** @type {ShellSlot<any>} */
   const colleagueView = inject(VIBE64_COLLEAGUE_VIEW_KEY);
-  const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
+  /** @type {ShellSlot<any>} */
+  const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY);
+  /** @type {ShellSlot<any>} */
   const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);
+  /** @type {ShellSlot<any>} */
   const colleagueDatabase = inject(VIBE64_COLLEAGUE_DATABASE_KEY);
+  /** @type {ShellSlot<any>} */
   const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
+  /** @type {ShellSlot<any>} */
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY);
-  const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null);
-  // The shared Learning environment (L) controller; absent in hosts without it.
-  const learningOwner = inject(VIBE64_LEARNING_KEY, null);
-  const learningController = computed(() => unref(learningOwner) || null);
+  /** @type {ShellSlot<typeof navigate>} */
+  const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY);
+  /** @type {import("@/types.js").Vibe64Learning} The shared Learning environment (L) controller. */
+  const learningController = inject(VIBE64_LEARNING_KEY);
   const allPanes = new Set([...VIBE64_COLLEAGUE_PANES, ...panes]);
   const currentView = computed(() => colleagueView.value?.projectSlug === projectSlugFromRoute(route) ? colleagueView.value : null);
   const restoringSelection = ref(false);
@@ -98,17 +107,17 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
   const focus = computed(() => {
     const routePane = Object.hasOwn(routePanes, route.path) ? routePanes[route.path] : "";
     if (routePane) {
-      return { projectSlug: "", sessionId: "", conversationId: "", pane: routePane, route: route.path, ...learningPanelFocus(learningController.value) };
+      return { projectSlug: "", sessionId: "", conversationId: "", pane: routePane, route: route.path, ...learningPanelFocus(learningController) };
     }
     const projectSlug = projectSlugFromRoute(route);
-    const sessionId = projectSlug ? currentView.value?.sessionId || unref(assistantLayer)?.sessionId || String(route.query.session || "") : "";
+    const sessionId = projectSlug ? currentView.value?.sessionId || assistantLayer.value?.sessionId || String(route.query.session || "") : "";
     const layout = colleagueLayout.value;
     // pane=lesson: the lesson is on screen (its Lesson toggle on, over Preview,
     // Dash or a studio page; also without a project).
     const pane = (projectSlug || layout?.lessonVisible) && layout?.projectSlug === projectSlug && layout.ready
       ? (!layout.projectVisible ? "chat" : layout.lessonVisible ? "lesson"
         : route.path.split("/dashboard/")[1]?.split("/")[0] || "preview") : "";
-    const preview = unref(colleaguePreview);
+    const preview = colleaguePreview.value;
     const integration = colleagueIntegrations.value;
     const database = colleagueDatabase.value;
     const plan = colleaguePlan.value;
@@ -124,7 +133,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
     }
     return {
       projectSlug, sessionId, conversationId: currentView.value?.conversationId || "", pane, route: route.path,
-      ...learningPanelFocus(learningController.value),
+      ...learningPanelFocus(learningController),
       ...(pane === "preview" && preview?.projectSlug === projectSlug && preview.sessionId === sessionId
         ? { previewScreen: preview.screen } : {}),
       ...(pane === "integrations" && integration?.projectSlug === projectSlug &&
@@ -136,12 +145,10 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
     };
   });
 
-  // The shared lesson step bar's beat player reads this page focus.
-  const pageFocus = inject(VIBE64_PAGE_FOCUS_KEY, null);
-  if (pageFocus) {
-    watch(focus, value => { pageFocus.value = value; }, { immediate: true });
-    onScopeDispose(() => { pageFocus.value = null; });
-  }
+  /** @type {ShellSlot<typeof focus.value>} The shared lesson step bar's beat player reads this page focus. */
+  const pageFocus = inject(VIBE64_PAGE_FOCUS_KEY);
+  watch(focus, value => { pageFocus.value = value; }, { immediate: true });
+  onScopeDispose(() => { pageFocus.value = null; });
 
   function waitFor(ready, failure, isCurrent, error = () => "") {
     if (ready()) return Promise.resolve();
@@ -172,7 +179,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
       return { ...focus.value };
     }
     if (command.learning) {
-      await applyLearningNavigation(learningController.value, command.learning);
+      await applyLearningNavigation(learningController, command.learning);
       assertCurrent();
       if (!command.projectSlug) {
         await waitFor(() => learningPanelMatches(command, focus.value), "Learning did not show the requested lesson.", isCurrent);
@@ -298,10 +305,10 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
     }
   }
 
-  if (browserNavigation) browserNavigation.value = navigate;
+  browserNavigation.value = navigate;
   onScopeDispose(() => {
     navigationGeneration.value += 1;
-    if (browserNavigation?.value === navigate) browserNavigation.value = null;
+    if (browserNavigation.value === navigate) browserNavigation.value = null;
   });
 
   return { focus, navigate, currentView, restoringSelection, selectionError };

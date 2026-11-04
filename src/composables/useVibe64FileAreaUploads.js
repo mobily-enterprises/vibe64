@@ -6,10 +6,10 @@ import { vibe64DroppedFiles } from "@/lib/vibe64FileAreas.js";
  * Uploads into a Files area's open folder, from dropped or chosen files. A
  * burst of uploads reloads the listing once.
  * @param {object} options
- * @param {ReturnType<typeof import("@/composables/useVibe64FileAreaBrowser.js").useVibe64FileAreaBrowser>} options.browser
+ * @param {import("@/types.js").Vibe64FileAreaBrowser} options.browser
  * @param {import("vue").ComputedRef<boolean>} options.canWrite
  * @param {{ error: (error: unknown, fallback?: string) => void }} options.feedback
- * @param {ReturnType<typeof import("@/composables/useVibe64FileAreaFocus.js").useVibe64FileAreaFocus>} options.focus
+ * @param {import("@/types.js").Vibe64FileAreaFocus} options.focus
  * @param {{ base: string }} options.props The area's props.
  */
 function useVibe64FileAreaUploads({

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, nextTick, ref, toRef, unref, watch } from "vue";
+import { computed, nextTick, ref, toRef, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheckCircle, mdiChevronDown, mdiMapMarkerPath } from "@mdi/js";
 import { cliProblem } from "../studio/CliInstallNotice.vue";
@@ -23,7 +23,7 @@ import { useAiSetupProviderLinks } from "./useAiSetupProviderLinks.js";
 import { useAiSetupSuccess } from "./useAiSetupSuccess.js";
 import { useAiTeamSetupOffer } from "./useAiTeamSetupOffer.js";
 import { routingSelectionText } from "../studio/ModelRoutingRow.vue";
-import { VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { useVibe64Learning } from "/src/composables/useVibe64Learning.js";
 
 // The AI setup stage: choose a provider, connect it, settle routing and prove
 // it answers. The onboarding shell shows it after its Why screen; Account
@@ -110,18 +110,17 @@ const {
   cards, cardTool, checkingTools, checkTools, currentMarks, currentNames, expandedId, mainAi, mainCard, noToolHere,
   orderedCards, otherRows, ownerRoles, ownerSenior, readyHere
 } = setupCards;
-const learning = inject(VIBE64_LEARNING_KEY, null);
+const learning = useVibe64Learning();
 const {
   colleagueNote, doneLabel, hello, inLesson, learn, proven, sayHello, switchColleague
 } = useAiSetupSuccess({ setup, learning, screen, chosen, outcome, verifying, announcement });
 // One offer, once: the end of first-time setup (not a redo, not inline, not
 // in Learn) offers the course's orientation lesson; the done button is its
 // "not now". Starting it is the Learning controller's (openOrientation).
-const tourOffered = computed(() => !props.inline && firstRun.value && !learn.value &&
-  typeof unref(learning)?.openOrientation === "function");
+const tourOffered = computed(() => !props.inline && firstRun.value && !learn.value);
 function takeTour() {
   if (busy.value || !tourOffered.value) return;
-  unref(learning).openOrientation();
+  learning.openOrientation();
   close("tour");
 }
 // Advanced appears once anything is configured.

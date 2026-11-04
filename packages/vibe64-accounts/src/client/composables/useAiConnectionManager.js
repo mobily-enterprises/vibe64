@@ -411,7 +411,10 @@ function provideAiConnectionManager(manager) {
   return manager;
 }
 
-/** The manager its screen provided. */
+/**
+ * The manager its screen provided.
+ * @returns {ReturnType<typeof useAiConnectionManager>}
+ */
 function injectAiConnectionManager() {
   return inject(AI_CONNECTION_MANAGER_KEY);
 }

@@ -1,14 +1,15 @@
 import { computed, inject, unref } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "../lib/accountsGateApi.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { vibe64ProjectQueryScope } from "/src/lib/vibe64ProjectScope.js";
 
 // The workspace AI setup: the owner's and the team setup, with every
 // connected tool's choices and illustrative decisions. The "main" view reads
 // only the main chat's selection, without waiting for live model catalogues.
 function useModelRouting({ enabled = true, view = "" } = {}) {
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  /** @type {import("/src/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   const queryKey = computed(() => ["vibe64", ...vibe64ProjectQueryScope(unref(viewer)?.projectSlug),
     "model-routing", unref(viewer)?.actorKey || "signed-out", ...(view ? [view] : [])]);
   const resource = useEndpointResource({

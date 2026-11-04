@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./client": "./src/client/index.js",
+    "./client/types": "./src/client/types.js",
     "./server/types": "./src/server/types.js",
     "./shared": "./src/shared/index.js",
     "./server/actions": "./src/server/aiTaskActions.js"

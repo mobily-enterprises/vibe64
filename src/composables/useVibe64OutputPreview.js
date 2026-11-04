@@ -28,8 +28,8 @@ import {
  * its proxy address is still pending, its signed-in identity, and what the
  * editor reports back about it (its page and its diagnostics).
  * @param {{
- *   outputs: ReturnType<typeof import("./useVibe64OutputStatus.js").useVibe64OutputStatus>,
- *   outputTerminal: ReturnType<typeof import("./useVibe64OutputTerminal.js").useVibe64OutputTerminal>,
+ *   outputs: import("@/types.js").Vibe64OutputStatus,
+ *   outputTerminal: import("@/types.js").Vibe64OutputTerminal,
  *   projectSlug: import("vue").Ref<string>
  * }} options
  */

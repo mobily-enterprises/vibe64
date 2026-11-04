@@ -15,9 +15,13 @@ function provideVibe64OpenedProjectSlug(route = useRoute()) {
   provide(VIBE64_OPENED_PROJECT_SLUG_KEY, computed(() => slug));
 }
 
+/**
+ * The opened project's slug, or the route's outside a project view.
+ * @returns {import("vue").ComputedRef<string>}
+ */
 function useVibe64ProjectSlug(route = useRoute()) {
-  const opened = getCurrentInstance() ? inject(VIBE64_OPENED_PROJECT_SLUG_KEY, null) : null;
-  return opened || computed(() => projectSlugFromRoute(route));
+  const fromRoute = () => computed(() => projectSlugFromRoute(route));
+  return getCurrentInstance() ? inject(VIBE64_OPENED_PROJECT_SLUG_KEY, fromRoute, true) : fromRoute();
 }
 
 export {

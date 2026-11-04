@@ -13,7 +13,7 @@ import { sourceEditorPathIsMarkdown } from "@/lib/vibe64SourceFilePaths.js";
  * their saved descriptions and steps), its Code, or the Markdown document or
  * image it renders; and which of them a newly selected file opens in.
  * @param {object} options
- * @param {ReturnType<typeof import("@/composables/useVibe64SourceEditor.js").useVibe64SourceEditor>} options.editor
+ * @param {import("@/types.js").Vibe64SourceEditor} options.editor
  * @param {(location: { path: string, symbolId: string, presentation: string, symbolPresentation: string }) => void} options.onInterfaceLocation
  *   Told where a single-file reader is, for its host to record.
  * @param {{ active: boolean, architectureFacts: object | null, assistantAvailable: boolean, codeFocusMode: boolean,

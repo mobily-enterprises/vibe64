@@ -22,7 +22,7 @@ function normalizedOutputVersion(value) {
  * through `reportOutput(outputEvent)`. `terminalHost` holds the element the
  * terminal mounts on.
  * @param {{
- *   connection: ReturnType<typeof import("./useVibe64TerminalConnection.js").useVibe64TerminalConnection>,
+ *   connection: import("@/types.js").Vibe64TerminalConnection,
  *   terminalHost: import("vue").Ref<HTMLElement | null>,
  *   terminalError: import("vue").Ref<string>,
  *   readOnly: () => boolean,

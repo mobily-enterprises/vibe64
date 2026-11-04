@@ -222,6 +222,7 @@ const emit = defineEmits(["select-session"]);
 const infoSessionId = ref("");
 const renamingSession = ref(null);
 const renamingSessionsApiPath = ref("");
+/** @type {ReturnType<typeof import("@/lib/vibe64SessionTooltip.js").createVibe64SessionTooltipState>} */
 const sessionTooltip = inject(VIBE64_SESSION_TOOLTIP_KEY);
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {

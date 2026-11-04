@@ -9,7 +9,7 @@ import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
@@ -136,7 +136,8 @@ function createConversationApplication(conversation, { identity, viewer, summary
 
 /** Main text and voice consume one supplied retained conversation. */
 function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, active = true, summarySession } = {}) {
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   // The retained factory runs outside this component's setup after selection.
   // Capture the voice owner while ancestor providers are current.
   const voice = useVibe64Voice();
@@ -159,7 +160,7 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
     api: { ...api, sendConversationMessage(id, input, ...options) {
       // As for Colleague, a new request from this page lifts speech silence left
       // by an interrupted or failed reply; history refreshes are not invitations.
-      const state = voice?.controller.state;
+      const state = voice.controller.state;
       if (state?.binding?.conversationId === id) state.session?.inviteSpeech(input.messageId);
       return api.sendConversationMessage(id, input, ...options);
     } },

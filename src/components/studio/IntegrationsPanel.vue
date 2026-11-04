@@ -216,7 +216,8 @@ async function copySetupValue(value, label = "Callback URL") {
 }
 const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || (!production.value && props.dashboardContext.sourceOperationsSuspended === true) || (production.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
 const loadError = computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : ""));
-const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY, null);
+/** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedIntegrations>} */
+const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);
 const displayedIntegrations = {
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return props.dashboardContext.sessionId || ""; },
@@ -229,12 +230,11 @@ const displayedIntegrations = {
   select: selectIntegration
 };
 watchEffect(() => {
-  if (!colleagueIntegrations) return;
   if (props.dashboardContext.active !== false) colleagueIntegrations.value = displayedIntegrations;
   else if (colleagueIntegrations.value === displayedIntegrations) colleagueIntegrations.value = null;
 });
 onUnmounted(() => {
-  if (colleagueIntegrations?.value === displayedIntegrations) colleagueIntegrations.value = null;
+  if (colleagueIntegrations.value === displayedIntegrations) colleagueIntegrations.value = null;
 });
 
 function add(provider) {

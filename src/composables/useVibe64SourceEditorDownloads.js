@@ -10,7 +10,7 @@ import { basename } from "@/lib/vibe64SourceFilePaths.js";
  * Source file downloads, one at a time. Downloading the open file while it has
  * unsaved edits first asks whether to download the saved file or save first.
  * @param {object} options
- * @param {ReturnType<typeof import("@/composables/useVibe64SourceEditor.js").useVibe64SourceEditor>} options.editor
+ * @param {import("@/types.js").Vibe64SourceEditor} options.editor
  * @param {{ projectSlug: string, sessionId: string, sessionsApiPath: string }} options.props The source editor's props.
  */
 function useVibe64SourceEditorDownloads({

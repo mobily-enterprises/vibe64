@@ -121,6 +121,7 @@ const {
   saveWorkConnectedReview, saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
   selectSessionTool, sessionPullRequest, sourceOperationsSuspended, updateWorkDisabled
 } = view;
+/** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // An open Update task runs its own check: the person's review just tells it which one.
 function confirmResolvedUpdate() {

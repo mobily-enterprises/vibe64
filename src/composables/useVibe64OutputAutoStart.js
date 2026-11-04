@@ -23,9 +23,9 @@ const LAUNCH_STATUS_IDLE_RECOVERY_LIMIT = 6;
  *   autoStartManagedPreview: unknown,
  *   autoStartTargetId: unknown,
  *   busy: unknown,
- *   launch: ReturnType<typeof import("./useVibe64OutputLaunch.js").useVibe64OutputLaunch>,
- *   outputs: ReturnType<typeof import("./useVibe64OutputStatus.js").useVibe64OutputStatus>,
- *   outputTerminal: ReturnType<typeof import("./useVibe64OutputTerminal.js").useVibe64OutputTerminal>,
+ *   launch: import("@/types.js").Vibe64OutputLaunch,
+ *   outputs: import("@/types.js").Vibe64OutputStatus,
+ *   outputTerminal: import("@/types.js").Vibe64OutputTerminal,
  *   previewDisplayed: unknown,
  *   projectSlug: import("vue").Ref<string>
  * }} options

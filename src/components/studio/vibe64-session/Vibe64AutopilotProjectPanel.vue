@@ -247,6 +247,7 @@ const {
   systemBackAvailable, systemRestoreRequest, temporaryAiWorkspace,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
+/** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // Creating or reviewing the Data overview is an AI task; a person who may not use the fix assistant gets the
 // request as a main chat draft instead.

@@ -39,9 +39,9 @@ function codexAccountConnectedPayload(payload = {}) {
  * @param {{
  *   props: { readOnly?: boolean },
  *   emit: (event: "session-update", payload: object) => void,
- *   codexCommands: ReturnType<typeof import("./useVibe64CodexCommands.js").useVibe64CodexCommands>,
- *   terminalController: ReturnType<typeof import("./useVibe64Terminal.js").useVibe64Terminal>,
- *   resetTerminalOutput: ReturnType<typeof import("./useCodexTerminalOutput.js").useCodexTerminalOutput>["resetTerminalOutput"],
+ *   codexCommands: import("@/types.js").Vibe64CodexCommands,
+ *   terminalController: import("@/types.js").Vibe64Terminal,
+ *   resetTerminalOutput: import("@/types.js").CodexTerminalOutput["resetTerminalOutput"],
  *   sessionId: import("vue").ComputedRef<string>,
  *   serverTerminalSession: import("vue").ComputedRef<{ commandPreview: string, id: string, status: string }>,
  *   staleTerminalSessionIds: import("vue").Ref<Set<string>>,

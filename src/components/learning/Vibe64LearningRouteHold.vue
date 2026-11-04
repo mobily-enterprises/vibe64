@@ -20,6 +20,7 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 // tab) returned first is dropped, so the project never opens again on an error
 // from the mode it was left in.
 const learning = useVibe64Learning();
+/** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY);
 const route = useRoute();
 const queryClient = useQueryClient();

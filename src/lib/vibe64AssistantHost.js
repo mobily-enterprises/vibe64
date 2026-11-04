@@ -24,6 +24,31 @@ export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 // The viewer of a standalone editor, which has no host identity.
 export const LOCAL_ASSISTANT_VIEWER = Object.freeze({ actorKey: "local" });
 
+/** @typedef {{ actorKey: string }} AssistantViewer */
+/** What a host provides as its viewer: the viewer itself, or a ref that is null while nobody is signed in. */
+/** @typedef {import("vue").MaybeRef<AssistantViewer | null>} AssistantViewerSource */
+
+/**
+ * A template ref callback that keeps one element slot pointing at the element while it is mounted.
+ * @param {import("vue").ShallowRef<HTMLElement | null>} slot
+ * @returns {(element: HTMLElement | null) => void}
+ */
+export function elementSlotTarget(slot) {
+  let currentElement = null;
+  return element => {
+    if (element) slot.value = element;
+    else if (slot.value === currentElement) slot.value = null;
+    currentElement = element;
+  };
+}
+
+/**
+ * One of the shell context's slots: the view that owns it writes its current state there while it is
+ * selected, and Colleague, the lesson player and the host read it. Every host provides each slot.
+ * @template T
+ * @typedef {import("vue").ShallowRef<T | null>} ShellSlot
+ */
+
 // The shared Learning environment (L) controller (createVibe64Learning), provided
 // by the assistant shell context of each host as the controller itself.
 // Colleague reads coursesOpen, hiddenBy, mode, lessonAttemptId, lesson, stepId,

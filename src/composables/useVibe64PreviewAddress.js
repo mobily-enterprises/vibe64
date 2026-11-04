@@ -25,10 +25,10 @@ import {
  * the declared routes (asking for their parameters), going back, and the page
  * remembered for the project's Preview window. Navigating loads the frame.
  * @param {{
- *   frame: ReturnType<typeof import("./useVibe64PreviewFrame.js").useVibe64PreviewFrame>,
+ *   frame: import("@/types.js").Vibe64PreviewFrame,
  *   projectSlug: import("vue").Ref<string>,
  *   props: { embeddedPreview?: boolean, session?: object | null },
- *   targets: ReturnType<typeof import("./useVibe64PreviewTargets.js").useVibe64PreviewTargets>
+ *   targets: import("@/types.js").Vibe64PreviewTargets
  * }} options
  */
 function useVibe64PreviewAddress({ frame, projectSlug, props, targets }) {

@@ -20,7 +20,7 @@ const PROJECT_VIEW_WAIT_MS = 5000;
  * @param {LearningState} dependencies.state
  * @param {LearningCurrentLesson} dependencies.currentLesson
  * @param {LearningModes} dependencies.modes
- * @param {ReturnType<typeof import("./vibe64LessonPlayer.js").createLessonPlayer>} dependencies.player
+ * @param {import("@/types.js").LessonPlayer} dependencies.player
  * @param {LearningLayout} dependencies.layout
  * @param {LearningColleagueView} dependencies.colleagueView
  * @param {LearningBrowserNavigation} dependencies.browserNavigation

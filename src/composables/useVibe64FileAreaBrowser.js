@@ -12,7 +12,7 @@ import { fileAreaRequest, fileAreaUrl } from "@/lib/vibe64FileAreaRequest.js";
  * @param {import("vue").ComputedRef<{ label: string }>} options.areaInfo
  * @param {import("vue").Ref<boolean>} options.busy Whether a file operation runs.
  * @param {import("vue").Ref<HTMLElement | null>} options.fileHeading The open file's name.
- * @param {ReturnType<typeof import("@/composables/useVibe64FileAreaFocus.js").useVibe64FileAreaFocus>} options.focus
+ * @param {import("@/types.js").Vibe64FileAreaFocus} options.focus
  * @param {{ active: boolean, agentActive: boolean, base: string, projectSlug: string, refreshKey: number }} options.props
  *   The area's props.
  * @param {import("vue").Ref<HTMLElement | null>} options.root The area's element.

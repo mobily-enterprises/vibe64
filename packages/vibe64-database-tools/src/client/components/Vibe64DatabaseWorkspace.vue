@@ -449,7 +449,8 @@ watch(activeView, (view) => {
   }
 }, { flush: "post", immediate: true });
 
-const colleagueDatabase = inject(VIBE64_COLLEAGUE_DATABASE_KEY, null);
+/** @type {import("/src/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedDatabase>} */
+const colleagueDatabase = inject(VIBE64_COLLEAGUE_DATABASE_KEY);
 const displayedDatabase = {
   get projectSlug() { return props.projectSlug; },
   get sessionId() { return props.sessionId; },
@@ -471,12 +472,11 @@ const displayedDatabase = {
   }
 };
 watchEffect(() => {
-  if (!colleagueDatabase) return;
   if (props.active) colleagueDatabase.value = displayedDatabase;
   else if (colleagueDatabase.value === displayedDatabase) colleagueDatabase.value = null;
 });
 onBeforeUnmount(() => {
-  if (colleagueDatabase?.value === displayedDatabase) colleagueDatabase.value = null;
+  if (colleagueDatabase.value === displayedDatabase) colleagueDatabase.value = null;
 });
 
 onBeforeUnmount(() => {

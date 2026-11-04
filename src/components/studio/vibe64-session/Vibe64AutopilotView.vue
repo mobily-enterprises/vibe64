@@ -54,7 +54,7 @@
 import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch, watchEffect } from "vue";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
-import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
+import { NO_RESOURCE_RECOVERY_CONTROL, VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiGithub } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
@@ -85,7 +85,9 @@ const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
 const learning = useVibe64Learning();
 const lessonShown = computed(() => learning.lessonShown);
-const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+/** @type {import("vue").Component} */
+const providedRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, NO_RESOURCE_RECOVERY_CONTROL);
+const resourceRecoveryControl = providedRecoveryControl === NO_RESOURCE_RECOVERY_CONTROL ? null : providedRecoveryControl;
 // Usage in the Architecture tool, opened from the recording indicator
 // ({ recordingId }) or from a pick in Preview ({ entryId, mode }).
 const usageOpenRequest = ref(null);
@@ -286,17 +288,17 @@ const view = {
   temporaryAiWorkspace, testApproval, updateTestApproval, usageOpenRequest
 };
 
-// The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
-const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
+/**
+ * The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
+ * @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof assistantLayer>}
+ */
+const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY);
 const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
 
 });
 watchEffect(() => {
-  if (!assistantHost) {
-    return;
-  }
   if (assistantLayerSelected.value) {
     assistantHost.value = assistantLayer;
   } else if (assistantHost.value === assistantLayer) {
@@ -304,7 +306,7 @@ watchEffect(() => {
   }
 }, { flush: "sync" });
 onBeforeUnmount(() => {
-  if (assistantHost?.value === assistantLayer) {
+  if (assistantHost.value === assistantLayer) {
     assistantHost.value = null;
   }
 });

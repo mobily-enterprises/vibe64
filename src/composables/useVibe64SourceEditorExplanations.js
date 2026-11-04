@@ -38,7 +38,7 @@ import {
  * @param {import("vue").Ref<boolean>} options.canLoad
  * @param {import("vue").Ref<string>} options.currentSessionId
  * @param {import("vue").Ref<string>} options.currentSessionsApiPath
- * @param {ReturnType<typeof import("./useVibe64SourceEditorFile.js").useVibe64SourceEditorFile>} options.file
+ * @param {import("@/types.js").Vibe64SourceEditorFile} options.file
  * @param {string} options.originId
  * @param {import("vue").Ref<string>} options.selectedPath
  */
