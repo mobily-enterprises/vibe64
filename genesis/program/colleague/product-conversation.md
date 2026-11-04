@@ -96,6 +96,8 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `src/components/StudioAppShellLayout.vue`
 - `src/components/ShellLayout.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
+- `src/composables/useVibe64SessionAssistantChoice.js`
+- `src/composables/useVibe64SessionAssistantApply.js`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/lib/studioUrls.js`
 - `src/composables/useVibe64TemporaryAiColleagueView.js`

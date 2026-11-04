@@ -128,35 +128,25 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
+import { watch } from "vue";
 import {
   mdiCreditCardOutline,
   mdiLockOutline,
   mdiShieldCheckOutline
 } from "@mdi/js";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 
-import { useVibe64AssistantCatalog } from "@/composables/useVibe64AssistantCatalog.js";
+import { useVibe64SessionAssistantApply } from "@/composables/useVibe64SessionAssistantApply.js";
+import { useVibe64SessionAssistantChoice } from "@/composables/useVibe64SessionAssistantChoice.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
-import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
-import {
-  VIBE64_SESSIONS_API_SUFFIX,
-  VIBE64_ASSISTANT_MODEL_ACCESS_API_SUFFIX,
-  VIBE64_SURFACE_ID,
-  vibe64AssistantModelAccessPath,
-  vibe64SessionPath
-} from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
   selection: { type: Object, default: null },
   catalogPath: { type: String, default: "" },
+  // The control that opened Custom AI takes the focus back when it closes.
+  // readable-check: allow collaborator-prop - platform object: the opening control is a page element, absent until it mounts
   target: {
     default: null,
-    type: Object
+    type: /** @type {import("vue").PropType<HTMLElement | null>} */ (Object)
   },
   canConfigure: {
     default: false,
@@ -170,7 +160,11 @@ const props = defineProps({
     default: null,
     type: Object
   },
-  saveSelection: { type: Function, default: null },
+  // readable-check: allow collaborator-prop - optional operation: a session's main chat has no saver of its own and saves through the session
+  saveSelection: {
+    default: null,
+    type: /** @type {import("vue").PropType<((selection: Record<string, any>) => unknown) | null>} */ (Function)
+  },
   sessionsApiPath: {
     default: "",
     type: [Function, Object, String]
@@ -178,311 +172,23 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["saved"]);
-const saveError = ref("");
-const routingMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode || "");
 const menuOpen = defineModel({ type: Boolean, default: false });
-const saving = ref(false);
-const modelAccessUpdating = ref(false);
-const unlockConfirmOpen = ref(false);
-const modelProviderId = ref("");
-const modelId = ref("");
-const agentId = ref("");
-const variantId = ref("");
-const assistantSelection = computed(() => props.selection || assistantRoutingFromMetadata(props.session?.metadata)?.override || props.session?.assistantSelection || null);
-const engineId = ref("");
-const catalogActive = computed(() => Boolean(menuOpen.value && (props.session?.sessionId || props.saveSelection)));
-const connections = useVibe64AssistantCatalog({ active: catalogActive, configuredOnly: true, path: computed(() => props.catalogPath) });
-const engineRows = computed(() => connections.engines.value.filter((engine) => engine.health?.status === "ready" &&
-  engine.modelProviders?.some((provider) => provider.connected)));
-// Warm only connected engines while this dialog is open. Switching orchestrators
-// then reuses the same query; it does not start discovery after the click.
-// Each engine's whole connected catalogue is its only model-list read.
-const catalogs = Object.fromEntries(VIBE64_AGENT_PROVIDERS.map(({ id }) => [id, useVibe64AssistantCatalog({
-  active: computed(() => catalogActive.value && engineRows.value.some((engine) => engine.engineId === id)),
-  path: computed(() => props.catalogPath),
-  engineId: id, allConnectedModels: true, providerConnectedOnly: true
-})]));
-const catalog = computed(() => catalogs[engineId.value]);
-const catalogLoading = computed(() => connections.overview.isInitialLoading.value || catalog.value?.overview.isInitialLoading.value);
-const catalogError = computed(() => String(connections.overview.loadError.value || catalog.value?.overview.loadError.value || ""));
-const selectedOverviewEngine = computed(() => catalog.value?.selectedOverviewEngine.value || null);
-const currentModelEngine = selectedOverviewEngine;
-const providerRows = computed(() => (currentModelEngine.value?.modelProviders || []).filter((provider) => provider.connected));
-const selectedProvider = computed(() => providerRows.value.find((provider) => provider.id === modelProviderId.value));
-const savedProviderUnavailable = computed(() => !catalogLoading.value && assistantSelection.value?.engineId === engineId.value &&
-  !providerRows.value.some((provider) => provider.id === assistantSelection.value.modelProviderId));
-const modelRows = computed(() => providerRows.value.flatMap((provider) => provider.models
-  .filter((model) => model.status === "available").map((model) => ({ ...model, modelProviderId: provider.id,
-    props: { subtitle: provider.label }, key: JSON.stringify([provider.id, model.id]) }))));
-const modelKey = computed(() => JSON.stringify([modelProviderId.value, modelId.value]));
-const modelAccess = computed(() => (
-  selectedProvider.value?.modelAccess || {}
-));
-const modelAccessUnlocked = computed(() => modelAccess.value.mode === "all");
-const recommendedModel = computed(() => modelRows.value.find((model) => (
-  model.modelProviderId === modelProviderId.value && model.id === modelAccess.value.recommendedModelId && model.status === "available"
-)) || null);
-const canRestoreRecommendedModel = computed(() => Boolean(
-  recommendedModel.value && modelId.value !== recommendedModel.value.id
-));
-const modelAccessPendingLabel = computed(() => modelAccessUnlocked.value
-  ? `Returning to ${recommendedModel.value?.label || "the recommended model"}…`
-  : "Unlocking paid models…"
-);
-const selectedModel = computed(() => modelRows.value.find((model) => (
-  model.key === modelKey.value
-)) || null);
-// Primary agents that can run the given model of the selected provider.
-function agentsForModel(targetModelId = "") {
-  return (currentModelEngine.value?.agents || []).filter((agent) => (
-    ["all", "primary"].includes(agent.mode) &&
-    (!agent.modelProviderId || agent.modelProviderId === modelProviderId.value) &&
-    (!agent.modelId || agent.modelId === targetModelId)
-  ));
-}
-const compatibleAgents = computed(() => agentsForModel(modelId.value));
-const selectedAgent = computed(() => compatibleAgents.value.find((agent) => (
-  agent.id === agentId.value
-)) || null);
-const variantRows = computed(() => [
-  { id: "", label: "Default" },
-  ...(selectedModel.value?.variants || [])
-]);
-// Apply carries the whole catalogue's revision, as Models setup does; the server
-// checks a choice against the whole catalogue when one provider's page differs.
-const selectionRevision = computed(() => String(currentModelEngine.value?.revision || ""));
-const draftSelection = computed(() => ({
-  agentId: agentId.value,
-  catalogRevision: selectionRevision.value,
-  engineId: engineId.value,
-  modelId: modelId.value,
-  modelProviderId: modelProviderId.value,
-  variantId: variantId.value
-}));
-const selectionChanged = computed(() => {
-  const current = assistantSelection.value || {};
-  return ["agentId", "engineId", "modelId", "modelProviderId", "variantId"].some((field) => (
-    String(current[field] || "") !== String(draftSelection.value[field] || "")
-  ));
-});
-const canSave = computed(() => Boolean(
-  !props.changesDisabled &&
-  (selectionChanged.value || routingMode.value !== "custom") &&
-  selectedProvider.value &&
-  selectedModel.value &&
-  selectedAgent.value &&
-  selectionRevision.value &&
-  !catalogLoading.value &&
-  !catalogError.value &&
-  !modelAccessUpdating.value
-));
-const updateCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-  buildCommandOptions: (_model, { context }) => ({
-    method: "PATCH",
-    path: String(context?.path || "")
-  }),
-  buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
-    assistantSelection: context?.assistantSelection || {}
-  }),
-  fallbackRunError: "AI session choices could not be updated.",
-  suppressSuccessMessage: true,
-  onRunSuccess(response) {
-    if (response?.ok === false) throw new Error(response.error || "The custom model could not be saved.");
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.sessions.assistant-selection.update",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PATCH"
-});
-const modelAccessCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_ASSISTANT_MODEL_ACCESS_API_SUFFIX,
-  buildCommandOptions: (_model, { context }) => ({
-    method: "PATCH",
-    path: String(context?.path || "")
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    engineId: String(context?.engineId || ""),
-    modelProviderId: String(context?.modelProviderId || ""),
-    unlocked: context?.unlocked === true
-  }),
-  fallbackRunError: "Provider model access could not be changed.",
-  messages: {
-    error: "Provider model access could not be changed.",
-    success: "Provider model access updated."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.assistants.model-access.update",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PATCH"
-});
-
-function hydrateSelection() {
-  const selection = assistantSelection.value || {};
-  engineId.value = String(selection.engineId || "");
-  modelProviderId.value = String(selection.modelProviderId || "");
-  modelId.value = String(selection.modelId || "");
-  agentId.value = String(selection.agentId || "");
-  variantId.value = String(selection.variantId || "");
-}
-
-async function reloadCatalog() {
-  await Promise.all([connections.reload(), catalog.value?.reload()]);
-}
-
-function selectEngine(value) {
-  if (props.changesDisabled || value === engineId.value) return;
-  engineId.value = value;
-  modelProviderId.value = "";
-  modelId.value = "";
-  agentId.value = "";
-  variantId.value = "";
-}
-
-function selectModel(key) {
-  if (props.changesDisabled) return;
-  const model = modelRows.value.find((row) => row.key === key);
-  if (!model || model.key === modelKey.value) return;
-  modelProviderId.value = model.modelProviderId;
-  modelId.value = model.id;
-  agentId.value = "";
-  variantId.value = "";
-}
-
-function selectVariant(value = "") {
-  if (props.changesDisabled) return;
-  variantId.value = String(value || "");
-}
-
-function selectionForModel(model = null) {
-  if (!model || model.status !== "available" || !selectionRevision.value) {
-    return null;
-  }
-  const agents = agentsForModel(model.id);
-  const agent = agents.find((candidate) => (
-    candidate.id === selectedOverviewEngine.value?.defaults?.agentId
-  )) || agents[0] || null;
-  if (!agent) {
-    return null;
-  }
-  const requestedVariantId = String(agent.variantId || "");
-  const variants = Array.isArray(model.variants) ? model.variants : [];
-  return {
-    agentId: agent.id,
-    catalogRevision: selectionRevision.value,
-    engineId: engineId.value,
-    modelId: model.id,
-    modelProviderId: modelProviderId.value,
-    variantId: variants.some((variant) => variant.id === requestedVariantId)
-      ? requestedVariantId
-      : ""
-  };
-}
+const choice = useVibe64SessionAssistantChoice({ menuOpen, props });
+const {
+  agentId, assistantSelection, canRestoreRecommendedModel, catalogError, catalogLoading, compatibleAgents, connections,
+  currentModelEngine, engineId, engineRows, hydrateSelection, modelAccess, modelAccessPendingLabel, modelAccessUnlocked,
+  modelKey, modelRows, recommendedModel, reloadCatalog, savedProviderUnavailable, selectEngine, selectModel, selectVariant,
+  selectedAgent, selectedModel, selectedOverviewEngine, selectedProvider, variantId, variantRows
+} = choice;
+const {
+  canSave, confirmUnlockModelAccess, modelAccessUpdating, requestModelAccessChange, restoreRecommendedModel, save,
+  saveError, saving, unlockConfirmOpen
+} = useVibe64SessionAssistantApply({ choice, emit, menuOpen, props });
 
 function openConnectionSettings() {
   if (props.changesDisabled) return;
   menuOpen.value = false;
   requestVibe64AccountConnectionsDialog({ section: "ai" });
-}
-
-async function applySelection(selection, { closeMenu = true } = {}) {
-  const sessionId = String(props.session?.sessionId || "").trim();
-  const sessionsPath = String(readRefOrGetterValue(props.sessionsApiPath) || "").trim();
-  if (props.changesDisabled || !selection || (!props.saveSelection && (!sessionId || !sessionsPath)) || saving.value) {
-    return null;
-  }
-  saving.value = true;
-  saveError.value = "";
-  try {
-    const response = props.saveSelection ? await props.saveSelection(selection) : await updateCommand.run({
-      assistantSelection: selection,
-      path: vibe64SessionPath(sessionsPath, sessionId, "/assistant-selection")
-    });
-    if (response?.ok === false) throw new Error(response.error || "The custom model could not be saved.");
-    if (response?.ok !== false) {
-      emit("saved");
-      modelId.value = selection.modelId;
-      agentId.value = selection.agentId;
-      variantId.value = selection.variantId;
-      if (closeMenu) menuOpen.value = false;
-    }
-    return response;
-  } catch (error) {
-    saveError.value = error.message || "The custom model could not be saved.";
-    // A refused save may mean the catalogue changed ("Review the current
-    // choices and try again"); show the current choices so a retry can work.
-    reloadCatalog().catch(() => {});
-    return { ok: false, error: saveError.value };
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function save() {
-  if (!canSave.value) return;
-  await applySelection(draftSelection.value);
-}
-
-async function restoreRecommendedModel({ closeMenu = true } = {}) {
-  const selection = selectionForModel(recommendedModel.value);
-  return applySelection(selection, { closeMenu });
-}
-
-function requestModelAccessChange(unlocked) {
-  if (props.changesDisabled || !props.canConfigure || modelAccessUpdating.value || saving.value) return;
-  if (unlocked === true) {
-    unlockConfirmOpen.value = true;
-    return;
-  }
-  void updateModelAccess(false);
-}
-
-async function confirmUnlockModelAccess() {
-  unlockConfirmOpen.value = false;
-  await updateModelAccess(true);
-}
-
-async function updateModelAccess(unlocked) {
-  const providerId = String(modelProviderId.value || "").trim();
-  const path = vibe64AssistantModelAccessPath(connections.apiPath.value);
-  if (
-    !props.canConfigure ||
-    props.changesDisabled ||
-    !providerId ||
-    !path ||
-    !modelAccess.value.configurable ||
-    modelAccessUpdating.value
-  ) {
-    return null;
-  }
-  modelAccessUpdating.value = true;
-  try {
-    const current = assistantSelection.value || {};
-    if (
-      unlocked !== true &&
-      current.modelProviderId === providerId &&
-      recommendedModel.value &&
-      current.modelId !== recommendedModel.value.id
-    ) {
-      const recovery = await restoreRecommendedModel({ closeMenu: false });
-      if (recovery?.ok === false || !recovery) return recovery;
-      await nextTick();
-    }
-    const response = await modelAccessCommand.run({
-      engineId: engineId.value,
-      modelProviderId: providerId,
-      path,
-      unlocked: unlocked === true
-    });
-    if (response?.ok !== false) {
-      await catalog.value?.reload();
-    }
-    return response;
-  } finally {
-    modelAccessUpdating.value = false;
-  }
 }
 
 watch(() => JSON.stringify(assistantSelection.value), hydrateSelection, { immediate: true });

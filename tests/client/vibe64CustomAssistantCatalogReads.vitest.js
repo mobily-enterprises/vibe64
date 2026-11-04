@@ -65,10 +65,10 @@ it("reads each connected tool's model list once while Custom AI opens, reopens a
   await vi.waitFor(() => expect(state.canSave).toBe(true));
   await settled();
   state.selectEngine("opencode");
-  await vi.waitFor(() => expect(state.draftSelection).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm" }));
+  await vi.waitFor(() => expect(state.choice.draftSelection.value).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm" }));
   await settled();
   expect(modelListReads.sort()).toEqual(["codex", "opencode"]);
   // Apply carries the whole catalogue's revision, which the server accepts.
-  expect(state.draftSelection.catalogRevision).toBe(catalogues.opencode.revision);
+  expect(state.choice.draftSelection.value.catalogRevision).toBe(catalogues.opencode.revision);
   expect(state.canSave).toBe(true);
 });

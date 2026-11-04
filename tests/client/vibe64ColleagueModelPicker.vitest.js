@@ -53,7 +53,7 @@ it("Colleague reuses the picker without a session and polling cannot replace an 
   app._instance.props.selection = { ...savedSelection };
   await nextTick();
   expect(state.engineId).toBe("claude");
-  expect(state.modelId).toBe("claude-model");
+  expect(state.choice.modelId.value).toBe("claude-model");
   await state.save();
   expect(saveSelection).toHaveBeenCalledWith(expect.objectContaining({ engineId: "claude", modelId: "claude-model", catalogRevision: "current" }));
   expect(fixture.command).not.toHaveBeenCalled();

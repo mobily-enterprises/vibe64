@@ -1445,6 +1445,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64AttachmentDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
+- `src/composables/useVibe64SessionAssistantChoice.js`
+- `src/composables/useVibe64SessionAssistantApply.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/lib/vibe64AssistantHost.js`
 - `src/lib/vibe64AssistantConversation.js`

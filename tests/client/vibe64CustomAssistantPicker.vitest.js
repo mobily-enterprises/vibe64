@@ -45,7 +45,7 @@ it("can leave Auto with the same model; saves exactly the chosen engine, provide
   state.selectEngine("codex"); await nextTick();
   state.selectModel(JSON.stringify(["other", "glm"])); await nextTick();
   state.selectVariant("high"); await nextTick();
-  expect(state.draftSelection).toMatchObject({ engineId: "codex", modelId: "glm", variantId: "high" });
+  expect(state.choice.draftSelection.value).toMatchObject({ engineId: "codex", modelId: "glm", variantId: "high" });
   expect(mocks.save).not.toHaveBeenCalled();
   await state.save();
   expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ assistantSelection: expect.objectContaining({
@@ -62,9 +62,9 @@ it("keeps failed saves visible and permits retry", async () => {
 it("only recovers an unavailable provider in the draft, and Cancel discards it", async () => {
   const state = mount({ saved: { ...selection, modelProviderId: "removed" } });
   state.menuOpen = true; await nextTick();
-  expect(state.modelProviderId).toBe("zai"); expect(mocks.save).not.toHaveBeenCalled();
+  expect(state.choice.modelProviderId.value).toBe("zai"); expect(mocks.save).not.toHaveBeenCalled();
   state.selectModel(JSON.stringify(["other", "glm"])); state.menuOpen = false; await nextTick();
-  state.menuOpen = true; await nextTick(); expect(state.modelProviderId).toBe("zai");
+  state.menuOpen = true; await nextTick(); expect(state.choice.modelProviderId.value).toBe("zai");
   expect(mocks.save).not.toHaveBeenCalled();
 });
 it("does not discover catalogues while closed and refuses unavailable or busy choices", async () => {
@@ -98,7 +98,7 @@ it("applies Claude external choices with the warmed whole catalogue's revision, 
   expect(options.allConnectedModels).toBe(true);
   expect(options.modelProviderId).toBeUndefined();
   expect(state.canSave).toBe(true);
-  expect(state.draftSelection.catalogRevision).toBe(claude.revision);
+  expect(state.choice.draftSelection.value.catalogRevision).toBe(claude.revision);
   await state.save();
   expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ assistantSelection: expect.objectContaining({
     engineId: "claude", modelProviderId: "zai", agentId: "claude", modelId: "glm", catalogRevision: claude.revision
@@ -143,7 +143,7 @@ it("chooses a new session's AI without a session: nothing loads until it opens, 
   expect(mocks.catalogOptions.some((options) => options.active.value)).toBe(false);
   state.menuOpen = true; await nextTick();
   expect(mocks.catalogOptions[0].active.value).toBe(true);
-  expect(state.draftSelection).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm", variantId: "high" });
+  expect(state.choice.draftSelection.value).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm", variantId: "high" });
   state.selectModel(JSON.stringify(["other", "glm"])); await nextTick();
   await state.save();
   expect(saveSelection).toHaveBeenCalledWith(expect.objectContaining({ modelProviderId: "other", modelId: "glm" }));
