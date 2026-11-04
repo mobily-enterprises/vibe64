@@ -3,13 +3,9 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import { positiveNumber } from "@/lib/numbers.js";
 
 const WINDOW_MARGIN_PX = 12;
-
-function positiveNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : 0;
-}
 
 function useVibe64TerminalWindow({
   active,

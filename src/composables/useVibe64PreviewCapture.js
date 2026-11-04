@@ -8,6 +8,7 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import { positiveNumber } from "@/lib/numbers.js";
 
 const PREVIEW_CAPTURE_FRAME_TIMEOUT_MS = 5000;
 const PREVIEW_CAPTURE_MEDIA_OPTIONS = Object.freeze({
@@ -20,11 +21,6 @@ const PREVIEW_CAPTURE_MEDIA_OPTIONS = Object.freeze({
     displaySurface: "browser"
   }
 });
-
-function positiveNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : 0;
-}
 
 function previewVisibleViewportRect(rect = {}, viewport = {}) {
   const viewportWidth = positiveNumber(viewport.width);
