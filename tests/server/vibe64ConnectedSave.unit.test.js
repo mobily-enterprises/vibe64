@@ -51,6 +51,7 @@ test("connected Save commits and records each receiver, resumes after failure, a
       async listSessionSummaries() { return []; },
       store: {
         async readBackgroundTask(id, key) { return tasks.get(`${id}:${key}`) || null; },
+        async listSessionConversations() { return []; },
         async writeBackgroundTaskEvent(id, key, { patch }) {
           const task = { ...tasks.get(`${id}:${key}`), ...patch };
           tasks.set(`${id}:${key}`, task);

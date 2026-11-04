@@ -47,7 +47,8 @@ async function withConnectedLibrary(sessions, run, other) {
         async readMetadataValue(id, key) { return sessionsByProject[projectSlug].get(id).metadata[key] || ""; },
         async writeSessionLabel(id, name) { sessionsByProject[projectSlug].get(id).sessionName = name; return name; },
         async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); },
-        async listSessionsForRenewal() { return []; }
+        async listSessionsForRenewal() { return []; },
+        async listSessionConversations() { return []; }
       },
       async getSession(id) {
         const session = sessionsByProject[projectSlug].get(id);

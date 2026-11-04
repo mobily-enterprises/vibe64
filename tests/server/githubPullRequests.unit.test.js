@@ -552,7 +552,8 @@ test("PR update notifications reach only sessions sharing the same source branch
   const runtime = { async getSession(id) { return sessions.find((item) => item.sessionId === id); }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return sessions; },
     store: { async writeMetadataValue(id, name, value) { writes.push([id, name, value]); },
-      async writeBackgroundTaskEvent() { return {}; }, async readBackgroundTask() { return null; } } };
+      async writeBackgroundTaskEvent() { return {}; }, async readBackgroundTask() { return null; },
+      async listSessionConversations() { return []; } } };
   const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, async readCurrentProject() { return project; } },
     async publishSessionChanged() {}, terminals: { async requireAssistantAccess() {},
       async saveSessionWork(_id, input) { await input.onRepositoryWriteAcquired(); return { ok: true, saveCommit: "new", reconciled: true }; } } });
