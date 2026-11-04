@@ -17,7 +17,7 @@ for (const engineId of ["codex", "opencode"]) {
     const presence: Record<string, unknown>[] = [];
     const pageErrors: string[] = [];
     const composer = (page: Page) => taskWindow(page).getByRole("textbox", { name: "Message the AI" });
-    const typing = (page: Page) => taskWindow(page).getByText("John is typing…", { exact: true });
+    const typing = (page: Page) => taskWindow(page).locator("[data-assistant-composer-support]").filter({ hasText: "John is typing…" });
     try {
       const { task } = await server.aiTasks.start("free", { message: "Look at the failing build." });
       // Typing shows once the AI's turn has ended: while it works, the chat says so instead.
