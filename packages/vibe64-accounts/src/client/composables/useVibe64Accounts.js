@@ -3,6 +3,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useQueryClient } from "@tanstack/vue-query";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE
@@ -76,7 +77,7 @@ function statusWithAccount(status, account) {
 }
 
 function useVibe64Accounts({
-  client = null
+  client = getHttpWebClient()
 } = {}) {
   const queryClient = useQueryClient();
   const forceRefresh = ref(false);

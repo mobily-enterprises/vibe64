@@ -1,10 +1,11 @@
 import { computed, ref, watch } from "vue";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64Accounts } from "./useVibe64Accounts.js";
 
 const accountsSetupEmits = ["back", "continue"];
 const accountsSetupProps = {
   accountsClient: {
-    default: null,
+    default: () => getHttpWebClient(),
     type: Object
   },
   backLabel: {

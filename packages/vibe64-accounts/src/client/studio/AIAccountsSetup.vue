@@ -27,6 +27,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
@@ -41,7 +42,7 @@ const props = defineProps({
     type: Boolean
   },
   accountsClient: {
-    default: null,
+    default: () => getHttpWebClient(),
     type: Object
   },
   providerId: { default: "codex", type: String },
