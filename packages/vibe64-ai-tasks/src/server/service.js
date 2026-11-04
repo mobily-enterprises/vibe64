@@ -6,6 +6,7 @@ import { createAiTask } from "./aiTaskMachine.js";
 import { createAiTaskRunner } from "./aiTaskRunner.js";
 
 /** @typedef {import("./types.js").AiTask} AiTask */
+/** @typedef {import("./types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-database-tools/server/types").DatabaseToolsService} DatabaseToolsService */
@@ -27,14 +28,16 @@ function taskPerson(user) {
 /**
  * What a browser sees of a task: never the prompts it was given.
  * @param {{ conversationId: string, task: AiTask }} record
+ * @param {Record<string, AiTaskKind>} kinds
  */
-function presentAiTask({ conversationId, task }) {
+function presentAiTask({ conversationId, task }, kinds) {
   const {
     input: _input, pending, problem, startedBy, cancelledBy: _cancelledBy, endedBy, turn: _turn, doneMessage: _doneMessage, ...shown
   } = task;
   return {
     ...shown,
     id: conversationId,
+    renamable: Boolean(kinds[task.kind]?.rename),
     problem: { key: problem.key, summary: problem.summary, details: problem.details },
     checkRunning: pending?.effect === "check",
     conflictReview: problem.facts.reviewId || "",
@@ -56,7 +59,8 @@ function presentAiTask({ conversationId, task }) {
  */
 function createAiTasksService({ databaseTools, logger, project, publishSessionChanged, sessions, terminals }) {
   const kinds = createAiTaskKinds({ databaseTools, project, sessions, terminals });
-  const runner = createAiTaskRunner({ kinds, logger, project, publishSessionChanged, terminals, present: presentAiTask });
+  const present = record => presentAiTask(record, kinds);
+  const runner = createAiTaskRunner({ kinds, logger, project, publishSessionChanged, terminals, present });
 
   async function taskRecords(sessionId) {
     const { store } = await project.createRuntimeWithoutSource();
@@ -84,13 +88,13 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
   async function list(sessionId, { vibe64User = null } = {}) {
     const records = await taskRecords(sessionId);
     if (records.some(record => record.task.active)) void runner.wake(sessionId);
-    return { ok: true, tasks: records.map(presentAiTask), viewerId: taskPerson(vibe64User)?.id || "" };
+    return { ok: true, tasks: records.map(present), viewerId: taskPerson(vibe64User)?.id || "" };
   }
 
   async function read(sessionId, { taskId }) {
     const record = await taskRecord(sessionId, taskId);
     if (record.task.active) void runner.wake(sessionId);
-    return { ok: true, task: presentAiTask(record) };
+    return { ok: true, task: present(record) };
   }
 
   async function closeEnded(sessionId, record, vibe64User) {
@@ -98,7 +102,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
     runner.forget(record.conversationId);
     await publishSessionChanged(sessionId, {
       reason: "ai-task-changed",
-      payload: { aiTaskClosed: { ...presentAiTask(record), closedBy: taskPerson(vibe64User) } }
+      payload: { aiTaskClosed: { ...present(record), closedBy: taskPerson(vibe64User) } }
     });
   }
 
@@ -114,7 +118,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
     if (!kind) throw new AppError(400, "Vibe64 has no such AI task.", { code: "vibe64_ai_task_kind_unknown" });
     const records = await taskRecords(sessionId);
     const named = requestedId && records.find(record => record.conversationId === requestedId);
-    if (named) return { ok: true, task: presentAiTask(named) };
+    if (named) return { ok: true, task: present(named) };
     const open = records.find(record => !aiTaskEnded(record.task));
     const runtime = await project.createRuntimeWithoutSource();
     const problem = await kind.problem({ runtime, sessionId }, input).catch((error) => {
@@ -122,7 +126,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
       throw error;
     });
     if (open) {
-      if (!problem || open.task.problem.key === problem.key) return { ok: true, task: presentAiTask(open) };
+      if (!problem || open.task.problem.key === problem.key) return { ok: true, task: present(open) };
       throw openTaskRefusal(open);
     }
     for (const ended of records) await closeEnded(sessionId, ended, vibe64User);
@@ -149,7 +153,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
       }
     });
     runner.remember(taskId);
-    const shown = presentAiTask({ conversationId: taskId, task });
+    const shown = present({ conversationId: taskId, task });
     await publishSessionChanged(sessionId, { reason: "ai-task-changed", payload: { aiTask: shown } });
     void runner.wake(sessionId);
     return { ok: true, task: shown };
@@ -160,7 +164,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
     const record = await runner.apply(sessionId, taskId, event);
     if (!record) throw taskClosed();
     void runner.wake(sessionId);
-    return { ok: true, task: presentAiTask(record) };
+    return { ok: true, task: present(record) };
   }
 
   function cancel(sessionId, { taskId, vibe64User = null }) {
@@ -177,6 +181,20 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
 
   function finish(sessionId, { taskId, vibe64User = null }) {
     return act(sessionId, taskId, { type: "finish", by: vibe64User });
+  }
+
+  /**
+   * A person's name for their own task, in any phase until Close. The conversation never hears of it.
+   * @param {string} sessionId
+   * @param {{ taskId: string, name?: string }} request
+   */
+  async function rename(sessionId, { taskId, name = "" }) {
+    const { task } = await taskRecord(sessionId, taskId);
+    const kind = kinds[task.kind];
+    if (!kind?.rename) {
+      throw new AppError(409, "Only a New AI task can be renamed.", { code: "vibe64_ai_task_not_renamable" });
+    }
+    return act(sessionId, taskId, { type: "rename", title: kind.rename(name) });
   }
 
   /** Closing removes the conversation with the task; repeating it finds nothing to do. */
@@ -253,6 +271,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
     onTurnSettled,
     onTurnStarting,
     read,
+    rename,
     resumeInterruptedTasks,
     start
   });

@@ -76,6 +76,7 @@
  * @property {boolean} [hasDraft]
  * @property {string} [reviewedConflictId]
  * @property {object} [facts] what a failed check learned, for the next try
+ * @property {string} [title] a person's name for the task
  */
 
 /**
@@ -112,6 +113,8 @@
  * @property {string[]} steps
  * @property {AiTaskCheck} check
  * @property {string} done
+ * @property {(name: string) => string} [rename] the title a person's name gives the task; only a kind a person may
+ *   rename has it
  */
 
 /** @typedef {ReturnType<typeof import("./service.js").createAiTasksService>} AiTasksService */

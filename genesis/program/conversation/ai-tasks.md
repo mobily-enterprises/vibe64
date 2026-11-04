@@ -117,8 +117,23 @@ temporary chat; a record without one belongs to the temporary workspace.
 
 The session header's **New AI task** opens a small form, then the window. A refused
 start keeps the form open with what the person typed. Colleague reaches tasks through
-the task actions (`list`, `read`, `start`, `cancel`, `finish`, `close`), which return a
+the task actions (`list`, `read`, `start`, `cancel`, `finish`, `close`, `rename`), which return a
 bounded summary of each task; temporary conversations are no longer created or closed
 as Colleague tools. Its review of an assignment is a `colleague-review` task named by
 the assignment, finished when the work is ready and cancelled otherwise. Colleague's
 "open this conversation" opens a task in its window.
+
+## Rename
+
+Only a New AI task can be renamed: the `free` kind carries `rename`, and presenting
+a task marks it `renamable` from its kind, so nothing new is saved on the task.
+`vibe64.ai-tasks.rename` (`POST …/ai-tasks/:taskId/rename`, also a Colleague tool)
+sends a `rename` event through the machine like Finish: the kind turns the name
+into one line of at most 80 characters, and an empty name gives back the kind's
+title. It is the one event an ended task still takes, so a task can be renamed in
+any phase until Close. It counts up `revision` and reaches every viewer like any
+other move, and never touches the conversation. Other kinds refuse it with 409
+`vibe64_ai_task_not_renamable`; a closed task with 404 `vibe64_ai_task_closed`.
+The header's pencil (`Vibe64AiTaskRename`) shows when the projection says
+`renamable` and the window's source has `rename`, so a host's own task source
+without it offers no Rename.

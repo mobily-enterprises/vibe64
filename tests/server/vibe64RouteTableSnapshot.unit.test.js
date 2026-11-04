@@ -246,6 +246,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/cancel public ap
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/check public app - vibe64.ai-tasks.check
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/continue public app - vibe64.ai-tasks.continue
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/finish public app - vibe64.ai-tasks.finish
+POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/rename public app - vibe64.ai-tasks.rename
 POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/link public app - vibe64.sessions.connected.link
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare public app - vibe64.sessions.connected.prepare

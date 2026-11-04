@@ -10,6 +10,7 @@
  * @property {string} id
  * @property {string} kind
  * @property {string} title
+ * @property {boolean} renamable whether a person may rename the task: only a New AI task
  * @property {"fix"|"task"} noun
  * @property {string} tray
  * @property {string[]} steps
@@ -69,6 +70,7 @@
  * @property {AiTaskStep[]} steps
  * @property {AiTaskAction[]} actions the footer, empty outside `needs_you`
  * @property {string} cancelQuestion what Cancel asks before it ends the task
+ * @property {boolean} renamable whether the header offers Rename, in any phase until Close
  * @property {AiTaskOutcome | null} outcome
  */
 
@@ -90,6 +92,8 @@
  * @property {() => Promise<void>} cancel
  * @property {() => Promise<void>} close
  * @property {(actionId: string) => void} run
+ * @property {(name: string) => Promise<void>} [rename] saves a person's name for the task; a source without it
+ *   offers no Rename
  * @property {() => HTMLElement | null} returnFocusTarget
  */
 

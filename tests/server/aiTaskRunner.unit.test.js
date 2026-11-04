@@ -897,6 +897,41 @@ test("New AI task sends the person's request unstructured, stops at your turn an
   assert.deepEqual([saved.phase, saved.message], ["done", "You finished this task."]);
 }, { updateFailure: null }));
 
+test("a person renames their New AI task in any phase until Close, on one line, and the AI never hears of it", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "free", { message: "Tidy the README." });
+  assert.equal(task.renamable, true);
+  await f.quiet(running.aiTasks);
+  const before = f.published.length;
+  const renamed = await running.aiTasks.rename(SESSION, { taskId: task.id, name: "  README\n\ttidy-up   pass  " });
+  assert.deepEqual([renamed.task.title, renamed.task.phase], ["README tidy-up pass", "working"]);
+  assert.equal((await f.task(task.id)).title, "README tidy-up pass");
+  assert.equal(f.published[before].payload.aiTask.title, "README tidy-up pass", "every viewer hears the new name");
+  assert.equal(f.native.turns.length, 1, "a name sends nothing to the AI");
+  const long = await running.aiTasks.rename(SESSION, { taskId: task.id, name: `${"x".repeat(79)} tail` });
+  assert.equal(long.task.title, "x".repeat(79));
+  await f.finishTurn(running);
+  await running.aiTasks.finish(SESSION, { taskId: task.id, vibe64User: OWNER });
+  const reset = await running.aiTasks.rename(SESSION, { taskId: task.id, name: " \n " });
+  assert.deepEqual([reset.task.title, reset.task.phase], ["AI task", "done"], "an empty name gives back the usual one, after the end too");
+  await running.aiTasks.close(SESSION, { taskId: task.id, vibe64User: OWNER });
+  await assert.rejects(running.aiTasks.rename(SESSION, { taskId: task.id, name: "Late" }), error => error.code === "vibe64_ai_task_closed");
+}, { updateFailure: null }));
+
+test("only a New AI task can be renamed: a fix and Colleague's task keep their names", () => withFixture(async (f) => {
+  const running = f.boot();
+  const refused = error => error.status === 409 && error.code === "vibe64_ai_task_not_renamable";
+  const fix = (await f.start(running.aiTasks)).task;
+  assert.equal(fix.renamable, false);
+  await assert.rejects(running.aiTasks.rename(SESSION, { taskId: fix.id, name: "Mine" }), refused);
+  assert.equal((await f.task(fix.id)).title, "Fix Update");
+  await running.aiTasks.cancel(SESSION, { taskId: fix.id, vibe64User: OWNER });
+  await f.quiet(running.aiTasks);
+  const colleague = (await f.start(running.aiTasks, OWNER, "colleague", { message: "Summarise the issues.", title: "Issues" })).task;
+  await assert.rejects(running.aiTasks.rename(SESSION, { taskId: colleague.id, name: "Mine" }), refused);
+  assert.equal((await f.task(colleague.id)).title, "Issues");
+}));
+
 test("a request follows the starter's chat mode and copies recent Main messages only when asked", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks, OWNER, "colleague", {
@@ -927,10 +962,10 @@ test("a Colleague review waits for its first request, a retry finds the same tas
   assert.equal((await f.task("review-1")).reason, "your_turn");
 }, { updateFailure: null }));
 
-test("Colleague can list, read, start, cancel, finish and close tasks, and reads only a bounded summary", () => {
+test("Colleague can list, read, start, cancel, finish, close and rename tasks, and reads only a bounded summary", () => {
   const tools = new Map(createAiTaskActions({ aiTasks: {} }).filter(action => action.extensions.assistant)
     .map(action => [action.id.replace("vibe64.ai-tasks.", ""), action.extensions.assistant]));
-  assert.deepEqual([...tools.keys()], ["list", "read", "start", "cancel", "finish", "close"]);
+  assert.deepEqual([...tools.keys()], ["list", "read", "start", "cancel", "finish", "close", "rename"]);
   const task = { id: "t1", kind: "free", title: "AI task", phase: "done", reason: "", message: "m".repeat(5000),
     report: "r", problem: { key: "secret key", summary: "Tidy", details: "d" }, log: [{ text: "x" }], startedBy: { id: "owner" } };
   const shown = tools.get("read").transformResult({ ok: true, task });

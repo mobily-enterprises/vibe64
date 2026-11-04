@@ -40,6 +40,7 @@
             {{ projection.ended ? task.title : projection.status }}
           </p>
         </div>
+        <Vibe64AiTaskRename v-if="renamable" :title="task.title" @rename="rename" />
         <div v-if="!projection.ended" class="ai-task__commands">
           <v-btn v-if="!fit.phone" data-vibe64-ai-task-hide variant="text" @click="source.hide">{{ WORDS.actions.hide }}</v-btn>
           <v-btn
@@ -184,10 +185,11 @@ import {
 } from "@mdi/js";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskFit } from "./aiTaskFit.js";
-import { aiTaskFooterActions } from "./aiTaskProjection.js";
+import { aiTaskFooterActions, aiTaskOffersRename } from "./aiTaskProjection.js";
 import { useAiTaskFocus } from "./useAiTaskFocus.js";
 import Vibe64AiTaskOutcome from "./Vibe64AiTaskOutcome.vue";
 import Vibe64AiTaskProgress from "./Vibe64AiTaskProgress.vue";
+import Vibe64AiTaskRename from "./Vibe64AiTaskRename.vue";
 
 const props = defineProps({
   source: {
@@ -221,6 +223,7 @@ const fit = computed(() => aiTaskFit(width.value, height.value));
 const detailsOpen = ref(false);
 const confirmingCancel = ref(false);
 const cancelling = computed(() => props.source.cancelRequested || task.value.phase === "cancelling");
+const renamable = computed(() => aiTaskOffersRename(projection.value, props.source));
 const tabs = [{ id: "progress", label: WORDS.views.progress }, { id: "chat", label: WORDS.views.chat }];
 const { focusTitle, moveBetweenViews, reducedMotion, returnFocus, setTab } = useAiTaskFocus({
   title,
@@ -239,6 +242,11 @@ function requestCancel() {
 function cancel() {
   confirmingCancel.value = false;
   void props.source.cancel();
+}
+
+/** @param {string} name */
+function rename(name) {
+  void props.source.rename(name);
 }
 
 function escape() {

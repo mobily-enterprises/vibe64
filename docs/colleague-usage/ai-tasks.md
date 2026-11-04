@@ -125,6 +125,27 @@ and, on **Not done**, what's next. **See the conversation** reads the whole chat
 nothing in the session. An ended fix does not get in the way: starting a new task
 closes it.
 
+## Rename a task
+
+A **New AI task** has a pencil beside its name in the window's header (**Rename**
+and the task's name, for a screen reader). Choose it, type the new name in **Task
+name**, and choose **Rename** or press **Enter**. **Cancel** or **Esc** keeps the
+name it has.
+
+- A name is one line of at most 80 characters. Line breaks and repeated spaces
+  become single spaces.
+- An empty name gives the task back its usual name, **AI task**.
+- You can rename it whenever you like until you close it: while the AI works, while
+  it waits for you, and after it ends. Renaming never sends anything to the AI and
+  doesn't change the conversation.
+- The name is saved at once. It stays after a reload, shows in your other tabs and
+  for other members watching the session, and Vibe64's messages about the task use it.
+
+Fixes and Colleague's tasks keep the names they were given, so they have no pencil.
+
+When you ask, Colleague can rename a New AI task for you
+(`vibe64.ai-tasks.rename`), with the same rules. It can't rename any other task.
+
 ## Leave and come back
 
 **Hide** (the back arrow on a phone, **Esc** on a keyboard, or the browser's Back)

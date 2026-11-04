@@ -311,6 +311,8 @@ function advanceAiTask(task, event) {
  * @returns {AiTask}
  */
 function step(task, event) {
+  // A person may rename a task in any phase until Close; nothing else about it changes.
+  if (event.type === "rename") return event.title === task.title ? task : moved(task, { title: event.title }, event, "");
   if (aiTaskEnded(task)) return task;
   if (event.type === "archived") return notDone(task, REASONS.ARCHIVED, event, ARCHIVED_MESSAGE, ARCHIVED_MESSAGE);
   if (event.type === "cancel") return cancel(task, event);

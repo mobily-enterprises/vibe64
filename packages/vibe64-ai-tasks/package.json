@@ -49,7 +49,7 @@
         "surfaces": [
           {
             "subpath": "./server/actions",
-            "summary": "Defines the actions that start, read, cancel, check, continue, finish and close a session's AI tasks."
+            "summary": "Defines the actions that start, read, cancel, check, continue, finish, close and rename a session's AI tasks."
           }
         ],
         "capabilities": [
