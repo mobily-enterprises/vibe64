@@ -64,7 +64,7 @@ export const onboardingReadTool = {
           truncated: { type: "boolean", required: true },
           warning: text
         })
-      },
+      }
     })
   },
   transformResult(result, { input }) {
