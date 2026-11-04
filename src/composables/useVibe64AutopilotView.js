@@ -101,6 +101,22 @@ function composerSubmitTitleFor(mode, approvalOwnerSentence) {
   })[mode] || "Send message";
 }
 
+/**
+ * The Autopilot view's state and actions: the composer, delivery, questions, Save and Update, workspace
+ * preparation and the project side's tools.
+ * @param {Record<string, any>} props The Autopilot view's props.
+ * @param {(event: string, ...args: any[]) => void} emit The Autopilot view's emit.
+ * @param {{
+ *   assistantAccessLoading?: import("vue").Ref<boolean> | null,
+ *   assistantCanUseAi?: import("vue").Ref<boolean> | null,
+ *   assistantCanRouteChat?: import("vue").Ref<boolean> | null,
+ *   assistantCanUseFix?: import("vue").Ref<boolean> | null,
+ *   assistantCanUseNative?: import("vue").Ref<boolean> | null,
+ *   assistantProgressLabel?: import("vue").Ref<string> | null,
+ *   mainChatApprovals?: import("@/types.js").Vibe64MainChatApprovals | null,
+ *   onAttachmentsAccepted?: (attachmentIds: string[]) => void
+ * }} [options] Without access readers every assistant action is allowed; without approvals the chat sends directly.
+ */
 function useVibe64AutopilotView(props, emit, {
   assistantAccessLoading = null,
   assistantCanUseAi = null,

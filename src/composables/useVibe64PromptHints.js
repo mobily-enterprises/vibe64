@@ -40,6 +40,26 @@ function promptHintConversationFingerprint(turns = []) {
   })));
 }
 
+/**
+ * A conversation's prompt hints: suggestions requested for the empty composer, previewed and chosen.
+ * @param {{
+ *   active?: import("vue").MaybeRefOrGetter<boolean>,
+ *   blankConversation?: import("vue").MaybeRefOrGetter<boolean>,
+ *   canRequest?: import("vue").MaybeRefOrGetter<boolean>,
+ *   conversationKey?: import("vue").MaybeRefOrGetter<string>,
+ *   draft?: import("vue").MaybeRefOrGetter<string>,
+ *   existingProject?: import("vue").MaybeRefOrGetter<boolean>,
+ *   onSelect?: (text: string) => boolean,
+ *   policy?: import("vue").MaybeRefOrGetter<Record<string, any>>,
+ *   sessionId?: import("vue").MaybeRefOrGetter<string>,
+ *   sessionsApiPath?: import("vue").MaybeRefOrGetter<string>
+ * }} [options] onSelect puts a chosen hint in the composer.
+ * @param {{
+ *   debounceMs?: number,
+ *   minIntervalMs?: number,
+ *   request?: (path: string, options: object) => Promise<any>
+ * }} [timing] How long to wait between requests, and the request itself.
+ */
 function useVibe64PromptHints({
   active = true,
   blankConversation = false,

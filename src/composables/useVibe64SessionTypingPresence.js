@@ -74,6 +74,24 @@ function typingPresenceLabel(people = []) {
   return visible.length > 1 ? `${visible.length} people are typing…` : "";
 }
 
+/**
+ * Who else is typing in a session's conversation, and this tab's own typing reported to them.
+ * @param {{
+ *   active?: import("vue").MaybeRefOrGetter<boolean>,
+ *   conversationId?: import("vue").MaybeRefOrGetter<string>,
+ *   projectSlug?: import("vue").MaybeRefOrGetter<string>,
+ *   sessionId?: import("vue").MaybeRefOrGetter<string>,
+ *   sessionsApiPath?: import("vue").MaybeRefOrGetter<string>
+ * }} [options]
+ * @param {{
+ *   clearTimer?: typeof clearTimeout,
+ *   debounceMs?: number,
+ *   idleMs?: number,
+ *   now?: () => number,
+ *   request?: (path: string, options: object) => Promise<any>,
+ *   setTimer?: typeof setTimeout
+ * }} [timing] The clock, timers and request.
+ */
 function useVibe64SessionTypingPresence({
   active = true,
   conversationId = "",

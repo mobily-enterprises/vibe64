@@ -23,6 +23,15 @@ function emptyConversationWelcomeText({
 /**
  * The Main chat transcript pane: its turns with any routed request, the
  * welcome shown in an empty conversation, and reloading or paging history.
+ * @param {Record<string, any>} props The Autopilot view's props.
+ * @param {{
+ *   composerSending: import("vue").Ref<boolean>,
+ *   messageDelivery: import("vue").Ref<Record<string, any> | null>,
+ *   preferredName: import("vue").Ref<string | undefined>,
+ *   routingRequest: import("vue").Ref<Record<string, any> | null>,
+ *   sessionId: import("vue").Ref<string>,
+ *   workspaceSetupStatus: import("vue").Ref<string>
+ * }} options
  */
 function useVibe64AutopilotChatPane(props, {
   composerSending,

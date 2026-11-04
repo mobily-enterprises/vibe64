@@ -41,6 +41,30 @@ function executionAttentionForError(error = null, message = "") {
  * Main chat delivery: sending the composer's message or a lesson's prompt,
  * retrying after a full context, and cancelling, editing or resending a
  * message the server has not accepted.
+ * @param {Record<string, any>} props The Autopilot view's props.
+ * @param {(event: string, ...args: any[]) => void} emit The Autopilot view's emit.
+ * @param {{
+ *   actorKey: import("vue").Ref<string>,
+ *   agentSteerable: import("vue").Ref<boolean>,
+ *   approvalMode: import("vue").Ref<boolean>,
+ *   composerAttachments: import("vue").Ref<Array<Record<string, any>>>,
+ *   composerCanSubmit: import("vue").Ref<boolean>,
+ *   composerDraft: import("vue").Ref<string>,
+ *   composerQueueing: import("vue").Ref<boolean>,
+ *   composerRetryMatchesDraft: import("vue").Ref<boolean>,
+ *   composerRetrySubmission: import("vue").Ref<Record<string, any> | null>,
+ *   composerSending: import("vue").Ref<boolean>,
+ *   composerSubmissionKind: import("vue").Ref<string>,
+ *   mainChatApprovals: import("@/types.js").Vibe64MainChatApprovals | null,
+ *   messageDelivery: import("vue").Ref<Record<string, any> | null>,
+ *   onAttachmentsAccepted: (attachmentIds: string[]) => void,
+ *   projectSlug: import("vue").Ref<string>,
+ *   questionState: Record<string, any>,
+ *   reportActivity: ReturnType<typeof import("@/lib/vibe64PageActivity.js").usePageActivity>,
+ *   requestAgentSettings: import("vue").Ref<Record<string, any> | null>,
+ *   routingRequest: import("vue").Ref<Record<string, any> | null>,
+ *   sessionId: import("vue").Ref<string>
+ * }} options
  */
 function useVibe64MainChatDelivery(props, emit, {
   actorKey,
