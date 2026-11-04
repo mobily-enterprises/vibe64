@@ -69,11 +69,22 @@ function followMediaQuery(query, sync) {
   return () => media.removeListener(listener);
 }
 
+/**
+ * Whether a video element calls back for each frame it presents; requestVideoFrameCallback came to browsers at
+ * different times.
+ * @param {HTMLVideoElement} video
+ */
+function videoFrameCallbacksAvailable(video) {
+  // readable-check: allow method-probe - platform object: not every browser's video elements offer requestVideoFrameCallback
+  return typeof video.requestVideoFrameCallback === "function";
+}
+
 export {
   browserSessionStorage,
   followMediaQuery,
   hasWindowFunction,
   pageRandomUUID,
   reloadPage,
+  videoFrameCallbacksAvailable,
   writePageClipboardText
 };

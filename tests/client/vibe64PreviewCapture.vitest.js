@@ -235,7 +235,8 @@ describe("Vibe64 visible preview capture", () => {
       documentObject,
       fileConstructor: TestFile,
       mediaDevices,
-      now: () => capturedAt
+      now: () => capturedAt,
+      onEnded: vi.fn()
     });
 
     const first = await session.capture(visiblePreviewRect);
@@ -403,6 +404,10 @@ describe("Vibe64 visible preview capture", () => {
           previewLoaded: ref(true),
           scopeKey: ref("session-1"),
           windowObject: {
+            IntersectionObserver: class {
+              disconnect() {}
+              observe() {}
+            },
             innerHeight: 600,
             innerWidth: 1000
           }
@@ -462,7 +467,8 @@ describe("Vibe64 visible preview capture", () => {
         getDisplayMedia: vi.fn(() => new Promise((resolve) => {
           resolveDisplayMedia = resolve;
         }))
-      }
+      },
+      onEnded: vi.fn()
     });
 
     const capture = session.capture(visiblePreviewRect);
@@ -482,7 +488,8 @@ describe("Vibe64 visible preview capture", () => {
       fileConstructor: TestFile,
       mediaDevices: {
         getDisplayMedia: vi.fn(async () => testCaptureStream(track))
-      }
+      },
+      onEnded: vi.fn()
     });
 
     await expect(session.capture(visiblePreviewRect))
@@ -499,7 +506,8 @@ describe("Vibe64 visible preview capture", () => {
       fileConstructor: TestFile,
       mediaDevices: {
         getDisplayMedia: vi.fn(async () => testCaptureStream(track))
-      }
+      },
+      onEnded: vi.fn()
     });
 
     await expect(session.capture(() => null))

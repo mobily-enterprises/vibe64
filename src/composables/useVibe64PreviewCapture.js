@@ -8,6 +8,7 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import { videoFrameCallbacksAvailable } from "@/lib/browser.js";
 import { positiveNumber } from "@/lib/numbers.js";
 
 const PREVIEW_CAPTURE_FRAME_TIMEOUT_MS = 5000;
@@ -118,8 +119,8 @@ function previewCaptureAvailable({
 }
 
 function stopMediaStream(stream) {
-  for (const track of stream?.getTracks?.() || []) {
-    track?.stop?.();
+  for (const track of stream.getTracks()) {
+    track.stop();
   }
 }
 
@@ -138,7 +139,8 @@ function waitForPreviewVideoFrame(video, {
       }
       settled = true;
       clearTimeoutFn(timeoutId);
-      if (frameCallbackId && typeof video.cancelVideoFrameCallback === "function") {
+      // Only a browser with frame callbacks returned an id to cancel.
+      if (frameCallbackId) {
         video.cancelVideoFrameCallback(frameCallbackId);
       }
       if (error) {
@@ -157,7 +159,7 @@ function waitForPreviewVideoFrame(video, {
     const timeoutId = setTimeoutFn(() => {
       finish(previewCaptureError("The shared tab did not provide an image frame in time.", "frame_timeout"));
     }, timeoutMs);
-    if (typeof video.requestVideoFrameCallback === "function") {
+    if (videoFrameCallbacksAvailable(video)) {
       frameCallbackId = video.requestVideoFrameCallback(frameReady);
       return;
     }
@@ -180,43 +182,60 @@ function previewCanvasBlob(canvas) {
   });
 }
 
+/** The current date, when a capture is taken. */
+function currentDate() {
+  return new Date();
+}
+
+/**
+ * One tab share at a time, cropped to the visible Preview. The browser's
+ * capture, document, File and timers are passed in so tests can supply their
+ * own; `onEnded()` is told when the person ends the share from the browser.
+ * @param {{
+ *   clearTimeoutFn?: typeof clearTimeout,
+ *   documentObject?: Document,
+ *   fileConstructor?: typeof File,
+ *   mediaDevices?: MediaDevices,
+ *   now?: () => Date,
+ *   onEnded: () => void,
+ *   requestAnimationFrameFn?: typeof requestAnimationFrame,
+ *   setTimeoutFn?: typeof setTimeout
+ * }} options
+ */
 function createVibe64PreviewCaptureSession({
   clearTimeoutFn = globalThis.clearTimeout,
   documentObject = globalThis.document,
   fileConstructor = globalThis.File,
   mediaDevices = globalThis.navigator?.mediaDevices,
-  now = () => new Date(),
-  onEnded = () => null,
+  now = currentDate,
+  onEnded,
   requestAnimationFrameFn = globalThis.requestAnimationFrame,
   setTimeoutFn = globalThis.setTimeout
-} = {}) {
+}) {
   let captureGeneration = 0;
   let captureSequence = 0;
   let captureStream = null;
   let captureTrack = null;
   let captureVideo = null;
 
+  /** Whether this browser can share a tab: insecure pages and most phones offer no getDisplayMedia. */
   function supported() {
-    return Boolean(
-      mediaDevices?.getDisplayMedia &&
-      documentObject?.createElement &&
-      typeof fileConstructor === "function"
-    );
+    return Boolean(mediaDevices?.getDisplayMedia);
   }
 
   function release({ stopTracks = false } = {}) {
     const stream = captureStream;
     if (captureTrack) {
-      captureTrack.removeEventListener?.("ended", handleTrackEnded);
+      captureTrack.removeEventListener("ended", handleTrackEnded);
     }
-    captureVideo?.pause?.();
     if (captureVideo) {
+      captureVideo.pause();
       captureVideo.srcObject = null;
     }
     captureStream = null;
     captureTrack = null;
     captureVideo = null;
-    if (stopTracks) {
+    if (stopTracks && stream) {
       stopMediaStream(stream);
     }
   }
@@ -241,12 +260,12 @@ function createVibe64PreviewCaptureSession({
       stopMediaStream(stream);
       throw previewCaptureError("Preview capture was cancelled.", "capture_cancelled");
     }
-    const track = stream?.getVideoTracks?.()[0] || null;
-    const displaySurface = String(track?.getSettings?.().displaySurface || "");
+    const track = stream.getVideoTracks()[0] || null;
     if (!track || track.readyState === "ended") {
       stopMediaStream(stream);
       throw previewCaptureError("The browser did not share a live tab.", "track_unavailable");
     }
+    const displaySurface = String(track.getSettings().displaySurface || "");
     if (displaySurface && displaySurface !== "browser") {
       stopMediaStream(stream);
       throw previewCaptureError("Choose the current Vibe64 tab, not a window or screen.", "wrong_surface");
@@ -262,7 +281,7 @@ function createVibe64PreviewCaptureSession({
     captureStream = stream;
     captureTrack = track;
     captureVideo = video;
-    track.addEventListener?.("ended", handleTrackEnded);
+    track.addEventListener("ended", handleTrackEnded);
     return video;
   }
 
@@ -279,7 +298,7 @@ function createVibe64PreviewCaptureSession({
       if (generation !== captureGeneration) {
         throw previewCaptureError("Preview capture was cancelled.", "capture_cancelled");
       }
-      const visibleRect = typeof getVisibleRect === "function" ? getVisibleRect() : null;
+      const visibleRect = getVisibleRect();
       if (!visibleRect) {
         throw previewCaptureError("The preview moved out of view before it could be captured.", "preview_not_visible");
       }
@@ -327,11 +346,11 @@ function createVibe64PreviewCaptureSession({
     release({ stopTracks: true });
   }
 
-  return {
+  return Object.freeze({
     capture,
     stop,
     supported
-  };
+  });
 }
 
 function useVibe64PreviewCapture({
@@ -381,7 +400,9 @@ function useVibe64PreviewCapture({
   }
 
   function disconnectObserver() {
-    intersectionObserver?.disconnect?.();
+    if (intersectionObserver) {
+      intersectionObserver.disconnect();
+    }
     intersectionObserver = null;
   }
 
@@ -392,12 +413,10 @@ function useVibe64PreviewCapture({
       refreshVisibility();
       return;
     }
-    if (typeof windowObject?.IntersectionObserver === "function") {
-      intersectionObserver = new windowObject.IntersectionObserver(refreshVisibility, {
-        threshold: 0
-      });
-      intersectionObserver.observe(frame);
-    }
+    intersectionObserver = new windowObject.IntersectionObserver(refreshVisibility, {
+      threshold: 0
+    });
+    intersectionObserver.observe(frame);
     refreshVisibility();
   }
 
