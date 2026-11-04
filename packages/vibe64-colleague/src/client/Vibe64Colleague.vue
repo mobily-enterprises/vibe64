@@ -9,8 +9,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, unref, wat
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
-import { useVibe64Learning } from "/src/composables/useVibe64Learning.js";
+import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
@@ -64,8 +63,8 @@ const pageActivity = inject(VIBE64_PAGE_ACTIVITY_KEY);
 watch(shown, (value, was) => {
   if (value !== was) pageActivity.report(value ? "colleague-opened" : "colleague-minimised", { projectSlug: props.focus?.projectSlug });
 });
-// The shared Learning controller (L and Courses).
-const learning = useVibe64Learning();
+/** @type {import("/src/types.js").Vibe64Learning} The shared Learning controller (L and Courses). */
+const learning = inject(VIBE64_LEARNING_KEY);
 const learningController = computed(() => learning);
 const { learningStep, stepButton, showLearningStep, leaveForLearning } = useColleagueLearning({
   learningController, xs, shown, toggleConversation, reopenConversation, reportFailure

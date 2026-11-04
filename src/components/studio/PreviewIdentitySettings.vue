@@ -168,6 +168,7 @@ import {
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
+import { reloadPage } from "@/lib/browser.js";
 
 const identityTypeLabels = Object.freeze({
   [PREVIEW_IDENTITY_SELECTOR_EMAIL]: "Email",
@@ -310,12 +311,6 @@ async function save() {
   // stored list the new draft instead of comparing it with what was typed.
   if (saved !== null) {
     resetDraft();
-  }
-}
-
-function reloadPage() {
-  if (typeof window !== "undefined") {
-    window.location.reload();
   }
 }
 </script>

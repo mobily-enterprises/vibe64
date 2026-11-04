@@ -53,8 +53,8 @@ export function elementSlotTarget(slot) {
 // by the assistant shell context of each host as the controller itself.
 // Colleague reads coursesOpen, hiddenBy, mode, lessonAttemptId, lesson, stepId,
 // results and colleagueRequest, and calls show(), minimise(),
-// openLesson({ attemptId, stepId }) and consumeColleagueRequest(id). Consumers
-// tolerate its absence.
+// openLesson({ attemptId, stepId }) and consumeColleagueRequest(id). Every host
+// provides it, so consumers inject it required.
 export const VIBE64_LEARNING_KEY = Symbol("vibe64.learning");
 
 // The page's focus as its host computes it (Colleague's focus shape), written

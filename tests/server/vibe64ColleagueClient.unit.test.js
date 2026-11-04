@@ -28,6 +28,7 @@ import * as navigationPanes from "../../packages/vibe64-colleague/src/shared/nav
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import * as assistantHostKeys from "../../src/lib/vibe64AssistantHost.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
 // barrels need only presentation placeholders; all JavaScript stays installed.
@@ -1040,8 +1041,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), 
-      VIBE64_COLLEAGUE_VIEW_KEY: Symbol("view"), VIBE64_LEARNING_KEY: Symbol("learning") },
+    "/src/lib/vibe64AssistantHost.js": assistantHostKeys,
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} },
@@ -1086,9 +1086,12 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     app: { id: "app", routeBase: "/", requiresWorkspace: false }
   } } });
   app.provide("jskit.shell-web.runtime.web-placement.client", placement);
-  if (viewer) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_ASSISTANT_VIEWER_KEY, viewer);
-  if (learning) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_LEARNING_KEY, learning);
-  if (companionView) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_VIEW_KEY, companionView);
+  if (viewer) app.provide(assistantHostKeys.VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+  // What every host's shell context provides; a test passes its own learning controller or selected view.
+  app.provide(assistantHostKeys.VIBE64_LEARNING_KEY, learning || vue.reactive({}));
+  app.provide(assistantHostKeys.VIBE64_COLLEAGUE_VIEW_KEY, companionView || vue.shallowRef(null));
+  app.provide(assistantHostKeys.VIBE64_COLLEAGUE_LAUNCHER_KEY, vue.shallowRef(null));
+  app.provide(assistantHostKeys.VIBE64_PAGE_ACTIVITY_KEY, { report() {}, subscribe: () => () => {} });
   app.provide(routeLocationKey, vue.reactive({ path: "/" }));
   app.provide("jskit.realtime.runtime.client.socket", socket);
   app.mount({});
@@ -1717,21 +1720,21 @@ test("Colleague guide commands point without navigating and show me through the 
 test("Colleague opening an app place minimises Learning, and a phone minimises its own dialog for guides and Learning", async t => {
   const acks = [];
   const calls = [];
-  const learning = vue.shallowRef(vue.reactive({ coursesOpen: true, surface: "courses",
+  const learning = vue.reactive({ coursesOpen: true, surface: "courses",
     mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, stepId: "open-preview", lesson: null, results: [],
     show(input) { calls.push(["show", input]); this.coursesOpen = true; },
-    minimise(by = "") { calls.push(["minimise", by]); this.coursesOpen = false; } }));
+    minimise(by = "") { calls.push(["minimise", by]); this.coursesOpen = false; } });
   const view = mount(t, async (url, options) => {
     if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
     return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
   }, undefined, null, null, null, { learning });
   await flush();
-  view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.coursesOpen });
+  view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.coursesOpen });
   await view.state.handleNavigation({ id: "open-preview", status: "pending", projectSlug: "alpha", sessionId: "", pane: "preview" });
   assert.deepEqual(calls, [["minimise", ""]], "the app place becomes visible; Courses keeps its state, not as the learner's close");
   assert.equal(acks.at(-1).focus.learningOpen, false);
   calls.length = 0;
-  learning.value.coursesOpen = true;
+  learning.coursesOpen = true;
   await view.state.handleNavigation({ id: "open-learning", status: "pending", learning: { open: true } });
   assert.deepEqual(calls, [], "a Learning command is the host navigator's own selection");
 
@@ -2324,7 +2327,7 @@ test("the local Colleague host reports the shared Learning state, opens Courses 
     },
     minimise() { this.coursesOpen = false; } });
   const { navigation, received } = await mountLocalColleagueHost(t, { route, provide(host, keys) {
-    host.provide(keys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
+    host.provide(keys.VIBE64_LEARNING_KEY, controller);
     host.provide(keys.VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
   } });
   assert.equal(received().focus.learningOpen, false);
@@ -2339,11 +2342,4 @@ test("the local Colleague host reports the shared Learning state, opens Courses 
     [false, "lesson", attemptId, "two"], "the step shows in the Lesson pane, with Courses closed");
   const minimised = await navigation.value({ id: "minimise", status: "pending", learning: { open: false } });
   assert.equal(minimised.learningOpen, false);
-});
-
-test("the local Colleague host refuses a Learning command when no Learning controller is provided", async t => {
-  const route = vue.reactive({ path: "/app/project/demo", query: {} });
-  const { navigation, received } = await mountLocalColleagueHost(t, { route });
-  assert.equal(Object.hasOwn(received().focus, "learningOpen"), false, "no controller, no Learning focus");
-  await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Courses is unavailable/u);
 });

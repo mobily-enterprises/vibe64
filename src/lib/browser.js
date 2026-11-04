@@ -25,8 +25,16 @@ function pageRandomUUID() {
   return typeof globalThis.crypto?.randomUUID === "function" ? globalThis.crypto.randomUUID() : "";
 }
 
+/** Reloads the page, after a change only a fresh page shows; outside a browser there is no page to reload. */
+function reloadPage() {
+  if (typeof window !== "undefined") {
+    window.location.reload();
+  }
+}
+
 export {
   browserSessionStorage,
   hasWindowFunction,
-  pageRandomUUID
+  pageRandomUUID,
+  reloadPage
 };

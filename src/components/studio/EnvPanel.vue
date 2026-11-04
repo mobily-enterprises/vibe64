@@ -277,6 +277,7 @@ import {
 import {
   useVibe64SessionSelection
 } from "@/composables/useVibe64SessionSelection.js";
+import { reloadPage } from "@/lib/browser.js";
 
 const projectSlug = useVibe64ProjectSlug();
 const sessionSelection = useVibe64SessionSelection({
@@ -588,12 +589,6 @@ async function saveValues(values = {}, { waitForRefresh = true } = {}) {
 async function savedValueChanged() {
   newValue.value = emptyNewValue();
   await reloadEnv();
-}
-
-function reloadPage() {
-  if (typeof window !== "undefined") {
-    window.location.reload();
-  }
 }
 </script>
 

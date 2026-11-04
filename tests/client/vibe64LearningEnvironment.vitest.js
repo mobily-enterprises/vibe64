@@ -774,7 +774,7 @@ describe("useVibe64Learning controller", () => {
     } finally { stop(); }
     const colleagueSource = readFileSync(path.resolve("packages/vibe64-colleague/src/client/Vibe64Colleague.vue"), "utf8");
     // One injection of the L controller feeds both the step card (E) and Teach me (D).
-    expect(colleagueSource).toContain("const learning = useVibe64Learning();");
+    expect(colleagueSource).toContain("const learning = inject(VIBE64_LEARNING_KEY);");
     expect(colleagueSource).toContain("const learningController = computed(() => learning);");
     expect(colleagueSource).toContain("watchColleagueLearningRequests({ learning: learningController.value");
   });

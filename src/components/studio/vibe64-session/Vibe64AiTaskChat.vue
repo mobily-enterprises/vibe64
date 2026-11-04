@@ -233,16 +233,6 @@ function focusSend() {
   min-width: 0;
 }
 
-/* JSKIT's transcript hard-codes these two colours: they ignore the theme and fail contrast. */
-.ai-task-chat :deep(.assistant-transcript--task .assistant-transcript__message--user) {
-  background: rgba(126, 87, 194, 0.16);
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.ai-task-chat :deep(.assistant-transcript__message-footer) {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
 .ai-task-chat__ended {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.875rem;

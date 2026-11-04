@@ -365,6 +365,7 @@ import {
 import {
   VIBE64_SESSION_SUMMARY_CHANGED_EVENT
 } from "@/lib/vibe64SessionRequestConfig.js";
+import { reloadPage } from "@/lib/browser.js";
 
 const projectSlug = useVibe64ProjectSlug();
 const route = useRoute();
@@ -538,12 +539,6 @@ function openPersonalSettings() {
     refresh: false,
     section: "profile"
   });
-}
-
-function reloadPage() {
-  if (typeof window !== "undefined") {
-    window.location.reload();
-  }
 }
 </script>
 
