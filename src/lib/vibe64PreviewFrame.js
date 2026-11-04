@@ -40,7 +40,7 @@ function previewLifecycleIdentity(parts = [], url = "") {
 }
 
 function isPreviewBridgeReadyMessage(value = {}) {
-  return String(value?.type || "") === PREVIEW_BRIDGE_READY_MESSAGE_TYPE;
+  return String(value.type || "") === PREVIEW_BRIDGE_READY_MESSAGE_TYPE;
 }
 
 function previewOpeningOverlayVisible({
@@ -79,7 +79,9 @@ function createPreviewBridgeRequestRegistry() {
       return null;
     }
     clearTimeout(pending.timeout);
-    pending.signal?.removeEventListener?.("abort", pending.abortHandler);
+    if (pending.signal) {
+      pending.signal.removeEventListener("abort", pending.abortHandler);
+    }
     pendingRequests.delete(requestId);
     return pending;
   }
@@ -105,7 +107,7 @@ function createPreviewBridgeRequestRegistry() {
     timeoutMessage = "The application preview did not respond in time.",
     timeoutMs = 3000
   } = {}) {
-    if (!targetOrigin || !targetWindow || typeof targetWindow.postMessage !== "function") {
+    if (!targetOrigin || !targetWindow) {
       return Promise.reject(new Error("The application preview is not ready."));
     }
     if (signal?.aborted) {
@@ -130,9 +132,11 @@ function createPreviewBridgeRequestRegistry() {
         signal,
         timeout
       });
-      signal?.addEventListener?.("abort", abortHandler, { once: true });
-      if (signal?.aborted) {
-        abortHandler();
+      if (signal) {
+        signal.addEventListener("abort", abortHandler, { once: true });
+        if (signal.aborted) {
+          abortHandler();
+        }
       }
     });
     try {

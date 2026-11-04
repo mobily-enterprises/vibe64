@@ -111,7 +111,7 @@ function previewIdentityFromExchange(exchangeResult = {}, requestedIdentity = {}
       mode: "guest"
     };
   }
-  const identity = exchangeResult?.identity && typeof exchangeResult.identity === "object"
+  const identity = exchangeResult.identity && typeof exchangeResult.identity === "object"
     ? exchangeResult.identity
     : {};
   const selector = normalizePreviewIdentitySelector(

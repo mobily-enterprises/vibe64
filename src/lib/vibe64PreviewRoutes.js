@@ -1,8 +1,12 @@
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+
 const ROUTE_PARAM_PATTERN = /:([A-Za-z][A-Za-z0-9_]*)/gu;
 
-function previewRoutesForTarget(launchTarget = {}) {
-  return Array.isArray(launchTarget?.previewRoutes)
-    ? launchTarget.previewRoutes.filter((route) => route?.id && route?.pathTemplate)
+/** The routes a launch target declares for its Preview; a Preview without a target (null) has none. */
+function previewRoutesForTarget(launchTarget) {
+  const target = normalizeObject(launchTarget);
+  return Array.isArray(target.previewRoutes)
+    ? target.previewRoutes.filter((route) => route?.id && route?.pathTemplate)
     : [];
 }
 
@@ -40,7 +44,7 @@ function previewRoutePath(route = {}, values = {}) {
   let missingParam = "";
   const path = pathTemplate.replace(ROUTE_PARAM_PATTERN, (match, name) => {
     const param = params.find((candidate) => candidate.name === name);
-    const value = String(values?.[name] ?? param?.defaultValue ?? "").trim();
+    const value = String(values[name] ?? param?.defaultValue ?? "").trim();
     if (!value && param?.required !== false) {
       missingParam ||= name;
       return match;

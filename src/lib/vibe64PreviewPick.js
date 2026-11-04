@@ -1,6 +1,7 @@
 // Click in Preview: the component a picked element belongs to, the usage
 // entry it opens, and the colours of the pick highlight.
 
+import { hasWindowFunction } from "@/lib/browser.js";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
 const PREVIEW_PICK_NO_COMPONENT_TEXT = "No component information on this page. Record while clicking to see its requests.";
@@ -17,7 +18,7 @@ function previewComponentSourcePath(file = "", sourceRoot = "") {
 // The editor's primary colour and the colour on it, as the element shows them,
 // for the Preview's Pick highlight: { color, onColor } as #rrggbb, else {}.
 function previewPickColors(element) {
-  const style = element && typeof globalThis.getComputedStyle === "function" ? globalThis.getComputedStyle(element) : null;
+  const style = element && hasWindowFunction("getComputedStyle") ? window.getComputedStyle(element) : null;
   const hex = (name) => {
     const channels = String(style?.getPropertyValue(name) || "").match(/^\s*rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)\s*$/u)
       ?.slice(1).map(Number);

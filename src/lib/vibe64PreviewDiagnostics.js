@@ -1,3 +1,4 @@
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 
 const PREVIEW_DIAGNOSTICS_MAX_TEXT_CHARACTERS = 700000;
@@ -21,12 +22,8 @@ function diagnosticsUrl(value = "") {
   }
 }
 
-function diagnosticsObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function diagnosticsHeaders(value = {}) {
-  return Object.fromEntries(Object.entries(diagnosticsObject(value))
+  return Object.fromEntries(Object.entries(normalizeObject(value))
     .slice(0, 100)
     .map(([name, headerValue]) => [
       clippedDiagnosticsValue(name, 500),
@@ -101,9 +98,9 @@ function diagnosticsSection(title, entries = [], formatEntry) {
 }
 
 function previewDiagnosticsText(snapshot = {}) {
-  const source = diagnosticsObject(snapshot);
-  const consoleData = diagnosticsObject(source.console);
-  const networkData = diagnosticsObject(source.network);
+  const source = normalizeObject(snapshot);
+  const consoleData = normalizeObject(source.console);
+  const networkData = normalizeObject(source.network);
   const text = [
     "# Vibe64 proxied app diagnostics",
     "",
