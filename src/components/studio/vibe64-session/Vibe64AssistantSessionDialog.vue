@@ -137,7 +137,13 @@ import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accoun
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
-const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, default: () => ({}) } });
+const props = defineProps({
+  modelValue: Boolean,
+  toolbar: {
+    required: true,
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract>} */ (Object)
+  }
+});
 const emit = defineEmits(["created", "update:model-value"]);
 // Main chat starts on the owner's Senior from AI setup.
 const routing = useModelRouting({ enabled: computed(() => props.modelValue), view: "main" });
@@ -222,7 +228,7 @@ async function submit() {
         expectedCommit: selectedBranch.value.commit
       };
     }
-    response = await props.toolbar.createSession?.(sessionAi.value || {}, options);
+    response = await props.toolbar.createSession(sessionAi.value || {}, options);
   } catch {
     return;
   }
@@ -242,8 +248,8 @@ watch(() => props.modelValue, (open) => {
 watch(submitting, async (running, wasRunning) => {
   if (running || !wasRunning || !props.modelValue) return;
   await nextTick();
-  const target = submitButton.value?.$el || submitButton.value;
-  if (target?.isConnected === true && typeof target.focus === "function") target.focus({ preventScroll: true });
+  const target = submitButton.value?.$el;
+  if (target?.isConnected === true) target.focus({ preventScroll: true });
 });
 </script>
 

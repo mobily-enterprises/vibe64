@@ -194,7 +194,7 @@ const {
 } = useVibe64SessionPanel(props, emit);
 
 async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
-  const response = await toolbar.createSession?.(assistantSelection, options);
+  const response = await toolbar.createSession(assistantSelection, options);
   if (response?.sessionId) {
     void focusCreatedVibe64SessionTab(response.sessionId);
   }

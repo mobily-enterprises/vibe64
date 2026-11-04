@@ -6,7 +6,7 @@
     max-width="46rem"
     :persistent="dialogBusy"
     scrollable
-    @after-leave="renewal.restoreTriggerFocus?.()"
+    @after-leave="renewal.restoreTriggerFocus()"
     @update:model-value="closeFromModel"
   >
     <v-card
@@ -440,8 +440,8 @@ import {
 
 const props = defineProps({
   renewal: {
-    default: () => ({}),
-    type: Object
+    required: true,
+    type: /** @type {import("vue").PropType<import("vue").ShallowUnwrapRef<import("@/types.js").Vibe64SessionRenewal>>} */ (Object)
   }
 });
 
@@ -486,13 +486,13 @@ const manualSourceItems = computed(() => {
 
 function closeFromModel(value) {
   if (!value && !dialogBusy.value) {
-    props.renewal.close?.();
+    props.renewal.close();
   }
 }
 
 function confirmRenewal() {
   if (canConfirmRenewal.value) {
-    props.renewal.confirm?.(sameSelection(successorSelection.value, mainSelection.value) ? null : successorSelection.value);
+    props.renewal.confirm(sameSelection(successorSelection.value, mainSelection.value) ? null : successorSelection.value);
   }
 }
 </script>

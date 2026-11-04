@@ -11,7 +11,22 @@ import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 
-const props = defineProps({ session: { type: Object, default: null }, goal: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, requiredMode: { type: String, default: "" }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
+const props = defineProps({
+  session: { type: Object, default: null },
+  goal: { type: Object, default: null },
+  sessionsApiPath: { type: [String, Object, Function], default: "" },
+  purposes: { type: Object, default: null },
+  // readable-check: allow collaborator-prop - optional operation: an AI task chat saves its routing through its conversation; main chat has none and saves through the session's command
+  savePreferences: { type: /** @type {import("vue").PropType<((preferences: Record<string, any>) => Promise<Record<string, any>>) | null>} */ (Function), default: null },
+  requiredMode: { type: String, default: "" },
+  temporary: Boolean,
+  disabled: Boolean,
+  active: Boolean,
+  connecting: Boolean,
+  canConfigure: Boolean,
+  loading: Boolean,
+  loadError: { type: String, default: "" }
+});
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");

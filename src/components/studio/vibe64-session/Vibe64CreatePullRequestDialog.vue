@@ -8,7 +8,13 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { GITHUB_BODY_MAX_LENGTH, githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
 
-const props = defineProps({ modelValue: Boolean, dashboardContext: { type: Object, default: () => ({}) } });
+const props = defineProps({
+  modelValue: Boolean,
+  dashboardContext: {
+    required: true,
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext>} */ (Object)
+  }
+});
 const emit = defineEmits(["update:modelValue", "created"]);
 const title = ref("");
 const body = ref("");
@@ -51,6 +57,7 @@ async function submit() {
     feedback.success("Pull request created. Future commits update its source branch.");
     emit("created", result.pullRequest);
     emit("update:modelValue", false);
+    // readable-check: allow optional-call - optional operation: the session panel's empty-state Dashboard context has no session work to refresh
     void props.dashboardContext.refreshSessionWork?.();
   } catch (error) {
     feedback.error(error, "The pull request could not be confirmed. Retry to check GitHub and continue.");

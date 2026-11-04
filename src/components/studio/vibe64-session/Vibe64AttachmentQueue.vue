@@ -9,10 +9,12 @@ const queue = ref(null);
 watch(() => props.sessionId, () => { selectedAttachment.value = null; });
 function focusComposer() {
   const root = queue.value?.$el;
-  const container = root?.closest?.(".assistant-prompt-input, .vibe64-terminal-surface") || root?.parentElement;
-  const terminalToggle = container?.classList?.contains("vibe64-terminal-surface")
+  // A queue emptied by its last removal leaves only its placeholder comment, still inside the composer.
+  const queueElement = root instanceof Element ? root : null;
+  const container = queueElement?.closest(".assistant-prompt-input, .vibe64-terminal-surface") || root?.parentElement;
+  const terminalToggle = container?.classList.contains("vibe64-terminal-surface")
     ? container.querySelector("button[aria-controls^='vibe64-terminal-body-']:not([disabled])") : null;
-  (terminalToggle || container?.querySelector?.("textarea:not([disabled]), [contenteditable='true'], button:not([disabled])"))?.focus();
+  (terminalToggle || container?.querySelector("textarea:not([disabled]), [contenteditable='true'], button:not([disabled])"))?.focus();
 }
 </script>
 <template>

@@ -8,7 +8,7 @@ import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath } from
 const props = defineProps({
   session: { type: Object, required: true },
   sessionsApiPath: { type: String, required: true },
-  refresh: { type: Function, default: null },
+  refresh: { type: /** @type {import("vue").PropType<() => Promise<unknown>>} */ (Function), required: true },
   // Session actions lists the pin when the header has no room for it.
   listItem: Boolean
 });
@@ -34,7 +34,7 @@ async function toggle() {
   pending.value = true;
   try {
     await command.run();
-    await props.refresh?.();
+    await props.refresh();
   } catch {
     // useCommand has already shown the failure.
   } finally {

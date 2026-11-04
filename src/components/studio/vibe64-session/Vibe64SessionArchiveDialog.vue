@@ -77,12 +77,12 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const props = defineProps({
   archive: {
-    default: () => ({}),
-    type: Object
+    required: true,
+    type: /** @type {import("vue").PropType<import("vue").ShallowUnwrapRef<import("@/types.js").Vibe64SessionDialogs>>} */ (Object)
   },
   shortSessionId: {
-    default: (sessionId) => String(sessionId || ""),
-    type: Function
+    required: true,
+    type: /** @type {import("vue").PropType<(sessionId: string) => string>} */ (Function)
   },
   sessionsApiPath: {
     required: true,

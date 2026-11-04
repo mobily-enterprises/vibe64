@@ -139,7 +139,7 @@
     </div>
     <Vibe64RenameSessionDialog
       v-if="renamingSession" :session="renamingSession" :sessions-api-path="renamingSessionsApiPath"
-      @close="renamingSession = null" @renamed="toolbar.refreshSessionData?.({ includeList: true, reason: 'session-renamed' })"
+      @close="renamingSession = null" @renamed="toolbar.refreshSessionData({ includeList: true, reason: 'session-renamed' })"
     />
   </div>
 </template>
@@ -188,8 +188,8 @@ const props = defineProps({
     type: Boolean
   },
   toolbar: {
-    default: () => ({}),
-    type: Object
+    required: true,
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract>} */ (Object)
   },
   compact: {
     default: false,
@@ -212,9 +212,10 @@ const props = defineProps({
     type: Number
   },
   // Brings back the selected session's dismissed Save or Update notice.
+  // readable-check: allow collaborator-prop - optional operation: the session panel's empty-state toolbar has no session whose notice it could bring back
   showRepositoryProblem: {
     default: null,
-    type: Function
+    type: /** @type {import("vue").PropType<(() => void) | null>} */ (Function)
   }
 });
 
@@ -295,7 +296,7 @@ function selectSession(sessionId = "") {
   sessionTooltip.suppressedSessionId.value = sessionId;
   infoSessionId.value = "";
   emit("select-session", sessionId);
-  props.toolbar.selectSession?.(sessionId);
+  props.toolbar.selectSession(sessionId);
 }
 
 function sessionTabLabel(sessionItem = {}) {

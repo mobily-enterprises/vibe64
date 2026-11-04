@@ -35,3 +35,5 @@ export {};
 
 /** @typedef {NonNullable<ReturnType<typeof import("./composables/useVibe64ConversationRuntime.js").useVibe64ConversationRuntime>["value"]>} Vibe64ConversationRuntime */
 /** @typedef {import("vue").UnwrapNestedRefs<ReturnType<typeof import("./composables/useVibe64MainChatApprovals.js").useVibe64MainChatApprovals>>} Vibe64MainChatApprovals */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64SessionDialogs.js").useVibe64SessionDialogs>} Vibe64SessionDialogs */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64SessionRenewal.js").useVibe64SessionRenewal>} Vibe64SessionRenewal */

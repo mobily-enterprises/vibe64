@@ -27,7 +27,8 @@ defineProps({
 });
 defineEmits(["submit", "stop"]);
 const sendButton = ref(null);
-defineExpose({ focus: () => (sendButton.value?.$el || sendButton.value)?.focus?.() });
+// The send button is a v-btn; its element takes the focus.
+defineExpose({ focus: () => sendButton.value?.$el.focus() });
 </script>
 <style scoped>
 .studio-autopilot__composer-delivery {

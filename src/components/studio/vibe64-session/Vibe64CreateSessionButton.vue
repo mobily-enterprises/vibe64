@@ -63,8 +63,8 @@ const props = defineProps({
     type: String
   },
   toolbar: {
-    default: () => ({}),
-    type: Object
+    required: true,
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract>} */ (Object)
   },
   variant: {
     default: "flat",
@@ -102,8 +102,9 @@ function requestCreateSession() {
   dialogOpen.value = true;
 }
 
-function handleCreated(response = {}) {
-  if (response?.sessionId) {
+// The dialog reports a created session's response.
+function handleCreated(response) {
+  if (response.sessionId) {
     void focusCreatedVibe64SessionTab(response.sessionId);
   }
 }
