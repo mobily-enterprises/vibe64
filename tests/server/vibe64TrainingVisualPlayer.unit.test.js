@@ -16,7 +16,7 @@ async function fixture(t, options = {}) {
   const iframe = { ownerDocument: { defaultView: view }, srcdoc: "",
     setAttribute(name, value) { attributes.set(name, value); }, removeAttribute(name) { attributes.delete(name); },
     contentWindow: { postMessage(value, origin, ports) { assert.equal(origin, "*"); transfers.push({ value, port: ports[0] }); } } };
-  const player = createTrainingVisualPlayer({ iframe, resource: alternateVisualResource(), attemptId: "attempt-one", ...options });
+  const player = createTrainingVisualPlayer({ iframe, resource: alternateVisualResource(), attemptId: "attempt-one", onState() {}, ...options });
   t.after(() => { player.dispose(); for (const { port } of transfers) port.close(); });
   function handshake(overrides = {}, source = iframe.contentWindow) {
     const payload = JSON.parse(iframe.srcdoc.match(/\)\((\{"playerInstanceId".*), url => import\(url\)\);<\/script>/u)[1]);
@@ -226,7 +226,7 @@ test("invalid encoded resource or descriptor is rejected before an iframe is mut
     const resource = alternateVisualResource();
     mutate(resource);
     const iframe = { ownerDocument: { defaultView: { atob, btoa } }, srcdoc: "unchanged" };
-    assert.throws(() => createTrainingVisualPlayer({ iframe, resource, attemptId: "attempt-one" }));
+    assert.throws(() => createTrainingVisualPlayer({ iframe, resource, attemptId: "attempt-one", onState() {} }));
     assert.equal(iframe.srcdoc, "unchanged");
   }
   const f = await fixture(t, { timeoutMs: 20 });

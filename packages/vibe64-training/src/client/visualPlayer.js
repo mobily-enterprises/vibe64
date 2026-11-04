@@ -86,15 +86,19 @@ function validateResource(resource, view) {
 // controller's port. Transition, interruption and receipt semantics stay there.
 async function bootstrap(payload, loadController) {
   let dispose;
-  let claimed = false;
-  window.addEventListener("pagehide", () => dispose?.(), { once: true });
-  window.addEventListener("message", async event => {
-    if (claimed || event.source !== parent || !event.data
+  // readable-check: allow method-probe - input validation: the course author's controller module is untrusted and must export mountVisual
+  function verifiedController(controller) {
+    if (typeof controller.mountVisual !== "function") throw new Error("The diagram controller has no mountVisual operation.");
+    return controller;
+  }
+  // The first exact init message claims this frame; no later message is heard.
+  async function initialize(event) {
+    if (event.source !== parent || !event.data
       || Object.keys(event.data).sort().join(",") !== "init,playerInstanceId,protocolVersion,token,type"
       || event.data.type !== "vibe64-visual-init" || event.data.protocolVersion !== 1
       || event.data.playerInstanceId !== payload.playerInstanceId || event.data.token !== payload.token
       || event.ports.length !== 1) return;
-    claimed = true;
+    window.removeEventListener("message", initialize);
     const port = event.ports[0];
     let moduleUrl;
     try {
@@ -106,8 +110,7 @@ async function bootstrap(payload, loadController) {
         || documentSvg.querySelector("parsererror")) throw new Error("The diagram SVG cannot be read.");
       document.body.append(document.importNode(svg, true));
       moduleUrl = URL.createObjectURL(new Blob([decode(payload.controller)], { type: "text/javascript" }));
-      const controller = await loadController(moduleUrl);
-      if (typeof controller.mountVisual !== "function") throw new Error("The diagram controller has no mountVisual operation.");
+      const controller = verifiedController(await loadController(moduleUrl));
       dispose = controller.mountVisual(document.body.querySelector("svg"), port, event.data.init);
     } catch (cause) {
       port.postMessage({
@@ -117,7 +120,9 @@ async function bootstrap(payload, loadController) {
     } finally {
       if (moduleUrl) URL.revokeObjectURL(moduleUrl);
     }
-  });
+  }
+  window.addEventListener("pagehide", () => dispose?.(), { once: true });
+  window.addEventListener("message", initialize);
   parent.postMessage({ type: "vibe64-visual-handshake", protocolVersion: 1,
     playerInstanceId: payload.playerInstanceId, token: payload.token }, "*");
 }
@@ -141,9 +146,24 @@ function frameDocument(payload) {
   ].join("");
 }
 
+/** A presentation observer that fails cannot retain the iframe or its port. */
+function ignoreObserverFailure() {}
+
+/**
+ * Mounts one verified lesson diagram in its sandboxed iframe and speaks the
+ * diagram protocol with its authored controller.
+ * @param {object} options
+ * @param {HTMLIFrameElement} options.iframe
+ * @param {object} options.resource the verified diagram resource
+ * @param {string} options.attemptId
+ * @param {boolean} [options.reducedMotion]
+ * @param {object} [options.snapshot] the saved diagram state to restore
+ * @param {(status: object) => unknown} options.onState
+ * @param {number} [options.timeoutMs]
+ */
 function createTrainingVisualPlayer({
   iframe, resource, attemptId, reducedMotion = false, snapshot: initialSnapshot, onState, timeoutMs = 5000
-} = {}) {
+}) {
   const view = iframe?.ownerDocument?.defaultView;
   if (!view || !identity(attemptId) || typeof reducedMotion !== "boolean"
     || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) {
@@ -163,8 +183,7 @@ function createTrainingVisualPlayer({
   function publish(patch) {
     status = { ...status, ...patch };
     try {
-      const observed = onState?.(structuredClone(status));
-      observed?.catch?.(() => {});
+      void Promise.resolve(onState(structuredClone(status))).catch(ignoreObserverFailure);
     } catch { /* A presentation observer cannot retain the iframe or its port. */ }
   }
 
@@ -359,7 +378,14 @@ function createTrainingVisualPlayer({
   }
 
   const ready = restore(savedSnapshot);
-  return { ready, command, snapshot, restore, dispose, get state() { return structuredClone(status); } };
+  return Object.freeze({
+    ready,
+    command,
+    snapshot,
+    restore,
+    dispose,
+    get state() { return structuredClone(status); }
+  });
 }
 
 export { createTrainingVisualPlayer };
