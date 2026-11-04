@@ -2,14 +2,14 @@
 import { computed, inject, onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { IntegrationConfigurationFields } from "@jskit-ai/connectors-web/client";
-import { getProviderClientAuthenticationMethods, getProviderScopes } from "@jskit-ai/connectors-core/shared/configuration";
+import { getProviderScopes } from "@jskit-ai/connectors-core/shared/configuration";
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
 import { OAUTH_CLIENT_REGISTRATION_PROVIDERS } from "@local/vibe64-source-editor/shared/oauthClientRegistration";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
+import { useIntegrationsPanelNavigation } from "@/composables/useIntegrationsPanelNavigation.js";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
-import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalStorage.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { VIBE64_COLLEAGUE_INTEGRATIONS_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64SavedEnvValues } from "@/lib/vibe64SavedEnvValues.js";
@@ -18,14 +18,29 @@ import PaymentConfigurationPanel from "@/components/studio/PaymentConfigurationP
 import IntegrationServiceLogo from "./IntegrationServiceLogo.vue";
 import { groupIntegrationProviders } from "@/lib/integrationCatalogue.js";
 import { integrationSetupPrompt } from "@/lib/integrationSetupPrompt.js";
+import {
+  envReferenceKey,
+  integrationClientMetadata,
+  integrationConfigurationOnly,
+  integrationCredentials,
+  integrationRegistrationEndpoint,
+  integrationRegistrationRequest,
+  integrationSetupSteps,
+  integrationSetupUrl
+} from "@/lib/integrationProviderSetup.js";
+import { withIntegrationAdded, withIntegrationRemoved } from "@/lib/integrationConfigurationEdits.js";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 
-const props = defineProps({ dashboardContext: { type: Object, required: true } });
+const props = defineProps({
+  dashboardContext: {
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} */ (Object),
+    required: true
+  }
+});
 const route = useRoute();
 const router = useRouter();
 const selectedId = ref("");
 const environment = ref("development");
-const production = computed(() => environment.value === "production");
 const integrationContext = computed(() => ({
   ...props.dashboardContext, integrationEnvironment: environment.value,
   integrationSetupRequest: {
@@ -40,24 +55,8 @@ function openPaymentEnv({ key, value, secret }) {
   return router.push({ path: projectAppPath(projectSlug.value, production.value ? "/dashboard/deploy" : "/dashboard/env"),
     query: { prefillKey: key, ...(secret ? { prefillSecret: "true" } : {}), ...(value === undefined ? {} : { prefillValue: value }) } });
 }
-watch([projectSlug, () => props.dashboardContext.productionIntegrationsApiPath], ([slug, apiPath]) => {
-  environment.value = apiPath && readLocalStorageJson(`vibe64:integrations:environment:${slug}`, "development") === "production"
-    ? "production" : "development";
-}, { immediate: true, flush: "sync" });
-watch(environment, (value) => {
-  writeLocalStorageJson(`vibe64:integrations:environment:${projectSlug.value}`, value);
-});
-const search = ref("");
-const navigationKey = computed(() => `vibe64:integrations:${encodeURIComponent(projectSlug.value)}:${production.value ? 'published' : encodeURIComponent(props.dashboardContext.sessionId || "")}:${environment.value}`);
-watch(navigationKey, (key) => {
-  const saved = readLocalStorageJson(key, {});
-  selectedId.value = typeof saved?.selectedId === "string" ? saved.selectedId : "";
-  search.value = typeof saved?.search === "string" ? saved.search : "";
-}, { immediate: true, flush: "sync" });
-watch([selectedId, search], () => {
-  if (production.value || props.dashboardContext.sessionId) writeLocalStorageJson(navigationKey.value, {
-    selectedId: selectedId.value, search: search.value
-  });
+const { navigationKey, production, search } = useIntegrationsPanelNavigation({
+  dashboardContext: () => props.dashboardContext, environment, projectSlug, selectedId
 });
 const requestedIntegration = computed(() => {
   const id = typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "";
@@ -121,13 +120,9 @@ const provider = computed(() => providers.find((entry) => entry.id === selected.
 // n8n registers through its own discovery section above.
 const registersClientDirectly = computed(() => provider.value?.id !== "n8n" &&
   OAUTH_CLIENT_REGISTRATION_PROVIDERS.includes(provider.value?.id));
-const configurationOnly = computed(() => provider.value?.configurationOnly || provider.value?.configurationOnlyForSettings?.(selected.value?.settings || {}));
+const configurationOnly = computed(() => provider.value && integrationConfigurationOnly(provider.value, selected.value?.settings || {}));
 const verificationIncomplete = computed(() => provider.value?.verificationFields?.some((field) =>
   field.required && !String(verificationInput.value[field.name] || "").trim()) === true);
-// The Env key an "env:NAME" configuration reference names.
-function envReferenceKey(reference) {
-  return /^env:([A-Z_][A-Z0-9_]*)$/u.exec(reference || "")?.[1];
-}
 const setupPrompt = computed(() => integrationSetupPrompt({
   id: selectedId.value,
   integration: selected.value,
@@ -142,21 +137,9 @@ const permissionLabels = computed(() => Object.fromEntries(
   provider.value ? getProviderScopes(provider.value, selected.value?.settings || {},
     registration.value?.grantType || "authorization_code").map((scope) => [scope.value, scope.label]) : []
 ));
-const credentials = computed(() => {
-  const reference = selected.value?.authentication.method === "oauth2"
-    ? registration.value?.clientSecretRef : selected.value?.authentication.secretRef;
-  const primaryKey = envReferenceKey(reference);
-  const entries = primaryKey ? [{ key: primaryKey, label: "Application credential", public: false }] : [];
-  // A shared account connected outside the app arrives as a refresh token in Env.
-  const refreshTokenKey = envReferenceKey(selected.value?.authentication.refreshTokenRef);
-  if (refreshTokenKey) entries.push({ key: refreshTokenKey, label: "Connected account", public: false });
-  for (const field of provider.value?.settingsFields || []) {
-    if (!field.environmentCredential) continue;
-    const key = envReferenceKey(selected.value?.settings?.[field.name]);
-    if (key) entries.push({ key, ...field.environmentCredential });
-  }
-  return entries;
-});
+const credentials = computed(() => integrationCredentials({
+  integration: selected.value, provider: provider.value, registration: registration.value
+}));
 const savedValues = useVibe64SavedEnvValues();
 // Variables the host reports as filled from a saved value, per environment.
 const linkedCredentials = ref({});
@@ -172,32 +155,14 @@ const callbackUrl = computed({
     provider.value?.setup?.callbackPath || `/integrations/${selected.value?.authentication.registrationRef}/callback`),
   set: (value) => { callbackOverride.value = value; }
 });
-const clientRegistrationEndpoint = computed(() => {
-  if (selected.value?.authentication.method !== "oauth2") return undefined;
-  const endpoint = provider.value?.setup?.clientRegistrationEndpoint;
-  return typeof endpoint === "function" ? endpoint(selected.value?.settings || {}) : endpoint;
-});
-const clientRegistrationBody = computed(() => !clientRegistrationEndpoint.value || !callbackUrl.value ? "" : JSON.stringify({
-  client_name: `${projectSlug.value} — ${selected.value?.displayName || provider.value.name}`,
-  redirect_uris: [callbackUrl.value],
-  token_endpoint_auth_method: "client_secret_post",
-  grant_types: ["authorization_code", "refresh_token"],
-  response_types: ["code"],
-  scope: (selected.value?.scopes || []).join(" ")
-}, null, 2));
-const clientMetadata = computed(() => {
-  const build = provider.value?.setup?.createClientMetadata;
-  if (!build) return null;
-  try {
-    return { json: JSON.stringify(build({
-      clientId: registration.value?.clientId,
-      clientName: selected.value?.displayName || provider.value.name,
-      callbackUrl: callbackUrl.value
-    }), null, 2) };
-  } catch {
-    return { json: "", error: "Enter a valid Client metadata URL, display name and suggested callback to prepare the document." };
-  }
-});
+const clientRegistrationEndpoint = computed(() => integrationRegistrationEndpoint(provider.value, selected.value));
+const clientRegistrationBody = computed(() => integrationRegistrationRequest({
+  endpoint: clientRegistrationEndpoint.value, callbackUrl: callbackUrl.value, projectSlug: projectSlug.value,
+  integration: selected.value, provider: provider.value
+}));
+const clientMetadata = computed(() => integrationClientMetadata({
+  callbackUrl: callbackUrl.value, integration: selected.value, provider: provider.value, registration: registration.value
+}));
 watch([selectedId, navigationKey, releaseId], () => {
   callbackOverride.value = null;
   setupCopyMessage.value = "";
@@ -239,46 +204,14 @@ onUnmounted(() => {
 
 function add(provider) {
   if (production.value) return;
-  const current = configuration.value;
-  let id = provider.id;
-  let suffix = 2;
-  while (current.integrations[id] || current.registrations[id]) id = `${provider.id}-${suffix++}`;
-  const prefix = id.toUpperCase().replaceAll("-", "_");
-  const method = provider.authenticationMethods[0];
-  const authentication = { method };
-  if (method === "api-key" && !provider.apiKeySecretOptional) authentication.secretRef = `env:${prefix}_API_KEY`;
-  else if (method === "service-account") authentication.secretRef = `env:${prefix}_SERVICE_ACCOUNT`;
-  else if (method === "oauth2") authentication.registrationRef = id;
-  const grantType = provider.oauthGrantTypes?.[0] || "authorization_code";
-  const clientAuthentication = getProviderClientAuthenticationMethods(provider, grantType)[0];
-  configuration.value = {
-    ...current,
-    integrations: { ...current.integrations, [id]: {
-      provider: provider.id, displayName: provider.name, accountMode: provider.accountModes[0],
-      scopes: getProviderScopes(provider, {}, grantType, method).filter((scope) => scope.required || scope.recommended).map((scope) => scope.value),
-      authentication
-    } },
-    registrations: method !== "oauth2" ? current.registrations : { ...current.registrations, [id]: {
-      source: "own", clientId: "",
-      ...(grantType === "authorization_code" ? { callbackUrlRef: `env:${prefix}_CALLBACK_URL` } : { grantType }),
-      ...(clientAuthentication !== "client_secret_post" ? { tokenEndpointAuthMethod: clientAuthentication } : {}),
-      ...(clientAuthentication !== "none" ? { clientSecretRef: `env:${prefix}_CLIENT_SECRET` } : {})
-    } }
-  };
-  selectedId.value = id;
+  const added = withIntegrationAdded(configuration.value, provider);
+  configuration.value = added.configuration;
+  selectedId.value = added.id;
 }
 
 function remove() {
   if (production.value) return;
-  const next = { ...configuration.value.integrations };
-  const registrations = { ...configuration.value.registrations };
-  const registrationId = selected.value.authentication.registrationRef;
-  delete next[selectedId.value];
-  if (!registrations[registrationId]?.clientId && registrations[registrationId]?.source === "own" &&
-      !Object.values(next).some((entry) => entry.authentication.registrationRef === registrationId)) {
-    delete registrations[registrationId];
-  }
-  configuration.value = { ...configuration.value, integrations: next, registrations };
+  configuration.value = withIntegrationRemoved(configuration.value, selectedId.value);
   selectedId.value = "";
   removeOpen.value = false;
 }
@@ -550,7 +483,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-expansion-panel-text>
                   <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the deployed application's environment.</p>
                   <ol class="integrations-panel__instructions">
-                    <li v-for="step in (provider.setup.stepsForSettings?.(selected?.settings || {}, selected?.authentication.method) || provider.setup.stepsByAuthentication?.[selected?.authentication.method] || provider.setup.steps)" :key="step">{{ step }}</li>
+                    <li v-for="step in integrationSetupSteps(provider, selected)" :key="step">{{ step }}</li>
                   </ol>
                   <section v-if="clientMetadata" aria-label="Client metadata document" class="mt-4">
                     <h3 class="text-title-medium">Client metadata document</h3>
@@ -575,7 +508,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                     <p>Keep the response private. Missing credentials, an error response or a different returned redirect URI is not a completed registration. A timeout may leave a client created: investigate before retrying. Copying this request does not send it or connect an account; user consent happens later.</p>
                   </section>
                   <v-btn class="mt-3" height="48" :to="projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env')" variant="text">Open Env</v-btn>
-                  <v-btn height="48" :href="provider.setup.urlForSettings?.(selected?.settings || {}, selected?.authentication.method) || provider.setup.urlByAuthentication?.[selected?.authentication.method] || provider.setup.url" target="_blank" rel="noopener" variant="text">Provider setup guide</v-btn>
+                  <v-btn height="48" :href="integrationSetupUrl(provider, selected)" target="_blank" rel="noopener" variant="text">Provider setup guide</v-btn>
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>

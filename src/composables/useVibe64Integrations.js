@@ -10,13 +10,18 @@ import { OAUTH_CLIENT_REGISTRATION_PROVIDERS } from "@local/vibe64-source-editor
 import { vibe64BrowserTabOriginId } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64SessionPath, VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { integrationConfigurationOnly } from "@/lib/integrationProviderSetup.js";
 
 // Drafts stay in this tab's memory, never browser storage or source files.
 const drafts = new Map();
 const verificationDrafts = new Map();
 
-// All integration commands use the same app-owned route and payload boundary.
-// Keep separate command instances so their pending state and feedback stay local.
+/**
+ * All integration commands use the same app-owned route and payload boundary.
+ * Keep separate command instances so their pending state and feedback stay local.
+ * @param {"PUT" | "POST"} method
+ * @param {Record<string, unknown>} options More useCommand options, such as the command's messages.
+ */
 function useIntegrationCommand(method, options) {
   return useCommand({
     access: "never", ownershipFilter: "public", surfaceId: "app", writeMethod: method,
@@ -26,6 +31,14 @@ function useIntegrationCommand(method, options) {
   });
 }
 
+/**
+ * The Integrations page's configuration draft, saving and each integration's application connection.
+ * @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext & {
+ *   integrationEnvironment: "development" | "production",
+ *   integrationSetupRequest: object
+ * }>} context
+ * @param {import("vue").Ref<string>} selectedId
+ */
 export function useVibe64Integrations(context, selectedId) {
   const configuration = ref(null);
   const baseline = ref("");
@@ -213,9 +226,14 @@ export function useVibe64Integrations(context, selectedId) {
       if (!disposed && key === connectionKey.value) adsError.value = "The advertising operation did not complete. Inspect Google Ads before repeating a write: it may already have succeeded. Check the app command, permissions and Env for details.";
     }
   }
+  // Whether the open session's conversation can be refreshed after a setup step.
+  function conversationRefreshable() {
+    // readable-check: allow method-probe - optional operation: the Dashboard without an open session (a deployed release's integrations) has no conversation to refresh
+    return typeof context.value.refreshConversation === "function";
+  }
   async function runSetup(operation = "status") {
     const selected = configuration.value?.integrations[selectedId.value];
-    if (connectorDefinitions.some((provider) => provider.id === selected?.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(selected?.settings || {})))) return;
+    if (connectorDefinitions.some((provider) => provider.id === selected?.provider && integrationConfigurationOnly(provider, selected?.settings || {}))) return;
     if ((production.value && (!releaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
         setupCommand.isRunning || command.isRunning || (!production.value && context.value.sourceOperationsSuspended)) return;
     const key = connectionKey.value;
@@ -245,12 +263,12 @@ export function useVibe64Integrations(context, selectedId) {
             connection.value = { ...result, integrationSetup: resumed.integrationSetup };
           }
         } finally {
-          if (!disposed && connectionKey.value === key && typeof context.value.refreshConversation === "function") {
+          if (!disposed && connectionKey.value === key && conversationRefreshable()) {
             await context.value.refreshConversation();
           }
         }
         if (disposed || connectionKey.value !== key) return;
-      } else if (result.integrationSetup && typeof context.value.refreshConversation === "function") {
+      } else if (result.integrationSetup && conversationRefreshable()) {
         await context.value.refreshConversation();
         if (disposed || connectionKey.value !== key) return;
       }

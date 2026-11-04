@@ -5,6 +5,7 @@ import paymentSchema from "@jskit-ai/payments-core/configuration.schema.json";
 import paymentConformance from "@jskit-ai/payments-core/conformance.json";
 import paymentContract from "@jskit-ai/payments-core/docs/contract.md?raw";
 import paymentConformanceGuide from "@jskit-ai/payments-core/docs/conformance.md?raw";
+import { integrationSetupSteps, integrationSetupUrl } from "@/lib/integrationProviderSetup.js";
 
 // The implementation prompt an AI session receives for one saved integration.
 function integrationSetupPrompt({ id, integration, provider, configuration, configurationOnly }) {
@@ -12,8 +13,8 @@ function integrationSetupPrompt({ id, integration, provider, configuration, conf
     `Implement the saved integration ${JSON.stringify(id)} (${JSON.stringify(integration?.provider)}) from integrations.json.`,
     "Use this project's selected framework and existing backend composition. Keep credentials, connections, callbacks and refresh owned by this application so it runs independently of Vibe64.",
     ...(provider?.setup ? [
-      `Selected provider setup instructions:\n\n${(provider.setup.stepsForSettings?.(integration?.settings || {}, integration?.authentication.method) || provider.setup.stepsByAuthentication?.[integration?.authentication.method] || provider.setup.steps || []).join("\n\n")}`,
-      `Provider setup guide: ${provider.setup.urlForSettings?.(integration?.settings || {}, integration?.authentication.method) || provider.setup.urlByAuthentication?.[integration?.authentication.method] || provider.setup.url}`
+      `Selected provider setup instructions:\n\n${(integrationSetupSteps(provider, integration) || []).join("\n\n")}`,
+      `Provider setup guide: ${integrationSetupUrl(provider, integration)}`
     ] : []),
     configurationOnly
       ? "Use the saved public settings to implement this integration through the selected framework. Do not create a connection command, OAuth flow or provider verification request. For Analytics, preserve existing tag-manager and consent behavior, avoid duplicate tags, and do not send test tracking events."

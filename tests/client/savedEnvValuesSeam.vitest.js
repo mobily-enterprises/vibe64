@@ -95,7 +95,7 @@ it("mounts the host component only when provided, with the documented props", ()
 });
 
 it("offers a connected-account row for a refresh token kept in Env", () => {
-  const integrations = source("src/components/studio/IntegrationsPanel.vue");
+  const integrations = source("src/lib/integrationProviderSetup.js");
   expect(integrations).toContain("authentication.refreshTokenRef");
   expect(integrations).toContain('label: "Connected account"');
 });

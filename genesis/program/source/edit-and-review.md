@@ -35,10 +35,13 @@ from saved project work, and inspect one exact file change at a time.
 
 
 - `src/components/studio/IntegrationsPanel.vue`
+- `src/composables/useIntegrationsPanelNavigation.js`
+- `src/lib/integrationConfigurationEdits.js`
 - `src/components/studio/GoogleAdsSearchPanel.vue`
 - `packages/vibe64-source-editor/src/server/integrationSetupCommand.js`
 - `packages/vibe64-source-editor/docs/application-google-ads.md`
 - `src/composables/useVibe64Integrations.js`
+- `src/lib/integrationProviderSetup.js`
 - `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
 - Main: `packages/vibe64-source-editor/src/server/service.js`
 - `packages/vibe64-source-editor/src/server/sourceFiles.js`
