@@ -79,7 +79,8 @@ describe("Env .env download", () => {
   });
 
   it("puts one tonal Download .env button beside Refresh, with its busy state and an inline error", () => {
-    const { script, template: markup } = template("src/components/studio/EnvPanel.vue");
+    const { template: markup } = template("src/components/studio/EnvPanel.vue");
+    const script = readFileSync(new URL("../../src/composables/useVibe64ProjectEnv.js", import.meta.url), "utf8");
 
     expect(markup).toMatch(/<template v-if="projectEnvTabActive">\s+<v-btn\s+:disabled="envInitialLoading"\s+:loading="downloadBusy"\s+:prepend-icon="mdiDownload"\s+rounded="pill"\s+type="button"\s+variant="tonal"\s+@click="downloadDotenv"\s+>\s+Download \.env\s+<\/v-btn>\s+<v-btn\s+:loading="[a-zA-Z]+"\s+:prepend-icon="mdiRefresh"/u);
     expect(markup).toMatch(/<v-alert\s+v-if="downloadError"\s+class="env-panel__alert"\s+closable[\s\S]*?type="error"[\s\S]*?\{\{ downloadError \}\}/u);

@@ -35,6 +35,7 @@ host provide managed system values separately.
 - `packages/vibe64-core/src/server/atomicFile.js`
 - `tests/server/atomicFile.unit.test.js`
 - `src/components/studio/EnvPanel.vue`
+- `src/composables/useVibe64ProjectEnv.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/RuntimeConfigRecordsTable.vue`
 

@@ -245,32 +245,18 @@
 import { computed, ref, watch } from "vue";
 import { mdiDownload, mdiFileCogOutline, mdiRefresh } from "@mdi/js";
 import { useRoute } from "vue-router";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import RuntimeConfigRecordsView from "@/components/studio/RuntimeConfigRecordsView.vue";
-import { useRuntimeConfigDotenvDownload } from "@/composables/useRuntimeConfigDotenvDownload.js";
-import { useRuntimeConfigSecretReveal } from "@/composables/useRuntimeConfigSecretReveal.js";
+import {
+  PROJECT_ENVIRONMENT_LABEL,
+  recordEditable,
+  useVibe64ProjectEnv
+} from "@/composables/useVibe64ProjectEnv.js";
 import {
   savedEnvValueEnvironment as savedValueEnvironment,
   useVibe64SavedEnvValues
 } from "@/lib/vibe64SavedEnvValues.js";
-import {
-  VIBE64_SURFACE_ID
-} from "@/lib/vibe64RequestConfig.js";
-import {
-  ENV_DOWNLOAD_ENDPOINT,
-  ENV_ENDPOINT,
-  ENV_SECRET_REVEAL_ENDPOINT,
-  ENV_USER_VALUES_ENDPOINT,
-  VIBE64_PROJECT_CHANGED_EVENT,
-  VIBE64_ENV_DOWNLOAD_API_SUFFIX,
-  VIBE64_ENV_SECRET_REVEAL_API_SUFFIX,
-  VIBE64_ENV_USER_VALUES_API_SUFFIX,
-  envQueryKey
-} from "@/lib/studioGateApi.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -285,8 +271,6 @@ const sessionSelection = useVibe64SessionSelection({
 });
 const selectedSessionId = sessionSelection.selectedId;
 const PROJECT_ENV_TAB = "dev";
-const PROJECT_ENVIRONMENT = "dev";
-const PROJECT_ENVIRONMENT_LABEL = "development";
 
 const activeTab = ref(PROJECT_ENV_TAB);
 const savedValues = useVibe64SavedEnvValues();
@@ -303,141 +287,35 @@ watch(() => [route.query.prefillKey, route.query.prefillValue, route.query.prefi
 }, { immediate: true });
 const pendingRemoval = ref(null);
 
-const envResource = useEndpointResource({
-  fallbackLoadError: "Env could not load.",
-  path: ENV_ENDPOINT,
-  queryKey: computed(() => [
-    ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
-    PROJECT_ENVIRONMENT,
-    selectedSessionId.value || "baseline"
-  ]),
-  readQuery: computed(() => ({
-    environment: PROJECT_ENVIRONMENT,
-    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
-  })),
-  realtime: {
-    event: VIBE64_PROJECT_CHANGED_EVENT
-  },
-  refreshOnPull: true,
-  requestRecoveryLabel: "Env"
-});
-
-const saveCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_ENV_USER_VALUES_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "PUT",
-    path: ENV_USER_VALUES_ENDPOINT
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    environment: PROJECT_ENVIRONMENT,
-    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {}),
-    values: context.values || {}
-  }),
-  fallbackRunError: "Env value could not be saved.",
-  messages: {
-    error: "Env value could not be saved.",
-    success: "Env saved."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.env.user-values.save",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PUT"
-});
-
-const revealCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_ENV_SECRET_REVEAL_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "POST",
-    path: ENV_SECRET_REVEAL_ENDPOINT
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    environment: PROJECT_ENVIRONMENT,
-    key: context.key,
-    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
-  }),
-  fallbackRunError: "Env secret could not be revealed.",
-  messages: {
-    error: "Env secret could not be revealed."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.env.secret.reveal",
-  suppressSuccessMessage: true,
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "POST"
-});
-
-const {
-  clearRevealedSecrets,
-  hideSecret,
-  revealedSecrets,
-  revealSecret,
-  secretRevealBusyKey
-} = useRuntimeConfigSecretReveal({
-  async revealValue(key) {
-    const response = await revealCommand.run({ key });
-    return response?.ok === false ? null : response?.value;
-  }
-});
-
-// The owner's .env download carries every value, so it uses the same
-// uncached, owner-only transport as reveal and never reaches Colleague.
-const downloadCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_ENV_DOWNLOAD_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "POST",
-    path: ENV_DOWNLOAD_ENDPOINT
-  }),
-  buildRawPayload: () => ({
-    environment: PROJECT_ENVIRONMENT,
-    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
-  }),
-  fallbackRunError: "Env could not be downloaded.",
-  messages: {
-    error: "Env could not be downloaded."
-  },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.env.download",
-  suppressSuccessMessage: true,
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "POST"
-});
-
 const {
   downloadBusy,
   downloadDotenv,
-  downloadError
-} = useRuntimeConfigDotenvDownload({
-  fileName: () => `${projectSlug.value}-${PROJECT_ENVIRONMENT_LABEL}.env`,
-  async readContent() {
-    return (await downloadCommand.run())?.content;
-  }
-});
+  downloadError,
+  envConfigSourceLabel,
+  envInitialLoading,
+  envLoadError,
+  envUnavailable,
+  envUnavailableMessage,
+  expectedMissingRecords,
+  hideSecret,
+  missingRecords,
+  records,
+  refresh,
+  refreshBusy,
+  reloadEnv,
+  revealedSecrets,
+  revealSecret,
+  saveBusy,
+  saveValues,
+  secretRevealBusyKey
+} = useVibe64ProjectEnv({ projectSlug, selectedSessionId });
 
-watch([projectSlug, selectedSessionId], () => {
-  clearRevealedSecrets();
-  downloadError.value = "";
-  addError.value = "";
-});
-
-const env = computed(() => envResource.data.value?.env || {});
-const envConfigSourceLabel = computed(() => String(env.value?.configSource?.label || ""));
-// Only the first load replaces the list: a refresh after a save swaps in the
-// new data quietly, keeping drafts, scroll, focus and revealed values.
-const envInitialLoading = computed(() => envResource.isInitialLoading.value === true);
-const refreshBusy = ref(false);
 const addBusy = ref(false);
 const addError = ref("");
 const removeError = ref("");
-const envLoadError = computed(() => String(envResource.loadError.value || ""));
-const envUnavailable = computed(() => Boolean(env.value?.unavailable));
-const envUnavailableMessage = computed(() => String(
-  env.value?.unavailable?.message ||
-  "Project Env is unavailable. Fix the project configuration and try again."
-));
-const saveBusy = computed(() => saveCommand.isRunning === true);
+watch([projectSlug, selectedSessionId], () => {
+  addError.value = "";
+});
 const removeConfirmOpen = computed({
   get: () => Boolean(pendingRemoval.value),
   set: (open) => {
@@ -448,11 +326,8 @@ const removeConfirmOpen = computed({
 });
 const pendingRemovalKey = computed(() => String(pendingRemoval.value?.key || ""));
 const projectEnvTabActive = computed(() => activeTab.value === PROJECT_ENV_TAB);
-const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
 const existingNewValue = computed(() => records.value.some((record) =>
   record.key === String(newValue.value.key || "").trim() && record.valuePresent === true));
-const missingRecords = computed(() => records.value.filter(recordMissing));
-const expectedMissingRecords = computed(() => missingRecords.value.filter(recordEditable));
 const environmentLabel = PROJECT_ENVIRONMENT_LABEL;
 
 function emptyNewValue() {
@@ -461,15 +336,6 @@ function emptyNewValue() {
     secret: true,
     value: ""
   };
-}
-
-function recordEditable(record = {}) {
-  return record.editable === true;
-}
-
-function recordMissing(record = {}) {
-  return record.valuePresent !== true &&
-    (record.missing === true || (Array.isArray(record.requiredFor) && record.requiredFor.length > 0));
 }
 
 function selectExpectedRecord(record = {}) {
@@ -482,20 +348,6 @@ function selectExpectedRecord(record = {}) {
     secret: record.secret === true,
     value: ""
   };
-}
-
-async function refresh() {
-  refreshBusy.value = true;
-  try {
-    await reloadEnv();
-  } finally {
-    refreshBusy.value = false;
-  }
-}
-
-async function reloadEnv() {
-  clearRevealedSecrets();
-  await envResource.reload();
 }
 
 async function saveRecord({
@@ -565,24 +417,6 @@ async function saveNewValue() {
     addError.value = String(error?.message || `${key} could not be saved.`);
   } finally {
     addBusy.value = false;
-  }
-}
-
-// One write to the project's Env file. Only the changed values' revealed
-// secrets are hidden; a failure throws to the row or form that asked for it.
-// A row save returns once written and shows its value while the list refreshes
-// quietly; adding and removing wait for the refreshed list, which alone knows
-// the new row or the default a removal reveals.
-async function saveValues(values = {}, { waitForRefresh = true } = {}) {
-  for (const key of Object.keys(values)) {
-    hideSecret(key);
-  }
-  await saveCommand.run({
-    values
-  });
-  const refreshed = envResource.reload();
-  if (waitForRefresh) {
-    await refreshed;
   }
 }
 

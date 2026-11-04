@@ -156,7 +156,7 @@ describe("saving one Env row", () => {
     const source = readFileSync(new URL("../../src/components/studio/EnvPanel.vue", import.meta.url), "utf8");
     const { descriptor } = parse(source);
     const markup = descriptor.template.content;
-    const script = descriptor.scriptSetup.content;
+    const script = readFileSync(new URL("../../src/composables/useVibe64ProjectEnv.js", import.meta.url), "utf8");
     expect(markup).toContain('v-if="projectEnvTabActive && (envInitialLoading || envLoadError)"');
     expect(script).toContain("const envInitialLoading = computed(() => envResource.isInitialLoading.value === true);");
     expect(script).not.toContain("isLoading.value");
