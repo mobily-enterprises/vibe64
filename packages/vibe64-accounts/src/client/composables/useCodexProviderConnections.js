@@ -4,6 +4,10 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT } from "../lib/accountsGateApi.js";
 
+/**
+ * The provider keys the owner connected in Codex and Claude Code, and changing them.
+ * @param {{ enabled?: import("vue").MaybeRef<boolean> }} [options]
+ */
 function useCodexProviderConnections({ enabled = true } = {}) {
   const resource = useEndpointResource({
     enabled: computed(() => Boolean(unref(enabled))),
@@ -56,5 +60,7 @@ function useCodexProviderConnections({ enabled = true } = {}) {
     loadError: computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : ""))
   };
 }
+
+/** @typedef {ReturnType<typeof useCodexProviderConnections>} CodexProviderConnections */
 
 export { useCodexProviderConnections };

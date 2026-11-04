@@ -3,6 +3,13 @@ import { computed, ref } from "vue";
 /**
  * Removing one AI connection after confirmation, through the owner of its kind:
  * a provider key in Codex or Claude Code, a native sign-out, or an OpenCode key.
+ * @param {{
+ *   codexProviders: import("./useCodexProviderConnections.js").CodexProviderConnections,
+ *   nativeAccounts: import("./useVibe64Accounts.js").Vibe64Accounts,
+ *   removingProviderId: import("vue").Ref<string>,
+ *   removeConnection: import("./useAiConnections.js").AiConnections["removeConnection"],
+ *   emit: import("./useAiConnectionManager.js").AiConnectionEmit
+ * }} options
  */
 function useAiConnectionRemoval({ codexProviders, nativeAccounts, removingProviderId, removeConnection, emit }) {
   const removeOpen = ref(false);

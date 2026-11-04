@@ -17,14 +17,25 @@ import { useNativeAiSetup } from "./useNativeAiSetup.js";
 const AI_CONNECTION_MANAGER_KEY = Symbol("vibe64.aiConnectionManager");
 
 /**
+ * What the manager tells its screen: a connection changed or connected, or the manager is busy.
+ * @typedef {(event: "busy" | "changed" | "connected", value?: boolean) => void} AiConnectionEmit
+ */
+
+/**
  * Every AI connection the owner has, and the state behind adding, managing,
  * removing and routing them: the script of AI Accounts, moved as one piece so
  * the setup screen's Manage and Advanced share one instance. Each concern is its
  * own part; this adds Add a connection, Manage, the Models screen and the busy
  * state over them. followRoute: a providerId/providerRevision in the route
  * opens that provider's key editor.
+ * @param {{
+ *   endpoint?: string,
+ *   isOwner?: import("vue").MaybeRef<boolean>,
+ *   emit: AiConnectionEmit,
+ *   followRoute?: boolean
+ * }} options
  */
-function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = false, emit = () => null, followRoute = true } = {}) {
+function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = false, emit, followRoute = true }) {
   const owner = computed(() => Boolean(unref(isOwner)));
   const addAiOpen = ref(false);
   const catalogProviderId = ref("");
@@ -405,7 +416,13 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   };
 }
 
-/** One manager per screen: its owner provides it, its parts inject it. */
+/** @typedef {ReturnType<typeof useAiConnectionManager>} AiConnectionManager */
+
+/**
+ * One manager per screen: its owner provides it, its parts inject it.
+ * @param {AiConnectionManager} manager
+ * @returns {AiConnectionManager}
+ */
 function provideAiConnectionManager(manager) {
   provide(AI_CONNECTION_MANAGER_KEY, manager);
   return manager;
@@ -413,7 +430,7 @@ function provideAiConnectionManager(manager) {
 
 /**
  * The manager its screen provided.
- * @returns {ReturnType<typeof useAiConnectionManager>}
+ * @returns {AiConnectionManager}
  */
 function injectAiConnectionManager() {
   return inject(AI_CONNECTION_MANAGER_KEY);

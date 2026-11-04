@@ -5,6 +5,13 @@ import { zenCheckIsRunning } from "../lib/zenModelCheck.js";
  * Which models a connection may use: unlocking or locking paid models, with a
  * confirmation before unlocking, and the Zen model check, whose progress is
  * reloaded every two seconds while it runs.
+ * @param {{
+ *   connections: import("./useAiConnections.js").AiConnectionList,
+ *   reload: import("./useAiConnections.js").AiConnections["reload"],
+ *   updateModelAccess: import("./useAiConnections.js").AiConnections["updateModelAccess"],
+ *   updatingModelAccessProviderId: import("vue").Ref<string>,
+ *   emit: import("./useAiConnectionManager.js").AiConnectionEmit
+ * }} options
  */
 function useModelAccess({ connections, reload, updateModelAccess, updatingModelAccessProviderId, emit }) {
   const modelAccessConfirmOpen = ref(false);

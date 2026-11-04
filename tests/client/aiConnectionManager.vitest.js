@@ -28,7 +28,7 @@ import { useAiConnectionManager } from "../../packages/vibe64-accounts/src/clien
 let app;
 function mount() {
   const renderer = createRenderer({ createComment: text => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  app = renderer.createApp({ setup: () => useAiConnectionManager({ isOwner: true }), render: () => null });
+  app = renderer.createApp({ setup: () => useAiConnectionManager({ isOwner: true, emit: () => {} }), render: () => null });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   return app._instance.setupState;

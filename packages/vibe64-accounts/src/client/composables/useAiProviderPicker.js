@@ -4,6 +4,18 @@ import { providerUnavailableReason } from "../lib/aiConnectionChoices.js";
 /**
  * The OpenCode provider picker: the catalogue providers not yet connected, its
  * search, and whether Add a connection can still offer OpenCode.
+ * @param {{
+ *   addAiOpen: import("vue").Ref<boolean>,
+ *   missingTool: (id: string) => object | null,
+ *   nativeAccounts: import("./useVibe64Accounts.js").Vibe64Accounts,
+ *   connections: import("./useAiConnections.js").AiConnectionList,
+ *   registryProviders: import("./useAiConnections.js").AiConnections["registryProviders"],
+ *   registryLoaded: import("./useAiConnections.js").AiConnections["registryLoaded"],
+ *   registryLoadError: import("./useAiConnections.js").AiConnections["registryLoadError"],
+ *   registryIsInitialLoading: import("./useAiConnections.js").AiConnections["registryIsInitialLoading"],
+ *   registryIsFetching: import("./useAiConnections.js").AiConnections["registryIsFetching"],
+ *   reloadRegistry: import("./useAiConnections.js").AiConnections["reloadRegistry"]
+ * }} options
  */
 function useAiProviderPicker({
   addAiOpen,

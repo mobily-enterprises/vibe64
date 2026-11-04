@@ -10,6 +10,15 @@ import {
 import { vibe64ResourceResponseError } from "/src/lib/vibe64ApiResponses.js";
 import { VIBE64_SURFACE_ID } from "/src/lib/vibe64RequestConfig.js";
 
+/**
+ * The OpenCode connections behind an AI connections endpoint, the live catalogue of providers, and saving, removing
+ * and unlocking a connection's models. `catalogProviderId` names the provider whose catalogue entry is read.
+ * @param {{
+ *   endpoint?: string,
+ *   catalogProviderId?: import("vue").MaybeRef<string>,
+ *   enabled?: import("vue").MaybeRef<boolean>
+ * }} [options]
+ */
 function useAiConnections({
   endpoint = AI_CONNECTIONS_ENDPOINT,
   catalogProviderId = "",
@@ -263,6 +272,9 @@ function useAiConnections({
     updatingModelAccessProviderId
   };
 }
+
+/** @typedef {ReturnType<typeof useAiConnections>} AiConnections */
+/** @typedef {AiConnections["connections"]} AiConnectionList The OpenCode connections read, empty until read. */
 
 export {
   useAiConnections

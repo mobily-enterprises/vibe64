@@ -12,6 +12,22 @@ function queryText(value) {
  * definition, checks and saves its key, then hands over to that connection's
  * routing step. With followRoute, a providerId and providerRevision in the
  * route open the editor for that provider.
+ * @param {{
+ *   followRoute: boolean,
+ *   owner: import("vue").Ref<boolean>,
+ *   emit: import("./useAiConnectionManager.js").AiConnectionEmit,
+ *   addAiOpen: import("vue").Ref<boolean>,
+ *   providerPickerOpen: import("vue").Ref<boolean>,
+ *   configuredProviderIds: import("vue").Ref<Set<string>>,
+ *   catalogProviderId: import("vue").Ref<string>,
+ *   catalogEngine: import("./useAiConnections.js").AiConnections["catalogEngine"],
+ *   catalogLoadError: import("./useAiConnections.js").AiConnections["catalogLoadError"],
+ *   catalogProvider: import("./useAiConnections.js").AiConnections["catalogProvider"],
+ *   connections: import("./useAiConnections.js").AiConnectionList,
+ *   reloadCatalog: import("./useAiConnections.js").AiConnections["reloadCatalog"],
+ *   saveConnection: import("./useAiConnections.js").AiConnections["saveConnection"],
+ *   savingProviderId: import("vue").Ref<string>
+ * }} options
  */
 function useAiKeyEditor({
   followRoute,

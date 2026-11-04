@@ -11,7 +11,7 @@ import { useRoute } from "vue-router";
  * @param {{
  *   inline: import("vue").Ref<boolean>,
  *   canConfigure: import("vue").Ref<boolean>,
- *   manager: ReturnType<typeof import("../composables/useAiConnectionManager.js").useAiConnectionManager>,
+ *   manager: import("../composables/useAiConnectionManager.js").AiConnectionManager,
  *   setupCards: import("./useAiSetupCards.js").AiSetupCards,
  *   openManage: (card: object) => void,
  *   connect: (card: object, step: string) => void
