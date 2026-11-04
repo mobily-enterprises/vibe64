@@ -22,7 +22,7 @@ for (const engineId of ["codex", "opencode"]) {
       const { task } = await server.aiTasks.start("free", { message: "Look at the failing build." });
       // Typing shows once the AI's turn has ended: while it works, the chat says so instead.
       const { captured } = server.temporary!;
-      await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
+      await expect.poll(() => [captured.temporaryTurns.length, captured.startedTurns]).toEqual([1, 1]);
       await server.temporary!.endNativeTurn(task.id, { text: "The build fails in lint.", message: "The build fails in lint." });
       await server.aiTasks.settled();
       const openChat = async (page: Page) => {
