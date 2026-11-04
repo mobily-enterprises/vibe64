@@ -149,7 +149,7 @@ function useVibe64MountedSessionData({
   }
 
   async function refresh(options = {}) {
-    const reason = typeof options === "string" ? options : String(options?.reason || "");
+    const reason = typeof options === "string" ? options : String(options.reason || "");
     if (!activeSessionId.value || !activeSessionsApiPath.value) {
       return null;
     }
@@ -215,7 +215,7 @@ function useVibe64MountedSessionData({
     }
   });
 
-  const realtimeSocket = useRealtimeSocket({ required: false });
+  const realtimeSocket = useRealtimeSocket();
   let connectionGeneration = realtimeSocket.connected ? 1 : 0;
   let reconciliationInFlight = null;
   let reconciliationController = null;
@@ -415,7 +415,7 @@ function useVibe64MountedSessionData({
     if (realtimeSocket.connected) {
       return reconcileMountedAgentSession("manual-retry");
     }
-    realtimeSocket.connect?.();
+    realtimeSocket.connect();
   }
   globalThis.document?.addEventListener("visibilitychange", reconcileAfterVisible);
   realtimeSocket.on("connect", reconcileAfterRealtimeConnect);

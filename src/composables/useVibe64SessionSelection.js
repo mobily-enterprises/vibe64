@@ -11,18 +11,24 @@ import {
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 function selectedSessionIdFromRoute(route = {}) {
-  const rawValue = route?.query?.session;
+  const rawValue = route.query?.session;
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
   return String(value || "").trim();
 }
 
-// The project page owns the selection and passes the person's last opened
-// session as rememberedId; other readers follow this tab's stored selection.
+/**
+ * The project page owns the selection and passes the person's last opened
+ * session as rememberedId; other readers follow this tab's stored selection.
+ * @param {object} options
+ * @param {import("vue").MaybeRef<string>} [options.projectSlug]
+ * @param {import("vue").MaybeRefOrGetter<string>} [options.rememberedId]
+ * @param {{ query: Record<string, unknown> }} [options.route]
+ */
 function useVibe64SessionSelection({
   projectSlug = useVibe64ProjectSlug(),
   rememberedId,
   route = useRoute()
-} = {}) {
+}) {
   return useStoredSelection({
     preferredId: computed(() => selectedSessionIdFromRoute(route)),
     rememberedId,

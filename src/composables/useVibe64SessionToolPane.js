@@ -1,5 +1,6 @@
 import { computed, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix,
@@ -9,6 +10,7 @@ import {
   normalizeProjectRoutePath,
   projectAppPath
 } from "@/lib/vibe64ProjectScope.js";
+import { normalizeProjectPane } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionShortLabel,
   vibe64SessionStatusColor,
@@ -31,24 +33,37 @@ const STANDALONE_SESSION_TOOL_IDS = new Set([
   "system"
 ]);
 
-function text(value = "") {
-  return String(value || "").trim();
-}
-
-function normalizeProjectPane(value = "") {
-  return value === "dashboard" ? value : "preview";
-}
-
 function sessionNavLabel(session = {}) {
   const name = vibe64SessionShortLabel(session);
   if (name) {
     return name;
   }
-  const sessionId = text(session?.sessionId);
+  const sessionId = normalizeText(session.sessionId);
   return sessionId.includes("_")
     ? sessionId.split("_").slice(-2).join("_")
     : sessionId.slice(0, 12);
 }
+
+/**
+ * What a Dashboard tool reads and calls: this pane's context for its session, or the session panel's empty-state
+ * context (the project and its sessions path) while no session is selected.
+ * @typedef {object} Vibe64DashboardContext
+ * @property {boolean} [active]
+ * @property {Record<string, any>} [activeSessionNav]
+ * @property {(text: string) => Promise<unknown>} [copyText]
+ * @property {boolean} [embeddedShell]
+ * @property {Record<string, any>} projectContext
+ * @property {() => unknown} [refreshConversation]
+ * @property {(observedWork?: Record<string, any> | null) => Promise<unknown>} [refreshSessionWork]
+ * @property {(...args: any[]) => unknown} [requestSaveWork]
+ * @property {Record<string, any> | null} [session]
+ * @property {string} [sessionId]
+ * @property {import("vue").MaybeRefOrGetter<string>} sessionsApiPath
+ * @property {import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract} [sessionToolbar]
+ * @property {string} [statusColor]
+ * @property {string} [statusLabel]
+ * @property {Record<string, any> | null} [workState]
+ */
 
 /** The right pane's session tools: the routed Dashboard tool and editor, database and system open requests. */
 function useVibe64SessionToolPane(props, emit, {
@@ -188,11 +203,11 @@ function useVibe64SessionToolPane(props, emit, {
   const dashboardSessionContext = computed(() => ({
     active: Boolean(props.active),
     activeSessionNav: activeSessionNav.value,
-    copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
+    copyText: props.page.copyText,
     embeddedShell: true,
     projectContext: props.projectContext || {},
     refreshSessionWork: props.refreshSessionWork,
-    refreshConversation: () => props.conversationLog?.reload?.(),
+    refreshConversation: () => props.conversationLog?.reload(),
     requestSaveWork,
     session: props.session || null,
     sessionId: sessionId.value,
@@ -206,8 +221,10 @@ function useVibe64SessionToolPane(props, emit, {
     systemReturnContext.value?.sessionId === sessionId.value
   ));
 
-  function openSourceEditorFile(target = {}) {
-    const path = text(target?.path);
+  // A source link, a starred file or a Usage location; a request without one opens nothing.
+  function openSourceEditorFile(request) {
+    const target = normalizeObject(request);
+    const path = normalizeText(target.path);
     if (!path) {
       return false;
     }

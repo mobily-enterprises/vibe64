@@ -78,7 +78,7 @@ function shouldPreserveSelectedSessionDuringRefresh({
 
 function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "") {
   return vibe64SessionEventMatchesScope(payload, { projectSlug }) &&
-    payload?.clientRefresh?.includeList !== false;
+    payload.clientRefresh?.includeList !== false;
 }
 
 function useVibe64SessionData() {
@@ -245,7 +245,7 @@ function useVibe64SessionData() {
   let refreshSessionDataInFlight = null;
 
   async function refreshSessionData(options = {}) {
-    const reason = typeof options === "string" ? options : String(options?.reason || "");
+    const reason = typeof options === "string" ? options : String(options.reason || "");
     if (refreshSessionDataInFlight) {
       vibe64SessionDebugLog("client.sessionData.refresh.join", {
         reason,

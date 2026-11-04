@@ -9,15 +9,27 @@ import {
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
+/**
+ * The selected session's archive confirmation and its archive request.
+ * @param {{
+ *   beginArchive: (sessionId: string) => unknown,
+ *   finishArchive: (sessionId: string, succeeded: boolean, archiveScope: unknown) => void,
+ *   isSelectedSessionArchived: import("vue").Ref<boolean>,
+ *   refreshSessionData: (options: { reason: string }) => Promise<unknown>,
+ *   selectedSessionId: import("vue").Ref<string>,
+ *   selectedSessionTitle: import("vue").Ref<string>,
+ *   sessionsApiPath: import("vue").MaybeRefOrGetter<string>
+ * }} options
+ */
 function useVibe64SessionDialogs({
-  beginArchive = () => null,
-  finishArchive = () => null,
+  beginArchive,
+  finishArchive,
   isSelectedSessionArchived,
-  refreshSessionData = async () => null,
+  refreshSessionData,
   selectedSessionId,
   selectedSessionTitle,
   sessionsApiPath
-} = {}) {
+}) {
   const archiveDialogOpen = ref(false);
   const archiveDialogSessionId = ref("");
   const archiveDialogSessionTitle = ref("");

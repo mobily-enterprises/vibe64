@@ -4,7 +4,8 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import {
-  blockingVibe64SessionPageError
+  blockingVibe64SessionPageError,
+  normalizeProjectPane
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionDebugLog
@@ -30,6 +31,23 @@ import {
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
+
+/**
+ * What the session toolbar, its New session button and the new session dialog read and call: the panel's `toolbar`,
+ * a runtime host's toolbar for its session, and the copies that add the project or a pull request to it.
+ * @typedef {object} Vibe64SessionToolbarContract
+ * @property {boolean} canCreateSession
+ * @property {(assistantSelection?: Record<string, any>, options?: { pullRequestNumber?: number, repositoryBranch?: Record<string, any> }) => Promise<Record<string, any> | null>} createSession
+ * @property {boolean} createSessionRunning
+ * @property {string} createSessionTitle
+ * @property {boolean} createSessionVisible
+ * @property {Record<string, any>} [projectContext]
+ * @property {(options?: Record<string, any>) => Promise<unknown>} refreshSessionData
+ * @property {boolean} [repositoryBranchSelectionDisabled]
+ * @property {(sessionId: string) => void} selectSession
+ * @property {Array<Record<string, any>>} sessions
+ * @property {string} sessionsApiPath
+ */
 
 const vibe64SessionPanelEmits = [
   "chat-attention",
@@ -389,10 +407,6 @@ function useVibe64SessionPanel(props, emit) {
   }
 }
 
-function normalizeProjectPane(value = "") {
-  return value === "dashboard" ? value : "preview";
-}
-
 function sessionPanelPageErrorMessage(error = "") {
   const message = String(error || "").trim();
   if (/^request failed\.?$/iu.test(message)) {
@@ -476,7 +490,7 @@ function sessionPanelRuntimeHostDiagnostics({
   const renderedSet = new Set(renderedIds);
   const selectedId = String(selectedSessionId || "").trim();
   const sessionSet = new Set(sessionIds);
-  const stateIds = Object.keys(runtimeStateBySessionId || {}).map((sessionId) => String(sessionId || "").trim()).filter(Boolean);
+  const stateIds = Object.keys(runtimeStateBySessionId).map((sessionId) => String(sessionId || "").trim()).filter(Boolean);
   const states = stateIds.map((sessionId) => runtimeStateBySessionId[sessionId]).filter(Boolean);
 
   return {

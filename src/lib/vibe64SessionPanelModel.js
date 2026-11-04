@@ -37,9 +37,14 @@ function blockingVibe64SessionPageError({
   if (runtimeError) {
     return runtimeError;
   }
-  const hasSelectedSession = Boolean(selectedSession?.sessionId || selectedSession);
+  const hasSelectedSession = Boolean(selectedSession);
   const listError = String(sessionListLoadError || "").trim();
   return listError && !hasMountedRuntime && !hasSelectedSession && sessions.length < 1 ? listError : "";
+}
+
+// The project's right pane: its dashboard, or the preview for anything else.
+function normalizeProjectPane(value = "") {
+  return value === "dashboard" ? value : "preview";
 }
 
 function enrichVibe64SessionForDisplay(session = null) {
@@ -55,6 +60,7 @@ function enrichVibe64SessionForDisplay(session = null) {
 export {
   blockingVibe64SessionPageError,
   enrichVibe64SessionForDisplay,
+  normalizeProjectPane,
   shortVibe64SessionId,
   vibe64SessionLimits,
   visibleVibe64Sessions
