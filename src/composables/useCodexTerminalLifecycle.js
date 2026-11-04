@@ -1,5 +1,6 @@
 import { computed, nextTick } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
@@ -27,10 +28,11 @@ function openCodexReconnectDialog() {
   });
 }
 
-function codexAccountConnectedPayload(payload = {}) {
-  const accountId = String(payload?.accountId || payload?.connectionId || "").trim().toLowerCase();
-  const status = String(payload?.status || "").trim().toLowerCase();
-  return accountId === "codex" && payload?.connected === true && (!status || status === "connected");
+function codexAccountConnectedPayload(payload) {
+  const account = normalizeObject(payload);
+  const accountId = String(account.accountId || account.connectionId || "").trim().toLowerCase();
+  const status = String(account.status || "").trim().toLowerCase();
+  return accountId === "codex" && account.connected === true && (!status || status === "connected");
 }
 
 /**

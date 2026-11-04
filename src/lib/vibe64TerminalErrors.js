@@ -1,19 +1,17 @@
-function normalizedText(value = "") {
-  return String(value || "").trim();
-}
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function terminalErrorCode(source = {}) {
   if (!source || typeof source !== "object") {
     return "";
   }
-  return normalizedText(source.code || source.errors?.[0]?.code || source.cause?.code);
+  return normalizeText(source.code || source.errors?.[0]?.code || source.cause?.code);
 }
 
 function terminalErrorText(source = {}) {
   if (!source || typeof source !== "object") {
-    return normalizedText(source);
+    return normalizeText(source);
   }
-  return normalizedText(
+  return normalizeText(
     source.error ||
     source.message ||
     source.errors?.[0]?.message ||

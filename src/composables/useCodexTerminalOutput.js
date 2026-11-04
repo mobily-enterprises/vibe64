@@ -3,9 +3,20 @@ import { ref, unref } from "vue";
 const CODEX_ACTIVITY_QUIET_MS = 2200;
 const TERMINAL_STREAM_QUIET_MS = 2500;
 
+/** What the Codex terminal tells a caller that does not follow its activity. */
+function ignoreCodexActivity() {}
+
+/**
+ * Whether Codex is busy, working or streaming, read from its terminal's output and typed input: busy from Enter until
+ * output goes quiet, streaming while bytes arrive. Each change goes to `emitBusyChanged` with `sessionId`.
+ * @param {{
+ *   emitBusyChanged?: (activity: { busy: boolean, sessionId: string, streaming: boolean, working: boolean }) => void,
+ *   sessionId?: string | import("vue").Ref<string>
+ * }} [options]
+ */
 function useCodexTerminalOutput({
-  emitBusyChanged,
-  sessionId
+  emitBusyChanged = ignoreCodexActivity,
+  sessionId = ""
 } = {}) {
   const codexBusy = ref(false);
   const codexWorking = ref(false);
@@ -31,7 +42,7 @@ function useCodexTerminalOutput({
       streaming: terminalStreaming.value,
       working: codexWorking.value
     };
-    emitBusyChanged?.(payload);
+    emitBusyChanged(payload);
   }
 
   function clearTerminalStreamingTimer() {

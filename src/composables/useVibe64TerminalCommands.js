@@ -1,4 +1,5 @@
 import { computed } from "vue";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
@@ -16,14 +17,6 @@ import {
   isVibe64StaleOperation,
   vibe64StaleOperationResult
 } from "@/lib/vibe64StaleOperation.js";
-
-function plainObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function normalizedId(value = "") {
-  return String(value || "").trim();
-}
 
 function commandMissingResponse(message) {
   return {
@@ -45,7 +38,7 @@ function useVibe64TerminalCommands() {
       method: "POST",
       path: String(context.path || "")
     }),
-    buildRawPayload: (_model, { context }) => plainObject(context.payload),
+    buildRawPayload: (_model, { context }) => normalizeObject(context.payload),
     fallbackRunError: "Terminal failed to start.",
     messages: {
       error: "Terminal failed to start."
@@ -116,7 +109,7 @@ function useVibe64TerminalCommands() {
   }
 
   async function startAgentTerminal(sessionId = "") {
-    const normalizedSessionId = normalizedId(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       return commandMissingResponse("Vibe64 session id is required.");
     }
@@ -127,8 +120,8 @@ function useVibe64TerminalCommands() {
   }
 
   async function closeAgentTerminal(sessionId = "", terminalSessionId = "") {
-    const normalizedSessionId = normalizedId(sessionId);
-    const normalizedTerminalSessionId = normalizedId(terminalSessionId);
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedTerminalSessionId = normalizeText(terminalSessionId);
     if (!normalizedSessionId || !normalizedTerminalSessionId) {
       return commandMissingResponse("AI terminal id is required.");
     }
@@ -145,15 +138,15 @@ function useVibe64TerminalCommands() {
     text = "",
     { attachmentIds = [] } = {}
   ) {
-    const normalizedSessionId = normalizedId(sessionId);
-    const normalizedTerminalSessionId = normalizedId(terminalSessionId);
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedTerminalSessionId = normalizeText(terminalSessionId);
     const normalizedText = String(text || "");
     if (!normalizedSessionId || !normalizedTerminalSessionId || !normalizedText) {
       return commandMissingResponse("AI terminal id and input are required.");
     }
     return await writeTerminalCommand.run({
       attachmentIds: Array.isArray(attachmentIds)
-        ? attachmentIds.map(normalizedId).filter(Boolean)
+        ? attachmentIds.map((attachmentId) => normalizeText(attachmentId)).filter(Boolean)
         : [],
       text: normalizedText,
       path: vibe64AgentTerminalControlTextPath(

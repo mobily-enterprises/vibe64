@@ -1,4 +1,4 @@
-import { unref, watch } from "vue";
+import { toValue, unref, watch } from "vue";
 import {
   useAgentAttachments
 } from "@/composables/useAgentAttachments.js";
@@ -8,9 +8,24 @@ function attachmentPathForTerminal(attachmentPath = "") {
   return normalizedPath ? `[${normalizedPath}] ` : "";
 }
 
+/**
+ * Attachments an agent terminal accepts: files are uploaded for the session, then each one's path is typed into the
+ * terminal that was current when its upload began, so a file never reaches a different terminal.
+ * @param {{
+ *   assistantLabel?: string | import("vue").Ref<string>,
+ *   canUpload: import("vue").MaybeRefOrGetter<boolean>,
+ *   deleteAttachment?: (sessionId: string, attachmentId: string) => Promise<unknown>,
+ *   ensureTerminalReady: () => Promise<boolean> | boolean,
+ *   focusTerminal: () => unknown,
+ *   sendAttachmentPath: (text: string, attachmentIds: string[], target: { sessionId: string, terminalSessionId: string }) => Promise<boolean>,
+ *   sessionId: import("vue").Ref<string>,
+ *   terminalSessionId: import("vue").Ref<string>,
+ *   uploadAttachment: (sessionId: string, file: File, options?: object) => Promise<object>
+ * }} options
+ */
 function useAgentTerminalAttachments({
   assistantLabel = "Codex",
-  canUpload = () => true,
+  canUpload,
   deleteAttachment,
   ensureTerminalReady,
   focusTerminal,
@@ -18,11 +33,9 @@ function useAgentTerminalAttachments({
   sessionId,
   terminalSessionId,
   uploadAttachment
-} = {}) {
+}) {
   const label = () => String(unref(assistantLabel) || "AI");
-  const uploadAllowed = () => Boolean(unref(sessionId)) && (
-    typeof canUpload === "function" ? canUpload() !== false : unref(canUpload) !== false
-  );
+  const uploadAllowed = () => Boolean(unref(sessionId)) && toValue(canUpload) !== false;
 
   function currentTarget(attachment) {
     return uploadAllowed() && attachment.sessionId === unref(sessionId) &&
@@ -74,13 +87,11 @@ function useAgentTerminalAttachments({
     }
   });
 
-  if (terminalSessionId !== undefined) {
-    watch(() => unref(terminalSessionId), (_next, previous) => {
-      if (!previous) return;
-      void attachments.abandonAttachments();
-      attachments.clearStatus();
-    }, { flush: "sync" });
-  }
+  watch(() => unref(terminalSessionId), (_next, previous) => {
+    if (!previous) return;
+    void attachments.abandonAttachments();
+    attachments.clearStatus();
+  }, { flush: "sync" });
 
   return {
     attachmentDragActive: attachments.dragActive,

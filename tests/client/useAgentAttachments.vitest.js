@@ -968,11 +968,13 @@ describe("useAgentAttachments", () => {
       };
     });
     const terminal = useAgentTerminalAttachments({
+      canUpload: () => true,
       deleteAttachment: vi.fn(),
       ensureTerminalReady: vi.fn().mockResolvedValue(true),
       focusTerminal: vi.fn(),
       sendAttachmentPath,
       sessionId: ref("session-1"),
+      terminalSessionId: ref(undefined),
       uploadAttachment
     });
 
@@ -1007,6 +1009,7 @@ describe("useAgentAttachments", () => {
     const sendAttachmentPath = vi.fn().mockResolvedValue(true);
     const uploadAttachment = vi.fn(async (session, file) => uploadedAttachment(session, file));
     const terminal = useAgentTerminalAttachments({
+      canUpload: () => true,
       ensureTerminalReady: async () => { terminalSessionId.value = "terminal-1"; return true; },
       focusTerminal: vi.fn(), sendAttachmentPath, sessionId: ref("session-1"),
       terminalSessionId, uploadAttachment
@@ -1027,7 +1030,7 @@ describe("useAgentAttachments", () => {
       const focusTerminal = vi.fn();
       const file = testFile("pending.png");
       const terminal = useAgentTerminalAttachments({
-        assistantLabel: "OpenCode", deleteAttachment, focusTerminal,
+        assistantLabel: "OpenCode", canUpload: () => true, deleteAttachment, focusTerminal,
         ensureTerminalReady: () => true,
         sendAttachmentPath, sessionId, terminalSessionId,
         uploadAttachment: () => pending.promise
@@ -1073,7 +1076,7 @@ describe("useAgentAttachments", () => {
     const sendAttachmentPath = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const uploadAttachment = vi.fn(async (session, file) => uploadedAttachment(session, file));
     const terminal = useAgentTerminalAttachments({
-      assistantLabel: "OpenCode", deleteAttachment: vi.fn(),
+      assistantLabel: "OpenCode", canUpload: () => true, deleteAttachment: vi.fn(),
       ensureTerminalReady: () => true, focusTerminal: vi.fn(),
       sendAttachmentPath, sessionId: ref("session-1"), terminalSessionId: ref("terminal-1"), uploadAttachment
     });

@@ -2,6 +2,7 @@ import {
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { terminalSessionMissingError } from "@/lib/vibe64TerminalErrors.js";
 
 const VIBE64_CODEX_APP_SERVER_TASK_ID = "codex_app_server";
@@ -19,25 +20,17 @@ const CODEX_TURN_ATTENTION_STATUSES = new Set([
   "failed"
 ]);
 
-function normalizedText(value = "") {
-  return String(value || "").trim();
-}
-
-function objectValue(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function arrayValue(value = []) {
   return Array.isArray(value) ? value : [];
 }
 
 function sessionBackgroundTasks(session = {}) {
-  return arrayValue(session?.backgroundTasks)
+  return arrayValue(session.backgroundTasks)
     .filter((task) => task && typeof task === "object" && !Array.isArray(task));
 }
 
 function codexReconnectRequiredText(value = "") {
-  const text = normalizedText(value);
+  const text = normalizeText(value);
   return Boolean(text) && (
     text.includes(CODEX_RECONNECT_REQUIRED_CODE) ||
     text.includes(CODEX_RECONNECT_REQUIRED_MESSAGE)
@@ -45,77 +38,77 @@ function codexReconnectRequiredText(value = "") {
 }
 
 function codexReconnectRequiredResult(result = {}) {
-  const source = objectValue(result);
-  return normalizedText(source.code) === CODEX_RECONNECT_REQUIRED_CODE ||
+  const source = normalizeObject(result);
+  return normalizeText(source.code) === CODEX_RECONNECT_REQUIRED_CODE ||
     codexReconnectRequiredText(source.error) ||
     codexReconnectRequiredText(source.message) ||
     codexReconnectRequiredText(source.observed) ||
     arrayValue(source.errors).some((error) => (
-      normalizedText(error?.code) === CODEX_RECONNECT_REQUIRED_CODE ||
+      normalizeText(error?.code) === CODEX_RECONNECT_REQUIRED_CODE ||
       codexReconnectRequiredText(error?.message)
     ));
 }
 
 function codexBackgroundTaskAttentionSignature(session = {}) {
   const task = sessionBackgroundTasks(session).find((entry) => (
-    normalizedText(entry.id) === VIBE64_CODEX_APP_SERVER_TASK_ID &&
-    CODEX_BACKGROUND_TASK_ATTENTION_STATUSES.has(normalizedText(entry.status))
+    normalizeText(entry.id) === VIBE64_CODEX_APP_SERVER_TASK_ID &&
+    CODEX_BACKGROUND_TASK_ATTENTION_STATUSES.has(normalizeText(entry.status))
   ));
   if (!task) {
     return "";
   }
   return [
-    normalizedText(session?.sessionId),
+    normalizeText(session.sessionId),
     "background-task",
-    normalizedText(task.id),
-    normalizedText(task.status),
-    normalizedText(task.updatedAt),
-    normalizedText(task.terminalSessionId),
-    normalizedText(task.error),
-    normalizedText(task.message)
+    normalizeText(task.id),
+    normalizeText(task.status),
+    normalizeText(task.updatedAt),
+    normalizeText(task.terminalSessionId),
+    normalizeText(task.error),
+    normalizeText(task.message)
   ].join("|");
 }
 
 function codexReconnectRequiredSignature(session = {}) {
-  const sessionId = normalizedText(session?.sessionId);
+  const sessionId = normalizeText(session.sessionId);
   const backgroundTask = sessionBackgroundTasks(session).find((task) => (
-    normalizedText(task.id) === VIBE64_CODEX_APP_SERVER_TASK_ID &&
+    normalizeText(task.id) === VIBE64_CODEX_APP_SERVER_TASK_ID &&
     codexReconnectRequiredResult(task)
   ));
   if (backgroundTask) {
     return [
       sessionId,
       "background-task",
-      normalizedText(backgroundTask.id),
-      normalizedText(backgroundTask.status),
-      normalizedText(backgroundTask.updatedAt),
-      normalizedText(backgroundTask.error),
-      normalizedText(backgroundTask.message)
+      normalizeText(backgroundTask.id),
+      normalizeText(backgroundTask.status),
+      normalizeText(backgroundTask.updatedAt),
+      normalizeText(backgroundTask.error),
+      normalizeText(backgroundTask.message)
     ].join("|");
   }
 
-  const terminal = objectValue(session?.agentSession?.terminal);
+  const terminal = normalizeObject(session.agentSession?.terminal);
   if (codexReconnectRequiredResult(terminal)) {
     return [
       sessionId,
       "terminal",
-      normalizedText(terminal.id || terminal.terminalSessionId),
-      normalizedText(terminal.status),
-      normalizedText(terminal.outputVersion),
-      normalizedText(terminal.error || terminal.closeError || terminal.terminalError)
+      normalizeText(terminal.id || terminal.terminalSessionId),
+      normalizeText(terminal.status),
+      normalizeText(terminal.outputVersion),
+      normalizeText(terminal.error || terminal.closeError || terminal.terminalError)
     ].join("|");
   }
 
-  const turn = objectValue(session?.agentSession?.turn);
+  const turn = normalizeObject(session.agentSession?.turn);
   if (codexReconnectRequiredResult(turn)) {
     return [
       sessionId,
       "agent-turn",
-      normalizedText(session?.agentSession?.thread?.id),
-      normalizedText(turn.id),
-      normalizedText(turn.status),
-      normalizedText(turn.updatedAt),
-      normalizedText(turn.error || turn.message)
+      normalizeText(session.agentSession?.thread?.id),
+      normalizeText(turn.id),
+      normalizeText(turn.status),
+      normalizeText(turn.updatedAt),
+      normalizeText(turn.error || turn.message)
     ].join("|");
   }
 
@@ -123,10 +116,10 @@ function codexReconnectRequiredSignature(session = {}) {
 }
 
 function codexTerminalAttentionSignature(session = {}) {
-  const terminal = objectValue(session?.agentSession?.terminal);
-  const terminalId = normalizedText(terminal.id || terminal.terminalSessionId);
-  const terminalStatus = normalizedText(terminal.status);
-  const terminalError = normalizedText(terminal.closeError || terminal.error || terminal.terminalError);
+  const terminal = normalizeObject(session.agentSession?.terminal);
+  const terminalId = normalizeText(terminal.id || terminal.terminalSessionId);
+  const terminalStatus = normalizeText(terminal.status);
+  const terminalError = normalizeText(terminal.closeError || terminal.error || terminal.terminalError);
   if (
     (!terminalId && !terminalStatus && !terminalError) ||
     terminalSessionMissingError(terminalError) ||
@@ -135,19 +128,19 @@ function codexTerminalAttentionSignature(session = {}) {
     return "";
   }
   return [
-    normalizedText(session?.sessionId),
+    normalizeText(session.sessionId),
     "terminal",
     terminalId,
     terminalStatus,
-    normalizedText(terminal.outputVersion),
+    normalizeText(terminal.outputVersion),
     terminalError
   ].join("|");
 }
 
 function codexAgentTurnAttentionSignature(session = {}) {
-  const turn = objectValue(session?.agentSession?.turn);
-  const status = normalizedText(turn.status);
-  const error = normalizedText(turn.error);
+  const turn = normalizeObject(session.agentSession?.turn);
+  const status = normalizeText(turn.status);
+  const error = normalizeText(turn.error);
   if (turn.active === true) {
     return "";
   }
@@ -158,13 +151,13 @@ function codexAgentTurnAttentionSignature(session = {}) {
     return "";
   }
   return [
-    normalizedText(session?.sessionId),
+    normalizeText(session.sessionId),
     "agent-turn",
-    normalizedText(session?.agentSession?.thread?.id),
-    normalizedText(turn.id),
-    normalizedText(turn.state),
+    normalizeText(session.agentSession?.thread?.id),
+    normalizeText(turn.id),
+    normalizeText(turn.state),
     status,
-    normalizedText(turn.updatedAt),
+    normalizeText(turn.updatedAt),
     error
   ].join("|");
 }

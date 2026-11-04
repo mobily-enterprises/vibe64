@@ -1,4 +1,5 @@
 import { computed } from "vue";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
@@ -9,10 +10,6 @@ import {
   vibe64AgentAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { uploadFileRequest } from "@/lib/vibe64FileUpload.js";
-
-function normalizeSessionId(sessionId = "") {
-  return String(sessionId || "").trim();
-}
 
 function missingSessionResponse() {
   return {
@@ -26,6 +23,11 @@ function missingAttachmentResponse() {
     error: "Attachment id is required.",
     ok: false
   };
+}
+
+// readable-check: allow method-probe - input validation: an attachment is a File or Blob, the values that read their own bytes
+function readableAttachmentFile(file) {
+  return Boolean(file) && typeof file.arrayBuffer === "function";
 }
 
 const ATTACHMENT_UPLOAD_MESSAGES = Object.freeze({
@@ -62,7 +64,7 @@ function useVibe64AttachmentCommands() {
   });
 
   async function deleteAttachment(sessionId = "", attachmentId = "") {
-    const normalizedSessionId = normalizeSessionId(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       return missingSessionResponse();
     }
@@ -80,11 +82,11 @@ function useVibe64AttachmentCommands() {
     onProgress = null,
     signal = null
   } = {}) {
-    const normalizedSessionId = normalizeSessionId(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       return missingSessionResponse();
     }
-    if (!file || typeof file.arrayBuffer !== "function") {
+    if (!readableAttachmentFile(file)) {
       return {
         error: "Attachment file is required.",
         ok: false
