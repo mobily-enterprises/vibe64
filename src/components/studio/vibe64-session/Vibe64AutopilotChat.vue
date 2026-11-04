@@ -278,10 +278,7 @@ import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64MainChatApprovals from "./Vibe64MainChatApprovals.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import {
-  promptHintConversationFingerprint,
-  useVibe64PromptHints
-} from "@/composables/useVibe64PromptHints.js";
+import { useVibe64MainChatPromptHints } from "@/composables/useVibe64MainChatPromptHints.js";
 import {
   useVibe64SessionTypingPresence
 } from "@/composables/useVibe64SessionTypingPresence.js";
@@ -296,24 +293,20 @@ const { view } = defineProps({
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   agentActive, agentObservationLost, agentStopEnabled, agentStopVisible, agentWorking, answerChoices,
-  approvalMode, assistantAccessError, assistantAccessLoading, assistantAccessScopeKey,
-  assistantCanConfigureRouting, assistantCanUsePurpose, assistantPurposes, assistantRestrictionMessage,
-  attachPreviewDiagnostics, cancelOptimisticMessage, captureVisiblePreview, chatCollapsed, chatReloading,
-  chatTurns, composerAttachments, composerAttachmentsEnabled,
-  composerAttachmentsSupported, composerCanSubmit, composerDisabled, composerDraft, composerHint,
-  composerInput, composerKey, composerPlaceholder, composerSending, composerSubmitAriaLabel,
+  approvalMode, assistantAccessError, assistantAccessLoading, assistantCanConfigureRouting,
+  assistantPurposes, assistantRestrictionMessage, attachPreviewDiagnostics, cancelOptimisticMessage,
+  captureVisiblePreview, chatCollapsed, chatReloading, chatTurns, composerAttachments,
+  composerAttachmentsEnabled, composerAttachmentsSupported, composerCanSubmit, composerDisabled,
+  composerDraft, composerHint, composerInput, composerKey, composerSending, composerSubmitAriaLabel,
   composerSubmitMode, composerSubmitTitle, connectionRecoveryVisible, conversationFollowLatestKey,
   conversationLogVisible, conversationScrollKey, dismissNumberedQuestions, editOptimisticMessage,
-  emptyConversationWelcome, fileBookmarks, interrupting, loadMoreChatTurns, mainChat,
-  mainChatApprovals, numberedQuestions, numberedQuestionSelectItems, openIntegrationRequest,
-  openSourceEditorFile, openWorkingFile, phoneLayout, previewAttachmentState, projectSlug, props,
-  questionAnswers, reasoningActive, reloadAssistantAccess, reloadChatPane, repositoryOperationActive,
-  requestAgentInterrupt, resendOptimisticMessage,
-  routingRequest, runIntegrationRequest, saveWorkOperationActive, saveWorkSending,
-  selectedAnswerChoice, sendLessonMessage, sessionId, sessionSourceRoot, sourceOperationsSuspended,
-  structuredQuestionActive, submitComposerMessage, temporaryAiWorkspace, testApproval, thinkingLabel,
-  thinkingVisible, updateComposerAttachments,
-  workspaceSetupRetrying, workspaceSetupRunning, workspaceSetupStatus
+  emptyConversationWelcome, fileBookmarks, interrupting, loadMoreChatTurns, mainChat, mainChatApprovals,
+  numberedQuestions, numberedQuestionSelectItems, openIntegrationRequest, openSourceEditorFile,
+  openWorkingFile, phoneLayout, previewAttachmentState, projectSlug, props, questionAnswers,
+  reasoningActive, reloadAssistantAccess, reloadChatPane, requestAgentInterrupt, resendOptimisticMessage,
+  routingRequest, runIntegrationRequest, saveWorkOperationActive, saveWorkSending, selectedAnswerChoice,
+  sendLessonMessage, sessionId, sessionSourceRoot, sourceOperationsSuspended, submitComposerMessage,
+  temporaryAiWorkspace, testApproval, thinkingLabel, thinkingVisible, updateComposerAttachments
 } = view;
 const conversationView = ref(null);
 const composerSendButton = ref(null);
@@ -373,67 +366,10 @@ async function sendRoutingAction(action) {
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
   ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");
 
-const promptHintsBlankConversation = computed(() => chatTurns.value.length < 1);
-const promptHintsCanRequest = computed(() => Boolean(
-  props.active &&
-  props.conversationRuntime?.canSubmit.value &&
-  !props.conversationLog?.loading &&
-  !props.conversationLog?.error &&
-  !props.sessionSelectionArchived &&
-  sessionId.value &&
-  sessionSourceRoot.value &&
-  !agentActive.value &&
-  !composerSending.value &&
-  !interrupting.value &&
-  !repositoryOperationActive.value &&
-  !saveWorkSending.value &&
-  !workspaceSetupRunning.value &&
-  !workspaceSetupRetrying.value &&
-  !sourceOperationsSuspended.value &&
-  (promptHintsBlankConversation.value || assistantCanUsePurpose("prompt_hint")) &&
-  !structuredQuestionActive.value &&
-  composerAttachmentState.value.count < 1 &&
-  !composerAttachmentState.value.uploading &&
-  !composerAttachmentState.value.hasUnresolved &&
-  !previewAttachmentState.value.captureBusy &&
-  !previewAttachmentState.value.diagnosticsBusy
-));
-const promptHintsConversationKey = computed(() => (
-  JSON.stringify([promptHintConversationFingerprint(chatTurns.value), assistantAccessScopeKey.value, assistantPurposes.value.prompt_hint])
-));
-const promptHintsExistingProject = computed(() => workspaceSetupStatus.value !== "unconfigured");
 const {
-  blurComposer: blurPromptHints,
-  dismissPromptHints,
-  focusComposer: focusPromptHints,
-  loading: promptHintsLoading,
-  preview: promptHintPreview,
-  previewPromptHint,
-  selectPromptHint,
-  suggestions: promptHintSuggestions,
-  visible: promptHintsVisible
-} = useVibe64PromptHints({
-  active: computed(() => props.active),
-  blankConversation: promptHintsBlankConversation,
-  canRequest: promptHintsCanRequest,
-  conversationKey: promptHintsConversationKey,
-  draft: composerDraft,
-  existingProject: promptHintsExistingProject,
-  onSelect: applyPromptHint,
-  policy: computed(() => props.promptHintPolicy),
-  sessionId,
-  sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
-});
-const composerPromptHintPreview = computed(() => (
-  promptHintsVisible.value &&
-  !String(composerDraft.value || "").trim() &&
-  promptHintPreview.value
-    ? promptHintPreview.value
-    : ""
-));
-const composerPromptHintPlaceholder = computed(() => (
-  composerPromptHintPreview.value || composerPlaceholder.value
-));
+  blurPromptHints, composerPromptHintPlaceholder, composerPromptHintPreview, dismissPromptHints, focusPromptHints,
+  previewPromptHint, promptHintSuggestions, promptHintsLoading, promptHintsVisible, selectPromptHint
+} = useVibe64MainChatPromptHints(view, { composerAttachmentState, onSelect: applyPromptHint });
 const composerSupportStatusVisible = computed(() => Boolean(
   composerAssistantLabel.value || promptHintsVisible.value
 ));

@@ -1,12 +1,15 @@
 import { readFileSync } from "node:fs";
 
 // The Autopilot view and the parts it is laid out from, in page order: the
-// header, session activity and chat above the project panel and dialogs.
+// header, session activity and chat above the project panel and dialogs. Each
+// part's presenting logic follows it.
 export const AUTOPILOT_VIEW_FILES = Object.freeze([
   "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+  "src/composables/useVibe64OpenCodeProgress.js",
   "src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue",
   "src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue",
   "src/components/studio/vibe64-session/Vibe64AutopilotChat.vue",
+  "src/composables/useVibe64MainChatPromptHints.js",
   "src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue",
   "src/components/studio/vibe64-session/Vibe64AutopilotDialogs.vue"
 ]);

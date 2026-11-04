@@ -1411,12 +1411,14 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64AutopilotChatPane.js`
 - `src/composables/useVibe64MainChatDelivery.js`
 - `src/composables/useVibe64PreviewAttachmentState.js`
+- `src/composables/useVibe64OpenCodeProgress.js`
 - `src/lib/vibe64AutopilotViewProps.js`
 - `src/composables/useVibe64ConversationLog.js`
 - `src/composables/useArchivedVibe64ConversationHistory.js`
 - `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/composables/useVibe64PromptHints.js`
+- `src/composables/useVibe64MainChatPromptHints.js`
 - `src/composables/useAgentTerminalAttachments.js`
 - `src/components/studio/Vibe64CodexSession.vue`
 - `src/composables/useCodexTerminalLifecycle.js`

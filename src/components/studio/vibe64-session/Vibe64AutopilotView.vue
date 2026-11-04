@@ -51,11 +51,9 @@
 </template>
 
 <script setup>
-import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch, watchEffect } from "vue";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
 import { NO_RESOURCE_RECOVERY_CONTROL, VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiGithub } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
@@ -76,10 +74,8 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { useVibe64AutopilotView } from "@/composables/useVibe64AutopilotView.js";
+import { useVibe64OpenCodeProgress } from "@/composables/useVibe64OpenCodeProgress.js";
 import { vibe64AutopilotViewEmits, vibe64AutopilotViewProps } from "@/lib/vibe64AutopilotViewProps.js";
-import {
-  VIBE64_SESSION_CHANGED_EVENT
-} from "@/lib/vibe64SessionRequestConfig.js";
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
@@ -112,50 +108,7 @@ watch(() => props.session?.sessionId, () => { testApproval.value = null; });
 const selectedAssistantSessionId = computed(() => String(
   props.session?.sessionId || ""
 ).trim());
-const openCodeProgressLabel = ref("");
-const openCodeProviderLabel = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).label || "OpenCode");
-
-function visibleOpenCodeProgressLabel(progress = {}) {
-  if (String(progress.tool || "").trim()) {
-    return `${openCodeProviderLabel.value} is using a tool…`;
-  }
-  if (
-    String(progress.partType || "").trim() === "reasoning" ||
-    String(progress.type || "").includes("reasoning")
-  ) {
-    return `${openCodeProviderLabel.value} is reasoning…`;
-  }
-  if (String(progress.text || "").trim()) {
-    return `${openCodeProviderLabel.value} is writing…`;
-  }
-  return `${openCodeProviderLabel.value} is working…`;
-}
-
-useRealtimeEvent({
-  enabled: computed(() => Boolean(
-    props.active &&
-    !props.sessionSelectionArchived &&
-    selectedAssistantSessionId.value &&
-    props.session?.assistantSelection?.engineId === "opencode"
-  )),
-  event: VIBE64_SESSION_CHANGED_EVENT,
-  matches: ({ payload = {} } = {}) => Boolean(
-    String(payload.sessionId || payload.entityId || "").trim() === selectedAssistantSessionId.value &&
-    (
-      payload.assistantProgress ||
-      [
-        "opencode-server-message-delivered",
-        "opencode-server-turn-active",
-        "opencode-server-turn-idle"
-      ].includes(payload.reason)
-    )
-  ),
-  onEvent: ({ payload = {} } = {}) => {
-    openCodeProgressLabel.value = payload.reason === "opencode-server-turn-idle"
-      ? ""
-      : visibleOpenCodeProgressLabel(payload.assistantProgress || {});
-  }
-});
+const { openCodeProgressLabel } = useVibe64OpenCodeProgress(props, { selectedAssistantSessionId });
 
 watch([
   selectedAssistantSessionId,
