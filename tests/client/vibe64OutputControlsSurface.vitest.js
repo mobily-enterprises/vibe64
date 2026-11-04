@@ -805,14 +805,15 @@ function mountPreviewSurface({ learning = idleLearning(), projectSlug = "project
   let state;
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
   const app = renderer.createApp({ setup() {
-    state = useVibe64OutputControlsSurface(props); return () => null;
+    state = useVibe64OutputControlsSurface(props, { openUsage: vi.fn(), readUsageEntries: vi.fn(async () => ({ entries: [] })),
+      recordInteraction: vi.fn(async () => ({ ok: true })), recording: ref(null) }); return () => null;
   } });
   provideShellContext(app, { learning });
   app.mount({});
   const posts = [];
   let rect = { left: 100, top: 100, right: 900, bottom: 700 };
   let frame = markRaw({ dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
-    getBoundingClientRect: () => rect,
+    getAttribute: () => null, getBoundingClientRect: () => rect,
     contentWindow: { postMessage(data, origin, ports = []) { posts.push({ data, origin, ports }); } } });
   state.previewFrame.value = frame;
   function announce(data = { type: "orientation-available", protocolVersion: 1, instanceId }, source = frame.contentWindow, origin = "https://preview.example.test") {

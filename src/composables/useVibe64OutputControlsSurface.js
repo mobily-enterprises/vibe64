@@ -14,16 +14,18 @@ import { useVibe64PreviewToolbar } from "@/composables/useVibe64PreviewToolbar.j
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { previewIdentityTypeLabel } from "@/lib/vibe64PreviewIdentity.js";
 
-// `usage` connects Click in Preview to the usage map: readUsageEntries(query)
-// reads usage entries, openUsage({ entryId, mode }) opens one, and while
-// `recording` (a ref or getter) is a recording of this Preview,
-// recordInteraction(interaction) saves each interaction the bridge reports.
+/**
+ * Everything the output controls show and do, composed from one concern per
+ * composable. `usage` connects Click in Preview to the usage map.
+ * @param {object} props The output controls' props.
+ * @param {import("@/composables/useVibe64PreviewPick.js").PreviewUsage} usage
+ */
 function useVibe64OutputControlsSurface(props, {
-  openUsage = null,
-  readUsageEntries = null,
-  recordInteraction = null,
-  recording = null
-} = {}) {
+  openUsage,
+  readUsageEntries,
+  recordInteraction,
+  recording
+}) {
   const outputs = useVibe64OutputControls({
     autoStartManagedPreview: () => props.autoStartManagedPreview,
     autoStartTargetId: () => props.autoStartTargetId,

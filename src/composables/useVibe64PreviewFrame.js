@@ -136,14 +136,14 @@ function useVibe64PreviewFrame({
     if (["resource.failed", "resource.retry", "resource.retry.skipped", "resource.retry.unavailable",
       "frame.requested", "iframe.loaded", "iframe.ready"].includes(event)) {
       // Only fixed diagnostic fields cross the authenticated action boundary.
-      void publishPreviewDiagnostic?.({ event, timestamp: new Date().toISOString(),
+      void publishPreviewDiagnostic({ event, timestamp: new Date().toISOString(),
         frameUrl: previewUrl.value, frameRequestId: previewFrameRequestId.value,
         resourceUrl: details.resourceUrl || "", resourceKind: details.resourceKind || "resource",
         retryCount: details.retryCount ?? resourceRetryCount(), willRetry: details.willRetry === true });
     }
     vibe64SessionDebugLog(`client.launchPreview.${event}`, redactPreviewDebugDetails({
       frameRequestId: previewFrameRequestId.value,
-      frameSrc: String(previewFrame.value?.getAttribute?.("src") || ""),
+      frameSrc: String(previewFrame.value?.getAttribute("src") || ""),
       loadedFrameRequestId: previewLoadedFrameRequestId.value,
       overlayVisible: previewLoadingOverlayVisible.value,
       previewBaseUrl: previewBaseUrl.value,

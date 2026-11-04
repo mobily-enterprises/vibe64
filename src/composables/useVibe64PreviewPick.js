@@ -14,15 +14,26 @@ import {
 } from "@/lib/vibe64PreviewPick.js";
 
 /**
+ * What connects Click in Preview to the usage map: `readUsageEntries(query)`
+ * reads usage entries, `openUsage({ entryId, mode })` opens one, and while
+ * `recording` (a ref or getter) is a recording of this Preview,
+ * `recordInteraction(interaction)` saves each interaction the bridge reports.
+ * @typedef {object} PreviewUsage
+ * @property {(request: { entryId?: string, mode: string }) => void} openUsage
+ * @property {(query: { limit: number, q: string }) => Promise<{ entries?: object[] }>} readUsageEntries
+ * @property {(interaction: object) => Promise<{ ok?: boolean, nextInteraction?: number }>} recordInteraction
+ * @property {import("vue").MaybeRefOrGetter<object | null>} recording
+ */
+
+/**
  * Click in Preview and usage recording in the embedded Preview. A picked
  * element opens Usage at its component's entry, or explains why it cannot.
  * While this Preview is recorded, the bridge's interaction reports are saved
  * in order, and the bridge is told which interaction number comes next.
- * `usage` is as `useVibe64OutputControlsSurface` receives it.
  * @param {{
  *   frame: import("@/types.js").Vibe64PreviewFrame,
  *   props: { session?: object | null },
- *   usage: { openUsage?: Function | null, readUsageEntries?: Function | null, recordInteraction?: Function | null, recording?: unknown }
+ *   usage: PreviewUsage
  * }} options
  */
 function useVibe64PreviewPick({
@@ -56,7 +67,6 @@ function useVibe64PreviewPick({
   // Only a higher number is forwarded, and no more than the recording takes.
   const previewInteractions = { forwarded: 0, highest: 0, recordingId: "" };
   const previewPickAvailable = computed(() => Boolean(
-    typeof readUsageEntries === "function" &&
     previewFrameLoaded.value &&
     previewPaneDisplayed.value &&
     !previewSuspended.value &&
@@ -73,13 +83,13 @@ function useVibe64PreviewPick({
 
   function showPreviewPickNotice(text, { opensUsage = false } = {}) {
     previewPickNoticeText.value = text;
-    previewPickNoticeOpensUsage.value = opensUsage && typeof openUsage === "function";
+    previewPickNoticeOpensUsage.value = opensUsage;
     previewPickNoticeVisible.value = true;
   }
 
   function openUsageFromPickNotice() {
     previewPickNoticeVisible.value = false;
-    openUsage?.({ mode: "calls" });
+    openUsage({ mode: "calls" });
   }
 
   function togglePreviewPick() {
@@ -101,10 +111,10 @@ function useVibe64PreviewPick({
       return null;
     }
     switchPreviewPicking(false);
-    if (result?.cancelled === true) {
+    if (result.cancelled === true) {
       return null;
     }
-    const file = previewComponentSourcePath(result?.componentFile, props.session?.sourcePath);
+    const file = previewComponentSourcePath(result.componentFile, props.session?.sourcePath);
     if (!file) {
       showPreviewPickNotice(PREVIEW_PICK_NO_COMPONENT_TEXT);
       return null;
@@ -117,7 +127,7 @@ function useVibe64PreviewPick({
         showPreviewPickNotice(`${file.split("/").pop()} has no usage entry yet. Refresh the architecture scan, then pick again.`, { opensUsage: true });
         return null;
       }
-      openUsage?.({ entryId: entry.id, mode: "calls" });
+      openUsage({ entryId: entry.id, mode: "calls" });
       return entry;
     } catch (error) {
       if (error?.code === "vibe64_genesis_city_missing") {
@@ -148,10 +158,9 @@ function useVibe64PreviewPick({
   }
 
   async function forwardPreviewInteraction(data = {}) {
-    const id = String(data?.id || "");
+    const id = String(data.id || "");
     const recordingId = previewRecordingId.value;
     if (
-      typeof recordInteraction !== "function" ||
       !recordingId ||
       recordingId !== previewInteractions.recordingId ||
       !USAGE_INTERACTION_ID_PATTERN.test(id) ||
@@ -162,13 +171,13 @@ function useVibe64PreviewPick({
     }
     previewInteractions.highest = Number(id.slice(2));
     previewInteractions.forwarded += 1;
-    const at = Date.parse(String(data?.at || ""));
+    const at = Date.parse(String(data.at || ""));
     const result = await recordInteraction({
       at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString(),
-      componentFile: previewComponentSourcePath(data?.componentFile, props.session?.sourcePath) || null,
+      componentFile: previewComponentSourcePath(data.componentFile, props.session?.sourcePath) || null,
       id,
-      kind: ["enter", "submit"].includes(data?.kind) ? data.kind : "click",
-      label: String(data?.elementLabel || "").trim().slice(0, 80) || "element"
+      kind: ["enter", "submit"].includes(data.kind) ? data.kind : "click",
+      label: String(data.elementLabel || "").trim().slice(0, 80) || "element"
     });
     // Another page of this recording already used the number: the bridge
     // continues from the next free one the server named.
