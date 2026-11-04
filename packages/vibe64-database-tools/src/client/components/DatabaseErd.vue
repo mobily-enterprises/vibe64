@@ -152,15 +152,16 @@
 </template>
 
 <script setup>
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { mdiClose, mdiFullscreen, mdiFullscreenExit, mdiImageFilterCenterFocus, mdiMagnify, mdiPin, mdiPinOutline, mdiRedo, mdiRestore, mdiTuneVariant, mdiUndo } from "@mdi/js";
 import { MarkerType, VueFlow } from "@vue-flow/core";
 import { MiniMap } from "@vue-flow/minimap";
 import DatabaseErdEdge from "./DatabaseErdEdge.vue";
 import DatabaseErdNode from "./DatabaseErdNode.vue";
-import { buildErdRelationshipRoutes, erdRouteSnapshot } from "../../shared/erdRelationships.js";
-import { buildErdNodes, visibleErdNodes, erdCardinality, erdColumns, erdLayoutGroups, erdSearch, placeErdNodes } from "../../shared/erdModel.js";
+import { hasElementFunction } from "../browser.js";
+import { useDatabaseErd } from "../composables/useDatabaseErd.js";
+import { erdCardinality, erdLayoutGroups, erdSearch } from "../../shared/erdModel.js";
 
 const props = defineProps({
   focusRequest: { type: Object, default: null },
@@ -171,44 +172,72 @@ const props = defineProps({
   schema: { default: () => ({ relationships: [], tables: [] }), type: Object }
 });
 const emit = defineEmits(["save-layout", "select-table", "inspect-table"]);
-defineExpose({ locate });
-const nodes = ref([]);
-const edges = ref([]);
 const erdRoot = ref(null);
 const optionsOpen = ref(false);
 const fullscreen = ref(false);
 const fullscreenAvailable = ref(false);
-const layoutError = ref("");
-const layoutPending = ref(false);
-const diagramReady = ref(false);
-const columnMode = ref(props.layout.columnMode || "keys");
-const focusTable = ref(props.layout.focusTable || "");
-const activeGroup = ref(props.layout.activeGroup || "");
-const groups = ref((props.layout.groups || []).map((group) => ({ ...group })));
-const views = ref(JSON.parse(JSON.stringify(props.layout.views || [])));
-const undoStack = ref([]);
-const redoStack = ref([]);
-const selectedTable = ref("");
-const selectedRelationshipId = ref("");
-const hoveredRelationshipId = ref("");
 const searchText = ref("");
 const searchChoice = ref(null);
-const searchColumn = ref("");
 const viewDialog = ref(false);
 const viewName = ref("");
 const groupDialog = ref(false);
 const editingGroup = ref("");
 const groupName = ref("");
 const groupTables = ref([]);
-const obstructedCount = ref(0);
 const feedback = useUiFeedback({ source: "vibe64.database-erd.feedback" });
 const defaultEdgeOptions = {
   type: "relationship",
   markerEnd: { height: 16, width: 16, markerUnits: "userSpaceOnUse", type: MarkerType.ArrowClosed }
 };
-// Schema refreshes replace the snapshot; its metadata is immutable between reads.
-const relationships = computed(() => toRaw(props.schema.relationships || []));
-const tables = computed(() => toRaw(props.schema.tables || []));
+const {
+  activeGroup,
+  changeColumnMode,
+  changeGroupFilter,
+  clearSelection,
+  clearViewportSave,
+  columnMode,
+  deleteGroup,
+  diagramReady,
+  edges,
+  fitDiagram,
+  focusTable,
+  groups,
+  layoutError,
+  layoutPending,
+  locate,
+  nodes,
+  obstructedCount,
+  onEdgeClick,
+  onEdgeHover,
+  onEdgeLeave,
+  onFlowInit,
+  onNodeClick,
+  onNodeDrag,
+  onNodeDragStart,
+  onNodeDragStop,
+  onViewportMove,
+  openFocusRequest,
+  rebuild,
+  receiveLayout,
+  redo,
+  redoStack,
+  relationships,
+  removeView,
+  resetPositions,
+  restoreView,
+  selectedRelationshipId,
+  selectedTable,
+  setFocus,
+  storeGroup,
+  storeView,
+  tableName,
+  tables,
+  togglePin,
+  undo,
+  undoStack,
+  views
+} = useDatabaseErd({ props, emit, feedback });
+defineExpose({ locate });
 const tableItems = computed(() => tables.value.map((table) => ({ title: table.name, value: table.qualifiedName })));
 const searchMatches = computed(() => erdSearch(tables.value, searchText.value || ""));
 const selectedNode = computed(() => nodes.value.find((node) => node.id === selectedTable.value));
@@ -230,344 +259,9 @@ const groupItems = computed(() => [
   ...(disconnectedCount.value ? [{ title: "Tables without relationships", value: "erd-disconnected" }] : [])
 ]);
 const matchingView = computed(() => views.value.find((view) => view.name.toLowerCase() === viewName.value.trim().toLowerCase()));
-let flow = null;
-let layoutWorker = null;
-let layoutRequestId = 0;
-let rebuildId = 0;
-let graphRefreshId = 0;
-let routingPromise = null;
-let relationshipDragFrame = null;
-let routes = props.layout.routes || [];
-let storedNodes = props.layout.nodes || [];
-let draggingSnapshot = null;
-let pendingRemoteLayout = null;
-let appliedLayoutRevision = props.layout.revision || 0;
-let disposed = false;
-let viewportSaveTimer = null;
-const layoutResolvers = new Map();
 
-function tableName(id) { return tables.value.find((table) => table.qualifiedName === id)?.name || id; }
-function snapshot() {
-  return {
-    routes: erdRouteSnapshot(routes),
-    nodes: nodes.value.map((node) => ({ table: node.id, x: node.position.x, y: node.position.y, collapsed: node.data.collapsed, expanded: node.data.expanded, pinned: node.data.pinned, group: node.data.group, hidden: false })),
-    columnMode: columnMode.value, focusTable: focusTable.value, activeGroup: activeGroup.value,
-    groups: groups.value.map((group) => ({ ...group })),
-    viewport: { ...(flow?.getViewport?.() || { x: 0, y: 0, zoom: 1 }) }
-  };
-}
-function checkpoint() {
-  undoStack.value = [...undoStack.value, snapshot()].slice(-30);
-  redoStack.value = [];
-}
-function clearViewportSave() { clearTimeout(viewportSaveTimer); viewportSaveTimer = null; }
-function persistPositions() { clearViewportSave(); emit("save-layout", { ...snapshot(), views: views.value }); }
-function buildNodes(saved = storedNodes) {
-  return buildErdNodes({ tables: tables.value, relationships: relationships.value }, {
-    nodes: saved, columnMode: columnMode.value, groups: groups.value
-  }).map((node) => {
-    const { table, columns } = node.data;
-    return {
-      ...node, type: "table", draggable: props.draggable && !node.data.pinned, dragHandle: ".database-erd-node header",
-      data: {
-        ...node.data, table: markRaw(table), columns: markRaw(columns),
-        columnMode: columnMode.value, keyColumnCount: erdColumns(table, relationships.value).length,
-        primaryColumns: new Set((table.keys || []).filter((key) => key.primary).flatMap((key) => key.columns)),
-        uniqueColumns: new Set((table.keys || []).flatMap((key) => key.columns)),
-        foreignColumns: new Set(relationships.value.filter((relationship) => relationship.sourceTable === table.qualifiedName).flatMap((relationship) => relationship.columns)),
-        onToggle: toggleNode, onExpand: expandNode, onPin: togglePin
-      }
-    };
-  });
-}
-function applyVisibility() {
-  nodes.value = visibleErdNodes(nodes.value, relationships.value, {
-    focusTable: focusTable.value, activeGroup: activeGroup.value
-  });
-}
-function emphasize() {
-  const selectedRoutes = routes.filter((route) => selectedRelationshipId.value ? route.relationshipId === selectedRelationshipId.value :
-    selectedTable.value && (route.source === selectedTable.value || route.target === selectedTable.value));
-  const selectedTables = new Set(selectedRoutes.flatMap((route) => [route.source, route.target]));
-  if (selectedTable.value) selectedTables.add(selectedTable.value);
-  const highlighted = hoveredRelationshipId.value ? routes.filter((route) =>
-    route.relationshipId === hoveredRelationshipId.value || selectedRoutes.includes(route)) : selectedRoutes;
-  const highlightedIds = new Set(highlighted.map((route) => route.id));
-  const hasSelection = Boolean(selectedRelationshipId.value || selectedTable.value);
-  const columnsByTable = new Map();
-  for (const route of highlighted) {
-    for (const [table, column] of [[route.source, route.sourceColumn], [route.target, route.targetColumn]]) {
-      if (!columnsByTable.has(table)) columnsByTable.set(table, []);
-      if (column) columnsByTable.get(table).push(column);
-    }
-  }
-  // Preserve graph identities: replacing the arrays makes Vue Flow parse every
-  // table and connection again for each pointer crossing.
-  for (const node of nodes.value) {
-    const columns = columnsByTable.get(node.id) || [];
-    if (node.id === selectedTable.value && searchColumn.value) columns.push(searchColumn.value);
-    node.data.highlighted = node.id === selectedTable.value || columnsByTable.has(node.id);
-    node.data.dimmed = hasSelection && !selectedTables.has(node.id);
-    const previous = node.data.highlightedColumns || [];
-    if (previous.length !== columns.length || previous.some((column, index) => column !== columns[index])) node.data.highlightedColumns = columns;
-  }
-  for (const edge of edges.value) {
-    const active = highlightedIds.has(edge.id);
-    edge.selected = edge.data.relationshipId === selectedRelationshipId.value;
-    edge.data.emphasized = active;
-    edge.style ||= { stroke: "rgb(var(--v-theme-primary))", strokeDasharray: edge.data.cardinality.optional ? "6 3" : undefined, strokeLinejoin: "round" };
-    edge.style.strokeWidth = active ? 2.4 : 1.6;
-    edge.style.strokeOpacity = hasSelection && !active ? 0.12 : 0.85;
-  }
-}
-async function refreshGraph({ dragging = false, reset = false, layoutPaths = new Map() } = {}) {
-  const request = ++graphRefreshId;
-  applyVisibility();
-  // Coalesce drag/visibility updates while the worker is routing. Only the most
-  // recent graph may replace the current one, including after a remote restore.
-  if (routingPromise) await routingPromise.catch(() => {});
-  if (disposed || request !== graphRefreshId) return false;
-  // Keep component callbacks and Vue's reactive proxies out of the worker payload.
-  const routingNodes = nodes.value.filter((node) => !node.hidden).map((node) => ({
-    id: node.id, position: node.position, dimensions: node.dimensions,
-    data: { table: node.data.table, columns: node.data.columns, collapsed: node.data.collapsed }
-  }));
-  const operation = requestWorker({
-    kind: "routes",
-    nodes: JSON.parse(JSON.stringify(routingNodes)),
-    relationships: JSON.parse(JSON.stringify(relationships.value)),
-    options: { previousRoutes: reset ? [] : erdRouteSnapshot(routes), dragging, fixedSides: reset, layoutPaths }
-  });
-  routingPromise = operation;
-  let graph;
-  try {
-    graph = await operation;
-  } catch (error) {
-    if (!disposed && request === graphRefreshId) layoutError.value = error.message || "The ERD connections could not be drawn.";
-    return false;
-  } finally {
-    if (routingPromise === operation) routingPromise = null;
-  }
-  if (disposed || request !== graphRefreshId) return false;
-  layoutError.value = "";
-  routes = graph.routes;
-  nodes.value = nodes.value.map((node) => ({ ...node, data: { ...node.data, relationshipPorts: graph.portsByNode.get(node.id) || [] } }));
-  edges.value = routes.map((route) => ({
-    id: route.id, type: "relationship", source: route.source, target: route.target,
-    sourceHandle: route.sourceHandle, targetHandle: route.targetHandle,
-    ariaLabel: `${tableName(route.source)}.${route.sourceColumn || "(collapsed)"} → ${tableName(route.target)}.${route.targetColumn || "(collapsed)"}; ${route.cardinality.parent} parent(s) per child; ${route.cardinality.child} children per parent; ${route.relationship.constraintName}`,
-    data: { relationshipId: route.relationshipId, points: route.points, cardinality: route.cardinality }
-  }));
-  obstructedCount.value = routes.filter((route) => route.obstructed).length;
-  emphasize();
-  await nextTick();
-  if (disposed || request !== graphRefreshId) return false;
-  flow?.updateNodeInternals?.(nodes.value.filter((node) => !node.hidden).map((node) => node.id));
-  return true;
-}
-function requestWorker(payload) {
-  const id = ++layoutRequestId;
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { layoutResolvers.delete(id); reject(new Error("The layout worker timed out.")); }, 15000);
-    layoutResolvers.set(id, { resolve, reject, timeout });
-    layoutWorker.postMessage({ ...payload, id });
-  });
-}
-async function rebuild({ force = false } = {}) {
-  if (!layoutWorker) return;
-  const request = ++rebuildId;
-  graphRefreshId += 1;
-  layoutPending.value = true;
-  layoutError.value = "";
-  const saved = nodes.value.length ? snapshot().nodes : storedNodes;
-  const initialViewport = !force && (nodes.value.length ? flow?.getViewport?.() : saved.length ? props.layout.viewport : null);
-  try {
-    const sourceNodes = buildNodes(saved);
-    const savedTables = new Set(saved.map((node) => node.table));
-    const needsSave = force || sourceNodes.some((node) => !savedTables.has(node.id));
-    const graph = buildErdRelationshipRoutes(sourceNodes, relationships.value, { fixedSides: true, calculatePaths: false });
-    const layout = await requestWorker({
-      nodes: sourceNodes.map((node) => ({ id: node.id, ...node.dimensions, ports: graph.portsByNode.get(node.id) })),
-      edges: graph.routes.map((route) => ({ id: route.id, source: route.source, target: route.target, sourceHandle: route.sourceHandle, targetHandle: route.targetHandle })),
-      centralTable: props.centralTable,
-      groups: erdLayoutGroups(sourceNodes, relationships.value)
-    });
-    if (disposed || request !== rebuildId) return;
-    nodes.value = placeErdNodes(sourceNodes, layout.nodes, saved, force);
-    if (!await refreshGraph({ reset: force, layoutPaths: force || !saved.length ? new Map(layout.paths.map((path) => [path.id, path.points])) : new Map() })) return;
-    if (!await updateViewport(initialViewport, { animate: diagramReady.value })) return;
-    diagramReady.value = true;
-    if (needsSave || JSON.stringify(erdRouteSnapshot(routes)) !== JSON.stringify(props.layout.routes || [])) persistPositions();
-    if (layout.fallback) feedback.error(new Error("The recommended layout was unavailable; a basic arrangement was used."), "Layout needs attention.");
-  } catch (error) {
-    if (request === rebuildId) layoutError.value = error.message || "The ERD could not be arranged.";
-  } finally {
-    if (request === rebuildId) layoutPending.value = false;
-  }
-}
-async function restore(state, { remote = false } = {}) {
-  const request = ++rebuildId;
-  layoutPending.value = true;
-  columnMode.value = state.columnMode || "keys";
-  focusTable.value = state.focusTable || "";
-  activeGroup.value = state.activeGroup || "";
-  groups.value = (state.groups || []).map((group) => ({ ...group }));
-  if (remote) {
-    views.value = JSON.parse(JSON.stringify(state.views || []));
-  } else {
-    selectedTable.value = "";
-    selectedRelationshipId.value = "";
-    hoveredRelationshipId.value = "";
-  }
-  routes = state.routes || [];
-  nodes.value = buildNodes(state.nodes);
-  try {
-    if (!await refreshGraph()) return false;
-    if (!remote) {
-      if (!await updateViewport(state.viewport)) return false;
-      persistPositions();
-    }
-    return true;
-  } finally {
-    // An older restore cannot unlock a newer restore or arrangement.
-    if (request === rebuildId) layoutPending.value = false;
-  }
-}
-async function undo() {
-  if (!undoStack.value.length || layoutPending.value) return;
-  redoStack.value.push(snapshot());
-  await restore(undoStack.value.pop());
-}
-async function redo() {
-  if (!redoStack.value.length || layoutPending.value) return;
-  undoStack.value.push(snapshot());
-  await restore(redoStack.value.pop());
-}
-async function changeColumnMode(mode) {
-  if (mode === columnMode.value || layoutPending.value) return;
-  checkpoint();
-  columnMode.value = mode;
-  const saved = snapshot().nodes.map((node) => ({ ...node, expanded: false }));
-  nodes.value = buildNodes(saved);
-  if (!await refreshGraph()) return;
-  persistPositions();
-}
-async function changeNode(id, changes) {
-  checkpoint();
-  const saved = snapshot().nodes.map((node) => node.table === id ? { ...node, ...changes } : node);
-  nodes.value = buildNodes(saved);
-  if (!await refreshGraph()) return;
-  persistPositions();
-}
-function toggleNode(id) { return changeNode(id, { collapsed: !nodes.value.find((node) => node.id === id).data.collapsed }); }
-function expandNode(id) { return changeNode(id, { expanded: !nodes.value.find((node) => node.id === id).data.expanded }); }
-function togglePin(id) { return changeNode(id, { pinned: !nodes.value.find((node) => node.id === id).data.pinned }); }
-function onNodeDragStart() { draggingSnapshot = snapshot(); }
-function onNodeDrag() {
-  if (relationshipDragFrame !== null) return;
-  relationshipDragFrame = globalThis.requestAnimationFrame(() => {
-    relationshipDragFrame = null;
-    void refreshGraph({ dragging: true });
-  });
-}
-async function onNodeDragStop() {
-  if (relationshipDragFrame !== null) globalThis.cancelAnimationFrame(relationshipDragFrame);
-  relationshipDragFrame = null;
-  const beforeDrag = draggingSnapshot;
-  if (beforeDrag) {
-    undoStack.value = [...undoStack.value, beforeDrag].slice(-30);
-    redoStack.value = [];
-    draggingSnapshot = null;
-  }
-  if (pendingRemoteLayout) {
-    // Keep this drag without reverting tables moved by another viewer during it.
-    const previous = new Map(beforeDrag.nodes.map((node) => [node.table, node]));
-    const moved = new Map(snapshot().nodes.filter((node) => {
-      const before = previous.get(node.table);
-      return before && (node.x !== before.x || node.y !== before.y);
-    }).map((node) => [node.table, node]));
-    const shared = pendingRemoteLayout;
-    pendingRemoteLayout = null;
-    const mergedNodes = shared.nodes.map((node) => {
-      const position = moved.get(node.table);
-      return position ? { ...node, x: position.x, y: position.y } : node;
-    });
-    if (!await restore({ ...shared, nodes: mergedNodes }, { remote: true })) return;
-  }
-  if (!await refreshGraph()) return;
-  persistPositions();
-}
-function onNodeClick({ node }) { selectedTable.value = node.id; emit("inspect-table", node.id); selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
-function onEdgeClick({ edge }) { selectedRelationshipId.value = edge.data.relationshipId; selectedTable.value = ""; emit("inspect-table", ""); emphasize(); }
-function onEdgeHover({ edge }) { hoveredRelationshipId.value = edge.data.relationshipId; emphasize(); }
-function onEdgeLeave() { hoveredRelationshipId.value = ""; emphasize(); }
-function clearSelection() { selectedTable.value = ""; emit("inspect-table", ""); selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
-async function setFocus(id) {
-  checkpoint();
-  focusTable.value = id;
-  activeGroup.value = "";
-  clearSelection();
-  if (!await refreshGraph()) return;
-  if (!await fitDiagram()) return;
-  persistPositions();
-}
-async function changeGroupFilter(id) {
-  checkpoint();
-  activeGroup.value = id;
-  focusTable.value = "";
-  clearSelection();
-  if (!await refreshGraph()) return;
-  if (!await fitDiagram()) return;
-  persistPositions();
-}
-let appliedFocusRequest = null;
-watch([() => props.focusRequest, () => nodes.value.length, layoutPending], async ([request, count, pending]) => {
-  if (!request?.qualifiedName || request === appliedFocusRequest || !count || pending) return;
-  if (!nodes.value.some((node) => node.id === request.qualifiedName)) return;
-  appliedFocusRequest = request;
-  await locate({ table: request.qualifiedName, column: "" });
-}, { flush: "post" });
+watch([() => props.focusRequest, () => nodes.value.length, layoutPending], ([request, count, pending]) => openFocusRequest(request, count, pending), { flush: "post" });
 
-async function locate(item) {
-  if (!item || layoutPending.value || !nodes.value.length) return;
-  checkpoint();
-  focusTable.value = "";
-  activeGroup.value = "";
-  selectedRelationshipId.value = "";
-  hoveredRelationshipId.value = "";
-  selectedTable.value = item.table;
-  emit("inspect-table", item.table);
-  searchColumn.value = item.column;
-  const saved = snapshot().nodes.map((node) => node.table === item.table ? { ...node, collapsed: false, expanded: Boolean(item.column) || node.expanded } : node);
-  nodes.value = placeErdNodes(buildNodes(saved), [], saved);
-  if (!await refreshGraph()) return;
-  const request = graphRefreshId;
-  await flow?.fitView?.({ nodes: [item.table], maxZoom: 1.2, padding: 0.5, duration: 220 });
-  if (disposed || request !== graphRefreshId) return;
-  persistPositions();
-}
-async function resetPositions() { checkpoint(); await rebuild({ force: true }); }
-async function updateViewport(viewport, { animate = true } = {}) {
-  const request = graphRefreshId;
-  await nextTick();
-  await new Promise((resolve) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve)));
-  if (disposed || request !== graphRefreshId) return false;
-  if (viewport) await flow?.setViewport?.(viewport, { duration: animate ? 180 : 0 });
-  else await flow?.fitView?.({ nodes: nodes.value.filter((node) => !node.hidden).map((node) => node.id), duration: animate ? 220 : 0, padding: 0.18 });
-  return !disposed && request === graphRefreshId;
-}
-function fitDiagram() { return updateViewport(); }
-function onFlowInit(instance) { flow = instance; }
-function onViewportMove() {
-  clearViewportSave();
-  if (layoutPending.value || draggingSnapshot || !nodes.value.length) return;
-  // A wheel gesture ends after a short pause. Save the camera once it settles,
-  // instead of triggering a shared-state reload between successive wheel ticks.
-  viewportSaveTimer = setTimeout(() => {
-    viewportSaveTimer = null;
-    if (!disposed && !layoutPending.value && !draggingSnapshot) persistPositions();
-  }, 600);
-}
 function editGroup(id = "") {
   optionsOpen.value = false;
   const group = groups.value.find((item) => item.id === id);
@@ -578,39 +272,19 @@ function editGroup(id = "") {
 }
 async function saveGroup() {
   if (!groupName.value.trim() || !groupTables.value.length) return;
-  checkpoint();
-  const existing = groups.value.find((group) => group.name.toLowerCase() === groupName.value.trim().toLowerCase());
-  const id = editingGroup.value || existing?.id || crypto.randomUUID();
-  groups.value = [...groups.value.filter((group) => group.id !== id), { id, name: groupName.value.trim() }];
-  const members = new Set(groupTables.value);
-  const saved = snapshot().nodes.map((node) => ({ ...node, group: members.has(node.table) ? id : node.group === id ? "" : node.group }));
-  nodes.value = buildNodes(saved);
-  activeGroup.value = id;
-  focusTable.value = "";
-  clearSelection();
   groupDialog.value = false;
-  await rebuild({ force: true });
+  await storeGroup(editingGroup.value, groupName.value.trim(), groupTables.value);
 }
 async function removeGroup() {
-  checkpoint();
-  const id = editingGroup.value;
-  groups.value = groups.value.filter((group) => group.id !== id);
-  if (activeGroup.value === id) activeGroup.value = "";
-  const saved = snapshot().nodes.map((node) => ({ ...node, group: node.group === id ? "" : node.group }));
-  nodes.value = buildNodes(saved);
   groupDialog.value = false;
-  await rebuild({ force: true });
+  await deleteGroup(editingGroup.value);
 }
 function saveView() {
   if (!viewName.value.trim() || (!matchingView.value && views.value.length >= 20)) return;
-  const id = matchingView.value?.id || crypto.randomUUID();
-  const view = { ...snapshot(), id, name: viewName.value.trim() };
-  views.value = [...views.value.filter((item) => item.id !== id), view];
   viewDialog.value = false;
-  persistPositions();
+  storeView(viewName.value.trim(), matchingView.value?.id);
 }
-async function loadView(view) { optionsOpen.value = false; checkpoint(); await restore(view); }
-function removeView(id) { views.value = views.value.filter((view) => view.id !== id); persistPositions(); }
+async function loadView(view) { optionsOpen.value = false; await restoreView(view); }
 function onFullscreenChange() {
   fullscreen.value = document.fullscreenElement === erdRoot.value;
   void nextTick().then(() => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(fitDiagram)));
@@ -631,57 +305,15 @@ function onKeydown(event) {
 }
 // State reloads replace the same snapshot object; only a refreshed schema needs layout work.
 watch([() => props.schema.refreshedAt, () => props.schema.database, () => props.schema.engine], () => {
-  if (layoutWorker) void rebuild();
-});
-watch(() => props.layout, (layout) => {
-  if (!layout.revision || layout.revision <= appliedLayoutRevision) return;
-  appliedLayoutRevision = layout.revision;
-  const current = snapshot();
-  // Acknowledging our own save (or changing only named views) does not change
-  // the graph. Rebuilding it would disable controls and repeat dense routing.
-  if (["columnMode", "focusTable", "activeGroup"].every((key) => layout[key] === current[key]) &&
-      JSON.stringify(layout.groups) === JSON.stringify(current.groups) &&
-      layout.nodes.length === current.nodes.length && layout.nodes.every((node, index) =>
-        Object.entries(current.nodes[index]).every(([key, value]) => node[key] === value))) {
-    views.value = JSON.parse(JSON.stringify(layout.views || []));
-    pendingRemoteLayout = null;
-    return;
-  }
-  if (draggingSnapshot) {
-    pendingRemoteLayout = layout;
-  } else if (layoutWorker) {
-    checkpoint();
-    void restore(layout, { remote: true });
-  }
-});
-onMounted(() => {
-  fullscreenAvailable.value = typeof erdRoot.value?.requestFullscreen === "function";
-  document.addEventListener("fullscreenchange", onFullscreenChange);
-  layoutWorker = new Worker(new URL("../workers/erdLayout.worker.js", import.meta.url), { type: "module" });
-  layoutWorker.addEventListener("message", ({ data }) => {
-    const resolver = layoutResolvers.get(data.id);
-    if (!resolver) return;
-    layoutResolvers.delete(data.id);
-    clearTimeout(resolver.timeout);
-    if (data.ok === false) resolver.reject(new Error(data.error));
-    else resolver.resolve(data);
-  });
-  layoutWorker.addEventListener("error", (event) => {
-    for (const resolver of layoutResolvers.values()) { clearTimeout(resolver.timeout); resolver.reject(new Error(event.message || "The layout worker failed.")); }
-    layoutResolvers.clear();
-  });
   void rebuild();
 });
+watch(() => props.layout, receiveLayout);
+onMounted(() => {
+  fullscreenAvailable.value = hasElementFunction(erdRoot.value, "requestFullscreen");
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+});
 onBeforeUnmount(() => {
-  clearViewportSave();
-  disposed = true;
-  rebuildId += 1;
-  graphRefreshId += 1;
-  if (relationshipDragFrame !== null) globalThis.cancelAnimationFrame(relationshipDragFrame);
   document.removeEventListener("fullscreenchange", onFullscreenChange);
-  for (const resolver of layoutResolvers.values()) { clearTimeout(resolver.timeout); resolver.reject(new Error("ERD closed.")); }
-  layoutResolvers.clear();
-  layoutWorker?.terminate();
 });
 </script>
 

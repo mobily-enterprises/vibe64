@@ -76,7 +76,7 @@ import { ERD_NODE_WIDTH, ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, ERD_FOOTER_HEIGHT } 
 
 defineProps({
   controlsVisible: { default: true, type: Boolean },
-  data: { required: true, type: Object },
+  data: { required: true, type: /** @type {import("vue").PropType<import("../erdFlowGraph.js").ErdNodeData>} */ (Object) },
   id: { required: true, type: String }
 });
 </script>
