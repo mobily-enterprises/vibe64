@@ -788,7 +788,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/To create, edit or cancel events, select Manage events/)).toBeVisible();
         await expect(panel.getByText(/All-day end dates are exclusive/)).toBeVisible();
         const eventScope = panel.getByRole("checkbox", { name: "Manage events", exact: true });
-        if (!await eventScope.isVisible()) await panel.getByRole("button", { name: "Permissions", exact: true }).click();
+        if (!await eventScope.isVisible()) await expandPanel(panel.getByRole("button", { name: "Permissions", exact: true }));
         await eventScope.check();
       }
       await panel.getByRole("button", { name: "Save configuration" }).click();
@@ -4451,7 +4451,7 @@ for (const { viewport, providerBatch } of [
             await expect(panel.getByText(/Search performance uses finalized Pacific-time dates/)).toBeVisible();
             await expect(panel.getByText(/Submission does not create the file, guarantee indexing or change DNS/)).toBeVisible();
             const write = panel.getByRole("checkbox", { name: "Manage Search Console properties", exact: true });
-            if (!await write.isVisible()) await panel.getByRole("button", { name: "Permissions", exact: true }).click();
+            if (!await write.isVisible()) await expandPanel(panel.getByRole("button", { name: "Permissions", exact: true }));
             await write.check();
             await panel.getByRole("button", { name: "Save configuration", exact: true }).click();
             await expect(panel.getByRole("button", { name: "Save configuration", exact: true })).toBeDisabled();

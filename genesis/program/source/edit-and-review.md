@@ -331,6 +331,8 @@ keyboard-focus change. The request is discarded if its selected slot, project,
 session or environment changes; connection updates do not keep scrolling it.
 
 Integrations is a typed form over the selected session's `integrations.json`.
+A provider's setup guide keeps its title height as it opens, so Open Env and the
+provider link do not move under a pointer that has just reached them.
 Provider setup instructions can vary with the selected authentication method.
 For Granola, API-key steps explain key creation and Env storage; OAuth steps
 explain MCP client registration, callback and consent. The OAuth registration

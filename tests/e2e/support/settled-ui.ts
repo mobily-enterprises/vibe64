@@ -20,7 +20,9 @@ async function dismissFeedbackIfShown(page: Page) {
 
 /**
  * Opens an expansion panel through its title button and waits until its content has finished expanding, so a control
- * inside it receives the next click.
+ * inside it receives the next click. While it expands, the panel clips its content: Playwright's scroll into view
+ * scrolls that clip, which no pointer can do, and the next frame's growth carries the control out from under the
+ * pointer between press and release, so the click lands on the panel instead.
  */
 async function expandPanel(title: Locator) {
   if (await title.getAttribute("aria-expanded") !== "true") await title.click();

@@ -545,7 +545,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 {{ production ? 'Open production Env' : 'Set callback in Env' }}
               </v-btn>
             </section>
-            <v-expansion-panels v-if="provider?.setup" class="mt-4">
+            <v-expansion-panels v-if="provider?.setup" class="mt-4" static>
               <v-expansion-panel :title="`Set up ${provider.name}`">
                 <v-expansion-panel-text>
                   <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the deployed application's environment.</p>
