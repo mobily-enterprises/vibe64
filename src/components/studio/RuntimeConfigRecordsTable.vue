@@ -125,6 +125,11 @@
   </v-table>
 </template>
 
+<script>
+/** Rows without actions (system values) write nothing. */
+function writeNothing() {}
+</script>
+
 <script setup>
 import { computed, ref, watch } from "vue";
 import { mdiLinkVariant } from "@mdi/js";
@@ -152,11 +157,11 @@ const props = defineProps({
   // A save should resolve once written; the row shows the saved value until
   // the refreshed records arrive.
   onRemoveRecord: {
-    default: null,
+    default: writeNothing,
     type: Function
   },
   onSaveRecord: {
-    default: null,
+    default: writeNothing,
     type: Function
   },
   records: {
@@ -281,7 +286,7 @@ async function saveRecord(record = {}) {
   }
   const key = recordKey(record);
   const value = draftValue(record);
-  const saved = await runRowWrite(record, "save", () => props.onSaveRecord?.({
+  const saved = await runRowWrite(record, "save", () => props.onSaveRecord({
     record,
     value
   }), `${record.key || "The value"} could not be saved.`);
@@ -300,7 +305,7 @@ async function removeRecord(record = {}) {
   if (!props.showActions || writeBusy.value) {
     return false;
   }
-  return runRowWrite(record, "remove", () => props.onRemoveRecord?.(record),
+  return runRowWrite(record, "remove", () => props.onRemoveRecord(record),
     `${record.key || "The value"} could not be removed.`);
 }
 

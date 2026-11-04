@@ -188,6 +188,11 @@
   </div>
 </template>
 
+<script>
+/** A host with no access check of its own has nothing to recheck before a retry. */
+function recheckNothing() {}
+</script>
+
 <script setup>
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
@@ -206,7 +211,7 @@ import {
 const props = defineProps({
   beforeRetry: {
     type: Function,
-    default: null
+    default: recheckNothing
   },
   runtimeReady: {
     type: Boolean,
@@ -293,7 +298,7 @@ async function retryProject() {
   recovering.value = true;
   recoveryError.value = "";
   try {
-    await props.beforeRetry?.();
+    await props.beforeRetry();
     if (disposed) {
       return;
     }

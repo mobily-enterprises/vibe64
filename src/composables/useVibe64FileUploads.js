@@ -11,13 +11,20 @@ const ACTIVE_PHASES = ["preparing", "queued", "uploading", "delivering"];
 // says why (`finishingNote`).
 const FINISHING_NOTE_DELAY_MS = 1500;
 
-// Files uploads reuse the chat attachment queue (progress, cancel, retry, one
-// upload at a time) with the shared upload transport. Each file goes straight
-// into the folder that was open when it was added; a finished upload is simply
-// there, with no further step. `endpoint` is the area's API base; `onAsk`
-// runs just before the name-conflict question opens; `finishingNote` is shown
-// for a file whose bytes are all sent while the server is still finishing it.
-function useVibe64FileUploads({ endpoint, onUploaded = () => {}, onAsk = () => {}, finishingNote = "" } = {}) {
+/**
+ * Files uploads reuse the chat attachment queue (progress, cancel, retry, one upload at a time) with the shared upload
+ * transport. Each file goes straight into the folder that was open when it was added; a finished upload is simply
+ * there, with no further step. `endpoint` is the area's API base; `onUploaded` runs for each finished file; `onAsk`
+ * runs just before the name-conflict question opens; `finishingNote` is shown for a file whose bytes are all sent
+ * while the server is still finishing it.
+ * @param {{
+ *   endpoint: import("vue").MaybeRefOrGetter<string>,
+ *   onUploaded: (receipt: object) => void,
+ *   onAsk: () => void,
+ *   finishingNote?: string
+ * }} options
+ */
+function useVibe64FileUploads({ endpoint, onUploaded, onAsk, finishingNote = "" }) {
   // Where each queued File goes: its folder path and conflict choice.
   const targets = new WeakMap();
   // Files sent in full whose answer is taking a while.
@@ -33,7 +40,7 @@ function useVibe64FileUploads({ endpoint, onUploaded = () => {}, onAsk = () => {
       for (const receipt of uploaded) onUploaded(receipt);
       return { accepted: false };
     },
-    async uploadAttachment(_key, file, { onProgress, signal } = {}) {
+    async uploadAttachment(_key, file, { onProgress, signal }) {
       const raw = toRaw(file);
       const target = targets.get(raw);
       if (!target) throw new Error("Choose the file again.");
@@ -41,7 +48,7 @@ function useVibe64FileUploads({ endpoint, onUploaded = () => {}, onAsk = () => {
       const query = new URLSearchParams({ path: target.path, ...(target.conflict ? { conflict: target.conflict } : {}) });
       let timer = null;
       const progress = (update) => {
-        onProgress?.(update);
+        onProgress(update);
         if (finishingNote && update?.progress === 1 && !timer) timer = setTimeout(() => finishing.add(raw), FINISHING_NOTE_DELAY_MS);
       };
       try {

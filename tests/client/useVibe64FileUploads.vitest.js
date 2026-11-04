@@ -27,7 +27,7 @@ function setup(endpoint = "/api/vibe64/project-files/project-drop-zone") {
   uploadFileRequest.mockClear();
   const uploaded = [];
   const scope = effectScope();
-  const uploads = scope.run(() => useVibe64FileUploads({ endpoint: ref(endpoint), onUploaded: (receipt) => uploaded.push(receipt) }));
+  const uploads = scope.run(() => useVibe64FileUploads({ endpoint: ref(endpoint), onUploaded: (receipt) => uploaded.push(receipt), onAsk() {} }));
   return { scope, uploaded, uploads };
 }
 
@@ -100,7 +100,8 @@ describe("useVibe64FileUploads", () => {
   it("says why a fully sent file is still finishing, once it takes a while", async () => {
     requests.length = 0;
     const scope = effectScope();
-    const uploads = scope.run(() => useVibe64FileUploads({ endpoint: ref("/api/vibe64/sessions/s/files/repo"), finishingNote: "Finishing — waiting" }));
+    const uploads = scope.run(() => useVibe64FileUploads({ endpoint: ref("/api/vibe64/sessions/s/files/repo"), finishingNote: "Finishing — waiting",
+      onAsk() {}, onUploaded() {} }));
     void uploads.uploadFiles([file("big.bin", 100)]);
     await settle();
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

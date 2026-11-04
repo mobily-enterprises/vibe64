@@ -50,6 +50,13 @@
   </section>
 </template>
 
+<script>
+/** A queue whose host explains no row notes nothing. */
+function noUploadNote() {
+  return "";
+}
+</script>
+
 <script setup>
 import { computed, ref, useId } from "vue";
 import {
@@ -71,7 +78,7 @@ import { formatFileSize } from "@/lib/vibe64FileSize.js";
 const props = defineProps({
   active: { type: Boolean, default: false },
   items: { type: Array, default: () => [] },
-  note: { type: Function, default: () => "" }
+  note: { type: Function, default: noUploadNote }
 });
 defineEmits(["cancel", "cancel-all", "clear", "remove", "retry"]);
 const ACTIVE = ["preparing", "queued", "uploading", "delivering"];

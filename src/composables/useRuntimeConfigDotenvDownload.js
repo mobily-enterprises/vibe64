@@ -1,13 +1,15 @@
 import { ref, toValue } from "vue";
 import { saveBlobAsFile } from "@/lib/vibe64AttachmentDownload.js";
 
-// Saves an environment's .env file, whose text readContent() fetches from the
-// owner-only download action; null or undefined means no file (a stale or
-// refused request). A failure stays in downloadError until the next attempt.
-function useRuntimeConfigDotenvDownload({ fileName, readContent } = {}) {
-  if (typeof readContent !== "function") {
-    throw new TypeError("useRuntimeConfigDotenvDownload requires readContent().");
-  }
+/**
+ * Saves an environment's .env file, whose text readContent() fetches from the owner-only download action; null or
+ * undefined means no file (a stale or refused request). A failure stays in downloadError until the next attempt.
+ * @param {{
+ *   fileName: import("vue").MaybeRefOrGetter<string>,
+ *   readContent: () => Promise<string | null | undefined>
+ * }} options
+ */
+function useRuntimeConfigDotenvDownload({ fileName, readContent }) {
   const downloadBusy = ref(false);
   const downloadError = ref("");
 

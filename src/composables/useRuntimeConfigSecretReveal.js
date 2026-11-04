@@ -1,13 +1,16 @@
 import { ref } from "vue";
 
+// A secret is named by its key, or by the record that holds it.
 function runtimeConfigSecretKey(value = {}) {
-  return String(typeof value === "string" ? value : value?.key || "").trim();
+  return String(typeof value === "string" ? value : value.key || "").trim();
 }
 
-function useRuntimeConfigSecretReveal({ revealValue } = {}) {
-  if (typeof revealValue !== "function") {
-    throw new TypeError("useRuntimeConfigSecretReveal requires revealValue().");
-  }
+/**
+ * Reveals and hides an Env value's secret; revealValue() reads it from the owner-only reveal action, and null or
+ * undefined means nothing to reveal.
+ * @param {{ revealValue: (key: string, record: string | { key?: string }) => Promise<unknown> }} options
+ */
+function useRuntimeConfigSecretReveal({ revealValue }) {
   const revealedSecrets = ref({});
   const secretRevealBusyKey = ref("");
 

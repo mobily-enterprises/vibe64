@@ -1,4 +1,4 @@
-import { computed, ref, unref, watch } from "vue";
+import { computed, ref, toValue, watch } from "vue";
 import { browserSessionStorage } from "@/lib/browser.js";
 
 function readStoredValue(storageKey = "") {
@@ -28,23 +28,31 @@ function writeStoredValue(storageKey = "", value = "") {
 }
 
 function readStorageKey(storageKey = "") {
-  return String(typeof storageKey === "function" ? storageKey() : unref(storageKey) || "").trim();
+  return String(toValue(storageKey) || "").trim();
 }
 
 function readPreferredId(preferredId = "") {
-  return String(typeof preferredId === "function" ? preferredId() : unref(preferredId) || "").trim();
+  return String(toValue(preferredId) || "").trim();
 }
 
-// rememberedId, when given, is the caller's own remembered choice (such as a
-// server record): it replaces this tab's stored value as the choice to restore,
-// and the stored value then only mirrors each selection for other readers.
+/**
+ * The tab's selection of one item among a changing list, restored from session storage.
+ * rememberedId, when given, is the caller's own remembered choice (such as a server record): it replaces this tab's
+ * stored value as the choice to restore, and the stored value then only mirrors each selection for other readers.
+ * @param {{
+ *   preferredId?: import("vue").MaybeRefOrGetter<string>,
+ *   rememberedId?: import("vue").MaybeRefOrGetter<string>,
+ *   storageKey?: import("vue").MaybeRefOrGetter<string>,
+ *   enabled?: import("vue").MaybeRefOrGetter<boolean>
+ * }} options
+ */
 function useStoredSelection({
   preferredId = "",
   rememberedId,
   storageKey = "",
   enabled = true
-} = {}) {
-  const selectionEnabled = computed(() => Boolean(typeof enabled === "function" ? enabled() : unref(enabled)));
+}) {
+  const selectionEnabled = computed(() => Boolean(toValue(enabled)));
   const activeStorageKey = computed(() => readStorageKey(storageKey));
   const activePreferredId = computed(() => readPreferredId(preferredId));
   const restoredId = (key = activeStorageKey.value) => (
