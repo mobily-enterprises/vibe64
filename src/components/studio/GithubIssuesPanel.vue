@@ -62,14 +62,14 @@ function date(value) {
       </Vibe64DashboardBackButton>
       <v-spacer />
       <v-btn
-        v-if="available"
+        v-if="available" class="issues-panel__refresh"
         :prepend-icon="mdiRefresh" variant="text" size="small" height="48"
         :disabled="resource.isFetching.value || Boolean(pending)" @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
       <v-btn
-        v-if="available" :prepend-icon="mdiPlus" color="primary" variant="tonal"
+        v-if="available" class="issues-panel__new" :prepend-icon="mdiPlus" color="primary" variant="tonal"
         rounded="pill" size="small" height="48" @click="openEditor()"
       >
         New issue
@@ -311,6 +311,7 @@ function date(value) {
 
 <style scoped>
 .issues-panel { width: 100%; min-width: 0; }
+.issues-panel__toolbar { container: issues-toolbar / inline-size; }
 .issues-panel__select-all { flex: 0 0 auto; }
 .issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
@@ -320,4 +321,15 @@ function date(value) {
 .issues-panel__issue-link { color: inherit; }
 .issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
+/* Back to dashboard keeps its readable label, so the actions beside it narrow to icons, keeping their accessible names, to stay on one row. */
+@container issues-toolbar (max-width: 28rem) {
+  .issues-panel__refresh { min-width: 48px; padding-inline: 0; }
+  .issues-panel__refresh :deep(.v-btn__prepend) { margin-inline: 0; }
+  .issues-panel__refresh :deep(.v-btn__content) { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; width: 1px; }
+}
+@container issues-toolbar (max-width: 23rem) {
+  .issues-panel__new { min-width: 48px; padding-inline: 0; }
+  .issues-panel__new :deep(.v-btn__prepend) { margin-inline: 0; }
+  .issues-panel__new :deep(.v-btn__content) { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; width: 1px; }
+}
 </style>
