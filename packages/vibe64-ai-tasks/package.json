@@ -22,6 +22,7 @@
         "runtime.events",
         "runtime.http",
         "runtime.logger",
+        "vibe64.database-tools",
         "vibe64.project",
         "vibe64.sessions",
         "vibe64.terminals"
@@ -61,6 +62,7 @@
     "@jskit-ai/kernel": "0.2.4",
     "@jskit-ai/realtime": "0.2.7",
     "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-database-tools": "0.1.0",
     "@local/vibe64-project": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
     "@local/vibe64-sessions": "0.1.0",

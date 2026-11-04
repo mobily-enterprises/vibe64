@@ -208,10 +208,10 @@ describe("Database Workspace automatic table admission", () => {
     try {
       await flushWorkspace(fixture.runQuery);
       fixture.workspace.requestOverviewAssistant({ scope: "ungrouped", tables: ["public.items"] });
-      expect(request).toHaveBeenCalledWith(expect.objectContaining({
-        displayMessage: "Review 1 ungrouped tables: Balanced.",
+      expect(request).toHaveBeenCalledWith({
+        input: { abstraction: "balanced", scope: "ungrouped", tables: ["public.items"] },
         message: expect.stringContaining('Review only these currently ungrouped tables: ["items"]')
-      }));
+      });
       expect(request.mock.calls[0][0].message).toContain("Preserve existing actors, names, descriptions, memberships and manual choices");
       expect(fixture.runQuery).not.toHaveBeenCalled();
     } finally { await fixture.close(); }

@@ -102,8 +102,9 @@
         :assistant-available="assistantCanUsePurpose('fix')"
         class="studio-autopilot__session-tool-content"
         :project-slug="projectSlug"
+        :reload-version="overviewReloadVersion"
         :session-id="sessionId"
-        @request-overview-assistant="assistantCanUsePurpose('fix') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
+        @request-overview-assistant="requestOverviewAssistant"
       />
     </section>
 
@@ -211,9 +212,11 @@
 
 <script setup>
 import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
-import { defineAsyncComponent, ref, watch } from "vue";
+import { defineAsyncComponent, inject, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
+import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
+import { AI_TASK_PHASES } from "@local/vibe64-ai-tasks/shared";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
@@ -243,9 +246,21 @@ const {
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
-  startTemporaryAiTask, systemBackAvailable, systemReloadVersion, systemRestoreRequest, temporaryAiWorkspace,
+  systemBackAvailable, systemReloadVersion, systemRestoreRequest, temporaryAiWorkspace,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
+const aiTasks = inject(VIBE64_AI_TASKS_KEY);
+// Creating or reviewing the Data overview is an AI task; a person who may not use the fix assistant gets the
+// request as a main chat draft instead.
+function requestOverviewAssistant({ input, message }) {
+  if (assistantCanUsePurpose("fix")) void aiTasks.start("database-overview", null, input);
+  else prefillComposer(message, { append: true });
+}
+// Overview reads its source again once its task is Done.
+const overviewReloadVersion = ref(0);
+watch(() => aiTasks.task?.kind === "database-overview" && aiTasks.task.phase === AI_TASK_PHASES.DONE, (done) => {
+  if (done) overviewReloadVersion.value += 1;
+});
 const architectureFileRequest = ref(null);
 const architectureProgramRequest = ref(null);
 watch(() => props.session?.sessionId, () => {

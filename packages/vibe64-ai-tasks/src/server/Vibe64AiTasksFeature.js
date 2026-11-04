@@ -15,6 +15,7 @@ import { createAiTasksService } from "./service.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-database-tools/server/types").DatabaseToolsService} DatabaseToolsService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -50,6 +51,7 @@ const Vibe64AiTasksFeature = defineFeature({
   id: "vibe64.ai-tasks",
   domain: "vibe64-ai-tasks",
   requires: {
+    databaseTools: "vibe64.database-tools",
     env: "runtime.env",
     events: "runtime.events",
     http: "runtime.http",
@@ -63,6 +65,7 @@ const Vibe64AiTasksFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {DatabaseToolsService} capabilities.databaseTools
    * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
@@ -71,8 +74,9 @@ const Vibe64AiTasksFeature = defineFeature({
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
    */
-  setup({ env, events, http, logger, project, sessions, terminals }) {
+  setup({ databaseTools, env, events, http, logger, project, sessions, terminals }) {
     const aiTasks = createAiTasksService({
+      databaseTools,
       logger,
       project,
       publishSessionChanged: createSessionChangedPublisher({ events }),

@@ -147,6 +147,7 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
     moveErd: (changes) => service.moveErdTables({ sessionId: directChatSessionId, changes }),
     clients: () => realtime.diagnostics().connectedClients,
     setOverview,
+    readOverview: () => service.readOverview({ sessionId: directChatSessionId }),
     readOverviewFile: () => readFile(path.join(sourceRoot(directChatSessionId), "data-overview.json"), "utf8"),
     schema,
     close: async () => { await runtime.shutdown(); sourceEditor.close(); await rm(temporaryRoot, { force: true, recursive: true }); }
@@ -186,9 +187,11 @@ async function openDiagram(page: Page, url: string, { waitForReady = true, view 
   await expect(page.getByText("Arranging tables…", { exact: true })).toHaveCount(0);
 }
 
-// Temporary AI runs on the real conversation owner over Socket.IO; it records the creates and turns it receives.
-async function temporaryAiOwner(page: Page, provider = "codex") {
+// The overview's AI task runs on the real AI task service and conversation owner over Socket.IO; it records
+// the creates and turns it receives, and its check reads this server's real overview.
+async function aiTaskOwner(page: Page, server: { readOverview: () => Promise<unknown> }, provider = "codex") {
   const owner = await assistantStatusServer({ temporaryEngineId: provider, session: directChatSessionPayload });
+  owner.aiTasks.overview = () => server.readOverview();
   await relayConversation(page, owner);
   return owner;
 }
@@ -518,12 +521,14 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
   const definition = { ...bookingOverview(), abstraction: "high", reviewedTables: schema.tables.map((table) => table.qualifiedName) };
   const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
-  let owner: Awaited<ReturnType<typeof temporaryAiOwner>> | null = null;
+  let owner: Awaited<ReturnType<typeof aiTaskOwner>> | null = null;
   try {
     const page = await context.newPage();
     page.setDefaultTimeout(7000);
-    owner = await temporaryAiOwner(page);
+    owner = await aiTaskOwner(page, server);
     const turns = owner.temporary!.captured.temporaryTurns;
+    // The AI is still working when the request is read.
+    owner.temporary!.captured.nativeTurn = () => ({ status: "inProgress" });
     await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await expect(page.getByText("Not yet reviewed: 0", { exact: true })).toBeVisible();
@@ -538,7 +543,6 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
     await overviewAction(page, "Reload overview");
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await expect(page.getByText("Not yet reviewed: 1", { exact: true })).toBeVisible();
-    owner.temporary!.captured.outcome = () => "complete";
     await overviewAction(page, "Review with AI");
     dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("radio", { name: "Process new tables only (1)", exact: true })).toBeChecked();
@@ -546,6 +550,7 @@ test("@data-overview generation levels and new-only scope preserve reviewed Othe
     for (const label of ["Not abstract", "Balanced", "Very abstract"]) await expect(openMenu(page).getByRole("option", { name: label, exact: true })).toBeVisible();
     await openMenu(page).getByRole("option", { name: "Not abstract", exact: true }).click();
     await dialog.getByRole("button", { name: "Generate overview", exact: true }).click();
+    await expect(page.locator("[data-vibe64-ai-task]")).toHaveAttribute("data-vibe64-ai-task-phase", "working");
     await expect.poll(() => turns.length).toBe(1);
     expect(turns[0].message).toContain("Process only coverage.unreviewed");
     expect(turns[0].message).toContain("Preserve existing actors, names, descriptions, memberships and manual choices");
@@ -559,13 +564,14 @@ for (const provider of ["codex", "opencode"]) {
   test(`@data-overview ${provider} receives the same source-write authoring task`, async ({ browser, baseURL }) => {
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), provider });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
-    let owner: Awaited<ReturnType<typeof temporaryAiOwner>> | null = null;
+    let owner: Awaited<ReturnType<typeof aiTaskOwner>> | null = null;
     try {
       const page = await context.newPage();
-      owner = await temporaryAiOwner(page, provider);
+      owner = await aiTaskOwner(page, server, provider);
       const { temporaryCreates: created, temporaryTurns: turns } = owner.temporary!.captured;
-      // The task writes the overview source, then reports completion.
-      owner.temporary!.captured.beforeNativeTurn = async () => { await server.setOverview(bookingOverview()); };
+      // The task writes the overview source, reviewing every table, then reports completion.
+      const reviewedTables = dataOverviewSchema().tables.map((table) => table.qualifiedName);
+      owner.temporary!.captured.beforeNativeTurn = async () => { await server.setOverview({ ...bookingOverview(), reviewedTables }); };
       owner.temporary!.captured.outcome = () => "complete";
       await openDiagram(page, server.url, { view: "Overview", waitForReady: false, provider });
       await page.getByRole("button", { name: "Create with AI", exact: true }).click();
@@ -578,8 +584,12 @@ for (const provider of ["codex", "opencode"]) {
       expect(turns[0].message).toContain("data-overview.json");
       expect(turns[0].message).toContain("several relationships away");
       expect(turns[0].message).toContain("do not change database records");
-      await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toContainText("Temporary recovery complete.");
-      await overviewAction(page, "Reload overview");
+      // Vibe64 reads the overview back itself; Done reloads Overview without a click.
+      const task = page.locator("[data-vibe64-ai-task]");
+      await expect(task).toHaveAttribute("data-vibe64-ai-task-phase", "done");
+      await expect(task.getByText("The data overview is valid.")).toBeVisible();
+      await task.locator("[data-vibe64-ai-task-close]").click();
+      await expect(task).toHaveCount(0);
       await expect(page.getByText("7 / 8 tables classified")).toBeVisible();
       await page.getByRole("button", { name: "Overview options", exact: true }).click();
       await expect(page.getByRole("button", { name: "Review with AI", exact: true })).toBeEnabled();

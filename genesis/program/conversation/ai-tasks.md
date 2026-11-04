@@ -5,7 +5,7 @@ works on it, the proof that it worked, and an outcome. People find it in one
 window that presents the problem and its solution, or the lack of one, together.
 A task ends **Done** or **Not done**. Done is proved, never assumed; Not done is
 decided by a person. Update, Save, workspace preparation, preview sign-in, incoming
-merge and project setup have moved to AI tasks so far. Other repairs, and repairs recorded before this change, stay in
+merge, project setup and the Data overview have moved to AI tasks so far. Other repairs, and repairs recorded before this change, stay in
 [temporary assistance](temporary-assistance.md) until they move.
 
 ## The server owns a task
@@ -40,7 +40,10 @@ merge's check runs the explicit repair review and refuses leftover conflict mark
 its conflict also arrives as input, because only the person's Merge met it. Merge
 stays the person's reviewed action. Project setup's check re-reads the opening
 inspection; one kind covers repair, adopt, inspect and create, so its problem names
-the task (`title`, `noun`, `opening`). Input is untrusted text: a check hands it
+the task (`title`, `noun`, `opening`). The Data overview's check reads the overview
+back through the database service: present, valid against the refreshed schema and,
+for a whole or new-tables review, with no table unreviewed. A database that can't be
+read is not the AI's to repair. Input is untrusted text: a check hands it
 back to its owner, which validates it again. Any other failed check goes
 back to the same conversation up to three times.
 

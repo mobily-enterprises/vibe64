@@ -230,7 +230,7 @@ import { useDatabaseTableQueries } from "../composables/useDatabaseTableQueries.
 import {
   useVibe64DatabaseTools
 } from "../composables/useVibe64DatabaseTools.js";
-import { buildOverviewAssistantRequest } from "../databaseOverviewPrompt.js";
+import { buildOverviewAssistantRequest } from "../../shared/databaseOverviewPrompt.js";
 import { shortDate } from "../databaseText.js";
 import DatabaseCopilotPanel from "./DatabaseCopilotPanel.vue";
 import DatabaseErd from "./DatabaseErd.vue";
@@ -255,6 +255,11 @@ const props = defineProps({
     default: "",
     type: String
   },
+  // Raised by the host once work that changed the overview's source ends: the workspace reads it again.
+  reloadVersion: {
+    default: 0,
+    type: Number
+  },
   sessionId: {
     default: "",
     type: String
@@ -263,11 +268,12 @@ const props = defineProps({
 const emit = defineEmits(["request-overview-assistant"]);
 
 /**
- * Asks the session's agent to create or review the Data overview.
+ * Asks an agent to create or review the Data overview: the request's input, and its message for a chat draft.
  * @param {{ abstraction?: string, scope?: string, tables?: string[] }} [request]
  */
 function requestOverviewAssistant({ abstraction = "balanced", scope = "all", tables = [] } = {}) {
-  emit("request-overview-assistant", buildOverviewAssistantRequest({ abstraction, scope, schemaTables: schema.value.tables, tables }));
+  const { message } = buildOverviewAssistantRequest({ abstraction, scope, schemaTables: schema.value.tables, tables });
+  emit("request-overview-assistant", { input: { abstraction, scope, tables }, message });
 }
 
 const database = useVibe64DatabaseTools({
@@ -414,6 +420,7 @@ watch([state, () => props.active, activeView], ([next, active]) => {
   }
 }, { immediate: true });
 
+watch(() => props.reloadVersion, () => { void reload(); });
 watch(() => props.sessionId, () => {
   if (hydratedSessionId.value !== props.sessionId) {
     hydratedSessionId.value = "";

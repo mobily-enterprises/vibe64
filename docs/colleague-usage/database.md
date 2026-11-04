@@ -10,12 +10,19 @@ a mounted table preserves its own draft and results; leaving or reloading the
 workspace does not preserve an unsaved SQL draft. A loading or unavailable database
 is not an empty successful query.
 
-In **Overview**, select **Review N ungrouped tables** to ask the coding agent to
+In **Overview**, select **Review N ungrouped tables** to ask the AI to
 classify the tables currently under **Other tables**, including ones previously
-reviewed. The request preserves existing groups and manual choices; the agent
-can explain why some tables remain ungrouped. The control requires an available
-coding assistant and submitting it starts that request. Colleague can explain
-these steps; its navigation actions do not themselves classify tables.
+reviewed. The request preserves existing groups and manual choices; the AI
+can explain why some tables remain ungrouped. **Create with AI** and **Review with
+AI** open the same request for the whole grouping or only new tables, at the
+abstraction level chosen in their dialog. Each control requires an available
+coding assistant and opens the [AI task window](ai-tasks.md). When the AI
+reports it has finished, Vibe64 reads the overview back against the refreshed
+schema; anything still invalid or, for a whole or new-tables review, any table
+still not reviewed goes back to the same conversation. The task ends **Done**
+once the overview is valid, and Overview reloads by itself. Only one AI task
+runs in a session at a time. Colleague can explain these steps; its navigation
+actions do not themselves classify tables.
 After opening an actor or **Other tables**, use **Back to data overview** in the
 header, or press **Escape**, to return. This labelled control is also available
 on mobile.

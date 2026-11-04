@@ -55,7 +55,7 @@ function useAiTaskHost({
 
   /**
    * @param {string} kind
-   * @param {HTMLElement} opener
+   * @param {HTMLElement | null} opener what focus returns to; a request from a dialog that closed has none
    * @param {object} input what only the page knows about the problem, such as a failed sign-in
    */
   async function start(kind, opener, input) {

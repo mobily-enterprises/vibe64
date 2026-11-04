@@ -150,6 +150,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     setups: [] as Record<string, unknown>[],
     signIns: [] as Record<string, unknown>[],
     incoming: [] as Record<string, unknown>[],
+    overviewReads: 0,
     // The session's workspace preparation, as a session read carries it.
     workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
     update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
@@ -159,6 +160,9 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     signIn: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     review: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, status: "repair-review", diff: { content: "+both sides kept" } }),
     onboarding: async (): Promise<Record<string, unknown>> => ({ ok: true, inspection: { state: "ready", diagnostics: [] } }),
+    // The Data overview as the database service reads it back.
+    overview: async (): Promise<Record<string, unknown>> => ({ ok: true, overview: { present: true, hash: "h1", error: "" },
+      coverage: { unreviewed: [], missing: [], missingRelationships: [] }, schema: { tables: [] } }),
     boot() {
       const runtime = async () => {
         const real = await temporary!.project.createRuntimeWithoutSource();
@@ -166,6 +170,10 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           ...await real.getSessionWithoutSource(id), workspaceSetup: aiTaskWorld.workspaceSetup }) };
       };
       aiTaskService = createAiTasksService({ logger: silentLogger,
+        databaseTools: { readOverview: () => {
+          aiTaskWorld.overviewReads += 1;
+          return aiTaskWorld.overview();
+        } },
         project: { createRuntime: runtime, createRuntimeWithoutSource: runtime, readOnboarding: () => aiTaskWorld.onboarding() },
         // A scenario moves a task from outside any request, so nothing names the project for it.
         publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, { projectSlug: WORKSPACE_SLUG, ...event }),

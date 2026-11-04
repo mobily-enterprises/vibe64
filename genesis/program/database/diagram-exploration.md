@@ -12,7 +12,7 @@ requiring every table and field to be read at once.
 - Main: `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseNavigator.vue`
 - `packages/vibe64-database-tools/src/client/composables/useDatabaseDiagramLayout.js`
-- `packages/vibe64-database-tools/src/client/databaseOverviewPrompt.js`
+- `packages/vibe64-database-tools/src/shared/databaseOverviewPrompt.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
@@ -277,8 +277,14 @@ Make main actor promotes an internal table into its own group. Edit or merge act
 
 Create/Review with AI offers Not abstract (one actor per table), Balanced (normally 5–10 business concepts), and Very abstract (normally 3–5 domains). These are semantic targets, not hard caps; AI also selects main business connections by real FK IDs. Users choose full regeneration, which explicitly replaces authored choices, or new-tables-only generation, which preserves existing actors and manual adjustments. `reviewedTables` records reviewed names, including tables deliberately left under Other tables; only unseen names are pending. Older definitions treat assigned tables as reviewed without assuming that unassigned tables were considered. AI instructions cover both classification and logical radial placement.
 
-Create/Review with AI uses the provider-independent Temporary AI workspace with
-source-write permission. `vibe64-helper database overview --json` returns the schema,
+Create/Review with AI and Review N ungrouped tables start the `database-overview`
+[AI task](../conversation/ai-tasks.md), which works with source-write permission.
+The request is built once, in `shared/databaseOverviewPrompt.js`, for that task and
+for the main chat's draft when the fix assistant is unavailable. The task's check
+reads the overview back through the database service: it is Done once the file
+is present and valid against the refreshed schema and, for a whole or new-tables
+review, no table is left unreviewed; otherwise the AI continues in the same
+conversation. Overview reloads when the task is Done. `vibe64-helper database overview --json` returns the schema,
 current definition, coverage, warnings and complete authoring instructions through
 the bound session bridge. Instructions ask the agent to inspect relevant models
 and documentation, preserve authored choices, classify new tables and repair

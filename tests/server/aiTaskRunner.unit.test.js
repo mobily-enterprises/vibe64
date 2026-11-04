@@ -43,6 +43,11 @@ const REVIEW = { repository: "example/library", targetBranch: "main", targetHead
   activeHead: "b".repeat(40), discardedHead: "" };
 const CONFLICT = { review: REVIEW, conflictPaths: ["shared.txt"], checkpointCommit: "c".repeat(40) };
 const onboardingAt = (state, diagnostics = []) => ({ ok: true, available: true, inspection: { state, nextAction: "repair", diagnostics } });
+// A Data overview read: present with a definition, and the tables nobody reviewed yet.
+const overviewRead = ({ present = true, error = "", unreviewed = [], missing = [] } = {}) => ({ ok: true, valid: !error && !missing.length,
+  overview: { present, hash: present ? "h1" : "", error, definition: { version: 1, actors: [] } },
+  coverage: { unreviewed, missing, missingRelationships: [], others: [] },
+  schema: { tables: [{ qualifiedName: "public.items", reference: "items" }, { qualifiedName: "public.orders", reference: "orders" }] } });
 
 async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null, setupFailed = null } = {}) {
   const selection = { engineId: "codex", modelProviderId: "openai", agentId: "codex", modelId: "main-model", variantId: "high",
@@ -109,6 +114,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     signIn: async () => ({ ok: true }),
     incoming: async () => ({ ok: true, status: "repair-review", diff: { content: "+both sides kept" } }),
     onboarding: async () => onboardingAt("ready"),
+    overview: async () => overviewRead(),
     workspaceSetup: setupFailed || { status: "succeeded" }
   };
 
@@ -141,6 +147,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
       }
     });
     aiTasks = createAiTasksService({
+      databaseTools: { readOverview: input => server.overview(input) },
       logger: silentLogger,
       project,
       publishSessionChanged: async (_id, event) => { published.push(event); },
@@ -376,6 +383,40 @@ test("setup that can't be read is repaired, and only a repair is offered for it"
   assert.equal(task.problem.summary, "genesis/stack.md could not be parsed.");
   await f.quiet(running.aiTasks);
   assert.match(f.native.turns[0].message, /The opening inspection reports: genesis\/stack\.md could not be parsed\./);
+}, { updateFailure: null }));
+
+test("creating the Data overview is Done once Vibe64 reads it back valid with every table reviewed", () => withFixture(async (f) => {
+  f.server.overview = async () => overviewRead({ present: false });
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "database-overview", { abstraction: "high", scope: "all" });
+  assert.deepEqual([task.title, task.noun], ["Create the data overview", "task"]);
+  assert.equal(task.problem.summary, "Regenerate the data overview: Very abstract.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /Selected abstraction: Very abstract \(high\)/);
+  f.server.overview = async () => overviewRead({ unreviewed: ["orders"] });
+  await f.finishTurn(running);
+  assert.equal((await f.task(task.id)).attempt, 2);
+  assert.match(f.native.turns[1].message, /Tables not yet reviewed: orders\./);
+  f.server.overview = async () => overviewRead();
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "The data overview is valid.");
+}, { updateFailure: null }));
+
+test("an ungrouped review names its tables, and a database that can't be read stops at needs you", () => withFixture(async (f) => {
+  const running = f.boot();
+  await assert.rejects(f.start(running.aiTasks, OWNER, "database-overview", { scope: "ungrouped", tables: [] }),
+    error => error.code === "vibe64_ai_task_no_problem");
+  const { task } = await f.start(running.aiTasks, OWNER, "database-overview", { scope: "ungrouped", tables: ["public.orders"] });
+  assert.equal(task.title, "Review the data overview");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /Review only these currently ungrouped tables: \["orders"\]/);
+  f.server.overview = async () => ({ ok: false, code: "vibe64_session_database_unavailable", error: "The database is not running." });
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.deepEqual([saved.phase, saved.reason], ["needs_you", "check_stuck"]);
+  assert.equal(f.native.turns.length, 1);
 }, { updateFailure: null }));
 
 test("a failed check goes back to the same conversation as a recorded message, and passes on the next try", () => withFixture(async (f) => {

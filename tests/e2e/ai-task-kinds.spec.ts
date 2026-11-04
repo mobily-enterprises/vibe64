@@ -74,6 +74,24 @@ const KINDS: {
     problem: "Stack is missing Connected development.",
     done: "Project setup is ready.",
     proof() {}
+  },
+  {
+    kind: "database-overview",
+    async world(page, server) {
+      // The request's read finds no overview yet; the check's read finds it saved and valid.
+      const missing = { ok: true, overview: { present: false, hash: "", error: "" },
+        coverage: { unreviewed: ["orders"], missing: [], missingRelationships: [] }, schema: { tables: [{ qualifiedName: "public.orders", reference: "orders" }] } };
+      const valid = { ...missing, overview: { present: true, hash: "h1", error: "" }, coverage: { unreviewed: [], missing: [], missingRelationships: [] } };
+      const reads = [missing];
+      server.aiTasks.overview = async () => reads.shift() || valid;
+      return quietWorld(page, server);
+    },
+    open: (page, server) => openStarted(page, server, "database-overview", { abstraction: "balanced", scope: "all" }),
+    problem: "Regenerate the data overview: Balanced.",
+    done: "The data overview is valid.",
+    proof(server) {
+      expect(server.aiTasks.overviewReads).toBe(2);
+    }
   }
 ];
 

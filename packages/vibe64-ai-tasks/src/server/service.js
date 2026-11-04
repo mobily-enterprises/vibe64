@@ -8,6 +8,7 @@ import { createAiTaskRunner } from "./aiTaskRunner.js";
 /** @typedef {import("./types.js").AiTask} AiTask */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-database-tools/server/types").DatabaseToolsService} DatabaseToolsService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -46,14 +47,15 @@ function presentAiTask({ conversationId, task }) {
 /**
  * Every AI task of a session: the one Vibe64 is doing, and any that ended and waits for Close.
  * @param {object} dependencies
+ * @param {DatabaseToolsService} dependencies.databaseTools
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  */
-function createAiTasksService({ logger, project, publishSessionChanged, sessions, terminals }) {
-  const kinds = createAiTaskKinds({ project, sessions, terminals });
+function createAiTasksService({ databaseTools, logger, project, publishSessionChanged, sessions, terminals }) {
+  const kinds = createAiTaskKinds({ databaseTools, project, sessions, terminals });
   const runner = createAiTaskRunner({ kinds, logger, project, publishSessionChanged, terminals, present: presentAiTask });
 
   async function taskRecords(sessionId) {

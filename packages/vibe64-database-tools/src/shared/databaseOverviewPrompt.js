@@ -1,15 +1,16 @@
-import { DATA_OVERVIEW_ABSTRACTIONS } from "../shared/dataOverview.js";
+import { DATA_OVERVIEW_ABSTRACTIONS } from "./dataOverview.js";
 
 /**
  * The agent request that creates or reviews the project's Data overview at one abstraction level. The scope is the
  * whole grouping ("all"), tables no review has seen yet ("new"), or the listed ungrouped tables ("ungrouped").
+ * The overview's AI task sends it; without one, the main chat receives it as a draft.
  * @param {{
  *   abstraction: string,
  *   scope: string,
  *   schemaTables: Array<{ qualifiedName: string, reference?: string }>,
  *   tables: string[]
  * }} options
- * @returns {{ title: string, displayMessage: string, message: string, dedupeKey: string }}
+ * @returns {{ abstraction: string, displayMessage: string, message: string }}
  */
 function buildOverviewAssistantRequest({ abstraction, scope, schemaTables, tables }) {
   const level = DATA_OVERVIEW_ABSTRACTIONS.find((item) => item.value === abstraction) || DATA_OVERVIEW_ABSTRACTIONS[1];
@@ -23,10 +24,9 @@ function buildOverviewAssistantRequest({ abstraction, scope, schemaTables, table
     ? `Review ${tableReferences.length} ungrouped tables`
     : scope === "new" ? "Process new tables only" : "Regenerate the data overview";
   return {
-    title: "Data overview",
+    abstraction: level.value,
     displayMessage: `${scopeLabel}: ${level.title}.`,
-    message: `Create or review this project's Data overview. Run \`vibe64-helper database overview --json\` to read its current definition, refreshed schema and exact authoring instructions. Inspect the relevant application source to understand the main actors. Selected abstraction: ${level.title} (${level.value}). ${level.description} ${scopeInstruction} Save the grouping in data-overview.json with abstraction set to "${level.value}". Supporting tables may be several relationships away. Change only this grouping file; do not change database records, schema or other application files. Run \`vibe64-helper database refresh\` followed by \`vibe64-helper database overview --json\`, fix invalid or missing references, and report coverage plus any tables left under Other tables.`,
-    dedupeKey: "database-overview"
+    message: `Create or review this project's Data overview. Run \`vibe64-helper database overview --json\` to read its current definition, refreshed schema and exact authoring instructions. Inspect the relevant application source to understand the main actors. Selected abstraction: ${level.title} (${level.value}). ${level.description} ${scopeInstruction} Save the grouping in data-overview.json with abstraction set to "${level.value}". Supporting tables may be several relationships away. Change only this grouping file; do not change database records, schema or other application files. Run \`vibe64-helper database refresh\` followed by \`vibe64-helper database overview --json\`, fix invalid or missing references, and report coverage plus any tables left under Other tables.`
   };
 }
 

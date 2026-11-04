@@ -3,8 +3,8 @@
 When Vibe64 offers **Fix it with AI** on an Update, Save, workspace preparation,
 preview sign-in, incoming merge or project setup problem, the whole fix happens in
 one window: the problem, the conversation with the AI, what Vibe64 is doing, and the
-result. Starting, adopting or inspecting a project from its setup screen uses the
-same window. You close it once the task is **Done** or **Not done**. It can't end any
+result. Starting, adopting or inspecting a project from its setup screen, and
+creating or reviewing the Database's Data overview, use the same window. You close it once the task is **Done** or **Not done**. It can't end any
 other way. Other **Fix it with AI** repairs still open a temporary chat
 ([Choose the AI for a temporary chat](temporary-chats.md)) until they move across.
 
@@ -14,7 +14,9 @@ Choose **Fix it with AI** on the Update, Save or workspace preparation notice, o
 Update error in Repository, under a failed identity in Preview's identity menu, on an
 incoming merge's conflicts, or on **Project setup needs attention**. On the setup
 screen, **Start through conversation**, **Set up project** and **Inspect it for me**
-open it too. The button says **Opening…** while it starts, **Being fixed… →** while
+open it too, and so do **Create with AI**, **Review with AI** and **Review N ungrouped
+tables** in the Database's Overview ([Browse a project's Database](database.md)).
+The button says **Opening…** while it starts, **Being fixed… →** while
 a fix is running, and **See result →** when a fix has ended and waits for you. In
 those last two states it opens the same window again; it never starts a second fix.
 
@@ -39,6 +41,7 @@ Two views sit under the problem, and only one shows at a time:
   | Preview sign-in | **The AI repairs the app's seed** | **Vibe64 signs in as this identity** |
   | Incoming merge | **The AI repairs the conflicting files** | **Vibe64 builds the repaired merge** |
   | Project setup | **The AI sets up the project** | **Vibe64 inspects the project** |
+  | Data overview | **The AI groups the tables** | **Vibe64 reads the overview back** |
 
   Choose **Update output**, **Save output** or **Preparation output** to read what
   the run printed.
@@ -77,6 +80,7 @@ can be done next.
 | This preview can't switch identity | Restart Preview, then **Check now**. |
 | The contribution or its target changed | Refresh Incoming changes and merge again. |
 | Project setup waits for Update | Fix Update first, then **Check now**. |
+| The data overview could not be read | Check the database is available, then **Check now**. |
 
 **Review resolved conflicts** opens the same review as the Update error (see
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts)).
@@ -90,7 +94,9 @@ on the server, whether or not anyone is watching. You never press another button
 finish a fix: a fixed Save pushes the work. A fixed sign-in proves the app accepts the
 identity; choose it again in Preview's identity menu to sign Preview in. A fixed
 incoming merge shows the repaired merge on Incoming changes; merging it stays your
-reviewed choice. Project setup is Done once Vibe64's own inspection needs nothing. If the run
+reviewed choice. Project setup is Done once Vibe64's own inspection needs nothing. The Data
+overview is Done once Vibe64 reads it back valid against the refreshed schema, with every
+table reviewed for a whole or new-tables review; Overview then reloads by itself. If the run
 still fails, the fix goes back to the same conversation with what failed, up to three
 attempts. Work you saved yourself meanwhile counts: when nothing is left to save,
 the Save fix is Done.
@@ -123,7 +129,7 @@ in the session. **Cancel fix** confirms; **Keep going** carries on. Cancelling a
 works. The button then says **Cancelling…** until Vibe64 confirms it.
 
 Vibe64's own checks (running Update, Save or workspace preparation, signing in,
-building a repaired merge, inspecting the project) can't be interrupted, so a Cancel
+building a repaired merge, inspecting the project, reading the overview) can't be interrupted, so a Cancel
 during one says so and the task ends as soon as that run finishes.
 
 ## One at a time
