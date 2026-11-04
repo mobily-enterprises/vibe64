@@ -48,6 +48,7 @@ function viewProps(overrides = {}) {
     projectContext: {},
     projectPane: "dashboard",
     refreshSessionData: vi.fn(async () => null),
+    refreshSessionWork: vi.fn(async () => null),
     retryWorkspaceSetup: vi.fn(async () => true),
     saveSessionWork: vi.fn(async () => ({ ok: true, status: "saved" })),
     sendAgentMessage: vi.fn(async () => true),
