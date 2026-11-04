@@ -144,14 +144,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { mdiArrowLeft, mdiImageFilterCenterFocus, mdiTuneVariant } from "@mdi/js";
 import { Handle, Position, VueFlow } from "@vue-flow/core";
 import DatabaseErd from "./DatabaseErd.vue";
 import DatabaseTableList from "./DatabaseTableList.vue";
 import DatabaseOverviewEdge from "./DatabaseOverviewEdge.vue";
-import { dataOverviewGraph } from "../dataOverviewModel.js";
+import { useDataOverviewMap } from "../composables/useDataOverviewMap.js";
+import { dataOverviewGraph, editedDataOverview } from "../dataOverviewModel.js";
 import { DATA_OVERVIEW_ABSTRACTIONS, DATA_OVERVIEW_PATH, validateDataOverview } from "../../shared/dataOverview.js";
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
@@ -182,18 +183,22 @@ const tableSearch = ref("");
 const selectedTableName = ref("");
 watch(selectedTableName, (name) => emit("inspect-table", name));
 const selectedPhysicalTable = computed(() => actorSchema.value.tables.find(table => table.qualifiedName === selectedTableName.value));
-const savingPosition = ref(false);
-let dragging = false;
-let positionBase;
-let localPositions;
-let queuedPositions;
+const {
+  arrange,
+  edges,
+  finishActorDrag,
+  fit,
+  flow,
+  isDragging,
+  layoutError,
+  nodes,
+  pending,
+  resetActorPositions,
+  savingPosition,
+  selection,
+  startActorDrag
+} = useDataOverviewMap({ props, graph, activeGroup, feedback });
 let returnFocus;
-const nodes = ref([]);
-const edges = ref([]);
-const flow = ref(null);
-const pending = ref(false);
-const layoutError = ref("");
-const selection = ref(null);
 const editor = ref(false);
 const editorError = ref("");
 const saving = ref(false);
@@ -210,15 +215,10 @@ const availableTables = computed(() => {
 });
 let baseHash = "";
 let baseDefinition;
-let worker;
-let layoutGraph;
-let requestId = 0;
-let timer;
 let disposed = false;
-let fitAfterArrange = false;
 
 async function openActor(group) {
-  if (dragging) return;
+  if (isDragging()) return;
   returnFocus = document.activeElement;
   selection.value = null;
   tableSearch.value = "";
@@ -231,7 +231,7 @@ function closeActor(event) {
   if (!activeGroup.value || editor.value || generation.value || event?.defaultPrevented) return;
   activeGroupId.value = "";
   selectedTableName.value = "";
-  void nextTick(() => returnFocus?.focus?.());
+  void nextTick(() => returnFocus?.focus());
 }
 function locateTable(table) {
   selectedTableName.value = table.qualifiedName;
@@ -240,112 +240,10 @@ function locateTable(table) {
 function locateColumn(column) {
   void actorErd.value?.locate({ table: selectedTableName.value, column: column.name });
 }
-async function fit({ automatic = false } = {}) {
-  const current = requestId;
-  await nextTick();
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  if (!disposed && current === requestId && !activeGroup.value) await flow.value?.fitView({
-    padding: 0.06, maxZoom: 1, minZoom: automatic ? 0.5 : 0.01, duration: 0
-  });
-}
-function arrange() {
-  if (dragging || !worker || disposed) return;
-  const id = ++requestId;
-  clearTimeout(timer);
-  layoutError.value = "";
-  selection.value = null;
-  layoutGraph = graph.value;
-  pending.value = layoutGraph.nodes.length > 0;
-  if (!pending.value) { nodes.value = []; edges.value = []; return; }
-  const positions = localPositions || props.overview.definition.positions;
-  worker.postMessage({
-    id,
-    kind: "overview",
-    nodes: layoutGraph.nodes.map((node) => ({ id: node.id, count: node.data.count, ...node.dimensions })),
-    overviewPositions: positions ? JSON.parse(JSON.stringify(positions)) : undefined,
-    overviewRings: props.overview.definition.rings?.map((ring) => ring.map((table) => `actor:${table}`)),
-    visibleEdges: layoutGraph.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
-  });
-  timer = setTimeout(() => {
-    requestId += 1;
-    pending.value = false;
-    layoutError.value = "Actor arrangement timed out. Retry to arrange the overview.";
-  }, 15000);
-}
-function startActorDrag({ node }) {
-  dragging = true;
-  // A routing reply from before this gesture must never move its cards.
-  requestId += 1;
-  clearTimeout(timer);
-  pending.value = false;
-  if (!savingPosition.value) positionBase = { hash: props.overview.hash, definition: JSON.parse(JSON.stringify(props.overview.definition)) };
-  edges.value = edges.value.map(edge => ({ ...edge, data: { ...edge.data, dragging: edge.data.dragging || edge.source === node.id || edge.target === node.id } }));
-}
-async function finishActorDrag() {
-  dragging = false;
-  if (!positionBase) { arrange(); return; }
-  const positions = Object.fromEntries(nodes.value.map(node => [node.data.group.table || "other-tables", { ...node.position }]));
-  await savePositions(positions);
-}
-function resetActorPositions() {
-  fitAfterArrange = true;
-  void savePositions({});
-}
-async function savePositions(positions) {
-  localPositions = positions;
-  queuedPositions = positions;
-  arrange();
-  if (savingPosition.value) return;
-  positionBase ||= { hash: props.overview.hash, definition: props.overview.definition };
-  savingPosition.value = true;
-  try {
-    // Keep only the latest drop while a write is in flight. Each following
-    // write uses our last acknowledgement, so concurrent edits still conflict.
-    while (queuedPositions && !disposed) {
-      const next = queuedPositions;
-      queuedPositions = null;
-      const result = await props.saveOverview({ definition: { ...positionBase.definition, positions: next }, baseHash: positionBase.hash });
-      if (!result?.ok) throw new Error(result?.error || "Actor positions could not be saved.");
-      positionBase = result.overview;
-    }
-  } catch (error) {
-    queuedPositions = null;
-    positionBase = null;
-    feedback.error(error, "Actor positions could not be saved.");
-  } finally {
-    localPositions = null;
-    if (!dragging) positionBase = null;
-    if (!disposed) { savingPosition.value = false; arrange(); }
-  }
-}
 watch([() => props.schema.refreshedAt, () => props.overview.hash, () => props.overview.error, allRelationships], () => {
   if (!savingPosition.value) arrange();
 });
-onMounted(() => {
-  worker = new Worker(new URL("../workers/erdLayout.worker.js", import.meta.url), { type: "module" });
-  worker.onmessage = async ({ data }) => {
-    if (disposed || data.id !== requestId) return;
-    clearTimeout(timer);
-    if (!data.ok) { pending.value = false; layoutError.value = data.error || "The overview could not be arranged."; return; }
-    const initial = !nodes.value.length;
-    const positions = new Map(data.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
-    nodes.value = layoutGraph.nodes.map((node) => ({ ...node, position: positions.get(node.id) || node.position }));
-    const routes = new Map(data.overviewRoutes.map((route) => [route.id, route]));
-    edges.value = layoutGraph.edges.map((edge) => {
-      const route = routes.get(edge.id);
-      return { ...edge, sourceHandle: route.sourceHandle, targetHandle: route.targetHandle, data: { ...edge.data, points: route.points } };
-    });
-    if (data.overviewRoutes.some((route) => route.obstructed)) layoutError.value = "Some connections could not avoid actors. Try showing only main connections.";
-    if (initial || fitAfterArrange) await fit({ automatic: initial });
-    if (!disposed && data.id === requestId) {
-      fitAfterArrange = false;
-      pending.value = false;
-    }
-  };
-  worker.onerror = () => { clearTimeout(timer); pending.value = false; layoutError.value = "The overview layout worker failed. Reload overview to retry."; };
-  arrange();
-});
-onBeforeUnmount(() => { disposed = true; clearTimeout(timer); worker?.terminate(); });
+onBeforeUnmount(() => { disposed = true; });
 
 function openGeneration() {
   overviewOptions.value = false;
@@ -403,24 +301,7 @@ async function save() {
   if (saving.value) return;
   editorError.value = "";
   try {
-    const edited = {
-      ...baseDefinition,
-      actors: draftActors.value,
-      reviewedTables: [...new Set([
-        ...(baseDefinition.reviewedTables || []),
-        ...baseDefinition.actors.flatMap((actor) => actor.tables),
-        ...draftActors.value.flatMap((actor) => actor.tables)
-      ])]
-    };
-    const mainTables = new Set(draftActors.value.map((actor) => actor.table));
-    if (edited.positions) edited.positions = Object.fromEntries(Object.entries(edited.positions).filter(([table]) => table === "other-tables" || mainTables.has(table)));
-    if (edited.rings) {
-      edited.rings = edited.rings.map((ring) => ring.filter((table) => mainTables.has(table))).filter((ring) => ring.length);
-      const placed = new Set(edited.rings.flat());
-      const added = [...mainTables].filter((table) => !placed.has(table));
-      if (added.length) edited.rings.push(added);
-    }
-    const definition = validateDataOverview(edited);
+    const definition = validateDataOverview(editedDataOverview(baseDefinition, draftActors.value));
     saving.value = true;
     const result = await props.saveOverview({ definition, baseHash });
     if (disposed) return;

@@ -78,3 +78,31 @@ export function dataOverviewGraph(schema, definition, { allRelationships = false
   }));
   return { nodes, edges, groups, coverage };
 }
+
+/**
+ * The overview definition the actor editor saves: its actors, every table either version grouped counted as
+ * reviewed, saved positions only for remaining actors (and Other tables), and authored rings without removed actors,
+ * new actors added as one outer ring.
+ * @param {Record<string, any>} baseDefinition the definition the editor opened
+ * @param {Array<{ table: string, tables: string[] }>} actors the edited actors
+ */
+export function editedDataOverview(baseDefinition, actors) {
+  const edited = {
+    ...baseDefinition,
+    actors,
+    reviewedTables: [...new Set([
+      ...(baseDefinition.reviewedTables || []),
+      ...baseDefinition.actors.flatMap((actor) => actor.tables),
+      ...actors.flatMap((actor) => actor.tables)
+    ])]
+  };
+  const mainTables = new Set(actors.map((actor) => actor.table));
+  if (edited.positions) edited.positions = Object.fromEntries(Object.entries(edited.positions).filter(([table]) => table === "other-tables" || mainTables.has(table)));
+  if (edited.rings) {
+    edited.rings = edited.rings.map((ring) => ring.filter((table) => mainTables.has(table))).filter((ring) => ring.length);
+    const placed = new Set(edited.rings.flat());
+    const added = [...mainTables].filter((table) => !placed.has(table));
+    if (added.length) edited.rings.push(added);
+  }
+  return edited;
+}
