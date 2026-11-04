@@ -132,7 +132,7 @@
       <p v-if="source.error" class="ai-task__error" role="alert">{{ source.error }}</p>
 
       <footer v-if="confirmingCancel" class="ai-task__footer ai-task__footer--question">
-        <p>{{ WORDS.cancelQuestion(task.noun) }}</p>
+        <p>{{ projection.cancelQuestion }}</p>
         <div class="ai-task__actions">
           <v-btn data-vibe64-ai-task-keep-going variant="text" @click="confirmingCancel = false">{{ WORDS.actions.keepGoing }}</v-btn>
           <v-btn color="error" data-vibe64-ai-task-cancel-confirm variant="flat" @click="cancel">{{ WORDS.cancelConfirm(task.noun) }}</v-btn>

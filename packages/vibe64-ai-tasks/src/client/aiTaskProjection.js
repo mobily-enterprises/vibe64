@@ -154,6 +154,7 @@ function projectAiTask(task, { viewerId }) {
     note: running && task.phase !== PHASES.CANCELLING ? "" : noteOf(task, needs),
     steps: stepsOf(task, needs),
     actions: needs ? [...review, ...needs.actions] : [],
+    cancelQuestion: WORDS.cancelQuestion(task.noun),
     outcome: ended ? outcomeOf(task, viewerId) : null
   };
 }

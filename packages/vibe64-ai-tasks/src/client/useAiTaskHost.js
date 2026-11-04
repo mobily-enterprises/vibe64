@@ -9,7 +9,7 @@ import { useAiTaskWindow } from "./useAiTaskWindow.js";
 
 /**
  * One session's AI task for its page: the task, its window and what a person can do from it. The
- * app supplies what only it knows, so nothing here reaches for the app or for Online.
+ * app supplies what only it knows, so nothing here reaches for the app or its host.
  * @param {object} options
  * @param {import("vue").MaybeRefOrGetter<string>} options.sessionId
  * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath

@@ -68,12 +68,13 @@
  * @property {string} note the words under the steps
  * @property {AiTaskStep[]} steps
  * @property {AiTaskAction[]} actions the footer, empty outside `needs_you`
+ * @property {string} cancelQuestion what Cancel asks before it ends the task
  * @property {AiTaskOutcome | null} outcome
  */
 
 /**
- * One window's task and everything a person can do to it. Public and Online each supply one, so
- * the window itself knows nothing about sessions or stores.
+ * One window's task and everything a person can do to it. A session's host supplies one, and a host
+ * with a task of its own can supply another, so the window itself knows nothing about sessions or stores.
  * @typedef {object} AiTaskSource
  * @property {AiTask} task
  * @property {AiTaskProjection} projection
