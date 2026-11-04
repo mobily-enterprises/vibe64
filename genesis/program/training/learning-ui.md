@@ -35,6 +35,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - Main: `packages/vibe64-training/src/client/TrainingLessonPicker.vue`
 - `packages/vibe64-training/src/client/trainingGuide.js`
 - `packages/vibe64-training/src/client/TrainingGuideOverlay.vue`
+- `packages/vibe64-training/src/client/browser.js`
 - `packages/vibe64-training/src/shared/learningVocabulary.js`
 - `src/components/learning/Vibe64LearningStage.vue`
 - `packages/vibe64-training/src/server/visualResourceActions.js`

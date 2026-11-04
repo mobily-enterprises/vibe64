@@ -1,25 +1,26 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { clearTrainingGuide, currentTrainingGuideElement, registerTrainingGuideOverlay, trainingGuide } from "./trainingGuide.js";
+import { clearTrainingGuide, currentTrainingGuideElement, trainingGuide, useTrainingGuideOverlay } from "./trainingGuide.js";
 import { placeGuideCaption } from "./guideCaptionPlacement.js";
+import { hasWindowFunction } from "./browser.js";
 
 // A coach mark over one real Vibe64 control: a soft spotlight, a ring with a
 // ripple and a short caption pointing at it. It never takes input: the
 // learner clicks the control underneath themselves, also through the
 // translucent caption. A timed guide clears on the first click or key.
-const unregister = registerTrainingGuideOverlay();
+useTrainingGuideOverlay();
 const rect = ref(null);
 const caption = ref(null);
 const captionSize = ref(null);
 const keepClear = ref([]);
 const lifetime = ref(0);
-const reducedMotion = ref(Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches));
+const reducedMotion = ref(hasWindowFunction("matchMedia") && Boolean(globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches));
 let frame = 0;
 let timer = null;
 let element = null;
 
 function stop() {
-  if (frame) globalThis.cancelAnimationFrame?.(frame);
+  if (frame && hasWindowFunction("cancelAnimationFrame")) globalThis.cancelAnimationFrame(frame);
   frame = 0;
   clearTimeout(timer);
   timer = null;
@@ -45,9 +46,9 @@ function measure() {
     return;
   }
   rect.value = box(element);
-  keepClear.value = [...(globalThis.document?.querySelectorAll?.(KEEP_CLEAR_SELECTOR) || [])].map(box);
+  keepClear.value = [...(globalThis.document?.querySelectorAll(KEEP_CLEAR_SELECTOR) || [])].map(box);
   captionSize.value = caption.value?.getBoundingClientRect ? box(caption.value) : null;
-  if (globalThis.requestAnimationFrame) frame = globalThis.requestAnimationFrame(measure);
+  if (hasWindowFunction("requestAnimationFrame")) frame = globalThis.requestAnimationFrame(measure);
 }
 watch(trainingGuide, guide => {
   stop();
@@ -63,10 +64,7 @@ watch(trainingGuide, guide => {
   }
   measure();
 }, { immediate: true });
-onBeforeUnmount(() => {
-  stop();
-  unregister();
-});
+onBeforeUnmount(stop);
 
 const pad = 6;
 const gap = 14;

@@ -1,21 +1,23 @@
-import { shallowRef } from "vue";
+import { onScopeDispose, shallowRef } from "vue";
+import { hasElementMethod } from "./browser.js";
 
 // One browser-wide teacher guide. The overlay component draws it; this module
 // only resolves the real control and reports truthfully whether it was drawn.
 const TRAINING_GUIDE_DURATION_MS = 8000;
+// readable-check: allow module-state - shared resource: the page has one teacher guide ring, which Learning, the lesson player and Colleague all draw
 const trainingGuide = shallowRef(null);
+// readable-check: allow module-state - shared resource: a guide can be drawn only while the page has a guide overlay mounted
 let overlays = 0;
+// readable-check: allow module-state - shared resource: guide ids stay unique across the page's one ring
 let sequence = 0;
 
-function registerTrainingGuideOverlay() {
+/** Counts the calling overlay as mounted for its scope's lifetime; the last one to go clears the guide. */
+function useTrainingGuideOverlay() {
   overlays += 1;
-  let registered = true;
-  return () => {
-    if (!registered) return;
-    registered = false;
+  onScopeDispose(() => {
     overlays -= 1;
     if (overlays === 0) trainingGuide.value = null;
-  };
+  });
 }
 
 function cssString(value) {
@@ -41,7 +43,7 @@ function visibleStepElement(step, root) {
 
 function guideElementVisible(element) {
   if (!element?.isConnected || element.closest("[inert], [aria-hidden='true']")) return false;
-  if (typeof element.checkVisibility === "function" && !element.checkVisibility({ visibilityProperty: true })) return false;
+  if (hasElementMethod(element, "checkVisibility") && !element.checkVisibility({ visibilityProperty: true })) return false;
   const rect = element.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }
@@ -110,16 +112,22 @@ async function showTrainingGuide(guide, { settleMs = 0, durationMs = TRAINING_GU
   return { shown: true, step: found.step.id };
 }
 
-// Run one teacher guide command in the initiating Main browser. Point-only
-// changes no view; "show me" uses the ordinary browser navigator first and,
-// for a file, the lesson view's own Files opener.
-async function runTrainingGuideCommand(command, { navigateBrowser, view } = {}) {
+/**
+ * Run one teacher guide command in the initiating Main browser. Point-only
+ * changes no view; "show me" uses the ordinary browser navigator first and,
+ * for a file, the lesson view's own Files opener.
+ * @param {object} command
+ * @param {object} context
+ * @param {((navigation: object) => Promise<object>) | null} [context.navigateBrowser] absent until the host's navigator is ready
+ * @param {{ openFile: (path: string) => boolean }} context.view the lesson view's Files opener
+ */
+async function runTrainingGuideCommand(command, { navigateBrowser, view }) {
   const { guide, ...navigation } = command;
   let focus = null;
   if (guide.navigate) {
     if (typeof navigateBrowser !== "function") throw new Error("Lesson workspace navigation is unavailable in this installation.");
     focus = await navigateBrowser(navigation);
-    if (guide.filePath && (typeof view?.openFile !== "function" || view.openFile(guide.filePath) !== true)) {
+    if (guide.filePath && view.openFile(guide.filePath) !== true) {
       throw new Error("This lesson's Files view could not open that practice project file.");
     }
   }
@@ -128,4 +136,4 @@ async function runTrainingGuideCommand(command, { navigateBrowser, view } = {}) 
 }
 
 export { TRAINING_GUIDE_DURATION_MS, clearTrainingGuide, currentTrainingGuideElement, findTrainingGuideStep,
-  registerTrainingGuideOverlay, runTrainingGuideCommand, showTrainingGuide, trainingGuide };
+  runTrainingGuideCommand, showTrainingGuide, trainingGuide, useTrainingGuideOverlay };
