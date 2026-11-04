@@ -61,6 +61,9 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
 - `packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue`
+- `packages/vibe64-accounts/src/client/studio/modelRoutingDraft.js`
+- `packages/vibe64-accounts/src/client/studio/useModelRoutingPreview.js`
+- `packages/vibe64-accounts/src/client/studio/useModelRoutingRecommendations.js`
 - `packages/vibe64-accounts/src/client/studio/ModelRoutingRow.vue`
 
 - `packages/vibe64-accounts/src/server/aiConnectionStore.js`
@@ -285,7 +288,10 @@ compact line each; Apply to form changes only the draft and Save persists.
 Unsaved edits refresh a cancellable preview ("Checking access…"); stale replies
 are ignored, a conflicting revision keeps the draft with Reload current
 choices, and viewer changes discard open reviews. Response caches include the
-host's actor, role and project identity.
+host's actor, role and project identity. The form keeps its setups, role groups
+and draft comparisons in `modelRoutingDraft.js`, its preview in
+`useModelRoutingPreview` and Review recommendations in
+`useModelRoutingRecommendations`.
 
 After connecting an account, the form opens in proposal mode with one checkbox
 per changed owner role (Current and Suggested lines with access); custom

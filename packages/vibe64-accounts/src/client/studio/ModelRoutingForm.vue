@@ -1,15 +1,18 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { ASSISTANT_FOLLOWING_ROLES, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_ROLE_PURPOSES, ASSISTANT_ROUTING_ROLE_DEFINITIONS,
-  ASSISTANT_SETUP_ROLES, assistantModeLabel, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_FOLLOWING_ROLES, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantModeLabel,
+  assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
 import AiPersonalUse from "./AiPersonalUse.vue";
 import ModelRoutingRow, { routeKey, routingSelectionText } from "./ModelRoutingRow.vue";
+import { MAIN_AI_ROLES, PLAIN_ROLES, SETUPS, addDefaultFollows, groupsFor, implicitFollows, rolesFor, routingChanges, sameValue,
+  until } from "./modelRoutingDraft.js";
+import { routingPreview, useModelRoutingPreview } from "./useModelRoutingPreview.js";
+import { useModelRoutingRecommendations } from "./useModelRoutingRecommendations.js";
 
 // The AI setup's models: the owner's setup (main chat and helpers) and, for the
 // owner, the team members' setup. After a connection it instead proposes the
@@ -24,11 +27,11 @@ const props = defineProps({ connectionId: { type: String, default: "" }, connect
   plain: Boolean,
   // Listeners as props, so "Add a DeepSeek key" and "Connect … in another tool"
   // appear only where the host can open those steps.
-  onAddTeamKey: { type: Function, default: null }, onConnectProvider: { type: Function, default: null } });
+  // readable-check: allow collaborator-prop - optional operation: only a host that can open the DeepSeek key step offers it
+  onAddTeamKey: { type: Function, default: null },
+  // readable-check: allow collaborator-prop - optional operation: only a host that can open another tool's connect step offers it
+  onConnectProvider: { type: Function, default: null } });
 const emit = defineEmits(["close", "saved", "busy"]);
-const SETUPS = [{ id: "owner", label: "Owner (you)" }, { id: "nonOwner", label: "Team members" }];
-const GROUPS = [{ id: "main", label: "Main chat" }, { id: "helpers", label: "Helpers" }];
-const MAIN_AI_ROLES = ["senior", "junior", "router", "quickHelper"];
 const customizing = ref(false);
 const proposalMode = computed(() => Boolean(props.connectionId) && !customizing.value);
 const { resource, engines, scopeKey, team, loadError: resourceError } = useModelRouting();
@@ -37,16 +40,13 @@ const loadError = computed(() => resourceError.value || refreshError.value);
 // draft[setup][role]: a selection, null (off) or { follows }; absent roles stay absent.
 const draft = ref({ owner: {}, nonOwner: {} });
 const baseRevision = ref(null);
-const recommendationReview = ref(null);
 const proposals = ref([]);
 // Owner role states from a preview that prefers the connection (Use as main AI).
 const preferred = ref(null);
 const saving = ref(false);
 const fieldErrors = ref({});
 const preview = ref(null);
-const previewPending = ref(false);
-const previewError = ref("");
-const retryPreview = ref(0);
+const { previewError, previewPending, requestPreview, retryPreview } = useModelRoutingPreview({ preview });
 const refreshingConnection = ref(Boolean(props.connectionId));
 const activeSetup = ref(props.initialSetup === "nonOwner" ? "nonOwner" : "owner");
 let savedPayload = "";
@@ -61,7 +61,7 @@ const connected = computed(() => engines.value.some((engine) => engine.connected
 const ownerName = computed(() => team.value?.ownerName || "the workspace owner");
 const roleState = (setupId, role, data = resource.data.value) => data?.setups?.[setupId]?.roles?.[role];
 const teamConfigured = computed(() => ASSISTANT_SETUP_ROLES.nonOwner.some((role) => roleState("nonOwner", role)?.configured ||
-  Object.hasOwn(draft.value.nonOwner, role) && !implicitFollows("nonOwner", role, draft.value.nonOwner[role])));
+  Object.hasOwn(draft.value.nonOwner, role) && !implicitFollows(savedValues, "nonOwner", role, draft.value.nonOwner[role])));
 const showSwitch = computed(() => owner.value && (teamConfigured.value || props.initialSetup === "nonOwner"));
 // No team model yet: no team role resolves to a model.
 const teamEmpty = computed(() => !ASSISTANT_SETUP_ROLES.nonOwner.some((role) => assistantSetupRoleValue(draft.value.nonOwner, role).value?.schema));
@@ -71,17 +71,10 @@ watch([() => resource.data.value?.setups, () => props.focusRole], async () => {
   if (!props.focusRole) return;
   await nextTick();
   const row = rowRefs.value[`${setup.value}.${props.focusRole}`]?.$el;
-  row?.scrollIntoView?.({ block: "center" });
-  row?.querySelector?.('input[role="combobox"]')?.focus({ preventScroll: true });
+  row?.scrollIntoView({ block: "center" });
+  row?.querySelector('input[role="combobox"]')?.focus({ preventScroll: true });
 }, { immediate: true });
 const stale = computed(() => baseRevision.value !== null && resource.data.value?.revision !== baseRevision.value);
-const rolesFor = (setupId, group) => ASSISTANT_ROUTING_ROLE_DEFINITIONS.filter(({ id, group: roleGroup }) =>
-  ASSISTANT_SETUP_ROLES[setupId].includes(id) && (!group || roleGroup === group));
-const groupsFor = (setupId) => GROUPS.filter(({ id }) => rolesFor(setupId, id).length);
-function sameValue(left, right) {
-  if (left?.follows || right?.follows) return left?.follows === right?.follows;
-  return routeKey(left) === routeKey(right) && left?.variantId === right?.variantId && left?.agentId === right?.agentId;
-}
 function choiceFor(setupId, role, selection) {
   return (roleState(setupId, role)?.choices || []).find((item) => routeKey(item) === routeKey(selection));
 }
@@ -92,17 +85,14 @@ const followedLabel = (setupId, role) => {
 // An explicit following role can return to its default "Same as".
 const defaultFollows = (setupId, role) => ASSISTANT_FOLLOWING_ROLES.includes(role) && !draft.value[setupId][role]?.follows
   ? ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId][role] || "" : "";
-const PLAIN_ROLES = { senior: "Building", junior: "Quick tasks", quickHelper: "Background helpers", router: "Request routing" };
 function selectionLabel(setupId, role, value) {
   if (value?.follows) return `Same as ${assistantModeLabel(value.follows)}`;
   if (!value) return "No model selected";
   return props.plain ? choiceFor(setupId, role, value)?.label || value.modelId : vibe64AssistantSelectionLabel(value);
 }
-const recommendedChanges = computed(() => rolesFor(setup.value).flatMap(({ id, label }) => {
-  const proposed = roleState(setup.value, id)?.recommendation;
-  if (!proposed || sameValue(draft.value[setup.value][id], proposed)) return [];
-  return [{ setup: setup.value, role: id, label, proposed, description: selectionLabel(setup.value, id, proposed) }];
-}));
+const { recommendationReview, recommendedChanges, reviewRecommendations, useRecommendations } = useModelRoutingRecommendations({
+  setup, draft, roleState, selectionLabel, update, canEdit, saving, stale
+});
 // Onboarding proposals: owner roles whose recommendation moves onto this connection.
 const suggestedChanges = computed(() => !connected.value ? [] : (preferred.value ? MAIN_AI_ROLES : ASSISTANT_SETUP_ROLES.owner).flatMap((role) => {
   const value = roleState("owner", role)?.value;
@@ -110,22 +100,12 @@ const suggestedChanges = computed(() => !connected.value ? [] : (preferred.value
   if (!recommendation?.schema || recommendation.modelProviderId !== props.connectionId || sameValue(value, recommendation)) return [];
   return [{ id: `owner:${role}`, setup: "owner", role, label: assistantModeLabel(role), previous: value?.schema ? value : null, proposed: recommendation }];
 }));
-// An unsaved following role shows its default "Same as"; it is saved with its
-// setup's first real change.
-function implicitFollows(setupId, role, value) {
-  return !Object.hasOwn(savedValues[setupId], role) && Boolean(value?.follows) && value.follows === ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId][role];
-}
 function payload() {
   const values = JSON.parse(JSON.stringify(draft.value));
   if (proposalMode.value) for (const proposal of suggestedChanges.value) {
     if (proposals.value.includes(proposal.id)) values[proposal.setup][proposal.role] = proposal.proposed;
   }
-  const changes = Object.fromEntries(SETUPS.map(({ id: setupId }) => {
-    const changed = Object.entries(values[setupId])
-      .filter(([role, value]) => !sameValue(value, savedValues[setupId][role]) || (value === null) !== (savedValues[setupId][role] === null));
-    return [setupId, changed.some(([role, value]) => !implicitFollows(setupId, role, value)) ? Object.fromEntries(changed) : {}];
-  }).filter(([, roles]) => Object.keys(roles).length));
-  return { revision: baseRevision.value, ...changes };
+  return { revision: baseRevision.value, ...routingChanges(values, savedValues) };
 }
 // A preferred preview proposes everything it moves; otherwise a deliberate choice stays unchecked.
 const defaultProposals = () => suggestedChanges.value
@@ -138,9 +118,7 @@ function hydrate(data) {
     .filter((role) => roleState(setupId, role, data)?.configured).map((role) => [role, roleState(setupId, role, data).value]))]));
   fieldErrors.value = {};
   savedValues = JSON.parse(JSON.stringify(draft.value));
-  for (const { id: setupId } of SETUPS) for (const [role, follows] of Object.entries(ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId])) {
-    if (!Object.hasOwn(draft.value[setupId], role)) draft.value[setupId][role] = { follows };
-  }
+  addDefaultFollows(draft.value);
   savedPayload = JSON.stringify({ revision: data.revision });
   proposals.value = defaultProposals();
   preview.value = data;
@@ -160,11 +138,6 @@ watch(scopeKey, () => {
 watch(() => resource.data.value, (data) => {
   if (!refreshingConnection.value && !saving.value && (baseRevision.value === null || draftSnapshot() === hydratedDraft)) hydrate(data);
 }, { immediate: true });
-async function routingPreview(body, signal) {
-  const result = await getHttpWebClient().request(`${ACCOUNTS_ENDPOINT}/model-routing/preview`, { method: "POST", body, signal });
-  if (result?.ok !== true) throw new Error(result?.error || "Routing preview could not be loaded.");
-  return result;
-}
 onMounted(async () => {
   if (!refreshingConnection.value) return;
   await reload();
@@ -185,17 +158,7 @@ watch([previewPayload, retryPreview, canEdit, stale], ([serialized], _previous, 
   if (baseRevision.value === null || !canEdit.value || stale.value) return;
   previewError.value = "";
   if (serialized === savedPayload) { preview.value = resource.data.value; return; }
-  const controller = new AbortController();
-  let current = true;
-  previewPending.value = true;
-  const timer = setTimeout(async () => {
-    try {
-      const result = await routingPreview(JSON.parse(serialized), controller.signal);
-      if (current) preview.value = result;
-    } catch (error) { if (current) previewError.value = error.message; }
-    finally { if (current) previewPending.value = false; }
-  }, 250);
-  cleanup(() => { current = false; clearTimeout(timer); controller.abort(); });
+  cleanup(requestPreview(serialized));
 }, { immediate: true });
 // Each personal provider the owner draft routes to, explained once above the roles.
 const personalProviders = computed(() => [...new Set(ASSISTANT_SETUP_ROLES.owner.flatMap((role) => {
@@ -219,15 +182,6 @@ function roleError(setupId, role) {
   const decision = preview.value?.setups?.[setupId]?.preview?.[ASSISTANT_ROLE_PURPOSES[role]];
   return draft.value[setupId][role]?.schema && decision && !decision.available ? decision.message || "Unavailable" : "";
 }
-function reviewRecommendations() {
-  if (!canEdit.value || saving.value || stale.value || !recommendedChanges.value.length) return;
-  recommendationReview.value = { changes: recommendedChanges.value };
-}
-function useRecommendations() {
-  if (!recommendationReview.value || !canEdit.value || saving.value || stale.value) return;
-  for (const { setup: setupId, role, proposed } of recommendationReview.value.changes) update(setupId, role, proposed);
-  recommendationReview.value = null;
-}
 function customize() {
   const changes = payload();
   for (const { id: setupId } of SETUPS) if (changes[setupId]) Object.assign(draft.value[setupId], changes[setupId]);
@@ -250,11 +204,6 @@ async function save() {
   try { const result = await command.run(); if (result?.ok === true) { await resource.reload(); emit("saved"); } }
   catch { /* Shared command feedback reports errors; keep this draft and its field errors. */ }
   finally { saving.value = false; }
-}
-function until(ready) {
-  return new Promise((resolve) => {
-    const stop = watch(ready, (value) => { if (value) { queueMicrotask(() => stop()); resolve(); } }, { immediate: true });
-  });
 }
 // Onboarding's plain "Yes": every suggestion for this connection, saved as usual.
 async function applySuggested() {
