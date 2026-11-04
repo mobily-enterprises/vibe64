@@ -121,6 +121,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/outputResults.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
 - `packages/vibe64-terminals/src/server/launchPreviewForwarding.js`
+- `packages/vibe64-terminals/src/server/launchPreviewFrameLoads.js`
 - `packages/vibe64-terminals/src/server/launchPreviewHeaders.js`
 - `packages/vibe64-terminals/src/server/launchPreviewIdentity.js`
 - `packages/vibe64-terminals/src/server/launchPreviewListening.js`
@@ -539,6 +540,13 @@ its own address once a second and reloads when the answer is no longer 503. It h
 no automatic refresh, which would make it blink while it waits. It has no bridge,
 so the default application identity waits for the page whose bridge announces
 itself instead of failing there and spending its one automatic attempt.
+Each terminal session's proxy adds `frame-load` records to the session's
+`preview-log.jsonl`: `starting_page` when a page load got that page, and
+`first_page` with its HTTP status when a real page was next served. The starting
+page's own checks do not count, each terminal session keeps at most 20 records,
+and a record holds only the time and status, because a path can hold a token.
+These records never replace `preview-last.json`, which stays the launch's latest
+record.
 Each upstream HTTP request restores the configured Preview idle timeout on a
 pooled socket. A pool's short free-socket timer must not terminate a later active
 request; tracking and teardown listeners remain attached only once per socket.

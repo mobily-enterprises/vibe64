@@ -200,6 +200,7 @@ async function proxyPreviewRequest(request, response, {
   consumeIdentityGrant = null,
   editorOrigins = [],
   executePreviewIdentityCommand = null,
+  frameLoads,
   locatorSource = "",
   previewAuth = null,
   proxyOrigin = "",
@@ -320,6 +321,7 @@ async function proxyPreviewRequest(request, response, {
         token
       }));
       response.end(body);
+      frameLoads.pageServed(request, targetResponse.statusCode || 200);
       previewProxyDebugLog("server.launchPreviewProxy.request.done", {
         ...requestDetails,
         contentType,
@@ -368,6 +370,7 @@ async function proxyPreviewRequest(request, response, {
         "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
       });
       response.end(previewStartingHtml());
+      frameLoads.startingPageServed(request);
       previewProxyDebugLog("server.launchPreviewProxy.request.startingHtml", {
         ...requestDetails,
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),

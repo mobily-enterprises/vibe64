@@ -32,6 +32,7 @@ import {
 } from "./launchPreviewConnections.js";
 import { createPreviewIdentityGrantConsumer } from "./launchPreviewIdentity.js";
 import { proxyPreviewRequest, proxyPreviewUpgrade } from "./launchPreviewForwarding.js";
+import { createPreviewFrameLoadRecorder } from "./launchPreviewFrameLoads.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
@@ -196,6 +197,7 @@ function createLaunchPreviewProxyRegistry({
         executePreviewIdentityCommand: input.executePreviewIdentityCommand,
         previewAuth,
         publicOrigin,
+        recordFrameLoad: input.recordFrameLoad,
         socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs
       });
       if (pendingEntry.closeRequested) {
@@ -369,8 +371,10 @@ async function startLaunchPreviewProxy({
     executePreviewIdentityCommand = null,
     previewAuth = null,
     publicOrigin = "",
+    recordFrameLoad = () => {},
     socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
   } = options;
+  const frameLoads = createPreviewFrameLoadRecorder(recordFrameLoad);
   const server = createServer();
   const tracker = createPreviewProxyConnectionTracker({
     socketIdleTimeoutMs
@@ -399,6 +403,7 @@ async function startLaunchPreviewProxy({
       consumeIdentityGrant,
       editorOrigins: [...editorOrigins],
       executePreviewIdentityCommand,
+      frameLoads,
       locatorSource,
       previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),

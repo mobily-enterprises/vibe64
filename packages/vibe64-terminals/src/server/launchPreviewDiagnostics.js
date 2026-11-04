@@ -37,7 +37,8 @@ function previewDiagnosticError(error = null) {
 
 async function writePreviewDiagnostic(session = {}, record = {}, options = {}) {
   const {
-    append = true
+    append = true,
+    latest = true
   } = options;
   const sessionRoot = previewDiagnosticsSessionRoot(session);
   if (!sessionRoot) {
@@ -62,7 +63,9 @@ async function writePreviewDiagnostic(session = {}, record = {}, options = {}) {
     ...(record.details && typeof record.details === "object" && !Array.isArray(record.details) ? { details: record.details } : {})
   };
   try {
-    await writeFile(previewLastPath(session), `${JSON.stringify(normalizedRecord, null, 2)}\n`, "utf8");
+    if (latest) {
+      await writeFile(previewLastPath(session), `${JSON.stringify(normalizedRecord, null, 2)}\n`, "utf8");
+    }
     if (append) {
       await appendFile(previewLogPath(session), `${JSON.stringify(normalizedRecord)}\n`, "utf8");
     }

@@ -37,6 +37,10 @@ import {
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import { injectLaunchPreviewBridge } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 import {
+  PREVIEW_FRAME_LOAD_RECORD_LIMIT,
+  createPreviewFrameLoadRecorder
+} from "../../packages/vibe64-terminals/src/server/launchPreviewFrameLoads.js";
+import {
   __testables as previewHeaderTestables,
   appendPreviewTokenQueryParam,
   normalizePreviewTargetHref,
@@ -1833,6 +1837,70 @@ test("launch preview proxy serves stable starting HTML while the target is unava
   } finally {
     await registry.closeAll();
   }
+});
+
+test("launch preview proxy records a page load that got the starting page and the real page served after it", async () => {
+  const target = createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "text/html" });
+    response.end("<h1>App</h1>");
+  });
+  await new Promise(resolve => target.listen(0, "127.0.0.1", resolve));
+  const { port } = target.address();
+  await new Promise(resolve => target.close(resolve));
+  const records = [];
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
+  try {
+    const preview = await registry.ensure({
+      recordFrameLoad: record => records.push(record),
+      sessionId: "session-frame-loads"
+    }, `http://127.0.0.1:${port}/home`);
+    const previewUrl = new URL(preview.href);
+    previewUrl.pathname = "/reset/secret-in-path";
+    previewUrl.searchParams.set("code", "secret-in-query");
+    previewUrl.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+    const bootstrap = await fetch(preview.href, { headers: { Accept: "text/html" }, redirect: "manual" });
+    const cookieName = previewTokenCookieName(previewUrl.origin);
+    const cookie = previewCookiePair(bootstrap.headers.get("set-cookie"), cookieName);
+    const load = async (destination) => {
+      const response = await fetch(previewUrl, {
+        headers: { Accept: "text/html", Cookie: cookie, "Sec-Fetch-Dest": destination },
+        redirect: "manual"
+      });
+      await response.text();
+      return response.status;
+    };
+
+    assert.equal(await load("iframe"), 503);
+    assert.equal(await load("empty"), 503);
+    assert.equal(await load("iframe"), 503);
+    assert.deepEqual(records, [{ reason: "starting_page", status: "frame-load" }]);
+
+    await new Promise(resolve => target.listen(port, "127.0.0.1", resolve));
+    assert.equal(await load("empty"), 200);
+    assert.equal(records.length, 1);
+    assert.equal(await load("iframe"), 200);
+    assert.equal(await load("iframe"), 200);
+    assert.deepEqual(records, [
+      { reason: "starting_page", status: "frame-load" },
+      { details: { httpStatus: 200 }, reason: "first_page", status: "frame-load" }
+    ]);
+    assert.doesNotMatch(JSON.stringify(records), /secret|token|\/reset/u);
+  } finally {
+    await registry.closeAll();
+    target.closeAllConnections();
+    await new Promise(resolve => target.close(resolve));
+  }
+});
+
+test("a terminal session's frame load records stop at their limit however often its target goes away", () => {
+  const records = [];
+  const frameLoads = createPreviewFrameLoadRecorder(record => records.push(record));
+  const pageLoad = { headers: { "sec-fetch-dest": "document" } };
+  for (let outage = 0; outage < PREVIEW_FRAME_LOAD_RECORD_LIMIT * 2; outage += 1) {
+    frameLoads.startingPageServed(pageLoad);
+    frameLoads.pageServed(pageLoad, 200);
+  }
+  assert.equal(records.length, PREVIEW_FRAME_LOAD_RECORD_LIMIT);
 });
 
 test("launch preview proxy gives reused HTTP connections the configured request idle window", { timeout: 15000 }, async () => {

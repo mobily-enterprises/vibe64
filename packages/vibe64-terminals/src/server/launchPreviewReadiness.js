@@ -7,6 +7,7 @@ import { readTerminalSession, updateTerminalSessionMetadata } from "@local/vibe6
 import { vibe64SessionDebugDurationMs, vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
 import { readPreviewLocatorSource } from "./previewLocator.js";
+import { writePreviewDiagnostic } from "./launchPreviewDiagnostics.js";
 import { LAUNCH_RESTART_REASON_SOURCE_CHANGED, launchRestartRecoveryForTerminal } from "./launchRestart.js";
 import { previewEditorOrigin, previewPublicOriginForLaunch } from "./previewPublicOrigin.js";
 import { previewAuthForLaunchTerminal, previewIdentityCommandRunnerForLaunchTerminal } from "./launchPreviewAuth.js";
@@ -348,6 +349,12 @@ async function ensureLaunchPreviewProxy({
       sessionId,
       targetHref
     }),
+    // The launch's latest record stays the launch's: these only join its log.
+    recordFrameLoad: (record) => writePreviewDiagnostic(context.session, {
+      ...record,
+      outputTargetId: terminal?.metadata?.outputTargetId,
+      terminalSessionId: terminal?.id
+    }, { latest: false }),
     sessionId,
     targetHref,
     terminalSessionId: String(terminal?.id || "").trim()
