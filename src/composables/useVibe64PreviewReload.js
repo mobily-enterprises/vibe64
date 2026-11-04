@@ -68,8 +68,8 @@ function useVibe64PreviewReload({ frame, identity, outputs, projectSlug, props }
     if (previewResourceRetryLifecycle !== lifecycle) {
       resetPreviewResourceRecovery(lifecycle);
     }
-    const resourceKind = String(message?.kind || "resource").trim() || "resource";
-    const resourceUrl = String(message?.href || "").trim();
+    const resourceKind = String(message.kind || "resource").trim() || "resource";
+    const resourceUrl = String(message.href || "").trim();
     const willRetry = previewResourceRetryCount < PREVIEW_RESOURCE_RETRY_LIMIT;
     previewDebugLog("resource.failed", { resourceKind, resourceUrl,
       retryCount: previewResourceRetryCount, willRetry });

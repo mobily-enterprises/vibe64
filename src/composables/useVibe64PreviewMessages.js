@@ -1,4 +1,5 @@
 import { onBeforeMount, onBeforeUnmount } from "vue";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
@@ -111,8 +112,9 @@ function useVibe64PreviewMessages({ address, frame, outputs, pick, reload }) {
     return origins.length < 1 || origins.includes(String(event?.origin || ""));
   }
 
-  function previewMessageType(value = {}) {
-    return String(value?.type || "");
+  /** A posted message's type; any window can post anything, null included. */
+  function previewMessageType(value) {
+    return String(normalizeObject(value).type || "");
   }
 
   function isPreviewBridgeMessage(value = {}) {

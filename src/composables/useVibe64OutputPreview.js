@@ -157,7 +157,7 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
   async function publishPreviewState(previewState = {}) {
     const currentSessionId = sessionId.value;
     const currentProjectSlug = projectSlug.value;
-    if (!currentSessionId || !currentProjectSlug || !String(previewState?.route || "").trim()) {
+    if (!currentSessionId || !currentProjectSlug || !String(previewState.route || "").trim()) {
       return false;
     }
     try {
@@ -166,8 +166,8 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
         {
           body: vibe64RealtimeOriginPayload({
             projectSlug: currentProjectSlug,
-            route: String(previewState?.route || "").trim(),
-            title: String(previewState?.title || "").trim()
+            route: String(previewState.route || "").trim(),
+            title: String(previewState.title || "").trim()
           }),
           method: "POST"
         }
@@ -176,7 +176,7 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
     } catch (error) {
       vibe64SessionDebugLog("client.launchPreview.state.publish.error", {
         error: vibe64SessionDebugError(error),
-        route: String(previewState?.route || "").trim(),
+        route: String(previewState.route || "").trim(),
         sessionId: currentSessionId
       });
       return false;

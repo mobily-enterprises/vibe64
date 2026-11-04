@@ -203,7 +203,7 @@ function useVibe64PreviewAddress({ frame, projectSlug, props, targets }) {
   }
 
   function openPreviewRoute(route = {}) {
-    if (!route?.pathTemplate) {
+    if (!route.pathTemplate) {
       return false;
     }
     if (!previewRouteHasParams(route)) {

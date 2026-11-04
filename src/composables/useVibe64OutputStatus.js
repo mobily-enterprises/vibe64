@@ -115,7 +115,7 @@ function useVibe64OutputStatus({
       return setup.diagnostic || "Workspace preparation failed. Expand Preparing workspace to inspect the failure and retry setup.";
     }
     if (outputTargetsResource.isLoading.value) return "";
-    const error = outputTargetsResource.query?.error?.value || null;
+    const error = outputTargetsResource.query.error.value || null;
     return launchStatusErrorText({
       error,
       fallback: outputTargetsResource.loadError.value,
@@ -176,11 +176,9 @@ function useVibe64OutputStatus({
     if (!refreshScopeKey || refreshScopeKey !== launchScopeKey.value) {
       return null;
     }
-    return typeof outputTargetsResource.query?.refetch === "function"
-      ? outputTargetsResource.query.refetch({
-          cancelRefetch: true
-        })
-      : outputTargetsResource.reload();
+    return outputTargetsResource.query.refetch({
+      cancelRefetch: true
+    });
   }
 
   // Runs the session's declared setup when its stored state is `status`: a

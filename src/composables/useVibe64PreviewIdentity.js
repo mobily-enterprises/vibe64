@@ -151,7 +151,7 @@ function useVibe64PreviewIdentity({ frame, outputs, props }) {
   }
 
   function selectPreviewConfiguredIdentity(identity = {}) {
-    const identityName = String(identity?.name || "").trim();
+    const identityName = String(identity.name || "").trim();
     if (!identityName) {
       return false;
     }
