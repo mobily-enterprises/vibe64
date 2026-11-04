@@ -8,10 +8,11 @@ import {
 import { defineComponent, h, markRaw, onBeforeUnmount, ref, shallowRef } from "vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 
-function resolvedModuleComponent(moduleValue) {
-  return moduleValue?.default || moduleValue;
-}
-
+/**
+ * A component that loads its module on first render, showing its loading state and, when the module fails to
+ * load, a retry and the shell's reload.
+ * @param {{ label?: string, loader: () => Promise<{ default: import("vue").Component }>, minHeight?: string }} options
+ */
 function defineVibe64AsyncComponent({
   label = "Vibe64 module",
   loader,
@@ -38,7 +39,7 @@ function defineVibe64AsyncComponent({
         loading.value = true;
         error.value = null;
         try {
-          const loaded = resolvedModuleComponent(await loader());
+          const loaded = (await loader()).default;
           if (disposed || activeRequestId !== requestId) {
             return false;
           }
@@ -50,7 +51,7 @@ function defineVibe64AsyncComponent({
           }
           component.value = null;
           error.value = loadError;
-          asyncModuleRecoveryRuntime?.notify?.(loadError, {
+          asyncModuleRecoveryRuntime.notify(loadError, {
             label,
             stale: isDynamicImportError(loadError)
           });
@@ -88,7 +89,7 @@ function defineVibe64AsyncComponent({
             : `Loading ${label}.`,
           minHeight,
           stale,
-          onReload: () => asyncModuleRecoveryRuntime?.reload?.(),
+          onReload: () => asyncModuleRecoveryRuntime.reload(),
           onRetry: load
         });
       };

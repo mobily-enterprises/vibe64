@@ -32,8 +32,8 @@ export default function getPlacements() {
 // Dashboard section links state their visibility once, in props.visibleWhen,
 // for both the desktop outlet and the mobile section list.
 function dashboardSectionVisibility(placement) {
-  return placement?.owner === "app-dashboard" && placement.target === "page.section-nav" && !placement.when &&
-    typeof placement.props?.visibleWhen === "function" ? { ...placement, when: placement.props.visibleWhen } : placement;
+  return placement.owner === "app-dashboard" && placement.target === "page.section-nav" && !placement.when &&
+    placement.props.visibleWhen ? { ...placement, when: placement.props.visibleWhen } : placement;
 }
 
 function uniqueDashboardSectionPlacements(placements = []) {
@@ -54,11 +54,11 @@ function uniqueDashboardSectionPlacements(placements = []) {
   });
 }
 
-function dashboardSectionPlacementKey(placement = {}) {
+function dashboardSectionPlacementKey(placement) {
   if (
-    placement?.kind !== "link" ||
-    placement?.owner !== "app-dashboard" ||
-    placement?.target !== "page.section-nav"
+    placement.kind !== "link" ||
+    placement.owner !== "app-dashboard" ||
+    placement.target !== "page.section-nav"
   ) {
     return "";
   }
@@ -66,11 +66,11 @@ function dashboardSectionPlacementKey(placement = {}) {
   return destination ? `${placement.owner}:${placement.target}:${destination}` : "";
 }
 
-function dashboardSectionPlacementDestination(placement = {}) {
+function dashboardSectionPlacementDestination(placement) {
   const raw = String(
-    placement?.props?.scopedSuffix ||
-    placement?.props?.unscopedSuffix ||
-    placement?.props?.to ||
+    placement.props?.scopedSuffix ||
+    placement.props?.unscopedSuffix ||
+    placement.props?.to ||
     ""
   ).trim();
   if (!raw) {
@@ -85,8 +85,8 @@ function dashboardSectionPlacementDestination(placement = {}) {
   return normalized ? `/${normalized}` : "/";
 }
 
-function dashboardSectionPlacementOrder(placement = {}) {
-  const order = Number(placement?.order);
+function dashboardSectionPlacementOrder(placement) {
+  const order = Number(placement.order);
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 

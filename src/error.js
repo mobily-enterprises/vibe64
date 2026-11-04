@@ -2,13 +2,17 @@ import { createDefaultErrorPolicy } from "@jskit-ai/shell-web/client/error";
 
 const ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY = "__vibe64JskitErrorRuntimeLogUnsubscribe";
 
-function errorSummary(error = {}) {
+/**
+ * A reported error's cause, as the console shows it.
+ * @param {any} error the cause JSKIT reported, present whenever this runs
+ */
+function errorSummary(error) {
   return {
-    code: String(error?.code || ""),
-    message: String(error?.message || error || ""),
-    name: String(error?.name || ""),
-    stack: typeof error?.stack === "string" ? error.stack : "",
-    status: Number.isInteger(error?.status) ? error.status : null
+    code: String(error.code || ""),
+    message: String(error.message || error || ""),
+    name: String(error.name || ""),
+    stack: typeof error.stack === "string" ? error.stack : "",
+    status: Number.isInteger(error.status) ? error.status : null
   };
 }
 
@@ -21,11 +25,11 @@ function errorConsoleMessage(payload = {}) {
   ].filter(Boolean).join(" | ") || "JSKIT reported an error.";
 }
 
-function installJskitErrorConsoleTrail(runtime = null) {
-  if (!runtime || typeof runtime.subscribe !== "function") {
-    return;
-  }
-
+/**
+ * Writes every event the error runtime reports to the console.
+ * @param {import("@jskit-ai/shell-web/client/types").ShellErrorRuntime} runtime
+ */
+function installJskitErrorConsoleTrail(runtime) {
   const previousUnsubscribe = globalThis[ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY];
   if (typeof previousUnsubscribe === "function") {
     previousUnsubscribe();
@@ -67,7 +71,11 @@ function installJskitErrorConsoleTrail(runtime = null) {
   });
 }
 
-export default function configureVibe64ErrorRuntime({ runtime } = {}) {
+/**
+ * The app's error presentation, which shell-web reads with its error toolkit.
+ * @param {{ runtime: import("@jskit-ai/shell-web/client/types").ShellErrorRuntime }} toolkit
+ */
+export default function configureVibe64ErrorRuntime({ runtime }) {
   installJskitErrorConsoleTrail(runtime);
 
   return Object.freeze({
