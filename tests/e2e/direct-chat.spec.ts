@@ -2225,6 +2225,8 @@ const PRACTICE_SLUG = `training-${"0123456789abcdef".repeat(2)}`;
 for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "session"], [width, "repository"]] as const)) {
   test(`@phone-header practice project name fits the phone app bar at ${width}px with the ${header} controls`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 800 });
+    // The L plate's one-off pop overhangs the project name while it plays; this test measures the header at rest.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const repository = header === "repository";
     await mockDirectChat(page, {
       creation: { showCreateAction: true },
