@@ -25,7 +25,7 @@ import { destinationIcon, hostOf, packageLabeller, shortCommit } from "./publish
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   state: { type: Object, default: null },
-  dashboardContext: { type: Object, default: () => ({}) },
+  dashboardContext: { type: /** @type {import("vue").PropType<import("./types.js").PublishDashboardContext>} */ (Object), required: true },
   call: { type: Function, required: true }
 });
 const emit = defineEmits(["update:modelValue", "confirm", "dry-run-started", "accounts"]);
@@ -47,8 +47,9 @@ const baseline = computed(() => props.state?.baseline || {});
 const keys = computed(() => props.state?.keys || {});
 const labels = computed(() => Object.fromEntries((props.state?.destinations || []).map((entry) => [entry.id, entry.label])));
 const packageLabel = computed(() => packageLabeller(props.state?.packaging?.packages || []));
-const sessionId = computed(() => String(props.dashboardContext?.sessionId || ""));
-const canSave = computed(() => typeof props.dashboardContext?.requestSaveWork === "function");
+const sessionId = computed(() => String(props.dashboardContext.sessionId || ""));
+// readable-check: allow method-probe - optional operation: a dashboard outside a session has no Save, so step 1 offers none
+const canSave = computed(() => typeof props.dashboardContext.requestSaveWork === "function");
 const blocked = computed(() => Boolean(plan.value?.preflight?.blocked));
 const needsAck = computed(() => (plan.value?.preflight?.checks || []).filter((check) => !check.ok && check.severity === "ack"));
 const ready = computed(() => Boolean(plan.value && !blocked.value && needsAck.value.every((check) => acknowledged.value.includes(check.id))));
@@ -145,7 +146,8 @@ async function run(name, work) {
 const prepare = () => run("prepare", async () => {
   const chosen = Object.fromEntries(changes.value.map((entry) => [entry.id, versions.value[entry.id]]));
   prepared.value = await props.call("/release/prepare", { body: { sessionId: sessionId.value, versions: chosen, notes: notes.value }, refreshAfter: false });
-  await props.dashboardContext?.refreshSessionWork?.();
+  // readable-check: allow optional-call - optional operation: a dashboard outside a session has no session work to refresh
+  await props.dashboardContext.refreshSessionWork?.();
 });
 
 async function save() {

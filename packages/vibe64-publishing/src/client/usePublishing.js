@@ -14,7 +14,14 @@ function publishingRequest(suffix = "", { method = "GET", body } = {}) {
   });
 }
 
-function usePublishing({ active = () => true, request = publishingRequest } = {}) {
+/**
+ * The Publish page's state and calls. `active` is false while the page is hidden, which reads nothing then.
+ * @param {{
+ *   active: () => boolean,
+ *   request?: typeof publishingRequest
+ * }} options
+ */
+function usePublishing({ active, request = publishingRequest }) {
   const state = ref(null);
   const loading = ref(false);
   const loadError = ref("");
@@ -54,7 +61,8 @@ function usePublishing({ active = () => true, request = publishingRequest } = {}
   // Immediate: a page opened while a release runs keeps following it.
   watch(busy, (running) => {
     clearInterval(timer);
-    timer = running ? setInterval(refresh, 2000) : null;
+    timer = null;
+    if (running) timer = setInterval(refresh, 2000);
   }, { immediate: true });
   onBeforeUnmount(() => clearInterval(timer));
 
