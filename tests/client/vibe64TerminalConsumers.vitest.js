@@ -19,6 +19,7 @@ const longRunningTerminalPath = path.resolve(
 const openCodeTerminalConsumerPath = path.resolve(
   "src/components/studio/Vibe64NativeAgentSession.vue"
 );
+const openCodeTerminalSessionPath = path.resolve("src/composables/useNativeAgentTerminalSession.js");
 const temporaryActionTerminalPath = path.resolve(
   "src/components/studio/Vibe64TemporaryActionTerminal.vue"
 );
@@ -39,7 +40,7 @@ describe("Vibe64 terminal consumers", () => {
     const launchState = readFileSync(launchTerminalStatePath, "utf8");
     const launchSurfaceState = readFileSync(launchTerminalSurfaceStatePath, "utf8");
     const longRunning = readFileSync(longRunningTerminalPath, "utf8");
-    const openCode = readFileSync(openCodeTerminalConsumerPath, "utf8");
+    const openCode = readFileSync(openCodeTerminalConsumerPath, "utf8") + readFileSync(openCodeTerminalSessionPath, "utf8");
     const runtimeHost = readFileSync(runtimeHostPath, "utf8");
     const autopilotState = readFileSync(autopilotStatePath, "utf8");
     const temporaryAction = readFileSync(temporaryActionTerminalPath, "utf8");

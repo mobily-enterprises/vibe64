@@ -3,11 +3,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const componentPath = path.resolve("src/components/studio/Vibe64CodexSession.vue");
+const sessionStatePath = path.resolve("src/composables/useCodexTerminalSession.js");
+const nativeComponentPath = path.resolve("src/components/studio/Vibe64NativeAgentSession.vue");
+const nativeSessionStatePath = path.resolve("src/composables/useNativeAgentTerminalSession.js");
 const presentationPath = path.resolve("src/composables/useCodexTerminalPresentation.js");
 
 describe("Vibe64CodexSession", () => {
   it("composes Codex behavior around the canonical terminal element", () => {
-    const source = readFileSync(componentPath, "utf8");
+    const source = readFileSync(componentPath, "utf8") + readFileSync(sessionStatePath, "utf8");
 
     expect(source).toContain("<Vibe64InteractiveTerminal");
     expect(source).toContain("useVibe64Terminal");
@@ -27,8 +30,8 @@ describe("Vibe64CodexSession", () => {
   });
 
   it("shares the agent terminal panels and shows one start icon for panel and button", () => {
-    const source = readFileSync(componentPath, "utf8");
-    const native = readFileSync(path.resolve("src/components/studio/Vibe64NativeAgentSession.vue"), "utf8");
+    const source = readFileSync(componentPath, "utf8") + readFileSync(sessionStatePath, "utf8");
+    const native = readFileSync(nativeComponentPath, "utf8") + readFileSync(nativeSessionStatePath, "utf8");
     for (const file of [source, native]) {
       expect(file).toContain("<Vibe64AgentTerminalStartPanel");
       expect(file).toContain("<Vibe64AgentTerminalDropOverlay");
