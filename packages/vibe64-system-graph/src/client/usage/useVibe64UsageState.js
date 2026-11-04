@@ -4,11 +4,36 @@ import { useRoute, useRouter } from "vue-router";
 import { sameQuery, sameUsageState, usageQueryFor, usageStateFromQuery } from "./usageModel.js";
 
 /**
+ * A request from elsewhere in the session to open Usage: a recording's request, or an entry picked in Preview.
+ * @typedef {object} UsageOpenRequest
+ * @property {string} [mode]
+ * @property {string} [entryId]
+ * @property {string} [recordingId]
+ * @property {string} [requestId]
+ * @property {number} nonce a new request for the same place opens it again
+ */
+
+/**
+ * What Usage's entry list looks for: Show usage's search and kind, or an entry opened from elsewhere.
+ * @typedef {object} UsageFindRequest
+ * @property {string} [q]
+ * @property {string} [kind]
+ * @property {string} [entryId]
+ */
+
+/**
+ * A way back to Architecture from the source viewer, carrying where Usage was.
+ * @typedef {object} ArchitectureRestoreRequest
+ * @property {Partial<import("./usageModel.js").UsageState>} [usage]
+ * @property {number} sequence
+ */
+
+/**
  * The Architecture view's Map | Usage state. The system dashboard route's query keeps Usage's state,
  * so a reload reopens the same entry, mode, subsystem, recording and request; requests to open or
- * restore Usage from elsewhere replace it.
+ * restore Usage from elsewhere replace it, and switching to Map remembers Usage for the way back.
  * @param {object} options
- * @param {{ active: boolean, usageOpenRequest: object | null, restoreRequest: object | null }} options.props the view's props
+ * @param {{ active: boolean, usageOpenRequest: UsageOpenRequest | null, restoreRequest: ArchitectureRestoreRequest | null }} options.props the view's props
  * @param {import("vue").Ref<object | null>} options.architecture the loaded architecture snapshot
  * @param {() => void} options.onMapShown called when the view returns to Map
  */
@@ -55,7 +80,20 @@ function useVibe64UsageState({ props, architecture, onMapShown }) {
     usageState.value = usageStateFromQuery({ ...request.usage, view: "usage" });
   }, { immediate: true });
 
-  return { usageState, usageMounted, usageFind, usageSnapshotKey };
+  // Map | Usage: leaving Usage remembers its state, so returning (or Show usage) resumes it.
+  let usageMemory = null;
+  function setArchitectureView(view) {
+    if (!view || view === usageState.value.view) return;
+    if (view === "map") { usageMemory = usageState.value; usageState.value = usageStateFromQuery({}); }
+    else usageState.value = usageMemory || usageStateFromQuery({ view: "usage" });
+  }
+  function showUsage({ q = "", kind = "" }) {
+    const mode = usageMemory && usageMemory.mode !== "recording" ? usageMemory.mode : "calls";
+    usageState.value = usageStateFromQuery({ view: "usage", mode });
+    usageFind.value = { q, kind };
+  }
+
+  return { usageState, usageMounted, usageFind, usageSnapshotKey, setArchitectureView, showUsage };
 }
 
 export { useVibe64UsageState };
