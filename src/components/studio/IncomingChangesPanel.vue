@@ -8,7 +8,7 @@ import { mdiArrowLeft, mdiRefresh, mdiSourceMerge, mdiArchiveOutline } from "@md
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { vibe64ApiError, vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
-import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
+import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const route = useRoute();
@@ -35,12 +35,15 @@ const pending = ref(false);
 const uncertain = ref(false);
 const conflict = ref(null);
 const repair = ref(null);
-const openingRepair = ref(false);
 const loadError = computed(() => resource.loadError.value || vibe64ResourceResponseError(resource.data.value));
 watch(() => [path.value, sessionId.value], () => {
   confirmation.value = null; uncertain.value = false; conflict.value = null; repair.value = null;
 });
-const actionDisabled = computed(() => pending.value || openingRepair.value || uncertain.value || resource.isFetching.value || props.dashboardContext.sourceOperationsSuspended);
+const actionDisabled = computed(() => pending.value || uncertain.value || resource.isFetching.value || props.dashboardContext.sourceOperationsSuspended);
+// What the AI's fix needs from the Merge that met the conflict: only this page saw it.
+const conflictInput = computed(() => conflict.value && {
+  review: conflict.value.review, conflictPaths: conflict.value.conflictPaths, checkpointCommit: conflict.value.checkpointCommit
+});
 
 function navigate(query) { return router.push({ query: { ...route.query, ...query } }); }
 function back() {
@@ -73,23 +76,10 @@ async function apply() {
       repair.value = null;
       if (error.code === "vibe64_incoming_merge_conflict") {
         conflict.value = { ...error.details, review: reviewed.review };
-      } else uncertain.value = true;
+      } else if (error.code !== "vibe64_ai_task_active") uncertain.value = true;
     }
     feedback.error(error, "The result was not confirmed. Refresh Incoming changes before trying again.");
   } finally { pending.value = false; }
-}
-async function fixConflict() {
-  if (actionDisabled.value || !conflict.value || props.dashboardContext.assistantFixAllowed === false ||
-      typeof props.dashboardContext.requestTemporaryAi !== "function") return;
-  const { review, conflictPaths, checkpointCommit } = conflict.value;
-  openingRepair.value = true;
-  try {
-    await props.dashboardContext.requestTemporaryAi({ code: "vibe64_incoming_merge_conflict", title: "Resolve Incoming merge",
-      error: [`Receiving repository: ${review.repository}; target ${review.targetBranch} at ${review.targetHead}.`,
-        `Contribution vibe64-incoming/${review.id} at ${review.activeHead}.`,
-        `Original receiving work is preserved by checkpoint ${checkpointCommit}.`,
-        `Conflicting files: ${JSON.stringify(conflictPaths)}.`].join("\n") });
-  } finally { openingRepair.value = false; }
 }
 async function reviewRepair() {
   if (actionDisabled.value || !entry.value?.review) return;
@@ -168,9 +158,12 @@ async function refresh() {
           </div>
           <v-alert v-if="conflict" type="warning" variant="tonal">
             These files need repair in this receiving session: {{ conflict.conflictPaths?.join(', ') }}.
-            Your original work has a private checkpoint. AI completion does not merge or push anything.
+            Your original work has a private checkpoint. The AI's fix does not merge or push anything.
             <div class="d-flex flex-wrap ga-2 mt-2">
-              <Vibe64TemporaryAiFixAction :pending="openingRepair" :disabled="actionDisabled || dashboardContext.assistantFixAllowed === false || typeof dashboardContext.requestTemporaryAi !== 'function'" @click="fixConflict" />
+              <Vibe64AiTaskButton
+                :allowed="!actionDisabled && dashboardContext.assistantFixAllowed !== false" :input="conflictInput"
+                kind="incoming-merge" title="Fix these conflicts with the AI" @done="reviewRepair"
+              />
               <v-btn height="48" variant="tonal" :disabled="actionDisabled" @click="reviewRepair">Review resolved conflicts</v-btn>
             </div>
           </v-alert>

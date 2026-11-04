@@ -20,12 +20,12 @@
         <v-btn :disabled="!enabled || resource.isFetching.value" size="small" variant="text" @click="resource.reload()">
           {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
         </v-btn>
-        <Vibe64TemporaryAiFixAction
+        <Vibe64AiTaskButton
           v-if="!updateFirst"
-          :disabled="askDisabled"
-          :pending="asking"
-          title="Open Temporary AI to resolve project setup"
-          @click="ask('repair')"
+          :allowed="!askDisabled"
+          :input="{ mode: 'repair' }"
+          kind="project-setup"
+          title="Fix project setup with the AI"
         />
       </div>
     </v-alert>
@@ -84,7 +84,7 @@
           </div>
         </div>
         <p v-if="!groups.length">No starters are configured for this installation yet.</p>
-        <v-btn :disabled="askDisabled" variant="text" @click="ask('create')">Start through conversation</v-btn>
+        <v-btn :disabled="askDisabled" variant="text" @click="ask('create', $event)">Start through conversation</v-btn>
       </template>
       <template v-else-if="state === 'adoption'">
         <p class="project-onboarding__eyebrow">Bring your project</p>
@@ -99,11 +99,11 @@
           :disabled="askDisabled"
         />
         <div class="project-onboarding__actions">
-          <v-btn :disabled="askDisabled || !purpose.trim()" color="primary" @click="ask('adopt')">Set up project</v-btn>
-          <v-btn :disabled="askDisabled" variant="text" @click="ask('inspect')">Inspect it for me</v-btn>
+          <v-btn :disabled="askDisabled || !purpose.trim()" color="primary" @click="ask('adopt', $event)">Set up project</v-btn>
+          <v-btn :disabled="askDisabled" variant="text" @click="ask('inspect', $event)">Inspect it for me</v-btn>
         </div>
       </template>
-      <p v-if="pending" role="status">{{ applying ? 'Adding the starter to this session…' : 'Opening Temporary AI…' }}</p>
+      <p v-if="pending" role="status">{{ applying ? 'Adding the starter to this session…' : 'Opening the AI…' }}</p>
     </section>
   </div>
 </template>
@@ -113,7 +113,8 @@ import { computed, inject, onBeforeUnmount, ref, watch, watchEffect } from "vue"
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { projectOnboardingRequest } from "@local/vibe64-project/shared/onboardingRequest";
+import { VIBE64_AI_TASKS_KEY, Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
+import { AI_TASK_PHASES } from "@local/vibe64-ai-tasks/shared";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
@@ -126,16 +127,15 @@ import {
   vibe64SessionEventMatchesScope,
   vibe64SessionQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
-import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 
 const props = defineProps({
   active: Boolean,
   archived: Boolean,
   busy: Boolean,
   canAsk: Boolean,
-  requestTemporaryAi: { type: Function, required: true },
   sessionId: { type: String, required: true }
 });
+const aiTasks = inject(VIBE64_AI_TASKS_KEY);
 // Setup is inspected again after a turn and after each Update outcome, so a
 // repair waiting for Update is offered against the updated session.
 const SETUP_RECHECK_REASONS = [
@@ -144,7 +144,6 @@ const SETUP_RECHECK_REASONS = [
 const projectSlug = useVibe64ProjectSlug();
 const purpose = ref("");
 const applying = ref("");
-const asking = ref(false);
 let disposed = false;
 onBeforeUnmount(() => { disposed = true; });
 const enabled = computed(() => props.active && !props.archived && Boolean(props.sessionId));
@@ -209,7 +208,7 @@ watchEffect(() => {
 onBeforeUnmount(() => {
   if (colleaguePreview?.value === displayedPreview) colleaguePreview.value = null;
 });
-const pending = computed(() => Boolean(applying.value || asking.value));
+const pending = computed(() => Boolean(applying.value || aiTasks.starting));
 const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);
 const askDisabled = computed(() => pending.value || !enabled.value || !props.canAsk);
 const groups = computed(() => {
@@ -248,18 +247,16 @@ async function apply(template) {
   }
 }
 
-async function ask(kind) {
-  if (askDisabled.value || kind === "repair" && updateFirst.value) return;
-  const inspection = onboarding.value?.inspection;
-  const diagnostic = loadError.value || inspection?.diagnostics.map(({ message }) => message).join(" ");
-  const request = projectOnboardingRequest(kind, { purpose: purpose.value, diagnostic, nextAction: inspection?.nextAction });
-  asking.value = true;
-  try {
-    await props.requestTemporaryAi(request);
-  } finally {
-    asking.value = false;
-  }
+// Starting, adopting or inspecting the project is an AI task too; its window holds the conversation.
+function ask(mode, event) {
+  if (askDisabled.value) return;
+  void aiTasks.start("project-setup", /** @type {HTMLElement} */ (event.currentTarget), { mode, purpose: purpose.value });
 }
+
+// A finished setup task changed the project: read its setup again.
+watch(() => aiTasks.task?.kind === "project-setup" && aiTasks.task.phase === AI_TASK_PHASES.DONE, (done) => {
+  if (done) void resource.reload();
+});
 
 watch(() => props.sessionId, () => { purpose.value = ""; });
 watch(() => props.busy, (busy, previous) => {

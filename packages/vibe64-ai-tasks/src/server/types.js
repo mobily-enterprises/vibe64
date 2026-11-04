@@ -4,6 +4,9 @@
  * @property {string} summary one line, shown in every view
  * @property {string} details what Details expands to
  * @property {object} facts what the kind's brief and check read
+ * @property {string} [title] names this task when its kind covers requests that read differently
+ * @property {"fix"|"task"} [noun] the same, for Cancel's label
+ * @property {string} [opening] the same, for the first message the person sees
  */
 
 /**

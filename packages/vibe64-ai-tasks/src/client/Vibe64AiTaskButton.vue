@@ -17,10 +17,11 @@
 </template>
 
 <script setup>
-import { computed, inject } from "vue";
+import { computed, inject, watch } from "vue";
 import { mdiArrowRight, mdiRobotOutline } from "@mdi/js";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { VIBE64_AI_TASKS_KEY } from "./aiTaskKey.js";
+import { AI_TASK_PHASES } from "../shared/aiTaskPhases.js";
 
 const props = defineProps({
   kind: {
@@ -43,6 +44,8 @@ const props = defineProps({
   }
 });
 
+// A view reloads what its fix changed once the fix is proved Done.
+const emit = defineEmits(["done"]);
 const tasks = /** @type {import("./useAiTaskHost.js").AiTaskHost} */ (inject(VIBE64_AI_TASKS_KEY));
 const own = computed(() => tasks.task?.kind === props.kind ? tasks.task : null);
 const linked = computed(() => Boolean(own.value));
@@ -52,6 +55,10 @@ const label = computed(() => {
   return tasks.projection.ended ? WORDS.button.result : WORDS.button.busy;
 });
 const disabled = computed(() => !own.value && (!props.allowed || tasks.starting));
+
+watch(() => own.value?.phase === AI_TASK_PHASES.DONE ? own.value.id : "", (doneId) => {
+  if (doneId) emit("done");
+});
 
 /** @param {MouseEvent} event */
 function activate(event) {

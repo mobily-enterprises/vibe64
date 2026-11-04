@@ -1,16 +1,20 @@
 # Fix a problem with AI in the AI task window
 
-When Vibe64 offers **Fix it with AI** on an Update, Save, workspace preparation or
-preview sign-in failure, the whole fix happens in one window: the problem, the
-conversation with the AI, what Vibe64 is doing, and the result. You close it once the
-fix is **Done** or **Not done**. It can't end any other way. These four use this
-window now; other **Fix it with AI** repairs still open a temporary chat
+When Vibe64 offers **Fix it with AI** on an Update, Save, workspace preparation,
+preview sign-in, incoming merge or project setup problem, the whole fix happens in
+one window: the problem, the conversation with the AI, what Vibe64 is doing, and the
+result. Starting, adopting or inspecting a project from its setup screen uses the
+same window. You close it once the task is **Done** or **Not done**. It can't end any
+other way. Other **Fix it with AI** repairs still open a temporary chat
 ([Choose the AI for a temporary chat](temporary-chats.md)) until they move across.
 
 ## Open it
 
 Choose **Fix it with AI** on the Update, Save or workspace preparation notice, on the
-Update error in Repository, or under a failed identity in Preview's identity menu. The button says **Opening…** while it starts, **Being fixed… →** while
+Update error in Repository, under a failed identity in Preview's identity menu, on an
+incoming merge's conflicts, or on **Project setup needs attention**. On the setup
+screen, **Start through conversation**, **Set up project** and **Inspect it for me**
+open it too. The button says **Opening…** while it starts, **Being fixed… →** while
 a fix is running, and **See result →** when a fix has ended and waits for you. In
 those last two states it opens the same window again; it never starts a second fix.
 
@@ -33,6 +37,8 @@ Two views sit under the problem, and only one shows at a time:
   | Save | **The AI repairs what stopped Save** | **Vibe64 runs Save** |
   | Workspace preparation | **The AI repairs the workspace** | **Vibe64 prepares the workspace** |
   | Preview sign-in | **The AI repairs the app's seed** | **Vibe64 signs in as this identity** |
+  | Incoming merge | **The AI repairs the conflicting files** | **Vibe64 builds the repaired merge** |
+  | Project setup | **The AI sets up the project** | **Vibe64 inspects the project** |
 
   Choose **Update output**, **Save output** or **Preparation output** to read what
   the run printed.
@@ -69,6 +75,8 @@ can be done next.
 | Preparation needs your choice | Make it on the preparation notice, then **Check now**. |
 | Preview isn't running | Start Preview, then **Check now**. |
 | This preview can't switch identity | Restart Preview, then **Check now**. |
+| The contribution or its target changed | Refresh Incoming changes and merge again. |
+| Project setup waits for Update | Fix Update first, then **Check now**. |
 
 **Review resolved conflicts** opens the same review as the Update error (see
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts)).
@@ -80,7 +88,9 @@ When you confirm it, the window runs Update as this fix's own check.
 Update, Save or workspace preparation again, or signs in as the identity, by itself,
 on the server, whether or not anyone is watching. You never press another button to
 finish a fix: a fixed Save pushes the work. A fixed sign-in proves the app accepts the
-identity; choose it again in Preview's identity menu to sign Preview in. If the run
+identity; choose it again in Preview's identity menu to sign Preview in. A fixed
+incoming merge shows the repaired merge on Incoming changes; merging it stays your
+reviewed choice. Project setup is Done once Vibe64's own inspection needs nothing. If the run
 still fails, the fix goes back to the same conversation with what failed, up to three
 attempts. Work you saved yourself meanwhile counts: when nothing is left to save,
 the Save fix is Done.
@@ -112,15 +122,16 @@ If a fix ends while the window is hidden, a message offers **See result**.
 in the session. **Cancel fix** confirms; **Keep going** carries on. Cancelling always
 works. The button then says **Cancelling…** until Vibe64 confirms it.
 
-Update, Save, workspace preparation and a sign-in can't be interrupted, so a Cancel
-during the check says so and the fix ends as soon as that run finishes.
+Vibe64's own checks (running Update, Save or workspace preparation, signing in,
+building a repaired merge, inspecting the project) can't be interrupted, so a Cancel
+during one says so and the task ends as soon as that run finishes.
 
 ## One at a time
 
 A session has one AI task at a time, whoever started it. Members see the same window
 live, and any of them can answer, Cancel or Close. While a fix is running, Vibe64
-refuses Save, Update and **Prepare workspace** with a message; try them again when it
-ends. While Update is failed, workspace preparation's fix waits for Update's: Update
+refuses Save, Update, **Prepare workspace** and an incoming Merge or Discard with a
+message; try them again when it ends. While Update is failed, workspace preparation's fix waits for Update's: Update
 prepares the workspace again itself. Connecting,
 disconnecting or switching an AI account never stops or waits on a running fix.
 

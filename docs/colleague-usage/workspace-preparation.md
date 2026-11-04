@@ -105,7 +105,9 @@ keep the application's real setup, launch and database commands. Node's default
 `Connected development` declaration selects `npm` treatment only; it adds no
 connected repositories and performs no dependency installation by itself.
 
-After the declaration is repaired, select **Recheck setup**. If workspace
+After a manual repair, select **Recheck setup**; a **Fix it with AI** task on the
+warning rechecks setup itself and is **Done** only once it no longer needs
+attention (see [AI tasks](ai-tasks.md)). If workspace
 preparation is still required, **Prepare workspace** or **Retry** runs the
 declared recipe; inspect it before rerunning database or installation steps.
 The same recovery applies on desktop and mobile. Colleague can explain the

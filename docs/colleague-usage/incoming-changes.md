@@ -41,27 +41,28 @@ rebuilds generated Genesis maps from the proposed merged source; generated-only
 conflicts do not need AI or manual edits. Authored conflicts
 leave the remote target and receiving session files unchanged. Vibe64 retains a
 private checkpoint of that session's complete work before offering **Fix it with
-AI**. The existing Temporary AI chat starts with Senior in this receiving session;
-its Senior model and account must be available. It uses the working session
-currently selected in the receiving project and receives the exact reviewed
-commits and conflicting paths. It repairs those
-working files without committing, rebasing or pushing. You can also repair
-them manually. Preserve unrelated work and inspect both sides' intended behavior.
+AI**. It opens the [AI task window](ai-tasks.md) in the working session currently
+selected in the receiving project, with the exact reviewed commits and conflicting
+paths. The AI repairs those working files without committing, rebasing or pushing.
+You can also repair them manually. Preserve unrelated work and inspect both sides'
+intended behavior. While the fix runs, Merge and Discard are refused with a message.
 
-When repair finishes, return to **Incoming changes → Review resolved conflicts**.
-This displays the proposed merge using the repaired conflicting files and the
+When the AI finishes, Vibe64 builds the repaired merge itself; a file that still
+holds conflict markers goes back to the AI. The fix is **Done** when the repaired
+merge is ready, and the page then shows it, as **Review resolved conflicts** does
+after a manual repair. This displays the proposed merge using the repaired conflicting files and the
 ordinary merge result for every other authored file, with regenerated Genesis
 maps included in the diff. Do not hand-edit generated maps. If regeneration
 fails, the merge stops without pushing or changing your session files.
 Unrelated local changes are excluded.
 Review that diff, then explicitly choose **Merge into <target> → Merge contribution**.
 Vibe64 rechecks the candidate, receiving worktree/index/HEAD and both remote heads.
-Changed inputs require another review. AI completion alone never pushes or
-proves a merge. The merge preserves both parents; local files, staged changes and
+Changed inputs require another review. A Done fix never pushes or merges by
+itself. The merge preserves both parents; local files, staged changes and
 the contribution branch remain available. Use ordinary Update to reconcile the
 receiving session afterwards.
 
-Temporary chat and private checkpoints retain their existing recovery lifecycle.
+Private checkpoints retain their existing recovery lifecycle.
 Reloading clears the transient merge review: refresh, try Merge to rediscover any
 remaining conflict, then review the resolved files again. This does not restart
 AI or discard its edits. After an uncertain response, **Refresh** inspects Git before another action is enabled.

@@ -202,8 +202,9 @@ mounted and running; returning refreshes inspection through the same resource.
 An admitted starter operation may finish while hidden or after leaving the
 project, but it does not request another inspection from the hidden or disposed
 view. Returning to Preview performs its normal fresh inspection.
-Finishing a temporary coding conversation refreshes visible setup for that exact
-project and session, including work delegated by Colleague. Once setup is ready,
+Finishing a temporary coding conversation, or a `project-setup` AI task ending
+Done, refreshes visible setup for that exact project and session, including work
+delegated by Colleague. Once setup is ready,
 the same pane reveals its outputs without a page reload. Streaming messages and
 other sessions do not cause setup inspections.
 
@@ -222,8 +223,10 @@ Selection waits up to ten seconds for brief source-lock contention, then
 rechecks the active session and assistant work before importing.
 The browser sends only the selected catalogue ID. Neither session startup nor
 inspection runs application verification or workspace preparation.
-All onboarding conversation actions use the session's existing Temporary AI
-workspace, opening a new task with the current diagnostics or entered purpose.
+All onboarding conversation actions start the `project-setup`
+[AI task](../conversation/ai-tasks.md) with the request's mode and entered purpose;
+the server reads the current diagnostics and builds the same request itself, and
+the task's check re-reads this inspection until it no longer needs setup.
 Colleague reads the same `vibe64.project.onboarding.read` action for setup state,
 bounded diagnostics, compact available request kinds and configured starter
 identities. An ordinary explanatory read omits the potentially large delegated

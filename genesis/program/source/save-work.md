@@ -393,8 +393,8 @@ merged source. Generated-only conflicts therefore need no AI. Regeneration
 failure leaves receiving source and remote heads untouched. Final merge parents
 remain the original target and contribution, not the temporary normalized input.
 Authored conflicts retain a private checkpoint through the original Update checkpoint
-owner before offering the existing Temporary AI workspace in the receiving
-session. Incoming's explicit repair review reuses Update's conflict-path tree
+owner before offering the `incoming-merge` [AI task](../conversation/ai-tasks.md)
+in the receiving session. Incoming's explicit repair review reuses Update's conflict-path tree
 overlay; it changes neither the real index nor worktree. The candidate combines
 only conflicting local paths with the native merge result for other files, then
 regenerates artifacts. Both review and final Merge recompute that generated tree;
@@ -404,9 +404,13 @@ Git pathspec syntax, so a conflict filename cannot select unrelated work.
 The transient review carries exact candidate, source tree, HEAD and index
 identities, recomputed by the server rather than trusted as client evidence.
 Final Merge rechecks those identities and both remote heads, then creates the
-ordinary two-parent commit. Temporary AI starts with Senior and does not run
-Update or publish on completion. Restart/reload preserves the existing chat and
-checkpoint owners; fresh Git/source review replaces the transient candidate.
+ordinary two-parent commit. The task's check runs the explicit repair review with
+the task's identity and refuses a candidate whose added lines still hold conflict
+markers; it never merges, runs Update or publishes. When it ends Done the page
+shows that review. Incoming Merge, Discard and review refuse to start while a
+repository AI task runs, apart from that task's own check. Restart/reload
+preserves the task and checkpoint owners; fresh Git/source review replaces the
+transient candidate.
 No Incoming queue, repair-status store or second Git engine is introduced.
 The contribution branch remains after integration. Discard uses a guarded atomic
 create-and-delete push; only an explicit lack of atomic support permits copying

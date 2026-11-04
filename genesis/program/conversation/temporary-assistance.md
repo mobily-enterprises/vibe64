@@ -603,25 +603,24 @@ status and matching connection error; drafts stay editable and Send waits for
 the connection. A failed generated repair request shows its concise description
 in the composer while retaining the full request and message identity for retry.
 
-Every product-owned repair entry, including project setup warnings, uses the
+Every product-owned repair entry not yet moved to [AI tasks](ai-tasks.md) uses the
 shared Fix it with AI control and temporary-task sender. It opens, selects, and
 focuses a separate Temporary AI task immediately, even while the main assistant
 is working. These entries and subsystem generation check the viewer's effective
 Fix it with AI access, independently of the main chat's mode or personal
 connection. Without it the control stays visible but disabled, and its title
 gives the role's reason or says Fix it with AI is unavailable.
-Onboarding's create, inspect and adoption actions use that same
-temporary-chat path. Each onboarding request opens a fresh chat. The task
-shows a concise user-facing repair request and a compact status heading while
-the AI works. Completion and verification results appear after the task stops.
+Onboarding's create, inspect, adoption and repair requests are AI tasks. A
+temporary task shows a concise user-facing repair request and a compact status
+heading while the AI works. Completion and verification results appear after the task stops.
 Detailed diagnostics remain in the AI request without overwhelming the visible
 user message.
 
 A product-owned recovery action may remember the exact temporary task it
-started and observe that task's terminal result. Workspace preparation uses
-this narrow handoff: after an accepted repair turn completes or fails, Vibe64
-reruns its own safe deterministic preparation operation because a provider
-timeout may arrive after useful edits were made. An unrelated, still-active,
+started and observe that task's terminal result. Workspace preparation used
+this narrow handoff before it became an AI task: after an accepted repair turn
+completes or fails, Vibe64 reruns its own safe deterministic preparation operation
+because a provider timeout may arrive after useful edits were made. An unrelated, still-active,
 or deliberately interrupted task does nothing. Temporary AI can edit or
 explain, but it never declares the managed operation successful; the managed
 operation's own result remains authoritative and visible.

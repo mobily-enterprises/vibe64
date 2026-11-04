@@ -1,6 +1,6 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { cachedRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
-import { sessionResult } from "./sessionResults.js";
+import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -80,6 +80,7 @@ function createSessionRepositoryReads({ project, terminals }) {
 
   async function changeIncomingContribution(sessionId, input) {
     return sessionResult(async () => {
+      await refuseDuringRepositoryAiTask(await project.createRuntimeWithoutSource(), requiredIncomingSessionId(sessionId), input.aiTaskId);
       const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
         ...input,
         vibe64User: trustedAssistantUser(input)

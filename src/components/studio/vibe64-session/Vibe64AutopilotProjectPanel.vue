@@ -182,7 +182,6 @@
         :archived="props.sessionSelectionArchived"
         :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
         :can-ask="assistantFixAllowed"
-        :request-temporary-ai="startTemporaryAiTask"
         :session-id="selectedAssistantSessionId"
       >
         <Vibe64OutputControls

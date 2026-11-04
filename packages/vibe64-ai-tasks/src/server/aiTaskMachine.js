@@ -33,8 +33,8 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
   const { check } = kind;
   return {
     kind: kind.id,
-    title: kind.title,
-    noun: kind.noun,
+    title: problem.title || kind.title,
+    noun: problem.noun || kind.noun,
     tray: kind.tray,
     steps: [...kind.steps],
     check: {
@@ -65,7 +65,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     diagnostic: "",
     retryKeys: [],
     report: "",
-    pending: { effect: "send", id: sendId, message: kind.brief(problem), display: kind.opening },
+    pending: { effect: "send", id: sendId, message: kind.brief(problem), display: problem.opening || kind.opening },
     turnMessageId: sendId,
     log: [{ at, text: "Vibe64 started this task." }],
     endedBy: null,

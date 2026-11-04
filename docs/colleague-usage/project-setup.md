@@ -10,9 +10,12 @@ You need access to the project and an available coding assistant for delegated w
    reveal Preview from chat.
 2. At **Set up this existing project**, fill **What is this project?** with its
    purpose and what you want to run, then choose **Set up project**. Alternatively,
-   choose **Inspect it for me** to have the coding agent investigate first.
-3. Follow the coding conversation. Setup is finished only after the agent has
-   supplied the required project declarations and normal preparation succeeds.
+   choose **Inspect it for me** to have the coding agent investigate first. Either
+   opens the [AI task window](ai-tasks.md), where you follow the conversation and
+   answer its questions.
+3. When the AI says it has finished, Vibe64 inspects the project itself. The task
+   is **Done** only once setup no longer needs anything; otherwise what is still
+   missing goes back to the same conversation. Normal preparation then runs.
 4. When output controls replace setup, select the intended output and use its
    normal Run control. A successful setup request alone does not mean it is running.
 
@@ -76,8 +79,8 @@ work. Public applications and non-web projects do not need preview accounts.
 3. You can also describe the app directly in the session's main chat. In an
    empty folder that was never set up, the coding agent first initializes Genesis,
    then proposes a Blueprint and the matching Stack components for your answer.
-4. Alternatively, choose **Start through conversation** to open Temporary AI for
-   project creation. Discuss what you want, who uses it and its first useful
+4. Alternatively, choose **Start through conversation** to open the
+   [AI task window](ai-tasks.md) for project creation. Discuss what you want, who uses it and its first useful
    outcome before choosing technology. If no starters are configured, this
    conversation route is still offered when a coding assistant is available.
 

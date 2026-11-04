@@ -149,6 +149,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     saves: [] as Record<string, unknown>[],
     setups: [] as Record<string, unknown>[],
     signIns: [] as Record<string, unknown>[],
+    incoming: [] as Record<string, unknown>[],
     // The session's workspace preparation, as a session read carries it.
     workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
     update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
@@ -156,13 +157,16 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
     setup: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
     signIn: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    review: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, status: "repair-review", diff: { content: "+both sides kept" } }),
+    onboarding: async (): Promise<Record<string, unknown>> => ({ ok: true, inspection: { state: "ready", diagnostics: [] } }),
     boot() {
       const runtime = async () => {
         const real = await temporary!.project.createRuntimeWithoutSource();
         return { ...real, getSessionWithoutSource: async (id: string) => ({
           ...await real.getSessionWithoutSource(id), workspaceSetup: aiTaskWorld.workspaceSetup }) };
       };
-      aiTaskService = createAiTasksService({ logger: silentLogger, project: { createRuntime: runtime, createRuntimeWithoutSource: runtime },
+      aiTaskService = createAiTasksService({ logger: silentLogger,
+        project: { createRuntime: runtime, createRuntimeWithoutSource: runtime, readOnboarding: () => aiTaskWorld.onboarding() },
         // A scenario moves a task from outside any request, so nothing names the project for it.
         publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, { projectSlug: WORKSPACE_SLUG, ...event }),
         terminals: { ...temporary!.terminals, verifyPreviewIdentity: (_sessionId, input) => {
@@ -182,6 +186,10 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           retryWorkspaceSetup: (_sessionId, input) => {
             aiTaskWorld.setups.push(input);
             return aiTaskWorld.setup(input);
+          },
+          changeIncomingContribution: (_sessionId, input) => {
+            aiTaskWorld.incoming.push(input);
+            return aiTaskWorld.review(input);
           }
         } });
     },

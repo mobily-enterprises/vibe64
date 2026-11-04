@@ -773,8 +773,8 @@ for (const width of [1280, 768, 390]) {
     await mockLaunchTerminalSocket(page, { terminalSocketNeverSettles: true });
     const session = sessionPayload();
     session.agentSession.turn.active = true;
-    const temporaryCreates: Record<string, unknown>[] = [];
-    const launch = await mockLaunchSession(page, { session, temporaryCreates });
+    const aiTaskStarts: Record<string, unknown>[] = [];
+    const launch = await mockLaunchSession(page, { session, aiTaskStarts });
     let state = "attention";
     let failInspection = false;
     let reads = 0;
@@ -855,17 +855,9 @@ for (const width of [1280, 768, 390]) {
     await page.screenshot({ path: testInfo.outputPath(`setup-warning-${width}.png`) });
 
     await warning.getByRole("button", { name: "Fix it with AI" }).click();
-    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    await expect(workspace).toBeVisible();
-    await expect(workspace.getByRole("button", { name: "Fix project setup", exact: true })).toBeVisible();
-    // The shared conversation owner sends this saved repair prompt; its turns are covered by the
-    // Temporary AI recovery specs against a real conversation server.
-    await expect.poll(() => temporaryCreates).toHaveLength(1);
-    expect(temporaryCreates[0].presentation).toEqual(expect.objectContaining({
-      title: "Fix project setup",
-      recoveryContext: expect.stringContaining("ContactUpcomingBookings.vue")
-    }));
-    await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
+    // The server reads the setup's diagnostics itself; ai-task-kinds.spec.ts runs the task.
+    await expect.poll(() => aiTaskStarts).toEqual([{ kind: "project-setup", input: { mode: "repair" } }]);
+    if (width <= 960) await page.getByRole("button", { name: "Show chat", exact: true }).click();
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
     await expect(mainDraft).toHaveValue("Keep my current task draft.");
   });

@@ -39,6 +39,10 @@ const never = () => new Promise(() => {});
 const saveFailure = { status: "failed", code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed.", operationId: "save-1" };
 const setupFailure = { status: "failed", diagnostic: "npm ci failed: ERESOLVE could not resolve.", transcript: "$ npm ci\nnpm error ERESOLVE", updatedAt: "t1" };
 const DEVELOPER = { name: "developer", type: "username", value: "developer" };
+const REVIEW = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40), id: "contribution-1",
+  activeHead: "b".repeat(40), discardedHead: "" };
+const CONFLICT = { review: REVIEW, conflictPaths: ["shared.txt"], checkpointCommit: "c".repeat(40) };
+const onboardingAt = (state, diagnostics = []) => ({ ok: true, available: true, inspection: { state, nextAction: "repair", diagnostics } });
 
 async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null, setupFailed = null } = {}) {
   const selection = { engineId: "codex", modelProviderId: "openai", agentId: "codex", modelId: "main-model", variantId: "high",
@@ -55,7 +59,8 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
   const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: id => store.readSession(id),
     getSessionWithoutSource: async id => ({ ...await store.readSession(id), workspaceSetup: server.workspaceSetup }),
     listSessionSummaries: async () => [{ sessionId: SESSION }] };
-  const project = { createRuntime: async () => runtime, createRuntimeWithoutSource: async () => runtime };
+  const project = { createRuntime: async () => runtime, createRuntimeWithoutSource: async () => runtime,
+    readOnboarding: input => server.onboarding(input) };
   const attachments = createSessionAttachments({ project, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   // The AI outlives any server, as the real one does: restarts keep this state.
   const native = { status: "ready", runId: "", text: "", accepted: new Set(), turns: [], stops: 0, conversations: 0, startError: null };
@@ -95,12 +100,15 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
   const saves = [];
   const setups = [];
   const signIns = [];
+  const incoming = [];
   const server = {
     update: async () => ({ ok: true }),
     save: async () => ({ ok: true }),
     inspect: async () => ({ ok: true, unsaved: true, destination: { mode: "github", branch: "main" } }),
     setup: async () => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
     signIn: async () => ({ ok: true }),
+    incoming: async () => ({ ok: true, status: "repair-review", diff: { content: "+both sides kept" } }),
+    onboarding: async () => onboardingAt("ready"),
     workspaceSetup: setupFailed || { status: "succeeded" }
   };
 
@@ -149,6 +157,10 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
         async retryWorkspaceSetup(sessionId, input, context) {
           setups.push({ input, context });
           return server.setup(input);
+        },
+        async changeIncomingContribution(sessionId, input) {
+          incoming.push(input);
+          return server.incoming(input);
         }
       },
       terminals: { ...terminalsWrap(conversations), async verifyPreviewIdentity(sessionId, input) {
@@ -171,7 +183,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     await quiet(running.aiTasks);
   }
 
-  return { boot, finishTurn, native, published, quiet, saves, server, setups, signIns, start, store, task, updates };
+  return { boot, finishTurn, incoming, native, published, quiet, saves, server, setups, signIns, start, store, task, updates };
 }
 
 function withFixture(run, options) {
@@ -298,6 +310,72 @@ test("a sign-in check with Preview stopped stops at the person, and Check now pa
   await waitFor(async () => (await f.task(task.id)).phase === "done");
   assert.deepEqual(f.signIns.map(input => input.identityName), ["developer", "developer"]);
   assert.equal(f.native.turns.length, 1, "the AI was not asked again");
+}, { updateFailure: null }));
+
+test("a completed merge repair builds the repaired merge for review, and never merges it", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "incoming-merge", CONFLICT);
+  assert.equal(task.problem.summary, "This contribution conflicts with main in 1 file.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /Conflicting files: \["shared.txt"\]/);
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "The repaired merge is ready for your review. Check it, then choose Merge into main.");
+  assert.deepEqual(f.incoming.map(({ action, aiTaskId, review }) => ({ action, aiTaskId, review })),
+    [{ action: "review-repair", aiTaskId: task.id, review: REVIEW }]);
+}, { updateFailure: null }));
+
+test("a repaired merge that still holds conflict markers goes back to the AI", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "incoming-merge", CONFLICT);
+  await f.quiet(running.aiTasks);
+  f.server.incoming = async () => ({ ok: true, status: "repair-review", diff: { content: "+<<<<<<< ours\n+mine" } });
+  await f.finishTurn(running);
+  await waitFor(() => f.native.turns.length === 2);
+  assert.match(f.native.turns[1].message, /still contain conflict markers/);
+  assert.equal((await f.task(task.id)).attempt, 2);
+}, { updateFailure: null }));
+
+test("a project setup repair ends Done once Vibe64's own inspection is ready", () => withFixture(async (f) => {
+  f.server.onboarding = async () => onboardingAt("attention", [{ message: "Stack is missing Connected development." }]);
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "project-setup", { mode: "repair" });
+  assert.equal(task.title, "Fix project setup");
+  assert.equal(task.noun, "fix");
+  assert.equal(task.problem.summary, "Stack is missing Connected development.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /The opening inspection reports: Stack is missing Connected development\./);
+  f.server.onboarding = async () => onboardingAt("ready");
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "Project setup is ready.");
+}, { updateFailure: null }));
+
+test("adopting a project is a task named for the request, and setup waiting for Update refuses a repair", () => withFixture(async (f) => {
+  f.server.onboarding = async () => onboardingAt("adoption");
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "project-setup", { mode: "adopt", purpose: "An invoice tool." });
+  assert.deepEqual([task.title, task.noun], ["Set up this project", "task"]);
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /What this project is and what I want to run: An invoice tool\./);
+  await running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER });
+  await f.quiet(running.aiTasks);
+  f.server.onboarding = async () => ({ ...onboardingAt("attention"), updateFirst: { message: "Update first." } });
+  await assert.rejects(f.start(running.aiTasks, OWNER, "project-setup", { mode: "repair" }),
+    error => error.code === "vibe64_ai_task_update_first");
+}, { updateFailure: null }));
+
+test("setup that can't be read is repaired, and only a repair is offered for it", () => withFixture(async (f) => {
+  f.server.onboarding = async () => ({ ok: false, code: "vibe64_onboarding_failed", error: "genesis/stack.md could not be parsed." });
+  const running = f.boot();
+  await assert.rejects(f.start(running.aiTasks, OWNER, "project-setup", { mode: "inspect" }),
+    error => error.code === "vibe64_ai_task_no_problem");
+  const { task } = await f.start(running.aiTasks, OWNER, "project-setup", { mode: "repair" });
+  assert.equal(task.problem.summary, "genesis/stack.md could not be parsed.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /The opening inspection reports: genesis\/stack\.md could not be parsed\./);
 }, { updateFailure: null }));
 
 test("a failed check goes back to the same conversation as a recorded message, and passes on the next try", () => withFixture(async (f) => {

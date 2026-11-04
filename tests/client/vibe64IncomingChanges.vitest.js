@@ -14,15 +14,14 @@ const review = { repository: "example/library", targetBranch: "main", targetHead
   activeHead: "b".repeat(40), discardedHead: "", id };
 let app;
 function mount() {
-  const requestTemporaryAi = vi.fn(async () => true);
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
     .createApp({ ...IncomingChangesPanel, render: () => null }, { dashboardContext: {
       sessionId: "receiving-session", projectContext: { repositoryMode: "github" },
-      assistantSeniorAllowed: true, requestTemporaryAi
+      assistantSeniorAllowed: true
     } });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
-  return { state: app._instance.setupState, requestTemporaryAi };
+  return { state: app._instance.setupState };
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,8 +32,8 @@ beforeEach(() => {
 });
 afterEach(() => app?.unmount());
 
-it("recognizes logical conflict failure, opens existing AI, and requires reviewed Merge after repair", async () => {
-  const { state, requestTemporaryAi } = mount();
+it("recognizes logical conflict failure, hands it to the AI's fix, and requires reviewed Merge after repair", async () => {
+  const { state } = mount();
   mocks.resource.save.mockResolvedValueOnce({ ok: false, code: "vibe64_incoming_merge_conflict", error: "Conflict.",
     details: { conflictPaths: ["shared.txt"], checkpointCommit: "c".repeat(40), review } });
   state.confirm("merge");
@@ -42,9 +41,7 @@ it("recognizes logical conflict failure, opens existing AI, and requires reviewe
   expect(mocks.success).not.toHaveBeenCalled();
   expect(state.conflict.conflictPaths).toEqual(["shared.txt"]);
   expect(state.uncertain).toBe(false);
-  await state.fixConflict();
-  expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({ code: "vibe64_incoming_merge_conflict",
-    error: expect.stringContaining(review.activeHead) }));
+  expect(state.conflictInput).toEqual({ review, conflictPaths: ["shared.txt"], checkpointCommit: "c".repeat(40) });
   expect(mocks.resource.save).toHaveBeenCalledTimes(1);
   const repairReview = { tree: "d".repeat(40), worktreeTree: "e".repeat(40), head: "f".repeat(40), indexTree: "1".repeat(40) };
   mocks.resource.save.mockResolvedValueOnce({ ok: true, status: "repair-review", review, repairReview,
