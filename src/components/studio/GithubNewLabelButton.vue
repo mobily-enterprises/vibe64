@@ -117,7 +117,7 @@ async function submit() {
           >
           <v-text-field
             v-model="color" label="Hex colour" prefix="#" variant="outlined" density="compact" maxlength="7"
-            :disabled="pending" :error-messages="validColor ? [] : 'Use six characters: 0–9 or A–F.'" hide-details="auto"
+            :disabled="pending" :error-messages="validColor ? '' : 'Use six characters: 0–9 or A–F.'" hide-details="auto"
             autocomplete="off" spellcheck="false"
           />
         </div>

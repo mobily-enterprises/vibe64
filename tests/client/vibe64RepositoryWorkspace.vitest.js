@@ -6,8 +6,7 @@ import * as Vue from "vue";
 import { html as renderDiffHtml } from "diff2html";
 import { describe, expect, it, vi } from "vitest";
 import {
-  configureHttpWebClient,
-  resetHttpWebClientForTests
+  configureHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
@@ -190,7 +189,7 @@ function mountHistoryWorkspace({ component = Vibe64RepositoryWorkspace, context 
       app.unmount();
       for (const request of requests) request.resolve(pendingResponse);
       await Promise.all(requests.map((request) => request.promise));
-      resetHttpWebClientForTests();
+      configureHttpWebClient();
     }
   };
 }

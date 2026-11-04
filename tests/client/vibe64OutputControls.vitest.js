@@ -797,12 +797,13 @@ function fakeStorage() {
   };
 }
 
+import { routeLocationKey } from "vue-router";
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 
 it("Preview diagnostic browser payload passes the HTTP schema with project authority in the route", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { previewDiagnosticInputValidator } = await import("../../packages/vibe64-terminals/src/server/inputSchemas.js");
   const requests = [];
@@ -826,6 +827,7 @@ it("Preview diagnostic browser payload passes the HTTP schema with project autho
     return () => Vue.h("div");
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
   app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   app.use(VueQueryPlugin, { queryClient }); app.mount({});
   try {
@@ -838,13 +840,13 @@ it("Preview diagnostic browser payload passes the HTTP schema with project autho
     expect(requests[0].body).not.toHaveProperty("projectSlug");
     expect(requests[0].body.resourceUrl).toBe("https://preview.example/src/main.js");
     expect(requests[0].body.frameUrl).toBe("https://preview.example/jobs");
-  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
 });
 
 it("Working Ctrl-C sends raw FIFO input through the output terminal socket", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { vibe64OutputTerminalWebSocketUrl } = await import("../../src/lib/vibe64SessionApi.js");
   const requests = [];
@@ -874,6 +876,7 @@ it("Working Ctrl-C sends raw FIFO input through the output terminal socket", asy
     return () => Vue.h("div");
   } });
   provideConversationFixture(workingApp, { on() {}, off() {} }, "local");
+  workingApp.provide(routeLocationKey, { path: "/", params: {} });
   workingApp.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   workingApp.use(VueQueryPlugin, { queryClient }); workingApp.mount({});
   try {
@@ -885,7 +888,7 @@ it("Working Ctrl-C sends raw FIFO input through the output terminal socket", asy
     expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input"))
       .toEqual([{ type: "input", data: "\u0003" }]);
     expect(requests.filter(request => request.options.method === "POST")).toHaveLength(0);
-  } finally { workingApp.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+  } finally { workingApp.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
 });
 
 it.each([
@@ -895,7 +898,7 @@ it.each([
 ])("embedded auto-start handles %s without repeating unconfirmed work", async (_label, code, status, retry) => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
@@ -940,6 +943,7 @@ it.each([
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "member-42");
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: "member-42" }));
+  app.provide(routeLocationKey, { path: "/", params: {} });
   app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   app.use(VueQueryPlugin, { queryClient }); app.mount({});
   try {
@@ -970,14 +974,14 @@ it.each([
     expect(posts.map(request => request.options.body.outputTargetId)).toEqual(Array(starts).fill("app"));
     expect(session.value.sessionId).toBe("saved-initial");
   } finally {
-    app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); vi.useRealTimers();
+    app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); vi.useRealTimers();
   }
 });
 
 it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup and exposes the %s outcome", async outcome => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { launchPreviewInFlightText } = await import("../../src/lib/vibe64PreviewStatusText.js");
@@ -1002,6 +1006,7 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "member-42");
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: "member-42" }));
+  app.provide(routeLocationKey, { path: "/", params: {} });
   app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   app.use(VueQueryPlugin, { queryClient }); app.mount({});
   try {
@@ -1024,14 +1029,14 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
     expect(requests.every(request => request.url ===
       `${api}/preparing/outputs?editorOrigin=${encodeURIComponent(window.location.origin)}`)).toBe(true);
   } finally {
-    app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
+    app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals();
   }
 });
 
 it("Preview Retry setup reruns only a failed Workspace setup", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const retries = [];
   vi.stubGlobal("window", { location: new URL("http://localhost/app/project/retry"),
@@ -1053,6 +1058,7 @@ it("Preview Retry setup reruns only a failed Workspace setup", async () => {
     return () => Vue.h("div");
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
   app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   app.use(VueQueryPlugin, { queryClient }); app.mount({});
   try {
@@ -1062,13 +1068,13 @@ it("Preview Retry setup reruns only a failed Workspace setup", async () => {
     session.value = { ...session.value, workspaceSetup: { status: "succeeded" } };
     await expect(controls.retryFailedWorkspaceSetup()).resolves.toBe(false);
     expect(retries).toHaveLength(1);
-  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
 });
 
 it("a refresh captured for an earlier project or session does not refetch the current one", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const reads = [];
   vi.stubGlobal("window", { location: new URL("http://localhost/app/project/scoped"),
@@ -1089,6 +1095,7 @@ it("a refresh captured for an earlier project or session does not refetch the cu
     return () => Vue.h("div");
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
   app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
   app.use(VueQueryPlugin, { queryClient }); app.mount({});
   try {
@@ -1100,5 +1107,5 @@ it("a refresh captured for an earlier project or session does not refetch the cu
     expect(reads).toHaveLength(before + 1);
     await controls.refresh();
     expect(reads).toHaveLength(before + 2);
-  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
 });

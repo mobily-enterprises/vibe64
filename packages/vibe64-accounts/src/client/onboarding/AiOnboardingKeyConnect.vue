@@ -57,7 +57,7 @@ async function save() {
   <form class="aio-key" @submit.prevent="save">
     <v-text-field
       v-model="apiKey" label="API key" type="password" autocomplete="off" variant="outlined"
-      :error-messages="error ? [error] : []" :disabled="saving"
+      :error-messages="error" :disabled="saving"
     />
     <v-btn type="submit" color="primary" variant="flat" size="large" :loading="saving">Connect</v-btn>
     <AiWaitStatus :active="saving" :label="`Checking the key with ${label || 'the provider'}. This can take up to a minute.`" />

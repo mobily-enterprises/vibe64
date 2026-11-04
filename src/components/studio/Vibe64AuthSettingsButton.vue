@@ -112,7 +112,7 @@
               v-model="preferredNameDraft"
               data-vibe64-personal-profile
               density="comfortable"
-              :error-messages="preferredNameValidation.error ? [preferredNameValidation.error] : []"
+              :error-messages="preferredNameValidation.error"
               hide-details="auto"
               label="What should Vibe64 call you?"
               variant="outlined"

@@ -70,7 +70,7 @@
               placeholder="e.g. improve-booking"
               maxlength="255"
               :disabled="submitting"
-              :error-messages="newBranchName.trim() && branchAlreadyExists ? 'That branch already exists. Choose an existing branch instead.' : []"
+              :error-messages="newBranchName.trim() && branchAlreadyExists ? 'That branch already exists. Choose an existing branch instead.' : ''"
               hide-details="auto"
             />
             <v-skeleton-loader v-if="branches.isLoading.value" type="list-item-two-line, paragraph" />

@@ -278,7 +278,7 @@ function date(value) {
           <GithubMentionTextarea
             v-model="draft" label="Add a comment" placeholder="Share an update or ask a question…" variant="outlined" rounded="lg"
             rows="4" auto-grow :counter="draft.length > 65000 ? GITHUB_BODY_MAX_LENGTH : undefined"
-            :error-messages="draft.length > GITHUB_BODY_MAX_LENGTH ? 'Keep your comment under 65,536 characters.' : []"
+            :error-messages="draft.length > GITHUB_BODY_MAX_LENGTH ? 'Keep your comment under 65,536 characters.' : ''"
             :base-path="basePath" :issue="issue" :enabled="dashboardContext.active !== false"
           />
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">

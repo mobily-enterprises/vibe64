@@ -60,7 +60,7 @@ const {
       v-model="editorApiKey"
       autocomplete="new-password"
       :disabled="editorSaving"
-      :error-messages="editorError ? [editorError] : []"
+      :error-messages="editorError"
       hint="Paste the key for this provider. It will not be shown again."
       label="API key"
       persistent-hint

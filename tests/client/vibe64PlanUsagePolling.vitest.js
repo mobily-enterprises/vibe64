@@ -30,7 +30,7 @@ vi.mock("vuetify/components/VDialog", () => ({ VDialog: blank }));
 vi.mock("vuetify/components/VCard", () => ({ VCard: blank, VCardActions: blank, VCardText: blank, VCardTitle: blank }));
 
 const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
 const { createRenderer, ssrContextKey } = await import("vue");
 const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("@/lib/vibe64AssistantHost.js");
 const { VIBE64_ACCOUNTS_CHANGED_EVENT } = await import("@local/vibe64-accounts/client");
@@ -78,7 +78,7 @@ function mountPlanUsage() {
   unmount = () => {
     app.unmount();
     queryClient.clear();
-    resetHttpWebClientForTests();
+    configureHttpWebClient();
     page.setHidden(false);
   };
   return {

@@ -2,8 +2,11 @@ import { readFileSync } from "node:fs";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { configureHttpWebClient, getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computed, createRenderer, effectScope, nextTick, reactive, ref, unref } from "vue";
+import { computed, createApp, createRenderer, effectScope, nextTick, reactive, ref, unref } from "vue";
 import { routeLocationKey } from "vue-router";
+
+// Composables inject the realtime socket, so each one runs inside an application context.
+const inApp = (run) => createApp({}).runWithContext(run);
 
 const endpointMocks = vi.hoisted(() => ({
   calls: [],
@@ -86,7 +89,7 @@ describe("Architecture client resources", () => {
     const reloadVersion = ref(0);
     const scope = effectScope();
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-    scope.run(() => useVibe64SystemGraph({ active, reloadVersion, sessionId: "session-1" }));
+    inApp(() => scope.run(() => useVibe64SystemGraph({ active, reloadVersion, sessionId: "session-1" })));
     reloadVersion.value += 1;
     await nextTick();
     await settle();
@@ -120,10 +123,10 @@ describe("Architecture client resources", () => {
     const sessionId = ref("session/a");
     const scope = effectScope();
     try {
-      scope.run(() => useTool({
+      inApp(() => scope.run(() => useTool({
         active: computed(() => childActive(props, rightPaneTab.value)),
         sessionId
-      }));
+      })));
       expect(endpointMocks.calls).toHaveLength(resources);
       expect(endpointMocks.calls[0].enabled.value).toBe(true);
       const paths = endpointMocks.calls.map((call) => call.path.value);
@@ -160,7 +163,7 @@ describe("Architecture client resources", () => {
   it("reports project progress only during refresh and retains command failures inline", async () => {
     const scope = effectScope();
     let graph;
-    scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); });
+    inApp(() => scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); }));
     const refresh = endpointMocks.resources[2];
     const status = endpointMocks.calls[4];
     expect(unref(status.enabled)).toBe(true);
@@ -190,12 +193,12 @@ describe("Architecture client resources", () => {
   it("reads status and Architecture, then refreshes synchronously", async () => {
     const scope = effectScope();
     let graph;
-    scope.run(() => {
+    inApp(() => scope.run(() => {
       graph = useVibe64SystemGraph({
         active: ref(true),
         sessionId: ref("session/a")
       });
-    });
+    }));
 
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",

@@ -4,8 +4,7 @@ import { compile } from "@vue/compiler-dom";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import {
-  configureHttpWebClient,
-  resetHttpWebClientForTests
+  configureHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import * as VueRuntime from "vue";
 import {
@@ -563,7 +562,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
   });
 
   afterEach(() => {
-    resetHttpWebClientForTests();
+    configureHttpWebClient();
   });
 
   it("restores the cached PR requirement when Settings is mounted again", async () => {

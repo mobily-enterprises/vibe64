@@ -112,7 +112,7 @@ async function submit() {
             <v-autocomplete
               v-model="selectedLabels" :items="labels" item-title="name" item-value="name" multiple chips closable-chips
               label="Labels" variant="outlined" :disabled="pending || !canSetLabels" :menu-props="{ maxHeight: 320 }"
-              :error-messages="selectedLabels.length > 100 ? 'Choose up to 100 labels.' : []"
+              :error-messages="selectedLabels.length > 100 ? 'Choose up to 100 labels.' : ''"
               :hint="canSetLabels ? 'Search and select repository labels.' : editing ? 'Your GitHub account cannot edit labels.' : 'GitHub requires write access to set labels on a new issue.'"
               persistent-hint no-data-text="No matching labels"
             >

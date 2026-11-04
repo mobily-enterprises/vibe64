@@ -38,7 +38,8 @@ const validation = computed(() => {
   catch (error) { return error.fieldErrors || [{ path: "payments", message: error.message }]; }
 });
 const connections = computed(() => Object.entries(props.modelValue.integrations).filter(([, value]) => ["stripe", "paddle"].includes(value.provider) && value.accountMode === "shared" && value.authentication.method === "api-key").map(([value, slot]) => ({ value, title: `${slot.displayName || slot.provider} (${value})` })));
-const errors = (path) => validation.value.filter((error) => error.path === `extensions.payments/${path}`).map((error) => error.message);
+// A field shows one message (Vuetify's default maxErrors), so each binding gets the first one itself, not a new array.
+const errors = (path) => validation.value.find((error) => error.path === `extensions.payments/${path}`)?.message || "";
 const webhookUrl = (integrationId) => integrationCallbackUrl(props.applicationPublicUrl, `/integrations/${integrationId}/webhook`);
 const returnUrl = computed(() => integrationCallbackUrl(props.applicationPublicUrl, "/billing"));
 function update(value) {

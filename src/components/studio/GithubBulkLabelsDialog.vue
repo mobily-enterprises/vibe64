@@ -80,7 +80,7 @@ async function submit() {
         <v-autocomplete
           v-model="selectedLabels" :items="labels" item-title="name" item-value="name" multiple chips closable-chips
           label="Labels to change" variant="outlined" :disabled="pending" :menu-props="{ maxHeight: 320 }"
-          :error-messages="selectedLabels.length > 100 ? 'Choose up to 100 labels.' : []" no-data-text="No matching labels"
+          :error-messages="selectedLabels.length > 100 ? 'Choose up to 100 labels.' : ''" no-data-text="No matching labels"
         >
           <template #chip="{ props: chipProps, item }"><GithubLabelChip v-bind="chipProps" :label="item" /></template>
           <template #item="{ props: itemProps, item }">

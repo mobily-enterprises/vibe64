@@ -5,8 +5,7 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import {
   configureHttpWebClient,
-  getHttpWebClient,
-  resetHttpWebClientForTests
+  getHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
@@ -237,7 +236,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
       queryClient.clear();
       for (const request of reads) request.resolve(opening());
       for (const request of writes) request.resolve({ ok: true });
-      resetHttpWebClientForTests();
+      configureHttpWebClient();
     }
   };
 }

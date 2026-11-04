@@ -6,8 +6,7 @@ import * as Vue from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   configureHttpWebClient,
-  getHttpWebClient,
-  resetHttpWebClientForTests
+  getHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 
 import {
@@ -227,7 +226,7 @@ function mountProjectQueries(slug, { catalog = null } = {}) {
 
 describe("Vibe64 project client scope", () => {
   afterEach(() => {
-    resetHttpWebClientForTests();
+    configureHttpWebClient();
     vi.unstubAllGlobals();
   });
 

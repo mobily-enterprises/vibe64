@@ -1,7 +1,6 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import {
-  configureHttpWebClient,
-  resetHttpWebClientForTests
+  configureHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import { createRenderer, nextTick, reactive, ssrContextKey } from "vue";
 import { routeLocationKey } from "vue-router";
@@ -50,7 +49,7 @@ it("reads each connected tool's model list once while Custom AI opens, reopens a
   onTestFinished(() => {
     app.unmount();
     queryClient.clear();
-    resetHttpWebClientForTests();
+    configureHttpWebClient();
   });
   app.mount({});
   const state = app._instance.setupState;

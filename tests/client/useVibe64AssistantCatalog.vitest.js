@@ -1,7 +1,6 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import {
-  configureHttpWebClient,
-  resetHttpWebClientForTests
+  configureHttpWebClient
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import { createRenderer, reactive, ref } from "vue";
 import { routeLocationKey } from "vue-router";
@@ -107,7 +106,7 @@ it.each([
     heldRefresh.resolve({ engines: [], revision: 2 });
     app.unmount();
     queryClient.clear();
-    resetHttpWebClientForTests();
+    configureHttpWebClient();
   });
   app.mount({});
 
