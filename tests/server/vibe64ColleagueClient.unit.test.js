@@ -4,8 +4,7 @@ import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import * as vue from "vue";
-import { createColleagueNavigation } from "../../packages/vibe64-colleague/src/client/colleagueNavigation.js";
-import * as trainingGuideModule from "../../packages/vibe64-training/src/client/trainingGuide.js";
+import { createColleagueNavigation, navigateColleagueBrowser } from "../../packages/vibe64-colleague/src/client/colleagueNavigation.js";
 import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
@@ -288,7 +287,7 @@ test("operation receipts open their exact target and prepare recovery without re
   await flush();
   assert.deepEqual(view.state.operations.value, [receipt]);
   const navigations = [];
-  view.state.props.navigate = async target => { navigations.push(target); return { focus: { ...target } }; };
+  view.state.props.navigate = async target => { navigations.push(target); return { ...target }; };
   const posts = view.requests.filter(({ options }) => options.method === "POST").length;
   await view.state.openOperationTarget(receipt);
   assert.deepEqual(navigations, [receipt.target]);
@@ -1014,7 +1013,6 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const imports = {
     "./colleagueFocusBinding.js": { createColleagueFocusBinding },
     "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
-    "../shared/learningFocus.js": learningFocus,
     "@local/vibe64-training/shared/learner-events": { VIBE64_TRAINING_LEARNER_CHANGED_EVENT: "vibe64.training.learner.changed" },
     "/src/lib/vibe64ColleagueModelBridge.js": { useVibe64ColleagueModel: () => ({ register: () => () => {} }) },
     "./colleagueModel.js": { createColleagueModel },
@@ -1033,8 +1031,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "vuetify/components": { VNavigationDrawer: {} },
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
     "@local/vibe64-voice/shared/routes": { COLLEAGUE_VOICE_SOCKET_URL: "/api/vibe64/colleague/voice/ws" },
-    "./colleagueNavigation.js": { createColleagueNavigation },
-    "@local/vibe64-training/client/guide": trainingGuideModule,
+    "./colleagueNavigation.js": { createColleagueNavigation, navigateColleagueBrowser },
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
     "@jskit-ai/assistant-runtime/client": { useAssistantConversation },
@@ -1073,7 +1070,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     parentNode: () => null, nextSibling: () => null
   });
   const app = renderer.createApp({ setup() {
-    Object.assign(props, { request: requestHost, focus: {}, navigate: null });
+    Object.assign(props, { request: requestHost, focus: {}, navigate: async () => ({}) });
     state = module.exports.default.setup(props, { expose() {}, emit: (...args) => events.push(args) });
     // The moved preview belongs to the actual element display after delivery,
     // never the canonical turns observed by admission reconciliation.

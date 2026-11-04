@@ -1,11 +1,10 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { COLLEAGUE_VOICE_SOCKET_URL } from "@local/vibe64-voice/shared/routes";
-import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
@@ -18,7 +17,7 @@ import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vi
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
-import { createColleagueNavigation } from "./colleagueNavigation.js";
+import { createColleagueNavigation, navigateColleagueBrowser } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
 import { createColleagueModel } from "./colleagueModel.js";
 import { useColleagueFreshStart } from "./useColleagueFreshStart.js";
@@ -30,13 +29,12 @@ import { useColleagueWatchesAndOperations } from "./useColleagueWatchesAndOperat
 import ColleagueFreshDialog from "./ColleagueFreshDialog.vue";
 import ColleagueOperationsDialog from "./ColleagueOperationsDialog.vue";
 import ColleagueWatchesDialog from "./ColleagueWatchesDialog.vue";
-import { applyLearningNavigation } from "../shared/learningFocus.js";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
   holdToTalk: Boolean,
-  request: { type: Function, required: true },
-  navigate: { type: Function, default: null },
+  request: { type: /** @type {import("vue").PropType<(url: string, options: object) => Promise<any>>} */ (Function), required: true },
+  navigate: { type: /** @type {import("vue").PropType<import("./colleagueNavigation.js").ColleagueNavigator>} */ (Function), required: true },
   focus: { type: Object, default: () => ({}) }
 });
 const emit = defineEmits(["message-submit", "voice-visual"]);
@@ -210,25 +208,9 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   void handleNavigation(navigation);
   return true;
 }
-// Both hosts' navigators run through this wrapper: opening an app place shows
-// the app (Courses closes with its state kept), and a guide rings the real
-// control after any "show me" navigation, reporting only what it drew.
-async function navigateBrowser(command) {
-  const controller = learningController.value;
-  const appPlace = command.projectSlug || command.route || (command.guide && command.guide.target !== "learning");
-  if (appPlace && !command.learning && unref(controller?.coursesOpen) && typeof controller.minimise === "function") {
-    await applyLearningNavigation(controller, { open: false });
-  }
-  if (!command.guide) return props.navigate(command);
-  return runTrainingGuideCommand(command, { navigateBrowser: props.navigate, view: { openFile(path) {
-    const view = companionView.value;
-    return view?.projectSlug === command.projectSlug && view.sessionId === command.sessionId &&
-      typeof view.openFile === "function" && view.openFile(path) === true;
-  } } });
-}
 const colleagueNavigation = createColleagueNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
-  navigate: () => props.navigate ? navigateBrowser : null,
+  navigate: command => navigateColleagueBrowser(command, { learning, companionView, navigate: props.navigate }),
   beforeNavigate(command) {
     // A phone shows one surface: reveal Courses, the Lesson pane, the app or the guide ring.
     if (xs.value && shown.value && typeof command.learning?.open === "boolean") return leaveForLearning();
@@ -423,7 +405,7 @@ const colleagueModels = useVibe64ColleagueModel();
 let unregisterModel = null;
 const { watchDetails, operationDetails, watches, operations, assignments, watchControlCount, changeWatch, openOperationTarget,
   prepareOperationRecovery } = useColleagueWatchesAndOperations({ product, draft, requestColleague, refresh, reportFailure,
-  readNavigate: () => props.navigate });
+  navigate: target => props.navigate(target) });
 watch(open, value => { if (value) void refresh(); });
 watch(actorKey, () => {
   revision += 1;
@@ -627,7 +609,7 @@ onBeforeUnmount(() => {
   />
   <ColleagueOperationsDialog
     v-model="operationDetails" :activator="operationButton?.$el || modelButton?.$el" :fullscreen="xs"
-    :operations="operations" :can-open-targets="Boolean(props.navigate)"
+    :operations="operations"
     @open-target="openOperationTarget" @prepare-recovery="prepareOperationRecovery"
   />
   <ColleagueFreshDialog

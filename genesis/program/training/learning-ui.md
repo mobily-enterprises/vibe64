@@ -272,7 +272,7 @@ header `pane-switch`. A pane that fills the screen gets its caption inside its
 top edge (`inside` placement).
 
 The default (`navigate=false`, `highlight=true`) only points. The Colleague
-client (`Vibe64Colleague.vue`) and the Learning step help (`vibe64LearningStepHelp.js`)
+client (`colleagueNavigation.js`) and the Learning step help (`vibe64LearningStepHelp.js`)
 run `runTrainingGuideCommand`, which rings the deepest visible step with a
 caption such as "Dashboard → Database → ERD". `navigate=true` first runs the
 ordinary browser navigator and, for `filePath`, opens the file in Dashboard →

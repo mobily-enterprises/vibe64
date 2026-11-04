@@ -11,9 +11,9 @@ import { computed, ref } from "vue";
  * @param {(suffix: string, options: object) => Promise<object>} options.requestColleague
  * @param {() => Promise<void>} options.refresh
  * @param {(error: unknown) => void} options.reportFailure
- * @param {() => ((target: object) => Promise<object>) | null} options.readNavigate
+ * @param {import("./colleagueNavigation.js").ColleagueNavigator} options.navigate the host's navigator, resolving with the opened focus
  */
-function useColleagueWatchesAndOperations({ product, draft, requestColleague, refresh, reportFailure, readNavigate }) {
+function useColleagueWatchesAndOperations({ product, draft, requestColleague, refresh, reportFailure, navigate }) {
   const watchDetails = ref(false);
   const operationDetails = ref(false);
   const watches = computed(() => (product.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
@@ -28,13 +28,11 @@ function useColleagueWatchesAndOperations({ product, draft, requestColleague, re
   }
   async function openOperationTarget(item) {
     const target = item?.target;
-    const navigate = readNavigate();
-    if (!target?.projectSlug || !navigate) return reportFailure("This operation target cannot be opened from the current app.");
+    if (!target?.projectSlug) return reportFailure("This operation target cannot be opened from the current app.");
     try {
-      const result = await navigate({ projectSlug: target.projectSlug,
+      const opened = await navigate({ projectSlug: target.projectSlug,
         ...(target.sessionId ? { sessionId: target.sessionId } : {}),
         ...(target.conversationId ? { conversationId: target.conversationId } : {}) });
-      const opened = result?.focus || result;
       if (opened?.projectSlug !== target.projectSlug || target.sessionId && opened.sessionId !== target.sessionId ||
           target.conversationId && opened.conversationId !== target.conversationId) {
         throw new Error("The operation target did not open.");
