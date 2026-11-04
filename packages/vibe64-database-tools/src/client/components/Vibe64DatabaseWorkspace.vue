@@ -200,38 +200,17 @@
 </template>
 
 <script setup>
-import {
-  computed,
-  inject,
-  nextTick,
-  onBeforeUnmount,
-  reactive,
-  ref,
-  shallowRef,
-  watch,
-  watchEffect
-} from "vue";
+import { computed, nextTick, reactive, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { VIBE64_COLLEAGUE_DATABASE_KEY } from "/src/lib/vibe64AssistantHost.js";
-import {
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiCreationOutline,
-  mdiDatabaseAlertOutline,
-  mdiDatabaseOutline,
-  mdiGraphOutline,
-  mdiRefresh,
-  mdiTableSearch
-} from "@mdi/js";
+import { mdiChevronLeft, mdiChevronRight, mdiCreationOutline, mdiDatabaseAlertOutline, mdiDatabaseOutline, mdiGraphOutline, mdiRefresh, mdiTableSearch } from "@mdi/js";
 
+import { useDatabaseColleagueView } from "../composables/useDatabaseColleagueView.js";
 import { useDatabaseCopilot } from "../composables/useDatabaseCopilot.js";
 import { useDatabaseDiagramLayout } from "../composables/useDatabaseDiagramLayout.js";
 import { useDatabaseTableQueries } from "../composables/useDatabaseTableQueries.js";
-import {
-  useVibe64DatabaseTools
-} from "../composables/useVibe64DatabaseTools.js";
+import { useVibe64DatabaseTools } from "../composables/useVibe64DatabaseTools.js";
 import { buildOverviewAssistantRequest } from "../../shared/databaseOverviewPrompt.js";
-import { shortDate } from "../databaseText.js";
+import { databaseScopeText, shortDate } from "../databaseText.js";
 import DatabaseCopilotPanel from "./DatabaseCopilotPanel.vue";
 import DatabaseErd from "./DatabaseErd.vue";
 import DatabaseFilterDialog from "./DatabaseFilterDialog.vue";
@@ -243,27 +222,12 @@ import DatabaseRowDialogs from "./DatabaseRowDialogs.vue";
 
 const props = defineProps({
   openRequest: { type: Object, default: null },
-  active: {
-    default: true,
-    type: Boolean
-  },
-  assistantAvailable: {
-    default: true,
-    type: Boolean
-  },
-  projectSlug: {
-    default: "",
-    type: String
-  },
+  active: { default: true, type: Boolean },
+  assistantAvailable: { default: true, type: Boolean },
+  projectSlug: { default: "", type: String },
   // Raised by the host once work that changed the overview's source ends: the workspace reads it again.
-  reloadVersion: {
-    default: 0,
-    type: Number
-  },
-  sessionId: {
-    default: "",
-    type: String
-  }
+  reloadVersion: { default: 0, type: Number },
+  sessionId: { default: "", type: String }
 });
 const emit = defineEmits(["request-overview-assistant"]);
 
@@ -276,11 +240,6 @@ function requestOverviewAssistant({ abstraction = "balanced", scope = "all", tab
   emit("request-overview-assistant", { input: { abstraction, scope, tables }, message });
 }
 
-const database = useVibe64DatabaseTools({
-  active: computed(() => props.active),
-  projectSlug: computed(() => props.projectSlug),
-  sessionId: computed(() => props.sessionId)
-});
 const {
   assistantCommand,
   assistantEndpoint,
@@ -307,7 +266,11 @@ const {
   state,
   updateCell,
   updating
-} = database;
+} = useVibe64DatabaseTools({
+  active: computed(() => props.active),
+  projectSlug: computed(() => props.projectSlug),
+  sessionId: computed(() => props.sessionId)
+});
 
 const activeView = ref("overview");
 const route = useRoute();
@@ -319,7 +282,6 @@ watch(activeView, (view) => { openedViews[view] = true; }, { flush: "sync" });
 const diagramReturn = shallowRef(null);
 const diagramSelections = reactive({ overview: "", erd: "" });
 const copilotOpen = ref(false);
-let disposed = false;
 const navigatorTab = ref("tables");
 const tableSearch = ref("");
 const hydratedSessionId = ref("");
@@ -331,20 +293,14 @@ const rowDialogs = ref(null);
 const schema = computed(() => state.value?.schema || { relationships: [], schemas: [], tables: [] });
 const connection = computed(() => state.value?.connection || {});
 const workspace = computed(() => state.value?.workspace || { history: [], snippets: [] });
-const databaseScopeLabel = computed(() => (
-  connection.value.developmentDatabaseScope === "project"
-    ? "Shared project database"
-    : connection.value.developmentDatabaseScope === "session"
-      ? "Session database"
-      : "Resolved database"
-));
+const databaseScopeLabel = computed(() => databaseScopeText(connection.value.developmentDatabaseScope));
 const refreshedLabel = computed(() => shortDate(schema.value.refreshedAt));
 
 const {
   activeQueryId,
   addFilter,
+  admitSchemaTable,
   cancelActiveQuery,
-  clearSelectedTable,
   filters,
   forgetTableQueries,
   loadSql,
@@ -403,21 +359,7 @@ watch([state, () => props.active, activeView], ([next, active]) => {
     erdLayout.value = next.layout || { nodes: [] };
   }
   if (activeView.value !== "data") return;
-  if (!selectedTableName.value) {
-    if (sqlText.value.trim()) return;
-    const firstTable = next.schema?.tables?.[0];
-    if (firstTable) void openTable(firstTable, { rememberCurrent: false });
-  } else {
-    const stillPresent = next.schema?.tables?.some((table) => table.qualifiedName === selectedTableName.value);
-    if (!stillPresent) {
-      const firstTable = next.schema?.tables?.[0];
-      if (firstTable) {
-        void openTable(firstTable, { rememberCurrent: false });
-      } else {
-        clearSelectedTable();
-      }
-    }
-  }
+  admitSchemaTable(next.schema?.tables);
 }, { immediate: true });
 
 watch(() => props.reloadVersion, () => { void reload(); });
@@ -449,39 +391,17 @@ watch(activeView, (view) => {
   }
 }, { flush: "post", immediate: true });
 
-/** @type {import("/src/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedDatabase>} */
-const colleagueDatabase = inject(VIBE64_COLLEAGUE_DATABASE_KEY);
-const displayedDatabase = {
-  get projectSlug() { return props.projectSlug; },
-  get sessionId() { return props.sessionId; },
-  get view() { return activeView.value; },
-  get table() { return activeView.value === "data" ? selectedTable.value?.qualifiedName || "" : ""; },
-  selectTable(qualifiedName) {
-    if (disposed || !props.active || !state.value) throw new Error("Database is not available in this session.");
-    const table = schema.value.tables.find(candidate => candidate.qualifiedName === qualifiedName);
-    if (!table) throw new Error("The requested table is not in this session’s database snapshot.");
-    if (running.value) throw new Error("A query is running. Wait for it to finish or cancel that query before selecting a table.");
-    navigatorTab.value = "tables";
-    tableSearch.value = "";
-    void openTable(table);
-  },
-  get screen() {
-    if (state.value) return "workspace";
-    if (loading.value || !error.value) return "loading";
-    return "unavailable";
-  }
-};
-watchEffect(() => {
-  if (props.active) colleagueDatabase.value = displayedDatabase;
-  else if (colleagueDatabase.value === displayedDatabase) colleagueDatabase.value = null;
-});
-onBeforeUnmount(() => {
-  if (colleagueDatabase.value === displayedDatabase) colleagueDatabase.value = null;
-});
+useDatabaseColleagueView({ props, activeView, selectedTable, state, schema, running, loading, error, showTable });
 
-onBeforeUnmount(() => {
-  disposed = true;
-});
+/**
+ * Shows a table in Data with the navigator on its full table list.
+ * @param {Record<string, any>} table
+ */
+function showTable(table) {
+  navigatorTab.value = "tables";
+  tableSearch.value = "";
+  return openTable(table);
+}
 
 /**
  * Opens a diagram's table in Data, remembering the diagram, its label and the focused element for Back.
@@ -496,15 +416,13 @@ function selectTableFromErd(table, view = activeView.value, label = "") {
     label: label || (view === "erd" ? "ERD" : "Overview"),
     focusTarget: globalThis.document?.activeElement
   };
-  navigatorTab.value = "tables";
-  tableSearch.value = "";
-  return selectTable(table);
+  return showTable(table);
 }
 
 function returnToDiagram() {
   if (!diagramReturn.value) return;
   activeView.value = diagramReturn.value.view;
-  void nextTick(() => diagramReturn.value?.focusTarget?.focus?.({ preventScroll: true }));
+  void nextTick(() => diagramReturn.value?.focusTarget?.focus({ preventScroll: true }));
 }
 
 async function refreshDatabaseSchema() {

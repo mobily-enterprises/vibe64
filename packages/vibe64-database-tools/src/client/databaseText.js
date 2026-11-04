@@ -12,6 +12,20 @@ function shortDate(value) {
 }
 
 /**
+ * Which database a session's workspace opened, as its header says it: the project's shared database, the session's
+ * own, or one resolved another way.
+ * @param {string | undefined} scope
+ * @returns {string}
+ */
+function databaseScopeText(scope) {
+  return scope === "project"
+    ? "Shared project database"
+    : scope === "session"
+      ? "Session database"
+      : "Resolved database";
+}
+
+/**
  * The first line of a SQL statement, at most 80 characters, as its label in a list.
  * @param {string | undefined} value
  * @returns {string}
@@ -59,6 +73,7 @@ function parsedValue(text, original, column = {}) {
 }
 
 export {
+  databaseScopeText,
   displayValue,
   firstSqlLine,
   parsedValue,

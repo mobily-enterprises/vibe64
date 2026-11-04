@@ -136,6 +136,29 @@ function useDatabaseTableQueries({ activeView, cancelQuery, connection, reload, 
   }
 
   /**
+   * Keeps Data on a table of the schema as it now is: with no table selected and an empty editor it opens the first
+   * table; when the selected table is gone it opens the first table, or clears Data when the schema has none.
+   * @param {Array<Record<string, any>> | undefined} tables
+   */
+  function admitSchemaTable(tables) {
+    if (!selectedTableName.value) {
+      if (sqlText.value.trim()) return;
+      const firstTable = tables?.[0];
+      if (firstTable) void openTable(firstTable, { rememberCurrent: false });
+    } else {
+      const stillPresent = tables?.some((table) => table.qualifiedName === selectedTableName.value);
+      if (!stillPresent) {
+        const firstTable = tables?.[0];
+        if (firstTable) {
+          void openTable(firstTable, { rememberCurrent: false });
+        } else {
+          clearSelectedTable();
+        }
+      }
+    }
+  }
+
+  /**
    * Forgets every table's remembered query, for another session.
    */
   function forgetTableQueries() {
@@ -271,6 +294,7 @@ function useDatabaseTableQueries({ activeView, cancelQuery, connection, reload, 
   return {
     activeQueryId,
     addFilter,
+    admitSchemaTable,
     cancelActiveQuery,
     clearSelectedTable,
     filters,

@@ -6,12 +6,17 @@ requiring every table and field to be read at once.
 ## Sources
 
 - `packages/vibe64-database-tools/src/client/components/DatabaseErd.vue`
+- `packages/vibe64-database-tools/src/client/composables/useDatabaseErd.js`
+- `packages/vibe64-database-tools/src/client/erdFlowGraph.js`
+- `packages/vibe64-database-tools/src/client/erdLayoutWorker.js`
+- `packages/vibe64-database-tools/src/client/browser.js`
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdNode.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseTableList.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdEdge.vue`
 - Main: `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseNavigator.vue`
 - `packages/vibe64-database-tools/src/client/composables/useDatabaseDiagramLayout.js`
+- `packages/vibe64-database-tools/src/client/composables/useDatabaseColleagueView.js`
 - `packages/vibe64-database-tools/src/shared/databaseOverviewPrompt.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -27,6 +32,7 @@ requiring every table and field to be read at once.
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-database-tools/src/server/events.js`
 - `packages/vibe64-database-tools/src/client/components/DatabaseOverview.vue`
+- `packages/vibe64-database-tools/src/client/composables/useDataOverviewMap.js`
 - `packages/vibe64-database-tools/src/client/components/DatabaseOverviewEdge.vue`
 - `packages/vibe64-database-tools/src/client/dataOverviewModel.js`
 - `packages/vibe64-database-tools/src/shared/dataOverview.js`
