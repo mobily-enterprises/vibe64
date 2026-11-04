@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { hasText, plural } from "./courseProgress.js";
 import { trainingIcons as icons } from "./trainingIcons.js";
 
 // Presentational browser of the official course catalogue: topics (catalogue
@@ -13,10 +14,9 @@ const props = defineProps({
   busy: Boolean
 });
 const emit = defineEmits(["install", "view", "refresh"]);
-const text = value => typeof value === "string" && value.length > 0;
 const ready = computed(() => props.availableResult?.ok === true && props.availableResult.available === true &&
   Array.isArray(props.availableResult.domains) && Array.isArray(props.availableResult.courses));
-const courses = computed(() => ready.value ? props.availableResult.courses.filter(course => text(course?.courseId) && text(course.release) && text(course.title)) : []);
+const courses = computed(() => ready.value ? props.availableResult.courses.filter(course => hasText(course?.courseId) && hasText(course.release) && hasText(course.title)) : []);
 const topics = computed(() => {
   if (!ready.value) return [];
   const known = new Set(props.availableResult.domains.map(domain => domain.domainId));
@@ -26,7 +26,6 @@ const topics = computed(() => {
   return other.length ? [...groups, { id: "", title: "Other courses", courses: other }] : groups;
 });
 const key = course => `${course.courseId}@${course.release}`;
-const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 const stateOf = course => props.installState && props.installState.courseId === course.courseId &&
   props.installState.release === course.release ? props.installState : null;
 function progressText(course) {

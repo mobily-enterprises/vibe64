@@ -113,8 +113,10 @@ function pickerAttempt() {
     lesson: { code: "V64-START-00", hash: pickerHash }
   }, projectSlug: "", preparation: { phase: "reserved" }, learning: { submissions: [], resume: null } };
 }
+// The host's course request; these tests create no course unless they pass their own.
+const noCourse = async () => null;
 async function renderPicker(props = {}, component = TrainingLessonPicker) {
-  const app = createSSRApp({ render: () => h(component, props) });
+  const app = createSSRApp({ render: () => h(component, component === TrainingLessonPicker ? { createCourse: noCourse, ...props } : props) });
   app.use(createVuetify());
   return renderToString(app);
 }
@@ -126,7 +128,7 @@ afterEach(() => { pickerApp?.unmount(); pickerApp = null; });
 function mountPicker(props = {}, component = TrainingLessonPicker) {
   pickerApp = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
     .createApp({ ...component, render: () => null }, component === TrainingLessonPicker ? {
-      catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, canResume: true, ...props
+      catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, canResume: true, createCourse: noCourse, ...props
     } : props);
   pickerApp.provide(ssrContextKey, { modules: new Set() });
   pickerApp.mount({});

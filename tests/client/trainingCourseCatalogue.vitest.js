@@ -23,8 +23,10 @@ function installedCourse(release, enabled, hashes = ["c".repeat(64), "d".repeat(
       { code: "V64-START-00", title: "Connect your first AI", hash: hashes[0], topicId: "intro", topicRelease: release, status: "published", required: true },
       { code: "V64-START-01", title: "Explore Vibe64", hash: hashes[1], topicId: "intro", topicRelease: release, status: "published", required: true }] };
 }
+// The host's course request; these tests create no course.
+const noCourse = async () => null;
 async function render(props, component = TrainingLessonPicker) {
-  const app = createSSRApp({ render: () => h(component, props) });
+  const app = createSSRApp({ render: () => h(component, component === TrainingLessonPicker ? { createCourse: noCourse, ...props } : props) });
   app.use(createVuetify());
   return renderToString(app);
 }

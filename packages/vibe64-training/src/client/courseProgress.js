@@ -64,4 +64,14 @@ function earlierCompletionLabel(earlier) {
   return earlier ? `Completed in ${earlier.release || "an earlier release"} · updated since` : "";
 }
 
-export { courseProgress, courseStatusLabel, earlierCompletionLabel, lessonStatus, offered, previewCourse, previewNote, statusLabels };
+// Whether a catalogue or progress field is a non-empty string.
+function hasText(value) {
+  return typeof value === "string" && value.length > 0;
+}
+
+// A count with its word, singular for one: "1 lesson", "3 lessons".
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+export { courseProgress, courseStatusLabel, earlierCompletionLabel, hasText, lessonStatus, offered, plural, previewCourse, previewNote, statusLabels };

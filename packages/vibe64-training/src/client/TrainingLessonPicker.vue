@@ -6,7 +6,7 @@ import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingCourseCatalogue from "./TrainingCourseCatalogue.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 import TrainingStartFeedback from "./TrainingStartFeedback.vue";
-import { courseProgress, courseStatusLabel, offered, previewCourse, previewNote } from "./courseProgress.js";
+import { courseProgress, courseStatusLabel, hasText, offered, plural, previewCourse, previewNote } from "./courseProgress.js";
 import { trainingIcons as icons } from "./trainingIcons.js";
 
 const props = defineProps({
@@ -19,8 +19,8 @@ const props = defineProps({
   busy: Boolean,
   canStart: Boolean,
   canResume: Boolean,
-  // Optional owner-only custom course request; resolves to the confirmed result or null.
-  createCourse: { type: Function, default: null },
+  // The owner-only custom course request, offered only where the catalogue allows it; resolves to the confirmed result or null.
+  createCourse: { type: /** @type {import("vue").PropType<(input: object) => Promise<object | null>>} */ (Function), required: true },
   starting: Boolean,
   startUnconfirmed: Boolean,
   // The host's message when the last start requested here failed.
@@ -33,11 +33,10 @@ const props = defineProps({
 });
 const emit = defineEmits(["refresh", "start", "resume", "install"]);
 const selectionId = ref("");
-const text = value => typeof value === "string" && value.length > 0;
 const revision = value => Number.isSafeInteger(value) && value >= 0;
 const lessonTitlesMissing = computed(() => Array.isArray(props.catalogueResult?.courses) &&
   props.catalogueResult.courses.some(course => Array.isArray(course?.lessons) &&
-    course.lessons.some(lesson => !text(lesson?.title))));
+    course.lessons.some(lesson => !hasText(lesson?.title))));
 
 // These are display-shape guards, not replicas of the server's content,
 // permission, pin, progress or admission validators.
@@ -45,11 +44,11 @@ const catalogueInvalid = computed(() => {
   const result = props.catalogueResult;
   return result?.ok === true && result.available === true && (!revision(result.revision) ||
     !Array.isArray(result.courses) || result.courses.some(course =>
-      !text(course?.courseId) || !text(course.release) || !text(course.title) ||
-      typeof course.enabled !== "boolean" || !text(course.status) || !Array.isArray(course.lessons) ||
-      !Array.isArray(course.topics) || course.topics.some(topic => !text(topic?.topicId) || !text(topic.release) || !text(topic.title)) ||
-      course.lessons.some(lesson => !text(lesson?.code) || !text(lesson.hash) ||
-        !text(lesson.topicId) || !text(lesson.topicRelease) || !text(lesson.status) || !text(lesson.title))));
+      !hasText(course?.courseId) || !hasText(course.release) || !hasText(course.title) ||
+      typeof course.enabled !== "boolean" || !hasText(course.status) || !Array.isArray(course.lessons) ||
+      !Array.isArray(course.topics) || course.topics.some(topic => !hasText(topic?.topicId) || !hasText(topic.release) || !hasText(topic.title)) ||
+      course.lessons.some(lesson => !hasText(lesson?.code) || !hasText(lesson.hash) ||
+        !hasText(lesson.topicId) || !hasText(lesson.topicRelease) || !hasText(lesson.status) || !hasText(lesson.title))));
 });
 const courses = computed(() => !catalogueInvalid.value && props.catalogueResult?.ok === true &&
   props.catalogueResult.available === true ? props.catalogueResult.courses : []);
@@ -69,9 +68,9 @@ watch(choices, values => {
 }, { immediate: true });
 
 function hasDisplayPin(attempt) {
-  return text(attempt?.attemptId) && text(attempt.pin?.course?.courseId) && text(attempt.pin.course.release) &&
-    text(attempt.pin?.topic?.topicId) && text(attempt.pin.topic.release) && text(attempt.pin.topic.commit) &&
-    text(attempt.pin?.lesson?.code) && text(attempt.pin.lesson.hash);
+  return hasText(attempt?.attemptId) && hasText(attempt.pin?.course?.courseId) && hasText(attempt.pin.course.release) &&
+    hasText(attempt.pin?.topic?.topicId) && hasText(attempt.pin.topic.release) && hasText(attempt.pin.topic.commit) &&
+    hasText(attempt.pin?.lesson?.code) && hasText(attempt.pin.lesson.hash);
 }
 const learningInvalid = computed(() => {
   const result = props.learningResult;
@@ -80,7 +79,7 @@ const learningInvalid = computed(() => {
       result.active !== null && (!hasDisplayPin(result.active) || result.active.ended) || !Array.isArray(result.history) ||
       result.history.some(attempt => !hasDisplayPin(attempt) || !attempt.ended)) return true;
   if (result.lessonProgress !== undefined && (!Array.isArray(result.lessonProgress) || result.lessonProgress.some(value =>
-    !text(value?.lessonCode) || !text(value.lessonHash) || !revision(value.required) || !revision(value.passed) ||
+    !hasText(value?.lessonCode) || !hasText(value.lessonHash) || !revision(value.required) || !revision(value.passed) ||
     value.passed > value.required || typeof value.completed !== "boolean" || typeof value.open !== "boolean"))) return true;
   const completion = result.completion;
   return completion != null && (!result.active || !revision(completion.required) || !revision(completion.passed) ||
@@ -162,7 +161,7 @@ watch(summaries, values => {
 });
 
 const creating = ref(false);
-const canCreateCourses = computed(() => typeof props.createCourse === "function" && !catalogueInvalid.value &&
+const canCreateCourses = computed(() => !catalogueInvalid.value &&
   props.catalogueResult?.ok === true && props.catalogueResult.canCreateCourses === true);
 const availableTopics = computed(() => [...new Map(courses.value.filter(course => course.enabled && course.status === "released")
   .flatMap(course => course.topics).map(topic => [JSON.stringify([topic.topicId, topic.release]), topic])).values()]);
@@ -198,7 +197,6 @@ function unusableNote(course) {
 // hidden); lessons shared by several courses count once.
 const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ course }) =>
   course.lessons.map(lesson => `${lesson.code}\n${lesson.hash}`))).size);
-const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 </script>
 <template>
   <section
