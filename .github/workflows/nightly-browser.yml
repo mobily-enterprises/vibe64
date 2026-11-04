@@ -1,0 +1,101 @@
+# Vibe64-owned nightly record of the full browser suite.
+# It uses no secrets and deploys nothing. Deploy Docs follows Vibe64 Verify only.
+name: Vibe64 Nightly Browser
+on:
+  schedule:
+    # 02:17 in Perth, off the hour because GitHub delays runs started on it.
+    - cron: "17 18 * * *"
+  workflow_dispatch: null
+permissions:
+  contents: read
+env:
+  npm_config_engine_strict: "true"
+  npm_config_strict_allow_scripts: "true"
+jobs:
+  browser-tests:
+    name: Browser tests ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Every shard runs to its end: one failing shard never shortens the record.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v7
+      - id: setup-node
+        name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - id: install-dependencies
+        name: Install dependencies
+        run: npm ci
+      - id: install-browser
+        name: Install test browser
+        run: npx --no-install playwright install --with-deps chromium
+      # --max-failures=0: every other browser run stops at 2 failures to save
+      #   time. This one exists to be the full record, so it runs every test.
+      # --fully-parallel: shards split by test instead of by file, because
+      #   integrations.spec.ts alone takes about an hour. Each shard keeps the
+      #   config's one worker, so its tests still run one at a time.
+      # --forbid-only: a stray test.only would otherwise shrink the record and pass.
+      # --global-timeout: a shard holds 54 tests of at most 60 s, so only a hang
+      #   reaches this. It stops the run with a failure and keeps its report.
+      - id: browser-tests
+        name: Run browser tests
+        timeout-minutes: 65
+        run: >-
+          npx --no-install playwright test
+          --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          --fully-parallel
+          --max-failures=0
+          --forbid-only
+          --global-timeout=3600000
+          --reporter=list,blob
+      - id: upload-shard-report
+        name: Upload shard report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 14
+  report:
+    name: Playwright report
+    needs: browser-tests
+    # Failed shards are what this report is for.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v7
+      - id: setup-node
+        name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - id: install-dependencies
+        name: Install dependencies
+        run: npm ci
+      - id: download-shard-reports
+        name: Download shard reports
+        uses: actions/download-artifact@v8
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - id: merge-reports
+        name: Merge shard reports
+        run: npx --no-install playwright merge-reports --reporter=html,github all-blob-reports
+      - id: upload-report
+        name: Upload Playwright report
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14

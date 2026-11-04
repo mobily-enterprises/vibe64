@@ -152,6 +152,26 @@ test("docs deployment follows successful Vibe64 verification on main", async () 
   assert.match(workflowSource, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
 });
 
+test("the nightly browser run records every test and stays away from deployment", async () => {
+  const workflowSource = await readFile(
+    path.join(APP_ROOT, ".github", "workflows", "nightly-browser.yml"),
+    "utf8"
+  );
+
+  assert.match(workflowSource, /Vibe64-owned nightly record/);
+  assert.match(workflowSource, /name: Vibe64 Nightly Browser/);
+  assert.match(workflowSource, /schedule:\s*\n(\s*#.*\n)*\s*- cron:/u);
+  assert.match(workflowSource, /workflow_dispatch:/u);
+  assert.match(workflowSource, /npm_config_engine_strict: "true"/);
+  assert.match(workflowSource, /npm_config_strict_allow_scripts: "true"/);
+  assert.match(workflowSource, /node-version: 26/);
+  assert.match(workflowSource, /fail-fast: false/);
+  assert.match(workflowSource, /--shard=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}/u);
+  assert.match(workflowSource, /--max-failures=0/);
+  assert.match(workflowSource, /merge-reports --reporter=html/);
+  assert.doesNotMatch(workflowSource, /secrets\.|deploy-pages|pages: write|id-token: write|npm run deploy/u);
+});
+
 test("application foundation does not include the retired app.manifest contract", async () => {
   await assert.rejects(access(path.join(APP_ROOT, "framework/app.manifest.mjs")), /ENOENT/);
 });
