@@ -38,16 +38,16 @@ function sourceEditorFileChangePayloadMatches({
     !normalizedPath ||
     !normalizedProjectSlug ||
     !normalizedSessionId ||
-    normalizeSourceEditorPath(payload?.path) !== normalizedPath ||
-    normalizeText(payload?.projectSlug) !== normalizedProjectSlug ||
-    normalizeText(payload?.sessionId) !== normalizedSessionId ||
+    normalizeSourceEditorPath(payload.path) !== normalizedPath ||
+    normalizeText(payload.projectSlug) !== normalizedProjectSlug ||
+    normalizeText(payload.sessionId) !== normalizedSessionId ||
     vibe64RealtimePayloadFromCurrentTab(payload, {
       originId
     })
   ) {
     return false;
   }
-  return Boolean(normalizeText(payload?.hash));
+  return Boolean(normalizeText(payload.hash));
 }
 
 function normalizeResolvedSourceEditorPath(value = {}) {
@@ -61,6 +61,15 @@ function normalizeResolvedSourceEditorPath(value = {}) {
 }
 
 /**
+ * A host's navigation to a referenced source file, when the host takes none
+ * over: the editor opens the file itself.
+ * @returns {boolean} Whether the host handled the navigation.
+ */
+function leaveReferencedSourceToEditor() {
+  return false;
+}
+
+/**
  * The selected source file: opening and creating it, revalidating it when
  * another window or the agent changes it, and saving its edits.
  * @param {object} options
@@ -71,9 +80,10 @@ function normalizeResolvedSourceEditorPath(value = {}) {
  * @param {import("vue").Ref<string>} options.currentSessionsApiPath
  * @param {import("vue").Ref<boolean>} options.disposed
  * @param {import("vue").Ref<{ operation: string, message: string } | null>} options.loadFailure
- * @param {((navigation: { fromPath: string, path: string, target: string }) => unknown) | null} options.navigateReferencedSource
+ * @param {(navigation: { fromPath: string, path: string, target: string }) => unknown} options.navigateReferencedSource
+ *   Resolves true when the host opened the referenced file itself.
  * @param {string} options.originId
- * @param {(() => string) | null} options.readCurrentText
+ * @param {() => string} options.readCurrentText The live text of the open file.
  * @param {import("vue").Ref<string>} options.selectedPath
  * @param {import("@/types.js").Vibe64SourceEditorTree} options.tree
  */
@@ -403,19 +413,17 @@ function useVibe64SourceEditorFile({
       if (!resolved.resolved || !resolved.path) {
         return false;
       }
-      if (typeof navigateReferencedSource === "function") {
-        try {
-          const handled = await navigateReferencedSource({
-            fromPath: normalizedFromPath,
-            path: resolved.path,
-            target: normalizedTarget
-          });
-          if (handled === true) {
-            return true;
-          }
-        } catch {
-          // Fall back to the normal in-editor file switch.
+      try {
+        const handled = await navigateReferencedSource({
+          fromPath: normalizedFromPath,
+          path: resolved.path,
+          target: normalizedTarget
+        });
+        if (handled === true) {
+          return true;
         }
+      } catch {
+        // Fall back to the normal in-editor file switch.
       }
       await openFile(resolved.path);
       return true;
@@ -444,9 +452,7 @@ function useVibe64SourceEditorFile({
     if (textAtUnmount !== null) {
       return textAtUnmount;
     }
-    return typeof readCurrentText === "function"
-      ? String(readCurrentText() ?? "")
-      : text.value;
+    return String(readCurrentText() ?? "");
   }
 
   async function saveDirtyBuffers() {
@@ -571,6 +577,7 @@ function useVibe64SourceEditorFile({
 export {
   SOURCE_EDITOR_AUTOSAVE_DELAY_MS,
   SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE,
+  leaveReferencedSourceToEditor,
   sourceEditorFileChangePayloadMatches,
   useVibe64SourceEditorFile
 };

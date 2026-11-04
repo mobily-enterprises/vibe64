@@ -30,6 +30,9 @@ import {
   sourceEditorExplanationWithMessage
 } from "@/lib/vibe64SourceEditorExplanations.js";
 
+/** A deletion nobody waits on reports its failure only to the debug log. */
+function ignoreDisposeError() {}
+
 /**
  * The open source explanation: asking for one, its streamed answer and
  * follow-ups, stopping and retrying it, and closing it, which deletes its
@@ -85,7 +88,7 @@ function useVibe64SourceEditorExplanations({
 
   function clearExplanationStream() {
     explanationRequestId += 1;
-    explanationAbortController?.abort?.();
+    explanationAbortController?.abort();
     explanationAbortController = null;
     explanationBusy.value = false;
   }
@@ -196,7 +199,7 @@ function useVibe64SourceEditorExplanations({
     }
     const requestId = explanationRequestId + 1;
     explanationRequestId = requestId;
-    explanationAbortController?.abort?.();
+    explanationAbortController?.abort();
     explanationAbortController = null;
     const explanationId = sourceEditorClientId("exp");
     const userMessageId = sourceEditorClientId("msg");
@@ -284,7 +287,7 @@ function useVibe64SourceEditorExplanations({
     explanationBusy.value = false;
     explanationError.value = "";
     markActiveExplanationMessage("stopped", "Stopped.");
-    controller?.abort?.();
+    controller?.abort();
     if (!canLoad.value) {
       return;
     }
@@ -311,7 +314,7 @@ function useVibe64SourceEditorExplanations({
   }
 
   async function disposeExplanation(explanation = null, {
-    onError = null,
+    onError = ignoreDisposeError,
     sessionsApiPath: apiPath = currentSessionsApiPath.value,
     sessionId: targetSessionId = currentSessionId.value
   } = {}) {
@@ -333,7 +336,7 @@ function useVibe64SourceEditorExplanations({
         error: vibe64SessionDebugError(error),
         sessionId: targetSessionId
       });
-      onError?.(error);
+      onError(error);
       return false;
     }
   }
@@ -396,7 +399,7 @@ function useVibe64SourceEditorExplanations({
     }
     const requestId = explanationRequestId + 1;
     explanationRequestId = requestId;
-    explanationAbortController?.abort?.();
+    explanationAbortController?.abort();
     explanationAbortController = null;
     const createdAt = nowIso();
     const userMessageId = sourceEditorClientId("msg");

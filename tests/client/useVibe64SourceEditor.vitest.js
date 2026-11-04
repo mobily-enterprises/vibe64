@@ -134,11 +134,16 @@ function realtimeForEvent(event) {
   return mocks.realtimeOptions.find((options) => options.event === event);
 }
 
+// The host takes no referenced-source navigation over, so the editor opens the file itself.
+async function leaveNavigationToEditor() {
+  return false;
+}
+
 async function createLoadedEditor({
   active = true,
   agentActive = false,
   currentText,
-  navigateReferencedSource = null,
+  navigateReferencedSource = leaveNavigationToEditor,
   openFile = true,
   projectSlug = "beepollen",
   sessionId = "session-1"
@@ -730,7 +735,14 @@ describe("useVibe64SourceEditor", () => {
     const sessionsApiPath = ref("/api/app/vibe64/sessions");
     const { useVibe64SourceEditor } = await import("../../src/composables/useVibe64SourceEditor.js");
     mocks.requestResults.push(treeResponse());
-    const editor = useVibe64SourceEditor({ active, projectSlug: "beepollen", sessionId, sessionsApiPath });
+    const editor = useVibe64SourceEditor({
+      active,
+      navigateReferencedSource: leaveNavigationToEditor,
+      projectSlug: "beepollen",
+      readCurrentText: () => editor.text.value,
+      sessionId,
+      sessionsApiPath
+    });
     await flushPromises();
     active.value = false;
     await nextTick();
@@ -807,6 +819,7 @@ describe("useVibe64SourceEditor", () => {
     mocks.requestResults.push(treeResponse());
 
     useVibe64SourceEditor({
+      navigateReferencedSource: leaveNavigationToEditor,
       projectSlug: ref("beepollen"),
       readCurrentText: () => currentText.value,
       sessionId: ref("session-1"),

@@ -16,15 +16,29 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
+/**
+ * Observes the selected source file through the server's change stream while
+ * the editor is active, and hands each change, readiness and error to the
+ * editor. The stream follows the file, the session and activity, and closes
+ * when the editor unmounts.
+ * @param {object} options
+ * @param {import("vue").MaybeRefOrGetter<boolean>} options.active
+ * @param {(payload: Record<string, any>) => void} options.onChange
+ * @param {(error: { error?: string, fatal?: boolean, transient?: boolean }) => void} options.onError
+ * @param {(payload: Record<string, any>) => void} options.onReady
+ * @param {import("vue").MaybeRefOrGetter<string>} options.path
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionId
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath
+ */
 function useVibe64SourceEditorFileSync({
   active = true,
-  onChange = null,
-  onError = null,
-  onReady = null,
+  onChange,
+  onError,
+  onReady,
   path = "",
   sessionId = "",
   sessionsApiPath = ""
-} = {}) {
+}) {
   let eventSource = null;
 
   function currentValue(value) {
@@ -36,7 +50,7 @@ function useVibe64SourceEditorFileSync({
   }
 
   function close() {
-    eventSource?.close?.();
+    eventSource?.close();
     eventSource = null;
   }
 
@@ -65,7 +79,7 @@ function useVibe64SourceEditorFileSync({
         withCredentials: true
       });
     } catch (error) {
-      onError?.({
+      onError({
         error: String(error?.message || error || "Source file observation could not start."),
         fatal: true
       });
@@ -76,19 +90,19 @@ function useVibe64SourceEditorFileSync({
 
     source.addEventListener(VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT, (event) => {
       if (isCurrent()) {
-        onChange?.(parseJsonStreamEvent(event));
+        onChange(parseJsonStreamEvent(event));
       }
     });
     source.addEventListener(VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT, (event) => {
       if (!isCurrent()) {
         return;
       }
-      onReady?.(parseJsonStreamEvent(event));
+      onReady(parseJsonStreamEvent(event));
     });
     source.addEventListener(VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT, (event) => {
       if (isCurrent()) {
         const payload = parseJsonStreamEvent(event);
-        onError?.(payload);
+        onError(payload);
         if (payload.fatal === true) {
           close();
         }
@@ -96,7 +110,7 @@ function useVibe64SourceEditorFileSync({
     });
     source.onerror = () => {
       if (isCurrent()) {
-        onError?.({
+        onError({
           error: "Source file observation disconnected.",
           transient: true
         });

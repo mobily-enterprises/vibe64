@@ -38,16 +38,25 @@ import {
  * file and Find in files, and source explanations. It follows the session,
  * refreshes after the agent's work and other windows' changes, and saves the
  * selected file when it unmounts.
+ * @param {object} options
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.active] Whether the editor is shown; true by default.
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.agentActive] Whether the agent is working.
+ * @param {(navigation: { fromPath: string, path: string, target: string }) => unknown} options.navigateReferencedSource
+ *   Resolves true when the host opened a referenced source file itself.
+ * @param {import("vue").MaybeRefOrGetter<string>} options.projectSlug
+ * @param {() => string} options.readCurrentText The live text of the open file.
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionId
  */
 function useVibe64SourceEditor({
   active = true,
   agentActive = false,
-  navigateReferencedSource = null,
+  navigateReferencedSource,
   projectSlug,
-  readCurrentText = null,
+  readCurrentText,
   sessionsApiPath,
   sessionId
-} = {}) {
+}) {
   const originId = vibe64BrowserTabOriginId();
   const selectedPath = ref("");
   const loadFailure = ref(null);
