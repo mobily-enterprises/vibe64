@@ -1,21 +1,19 @@
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+
 const STALE_OPERATION_CODES = new Set([
   "vibe64_stale_command_start"
 ]);
 
-function plainObject(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function responseDetails(source = {}) {
-  return plainObject(source.details);
+  return normalizeObject(source.details);
 }
 
 function responseCode(source = {}) {
-  return String(source?.code || source?.errors?.[0]?.code || responseDetails(source).code || "").trim();
+  return String(source.code || source.errors?.[0]?.code || responseDetails(source).code || "").trim();
 }
 
 function responseStatus(source = {}) {
-  const value = source?.status ?? source?.statusCode ?? responseDetails(source).status ?? responseDetails(source).statusCode ?? null;
+  const value = source.status ?? source.statusCode ?? responseDetails(source).status ?? responseDetails(source).statusCode ?? null;
   if (value == null || value === "") {
     return null;
   }
@@ -24,11 +22,11 @@ function responseStatus(source = {}) {
 }
 
 function responseOperationOutcome(source = {}) {
-  return String(source?.operationOutcome || responseDetails(source).operationOutcome || "").trim();
+  return String(source.operationOutcome || responseDetails(source).operationOutcome || "").trim();
 }
 
 function responseRefreshRecommended(source = {}) {
-  return source?.refreshRecommended === true || responseDetails(source).refreshRecommended === true;
+  return source.refreshRecommended === true || responseDetails(source).refreshRecommended === true;
 }
 
 function isVibe64StaleOperation(source = {}) {

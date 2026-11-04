@@ -8,21 +8,14 @@ import {
   mdiSourceBranch,
   mdiSourceCommit
 } from "@mdi/js";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   vibe64SessionPullRequest,
   shortVibe64SessionId
 } from "@/lib/vibe64SessionViewModel.js";
 
-function text(value = "") {
-  return String(value || "").trim();
-}
-
-function plainObject(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function safeRepositoryRemote(value = "") {
-  const remote = text(value);
+  const remote = normalizeText(value);
   if (!remote || /[\r\n\0]/u.test(remote)) {
     return "";
   }
@@ -40,12 +33,12 @@ function safeRepositoryRemote(value = "") {
 }
 
 function githubRepositoryName(project = {}) {
-  const github = plainObject(project.githubRepository || project.repository?.github);
-  return text(github.fullName || github.repository || github.name);
+  const github = normalizeObject(project.githubRepository || project.repository?.github);
+  return normalizeText(github.fullName || github.repository || github.name);
 }
 
 function repositoryFact(session = {}, project = {}) {
-  const metadata = plainObject(session.metadata);
+  const metadata = normalizeObject(session.metadata);
   const fullName = githubRepositoryName(project);
   const remote = safeRepositoryRemote(
     metadata.source_remote_url ||
@@ -74,20 +67,20 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
   if (!session || typeof session !== "object" || Array.isArray(session)) {
     return [];
   }
-  const metadata = plainObject(session.metadata);
-  const agentSession = plainObject(session.agentSession);
-  const agentThread = plainObject(agentSession.thread);
-  const agentTurn = plainObject(agentSession.turn);
-  const sessionId = text(session.sessionId);
-  const sessionRoot = text(session.sessionRoot);
-  const sourcePath = text(session.sourcePath);
-  const projectSource = text(project.sourceRoot);
-  const branch = text(metadata.branch || session.branch);
-  const baseBranch = text(metadata.base_branch || metadata.source_default_branch);
-  const baseCommit = text(metadata.base_commit);
-  const threadId = text(agentThread.id || agentTurn.threadId);
-  const turnId = text(agentTurn.id || agentTurn.turnId);
-  const createdAt = text(session.manifest?.createdAt || session.createdAt);
+  const metadata = normalizeObject(session.metadata);
+  const agentSession = normalizeObject(session.agentSession);
+  const agentThread = normalizeObject(agentSession.thread);
+  const agentTurn = normalizeObject(agentSession.turn);
+  const sessionId = normalizeText(session.sessionId);
+  const sessionRoot = normalizeText(session.sessionRoot);
+  const sourcePath = normalizeText(session.sourcePath);
+  const projectSource = normalizeText(project.sourceRoot);
+  const branch = normalizeText(metadata.branch || session.branch);
+  const baseBranch = normalizeText(metadata.base_branch || metadata.source_default_branch);
+  const baseCommit = normalizeText(metadata.base_commit);
+  const threadId = normalizeText(agentThread.id || agentTurn.threadId);
+  const turnId = normalizeText(agentTurn.id || agentTurn.turnId);
+  const createdAt = normalizeText(session.manifest?.createdAt || session.createdAt);
   const repository = repositoryFact(session, project);
   const pullRequest = vibe64SessionPullRequest(session);
 
@@ -197,11 +190,11 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
 function vibe64SessionInfoText(facts = [], { status = "" } = {}) {
   const lines = (Array.isArray(facts) ? facts : [])
     .map((fact) => {
-      const value = text(fact?.copyValue || fact?.value);
-      return value ? `${text(fact?.label) || "Value"}: ${value}` : "";
+      const value = normalizeText(fact?.copyValue || fact?.value);
+      return value ? `${normalizeText(fact?.label) || "Value"}: ${value}` : "";
     })
     .filter(Boolean);
-  const normalizedStatus = text(status);
+  const normalizedStatus = normalizeText(status);
   if (normalizedStatus) {
     lines.splice(1, 0, `Status: ${normalizedStatus.replaceAll("_", " ")}`);
   }

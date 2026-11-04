@@ -1,21 +1,20 @@
-function text(value = "") {
-  return String(value || "").trim();
-}
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function shortVibe64SessionId(sessionId = "") {
-  return text(sessionId).replace(/^\d{4}-/u, "");
+  return normalizeText(sessionId).replace(/^\d{4}-/u, "");
 }
 
-function vibe64SessionPullRequest(session = {}) {
+// A session's pull request source, or null; a caller without a session passes null.
+function vibe64SessionPullRequest(session) {
   try {
-    const source = JSON.parse(session?.metadata?.github_pull_request || "null");
+    const source = JSON.parse(normalizeObject(session).metadata?.github_pull_request || "null");
     return source?.headRepository && source?.headBranch ? source : null;
   } catch { return null; }
 }
 
 // A session's own name, or "" when it has none.
 function vibe64SessionShortLabel(session = {}) {
-  return text(session?.sessionName || session?.metadata?.label);
+  return normalizeText(session.sessionName || session.metadata?.label);
 }
 
 // The one title a session shows everywhere: its name, else its short id.
@@ -24,16 +23,16 @@ function vibe64SessionDisplayTitle(session = {}) {
   if (label) {
     return label;
   }
-  const shortId = shortVibe64SessionId(session?.sessionId);
+  const shortId = shortVibe64SessionId(session.sessionId);
   return shortId ? `Session ${shortId}` : "";
 }
 
 function vibe64SessionStatusLabel(status = "") {
-  return text(status || "active").replaceAll("_", " ");
+  return normalizeText(status || "active").replaceAll("_", " ");
 }
 
 function vibe64SessionStatusColor(status = "") {
-  const value = text(status);
+  const value = normalizeText(status);
   if (value === "blocked") {
     return "error";
   }
@@ -41,7 +40,7 @@ function vibe64SessionStatusColor(status = "") {
 }
 
 function isArchivedVibe64Session(session = {}) {
-  return text(session.status) === "archived";
+  return normalizeText(session.status) === "archived";
 }
 
 function isOpenVibe64Session(session = {}) {

@@ -14,7 +14,7 @@ async function focusCreatedVibe64SessionTab(sessionId = "") {
         element.getAttribute("data-vibe64-session-id") === normalizedSessionId &&
         element.getClientRects().length > 0
       ));
-    if (!dialogVisible && target && typeof target.focus === "function") {
+    if (!dialogVisible && target) {
       target.focus({ preventScroll: true });
       return document.activeElement === target;
     }

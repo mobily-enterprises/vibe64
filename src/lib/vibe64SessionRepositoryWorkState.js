@@ -73,14 +73,14 @@ function sessionRepositoryWorkState(workState = null) {
 }
 
 function repositoryWorkState(sessionItem = {}) {
-  const state = String(sessionItem?.repositoryWorkState?.state || "checking");
+  const state = String(sessionItem.repositoryWorkState?.state || "checking");
   return Object.hasOwn(REPOSITORY_WORK_STATE_PRESENTATION, state) ? state : "checking";
 }
 
 // The assistant can change source until its turn ends, so "saved" is only the
 // last check's result while the session reports assistant work.
 function repositoryWorkStateProvisional(sessionItem = {}) {
-  return sessionItem?.agentThinking === true && repositoryWorkState(sessionItem) === "saved";
+  return sessionItem.agentThinking === true && repositoryWorkState(sessionItem) === "saved";
 }
 
 function repositoryWorkStateLabel(sessionItem = {}) {
@@ -89,9 +89,9 @@ function repositoryWorkStateLabel(sessionItem = {}) {
   }
   const state = repositoryWorkState(sessionItem);
   if (state === "unsaved") {
-    const changedCount = Number(sessionItem?.repositoryWorkState?.changedCount || 0);
+    const changedCount = Number(sessionItem.repositoryWorkState?.changedCount || 0);
     const changeLabel = changedCount === 1 ? "1 change" : `${changedCount || "Unsaved"} changes`;
-    return sessionItem?.repositoryWorkState?.updateAvailable
+    return sessionItem.repositoryWorkState?.updateAvailable
       ? `${changeLabel}; update available`
       : changeLabel;
   }
@@ -100,7 +100,7 @@ function repositoryWorkStateLabel(sessionItem = {}) {
 
 // The stored reason a session's repository needs help and what to do next.
 function repositoryWorkStateProblem(sessionItem = {}) {
-  const problem = sessionItem?.repositoryWorkState?.problem;
+  const problem = sessionItem.repositoryWorkState?.problem;
   return repositoryWorkState(sessionItem) === "needs_help" && problem?.message ? problem : null;
 }
 

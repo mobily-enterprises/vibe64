@@ -161,7 +161,7 @@ function mountedSessionRealtimeShouldRefresh({ payload = {} } = {}, sessionId = 
   if (!changedSessionId || changedSessionId !== String(sessionId || "").trim()) {
     return false;
   }
-  return payload?.clientRefresh?.[read] !== false;
+  return payload.clientRefresh?.[read] !== false;
 }
 
 export {

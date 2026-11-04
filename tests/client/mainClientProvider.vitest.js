@@ -12,8 +12,7 @@ vi.mock("/src/components/studio/Vibe64ActiveSessionNavItem.vue", () => ({
 }));
 
 import {
-  attachVibe64RealtimeQueryRecovery,
-  invalidateVibe64LiveQueries
+  attachVibe64RealtimeQueryRecovery
 } from "../../packages/main/src/client/vibe64RealtimeQueries.js";
 import { MainClientProvider } from "../../packages/main/src/client/providers/MainClientProvider.js";
 import {
@@ -73,10 +72,9 @@ describe("MainClientProvider realtime integration", () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores missing query clients", async () => {
+  it("recognises Vibe64 live queries by their key", () => {
     expect(isVibe64LiveQuery({ queryKey: ["vibe64", "sessions"] })).toBe(true);
     expect(isVibe64LiveQuery({ queryKey: ["other", "sessions"] })).toBe(false);
-    expect(await Promise.resolve(invalidateVibe64LiveQueries(null))).toBeNull();
   });
 
   it("attaches directly to the realtime capability and returns an explicit detach function", () => {

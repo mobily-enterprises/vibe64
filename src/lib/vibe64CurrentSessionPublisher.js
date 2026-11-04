@@ -1,11 +1,17 @@
-function createVibe64CurrentSessionPublisher({
-  onError = () => null,
-  publish
-} = {}) {
-  if (typeof publish !== "function") {
-    throw new TypeError("Current Vibe64 session publisher requires publish().");
-  }
+/** A publication that failed is dropped; the next request publishes again. */
+function ignorePublicationError() {}
 
+/**
+ * Publishes the person's current session, one publication at a time, skipping one that repeats the last published.
+ * @param {{
+ *   onError?: (error: unknown, publication: { apiPath: string, identity: string, sessionId: string }) => void,
+ *   publish: (publication: { apiPath: string, sessionId: string }) => Promise<void>
+ * }} options
+ */
+function createVibe64CurrentSessionPublisher({
+  onError = ignorePublicationError,
+  publish
+}) {
   let pendingPublication = null;
   let publicationChain = Promise.resolve();
   let lastPublishedIdentity = null;
@@ -15,8 +21,8 @@ function createVibe64CurrentSessionPublisher({
     if (stopped) {
       return publicationChain;
     }
-    const apiPath = String(publication?.apiPath || "");
-    const sessionId = String(publication?.sessionId || "").trim();
+    const apiPath = String(publication.apiPath || "");
+    const sessionId = String(publication.sessionId || "").trim();
     pendingPublication = {
       apiPath,
       identity: JSON.stringify([apiPath, sessionId]),

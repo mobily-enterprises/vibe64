@@ -94,8 +94,8 @@ function vibe64RepositoryApiPath(sessionsApiPath = "") {
 
 function vibe64RepositoryHistoryPath(sessionsApiPath = "", options = {}) {
   const params = new URLSearchParams();
-  const sessionId = String(options?.sessionId || "").trim();
-  const cursor = String(options?.cursor || "").trim();
+  const sessionId = String(options.sessionId || "").trim();
+  const cursor = String(options.cursor || "").trim();
   if (sessionId) {
     params.set("sessionId", sessionId);
   }
@@ -113,18 +113,18 @@ function vibe64RepositoryVersionFilesPath(
   options = {}
 ) {
   const params = new URLSearchParams();
-  const sessionId = String(options?.sessionId || "").trim();
-  const historySnapshotCommit = String(options?.historySnapshotCommit || "").trim();
+  const sessionId = String(options.sessionId || "").trim();
+  const historySnapshotCommit = String(options.historySnapshotCommit || "").trim();
   if (sessionId) {
     params.set("sessionId", sessionId);
   }
   if (historySnapshotCommit) {
     params.set("historySnapshotCommit", historySnapshotCommit);
   }
-  if (Number.isInteger(Number(options?.offset)) && Number(options.offset) > 0) {
+  if (Number.isInteger(Number(options.offset)) && Number(options.offset) > 0) {
     params.set("offset", String(Number(options.offset)));
   }
-  if (Number.isInteger(Number(options?.limit)) && Number(options.limit) > 0) {
+  if (Number.isInteger(Number(options.limit)) && Number(options.limit) > 0) {
     params.set("limit", String(Number(options.limit)));
   }
   const query = params.toString();
@@ -139,8 +139,8 @@ function vibe64RepositoryVersionDiffPath(
   options = {}
 ) {
   const params = new URLSearchParams({ path: String(sourcePath || "") });
-  const sessionId = String(options?.sessionId || "").trim();
-  const historySnapshotCommit = String(options?.historySnapshotCommit || "").trim();
+  const sessionId = String(options.sessionId || "").trim();
+  const historySnapshotCommit = String(options.historySnapshotCommit || "").trim();
   if (sessionId) {
     params.set("sessionId", sessionId);
   }
@@ -152,10 +152,10 @@ function vibe64RepositoryVersionDiffPath(
 
 function vibe64SessionChangesPath(sessionsApiPath = "", sessionId = "", options = {}) {
   const params = new URLSearchParams();
-  if (Number.isInteger(Number(options?.offset)) && Number(options.offset) > 0) {
+  if (Number.isInteger(Number(options.offset)) && Number(options.offset) > 0) {
     params.set("offset", String(Number(options.offset)));
   }
-  if (Number.isInteger(Number(options?.limit)) && Number(options.limit) > 0) {
+  if (Number.isInteger(Number(options.limit)) && Number(options.limit) > 0) {
     params.set("limit", String(Number(options.limit)));
   }
   const query = params.toString();
@@ -296,14 +296,14 @@ function vibe64OutputResultPath(sessionsApiPath = "", sessionId = "", resultId =
 function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "", options = {}) {
   const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
   const params = new URLSearchParams();
-  const normalizedPath = String(options?.path || "").trim();
+  const normalizedPath = String(options.path || "").trim();
   if (normalizedPath) {
     params.set("path", normalizedPath);
   }
-  if (Number.isInteger(Number(options?.offset)) && Number(options.offset) > 0) {
+  if (Number.isInteger(Number(options.offset)) && Number(options.offset) > 0) {
     params.set("offset", String(Number(options.offset)));
   }
-  if (Number.isInteger(Number(options?.limit)) && Number(options.limit) > 0) {
+  if (Number.isInteger(Number(options.limit)) && Number(options.limit) > 0) {
     params.set("limit", String(Number(options.limit)));
   }
   const query = params.toString();
@@ -405,7 +405,7 @@ function vibe64OutputsQueryKey(surfaceId, ownershipFilter, sessionId = "", proje
 }
 
 function agentSettingsInputFromContext(context = {}) {
-  return context?.agentSettings && typeof context.agentSettings === "object" && !Array.isArray(context.agentSettings)
+  return context.agentSettings && typeof context.agentSettings === "object" && !Array.isArray(context.agentSettings)
     ? {
         agentSettings: context.agentSettings
       }

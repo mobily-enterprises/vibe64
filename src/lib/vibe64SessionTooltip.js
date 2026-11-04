@@ -11,7 +11,7 @@ function createVibe64SessionTooltipState() {
 
   function trackPointer(event) {
     if (!suppressedSessionId.value) return;
-    const tab = event.target.closest?.("[data-vibe64-session-id]");
+    const tab = event.target.closest("[data-vibe64-session-id]");
     if (tab?.dataset.vibe64SessionId !== suppressedSessionId.value) resumeHover();
   }
 

@@ -138,13 +138,13 @@ function sessionRenewalFailureSupportingMessage(renewal = null) {
 }
 
 function sessionRenewalAdvisoryPresentation(advisory = {}) {
-  const severity = String(advisory?.severity || "none").trim();
-  const recommended = advisory?.recommended === true;
+  const severity = String(advisory.severity || "none").trim();
+  const recommended = advisory.recommended === true;
   return {
     attention: recommended,
     color: severity === "soon" ? "warning" : recommended ? "primary" : undefined,
     label: severity === "soon" ? "Renew soon" : recommended ? "Consider renewal" : "Renew session",
-    reason: String(advisory?.reason || "Renew this session with a reviewed handover.").trim()
+    reason: String(advisory.reason || "Renew this session with a reviewed handover.").trim()
   };
 }
 

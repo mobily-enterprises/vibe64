@@ -1,15 +1,18 @@
-// Failures name their message in errors[0], error (text or { message }) or message.
-function vibe64ApiResponseError(response = {}, fallback = "Vibe64 request failed.") {
-  const error = typeof response?.error === "string" ? response.error : response?.error?.message;
-  return String(response?.errors?.[0]?.message || error || response?.message || fallback);
+import { isRecord, normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+
+// Failures name their message in errors[0], error (text or { message }) or message. A refused request may have no
+// body at all.
+function vibe64ApiResponseError(response, fallback = "Vibe64 request failed.") {
+  const body = normalizeObject(response);
+  const error = typeof body.error === "string" ? body.error : body.error?.message;
+  return String(body.errors?.[0]?.message || error || body.message || fallback);
 }
 
 function vibe64ApiError(response = {}, fallback = "Vibe64 request failed.") {
+  const body = normalizeObject(response);
   const error = new Error(vibe64ApiResponseError(response, fallback));
-  error.code = String(response?.code || response?.errors?.[0]?.code || "");
-  error.details = response?.details && typeof response.details === "object" && !Array.isArray(response.details)
-    ? response.details
-    : null;
+  error.code = String(body.code || body.errors?.[0]?.code || "");
+  error.details = isRecord(body.details) ? body.details : null;
   error.response = response;
   return error;
 }
