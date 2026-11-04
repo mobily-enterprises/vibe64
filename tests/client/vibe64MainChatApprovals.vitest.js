@@ -180,7 +180,7 @@ describe("approval queue reader", () => {
     const scope = effectScope();
     const app = createApp({});
     const value = app.runWithContext(() => scope.run(() => useVibe64MainChatApprovals({
-      projectSlug: "chat-test", projectLabel: "Hello Node", sessionId: "session-1", sessionsApiPath: "/api/sessions", ...options
+      projectSlug: "chat-test", projectLabel: "Hello Node", sessionId: "session-1", sessionsApiPath: "/api/sessions", onReview: vi.fn(), ...options
     })));
     return { value, scope };
   }

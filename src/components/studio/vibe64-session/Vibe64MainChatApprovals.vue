@@ -176,7 +176,7 @@ import { mdiCheck, mdiChevronUp, mdiClockOutline, mdiClose, mdiPencilOutline, md
 const RECENT_ROWS = 3;
 
 const props = defineProps({
-  approvals: { type: Object, required: true },
+  approvals: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64MainChatApprovals>} */ (Object), required: true },
   phone: { type: Boolean, default: false }
 });
 const emit = defineEmits(["show-in-chat"]);

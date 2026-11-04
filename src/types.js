@@ -32,3 +32,6 @@
 /** @typedef {ReturnType<typeof import("./composables/useVibe64StarredFiles.js").useVibe64StarredFiles>} Vibe64StarredFiles */
 
 export {};
+
+/** @typedef {NonNullable<ReturnType<typeof import("./composables/useVibe64ConversationRuntime.js").useVibe64ConversationRuntime>["value"]>} Vibe64ConversationRuntime */
+/** @typedef {import("vue").UnwrapNestedRefs<ReturnType<typeof import("./composables/useVibe64MainChatApprovals.js").useVibe64MainChatApprovals>>} Vibe64MainChatApprovals */

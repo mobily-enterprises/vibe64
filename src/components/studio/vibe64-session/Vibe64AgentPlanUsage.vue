@@ -16,7 +16,7 @@ import { findVibe64AgentProvider, vibe64ProviderPresentation } from "@local/vibe
 const props = defineProps({
   active: Boolean,
   session: { type: Object, default: null },
-  conversationRuntime: { type: Object, default: null },
+  conversationRuntime: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64ConversationRuntime>} */ (Object), required: true },
   sessionsApiPath: { type: [Function, Object, String], default: "" }
 });
 const projectSlug = useVibe64ProjectSlug();
@@ -82,9 +82,9 @@ useRealtimeEvent({
     ["agent-plan-usage", `${engineId.value}-plan-usage`].includes(payload.reason),
   onEvent: () => { if (!globalThis.document?.hidden) void usage.reload(); }
 });
-const suppliedGoal = computed(() => unref(props.conversationRuntime?.goalState));
-const goalView = computed(() => unref(props.conversationRuntime?.goalView));
-const goalAvailable = computed(() => goalEnabled.value && !suppliedGoal.value?.loading && suppliedGoal.value?.available !== false && !unref(props.conversationRuntime?.goalLoadError) &&
+const suppliedGoal = computed(() => unref(props.conversationRuntime.goalState));
+const goalView = computed(() => unref(props.conversationRuntime.goalView));
+const goalAvailable = computed(() => goalEnabled.value && !suppliedGoal.value?.loading && suppliedGoal.value?.available !== false && !unref(props.conversationRuntime.goalLoadError) &&
   goalView.value?.status === "available");
 const goal = computed(() => goalAvailable.value ? goalView.value?.goal || null : null);
 const goalEngineId = computed(() => goalView.value?.routing?.selection?.engineId || engineId.value);

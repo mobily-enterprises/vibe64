@@ -22,16 +22,26 @@ function titleWithoutCount(title = "") {
   return String(title).replace(/^\(\d+\) /u, "");
 }
 
-// A team member's main-chat messages wait for the owner. One reader per chat:
-// everyone sees the same queue; actions depend on who is looking.
+/**
+ * A team member's main-chat messages wait for the owner. One reader per chat:
+ * everyone sees the same queue; actions depend on who is looking.
+ * @param {{
+ *   active?: import("vue").MaybeRefOrGetter<boolean>,
+ *   projectSlug: import("vue").MaybeRefOrGetter<string>,
+ *   projectLabel?: import("vue").MaybeRefOrGetter<string>,
+ *   sessionId: import("vue").MaybeRefOrGetter<string>,
+ *   sessionsApiPath: import("vue").MaybeRefOrGetter<string>,
+ *   onReview: (sessionId: string) => void
+ * }} options onReview opens the chat whose message the owner chose to review.
+ */
 function useVibe64MainChatApprovals({
   active = true,
   projectSlug,
   projectLabel = projectSlug,
   sessionId,
   sessionsApiPath,
-  onReview = null
-} = {}) {
+  onReview
+}) {
   const feedback = useShellWebErrorRuntime();
   const slug = computed(() => String(readRefOrGetterValue(projectSlug) || ""));
   const id = computed(() => String(readRefOrGetterValue(sessionId) || ""));
@@ -157,7 +167,7 @@ function useVibe64MainChatApprovals({
       source: "vibe64.main-chat-approvals.queued", intent: "action-feedback", severity: "info", channel: "snackbar",
       message: `${payload.approvalSender || "A team member"} sent a message for your approval in ${readRefOrGetterValue(projectLabel) || slug.value}`,
       dedupeKey: `approval:${payload.sessionId}:${payload.approvalId || ""}`,
-      ...(typeof onReview === "function" ? { action: { label: "Review", handler: () => onReview(payload.sessionId) } } : {})
+      action: { label: "Review", handler: () => onReview(payload.sessionId) }
     })
   });
 

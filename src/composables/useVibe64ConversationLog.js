@@ -1,4 +1,5 @@
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
+import { isRecord, normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -67,12 +68,10 @@ function normalizeConversationTurn(turn = {}, index = 0) {
   };
 }
 
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function normalizeConversationLog(payload = {}, options = {}) {
-  const turns = Array.isArray(payload?.conversationLog) ? payload.conversationLog : [];
+// A conversation log read is server data and may be null.
+function normalizeConversationLog(payload, options = {}) {
+  const log = normalizeObject(payload).conversationLog;
+  const turns = Array.isArray(log) ? log : [];
   const normalizedTurns = turns
     .map((turn, index) => normalizeConversationTurn(turn, index))
     .filter(Boolean);
@@ -128,6 +127,18 @@ function conversationLogCompletedTurnKey(session = {}) {
   return `${sessionId}|${revision}|${turnId}`;
 }
 
+/**
+ * A conversation's integration setup requests: connect, check, cancel, skip and resume.
+ * @param {{
+ *   turns: import("vue").ComputedRef<Array<Record<string, any>>>,
+ *   enabled: import("vue").ComputedRef<boolean>,
+ *   sessionId: import("vue").ComputedRef<string>,
+ *   projectSlug: import("vue").Ref<string>,
+ *   sessionsApiPath: import("vue").ComputedRef<string>,
+ *   reloadConversationLog: SuppliedConversation["reload"],
+ *   httpClient: import("@jskit-ai/http-web/client/types").HttpClient
+ * }} options
+ */
 function useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug, sessionsApiPath, reloadConversationLog, httpClient }) {
   const integrationActionPending = shallowRef(null);
   const integrationActionError = ref(null);
@@ -169,7 +180,9 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
         const integrationId = turn.integrationSetup.integrationId;
         const integration = config?.configuration?.integrations?.[integrationId];
         if (!integration) throw new Error("Choose Configure to set up this integration first.");
-        if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
+        if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly ||
+          // readable-check: allow optional-call - optional operation: only a connector whose settings decide whether it has an account defines configurationOnlyForSettings
+          provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
           integrationConnections.value = { ...integrationConnections.value,
             [selection.requestId]: { status: "configuration-only" } };
           return true;
@@ -234,16 +247,41 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
     integrationActionPending, integrationActionError, skipIntegrationRequest, resumeIntegrationRequest };
 }
 
-// Main chat's product view over its supplied JSKIT conversation binding: the
-// binding owns reads, live output and recovery; this adds Vibe64's pending
-// turn, integration actions and completion reconciliation.
+/**
+ * The members of JSKIT's supplied conversation that Main chat's log reads. It is assistant-runtime's
+ * ConversationRuntime, which that package does not export as a client type.
+ * @typedef {object} SuppliedConversation
+ * @property {import("vue").Ref<Array<Record<string, any>>>} turns
+ * @property {import("vue").Ref<string>} error
+ * @property {import("vue").Ref<boolean>} [accessDenied]
+ * @property {import("vue").Ref<boolean>} hasMoreBefore
+ * @property {(request?: object) => Promise<unknown>} loadMore
+ * @property {import("vue").Ref<string>} loadMoreError
+ * @property {import("vue").Ref<boolean>} loading
+ * @property {import("vue").Ref<boolean>} loadingMore
+ * @property {import("vue").Ref<object | null>} snapshot
+ * @property {(options?: { resubscribe?: boolean }) => Promise<unknown>} reload
+ */
+
+/**
+ * Main chat's product view over its supplied JSKIT conversation binding: the
+ * binding owns reads, live output and recovery; this adds Vibe64's pending
+ * turn, integration actions and completion reconciliation.
+ * @param {{
+ *   active?: import("vue").MaybeRefOrGetter<boolean>,
+ *   projectSlug?: import("vue").MaybeRefOrGetter<string>,
+ *   sessionsApiPath?: import("vue").MaybeRefOrGetter<string>,
+ *   session: import("vue").MaybeRefOrGetter<Record<string, any> | null>,
+ *   conversation: SuppliedConversation
+ * }} options
+ */
 function useVibe64ConversationLog({
   active = true,
   projectSlug: projectSlugInput,
   sessionsApiPath: sessionsApiPathInput,
   session,
   conversation
-} = {}) {
+}) {
   const paths = usePaths();
   const httpClient = getHttpWebClient();
   const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
@@ -283,7 +321,15 @@ function useVibe64ConversationLog({
       // The supplied binding retains the error and its ordinary recovery.
     });
   }, { flush: "post" });
-  return { ...integrationActions, turns, error: conversation.error,
+  return { integrationConnections: integrationActions.integrationConnections,
+    connectIntegrationRequest: integrationActions.connectIntegrationRequest,
+    checkIntegrationRequest: integrationActions.checkIntegrationRequest,
+    cancelIntegrationRequest: integrationActions.cancelIntegrationRequest,
+    integrationActionPending: integrationActions.integrationActionPending,
+    integrationActionError: integrationActions.integrationActionError,
+    skipIntegrationRequest: integrationActions.skipIntegrationRequest,
+    resumeIntegrationRequest: integrationActions.resumeIntegrationRequest,
+    turns, error: conversation.error,
     errorReloadable: computed(() => conversation.accessDenied?.value === false),
     hasMoreBefore: conversation.hasMoreBefore,
     loadMore: conversation.loadMore, loadMoreError: conversation.loadMoreError, loading: conversation.loading,

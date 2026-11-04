@@ -134,8 +134,17 @@ function createConversationApplication(conversation, { identity, viewer, summary
     } };
 }
 
-/** Main text and voice consume one supplied retained conversation. */
-function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, active = true, summarySession } = {}) {
+/**
+ * Main text and voice consume one supplied retained conversation.
+ * @param {{
+ *   sessionId: import("vue").MaybeRefOrGetter<string>,
+ *   projectSlug: import("vue").MaybeRefOrGetter<string>,
+ *   sessionsApiPath: import("vue").MaybeRefOrGetter<string>,
+ *   active?: import("vue").MaybeRefOrGetter<boolean>,
+ *   summarySession?: import("vue").MaybeRefOrGetter<{ sessionId?: string } | null>
+ * }} options summarySession is the session list's entry, shown until the session's own read arrives.
+ */
+function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, active = true, summarySession }) {
   /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   // The retained factory runs outside this component's setup after selection.

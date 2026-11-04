@@ -65,7 +65,9 @@ function mountPlanUsage() {
   }).createApp(PlanUsage, {
     active: true,
     session: { sessionId: "one", assistantSelection: { engineId: "claude" } },
-    sessionsApiPath: "/api/projects/fixture/sessions"
+    sessionsApiPath: "/api/projects/fixture/sessions",
+    // No goal is set; this test reads only the plan allowance.
+    conversationRuntime: { goalState: null, goalView: null, goalLoadError: null, changeGoal: vi.fn() }
   });
   app.use(VueQueryPlugin, { queryClient });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
