@@ -47,12 +47,18 @@ function createTemporaryConversationLifecycle({
   temporaryCompletionRetryMs,
   routing
 }) {
+  /**
+   * `options.aiTask`, from the AI tasks feature only, makes this chat that task's conversation: it receives
+   * the session's conversations inside this write, and returns the task to save or throws its refusal.
+   */
   async function createTemporaryConversation(sessionId, input, options = {}) {
     let created = false;
-    const result = await chatTurns.writeSnapshot(sessionId, options, async (ctx) => {
+    const { aiTask = null, ...writeOptions } = options;
+    const result = await chatTurns.writeSnapshot(sessionId, writeOptions, async (ctx) => {
       const conversationId = input.conversationId || randomUUID();
       const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
       if (existing) return chatTurns.snapshotWithAccess(ctx, existing);
+      const task = aiTask ? aiTask(await ctx.runtime.store.listSessionConversations(sessionId)) : null;
       created = true;
       const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
       const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
@@ -64,8 +70,8 @@ function createTemporaryConversationLifecycle({
           ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
           : { mode: "senior", override: parentSelection };
       }
-      const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
-        : input.assistantRouting || inheritedPreferences;
+      const fixRequired = input.presentation?.recoveryOperation === "update" || task?.turn.routing === "fix";
+      const requestedPreferences = fixRequired ? { mode: "fix" } : input.assistantRouting || inheritedPreferences;
       if (requestedPreferences.mode === "auto") throw temporaryAutoModeRefusal();
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
       const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false });
@@ -75,6 +81,7 @@ function createTemporaryConversationLifecycle({
       const numbers = numberedConversations(await ctx.runtime.store.listSessionConversations(sessionId)).map(item => item.number);
       const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
         ...initialPresentation,
+        ...(task ? { task } : {}),
         number: Math.max(0, ...numbers) + 1,
         ...(Object.hasOwn(initialPresentation, "draft") ? { draftRevision: randomUUID() } : {}),
         ...(preferences ? {

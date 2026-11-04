@@ -33,6 +33,10 @@ function prepareCopiedSessionConversation(record) {
     copy.status = "interrupted";
     copy.error = "Copied into a stopped development environment.";
   }
+  // Nothing runs in the copy, so an AI task there waits for a person, as after a restart.
+  if (copy.task?.active) {
+    copy.task = { ...copy.task, phase: "needs_you", reason: "interrupted", message: "", waiting: false, pending: null, active: false };
+  }
   return copy;
 }
 
