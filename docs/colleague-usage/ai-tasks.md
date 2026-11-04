@@ -1,15 +1,15 @@
 # Fix a problem with AI in the AI task window
 
-When Vibe64 offers **Fix it with AI** on an Update failure, the whole fix happens
-in one window: the problem, the conversation with the AI, what Vibe64 is doing,
-and the result. You close it once the fix is **Done** or **Not done**. It can't
-end any other way. Update uses this window now; other **Fix it with AI** repairs
-still open a temporary chat ([Choose the AI for a temporary chat](temporary-chats.md))
+When Vibe64 offers **Fix it with AI** on an Update or Save failure, the whole fix
+happens in one window: the problem, the conversation with the AI, what Vibe64 is
+doing, and the result. You close it once the fix is **Done** or **Not done**. It
+can't end any other way. Update and Save use this window now; other **Fix it with
+AI** repairs still open a temporary chat ([Choose the AI for a temporary chat](temporary-chats.md))
 until they move across.
 
 ## Open it
 
-Choose **Fix it with AI** on the Update notice or on the Update error in
+Choose **Fix it with AI** on the Update or Save notice, or on the Update error in
 Repository. The button says **Opening…** while it starts, **Being fixed… →** while
 a fix is running, and **See result →** when a fix has ended and waits for you. In
 those last two states it opens the same window again; it never starts a second fix.
@@ -26,8 +26,9 @@ the problem stays in view. Choose **Details** to read all of it.
 Two views sit under the problem, and only one shows at a time:
 
 - **Progress** lists the steps (for Update: **The AI repairs the conflicts** and
-  **Vibe64 runs Update**), the attempt, and an activity list. Choose **Update
-  output** to read what Update printed.
+  **Vibe64 runs Update**; for Save: **The AI repairs what stopped Save** and
+  **Vibe64 runs Save**), the attempt, and an activity list. Choose **Update
+  output** or **Save output** to read what the run printed.
 - **Chat** is the conversation with the AI. A dot on **Chat** means the AI is waiting
   for your answer.
 
@@ -56,6 +57,8 @@ can be done next.
 | Vibe64 couldn't confirm the result | **Check now**. |
 | The check failed. Your unsent message is waiting. | **Open chat** and send it or clear it. |
 | What Update said, after three failed checks | **Check now**, **Open chat** or **Review resolved conflicts**. |
+| What Save said, after three failed checks | **Check now** or **Open chat**. |
+| Save needs your review of where it goes | Choose **Save** and review it, then **Check now**. |
 
 **Review resolved conflicts** opens the same review as the Update error (see
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts)).
@@ -64,9 +67,11 @@ When you confirm it, the window runs Update as this fix's own check.
 ## How a fix ends
 
 **Done** is proved, never assumed. When the AI says it has finished, Vibe64 runs
-Update again by itself, on the server, whether or not anyone is watching. You never
-press another button to finish a fix. If Update still fails, the fix goes back to the
-same conversation with what failed, up to three attempts.
+Update or Save again by itself, on the server, whether or not anyone is watching. You
+never press another button to finish a fix: a fixed Save pushes the work. If the run
+still fails, the fix goes back to the same conversation with what failed, up to three
+attempts. Work you saved yourself meanwhile counts: when nothing is left to save,
+the Save fix is Done.
 
 **Not done** is decided by a person: you choose **Cancel** or **End as not done**, or
 the session is archived while the fix is open. Vibe64 never gives up on its own.
@@ -95,8 +100,8 @@ If a fix ends while the window is hidden, a message offers **See result**.
 in the session. **Cancel fix** confirms; **Keep going** carries on. Cancelling always
 works. The button then says **Cancelling…** until Vibe64 confirms it.
 
-Update can't be interrupted, so a Cancel during the check says so and the fix ends as
-soon as that run finishes.
+Update and Save can't be interrupted, so a Cancel during the check says so and the fix
+ends as soon as that run finishes.
 
 ## One at a time
 
@@ -109,4 +114,4 @@ Archiving a session with a fix running warns you first, and ends the fix as **No
 done**.
 
 Colleague can explain this window and what its state means. It doesn't start, answer
-or end a fix from Update's notice; choose those controls yourself.
+or end a fix from a notice; choose those controls yourself.

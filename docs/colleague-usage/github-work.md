@@ -49,11 +49,13 @@ chat shows **Automatic save didn't run:** with the reason, and nothing changes.
 See [Auto workflow](auto-workflow.md).
 
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
-AI**, which opens a temporary repair chat with the exact error and asks it to
-preserve all work. Ordinary failures also keep **Retry**; conflicts and diverged
-history offer only the repair, because retrying alone cannot succeed. Review the
-repair's result, then retry the operation. Selecting the button requires the
-person's interaction; Colleague can explain it.
+AI**, which opens the [AI task window](ai-tasks.md) with the exact error. The AI
+repairs the files, then Vibe64 runs Save or Update itself, so you never press
+another button to finish: a fixed Save pushes the work by itself. If Save needs your
+review of where it goes, the fix stops and asks you to choose **Save** and then
+**Check now**. Ordinary failures also keep **Retry** while no fix is open; conflicts
+and diverged history offer only the repair, because retrying alone cannot succeed.
+Selecting the button requires the person's interaction; Colleague can explain it.
 
 If a session's own coding agent rewrote the saved branch's history and pushed it
 (for example, by splitting large commits and force-pushing), select **Check for
@@ -119,7 +121,8 @@ review before this session can update: package-lock.json, package.json…*, and
   then choose **Review resolved conflicts** (see below);
 - a required pull request: **Create draft PR** or **Fix it with AI**;
 - diverged history: **Fix it with AI** only, because retrying cannot succeed;
-- anything else: **Fix it with AI**, or fix the cause and Save or Update again.
+- anything else: **Fix it with AI**, which opens the same window for Save and
+  Update, or fix the cause and Save or Update again.
 
 These controls are on the Save or Update notice in chat. If you dismissed it,
 open the selected tab's info and choose **Show Update notice** (or **Show Save

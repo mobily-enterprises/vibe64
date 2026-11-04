@@ -227,7 +227,7 @@ function createSessionWork({
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
       const runtime = await project.createRuntimeWithoutSource();
-      await refuseDuringRepositoryAiTask(runtime, sessionId);
+      await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
       let session = await runtime.getSessionWithoutSource(sessionId);
       const previous = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       if (previous?.status === "failed" && (

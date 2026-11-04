@@ -36,7 +36,9 @@ const conflictResult = (reviewId = "review-2", paths = ["a.js"]) => ({
 });
 const never = () => new Promise(() => {});
 
-async function taskFixture(root, { updateFailure = conflictFailure } = {}) {
+const saveFailure = { status: "failed", code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed.", operationId: "save-1" };
+
+async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null } = {}) {
   const selection = { engineId: "codex", modelProviderId: "openai", agentId: "codex", modelId: "main-model", variantId: "high",
     catalogRevision: `sha256:${"a".repeat(64)}` };
   const capabilities = { engineId: "codex", transportId: "codex_app_server", revision: `sha256:${"b".repeat(64)}`, defaults: selection,
@@ -47,6 +49,7 @@ async function taskFixture(root, { updateFailure = conflictFailure } = {}) {
     ...sourceMetadata(root, SESSION), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
   if (updateFailure) await store.writeBackgroundTaskEvent(SESSION, "update-session", { patch: updateFailure });
+  if (saveFailed) await store.writeBackgroundTaskEvent(SESSION, "save-work", { patch: saveFailed });
   const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: id => store.readSession(id),
     getSessionWithoutSource: id => store.readSession(id),
     listSessionSummaries: async () => [{ sessionId: SESSION }] };
@@ -87,7 +90,12 @@ async function taskFixture(root, { updateFailure = conflictFailure } = {}) {
   Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options) });
   const updates = [];
   const published = [];
-  const server = { update: async () => ({ ok: true }) };
+  const saves = [];
+  const server = {
+    update: async () => ({ ok: true }),
+    save: async () => ({ ok: true }),
+    inspect: async () => ({ ok: true, unsaved: true, destination: { mode: "github", branch: "main" } })
+  };
 
   /** A fresh server over the same store and the same AI. `terminalsWrap` injects a crash. */
   function boot({ terminalsWrap = terminals => terminals } = {}) {
@@ -121,16 +129,23 @@ async function taskFixture(root, { updateFailure = conflictFailure } = {}) {
       logger: silentLogger,
       project,
       publishSessionChanged: async (_id, event) => { published.push(event); },
-      sessions: { async updateSessionWork(sessionId, input) {
-        updates.push(input);
-        return server.update(input);
-      } },
+      sessions: {
+        async updateSessionWork(sessionId, input) {
+          updates.push(input);
+          return server.update(input);
+        },
+        async saveSessionWork(sessionId, input) {
+          saves.push(input);
+          return server.save(input);
+        },
+        inspectSessionWork: () => server.inspect()
+      },
       terminals: terminalsWrap(conversations)
     });
     return { aiTasks, conversations };
   }
 
-  const start = (aiTasks, by = OWNER) => aiTasks.start(SESSION, { kind: "update", input: {}, vibe64User: by });
+  const start = (aiTasks, by = OWNER, kind = "update") => aiTasks.start(SESSION, { kind, input: {}, vibe64User: by });
   const quiet = aiTasks => aiTasks.resumeInterruptedTasks();
   const task = async id => (await store.readSessionConversation(SESSION, id))?.task;
 
@@ -142,7 +157,7 @@ async function taskFixture(root, { updateFailure = conflictFailure } = {}) {
     await quiet(running.aiTasks);
   }
 
-  return { boot, finishTurn, native, published, quiet, server, start, store, task, updates };
+  return { boot, finishTurn, native, published, quiet, saves, server, start, store, task, updates };
 }
 
 function withFixture(run, options) {
@@ -179,6 +194,47 @@ test("a completed repair runs Update on the server with no browser, and the task
   assert.equal(f.updates[0].aiTaskId, task.id);
   assert.equal(f.updates[0].vibe64User.id, "owner");
 }));
+
+test("a completed Save repair runs Save on the server to the session's destination, and the task ends Done", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  assert.equal(task.title, "Fix Save");
+  assert.equal(task.problem.summary, "The pre-commit hook failed.");
+  await f.quiet(running.aiTasks);
+  assert.match(f.native.turns[0].message, /Help resolve this Vibe64 Save problem/);
+  await f.finishTurn(running);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "Session saved. Your work was pushed.");
+  assert.equal(f.saves.length, 1);
+  assert.deepEqual(f.saves[0].destinationReview, { mode: "github", branch: "main" });
+  assert.equal(f.saves[0].aiTaskId, task.id);
+  assert.equal(f.updates.length, 0);
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+test("a Save only a person can settle stops for them without asking the AI again", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  await f.quiet(running.aiTasks);
+  f.server.save = async () => ({ ok: false, code: "vibe64_session_repository_review_changed", error: "The destination changed." });
+  await f.finishTurn(running);
+  const stuck = await f.task(task.id);
+  assert.equal(stuck.phase, "needs_you");
+  assert.equal(stuck.reason, "check_stuck");
+  assert.equal(stuck.message, "Save needs your review of where it goes. Choose Save, review it, then Check now.");
+  assert.equal(f.native.turns.length, 1);
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+test("work a person saved meanwhile ends the Save fix Done without saving again", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  await f.quiet(running.aiTasks);
+  await f.store.writeBackgroundTaskEvent(SESSION, "save-work", { patch: { status: "ready", code: "", error: "" } });
+  f.server.inspect = async () => ({ ok: true, unsaved: false, destination: { mode: "github", branch: "main" } });
+  await f.finishTurn(running);
+  assert.equal((await f.task(task.id)).phase, "done");
+  assert.equal(f.saves.length, 0);
+}, { updateFailure: null, saveFailed: saveFailure }));
 
 test("a failed check goes back to the same conversation as a recorded message, and passes on the next try", () => withFixture(async (f) => {
   const running = f.boot();

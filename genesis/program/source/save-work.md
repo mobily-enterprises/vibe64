@@ -265,8 +265,11 @@ changes while already saved temporary-chat history and plain draft text remain
 available through the short session-store path. An Update repair is an
 [AI task](../conversation/ai-tasks.md) whose check records a request identity on the
 existing background task, so a lost response or a restart recovers confirmed progress
-without launching a duplicate Update. While such a task runs, Save and Update refuse
-to start.
+without launching a duplicate Update. A Save repair is an AI task too: once the AI
+finishes, its check runs Save to the destination a fresh inspection reports, which
+pushes the work without another click. The check passes the task's identity, so the
+repository-task refusal lets that one Save through. While either task runs, Save and
+Update refuse to start.
 
 Colleague can read saved branches and open a session on an existing branch or
 create a new named branch through ordinary session creation. Branch discovery

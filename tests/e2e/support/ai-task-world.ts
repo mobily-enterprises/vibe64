@@ -30,8 +30,20 @@ export function conflictAnswer(reviewId: string, paths = ["src/pricing.js"]) {
  * repository reads see, so a scenario can end the failure as Update would.
  */
 export async function aiTaskWorld(page: Page, server: StatusServer, failure: Record<string, any> = CONFLICT_FAILURE) {
+  return repositoryWorld(page, server, failure, "update");
+}
+
+export const SAVE_FAILURE = { status: "failed", code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed: lint found 2 errors." };
+
+/** A session whose Save has failed. `world.updated` here means Save has since succeeded. */
+export async function saveTaskWorld(page: Page, server: StatusServer, failure: Record<string, any> = SAVE_FAILURE) {
+  return repositoryWorld(page, server, failure, "save");
+}
+
+async function repositoryWorld(page: Page, server: StatusServer, failure: Record<string, any>, kind: "update" | "save") {
   const world = { updated: false, operationEvents: [] as { at: string; message: string }[] };
-  await server.temporary!.store.writeBackgroundTaskEvent(directChatSessionId, "update-session", { patch: failure });
+  const update = kind === "update";
+  await server.temporary!.store.writeBackgroundTaskEvent(directChatSessionId, update ? "update-session" : "save-work", { patch: failure });
   await mockProjectGateReady(page);
   await relayConversation(page, server);
   await routeApiEndpoint(page, "/vibe64/repository", async (route) => {
@@ -62,17 +74,19 @@ export async function aiTaskWorld(page: Page, server: StatusServer, failure: Rec
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/updates/check")) {
-      await fulfillJson(route, world.updated
+      await fulfillJson(route, world.updated || !update
         ? { ok: true, relationship: "current", ahead: 0, behind: 0, updateAvailable: false, incomingVersions: [] }
         : { code: failure.code, error: failure.error, ok: false });
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/work")) {
-      await fulfillJson(route, { ahead: 0, behind: world.updated ? 0 : 1, ok: true, operation: null, unsaved: true, updateAvailable: !world.updated,
-        updateOperation: world.updated ? null : {
-          operationId: "failed-update", kind: "update", status: "failed", code: failure.code,
-          error: failure.error, conflictRecovery: failure.conflictRecovery, events: world.operationEvents
-        } });
+      const failed = world.updated ? null : {
+        operationId: `failed-${kind}`, kind, status: "failed", code: failure.code,
+        error: failure.error, conflictRecovery: failure.conflictRecovery, events: world.operationEvents
+      };
+      await fulfillJson(route, { ahead: update ? 0 : 1, behind: update && !world.updated ? 1 : 0, ok: true,
+        unsaved: update || !world.updated, updateAvailable: update && !world.updated,
+        operation: update ? null : failed, updateOperation: update ? failed : null });
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
@@ -91,12 +105,12 @@ export const taskWindow = (page: Page) => page.locator("[data-vibe64-ai-task]");
 export async function openFix(page: Page, server: StatusServer, arrive: () => Promise<void> = async () => {}) {
   await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
   await arrive();
+  // On a phone the notice can sit in the hidden chat: wait for the page, then show the chat if needed.
   const button = page.locator("[data-vibe64-ai-task-button]").filter({ visible: true }).first();
-  if (!await button.isVisible().catch(() => false)) {
-    const showChat = page.getByRole("button", { name: "Show chat", exact: true });
-    if (await showChat.isVisible().catch(() => false)) await showChat.click();
-  }
-  await page.locator("[data-vibe64-ai-task-button]").filter({ visible: true }).first().click();
+  const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+  await expect(button.or(showChat).first()).toBeVisible();
+  if (!await button.isVisible()) await showChat.click();
+  await button.click();
   await expect(taskWindow(page)).toBeVisible();
   return taskIdOf(page);
 }

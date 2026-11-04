@@ -850,7 +850,7 @@ describe("Vibe64 direct session view", () => {
     }
   });
 
-  it("uses one shared Fix it with AI control for every Temporary AI recovery launcher", () => {
+  it("uses one shared Fix it with AI control for every recovery launcher", () => {
     const autopilot = readAutopilotViewSource();
     const outputControls = fs.readFileSync(
       path.resolve("src/components/studio/Vibe64PreviewIdentityMenu.vue"),
@@ -862,7 +862,8 @@ describe("Vibe64 direct session view", () => {
     );
     const fixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
 
-    expect(autopilot.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(2);
+    expect(autopilot.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
+    expect(autopilot.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect(outputControls.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
     expect(repository.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect([autopilot, outputControls, repository].join("\n")).not.toContain(
@@ -960,8 +961,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(repairs).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantFixAllowed"');
-    expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage\"");
+    expect(component).toContain(":kind=\"saveWorkActivityIsUpdate ? 'update' : 'save'\"");
     expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");

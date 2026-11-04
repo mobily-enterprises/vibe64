@@ -4,8 +4,8 @@ An AI task is a specific job given to an agent: a problem, the conversation that
 works on it, the proof that it worked, and an outcome. People find it in one
 window that presents the problem and its solution, or the lack of one, together.
 A task ends **Done** or **Not done**. Done is proved, never assumed; Not done is
-decided by a person. Only Update has moved to AI tasks so far. Other repairs, and
-Update repairs recorded before this change, stay in
+decided by a person. Update and Save have moved to AI tasks so far. Other repairs,
+and Update and Save repairs recorded before this change, stay in
 [temporary assistance](temporary-assistance.md) until they move.
 
 ## The server owns a task
@@ -25,22 +25,28 @@ without them.
 
 The kinds are plain objects on the server, so a check or retry survives restart.
 A kind says what the task is called, its steps, how it opens, and how it is proved.
-Update's check runs Vibe64's Update operation with the task's recorded conflict
-review, and its failure goes back to the same conversation up to three times.
+Each kind lives in its own file under `kinds/`. Update's check runs Vibe64's Update
+operation with the task's recorded conflict review. Save's check runs Vibe64's Save
+to the destination the session has now, so a fixed Save pushes by itself; work a
+person saved meanwhile counts, because nothing left to save after a ready Save means
+Save succeeded. A Save refused for a reason only a person can settle (a changed
+destination review, connected projects, Update first, nothing to save) stops at
+`needs_you(check_stuck)` without asking the AI again. Any other failed check goes
+back to the same conversation up to three times.
 
 One task at a time runs in a session, whatever its kind and whoever started it.
 Starting the same problem reopens the open task; starting another is refused. A task
 that ended and waits for Close doesn't block: starting a new one closes it.
 Repository operations refuse to start during a task that changes the repository,
-apart from the task's own check. The session's Update toolbar is refused this way,
-not hidden.
+apart from the task's own check. The session's Update and Save toolbar actions
+are refused this way, not hidden.
 
 A completed repair runs its check by itself, on the server, whether or not any
 browser watched the turn end. A failed check returns to the same conversation.
 A person's Check, Continue or review carries on from where the task stopped.
 
 Cancel is always accepted at once and recorded. A turn is stopped through the
-existing native Stop. Update and Prepare have no real stop, so a task cancelled
+existing native Stop. Update, Save and Prepare have no real stop, so a task cancelled
 during such a check waits for the run to end, and says so.
 
 A turn lost to a restart stops at `needs_you(interrupted)` with Continue. A check

@@ -34,13 +34,6 @@ const ASSISTANT_CATALOG = {
 };
 const SESSION_ID = "direct-chat-session";
 const SCROLL_TEST_COPY = "A deliberately detailed update keeps the conversation tall enough to exercise the real overflow container.";
-const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
-  "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
-  "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
-  "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not push. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
-  "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
-].join("\n");
 
 // The page's HTTP stays mocked; its chat uses the real conversation owner for
 // the page's session. With a temporary engine, that owner also serves Temporary
@@ -1401,53 +1394,6 @@ test.describe("direct chat", () => {
       await expectTemporaryRecovery(page, hintRealtime, {
         expectedPrompt: recovery.expectedPrompt,
         promptLabel: "Fix workspace preparation"
-      });
-    });
-  }
-
-  for (const recovery of [
-    {
-      action: "Save",
-      code: "vibe64_session_save_history_diverged",
-      operationKey: "operation",
-      promptLead: "Help resolve this Vibe64 Save problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
-    }
-  ]) {
-    temporaryTest(`routes chat ${recovery.code} recovery through Temporary AI`, async ({ page, hintRealtime }) => {
-      const diagnostic = `${recovery.action} could not preserve the changed history.`;
-      await mockDirectChat(page, {
-        temporaryOwner: true,
-        workState: {
-          operation: null,
-          updateOperation: null,
-          unsaved: true,
-          [recovery.operationKey]: {
-            code: recovery.code,
-            error: diagnostic,
-            operationId: `operation-${recovery.code}`,
-            status: "failed"
-          }
-        }
-      });
-
-      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
-
-      await expectTemporaryRecovery(page, hintRealtime, {
-        expectedPrompt: [
-          recovery.promptLead,
-          REPOSITORY_RECOVERY_GIT_BOUNDARY,
-          ...(recovery.action === "Update" ? [
-            [
-              "Review every listed conflict against both the saved and session versions, preserving their intended changes. Leave an already-correct file unchanged. Confirm the content is resolved before reporting completion; valid syntax alone is insufficient.",
-              "Your task is to prepare the file repair, not to run or complete the rebase yourself. Return kind=complete with a factual report as soon as the edits and focused checks are ready for Vibe64 to try Update. Vibe64 then runs Update automatically and returns remaining conflicts to this same conversation.",
-              "Return kind=continue only when you need an actual user decision, and ask that specific question. Do not wait for the user to click Rebase or tell them to open another repair chat.",
-              "Describe progress in terms of the user's features and remaining work. Keep HEAD/index/ref bookkeeping in the technical checks, not routine progress or the final reply. Passing application tests is not proof that Update succeeded."
-            ].join("\n")
-          ] : []),
-          diagnostic
-        ].join("\n\n"),
-        promptLabel: `Resolve ${recovery.action}`
       });
     });
   }

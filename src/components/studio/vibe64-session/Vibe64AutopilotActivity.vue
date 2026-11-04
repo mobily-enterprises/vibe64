@@ -117,17 +117,11 @@
           Review resolved conflicts
         </v-btn>
         <Vibe64AiTaskButton
-          v-if="saveWorkCanResolveWithTemporaryAi && saveWorkActivityIsUpdate"
+          v-if="saveWorkCanResolveWithTemporaryAi"
           :allowed="assistantFixAllowed"
-          kind="update"
-          :title="assistantFixAllowed ? 'Fix this Update with the AI' : assistantFixRestrictionMessage"
-        />
-        <Vibe64TemporaryAiFixAction
-          v-else-if="saveWorkCanResolveWithTemporaryAi"
-          :disabled="repositoryRecoverySending || !assistantFixAllowed"
-          :pending="repositoryRecoverySending"
-          :title="assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage"
-          @click="fixRepositoryActionError"
+          :kind="saveWorkActivityIsUpdate ? 'update' : 'save'"
+          :title="assistantFixAllowed
+            ? `Fix this ${saveWorkActivityIsUpdate ? 'Update' : 'Save'} with the AI` : assistantFixRestrictionMessage"
         />
         <v-btn
           v-if="saveWorkCanCreatePullRequest" color="primary" variant="flat" height="48"
@@ -237,8 +231,8 @@ const {
   agentActive, assistantAccountMessage, assistantAccountUnavailable, assistantFixAllowed,
   assistantFixRestrictionMessage, checkpointFailure, checkpointFailureReason, checkpointFailureVisible,
   connectionRecoveryVisible, createPullRequestOpen, dismissCheckpointFailure, dismissSaveWorkActivity,
-  dismissWorkspaceSetupActivity, fixRepositoryActionError, fixWorkspaceSetupWithTemporaryAi, githubProject,
-  projectSlug, props, repositoryRecoverySending, requestSessionRenewal, resourceRecoveryControl,
+  dismissWorkspaceSetupActivity, fixWorkspaceSetupWithTemporaryAi, githubProject,
+  projectSlug, props, requestSessionRenewal, resourceRecoveryControl,
   retrySaveWork, retryWorkspaceSetup, reviewResolvedUpdate, saveWorkActivityDismissed,
   saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithTemporaryAi,
   saveWorkConnectedResults, saveWorkDisabled, saveWorkError, saveWorkFailure, saveWorkOperationActive,

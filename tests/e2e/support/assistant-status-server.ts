@@ -146,16 +146,26 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   // The real AI task service over the real conversations; only Update's answer is the scenario's.
   const aiTaskWorld = {
     updates: [] as Record<string, unknown>[],
+    saves: [] as Record<string, unknown>[],
     update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    save: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
     boot() {
       aiTaskService = createAiTasksService({ logger: silentLogger, project: temporary!.project,
         // A scenario moves a task from outside any request, so nothing names the project for it.
         publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, { projectSlug: WORKSPACE_SLUG, ...event }),
         terminals: temporary!.terminals,
-        sessions: { updateSessionWork: (_sessionId, input) => {
-          aiTaskWorld.updates.push(input);
-          return aiTaskWorld.update(input);
-        } } });
+        sessions: {
+          updateSessionWork: (_sessionId, input) => {
+            aiTaskWorld.updates.push(input);
+            return aiTaskWorld.update(input);
+          },
+          saveSessionWork: (_sessionId, input) => {
+            aiTaskWorld.saves.push(input);
+            return aiTaskWorld.save(input);
+          },
+          inspectSessionWork: () => aiTaskWorld.inspect()
+        } });
     },
     // A new server over the same records and the same AI, as a restart leaves them.
     async restart() {
