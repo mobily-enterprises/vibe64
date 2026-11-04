@@ -50,18 +50,18 @@ function connectBrowserLifecycleSocket({
     pageUnloading = true;
   };
   const removeUnloadListeners = () => {
-    browserWindow.removeEventListener?.("beforeunload", markPageUnloading);
-    browserWindow.removeEventListener?.("pagehide", markPageUnloading);
+    browserWindow.removeEventListener("beforeunload", markPageUnloading);
+    browserWindow.removeEventListener("pagehide", markPageUnloading);
   };
   const closeWindowIfServerDisconnected = () => {
     removeUnloadListeners();
     if (connected && !stopped && !pageUnloading) {
-      browserWindow.dispatchEvent?.(createBrowserLifecycleDisconnectedEvent(browserWindow, {
+      browserWindow.dispatchEvent(createBrowserLifecycleDisconnectedEvent(browserWindow, {
         closeBrowserOnDisconnect
       }));
     }
     if (connected && closeBrowserOnDisconnect && !stopped && !pageUnloading) {
-      browserWindow.close?.();
+      browserWindow.close();
     }
   };
   const receiveLifecycleState = (event) => {
@@ -75,8 +75,8 @@ function connectBrowserLifecycleSocket({
     }
   };
 
-  browserWindow.addEventListener?.("beforeunload", markPageUnloading);
-  browserWindow.addEventListener?.("pagehide", markPageUnloading);
+  browserWindow.addEventListener("beforeunload", markPageUnloading);
+  browserWindow.addEventListener("pagehide", markPageUnloading);
 
   try {
     socket = new WebSocketCtor(resolveWebSocketUrl(BROWSER_LIFECYCLE_WEBSOCKET_PATH, browserWindow));
@@ -85,17 +85,17 @@ function connectBrowserLifecycleSocket({
     return noopLifecycleConnection();
   }
 
-  socket.addEventListener?.("open", () => {
+  socket.addEventListener("open", () => {
     connected = true;
   });
-  socket.addEventListener?.("message", receiveLifecycleState);
-  socket.addEventListener?.("close", closeWindowIfServerDisconnected);
+  socket.addEventListener("message", receiveLifecycleState);
+  socket.addEventListener("close", closeWindowIfServerDisconnected);
 
   return {
     close() {
       stopped = true;
       removeUnloadListeners();
-      socket?.close?.();
+      socket.close();
     }
   };
 }
