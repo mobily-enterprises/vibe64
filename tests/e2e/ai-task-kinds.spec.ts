@@ -8,9 +8,13 @@ import {
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
 
 async function openNewAiTask(page: Page) {
-  // The header settles its actions after it measures: New AI task is inline, or in Session actions.
+  // A phone shows the project first; the header is in the chat. The header settles its actions after it
+  // measures: New AI task is inline, or in Session actions.
   const inline = page.locator("[data-vibe64-header-action=new-ai-task]");
   const menu = page.getByRole("button", { name: /^Session actions(?::|$)/u });
+  const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+  await expect(inline.or(menu).or(showChat).first()).toBeVisible();
+  if (await showChat.isVisible()) await showChat.click();
   await expect(inline.or(menu).first()).toBeVisible();
   if (!(await inline.isVisible())) await menu.click();
   await page.locator("[data-vibe64-new-ai-task-action]:visible").first().click();

@@ -20,6 +20,11 @@ for (const engineId of ["codex", "opencode"]) {
     const typing = (page: Page) => taskWindow(page).getByText("John is typing…", { exact: true });
     try {
       const { task } = await server.aiTasks.start("free", { message: "Look at the failing build." });
+      // Typing shows once the AI's turn has ended: while it works, the chat says so instead.
+      const { captured } = server.temporary!;
+      await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
+      await server.temporary!.endNativeTurn(task.id, { text: "The build fails in lint.", message: "The build fails in lint." });
+      await server.aiTasks.settled();
       const openChat = async (page: Page) => {
         await page.goto(`${server.url}${DASHBOARD_PATH}/repository?aiTask=${encodeURIComponent(task.id)}`);
         await taskWindow(page).getByRole("tab", { name: "Chat" }).click();
