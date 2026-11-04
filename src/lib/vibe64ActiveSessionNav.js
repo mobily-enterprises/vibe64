@@ -2,7 +2,13 @@
 
 /**
  * The active session's menu.
- * @typedef {{ sessionId?: string, label?: string, visible?: boolean, tools?: object[] }} ActiveSessionNav
+ * @typedef {{
+ *   sessionId?: string,
+ *   label?: string,
+ *   visible?: boolean,
+ *   tools?: object[],
+ *   selectTool: (toolId: string) => boolean
+ * }} ActiveSessionNav
  */
 
 /** The active session's menu, or null while no session is open. */

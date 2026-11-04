@@ -9,10 +9,12 @@ import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.j
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { vibe64ApiError, vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
 import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
+import { useRouteQueryNavigation } from "@/composables/useRouteQueryNavigation.js";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const route = useRoute();
 const router = useRouter();
+const { navigate } = useRouteQueryNavigation();
 const queryClient = useQueryClient();
 const feedback = useUiFeedback({ source: "vibe64.incoming" });
 const projectSlug = computed(() => projectSlugFromRoute(route));
@@ -45,7 +47,6 @@ const conflictInput = computed(() => conflict.value && {
   review: conflict.value.review, conflictPaths: conflict.value.conflictPaths, checkpointCommit: conflict.value.checkpointCommit
 });
 
-function navigate(query) { return router.push({ query: { ...route.query, ...query } }); }
 function back() {
   const previous = router.options.history.state.back;
   if (typeof previous === "string" && previous.startsWith(projectAppPath(projectSlug.value) + "/")) router.back();

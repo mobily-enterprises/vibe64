@@ -30,6 +30,7 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/sessionRecords.js`
 - `src/components/studio/GithubPullRequestsPanel.vue`
+- `src/composables/useRouteQueryNavigation.js`
 - `src/components/studio/GithubPullRequestActions.vue`
 - `src/components/studio/GithubBrowserTabs.vue`
 - `src/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue`

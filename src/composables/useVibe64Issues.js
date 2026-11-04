@@ -1,5 +1,5 @@
 import { computed, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -13,14 +13,18 @@ import {
   invalidateGithubIssueQueries
 } from "@/lib/vibe64GithubProject.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+import { useRouteQueryNavigation } from "@/composables/useRouteQueryNavigation.js";
 
 // Unsent comments belong to this browser tab, not project source or GitHub.
+// readable-check: allow module-state - shared resource: the tab's unsent comment drafts outlive the Issues view that wrote them, so the next one shows them
 const drafts = reactive(new Map());
+// readable-check: allow module-state - shared resource: a comment still sending when its Issues view closes finishes into the next Issues view of the tab
 const submittedComments = reactive(new Map());
 
+/** @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} context */
 export function useVibe64Issues(context) {
   const route = useRoute();
-  const router = useRouter();
+  const { navigate } = useRouteQueryNavigation();
   const queryClient = useQueryClient();
   const feedback = useUiFeedback({ source: "vibe64.issues" });
   const projectSlug = computed(() => projectSlugFromRoute(route));
@@ -87,9 +91,6 @@ export function useVibe64Issues(context) {
     else submittedComments.delete(detailPath.value);
   }, { immediate: true });
 
-  function navigate(changes) {
-    return router.push({ query: { ...route.query, ...changes } });
-  }
   function filter(nextState = state.value, nextLabels = selectedLabels.value) {
     return navigate({ issueState: nextState, issueSearch: String(searchDraft.value || "").trim() || undefined,
       issueLabel: nextLabels?.length ? nextLabels : undefined,

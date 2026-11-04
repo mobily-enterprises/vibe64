@@ -17,10 +17,17 @@ import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import { githubProjectAvailable, githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 import GithubPullRequestActions from "./GithubPullRequestActions.vue";
+import { useRouteQueryNavigation } from "@/composables/useRouteQueryNavigation.js";
 
-const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
+const props = defineProps({
+  dashboardContext: {
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} */ (Object),
+    required: true
+  }
+});
 const route = useRoute();
 const router = useRouter();
+const { navigate } = useRouteQueryNavigation();
 const queryClient = useQueryClient();
 const projectSlug = computed(() => projectSlugFromRoute(route));
 const repository = computed(() => githubProjectRepositoryName(props.dashboardContext.projectContext));
@@ -55,7 +62,7 @@ const createAvailable = computed(() => Boolean(props.dashboardContext.sessionId)
 const toolbar = computed(() => ({
   ...props.dashboardContext.sessionToolbar,
   repositoryBranchSelectionDisabled: true,
-  createSession: (selection, options = {}) => props.dashboardContext.sessionToolbar?.createSession?.(selection, {
+  createSession: (selection, options = {}) => props.dashboardContext.sessionToolbar.createSession(selection, {
     ...options,
     pullRequestNumber: Number(number.value)
   })
@@ -66,9 +73,6 @@ watch(() => route.query.createPullRequest, (value) => {
   }
 }, { immediate: true });
 
-function navigate(query) {
-  return router.push({ query: { ...route.query, ...query } });
-}
 function filter(nextState = state.value) {
   return navigate({ prState: nextState, prSearch: String(search.value || "").trim() || undefined, prCursor: undefined, pr: undefined });
 }
@@ -103,6 +107,7 @@ async function actionFinished({ apiPath }) {
   await queryClient.invalidateQueries({ queryKey: ["vibe64.pullRequests", apiPath.replace(/\/\d+$/u, "")] });
   if (apiPath !== `${basePath.value}/${number.value}`) return;
   await detail.reload();
+  // readable-check: allow optional-call - optional operation: the Dashboard without an open session has no session work to refresh
   void props.dashboardContext.refreshSessionWork?.();
 }
 </script>

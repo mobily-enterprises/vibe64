@@ -63,13 +63,13 @@ const statusClass = computed(() => (
 ));
 
 function selectTool() {
-  if (itemDisabled.value || typeof sessionNav.value.selectTool !== "function") {
+  if (itemDisabled.value || !injectedSessionNav.value) {
     return;
   }
   if (itemTo.value) {
     return;
   }
-  sessionNav.value.selectTool(String(props.toolId || ""));
+  injectedSessionNav.value.selectTool(String(props.toolId || ""));
 }
 </script>
 

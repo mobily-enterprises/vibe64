@@ -19,6 +19,12 @@ import {
 } from "@/lib/vibe64RepositoryRequest.js";
 import { useVibe64RepositoryHistory } from "@/composables/useVibe64RepositoryHistory.js";
 
+/**
+ * A session's repository workspace: its changes against the saved project, update checks and updates, Save, and the
+ * project history.
+ * @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} dashboardContext
+ * @param {{ view?: import("vue").MaybeRefOrGetter<string> }} [options] The open view: "changes" or "history".
+ */
 function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {}) {
   const selectedCurrentPath = ref("");
   const changes = reactive({ error: "", loading: false, loadingMore: false, payload: null });
@@ -173,6 +179,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       changes.payload = append
         ? { ...result, files: [...previousFiles, ...(result.files || [])] }
         : result;
+      // readable-check: allow method-probe - optional operation: a Dashboard context carries refreshSessionWork only while a session is open (Vibe64DashboardContext)
       if (!append && typeof context.value.refreshSessionWork === "function") {
         const observedWork = { ...result };
         delete observedWork.initialDiff;
@@ -390,6 +397,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
   const saveWorkBlocked = computed(() => Boolean(
     saveWorkBlockedReason.value ||
     !sessionId.value ||
+    // readable-check: allow method-probe - optional operation: a Dashboard context carries requestSaveWork only while a session is open, and without it Save stays blocked
     typeof context.value.requestSaveWork !== "function"
   ));
 
@@ -487,7 +495,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       repositoryStatusRealtimeShouldRefresh(payload)
     ),
     onEvent: async ({ payload = {} } = {}) => {
-      const reason = String(payload?.reason || "").trim();
+      const reason = String(payload.reason || "").trim();
       const checkCanonical = repositoryStatusRealtimeNeedsCanonicalCheck(payload) || [
         "session-repository-checked",
         "session-save-completed",
