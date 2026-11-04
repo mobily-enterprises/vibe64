@@ -85,11 +85,11 @@ const props = defineProps({
   // @remove-record and @save-record handlers, passed to the person's rows so
   // each row awaits its own write (see RuntimeConfigRecordsTable).
   onRemoveRecord: {
-    default: null,
+    required: true,
     type: Function
   },
   onSaveRecord: {
-    default: null,
+    required: true,
     type: Function
   },
   // Shows the person's rows without their edit and remove actions.

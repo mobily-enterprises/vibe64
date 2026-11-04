@@ -5,7 +5,7 @@ import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalS
  * Keeps the Integrations panel where the person left it in this browser: the environment shown for each project, and
  * the integration selected and the search typed for each project, session (or the deployed release) and environment.
  * @param {{
- *   dashboardContext: () => import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext,
+ *   dashboardContext: () => import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext,
  *   environment: import("vue").Ref<string>,
  *   projectSlug: import("vue").Ref<string>,
  *   selectedId: import("vue").Ref<string>

@@ -33,7 +33,7 @@ function useIntegrationCommand(method, options) {
 
 /**
  * The Integrations page's configuration draft, saving and each integration's application connection.
- * @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext & {
+ * @param {import("vue").Ref<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext & {
  *   integrationEnvironment: "development" | "production",
  *   integrationSetupRequest: object
  * }>} context

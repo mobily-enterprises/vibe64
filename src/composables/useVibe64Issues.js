@@ -21,7 +21,7 @@ const drafts = reactive(new Map());
 // readable-check: allow module-state - shared resource: a comment still sending when its Issues view closes finishes into the next Issues view of the tab
 const submittedComments = reactive(new Map());
 
-/** @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} context */
+/** @param {import("vue").Ref<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext>} context */
 export function useVibe64Issues(context) {
   const route = useRoute();
   const { navigate } = useRouteQueryNavigation();

@@ -21,7 +21,7 @@ import { useRouteQueryNavigation } from "@/composables/useRouteQueryNavigation.j
 
 const props = defineProps({
   dashboardContext: {
-    type: /** @type {import("vue").PropType<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} */ (Object),
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext>} */ (Object),
     required: true
   }
 });

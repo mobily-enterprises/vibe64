@@ -22,7 +22,7 @@ import { useVibe64RepositoryHistory } from "@/composables/useVibe64RepositoryHis
 /**
  * A session's repository workspace: its changes against the saved project, update checks and updates, Save, and the
  * project history.
- * @param {import("vue").Ref<import("@/composables/useVibe64DashboardPage.js").Vibe64DashboardContext>} dashboardContext
+ * @param {import("vue").Ref<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext>} dashboardContext
  * @param {{ view?: import("vue").MaybeRefOrGetter<string> }} [options] The open view: "changes" or "history".
  */
 function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {}) {

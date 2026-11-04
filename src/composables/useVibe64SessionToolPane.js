@@ -46,23 +46,36 @@ function sessionNavLabel(session = {}) {
 
 /**
  * What a Dashboard tool reads and calls: this pane's context for its session, or the session panel's empty-state
- * context (the project and its sessions path) while no session is selected.
+ * context (the project and its sessions path) while no session is selected. The session panel adds its session
+ * toolbar to either before handing it to the Dashboard. The members only a session has are absent while none is
+ * open, and Vibe64 Online adds the deployed release's members.
  * @typedef {object} Vibe64DashboardContext
- * @property {boolean} [active]
+ * @property {Record<string, any>} projectContext The open project's record.
+ * @property {import("vue").MaybeRefOrGetter<string>} sessionsApiPath
+ * @property {import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract} [sessionToolbar] The
+ *   session toolbar, which also creates sessions; every context a Dashboard page receives carries it.
+ * @property {boolean} [active] False while the Dashboard pane is hidden.
  * @property {Record<string, any>} [activeSessionNav]
  * @property {(text: string) => Promise<unknown>} [copyText]
  * @property {boolean} [embeddedShell]
- * @property {Record<string, any>} projectContext
- * @property {() => unknown} [refreshConversation]
- * @property {(observedWork?: Record<string, any> | null) => Promise<unknown>} [refreshSessionWork]
- * @property {(...args: any[]) => unknown} [requestSaveWork]
- * @property {Record<string, any> | null} [session]
  * @property {string} [sessionId]
- * @property {import("vue").MaybeRefOrGetter<string>} sessionsApiPath
- * @property {import("@/composables/useVibe64SessionPanel.js").Vibe64SessionToolbarContract} [sessionToolbar]
+ * @property {Record<string, any> | null} [session]
+ * @property {boolean} [sourceOperationsSuspended]
  * @property {string} [statusColor]
  * @property {string} [statusLabel]
  * @property {Record<string, any> | null} [workState]
+ * @property {(observedWork?: Record<string, any> | null) => Promise<unknown>} [refreshSessionWork] Present while a
+ *   session is open.
+ * @property {(...args: any[]) => unknown} [requestSaveWork] Present while a session is open.
+ * @property {(options?: object) => Promise<unknown>} [requestUpdateWork] Present while a session is open.
+ * @property {() => unknown} [refreshConversation] Present while a session is open.
+ * @property {(text: string) => void} [requestAssistantDraft] Present while a session is open.
+ * @property {boolean} [assistantDraftAvailable]
+ * @property {boolean} [assistantFixAllowed]
+ * @property {string} [assistantFixRestrictionMessage]
+ * @property {boolean} [owner] Vibe64 Online: whether the person owns the workspace.
+ * @property {string} [productionIntegrationsApiPath] Vibe64 Online: the deployed release's integrations.
+ * @property {string} [applicationPublicUrl] Vibe64 Online: the deployed application's address.
  */
 
 /** The right pane's session tools: the routed Dashboard tool and editor, database and system open requests. */

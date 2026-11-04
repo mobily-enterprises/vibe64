@@ -1,5 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { hasWindowFunction } from "@/lib/browser.js";
+import { followMediaQuery } from "@/lib/browser.js";
 
 const TAKEOVER_FOCUSABLE_SELECTOR =
   "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
@@ -25,7 +25,7 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     props.mobileTakeover && surfaceExpanded.value && mobileTakeoverViewport.value && !mobileFullscreenDismissed.value
   ));
 
-  let mobileTakeoverMediaQuery = null;
+  let stopFollowingViewport = () => {};
   let takeoverPendingRestoreTarget = null;
   let takeoverRestoreTarget = null;
   let takeoverBodyOverflow = "";
@@ -102,8 +102,8 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     }
   }
 
-  function updateMobileTakeoverViewport(event = mobileTakeoverMediaQuery) {
-    mobileTakeoverViewport.value = Boolean(event?.matches);
+  function updateMobileTakeoverViewport(matches) {
+    mobileTakeoverViewport.value = matches;
   }
 
   async function applyMobileTakeover() {
@@ -164,18 +164,12 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
   }, { flush: "post" });
 
   onMounted(() => {
-    if (!hasWindowFunction("matchMedia")) {
-      return;
-    }
-    mobileTakeoverMediaQuery = window.matchMedia("(max-width: 720px)");
-    updateMobileTakeoverViewport();
-    mobileTakeoverMediaQuery.addEventListener("change", updateMobileTakeoverViewport);
+    stopFollowingViewport = followMediaQuery("(max-width: 720px)", updateMobileTakeoverViewport);
   });
 
   onBeforeUnmount(() => {
     releaseMobileTakeover({ restoreFocus: false });
-    mobileTakeoverMediaQuery?.removeEventListener("change", updateMobileTakeoverViewport);
-    mobileTakeoverMediaQuery = null;
+    stopFollowingViewport();
   });
 
   return {
