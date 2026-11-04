@@ -29,5 +29,6 @@
 /** @typedef {ReturnType<typeof import("./lib/vibe64LessonPlayer.js").createLessonPlayer>} LessonPlayer */
 /** @typedef {ReturnType<typeof import("./lib/vibe64PageActivity.js").createPageActivity>} PageActivity */
 /** @typedef {ReturnType<typeof import("./lib/vibe64Learning.js").createVibe64Learning>} Vibe64Learning */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64StarredFiles.js").useVibe64StarredFiles>} Vibe64StarredFiles */
 
 export {};

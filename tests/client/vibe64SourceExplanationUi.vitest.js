@@ -301,6 +301,10 @@ describe("source explanation Material interaction", () => {
       "../../src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue",
       import.meta.url
     ), "utf8");
+    const dock = readFileSync(new URL(
+      "../../src/composables/useVibe64SourceExplanationDock.js",
+      import.meta.url
+    ), "utf8");
     const panel = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue",
       import.meta.url
@@ -308,12 +312,13 @@ describe("source explanation Material interaction", () => {
 
     expect(editor).toContain('ref="sourceEditorElement"');
     expect(editor).toContain('@close="closeExplanationPanel"');
-    expect(editor).toContain("explanationFocusTimer = setTimeout(() =>");
-    expect(editor).toContain("clearTimeout(explanationFocusTimer)");
-    expect(editor).toContain("sourceEditorUnmounted = true");
-    expect(editor).toContain('focusAfterLayout(rootElement, ".vibe64-source-editor__side-rail--right")');
-    expect(editor).toContain('focusAfterLayout(rootElement, ".vibe64-source-explanation__range")');
-    expect(editor).toContain('focusAfterLayout(rootElement, ".vibe64-source-editor__explain-button")');
+    expect(editor).toContain("useVibe64SourceExplanationDock({ editor, sourceEditorElement })");
+    expect(dock).toContain("explanationFocusTimer = setTimeout(() =>");
+    expect(dock).toContain("clearTimeout(explanationFocusTimer)");
+    expect(dock).toContain("sourceEditorUnmounted = true");
+    expect(dock).toContain('focusAfterLayout(rootElement, ".vibe64-source-editor__side-rail--right")');
+    expect(dock).toContain('focusAfterLayout(rootElement, ".vibe64-source-explanation__range")');
+    expect(dock).toContain('focusAfterLayout(rootElement, ".vibe64-source-editor__explain-button")');
     expect(panel).toContain("emit('collapse', $event)");
     expect(panel).toContain("emit('close', $event)");
     expect(panel).toContain('tabindex="0"');

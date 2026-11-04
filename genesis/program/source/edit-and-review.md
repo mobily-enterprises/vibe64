@@ -95,6 +95,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SourceFilePresentation.js`
 - `src/composables/useVibe64SourceEditorDownloads.js`
 - `src/composables/useVibe64SourceTreeExpansion.js`
+- `src/composables/useVibe64SourceExplanationDock.js`
 - `src/lib/vibe64SourceEditorLanguages.js`
 - `src/lib/vibe64SourceFilePaths.js`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
@@ -960,8 +961,11 @@ Interface/Code, whose presentation their host records.
   `useVibe64SourceCodeMirror()` owns the CodeMirror view, its theme, languages
   and source-path clicks; `useVibe64SourceFilePresentation()` chooses Interface,
   Code, rendered Markdown or image; `useVibe64SourceEditorDownloads()` downloads
-  files, asking first about unsaved edits; and `useVibe64SourceTreeExpansion()`
-  remembers each session's open folders in the browser.
+  files, asking first about unsaved edits; `useVibe64SourceTreeExpansion()`
+  remembers each session's open folders in the browser; and
+  `useVibe64SourceExplanationDock()` keeps whether the explanation dock is
+  collapsed and, once the layout settles, moves focus to the control that
+  follows a collapse, expand or close.
 - `Vibe64FileArea` presents every Files area except Repo from its folder
   toolbar (`Vibe64FileAreaToolbar`) and item list (`Vibe64FileAreaListing`).
   `useVibe64FileAreaBrowser()` owns the listing, the open file and their

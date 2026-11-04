@@ -240,7 +240,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { mdiChevronLeft, mdiDownload } from "@mdi/js";
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
@@ -255,6 +255,8 @@ import Vibe64ImagePreview from "@/components/studio/files/Vibe64ImagePreview.vue
 import { useVibe64SourceEditor } from "@/composables/useVibe64SourceEditor.js";
 import { useVibe64SourceCodeMirror } from "@/composables/useVibe64SourceCodeMirror.js";
 import { useVibe64SourceEditorDownloads } from "@/composables/useVibe64SourceEditorDownloads.js";
+import { leaveReferencedSourceToEditor } from "@/composables/useVibe64SourceEditorFile.js";
+import { useVibe64SourceExplanationDock } from "@/composables/useVibe64SourceExplanationDock.js";
 import { useVibe64SourceFilePresentation } from "@/composables/useVibe64SourceFilePresentation.js";
 import { useVibe64SourceTreeExpansion } from "@/composables/useVibe64SourceTreeExpansion.js";
 import { basename } from "@/lib/vibe64SourceFilePaths.js";
@@ -263,7 +265,8 @@ const props = defineProps({
   singleFile: { type: Boolean, default: false },
   architectureFacts: { type: Object, default: null },
   agentActive: { type: Boolean, default: false },
-  fileBookmarks: { type: Object, default: null },
+  // readable-check: allow collaborator-prop - optional operation: the architecture file viewer passes no starred files, so it shows no star and refreshes none
+  fileBookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles | null>} */ (Object), default: null },
   active: { default: false, type: Boolean },
   assistantAvailable: { default: true, type: Boolean },
   assistantUnavailableMessage: { default: "The selected AI connection is unavailable for this account.", type: String },
@@ -273,7 +276,8 @@ const props = defineProps({
   sessionId: { default: "", type: String },
   sessionsApiPath: { default: "", type: String },
   assistantDraftAvailable: { default: false, type: Boolean },
-  navigateReferencedSource: { default: null, type: Function },
+  // A host that opens a referenced source file itself resolves true; by default the editor opens it.
+  navigateReferencedSource: { default: leaveReferencedSourceToEditor, type: Function },
   sourcePathClickWithoutModifier: { default: false, type: Boolean },
   // Files offers uploads and "Move or copy…" in the tree, and refreshes it
   // after an upload, move or copy.
@@ -287,12 +291,10 @@ const sourceEditorElement = ref(null);
 const newFileDialog = ref(null);
 // The CodeMirror view; the editor reads the live text from it.
 const editorView = shallowRef(null);
-let explanationFocusTimer = null;
-let sourceEditorUnmounted = false;
 const editor = useVibe64SourceEditor({
   active: () => props.active,
   agentActive: () => props.agentActive,
-  navigateReferencedSource: (navigation) => props.navigateReferencedSource?.(navigation),
+  navigateReferencedSource: (navigation) => props.navigateReferencedSource(navigation),
   projectSlug: () => props.projectSlug,
   readCurrentText: () => editorView.value?.state.doc.toString() ?? "",
   sessionId: () => props.sessionId,
@@ -353,7 +355,12 @@ const {
   saveAndDownload
 } = useVibe64SourceEditorDownloads({ editor, props });
 watch(() => props.refreshKey, refreshFiles);
-const explanationCollapsed = ref(false);
+const {
+  closeExplanationPanel,
+  collapseExplanation,
+  expandExplanation,
+  explanationCollapsed
+} = useVibe64SourceExplanationDock({ editor, sourceEditorElement });
 const { smAndDown: mobile } = useDisplay();
 const fileListCollapsed = ref(mobile.value);
 
@@ -403,47 +410,6 @@ const {
   revealCreatedFile
 } = useVibe64SourceTreeExpansion({ editor, props });
 
-onBeforeUnmount(() => {
-  sourceEditorUnmounted = true;
-  if (explanationFocusTimer) {
-    clearTimeout(explanationFocusTimer);
-    explanationFocusTimer = null;
-  }
-});
-
-async function focusAfterLayout(rootElement = null, selector = "") {
-  await nextTick();
-  if (sourceEditorUnmounted) {
-    return;
-  }
-  if (explanationFocusTimer) {
-    clearTimeout(explanationFocusTimer);
-  }
-  explanationFocusTimer = setTimeout(() => {
-    explanationFocusTimer = null;
-    rootElement?.querySelector?.(selector)?.focus?.();
-  }, 0);
-}
-
-function collapseExplanation(event = {}) {
-  const rootElement = event?.currentTarget?.closest?.(".vibe64-source-editor") || sourceEditorElement.value;
-  explanationCollapsed.value = true;
-  void focusAfterLayout(rootElement, ".vibe64-source-editor__side-rail--right");
-}
-
-function expandExplanation(event = {}) {
-  const rootElement = event?.currentTarget?.closest?.(".vibe64-source-editor") || sourceEditorElement.value;
-  explanationCollapsed.value = false;
-  void focusAfterLayout(rootElement, ".vibe64-source-explanation__range");
-}
-
-async function closeExplanationPanel(event = {}) {
-  const rootElement = event?.currentTarget?.closest?.(".vibe64-source-editor") || sourceEditorElement.value;
-  if (await editor.closeExplanation()) {
-    void focusAfterLayout(rootElement, ".vibe64-source-editor__explain-button");
-  }
-}
-
 function collapseFileList() {
   fileListCollapsed.value = true;
 }
@@ -488,7 +454,7 @@ function sendExplanationFollowup() {
 }
 
 function openExplanationRange(explanation = {}) {
-  const sourceRange = explanation?.sourceRange || {};
+  const sourceRange = explanation.sourceRange || {};
   if (sourceRange.path) {
     void editor.openFile(sourceRange.path, {
       column: sourceRange.startColumn,
@@ -498,7 +464,7 @@ function openExplanationRange(explanation = {}) {
 }
 
 function openExplanationSourceLink(sourceLink = {}) {
-  const path = String(sourceLink?.path || "").trim();
+  const path = String(sourceLink.path || "").trim();
   if (!path) {
     return;
   }
