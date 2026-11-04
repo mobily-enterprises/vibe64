@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createWebSocketTerminalDriver,
-  validateTerminalDriver
+  createWebSocketTerminalDriver
 } from "../../src/lib/vibe64TerminalDriver.js";
 
 describe("Vibe64 terminal drivers", () => {
@@ -86,16 +85,6 @@ describe("Vibe64 terminal drivers", () => {
         type: "disconnected"
       }
     ]);
-  });
-
-  it("rejects incomplete drivers at the composition boundary", () => {
-    expect(() => validateTerminalDriver()).toThrow(/object/u);
-    expect(() => validateTerminalDriver({})).toThrow(/openConnection/u);
-    expect(validateTerminalDriver({
-      openConnection() {}
-    })).toEqual(expect.objectContaining({
-      openConnection: expect.any(Function)
-    }));
   });
 });
 

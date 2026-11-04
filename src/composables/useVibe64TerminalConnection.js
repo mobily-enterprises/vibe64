@@ -8,7 +8,7 @@ import { terminalResizeErrorMessage } from "@/lib/studioTerminalSize.js";
  * itself (snapshot, output, metadata, status) go to `applySessionMessage`.
  * `readTerminalSize()` reads the display's current size.
  * @param {{
- *   driver: { openConnection: Function, reconnectOnDisconnect?: boolean },
+ *   driver: import("@/lib/vibe64TerminalDriver.js").Vibe64TerminalDriver,
  *   terminalSessionId: import("vue").Ref<string>,
  *   terminalStatus: import("vue").Ref<string>,
  *   terminalError: import("vue").Ref<string>,
@@ -113,7 +113,7 @@ function useVibe64TerminalConnection({
       connection,
       sessionId: disconnectedSessionId
     } = releaseTerminalConnection("detached");
-    connection?.close?.();
+    connection?.close();
     if (connection) {
       emitTerminalEvent("disconnected", {
         intentional: true,
@@ -161,7 +161,7 @@ function useVibe64TerminalConnection({
 
   function recoverTerminalConnection(sessionId) {
     const { connection } = releaseTerminalConnection("disconnected");
-    connection?.close?.();
+    connection?.close();
     scheduleTerminalReconnect(sessionId);
   }
 
@@ -235,7 +235,7 @@ function useVibe64TerminalConnection({
     if (terminalConnectionSessionId && terminalConnectionSessionId !== terminalSessionId.value) {
       closeTerminalSocket();
     }
-    if (terminalConnection?.isOpen?.() && terminalConnectionSessionId === terminalSessionId.value) {
+    if (terminalConnection?.isOpen() && terminalConnectionSessionId === terminalSessionId.value) {
       return true;
     }
     if (terminalConnectionOpenPromise && terminalConnectionOpenSessionId === terminalSessionId.value) {
@@ -310,7 +310,7 @@ function useVibe64TerminalConnection({
       data: input,
       source
     });
-    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen?.()) {
+    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen()) {
       terminalError.value = "Terminal stream is not connected.";
       return false;
     }
@@ -334,7 +334,7 @@ function useVibe64TerminalConnection({
     if (!size || terminalSizeAlreadyReported(size)) {
       return false;
     }
-    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen?.()) {
+    if (!(await connectTerminalSocket()) || !terminalConnection?.isOpen()) {
       return false;
     }
     terminalReportedCols = size.cols;

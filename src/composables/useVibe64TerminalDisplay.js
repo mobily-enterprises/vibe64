@@ -65,7 +65,7 @@ function useVibe64TerminalDisplay({
   }
 
   function updateTerminalSelection() {
-    terminalSelectedText.value = terminalInstance?.hasSelection?.()
+    terminalSelectedText.value = terminalInstance?.hasSelection()
       ? terminalInstance.getSelection()
       : "";
   }
@@ -105,7 +105,7 @@ function useVibe64TerminalDisplay({
       return false;
     }
     terminalFitAddon.fit();
-    terminalInstance.refresh?.(0, Math.max(0, terminalInstance.rows - 1));
+    terminalInstance.refresh(0, Math.max(0, terminalInstance.rows - 1));
     const size = terminalCurrentSize();
     connection.scheduleTerminalResizeReport();
     return Boolean(size);
@@ -136,7 +136,7 @@ function useVibe64TerminalDisplay({
         terminalLibrary = await loadXtermModules();
       } catch (error) {
         terminalError.value = "Terminal module could not load. Check your connection and retry.";
-        asyncModuleRecoveryRuntime?.notify?.(error, {
+        asyncModuleRecoveryRuntime.notify(error, {
           label: "Terminal",
           stale: isDynamicImportError(error)
         });
@@ -171,7 +171,7 @@ function useVibe64TerminalDisplay({
         });
       });
       terminalSelectionDisposable = terminalInstance.onSelectionChange(updateTerminalSelection);
-      terminalScrollDisposable = terminalInstance.onScroll?.(updateTerminalFollowOutput) || null;
+      terminalScrollDisposable = terminalInstance.onScroll(updateTerminalFollowOutput);
       terminalFocusInHandler = () => {
         terminalFocused.value = true;
       };
@@ -208,11 +208,11 @@ function useVibe64TerminalDisplay({
   }
 
   function disposeTerminalDisplay() {
-    terminalDataDisposable?.dispose?.();
+    terminalDataDisposable?.dispose();
     terminalDataDisposable = null;
-    terminalSelectionDisposable?.dispose?.();
+    terminalSelectionDisposable?.dispose();
     terminalSelectionDisposable = null;
-    terminalScrollDisposable?.dispose?.();
+    terminalScrollDisposable?.dispose();
     terminalScrollDisposable = null;
     const mountedHost = terminalMountedHost || terminalHost.value;
     if (terminalFocusInHandler) {
@@ -232,10 +232,10 @@ function useVibe64TerminalDisplay({
       window.removeEventListener("resize", terminalResizeHandler);
       terminalResizeHandler = null;
     }
-    terminalResizeObserver?.disconnect?.();
+    terminalResizeObserver?.disconnect();
     terminalResizeObserver = null;
     connection.cancelTerminalResizeReport();
-    terminalInstance?.dispose?.();
+    terminalInstance?.dispose();
     terminalInstance = null;
     terminalFitAddon = null;
     terminalSetupPromise = null;
@@ -254,11 +254,11 @@ function useVibe64TerminalDisplay({
     terminalFollowOutput = true;
     connection.resetReportedTerminalSize();
     connection.resetInitialTerminalResize();
-    terminalInstance?.reset?.();
+    terminalInstance?.reset();
   }
 
   function scrollTerminalToBottom() {
-    terminalInstance?.scrollToBottom?.();
+    terminalInstance?.scrollToBottom();
     terminalFollowOutput = true;
   }
 
@@ -283,13 +283,13 @@ function useVibe64TerminalDisplay({
       return false;
     }
     if (replace) {
-      terminalInstance?.reset?.();
+      terminalInstance?.reset();
       terminalOutputOffset = 0;
     } else if (previousOutput && !nextOutput.startsWith(previousOutput)) {
       if (!nextOutputVersion || nextOutputVersion <= terminalOutputVersion) {
         return false;
       }
-      terminalInstance?.reset?.();
+      terminalInstance?.reset();
       terminalOutputOffset = 0;
     }
     terminalLatestOutput = nextOutput;
@@ -359,7 +359,7 @@ function useVibe64TerminalDisplay({
       return false;
     }
     try {
-      terminalInstance?.focus?.();
+      terminalInstance?.focus();
     } catch (error) {
       terminalError.value = String(error?.message || error || "Terminal focus failed.");
       return false;

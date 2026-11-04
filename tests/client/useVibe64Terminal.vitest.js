@@ -23,6 +23,11 @@ const xtermMock = vi.hoisted(() => {
         dispose() {}
       };
     }
+    onScroll() {
+      return {
+        dispose() {}
+      };
+    }
     onSelectionChange() {
       return {
         dispose() {}

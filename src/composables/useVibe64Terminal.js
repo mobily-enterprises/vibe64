@@ -1,9 +1,8 @@
-import { computed, getCurrentScope, onScopeDispose, ref, unref, watch } from "vue";
+import { computed, getCurrentScope, onScopeDispose, ref, toValue, watch } from "vue";
 import {
   stripTerminalControlSequences,
   terminalLastMeaningfulLine
 } from "@/lib/codexOutput.js";
-import { validateTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import { createTerminalMatcherEngine } from "@/lib/vibe64TerminalMatchers.js";
 import { createTerminalPolicyEngine } from "@/lib/vibe64TerminalPolicies.js";
 import { useVibe64TerminalConnection } from "@/composables/useVibe64TerminalConnection.js";
@@ -13,9 +12,13 @@ import { useVibe64TerminalLifecycle } from "@/composables/useVibe64TerminalLifec
 const TERMINAL_RECONNECT_DELAY_MS = 250;
 const TERMINAL_RECONNECT_MAX_DELAY_MS = 5_000;
 
-function resolveCallback(callback, fallback) {
-  return typeof callback === "function" ? callback : fallback;
-}
+/** A terminal that watches its output for no text. */
+const NO_TERMINAL_MATCHERS = Object.freeze([]);
+/** A terminal that acts on none of its events by itself. */
+const NO_TERMINAL_POLICIES = Object.freeze([]);
+
+/** What a terminal tells a caller that does not listen for one of its notices. */
+function ignoreTerminalNotice() {}
 
 /**
  * A terminal's own state and the operations on it: its session, visibility
@@ -24,8 +27,8 @@ function resolveCallback(callback, fallback) {
  * `handleEvent`; the `notify*` callbacks hear its output, matches, session and
  * status updates and typed input.
  * @param {{
- *   driver: { openConnection: Function, reconnectOnDisconnect?: boolean },
- *   fitOnResize: boolean | null | import("vue").Ref<boolean> | (() => boolean),
+ *   driver: import("@/lib/vibe64TerminalDriver.js").Vibe64TerminalDriver,
+ *   fitOnResize: boolean | import("vue").Ref<boolean> | (() => boolean),
  *   handleEvent: (event: { sessionId: string, type: string }) => void,
  *   initiallyExpanded: boolean,
  *   initiallyVisible: boolean,
@@ -208,24 +211,19 @@ function createVibe64TerminalState({
   }
 
   function terminalReadOnly() {
-    return Boolean(typeof readOnly === "function" ? readOnly() : unref(readOnly));
+    return Boolean(toValue(readOnly));
   }
 
   function terminalLiveResize() {
-    return Boolean(typeof liveResize === "function" ? liveResize() : unref(liveResize));
+    return Boolean(toValue(liveResize));
   }
 
   function terminalFitOnResize() {
-    if (fitOnResize === null || typeof fitOnResize === "undefined") {
-      return terminalLiveResize();
-    }
-    return Boolean(typeof fitOnResize === "function" ? fitOnResize() : unref(fitOnResize));
+    return Boolean(toValue(fitOnResize));
   }
 
   function terminalResizeReportDelay() {
-    const delay = Number(typeof resizeReportDelayMs === "function"
-      ? resizeReportDelayMs()
-      : unref(resizeReportDelayMs));
+    const delay = Number(toValue(resizeReportDelayMs));
     return Number.isFinite(delay) && delay > 0 ? delay : 0;
   }
 
@@ -393,30 +391,49 @@ function createVibe64TerminalState({
 /**
  * The one terminal runtime: a session's state, presentation and matchers
  * (createVibe64TerminalState), composed with its lifecycle
- * (useVibe64TerminalLifecycle) and its policies.
+ * (useVibe64TerminalLifecycle) and its policies. Fitting the screen to its
+ * host on resize follows `liveResize` unless `fitOnResize` says otherwise.
+ * @param {{
+ *   driver: import("@/lib/vibe64TerminalDriver.js").Vibe64TerminalDriver,
+ *   initiallyExpanded?: boolean,
+ *   initiallyVisible?: boolean,
+ *   liveResize?: boolean | import("vue").Ref<boolean> | (() => boolean),
+ *   fitOnResize?: boolean | import("vue").Ref<boolean> | (() => boolean),
+ *   matchers?: object[] | (() => object[]),
+ *   onEvent?: (event: { sessionId: string, type: string }) => void,
+ *   onMatch?: (payload: object) => void,
+ *   onOutput?: (outputEvent: object) => void,
+ *   onSessionUpdate?: (session: object) => void,
+ *   onStatusUpdate?: (status: object) => void,
+ *   onUserData?: (input: string) => void,
+ *   policies?: object[] | (() => object[]),
+ *   presentation?: string,
+ *   readOnly?: boolean | import("vue").Ref<boolean> | (() => boolean),
+ *   reconnectDelayMs?: number,
+ *   reconnectMaxDelayMs?: number,
+ *   resizeReportDelayMs?: number | import("vue").Ref<number> | (() => number)
+ * }} options
  */
 function useVibe64Terminal({
   driver,
-  fitOnResize = null,
   initiallyExpanded = false,
   initiallyVisible = true,
   liveResize = true,
-  matchers = [],
-  onEvent = null,
-  onMatch = null,
-  onOutput = null,
-  onSessionUpdate = null,
-  onStatusUpdate = null,
-  onUserData = null,
-  policies = [],
+  fitOnResize = liveResize,
+  matchers = NO_TERMINAL_MATCHERS,
+  onEvent = ignoreTerminalNotice,
+  onMatch = ignoreTerminalNotice,
+  onOutput = ignoreTerminalNotice,
+  onSessionUpdate = ignoreTerminalNotice,
+  onStatusUpdate = ignoreTerminalNotice,
+  onUserData = ignoreTerminalNotice,
+  policies = NO_TERMINAL_POLICIES,
   presentation = "inline",
   readOnly = false,
   reconnectDelayMs = TERMINAL_RECONNECT_DELAY_MS,
   reconnectMaxDelayMs = TERMINAL_RECONNECT_MAX_DELAY_MS,
   resizeReportDelayMs = 0
-} = {}) {
-  const terminalDriver = validateTerminalDriver(driver);
-  const notifyEvent = resolveCallback(onEvent, () => null);
+}) {
   const terminalReconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
   const terminalReconnectMaxDelay = Math.max(
     terminalReconnectDelay,
@@ -424,23 +441,23 @@ function useVibe64Terminal({
   );
 
   const terminal = createVibe64TerminalState({
-    driver: terminalDriver,
+    driver,
     fitOnResize,
     // The policies act on the lifecycle built on this state; they hear its
     // events once both exist.
     handleEvent(event) {
-      notifyEvent(event);
+      onEvent(event);
       terminalPolicyEngine.handle(event);
     },
     initiallyExpanded,
     initiallyVisible,
     liveResize,
     matchers,
-    notifyMatch: resolveCallback(onMatch, () => null),
-    notifyOutput: resolveCallback(onOutput, () => null),
-    notifySessionUpdate: resolveCallback(onSessionUpdate, () => null),
-    notifyStatusUpdate: resolveCallback(onStatusUpdate, () => null),
-    notifyUserData: resolveCallback(onUserData, () => null),
+    notifyMatch: onMatch,
+    notifyOutput: onOutput,
+    notifySessionUpdate: onSessionUpdate,
+    notifyStatusUpdate: onStatusUpdate,
+    notifyUserData: onUserData,
     presentation,
     readOnly,
     reconnectDelay: terminalReconnectDelay,
@@ -481,7 +498,7 @@ function useVibe64Terminal({
     terminalVisible
   } = terminal;
   const lifecycle = useVibe64TerminalLifecycle({
-    driver: terminalDriver,
+    driver,
     terminal,
     connection,
     display

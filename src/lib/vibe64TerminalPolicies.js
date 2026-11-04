@@ -1,3 +1,5 @@
+import { toValue } from "vue";
+
 function normalizePolicyActions(actions = []) {
   return (Array.isArray(actions) ? actions : [actions])
     .map((action) => typeof action === "string" ? { type: action } : action)
@@ -15,11 +17,26 @@ function normalizePolicies(policies = []) {
     .filter((policy) => policy.on.some(Boolean) && policy.actions.length > 0);
 }
 
+// readable-check: allow method-probe - input validation: a policy applies to every event it is on, or only where its when function agrees
+function policyHasCondition(policy) {
+  return typeof policy.when === "function";
+}
+
+/**
+ * Runs a terminal's policies: each event a policy is `on` runs its actions through `actions`, once per session unless
+ * the policy says `once: false`, and an action with `delayMs` runs later only while its session is still current.
+ * `policies` is the list, or a getter that reads it at each event.
+ * @param {{
+ *   actions: Record<string, (action: object) => unknown>,
+ *   currentSessionId: () => string,
+ *   policies: object[] | (() => object[])
+ * }} options
+ */
 function createTerminalPolicyEngine({
-  actions = {},
-  currentSessionId = () => "",
-  policies = []
-} = {}) {
+  actions,
+  currentSessionId,
+  policies
+}) {
   const completed = new Set();
   const timers = new Set();
 
@@ -68,13 +85,11 @@ function createTerminalPolicyEngine({
       return [];
     }
     const executed = [];
-    for (const policy of normalizePolicies(
-      typeof policies === "function" ? policies() : policies
-    )) {
+    for (const policy of normalizePolicies(toValue(policies))) {
       if (!policy.on.includes(eventType) && !policy.on.includes("*")) {
         continue;
       }
-      if (typeof policy.when === "function" && !policy.when(event)) {
+      if (policyHasCondition(policy) && !policy.when(event)) {
         continue;
       }
       const completionKey = `${sessionId}:${policy.id}`;
@@ -92,11 +107,11 @@ function createTerminalPolicyEngine({
     return executed;
   }
 
-  return {
+  return Object.freeze({
     clearTimers,
     handle,
     reset
-  };
+  });
 }
 
 export {

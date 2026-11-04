@@ -1,3 +1,4 @@
+import { toValue } from "vue";
 import { stripTerminalControlSequences } from "@/lib/codexOutput.js";
 
 function normalizedMatcherId(matcher = {}, index = 0) {
@@ -60,6 +61,11 @@ function regularExpressionMatches(text, pattern) {
   return matches;
 }
 
+// readable-check: allow method-probe - input validation: a matcher finds text with a pattern, or decides with a predicate function
+function matcherHasPredicate(matcher) {
+  return typeof matcher.predicate === "function";
+}
+
 function textMatches(text, matcher = {}) {
   const pattern = matcherPattern(matcher);
   if (typeof pattern === "string") {
@@ -103,11 +109,18 @@ function normalizePredicateMatch(result) {
   return null;
 }
 
+/**
+ * Watches a terminal's transcript for its matchers' text and reports each new match through `onMatch`, once per
+ * session unless a matcher says `once: false`. `matchers` is the list, or a getter that reads it at each inspection.
+ * @param {{
+ *   matchers: object[] | (() => object[]),
+ *   onMatch: (payload: object) => void
+ * }} options
+ */
 function createTerminalMatcherEngine({
-  matchers = [],
-  onMatch = null
-} = {}) {
-  const notify = typeof onMatch === "function" ? onMatch : () => null;
+  matchers,
+  onMatch
+}) {
   let activeSessionId = "";
   let matcherStates = new Map();
 
@@ -132,9 +145,7 @@ function createTerminalMatcherEngine({
       reset(sessionId);
     }
 
-    const activeMatchers = normalizeMatchers(
-      typeof matchers === "function" ? matchers() : matchers
-    );
+    const activeMatchers = normalizeMatchers(toValue(matchers));
     if (activeMatchers.length < 1) {
       return [];
     }
@@ -160,7 +171,7 @@ function createTerminalMatcherEngine({
         sessionId
       };
       const sourceText = matcher.source === "raw" ? rawOutput : plainOutput;
-      const matches = typeof matcher.predicate === "function"
+      const matches = matcherHasPredicate(matcher)
         ? [normalizePredicateMatch(matcher.predicate(matcherContext))].filter(Boolean)
         : textMatches(sourceText, matcher);
 
@@ -185,7 +196,7 @@ function createTerminalMatcherEngine({
           value: match.value
         };
         emitted.push(payload);
-        notify(payload);
+        onMatch(payload);
         if (matcher.once !== false) {
           state.complete = true;
           break;
@@ -196,10 +207,10 @@ function createTerminalMatcherEngine({
     return emitted;
   }
 
-  return {
+  return Object.freeze({
     inspect,
     reset
-  };
+  });
 }
 
 export {

@@ -7,7 +7,7 @@ import { watch } from "vue";
  * `terminal` is the runtime's own state and operations, `connection` its live
  * stream and `display` its screen.
  * @param {{
- *   driver: { startSession?: Function, closeSession?: Function },
+ *   driver: import("@/lib/vibe64TerminalDriver.js").Vibe64TerminalDriver,
  *   terminal: import("@/types.js").Vibe64TerminalState,
  *   connection: import("@/types.js").Vibe64TerminalConnection,
  *   display: import("@/types.js").Vibe64TerminalDisplay
@@ -30,6 +30,10 @@ function useVibe64TerminalLifecycle({ driver, terminal, connection, display }) {
     showTerminal,
     terminalSnapshot
   } = terminal;
+  // readable-check: allow method-probe - optional operation: a WebSocket driver attaches to sessions its owner starts and has no startSession, so startTerminal refuses
+  const driverStartsSessions = typeof driver.startSession === "function";
+  // readable-check: allow method-probe - optional operation: run output and provider sign-in drivers have no closeSession; their sessions' owners stop the process, so closing only lets go of it
+  const driverClosesSessions = typeof driver.closeSession === "function";
   const terminalExitWaiters = new Map();
   const terminalSettlementWaiters = new Map();
   let terminalExitNotifiedSessionId = "";
@@ -80,7 +84,7 @@ function useVibe64TerminalLifecycle({ driver, terminal, connection, display }) {
     if (terminalStarting.value) {
       return false;
     }
-    if (typeof driver.startSession !== "function") {
+    if (!driverStartsSessions) {
       throw new Error("This terminal driver cannot start sessions.");
     }
     terminalStarting.value = true;
@@ -125,7 +129,7 @@ function useVibe64TerminalLifecycle({ driver, terminal, connection, display }) {
     const sessionId = currentSessionId();
     const ownership = terminalOwnership.value;
     connection.closeTerminalSocket();
-    if (deleteSession && sessionId && typeof driver.closeSession === "function") {
+    if (deleteSession && sessionId && driverClosesSessions) {
       try {
         await driver.closeSession(sessionId);
       } catch (error) {

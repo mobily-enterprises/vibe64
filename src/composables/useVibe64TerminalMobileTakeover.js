@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { hasWindowFunction } from "@/lib/browser.js";
 
 const TAKEOVER_FOCUSABLE_SELECTOR =
   "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
@@ -31,6 +32,16 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
   let takeoverInertRecords = [];
   let takeoverApplied = false;
 
+  /** The expand or full-screen button's element; none while neither button shows. */
+  function expansionToggleElement() {
+    return expansionToggle.value?.$el;
+  }
+
+  /** The surface's element, which becomes the dialog during the takeover. */
+  function takeoverRootElement() {
+    return takeoverRoot.value?.$el;
+  }
+
   function toggleExpanded() {
     const collapsing = surfaceExpanded.value;
     if (
@@ -39,7 +50,7 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
       mobileTakeoverViewport.value &&
       typeof document !== "undefined"
     ) {
-      const toggle = expansionToggle.value?.$el || expansionToggle.value;
+      const toggle = expansionToggleElement();
       takeoverPendingRestoreTarget = document.activeElement !== document.body
         ? document.activeElement
         : toggle;
@@ -47,17 +58,17 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     requestToggle();
     if (collapsing) {
       void nextTick(() => {
-        const target = expansionToggle.value?.$el || expansionToggle.value;
-        target?.focus?.({ preventScroll: true });
+        const target = expansionToggleElement();
+        target?.focus({ preventScroll: true });
       });
     }
   }
 
   function toggleMobileFullscreen() {
-    const target = expansionToggle.value?.$el || expansionToggle.value;
+    const target = expansionToggleElement();
     takeoverPendingRestoreTarget = target;
     mobileFullscreenDismissed.value = !mobileFullscreenDismissed.value;
-    void nextTick(() => target?.focus?.({ preventScroll: true }));
+    void nextTick(() => target?.focus({ preventScroll: true }));
   }
 
   function handleTakeoverKeydown(event) {
@@ -72,12 +83,12 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     if (event.key !== "Tab") {
       return;
     }
-    const root = takeoverRoot.value?.$el || takeoverRoot.value;
-    const focusable = Array.from(root?.querySelectorAll?.(TAKEOVER_FOCUSABLE_SELECTOR) || [])
+    const root = takeoverRootElement();
+    const focusable = Array.from(root?.querySelectorAll(TAKEOVER_FOCUSABLE_SELECTOR) || [])
       .filter((element) => element.getAttribute("aria-hidden") !== "true");
     if (!focusable.length) {
       event.preventDefault();
-      root?.focus?.({ preventScroll: true });
+      root?.focus({ preventScroll: true });
       return;
     }
     const first = focusable[0];
@@ -100,7 +111,7 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     if (!mobileTakeoverActive.value || takeoverApplied || typeof document === "undefined") {
       return;
     }
-    const root = takeoverRoot.value?.$el || takeoverRoot.value;
+    const root = takeoverRootElement();
     if (!root) {
       return;
     }
@@ -118,8 +129,8 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     for (const record of takeoverInertRecords) {
       record.element.inert = true;
     }
-    const target = expansionToggle.value?.$el || expansionToggle.value || root;
-    target?.focus?.({ preventScroll: true });
+    const target = expansionToggleElement() || root;
+    target.focus({ preventScroll: true });
   }
 
   function releaseMobileTakeover({ restoreFocus = true } = {}) {
@@ -140,7 +151,7 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
     takeoverRestoreTarget = null;
     takeoverPendingRestoreTarget = null;
     if (restoreFocus) {
-      void nextTick(() => restoreTarget?.isConnected && restoreTarget.focus?.({ preventScroll: true }));
+      void nextTick(() => restoreTarget?.isConnected && restoreTarget.focus({ preventScroll: true }));
     }
   }
 
@@ -153,25 +164,17 @@ function useVibe64TerminalMobileTakeover({ props, surfaceExpanded, requestToggle
   }, { flush: "post" });
 
   onMounted(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (!hasWindowFunction("matchMedia")) {
       return;
     }
     mobileTakeoverMediaQuery = window.matchMedia("(max-width: 720px)");
     updateMobileTakeoverViewport();
-    if (typeof mobileTakeoverMediaQuery.addEventListener === "function") {
-      mobileTakeoverMediaQuery.addEventListener("change", updateMobileTakeoverViewport);
-    } else {
-      mobileTakeoverMediaQuery.addListener?.(updateMobileTakeoverViewport);
-    }
+    mobileTakeoverMediaQuery.addEventListener("change", updateMobileTakeoverViewport);
   });
 
   onBeforeUnmount(() => {
     releaseMobileTakeover({ restoreFocus: false });
-    if (typeof mobileTakeoverMediaQuery?.removeEventListener === "function") {
-      mobileTakeoverMediaQuery.removeEventListener("change", updateMobileTakeoverViewport);
-    } else {
-      mobileTakeoverMediaQuery?.removeListener?.(updateMobileTakeoverViewport);
-    }
+    mobileTakeoverMediaQuery?.removeEventListener("change", updateMobileTakeoverViewport);
     mobileTakeoverMediaQuery = null;
   });
 

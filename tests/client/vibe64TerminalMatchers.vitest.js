@@ -5,7 +5,10 @@ import {
 
 describe("Vibe64 terminal matchers", () => {
   it("does not normalize terminal history when no matchers are configured", () => {
-    const engine = createTerminalMatcherEngine();
+    const engine = createTerminalMatcherEngine({
+      matchers: [],
+      onMatch: vi.fn()
+    });
     const output = {
       toString() {
         throw new Error("terminal history should remain untouched");

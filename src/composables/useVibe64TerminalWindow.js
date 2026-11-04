@@ -7,10 +7,18 @@ import { positiveNumber } from "@/lib/numbers.js";
 
 const WINDOW_MARGIN_PX = 12;
 
+/**
+ * A floating terminal window's place on the page: centred when it first opens, dragged by its header, kept inside
+ * the viewport as the page or the window resizes, and remembered under `storageKey` while it is `active`.
+ * @param {{
+ *   active: import("vue").Ref<boolean>,
+ *   storageKey: import("vue").Ref<string>
+ * }} options
+ */
 function useVibe64TerminalWindow({
   active,
   storageKey
-} = {}) {
+}) {
   const panel = ref(null);
   const position = ref({
     left: WINDOW_MARGIN_PX,
@@ -147,7 +155,7 @@ function useVibe64TerminalWindow({
       x: event.clientX,
       y: event.clientY
     };
-    event.currentTarget?.setPointerCapture?.(event.pointerId);
+    event.currentTarget.setPointerCapture(event.pointerId);
     window.addEventListener("pointermove", moveDrag);
     window.addEventListener("pointerup", stopDrag);
     window.addEventListener("pointercancel", stopDrag);
@@ -178,7 +186,7 @@ function useVibe64TerminalWindow({
   }
 
   function observePanel() {
-    resizeObserver?.disconnect?.();
+    resizeObserver?.disconnect();
     resizeObserver = null;
     if (typeof ResizeObserver === "undefined" || !panel.value) {
       return;
@@ -201,7 +209,7 @@ function useVibe64TerminalWindow({
     async (isActive) => {
       stopDrag();
       if (!isActive) {
-        resizeObserver?.disconnect?.();
+        resizeObserver?.disconnect();
         resizeObserver = null;
         stopViewportTracking();
         return;
@@ -216,7 +224,7 @@ function useVibe64TerminalWindow({
 
   onBeforeUnmount(() => {
     stopDrag();
-    resizeObserver?.disconnect?.();
+    resizeObserver?.disconnect();
     resizeObserver = null;
     stopViewportTracking();
   });
