@@ -124,7 +124,8 @@ Git commands.
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64ShortActionDismissals.js`
 - `src/composables/useVibe64SessionSaveWork.js`
-- `src/composables/useVibe64TemporaryAiRepairs.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/save.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/update.js`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/lib/vibe64SessionRepositoryWorkState.js`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
@@ -261,7 +262,7 @@ a completed Save. After an uncertain result it inspects the saved operation
 before retrying. Update does not publish work and may restart workspace
 preparation; acceptance of either operation does not establish completion.
 Save and Update retain their source coordination for assistant and repository
-changes while already saved temporary-chat history and plain draft text remain
+changes while an AI task's saved conversation and plain draft text remain
 available through the short session-store path. An Update repair is an
 [AI task](../conversation/ai-tasks.md) whose check records a request identity on the
 existing background task, so a lost response or a restart recovers confirmed progress
@@ -540,17 +541,18 @@ branch. Fork sessions do not refresh the base project's clone cache.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.
-That shared activity remains visible while a Temporary AI repair is selected.
-Checking the existing Update repair does not create a second temporary chat.
+An Update or Save task's Progress view offers that operation's own transcript in
+a collapsed section. Checking an Update task runs in that task; it never creates a
+second task or conversation.
 
-Review resolved conflicts is available on the Update error and in an open Update
-repair tab. It snapshots the current conflict review ID and affected paths for
-the person's explicit acknowledgement. A changed review or session invalidates
-the open confirmation. Confirmation uses the existing Update operation and locks,
-independently of any AI outcome; it may also report the result into the existing
-repair chat without sending an automatic follow-up. It never publishes. Check
-Update remains an unacknowledged retry; automatic AI completion submits its own
-recorded runConflictId through the same check/result owner.
+Review resolved conflicts is available on the Update error and in the AI task
+window's footer when an Update task's check is stuck on a conflict review. It
+snapshots the current conflict review ID and affected paths for the person's
+explicit acknowledgement. A changed review or session invalidates the open
+confirmation. Confirmation runs the existing Update operation and locks with that
+reviewed ID, independently of any AI outcome, and sends nothing to the AI. It
+never publishes. An Update task's own check runs Update with the conflict review
+the task recorded, through the same Update operation.
 
 Work inspection also settles a failed Update that the session repaired outside
 Save or Update, for example its assistant or a person rebasing with Git. The
@@ -702,7 +704,7 @@ sharing the same mode, repository and branch. Local sessions retain their
 existing original-folder binding instead of using this catalogue override.
 
 Codex, Claude and OpenCode observed writable session turns create private Git
-recovery checkpoints on completion, interruption or failure. Ordinary temporary
+recovery checkpoints on completion, interruption or failure. AI task
 conversations participate; scoped read-only helpers and naming profiles do not.
 Checkpoints preserve the saveable files without advancing the project branch or
 changing the index. A turn's ref and the latest pointer are published in one Git

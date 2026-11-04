@@ -870,6 +870,44 @@ test("archiving ends an open task before the session goes", () => withFixture(as
   assert.equal(saved.reason, "archived");
 }));
 
+// The upgrade that deleted the old temporary chats left ordinary archived sessions as they were, so their
+// records can still carry the client-writable recovery fields AI tasks removed. Every reader must still
+// read such a session, and none may present those fields or take the chat for a task.
+const OLD_RECOVERY_FIELDS = {
+  displayMessage: "Fix Update", completionMessage: "Update finished.", dedupeKey: "update:conflict-1",
+  failureMessage: "", nextStepMessage: "Run Update again.", recoveryNotice: "Update found conflicts.",
+  recoveryOperation: "update", recoveryConflictId: "conflict-1", recoveryContext: "update", recoveryOutcome: "verified",
+  recoveryOutcomeMessage: "Session updated.", recoveryRequestId: "request-1", runConflictId: "conflict-1",
+  recoveryAutoPaused: true, recoveryRetryKeys: ["update:conflict-1"]
+};
+
+test("an archived session whose old repair chat keeps its recovery fields still reads, and nothing presents them", () => withFixture(async (f) => {
+  const { aiTasks, conversations } = f.boot();
+  await f.store.writeConversationUserMessage(SESSION, { text: "Main question", messageId: "main" });
+  await conversations.createTemporaryConversation(SESSION, {
+    conversationId: "old-repair", presentation: { title: "Fix Update", draft: "Leftover draft" }, vibe64User: OWNER
+  });
+  await f.store.writeSessionConversation(SESSION, "old-repair", OLD_RECOVERY_FIELDS);
+  const unpresented = view => Object.keys(OLD_RECOVERY_FIELDS).filter(key => Object.hasOwn(view, key));
+  const listed = await conversations.listTemporaryConversations(SESSION);
+  assert.deepEqual(listed.conversations.map(chat => [chat.conversationId, chat.title, chat.draft]),
+    [["old-repair", "Fix Update", "Leftover draft"]]);
+  assert.deepEqual(unpresented(listed.conversations[0]), [], "the chat's list presents no removed recovery field");
+  assert.deepEqual(unpresented(await conversations.readTemporaryConversation(SESSION, { conversationId: "old-repair" })), [],
+    "nor does its read");
+
+  await f.store.writeStatus(SESSION, "archived");
+  await f.store.publishSessionArchive(SESSION);
+  assert.equal((await f.store.readConversationLog(SESSION))[0].user.text, "Main question");
+  const saved = await f.store.readSessionConversation(SESSION, "old-repair");
+  assert.equal(saved.recoveryOperation, "update", "the archive is read back as it was saved");
+  assert.deepEqual((await f.store.listSessionConversations(SESSION)).map(record => record.conversationId), ["old-repair"]);
+  assert.deepEqual((await aiTasks.list(SESSION, { vibe64User: OWNER })).tasks, [], "an old chat is not a task");
+  await assert.rejects(aiTasks.read(SESSION, { taskId: "old-repair" }), error => error.code === "vibe64_ai_task_closed");
+  // The chat's own reader refuses an archived session, as it refuses any, before it reads the record.
+  await assert.rejects(conversations.listTemporaryConversations(SESSION), error => error.code === "vibe64_session_archived");
+}));
+
 test("Close removes the task with its conversation, and repeating it is harmless", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);

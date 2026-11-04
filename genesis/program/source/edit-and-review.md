@@ -837,7 +837,7 @@ host hydrates or redirects the
 shared tool route; a retained hidden host waits until reactivation to reconsider
 its source and the current route.
 
-A source explanation is temporary assistance for a selected code range or file.
+A source explanation is short-lived helper assistance for a selected code range or file.
 The server resolves `source_explanation` to the actor's effective Explain & check
 role before requesting a profile or consulting the answer cache. This can use
 another orchestrator; a team member's explanation uses the team setup even while
@@ -968,7 +968,7 @@ Interface/Code, whose presentation their host records.
   refreshes; `useVibe64FileAreaCommands()` the one-at-a-time saves, creates,
   renames and deletes; `useVibe64FileAreaUploads()` dropped and chosen uploads;
   and `useVibe64FileAreaFocus()` where focus returns after a dialog.
-- The source-editor service owns explanation cache lookup, temporary conversation
+- The source-editor service owns explanation cache lookup, helper conversation
   creation and cleanup. `useVibe64SourceEditorExplanations()`, which
   `useVibe64SourceEditor()` composes, owns the selected explanation,
   request generation, streamed messages and acknowledged Close state;

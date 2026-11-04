@@ -34,7 +34,6 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-genesis/src/server/architectureInspection.js`
 - `packages/vibe64-genesis/src/server/architectureLayout.js`
 - `src/composables/useVibe64AutopilotView.js`
-- `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -116,7 +115,7 @@ message with `vibe64_genesis_stack_unreadable` (409), naming the file, Genesis's
 section line, the offending text and Genesis's message, so the person fixes the
 file and sends again. Other inspection errors still propagate.
 An active main or temporary turn skips this preparation. Routine connection
-verification and read-only temporary conversations remain read-only. Project
+verification and read-only helper conversations remain read-only. Project
 format migration remains a separate operation, and skill maintenance does not
 initialize source, run setup, or build indexes. Existing assistant context is
 refreshed only through its native lifecycle; file synchronization alone does not

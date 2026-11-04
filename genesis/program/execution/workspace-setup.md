@@ -26,16 +26,13 @@ contract transported by the project's Stack.
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/composables/useVibe64TerminalMobileTakeover.js`
-- `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotActivity.vue`
-- `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64WorkspaceSetupActivity.js`
-- `src/composables/useVibe64TemporaryAiRepairs.js`
-- `src/composables/useVibe64TemporaryAi.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/workspaceSetup.js`
+- `packages/vibe64-ai-tasks/src/client/Vibe64AiTaskButton.vue`
 
 ## Public contract
 

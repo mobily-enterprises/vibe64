@@ -106,6 +106,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionRenewalDraft.js`
 - `src/composables/useVibe64SessionRenewalPolling.js`
 - `src/composables/useVibe64SessionRenewalSuccessor.js`
+- `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionData.js`
 - `src/composables/useVibe64SessionCreation.js`
@@ -226,7 +227,7 @@ Untouched is decided by `bindConnectedSession` with `onlyIfUntouched`, under the
 receiving session's write lease and immediately before the link, so work started
 just before is seen: `HEAD` equals its `base_commit`, session work inspection reports
 nothing unsaved (it ignores Genesis derived artifacts and ignored files), no AI turn,
-AI terminal or temporary AI task runs, no Save or Update runs, and the session is
+AI terminal or AI task turn runs, no Save or Update runs, and the session is
 neither pinned nor closing. A check that cannot finish counts as not untouched.
 
 Only a start a person can answer for may link: workspace setup passes

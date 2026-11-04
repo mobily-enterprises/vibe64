@@ -839,8 +839,8 @@ The development example also awaits backend shutdown inside Vite's native
 A Vite configuration restart keeps the backend running.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
-Main chat receives its actual visibility, including temporary and host chat
-selection and pane collapse. Returning to Main resumes the existing latest-message
+Main chat receives its actual visibility, including pane collapse; the AI task
+window opens over it without hiding it. Returning to Main resumes the existing latest-message
 scroll behavior; scrolling back while Main is visible still preserves that position.
 User messages, commentary, answers and system messages separate progress groups.
 Vibe64 supplies the existing active execution state as `conversation.working`;
@@ -1546,7 +1546,7 @@ service policy. A goal read can target a retained Codex or Claude goal while the
 visible chat uses OpenCode; its native capability remains `goals: false`.
 
 The session header gives its room to session names first, then Save, which never
-leaves the header. Temporary AI, Renew session, Pin session, Pull request and
+leaves the header. New AI task, Renew session, Pin session, Pull request and
 Prepare workspace follow in that priority; when the pane is too narrow, the
 lowest-priority actions move into Session actions first. Header actions are light
 36 px icon buttons with 18 px icons, and 44 px touch targets on coarse pointers.
@@ -1705,8 +1705,8 @@ the captured submitter remains the actor for routing, delivery and review.
 Goals cannot start in Auto. Choosing Auto during an unfinished goal saves it
 for after the goal finishes. Resume and messages retain the existing goal
 orchestrator, including when its native status is temporarily unavailable.
-Chat modes are `custom`, `senior`, `junior` and `auto`; `fix` is only a temporary
-repair chat's mode. Model assignments additionally include `router`, `colleague`,
+Chat modes are `custom`, `senior`, `junior` and `auto`; `fix` is only an AI task
+conversation's mode. Model assignments additionally include `router`, `colleague`,
 `fix`, `explain` and `quickHelper`; none is selectable as a main-chat mode.
 Configuration and request snapshots use schema 5. The simplified classifier uses
 new reason values in ordinary new requests; existing saved roles, review decisions,
@@ -2315,10 +2315,8 @@ preview, and diagnostics attachment actions. Chat mode opens the role and Custom
 message requests even when the role or model catalogue is unavailable. Custom
 opens the model dialog, with Cancel available unless a save is in progress. The
 host tools target and starred-files menu remain mounted independently of it. The public
-companion layer is offered only while Main chat is selected in the active session.
-Opening a temporary or host-provided conversation withdraws that layer immediately;
-its retained submission action also rejects writing or sending to hidden Main.
-Returning to Main exposes the same layer and preserves any unsent draft.
+companion layer is offered only for the active, unarchived session and names only
+that session; opening the AI task window leaves it in place.
 Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
 desktop minimum keeps Send and Stop on the same row as the other controls,
@@ -2342,7 +2340,7 @@ The app theme overrides the shared control's hard-coded paused color because
 the control does not expose a color prop.
 
 The conversation uses `AssistantConversationElement` from
-`@jskit-ai/assistant-core/client/conversation`. Main chat, temporary assistance,
+`@jskit-ai/assistant-core/client/conversation`. Main chat, the AI task chat
 and database copilot share its transcript and composer primitives. Vibe64 owns
 selection, uploads, integration actions, model/permission settings, suggestions,
 Save and provider execution policy. Its application adapter is documented in

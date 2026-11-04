@@ -17,6 +17,8 @@ connection and share one query-ownership boundary.
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-database-tools/src/server/sessionQueries.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
+- `packages/vibe64-database-tools/src/server/assistantTasks.js`
+- `packages/vibe64-database-tools/src/server/schemaAccess.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `packages/vibe64-database-tools/src/client/composables/useDatabaseTableQueries.js`
 - `packages/vibe64-database-tools/src/client/components/DatabaseQueryEditor.vue`
@@ -92,6 +94,21 @@ canonical chat receipt or live subscription. It is not copied into Main history.
 Session hydration clears history but retains the draft; hiding the panel does not
 cancel an admitted question. Modifier-Enter submits, while ordinary Enter adds a
 line. The same command exception remains visible without automatic resend.
+
+Database Copilot begins with bounded database identity and object counts, plus
+the exact selected table attached to each user question. The current selection
+must exist in the refreshed schema; historical messages retain their original
+table context. The UI shows the current context above the composer. “This table”
+uses the question’s captured selection and the existing bounded schema lookup.
+Changing selection during a request cannot retarget it or replace another
+table’s visible query result. Its helper can search the refreshed schema, list
+object names and kinds, and request complete SQL-relevant definitions for a
+bounded set of matches before proposing a query. Truncation is explicit and
+another search is available; credentials never enter the helper conversation.
+PostgreSQL and MySQL or MariaDB implement one server dialect contract for
+connection, inspection, SQL policy, read-only execution, and result
+interpretation, while the assistant consumes only the normalized schema contract.
+Any requested query runs only through the session's read-only database identity.
 
 `runDatabaseAssistant()` delegates the original response-count and abort ordering
 and the structured reply/tool protocol to JSKIT's `runBoundedAssistantToolLoop()`.
@@ -196,7 +213,8 @@ Stop cannot stop the main conversation.
 The client caches database workspace state per actor, project and session, and
 refreshes it when AI connections or routing change. Switching actors remounts
 the transient Copilot view. AI generation of the project's Data overview is a
-separate Junior task; it does not use Copilot's Explain & check availability.
+separate `database-overview` AI task on Fix it with AI; it does not use Copilot's
+Explain & check availability.
 
 SQLite uses an explicitly declared persistent filename. Managed resources provide
 an absolute filename; standalone projects may resolve a relative filename from

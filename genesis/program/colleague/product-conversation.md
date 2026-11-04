@@ -98,7 +98,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/lib/studioUrls.js`
-- `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
+- `src/composables/useVibe64SessionColleagueView.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/serviceState.js`
 - `packages/vibe64-terminals/src/server/serviceHostSlots.js`
@@ -903,8 +903,10 @@ assignments, while assignment cancellation does not stop coding agents or speech
 After restart, fresh authentication is required; interrupted mutations need
 inspection and are never automatically resent.
 
-After implementation answers, review uses a temporary conversation in the same
-session, with its existing configured routing and shared worktree. Assignment
+After implementation answers, review runs as the session's `colleague-review`
+[AI task](../conversation/ai-tasks.md), named by the assignment, with its own
+conversation, configured routing and the shared worktree. It is finished when the
+work is ready and cancelled otherwise. Assignment
 work waits for its current participants to settle before sending another turn.
 Readiness for human testing requires recorded evidence and a completed review
 after the latest implementation send. The model must compare every original
@@ -950,14 +952,14 @@ adds its own views to both sides: on the server by providing the optional
 `vibe64.colleague.navigation-panes` capability (`{ pane, meaning }` each, which
 also extends the tool's description), and in the browser through
 `useVibe64ColleagueNavigation({ panes })`. A pane outside a host's list is
-refused as unavailable. Session views and temporary conversations require an
-exact session ID. When a session is
-supplied, omitting the temporary conversation selects Main; keeping a temporary
-chat selected requires its ID. The host acknowledges the actual route and loaded
-conversation. This capability opens existing views without giving Colleague
+refused as unavailable. Session views and AI task conversations require an
+exact session ID. When a session is supplied, omitting the conversation selects
+Main and hides an open AI task window; naming the session's AI task opens it in
+its window, and any other conversation is refused. The host acknowledges the
+actual route and loaded conversation. This capability opens existing views without giving Colleague
 repository contents, a terminal or screen access.
 The same action accepts an optional planView (default, current or history) for
-an exact session's Main chat, without another pane or temporary conversation.
+an exact session's Main chat, without another pane or AI task conversation.
 The native Plan and history owner reads fresh authorized data and opens its own
 dialog. Default follows the button's current-or-history choice. Acknowledgement
 reports the actual current/history tab only while that matching dialog is open.
@@ -1061,8 +1063,8 @@ The existing session rename, archive and workspace-preparation retry actions are
 also available through bounded session summaries. They use the same current
 actor/project boundary and service guards as the UI. Archiving is an explicit
 session-close request, distinct from stopping an agent or Colleague; it removes
-the working workspace and temporary chats while retaining ordinary archive
-history. Preparation acceptance is reported as its current status, not as a
+the working workspace and ends the session's open AI task as Not done while
+retaining ordinary archive history. Preparation acceptance is reported as its current status, not as a
 completed setup. Private paths, metadata and full logs are omitted from these
 tool results.
 

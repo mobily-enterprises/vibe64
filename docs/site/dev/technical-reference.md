@@ -129,13 +129,15 @@ An active repository write must finish before another can start.
 
 If the new merge still conflicts, Vibe64 reports the current conflicting files
 and leaves the session's files, branch and index unchanged. **Fix it with AI**
-reviews those conflicts; a completed repair automatically checks Update, and
-**Check Update** in the repair tab can repeat that check. An explicitly reviewed
-resolution can retain unchanged file contents. Review cannot resolve a newer
-upstream version or a newly conflicting file without another review.
+opens the Update AI task, which reviews those conflicts; when the AI reports the
+repair ready, Vibe64 runs Update itself on the server and returns any remaining
+conflicts to the same conversation. **Check Update** in the task's footer can
+repeat that check when the task needs you. An explicitly reviewed resolution can
+retain unchanged file contents. Review cannot resolve a newer upstream version or
+a newly conflicting file without another review.
 
-An ordinary Rebase click starts over instead of submitting the repair tab's
-review. Neither action publishes the session's work.
+An ordinary Rebase click starts over instead of submitting the task's review.
+Neither action publishes the session's work.
 
 After a successful update, Vibe64 automatically starts the project's declared
 workspace preparation. This also applies when an interrupted update is recovered.
@@ -144,16 +146,11 @@ for another click or an assistant turn. A preparation failure leaves the complet
 update intact and appears as a separate setup problem with a retry action.
 Projects should make preparation safe to repeat and skip work already satisfied.
 
-A verified Temporary AI repair adds one system message to its conversation.
-The repair panel disappears when verification succeeds.
-For Update repairs, that message follows workspace preparation and reports readiness
-only after setup succeeds. Once ready, **Return to main chat** closes the completed
-repair tab and focuses Main chat, leaving other temporary conversations intact.
-Projects without preparation can return as soon as Update succeeds. Preparation
-failures keep their diagnostic and retry action; they do not claim the workspace is ready.
-While the matching Update repair chat is open, it presents the repair and check
-status in place of the separate Update activity banner. Main chat retains the
-Update diagnostic and operation log. Unrelated failures remain visible.
+Only Vibe64's check makes an Update task Done: the window then shows the problem,
+what happened and a single **Close**, which removes the task and its conversation.
+Preparation failures keep their diagnostic and retry action; they do not claim the
+workspace is ready. Main chat retains the Update diagnostic and operation log.
+Unrelated failures remain visible.
 
 ## Root resolution
 

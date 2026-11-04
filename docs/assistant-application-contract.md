@@ -11,7 +11,7 @@ its `examples/conversation` directory is a runnable independent consumer.
 | Surface | Shared element | Vibe64-owned adapter behavior |
 | --- | --- | --- |
 | Main chat | `Vibe64ConversationLog` embeds `AssistantConversationElement`; the composer uses shared input/actions. | Session selection, optimistic delivery/retry, attachments, source links, integration consent, model permissions, hints, Save and usage controls. |
-| Temporary AI | `Vibe64EphemeralConversationMessages` maps flat messages into the same element. | Per-task retained drafts/uploads/settings, repair status/actions, stop/close and exact cleanup. |
+| AI task chat | `Vibe64AiTaskChat` embeds the same element through `useAiTaskConversation`. | The task's retained draft, uploads and Chat mode, steering, Stop, delivery recovery and typing; the task's own window owns status, Cancel and Close. |
 | Database copilot | `Vibe64DatabaseWorkspace` supplies a conversation adapter directly. | Table context, SQL actions, owner access, request errors and server-owned configuration. |
 
 The UI's adapter is `{ conversation, composer?, delivery?, actions }`. Conversation state
@@ -19,22 +19,22 @@ contains the ordered turn model and loading/pagination fields. Composer state
 contains the draft and send/stop availability. Actions call the existing
 application operations; the component does not own HTTP, permissions or storage.
 Configuration is hidden for database copilot and supplied by its server. Main
-and temporary chat retain their authorized Vibe64 settings controls in slots.
+chat and an AI task's chat retain their authorized Vibe64 settings controls in slots.
 
-Main and temporary chat use JSKIT's `createAssistantMessageDelivery` to insert
+Main chat and an AI task's chat use JSKIT's `createAssistantMessageDelivery` to insert
 submitted messages immediately and retain failed entries with Resend/Edit/Cancel.
 The controller owns pending state and matching canonical receipts; Vibe64 owns
 transport, admission, stable request IDs, repair context and conversation lifetime.
-Main chat continues to settle from its authoritative realtime receipt. Temporary
-chat overlays pending entries through `adapter.delivery` before saves, creation
+Main chat continues to settle from its authoritative realtime receipt. An AI
+task's chat overlays pending entries through `adapter.delivery` before saves, creation
 or turn-start requests finish. Retries preserve the original request and newer
 drafts/uploads. Only accepted attachments are cleared. Other JSKIT applications
 can use the same controller and the element's default failure actions.
 
-User-facing temporary chats use main chat's capabilities, tools, project access,
-command runtime and write coordination in both providers. They have no separate
-permission flags or modes. Closing them preserves project edits and removes only
-their conversation and uploads; their messages never enter main History. Internal
+An AI task's conversation uses main chat's capabilities, tools, project access,
+command runtime and write coordination in both providers. It has no separate
+permission flags or modes. Closing the task preserves project edits and removes
+only its conversation and uploads; its messages never enter main History. Internal
 helpers retain their bounded execution profiles. Update repair requests a
 structured response independently of execution permissions.
 
@@ -85,8 +85,8 @@ retain `mutateSession` and its process-safe session locks.
 The app retains six-digit turn directories and timestamped Markdown message
 files, attachment descriptors, actor metadata and integration decisions. There
 is no migration, parallel durable transcript, or change to archive ownership.
-The main history remains durable. Temporary provider conversations, uploads and
-client history retain their existing transient lifecycle. Database copilot
+The main history remains durable. An AI task's provider conversation, uploads and
+client history last until the task is closed. Database copilot
 history stays in the current database workspace.
 
 Other applications can supply different storage without adopting the Vibe64
@@ -130,7 +130,7 @@ retains ownership when a stop cannot be proved.
 
 The main native thread belongs to the controller before initial connection or
 observer attachment. Shared-runtime cancellation includes providers that own
-only temporary conversations. Stop confirmation must be saved before releasing
+only AI task conversations. Stop confirmation must be saved before releasing
 its owner or publishing an inactive state. If history recovery fails, keep the
 stopped state and reject continuation until the read succeeds; recovery itself
 must never resume native work.
@@ -142,7 +142,7 @@ can settle a pending HTTP send/stop from its authoritative realtime receipt.
 
 ## Verification boundary
 
-Focused tests cover storage/archives, provider transport and detached temporary
+Focused tests cover storage/archives, provider transport and detached AI task
 turns, shared rendering/scroll behavior, and companion ownership/cancellation.
 Real provider accounts, speech devices and deployed-session workflows require
 the corresponding runtime resources. Passing focused tests is not a claim that

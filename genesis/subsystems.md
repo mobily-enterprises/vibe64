@@ -657,6 +657,12 @@ conversation, the proof and the outcome. The server decides how a task ends, so 
 task keeps going without a browser and is right after a reload, on another
 device and for another team member. A task sits as a nested `task` field on its
 temporary conversation record, and only the machine in this package writes it.
+Starting a task creates that conversation and closing it deletes the conversation,
+through Terminals' session conversation machinery, which keeps owning turns,
+routing, delivery, attachments and native engines. The editor's task chat
+(`useAiTaskConversation` with its record, saves and messages composables, and
+`src/lib/vibe64AiTaskConversation.js`) and the window's host live in the
+application beside this package's window, tray and button.
 
 ### Source
 - Directory `packages/vibe64-ai-tasks`
@@ -678,7 +684,7 @@ reader; persisted session metadata remains in Session runtime. Native usage come
 from JSKIT's existing provider owners. The transfer changes neither saved history
 nor process sharing and allocates no new persistence.
 
-Owns direct conversations and temporary assistance with connected coding agents,
+Owns direct conversations and the conversations of AI tasks with connected coding agents,
 including retained text/voice admission and bindings to the shared JSKIT voice host.
 Preserves the three native interactive terminals alongside chat: their authorized
 launch/access and presentation remain application-owned, while JSKIT owns native
@@ -749,7 +755,7 @@ Coordinates workspace preparation and Save work using the existing project, sess
 Owns Git-derived Incoming inspection and ancestry-preserving Merge/Discard under
 the existing managed Git boundary. Sessions exposes the authorized actions;
 Projects retains receiving access and publication-policy decisions.
-Incoming conflict repair reuses the existing checkpoint, Temporary AI and
+Incoming conflict repair reuses the existing checkpoint, AI task and
 conflict-path tree owners. Its transient review binds both remote heads and
 receiving source state; only a separately reviewed native Merge publishes.
 The same Save owner verifies exact retained connected submissions against fresh
@@ -761,7 +767,6 @@ and Runtime preserves the bindings across renewal.
 
 ### Program
 - `genesis/program/conversation/direct-chat.md`
-- `genesis/program/conversation/temporary-assistance.md`
 - `genesis/program/execution/workspace-setup.md`
 - `genesis/program/preview/managed-application.md`
 - `genesis/program/source/save-work.md`

@@ -147,7 +147,7 @@ delivery failure is logged separately and cannot make a confirmed write retryabl
 an explicitly requested refresh still reports its own delivery failure.
 After changing GitHub issues, comments, labels or PRs, agents run
 `vibe64-helper github refresh`. Session guidance supplies this instruction alongside
-the existing managed Git commands. The shared Main and temporary conversation
+the existing managed Git commands. The shared Main and AI task conversation
 guidance also directs agents to fetch GitHub-hosted ticket, PR and comment
 attachments through authenticated managed `gh api`, using their original URLs.
 Agents save and inspect the downloaded files; an unauthenticated 404 is not proof
@@ -162,7 +162,7 @@ Other projects remain untouched. A failed notification is reported by the comman
 The same managed command supports `vibe64-helper github issue-link <number>`. After the
 existing session/actor access checks, it returns a root-relative issue path for
 the bound project, without contacting GitHub, exposing credentials, or accepting
-a project override. Public Vibe64's shared session driver tells main and temporary
+a project override. Public Vibe64's shared session driver tells Main and AI task
 assistants to use this internal link first and optionally include GitHub as a
 secondary link. Issues in other repositories retain GitHub links. Genesis
 composes this Vibe64-owned guidance; provider adapters do not duplicate it.

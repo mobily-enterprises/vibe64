@@ -23,6 +23,10 @@ opens a provider, resumes a conversation or stops a parent process. Transcript
 messages, native history IDs and paths remain unchanged.
 
 Terminals owns the pure copied-Claude receipt and secondary-conversation transforms.
+The secondary transform (`prepareCopiedSessionConversation`) keeps an AI task
+conversation's native bindings and unsent draft, marks a running turn interrupted,
+and stops an active task at `needs_you(interrupted)`, as after a restart, because
+nothing runs in the copy.
 It also prepares scoped Claude receipt files without following directory aliases,
 and stops copied routing requests while retaining uncertain delivery evidence.
 Routing reconciliation records a late receipt without making a stopped request
