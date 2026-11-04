@@ -81,7 +81,7 @@ describe("Vibe64 terminal consumers", () => {
     );
     expect(longRunning).toContain("mobile-takeover");
     expect(longRunning).toContain('v-if="open"');
-    expect(longRunning).toContain("props.terminal?.closeTerminalSocket?.()");
+    expect(longRunning).toContain("props.terminal.closeTerminalSocket()");
 
     expect(temporaryAction).toContain('props.active || props.error || props.status === "required" ||');
     expect(temporaryAction).toContain("(detailsViewed.value && Boolean(props.status || props.stage || props.output))");

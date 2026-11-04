@@ -101,7 +101,7 @@ const props = defineProps({
   },
   terminal: {
     required: true,
-    type: Object
+    type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Terminal>} */ (Object)
   },
   title: {
     default: "Run output",
@@ -132,7 +132,7 @@ function hide() {
 
 watch(() => props.open, (open) => {
   if (!open) {
-    props.terminal?.closeTerminalSocket?.();
+    props.terminal.closeTerminalSocket();
   }
 });
 </script>
