@@ -20,6 +20,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `packages/vibe64-voice/src/server/Vibe64VoiceFeature.js`
 - `src/composables/useVibe64ConversationRuntime.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64ConversationVoice.js`
 - `src/composables/useVibe64AgentSettings.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`

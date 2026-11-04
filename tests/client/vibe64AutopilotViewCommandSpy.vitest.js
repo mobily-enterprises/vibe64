@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { conversationAttribution } from "../../src/lib/vibe64ConversationAttribution.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import * as vue from "vue";
@@ -8,13 +7,11 @@ import { renderToString } from "@vue/server-renderer";
 import * as mdi from "@mdi/js";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
-import { VoiceConversationControls, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
-import { createProjectVoiceBinding } from "../../packages/vibe64-voice/src/client/projectVoiceBinding.js";
+import { VoiceConversationControls } from "@jskit-ai/assistant-voice/client";
 import { sourceEditorLinkTarget } from "../../src/lib/vibe64SourceEditorLinks.js";
-import { thinkingMessagePresentation, usesCommentaryForThinking } from "../../src/lib/vibe64ThinkingPresentation.js";
-import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
-import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
+import { usesCommentaryForThinking } from "../../src/lib/vibe64ThinkingPresentation.js";
+import { conversationTurnPresentation } from "../../src/lib/vibe64ConversationPresentation.js";
+import { useVibe64ConversationVoice } from "../../src/composables/useVibe64ConversationVoice.js";
 import { readAutopilotViewSource } from "./helpers/autopilotViewSource.js";
 
 // The view's own file; its whole source comes from readAutopilotViewSource().
@@ -86,23 +83,25 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
       return true;
     })
   };
+  let voiceParts = null;
   const imports = {
     vue, "@mdi/js": mdi,
-    "@local/vibe64-voice/client": { useVibe64Voice: () => voice, createProjectVoiceBinding },
+    "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
     // The one catalogue read that decides whether a lesson may speak unprompted.
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: vi.fn(async url => {
       expect(url).toBe("/api/vibe64/voice/voices");
       if (!speech) throw Object.assign(new Error("Speaking voices could not load."), { status: 503, code: "voice_unavailable" });
       return speech;
     }) }) },
-    "@jskit-ai/assistant-voice/client": { VoiceAvatar: {}, VoiceConversationControls: {}, VoiceConversationHost: {}, VoiceConversationSettings: {}, useVoiceLauncher },
+    "@jskit-ai/assistant-voice/client": { VoiceAvatar: {}, VoiceConversationControls: {}, VoiceConversationHost: {}, VoiceConversationSettings: {} },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {} },
-    "@local/vibe64-runtime/shared/assistantRouting": { assistantModeLabel },
-    "@local/vibe64-runtime/shared": { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel },
     "@/lib/vibe64SourceEditorLinks.js": { sourceEditorLinkTarget },
-    "@/lib/vibe64ConversationAttribution.js": { conversationAttribution },
-    "@/lib/vibe64ThinkingPresentation.js": { thinkingMessagePresentation, usesCommentaryForThinking },
-    "@local/vibe64-training/shared/learning-guidance": { learningGuidancePresentation }
+    "@/lib/vibe64ThinkingPresentation.js": { usesCommentaryForThinking },
+    "@/lib/vibe64ConversationPresentation.js": { conversationTurnPresentation },
+    // Main's voice runs on the published voice launcher; the tests drive its parts as the log does.
+    "@/composables/useVibe64ConversationVoice.js": {
+      useVibe64ConversationVoice: (...args) => (voiceParts = useVibe64ConversationVoice(...args))
+    }
   };
   const controls = [];
   const avatarRenders = [];
@@ -186,7 +185,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const root = {};
   app.mount(root);
   if (render) exposed = app._instance.subTree.component.exposed;
-  return { app, root, state, exposed, props, voice, runtime, controls, emit, avatarRenders };
+  return { app, root, state: { ...voiceParts, ...state }, exposed, props, voice, runtime, controls, emit, avatarRenders };
 }
 
 describe("Vibe64 direct session view", () => {
