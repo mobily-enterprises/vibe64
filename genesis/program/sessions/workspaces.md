@@ -107,6 +107,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionRenewalPolling.js`
 - `src/composables/useVibe64SessionRenewalSuccessor.js`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
+- `src/composables/useVibe64RenewalAssistantChoice.js`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionData.js`
 - `src/composables/useVibe64SessionCreation.js`
