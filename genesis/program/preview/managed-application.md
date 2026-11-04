@@ -165,6 +165,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/composables/useVibe64PreviewAddress.js`
 - `src/composables/useVibe64PreviewPick.js`
 - `src/composables/useVibe64PreviewMessages.js`
+- `src/composables/useVibe64PreviewAttachments.js`
 - `src/composables/useVibe64PreviewPresentation.js`
 - `src/lib/vibe64PreviewAddress.js`
 - `src/lib/vibe64PreviewFrame.js`

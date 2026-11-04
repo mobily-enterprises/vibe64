@@ -109,13 +109,12 @@ function previewCaptureErrorMessage(error, fallback = "Preview capture failed.")
 }
 
 function previewCaptureAvailable({
-  canAttach = false,
   displayed = false,
   loaded = false,
   supported = false,
   visible = false
 } = {}) {
-  return Boolean(canAttach && displayed && loaded && supported && visible);
+  return Boolean(displayed && loaded && supported && visible);
 }
 
 function stopMediaStream(stream) {
@@ -353,16 +352,43 @@ function createVibe64PreviewCaptureSession({
   });
 }
 
+/**
+ * A Preview file in the making: `produce({ signal })` creates the file, and
+ * stops when the message it was for no longer wants it.
+ * @typedef {(options: { signal: AbortSignal }) => Promise<File>} PreviewFileProducer
+ */
+
+/**
+ * What hands a Preview file to the current message: it shows `fileName` while
+ * `produce` runs, and a falsy result (or an empty list) means the person
+ * cancelled.
+ * @typedef {(request: { fileName: string, produce: PreviewFileProducer }) => Promise<unknown>} PreviewFilePreparer
+ */
+
+/**
+ * The Preview's eye: a screenshot of the visible Preview, offered while the
+ * Preview is displayed, loaded and on screen, and the one way every Preview
+ * file reaches the message (`deliverPreviewFile`). Tests pass their own
+ * `captureSession` and `windowObject`.
+ * @param {{
+ *   captureSession?: ReturnType<typeof createVibe64PreviewCaptureSession> | null,
+ *   prepareFile: PreviewFilePreparer,
+ *   previewDisplayed: import("vue").MaybeRefOrGetter<boolean>,
+ *   previewFrame: import("vue").MaybeRefOrGetter<HTMLElement | null>,
+ *   previewLoaded: import("vue").MaybeRefOrGetter<boolean>,
+ *   scopeKey: import("vue").MaybeRefOrGetter<string>,
+ *   windowObject?: Window
+ * }} options
+ */
 function useVibe64PreviewCapture({
-  attachFile,
   captureSession = null,
-  prepareFile = null,
+  prepareFile,
   previewDisplayed,
   previewFrame,
   previewLoaded,
   scopeKey,
   windowObject = globalThis.window
-} = {}) {
+}) {
   const busy = ref(false);
   const noticeColor = ref("success");
   const noticeText = ref("");
@@ -420,42 +446,35 @@ function useVibe64PreviewCapture({
     refreshVisibility();
   }
 
-  const canDeliver = typeof prepareFile === "function" || typeof attachFile === "function";
-
   const supported = computed(() => session.supported());
   const buttonVisible = computed(() => previewCaptureAvailable({
-    canAttach: canDeliver,
     displayed: readRefOrGetterValue(previewDisplayed) === true,
     loaded: readRefOrGetterValue(previewLoaded) === true,
     supported: supported.value,
     visible: visible.value
   }));
 
-  // Hands one Preview file to the message: through prepareFile when the host
-  // offers it, where a falsy result means the person cancelled, otherwise
-  // straight to attachFile, where it means the attachment failed.
+  /**
+   * Hands one Preview file to the message through prepareFile, where a falsy
+   * result means the person cancelled.
+   * @param {{ busy: import("vue").Ref<boolean>, failureMessage?: string, fileName: string, produce: PreviewFileProducer }} delivery
+   */
   async function deliverPreviewFile({
-    attachFailureMessage = "The preview file could not be attached to the current message.",
     busy: deliveryBusy,
     failureMessage = "The preview file could not be attached.",
     fileName,
     produce
   }) {
-    if (deliveryBusy.value || !canDeliver) {
+    if (deliveryBusy.value) {
       return false;
     }
     deliveryBusy.value = true;
     noticeVisible.value = false;
     try {
-      const result = typeof prepareFile === "function"
-        ? await prepareFile({ fileName, produce })
-        : await attachFile(await produce({}));
+      const result = await prepareFile({ fileName, produce });
       const attached = Array.isArray(result) ? result.length > 0 : Boolean(result);
       if (!attached) {
-        if (typeof prepareFile === "function") {
-          return false;
-        }
-        throw new Error(attachFailureMessage);
+        return false;
       }
       noticeText.value = "";
       noticeVisible.value = false;
@@ -479,15 +498,14 @@ function useVibe64PreviewCapture({
     }
     try {
       return await deliverPreviewFile({
-        attachFailureMessage: "The preview image could not be attached to the current message.",
         busy,
         failureMessage: "Preview capture failed.",
         fileName: "Preview screenshot",
-        produce: ({ signal } = {}) => {
+        produce: ({ signal }) => {
           const stopCapture = () => session.stop();
-          signal?.addEventListener?.("abort", stopCapture, { once: true });
+          signal.addEventListener("abort", stopCapture, { once: true });
           return session.capture(currentVisibleRect).finally(() => {
-            signal?.removeEventListener?.("abort", stopCapture);
+            signal.removeEventListener("abort", stopCapture);
           });
         }
       });

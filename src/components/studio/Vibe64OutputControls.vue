@@ -144,7 +144,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { SYSTEM_GRAPH_API_SUFFIX } from "@local/vibe64-system-graph/client";
@@ -159,11 +159,8 @@ import {
   useVibe64OutputControlsSurface
 } from "@/composables/useVibe64OutputControlsSurface.js";
 import {
-  useVibe64PreviewCapture
-} from "@/composables/useVibe64PreviewCapture.js";
-import {
-  previewDiagnosticsFile
-} from "@/lib/vibe64PreviewDiagnostics.js";
+  useVibe64PreviewAttachments
+} from "@/composables/useVibe64PreviewAttachments.js";
 
 const emit = defineEmits([
   "open-usage",
@@ -177,13 +174,10 @@ const props = defineProps({
     required: true,
     type: Boolean
   },
-  attachPreviewFile: {
-    default: null,
-    type: Function
-  },
+  // Hands each Preview file (screenshot, diagnostics) to the current message.
   preparePreviewFile: {
-    default: null,
-    type: Function
+    required: true,
+    type: /** @type {import("vue").PropType<import("@/composables/useVibe64PreviewCapture.js").PreviewFilePreparer>} */ (Function)
   },
   buttonLabel: {
     default: "Run",
@@ -307,63 +301,39 @@ const embeddedTerminalStyle = computed(() => ({
   zIndex: 3
 }));
 
+const attachments = useVibe64PreviewAttachments({
+  prepareFile: props.preparePreviewFile,
+  previewDiagnosticsAvailable,
+  previewDisplayed: () => props.previewDisplayed,
+  previewFrame,
+  previewLoaded: previewFrameLoaded,
+  requestPreviewDiagnostics,
+  scopeKey: () => String(props.session?.sessionId || "")
+});
 const {
   busy: previewCaptureBusy,
   buttonVisible: previewCaptureButtonVisible,
   capturePreview: captureVisiblePreview,
-  deliverPreviewFile,
   noticeColor: previewAttachmentNoticeColor,
   noticeText: previewAttachmentNoticeText,
   noticeVisible: previewAttachmentNoticeVisible
-} = useVibe64PreviewCapture({
-  attachFile: props.attachPreviewFile,
-  prepareFile: props.preparePreviewFile,
-  previewDisplayed: () => props.previewDisplayed,
-  previewFrame,
-  previewLoaded: previewFrameLoaded,
-  scopeKey: () => String(props.session?.sessionId || "")
-});
-
-const previewDiagnosticsAttachmentBusy = ref(false);
-const previewDiagnosticsAttachmentAvailable = computed(() => Boolean(
-  previewDiagnosticsAvailable.value &&
-  (
-    typeof props.preparePreviewFile === "function" ||
-    typeof props.attachPreviewFile === "function"
-  )
-));
-let previewDiagnosticsAttachmentSequence = 0;
+} = attachments.capture;
 
 watch([() => props.session?.sessionId, testApproval], ([sessionId, approval]) => {
   emit("test-approval", { sessionId, approval });
 }, { immediate: true });
 
-async function attachPreviewDiagnostics() {
-  if (!previewDiagnosticsAttachmentAvailable.value) {
-    return false;
-  }
-  return deliverPreviewFile({
-    attachFailureMessage: "The preview diagnostics file could not be attached to the current message.",
-    busy: previewDiagnosticsAttachmentBusy,
-    failureMessage: "Preview diagnostics could not be attached.",
-    fileName: "Preview diagnostics",
-    produce: async ({ signal } = {}) => previewDiagnosticsFile(await requestPreviewDiagnostics({ signal }), {
-      sequence: ++previewDiagnosticsAttachmentSequence
-    })
-  });
-}
-
 watch(
   [
     previewCaptureButtonVisible,
     previewCaptureBusy,
-    previewDiagnosticsAttachmentAvailable,
-    previewDiagnosticsAttachmentBusy,
+    previewDiagnosticsAvailable,
+    attachments.diagnosticsBusy,
     previewDiagnosticsRequestBusy
   ],
   ([captureAvailable, captureBusy, diagnosticsAvailable, diagnosticsBusy, diagnosticsRequestBusy]) => {
     emit("preview-attachment-state", {
-      attachDiagnostics: attachPreviewDiagnostics,
+      attachDiagnostics: attachments.attachDiagnostics,
       capture: captureVisiblePreview,
       captureAvailable: Boolean(captureAvailable),
       captureBusy: Boolean(captureBusy),

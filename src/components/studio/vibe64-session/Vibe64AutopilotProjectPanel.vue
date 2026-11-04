@@ -185,7 +185,6 @@
       >
         <Vibe64OutputControls
           :preview-identity-fix-allowed="assistantFixAllowed"
-          :attach-preview-file="attachPreviewFile"
           :prepare-preview-file="attachPreviewFileProducer"
           :auto-start-managed-preview="!props.sessionSelectionArchived"
           button-label="Run"
@@ -292,15 +291,6 @@ const router = useRouter();
 function selectPreview() {
   void router.push(projectAppPath(projectSlug.value));
   emit("project-attention");
-}
-
-async function attachPreviewFile(file) {
-  const composer = aiTaskComposer.value || temporaryAiWorkspace.value?.composer || composerInput.value;
-  const uploaded = await composer?.attachFiles([file]);
-  if (!Array.isArray(uploaded) || uploaded.length < 1) {
-    throw new Error("Open the chat composer before attaching a preview file.");
-  }
-  return uploaded[0];
 }
 
 async function attachPreviewFileProducer(options = {}) {
