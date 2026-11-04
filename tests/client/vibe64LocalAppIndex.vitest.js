@@ -197,7 +197,7 @@ it("shared original shell refs are per mount and only local composition supplies
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
     expect(localSource).toContain("const { focus, navigate } = useVibe64ColleagueNavigation();");
     const navigationSource = readFileSync(path.resolve("src/composables/useVibe64ColleagueNavigation.js"), "utf8");
-    expect(navigationSource).toContain("if (browserNavigation) browserNavigation.value = navigate;");
+    expect(navigationSource).toContain("  browserNavigation.value = navigate;");
     // Show me's view replaces the shown one, uncovered: the lesson's ?lesson=1 goes with the rest of the query.
     expect(navigationSource).toContain("const result = await router.push({ path, query });");
     expect(navigationSource).not.toContain("...route.query, session: command");

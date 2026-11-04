@@ -58,6 +58,7 @@ import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session
 import Vibe64ProjectMessage from "../../src/components/studio/vibe64-session/Vibe64ProjectMessage.vue";
 import { aiTaskTranscript } from "../../src/lib/vibe64AiTaskConversation.js";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
+import { provideVoiceDouble } from "./helpers/shellContext.js";
 
 Object.assign(SharedConversation.LongTextPreviewBlocks, {
   inheritAttrs: false,
@@ -290,6 +291,7 @@ function mountConversation({
   app.component("VCardActions", passthroughComponent());
   app.component("VSkeletonLoader", passthroughComponent());
   app.provide(ssrContextKey, { modules: new Set() });
+  provideVoiceDouble(app);
   app.mount(container);
   return { app, container, integrationChecks, integrationSkips, integrationResumes, integrationRequests, loadMoreRequests, state };
 }
@@ -478,6 +480,7 @@ describe("Vibe64 conversation scroll following", () => {
     }
     app.component("VBtn", passthroughComponent("button"));
     app.provide(ssrContextKey, { modules: new Set() });
+    provideVoiceDouble(app);
     const container = createHostElement("root");
     app.mount(container);
     try {
@@ -529,6 +532,7 @@ describe("Vibe64 conversation scroll following", () => {
     for (const name of ["VAlert", "VIcon", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) app.component(name, passthroughComponent());
     app.component("VBtn", passthroughComponent("button"));
     app.provide(ssrContextKey, { modules: new Set() });
+    provideVoiceDouble(app);
     const container = createHostElement("root");
     app.mount(container);
     const order = () => {
@@ -576,6 +580,7 @@ describe("Vibe64 conversation scroll following", () => {
     }
     app.component("VBtn", passthroughComponent("button"));
     app.provide(ssrContextKey, { modules: new Set() });
+    provideVoiceDouble(app);
     const container = createHostElement("root");
     app.mount(container);
     await flushScrollWork();

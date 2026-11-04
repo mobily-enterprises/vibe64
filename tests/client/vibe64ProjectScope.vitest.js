@@ -77,9 +77,9 @@ vi.mock("vuetify/components/VTextField", () => ({ VTextField: passthroughCompone
 
 import ProjectPage from "../../src/pages/app/project/[slug].vue";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
-import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { idleLearning } from "./helpers/learningHostParts.js";
 import Vibe64ProjectPaneControls from "../../src/components/studio/Vibe64ProjectPaneControls.vue";
+import { provideShellContext } from "./helpers/shellContext.js";
 
 for (const [component, file] of [
   [ProjectPage, "../../src/pages/app/project/[slug].vue"],
@@ -188,7 +188,7 @@ function mountProjectQueries(slug, { catalog = null } = {}) {
   app.use(VueQueryPlugin, { queryClient });
   app.provide("jskit.realtime.runtime.client.socket", socket);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
-  app.provide(VIBE64_LEARNING_KEY, idleLearning());
+  provideShellContext(app, { learning: idleLearning() });
   const container = { children: [], props: {}, type: "root" };
   app.mount(container);
   return {

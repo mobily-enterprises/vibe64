@@ -22,6 +22,9 @@ vi.mock("vue", async (importOriginal) => {
   };
 });
 
+// The editor runs outside a mounted view here, so the shell's page activity channel is a double that hears nothing.
+vi.mock("@/lib/vibe64PageActivity.js", () => ({ usePageActivity: () => () => {} }));
+
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
   useRealtimeEvent(options) {
     mocks.realtimeOptions.push(options);

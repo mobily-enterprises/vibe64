@@ -12,7 +12,6 @@ import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { VIBE64_SURFACE_ID, vibe64SessionQueryKey } from "../../src/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 
@@ -53,6 +52,7 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
 }));
 import Onboarding from "../../src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import AiTaskButton from "../../packages/vibe64-ai-tasks/src/client/Vibe64AiTaskButton.vue";
+import { provideShellContext } from "./helpers/shellContext.js";
 
 for (const [component, relativePath] of [
   [Onboarding, "src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue"],
@@ -180,7 +180,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
     }
   });
   app.use(VueQueryPlugin, { queryClient });
-  app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
+  provideShellContext(app, { colleaguePreview });
   app.provide(VIBE64_AI_TASKS_KEY, aiTasks);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
@@ -255,6 +255,7 @@ async function render(state, props = {}, environmentSetup = null,
     })
   });
   app.provide(VIBE64_AI_TASKS_KEY, aiTaskHost());
+  provideShellContext(app);
   for (const [name, element] of [["v-alert", "aside"], ["v-btn", "button"], ["v-icon", "i"], ["v-textarea", "textarea"], ["v-skeleton-loader", "div"]]) {
     app.component(name, passthroughComponent(element));
   }

@@ -5,7 +5,7 @@ import { attachConversationRuntime } from "./helpers/conversationRuntimeFixture.
 
 import { sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
 import { createVibe64SessionRepositoryStatusQueue } from "../../src/composables/useVibe64SessionRepositoryStatusRegistry.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { provideShellContext } from "./helpers/shellContext.js";
 
 const route = reactive({
   path: "/app/project/chat-test/dashboard/env"
@@ -92,7 +92,7 @@ async function createViewWithProps(overrides = {}, options = {}) {
   const scope = effectScope();
   viewScopes.add(scope);
   const app = createApp({});
-  if (options.viewer) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, options.viewer);
+  provideShellContext(app, options.viewer ? { viewer: options.viewer } : {});
   return {
     emit,
     props,

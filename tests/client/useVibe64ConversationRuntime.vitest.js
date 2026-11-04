@@ -24,6 +24,7 @@ import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/co
 import { VIBE64_SESSION_CHANGED_EVENT } from "../../src/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { createConversationFixtureSocket, provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
+import { provideVoiceDouble } from "./helpers/shellContext.js";
 const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
 const releases = [];
@@ -59,6 +60,7 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   } };
   const app = renderer.createApp({ setup() { provideShell?.(); return () => h(reader, { key: readerKey.value }); } });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+  if (!beforeMount) provideVoiceDouble(app);
   provideConversationFixture(app, socket, "owner");
   if (!beforeMount) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

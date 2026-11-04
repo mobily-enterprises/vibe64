@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRenderer, markRaw, nextTick, reactive, ref } from "vue";
 import { MessageChannel } from "node:worker_threads";
-import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createVibe64Learning } from "../../src/lib/vibe64Learning.js";
 import { idleLearning, learningHostParts } from "./helpers/learningHostParts.js";
 
@@ -48,6 +47,7 @@ import {
   launchPreviewStatusText
 } from "../../src/lib/vibe64PreviewStatusText.js";
 import { useVibe64OutputControlsSurface } from "../../src/composables/useVibe64OutputControlsSurface.js";
+import { provideShellContext } from "./helpers/shellContext.js";
 
 describe("Vibe64 launch controls surface", () => {
   it("keeps launch lifecycle text stable during background polling", () => {
@@ -807,7 +807,7 @@ function mountPreviewSurface({ learning = idleLearning(), projectSlug = "project
   const app = renderer.createApp({ setup() {
     state = useVibe64OutputControlsSurface(props); return () => null;
   } });
-  app.provide(VIBE64_LEARNING_KEY, learning);
+  provideShellContext(app, { learning });
   app.mount({});
   const posts = [];
   let rect = { left: 100, top: 100, right: 900, bottom: 700 };

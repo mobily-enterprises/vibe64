@@ -34,12 +34,13 @@ vi.mock("@/composables/useVibe64Integrations.js", () => ({ useVibe64Integrations
   } })
 }) }));
 import IntegrationsPanel from "@/components/studio/IntegrationsPanel.vue";
+import { runInShellContext } from "./helpers/shellContext.js";
 
 it("does not replay URL selection when unrelated dashboard context refreshes", async () => {
   navigation.route.query = { integration: "calendar", integrationEnvironment: "production" };
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", productionIntegrationsApiPath: "/production" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.environment.value).toBe("production");
     form.selectIntegration("calendar", "development");
@@ -57,7 +58,7 @@ it("does not replay URL selection when unrelated dashboard context refreshes", a
 it("reveals a requested integration once its detail renders, including repeated selection, without moving focus", async () => {
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", active: true } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   const detail = { scrollIntoView: vi.fn(), focus: vi.fn() };
   try {
     await nextTick();
@@ -80,7 +81,7 @@ it("reveals a requested integration once its detail renders, including repeated 
 it("defers reveal while inactive and cancels it when the session, environment or selection changes", async () => {
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", active: false } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   const detail = { scrollIntoView: vi.fn() };
   try {
     form.integrationDetail.value = detail;
@@ -123,7 +124,7 @@ it("defers reveal while inactive and cancels it when the session, environment or
 it("updates the application callback suggestion without changing an explicit override or saved Env reference", async () => {
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.callbackUrl.value).toBe("https://person-dogandgroom.apps.example.test/integrations/google/callback");
     props.dashboardContext.applicationPublicUrl = "https://dogandgroom.example";
@@ -145,7 +146,7 @@ it("updates the application callback suggestion without changing an explicit ove
 it("prepares MCP registration from the current project callback, region and permissions before credentials exist", async () => {
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.clientRegistrationBody.value).toBe("");
     form.add(form.providers.find((provider) => provider.id === "amplitude"));
@@ -183,7 +184,7 @@ it("prepares MCP registration from the current project callback, region and perm
 it("prepares Canva metadata from current fields without publishing it or including secrets", async () => {
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://dogandgroom.example" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.clientMetadata.value).toBeNull();
     form.add(form.providers.find((provider) => provider.id === "canva"));
@@ -212,7 +213,7 @@ it("hydrates production navigation without a development session and follows Bac
   navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "", productionIntegrationsApiPath: "/production/integrations" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.environment.value).toBe("production");
     expect(form.selectedId.value).toBe("calendar");
@@ -237,7 +238,7 @@ it("applies a production link when its host API becomes available after mount", 
   navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "" } });
-  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.environment.value).toBe("development");
     expect(form.selectedId.value).toBe("");
