@@ -1,18 +1,20 @@
 import { createApp, reactive, shallowRef } from "vue";
 import * as HostKeys from "../../../src/lib/vibe64AssistantHost.js";
 import { createPageActivity } from "../../../src/lib/vibe64PageActivity.js";
+import { VIBE64_COLLEAGUE_MODEL_KEY, createVibe64ColleagueModelBridge } from "../../../src/lib/vibe64ColleagueModelBridge.js";
 import { VIBE64_VOICE_KEY } from "../../../packages/vibe64-voice/src/client/voiceHost.js";
 
 // What both hosts provide to every view, for a test that mounts or runs one view on its own:
-// Vibe64AssistantShellContext's slots (each empty unless the test passes its own), the local viewer and a page
-// activity channel, plus the learning controller a test passes. The slots are returned so a test can read
-// what the view published.
+// Vibe64AssistantShellContext's slots (each empty unless the test passes its own), the local viewer, a page
+// activity channel and a Colleague model bridge with no Colleague mounted, plus the learning controller a test
+// passes. The slots are returned so a test can read what the view published.
 export function provideShellContext(app, { learning = null, viewer = HostKeys.LOCAL_ASSISTANT_VIEWER, ...given } = {}) {
   const slots = {
     assistantHost: shallowRef(null), colleagueView: shallowRef(null), colleaguePreview: shallowRef(null),
     colleagueIntegrations: shallowRef(null), colleagueDatabase: shallowRef(null), colleaguePlan: shallowRef(null),
     colleagueLayout: shallowRef(null), browserNavigation: shallowRef(null), pageFocus: shallowRef(null),
     colleagueLauncher: shallowRef(null), aiTaskTray: shallowRef(null), pageActivity: createPageActivity(),
+    colleagueModels: createVibe64ColleagueModelBridge(),
     ...given
   };
   app.provide(HostKeys.VIBE64_ASSISTANT_VIEWER_KEY, viewer);
@@ -28,6 +30,7 @@ export function provideShellContext(app, { learning = null, viewer = HostKeys.LO
   app.provide(HostKeys.VIBE64_PAGE_ACTIVITY_KEY, slots.pageActivity);
   app.provide(HostKeys.VIBE64_COLLEAGUE_LAUNCHER_KEY, slots.colleagueLauncher);
   app.provide(HostKeys.VIBE64_AI_TASK_TRAY_KEY, slots.aiTaskTray);
+  app.provide(VIBE64_COLLEAGUE_MODEL_KEY, slots.colleagueModels);
   if (learning) app.provide(HostKeys.VIBE64_LEARNING_KEY, learning);
   return slots;
 }

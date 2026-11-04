@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerVibe64ColleagueModel, useVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
+import { createVibe64ColleagueModelBridge } from "../../src/lib/vibe64ColleagueModelBridge.js";
 import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueSelectionLabels.js";
 
 describe("Colleague model bridge", () => {
   it("reaches the newest mounted Colleague and removes only the unmounted one", async () => {
-    const bridge = useVibe64ColleagueModel();
+    const bridge = createVibe64ColleagueModelBridge();
     const target = { schema: "vibe64.assistant-selection.v1", engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" };
     expect(bridge.available.value).toBe(false);
     await expect(bridge.current()).resolves.toBeNull();
@@ -13,10 +13,10 @@ describe("Colleague model bridge", () => {
 
     const first = { current: async () => ({ selection: { engineId: "codex" } }), select: vi.fn(async () => ({ ok: true, from: "first" })) };
     const second = { current: async () => null, select: vi.fn(async () => ({ ok: true, from: "second" })) };
-    const unregisterFirst = registerVibe64ColleagueModel(first);
+    const unregisterFirst = bridge.register(first);
     expect(bridge.available.value).toBe(true);
     await expect(bridge.current()).resolves.toEqual({ selection: { engineId: "codex" } });
-    const unregisterSecond = registerVibe64ColleagueModel(second);
+    const unregisterSecond = bridge.register(second);
     await expect(bridge.current()).resolves.toBeNull();
     await expect(bridge.select(target)).resolves.toEqual({ ok: true, from: "second" });
     expect(second.select).toHaveBeenCalledWith(target);

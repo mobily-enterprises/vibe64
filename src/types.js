@@ -31,6 +31,7 @@
 /** @typedef {ReturnType<typeof import("./lib/vibe64Learning.js").createVibe64Learning>} Vibe64Learning */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64StarredFiles.js").useVibe64StarredFiles>} Vibe64StarredFiles */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64LearningCourses.js").useVibe64LearningCourses>} Vibe64LearningCourses */
+/** @typedef {ReturnType<typeof import("./lib/vibe64ColleagueModelBridge.js").createVibe64ColleagueModelBridge>} Vibe64ColleagueModelBridge */
 
 export {};
 

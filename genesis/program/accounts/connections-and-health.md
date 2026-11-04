@@ -424,7 +424,8 @@ the host returns focus when the flow closes; while AI Accounts is busy it sets
 `aiOnboardingBlocked`, and requests are refused rather than stacked over it. Regular Z.AI stays
 reachable through Advanced → Add a connection → OpenCode as well. Success requires the chosen
 provider connected and the owner's Senior usable on it, or recommended onto it. The Colleague
-model bridge, registered by the mounted Colleague, reads and switches
+model bridge, which the host shell context provides and the mounted Colleague
+registers with, reads and switches
 Colleague's selection through the existing model selection; the exported
 `AiOnboardingNudge` in the Colleague panel and Colleague's no-usable-model
 warning dispatch the same request while setup is needed, as does the exported

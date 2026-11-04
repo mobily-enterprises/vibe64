@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { VIBE64_AI_TASK_TRAY_KEY, VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_COLLEAGUE_INTEGRATIONS_KEY, VIBE64_COLLEAGUE_DATABASE_KEY, VIBE64_COLLEAGUE_PLAN_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_BROWSER_NAVIGATION_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY, VIBE64_PAGE_FOCUS_KEY, LOCAL_ASSISTANT_VIEWER } from "@/lib/vibe64AssistantHost.js";
 import { createVibe64Learning, requestStudio } from "@/lib/vibe64Learning.js";
 import { createPageActivity } from "@/lib/vibe64PageActivity.js";
+import { VIBE64_COLLEAGUE_MODEL_KEY, createVibe64ColleagueModelBridge } from "@/lib/vibe64ColleagueModelBridge.js";
 const props = defineProps({ local: Boolean });
 // Standalone's local display scope is not an authenticated user; a host with
 // sign-in supplies its real viewer to its authenticated children instead.
@@ -27,6 +28,8 @@ provide(VIBE64_PAGE_ACTIVITY_KEY, pageActivity);
 // One Learn/Develop controller for both hosts; the overlay binds its signed-in viewer.
 provide(VIBE64_LEARNING_KEY, createVibe64Learning({ browserNavigation, colleagueView, layout, pageFocus, pageActivity,
   router: useRouter(), request: requestStudio }));
+// AI onboarding reads and changes the model of the Colleague mounted in this view.
+provide(VIBE64_COLLEAGUE_MODEL_KEY, createVibe64ColleagueModelBridge());
 provide(VIBE64_COLLEAGUE_LAUNCHER_KEY, shallowRef(null));
 provide(VIBE64_AI_TASK_TRAY_KEY, shallowRef(null));
 </script>

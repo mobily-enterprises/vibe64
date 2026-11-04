@@ -16,7 +16,7 @@ import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
-import { registerVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
+import { useVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
@@ -419,6 +419,7 @@ const selectModel = assistantSelection => saveSelection({ assistantSelection });
 // AI onboarding reads and switches this Colleague's model through the bridge.
 const colleagueModel = createColleagueModel({ product, productError, refresh, requestColleague, saveSelection, waitForConversation,
   sendMessage, reopenConversation, focusConversationComposer, readFocus: () => props.focus });
+const colleagueModels = useVibe64ColleagueModel();
 let unregisterModel = null;
 const { watchDetails, operationDetails, watches, operations, assignments, watchControlCount, changeWatch, openOperationTarget,
   prepareOperationRecovery } = useColleagueWatchesAndOperations({ product, draft, requestColleague, refresh, reportFailure,
@@ -450,7 +451,7 @@ watch([actorKey, () => props.focus], ([actor], [previousActor]) => {
 onMounted(() => {
   if (voice) voice.launcher.value = launcher.value?.$el;
   void refresh();
-  unregisterModel = registerVibe64ColleagueModel(colleagueModel);
+  unregisterModel = colleagueModels.register(colleagueModel);
   window.addEventListener("blur", cancelAvatarPress);
   window.addEventListener("pagehide", cancelAvatarPress);
 });

@@ -1016,7 +1016,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
     "../shared/learningFocus.js": learningFocus,
     "@local/vibe64-training/shared/learner-events": { VIBE64_TRAINING_LEARNER_CHANGED_EVENT: "vibe64.training.learner.changed" },
-    "/src/lib/vibe64ColleagueModelBridge.js": { registerVibe64ColleagueModel: () => () => {} },
+    "/src/lib/vibe64ColleagueModelBridge.js": { useVibe64ColleagueModel: () => ({ register: () => () => {} }) },
     "./colleagueModel.js": { createColleagueModel },
     "./useColleagueFreshStart.js": { useColleagueFreshStart },
     "./useColleagueHistory.js": { useColleagueHistory },

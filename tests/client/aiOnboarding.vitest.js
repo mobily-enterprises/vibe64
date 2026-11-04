@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { computed, createRenderer, effectScope, ref, ssrContextKey } from "vue";
+import { computed, createApp, createRenderer, effectScope, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
@@ -21,7 +21,7 @@ vi.mock("../../src/composables/useLocalToolRows.js", () => ({ useLocalToolRows: 
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 
-import { registerVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
+import { VIBE64_COLLEAGUE_MODEL_KEY, createVibe64ColleagueModelBridge } from "../../src/lib/vibe64ColleagueModelBridge.js";
 import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
 import { aiOnboardingAvailable, aiOnboardingBlocked, aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
@@ -40,6 +40,7 @@ const glm = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "glm");
 const ENGINE_LABELS = { claude: "Claude Code", codex: "Codex" };
 const pick = (selection) => selection && { schema: "vibe64.assistant-selection.v1", agentId: selection.engineId, variantId: "high",
   catalogRevision: `sha256:${"a".repeat(64)}`, ...selection };
+let colleagueModels;
 let unregisterColleague = () => null;
 
 let app;
@@ -48,9 +49,16 @@ function mount(component, props, provides = []) {
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...component, render: () => null }, props);
   app.provide(ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_COLLEAGUE_MODEL_KEY, colleagueModels);
   for (const [key, value] of provides) app.provide(key, value);
   app.mount({});
   return app._instance.setupState;
+}
+// Runs a composable outside a mounted tree, where the host shell provides its Colleague model bridge.
+function inShell(run) {
+  const host = createApp({});
+  host.provide(VIBE64_COLLEAGUE_MODEL_KEY, colleagueModels);
+  return host.runWithContext(() => effectScope().run(run));
 }
 const resource = (data) => ({ data: ref(data), reload: vi.fn().mockResolvedValue({}) });
 
@@ -94,8 +102,10 @@ beforeEach(() => {
       selection.value = assistantSelection;
       return { ok: true, ...labelled() };
     }),
-    sayHello: vi.fn(async () => ({ ok: true, reply: "Hello there!" })) };
-  unregisterColleague = registerVibe64ColleagueModel(mocks.colleague);
+    sayHello: vi.fn(async () => ({ ok: true, reply: "Hello there!" })),
+    reveal: vi.fn(async () => {}) };
+  colleagueModels = createVibe64ColleagueModelBridge();
+  unregisterColleague = colleagueModels.register(mocks.colleague);
 });
 afterEach(() => {
   unregisterColleague();
@@ -337,7 +347,7 @@ describe("embedded setup", () => {
 
 describe("shell", () => {
   const shell = (props) => mount(AiOnboarding, { open: true, canConfigure: true,
-    onboarding: effectScope().run(() => useAiOnboarding({ enabled: true })), ...props });
+    onboarding: inShell(() => useAiOnboarding({ enabled: true })), ...props });
 
   it("opens first run on Why, and a redo, an existing setup or a member on the setup stage", () => {
     expect(shell({ start: "why" }).view).toBe("why");
@@ -365,7 +375,7 @@ describe("shell", () => {
 describe("flow", () => {
   async function flow({ setUp = false, redo = setUp, learnMode = false, learning = { learnMode }, onClose = undefined } = {}) {
     if (setUp) mocks.accounts.status.value.accounts[2].connected = true;
-    const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+    const onboarding = inShell(() => useAiOnboarding({ enabled: true }));
     const state = mount(AiSetup, { open: true, redo, onboarding, canConfigure: true, ...(onClose ? { onClose } : {}) },
       [[VIBE64_LEARNING_KEY, learning]]);
     await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
@@ -464,7 +474,7 @@ describe("flow", () => {
 
   it("without a Colleague here, success only points to its model menu", async () => {
     unregisterColleague();
-    const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+    const onboarding = inShell(() => useAiOnboarding({ enabled: true }));
     const state = mount(AiSetup, { open: true, onboarding, canConfigure: true });
     state.connect(claude, "have");
     connectClaude();
@@ -607,7 +617,7 @@ describe("flow", () => {
     async function ownerOnClaude(props = {}) {
       mocks.accounts.status.value.accounts[1].connected = true;
       mocks.routing.team.value = { available: true, ownerName: "Tony", memberCount: 1 };
-      const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+      const onboarding = inShell(() => useAiOnboarding({ enabled: true }));
       const state = mount(AiSetup, { open: true, redo: true, onboarding, canConfigure: true, ...props });
       await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
       routeSenior({ assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" },
@@ -652,7 +662,7 @@ describe("flow", () => {
       expect([state.teamCardState, state.manager.routingOpen.value]).toEqual(["offer", false]);
       app.unmount();
       mocks.accounts.status.value.accounts[1].connected = true;
-      const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+      const onboarding = inShell(() => useAiOnboarding({ enabled: true }));
       routeSenior({ assignment: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
       const other = mount(AiSetup, { open: true, redo: true, onboarding, canConfigure: true, focus: "team" });
       await vi.waitFor(() => expect(other.manager.routingOpen.value).toBe(true));
@@ -861,7 +871,7 @@ describe("flow", () => {
   });
 
   it("shows the owner-only notice to members", () => {
-    const onboarding = effectScope().run(() => useAiOnboarding({ enabled: false }));
+    const onboarding = inShell(() => useAiOnboarding({ enabled: false }));
     expect(mount(AiSetup, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");
   });
 

@@ -7,6 +7,7 @@ import * as Vue from "vue";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import * as LearningEnvironment from "../../src/lib/vibe64Learning.js";
 import * as PageActivity from "../../src/lib/vibe64PageActivity.js";
+import * as ColleagueModels from "../../src/lib/vibe64ColleagueModelBridge.js";
 import { idleLearning } from "./helpers/learningHostParts.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
@@ -168,10 +169,12 @@ it("gives a host's Courses content the courses owner, its request state and the 
 const appSource = () => readFileSync(path.resolve("src/App.vue"), "utf8");
 it("shared original shell refs are per mount and only local composition supplies the established local display identity", () => {
   const context = compiledUi(path.resolve("src/components/Vibe64AssistantShellContext.vue"), { vue: Vue, "@/lib/vibe64AssistantHost.js": HostKeys,
-    "@/lib/vibe64Learning.js": LearningEnvironment, "@/lib/vibe64PageActivity.js": PageActivity, "vue-router": { useRouter: () => null } });
+    "@/lib/vibe64Learning.js": LearningEnvironment, "@/lib/vibe64PageActivity.js": PageActivity, "@/lib/vibe64ColleagueModelBridge.js": ColleagueModels,
+    "vue-router": { useRouter: () => null } });
   const mount = local => {
     let captured;
-    const probe = { setup() { captured = Object.fromEntries(Object.entries(HostKeys).map(([name, key]) => [name, Vue.inject(key, null)])); return () => Vue.h("aside"); } };
+    const probe = { setup() { captured = Object.fromEntries(Object.entries(HostKeys).map(([name, key]) => [name, Vue.inject(key, null)]));
+      captured.colleagueModels = Vue.inject(ColleagueModels.VIBE64_COLLEAGUE_MODEL_KEY, null); return () => Vue.h("aside"); } };
     const root = { children: [] }, app = uiRenderer().createApp({ setup: () => () => Vue.h(context, { local }, { default: () => Vue.h(probe) }) });
     app.mount(root); return { app, captured };
   };
@@ -186,6 +189,9 @@ it("shared original shell refs are per mount and only local composition supplies
     // One page activity channel per shell for the lesson step bar's do beats.
     expect(typeof local.captured.VIBE64_PAGE_ACTIVITY_KEY.report).toBe("function");
     expect(local.captured.VIBE64_PAGE_ACTIVITY_KEY).not.toBe(nonLocal.captured.VIBE64_PAGE_ACTIVITY_KEY);
+    // One Colleague model bridge per shell, with no Colleague mounted yet.
+    expect(local.captured.colleagueModels.available.value).toBe(false);
+    expect(local.captured.colleagueModels).not.toBe(nonLocal.captured.colleagueModels);
     // One Learning environment controller per shell, closed until the overlay binds a viewer.
     expect(local.captured.VIBE64_LEARNING_KEY.state.open).toBe(false);
     expect(local.captured.VIBE64_LEARNING_KEY.state.actorKey).toBe("");
