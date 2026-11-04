@@ -213,12 +213,19 @@ failing repository is reported and earlier prepared sources are retained. The
 receiving source reads only its integration branch from GitHub, not the full
 branch list.
 
-Preparation never creates or selects a session. A target with no binding, or
-whose binding's session is archived without a renewal, unfinished or gone,
-returns `vibe64_connected_link_required`; every such project is named together
-and workspace setup records the `ambiguous` state with `connectedChoiceRequired`.
-`connected.choices` lists those projects with each one's reason and free sessions,
-and `connected.link` saves one person's choice; both are public, human-only actions.
+Preparation never creates a session. A target with no binding, or whose binding's
+session is archived without a renewal, unfinished or gone, has no usable link. If
+exactly one session is free, preparation links it through the same reservation as a
+person's link, one target at a time because each rewrites the origin's bindings, and
+reports it in the result's `linked` list, which workspace setup writes to the output
+on success and on a stop alike. The session is used as it stands. The free list is
+the one a person is offered, so every rule applies equally. A refused link and an
+unfinished replacement stay a person's choice rather than failing or dropping the
+confirmed replacement. Otherwise the target returns `vibe64_connected_link_required`;
+every such project is named together and workspace setup records the `ambiguous`
+state with `connectedChoiceRequired`. `connected.choices` lists those projects with
+each one's reason and free sessions, and `connected.link` saves one person's choice;
+both are public, human-only actions.
 The receiving project owns which sessions are free: active, source ready, unbound
 and on no branch or pull request of their own. A link reserves a fresh contribution
 UUID, whose optional `sessionId` names the chosen session and whose `baseCommit` is
@@ -248,7 +255,8 @@ bindings and submitted revisions remain in the full archive metadata, while
 commits, dirty patches and untracked files use the existing source-recovery
 artifacts. Neither child checkouts nor incoming refs are removed by originating
 session archival. A receiving contribution archived without a renewal successor
-stops connected preparation for a person's choice; it is not silently replaced.
+needs a new link: preparation takes the only free session and says so, or stops
+for a person's choice. It is never silently replaced.
 Source recovery is explicit through the existing archive facilities.
 Sources: `packages/vibe64-core/src/server/projectRepository.js`, the original
 Sessions/Runtime/source owners above, and focused contribution cases in

@@ -1631,11 +1631,11 @@ function connectedChoice(overrides: Record<string, unknown> = {}) {
 
 // Preparation stopped for a connected session: the server double answers what
 // the picker asks, and records what it saves.
-async function openConnectedChoice(page: Page, choices: unknown[]) {
+async function openConnectedChoice(page: Page, choices: unknown[], transcript = "[Prepare connected sources] Needs a choice.") {
   await page.setViewportSize({ width: 600, height: 844 });
   await mockLaunchTerminalSocket(page);
   const session = { ...sessionPayload(), workspaceSetup: { connectedChoiceRequired: true, status: "ambiguous",
-    updatedAt: "2026-09-29T07:00:00Z", transcript: "[Prepare connected sources] Needs a choice.",
+    updatedAt: "2026-09-29T07:00:00Z", transcript,
     diagnostic: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." } };
   await mockLaunchSession(page, { session });
   const server = { choices, linkBodies: [] as unknown[], linkAnswer: { ok: true } as Record<string, unknown>,
@@ -1692,6 +1692,17 @@ test("@preparation-notice an archived link says why, and a session taken meanwhi
   await expect(choice).toHaveCount(0);
   expect(server.linkBodies.at(-1)).toEqual({ repository: "example/vibe64", connectedSessionId: "free-2" });
   await expect.poll(() => server.retries).toBe(1);
+});
+
+test("@preparation-notice an automatic link is named in the output while another project stops for a choice", async ({ page }) => {
+  const line = "[Connected] genesis is now linked to Tooling, its only free session, which is used as it stands.";
+  const { choice, server } = await openConnectedChoice(page, [connectedChoice()], `${line}\n[Prepare connected sources] Needs a choice.`);
+  await expect(choice).toHaveCount(1);
+  await expect(choice).toContainText("vibe64 needs a connected session.");
+  const notice = page.locator(".vibe64-temporary-action-terminal:visible").filter({ hasText: /Workspace setup needs a choice/ });
+  await notice.getByRole("button", { name: "Show Workspace setup needs a choice details", exact: true }).click();
+  await expect(notice.getByText(line)).toBeVisible();
+  expect(server.linkBodies).toEqual([]);
 });
 
 test("@preparation-notice no free session says what to do and offers nothing to create", async ({ page }) => {

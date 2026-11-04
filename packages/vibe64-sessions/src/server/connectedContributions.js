@@ -10,6 +10,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import {
   ACTION_CHECK_CONTRIBUTION_UPDATES,
   ACTION_CREATE_CONNECTED_REPLACEMENT,
@@ -110,6 +111,12 @@ function createConnectedContributions({
       }
     });
   }
+
+  const {
+    inspectConnectedChoices,
+    linkConnectedSession,
+    linkOnlyFreeSession
+  } = createConnectedSessionChoices({ executeConnectedAction, project, terminals });
 
   async function inspectConnectedWork(session, requestContext, bindings = sessionConnectedSources(session), captureSnapshots = false) {
     const submissions = sessionConnectedSubmissions(session);
@@ -297,6 +304,7 @@ function createConnectedContributions({
     const sessionId = session.sessionId;
     const prepared = [];
     const resolvedSources = [];
+    const linked = [];
     let preparingRepository = "";
     let progress = Promise.resolve();
     const report = label => {
@@ -335,10 +343,19 @@ function createConnectedContributions({
             `(${readyCount} of ${targets.length} ready${stopped.length ? `; ${stopped.join(", ")}` : ""})`);
         }
       };
+      // Each link rewrites this session's bindings, so they happen one at a time.
+      let linkTurn = Promise.resolve();
+      const linkInTurn = target => {
+        const link = linkTurn.then(() => linkOnlyFreeSession(runtime, sessionId, target, requestContext));
+        // Queue tail: the link's own failure reaches this caller through `await link`.
+        linkTurn = link.catch(doNothing);
+        return link;
+      };
       /**
        * One connected project, up to date when that cannot affect anyone's
-       * work. A project with no usable link stops here for a person's choice;
-       * preparation itself never creates or selects a session.
+       * work. With no usable link it takes the project's only free session;
+       * otherwise it stops here for a person's choice. Preparation never
+       * creates a session.
        */
       const prepareTarget = async (target, index) => {
         const repository = target.fullName;
@@ -350,7 +367,7 @@ function createConnectedContributions({
             { messageCode: "vibe64_connected_receiving_repository_changed" }
           );
         }
-        const binding = sources.find(item => item.contribution.repository === repository);
+        let binding = sources.find(item => item.contribution.repository === repository);
         if (binding &&
             (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
           throw vibe64Error(
@@ -360,12 +377,23 @@ function createConnectedContributions({
             { messageCode: "vibe64_connected_binding_conflict" }
           );
         }
-        if (!binding) return { repository, allocation: { ok: false, code: CONNECTED_LINK_REQUIRED } };
         const resolve = () => executeConnectedAction(binding.projectSlug, ACTION_RESOLVE_CONNECTED_SOURCE, {
           contribution: binding.contribution,
           sessionName: servedSessionName(session)
         }, requestContext);
-        let allocation = await resolve();
+        let allocation = binding ? await resolve() : { ok: false, code: CONNECTED_LINK_REQUIRED };
+        if (allocation?.code === CONNECTED_LINK_REQUIRED) {
+          const link = await linkInTurn(target);
+          if (!link) return { repository, allocation };
+          binding = link.binding;
+          linked.push({
+            repository,
+            projectSlug: binding.projectSlug,
+            sessionId: binding.contribution.sessionId,
+            sessionName: link.sessionName
+          });
+          allocation = await resolve();
+        }
         let update = null;
         if (allocation?.ok !== false && allocation?.sourceReady === true) {
           // Bring the checkout up to its integration branch when that cannot
@@ -435,12 +463,13 @@ function createConnectedContributions({
         projects: resolvedSources,
         environment: await runtime.resolvePromptEnvironment()
       });
-      return { ok: true, prepared, development };
+      return { ok: true, prepared, development, linked };
     });
     await progress;
     return result?.ok === false ? {
       ...result,
       prepared,
+      linked,
       ...(preparingRepository ? { failedRepository: preparingRepository } : {})
     } : result;
   }
@@ -571,8 +600,6 @@ function createConnectedContributions({
       return project.inspectConnectedDevelopmentInputs({ session, projects, environment: await runtime.resolvePromptEnvironment() });
     });
   }
-
-  const { inspectConnectedChoices, linkConnectedSession } = createConnectedSessionChoices({ executeConnectedAction, project, terminals });
 
   return Object.freeze({
     assertConnectedWorkSaved,

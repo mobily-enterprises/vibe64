@@ -27,8 +27,11 @@ retry starts its own lines in the output, so an earlier failure is never shown a
 its progress.
 
 Preparation never creates a session in a connected project. When a project has no
-linked session yet, or its session was archived, it stops at **Workspace setup
-needs a choice**, naming that project, and you pick its session in the notice. See
+linked session yet, or its session was archived, preparation links that project's
+session if exactly one is free, uses it as it stands and says so in the output.
+Update that session first if you want it on the latest main. With two or more free,
+or none, it stops at **Workspace setup needs a choice**, naming that project, and
+you settle it in the notice. See
 [Choose a connected session](connected-contributions.md#choose-a-connected-session).
 
 A successful result records the previous recipe execution. It does not prove

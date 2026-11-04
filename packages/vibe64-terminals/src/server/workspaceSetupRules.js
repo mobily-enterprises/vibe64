@@ -116,6 +116,14 @@ function connectedUpdateLine({ repository = "", update = null } = {}) {
   return "";
 }
 
+/**
+ * The output line that keeps an automatic link from being silent.
+ * @param {{ repository: string, sessionName: string }} link
+ */
+function connectedLinkLine({ repository, sessionName }) {
+  return `[Connected] ${repository.split("/").pop()} is now linked to ${sessionName}, its only free session, which is used as it stands.`;
+}
+
 function stepStatus(label = "", status = "", secrets = []) {
   return `[${safeSetupLabel(label, secrets) || "Workspace preparation"}] ${status}.`;
 }
@@ -178,6 +186,7 @@ export {
   appendWorkspaceSetupTranscript,
   capturedCommandOutput,
   commandDiagnostic,
+  connectedLinkLine,
   connectedUpdateLine,
   diagnosticText,
   diagnosticsInclude,

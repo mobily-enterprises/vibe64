@@ -10,6 +10,7 @@ import { connectedChoiceRequired, failed, persist, persistInspectedState } from 
 import {
   CONNECTED_PREPARATION_LABEL,
   appendWorkspaceSetupTranscript,
+  connectedLinkLine,
   connectedUpdateLine,
   diagnosticText,
   diagnosticsInclude,
@@ -213,10 +214,12 @@ function createWorkspaceSetupStart({
     sourcePath,
     stateBase
   }) {
+    let connectedLinks = [];
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
         const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
+        connectedLinks = (prepared?.linked || []).map(connectedLinkLine);
         if (prepared?.ok === false) {
           // Name the connected project that failed: its own message often cannot.
           const failedProject = toText(prepared.failedRepository).split("/").pop();
@@ -225,7 +228,7 @@ function createWorkspaceSetupStart({
             { code: prepared.code }
           );
         }
-        connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
+        connectedUpdates = [...connectedLinks, ...(prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean)];
         await onProgress("Checking connected sources");
         session = await runtime.getSessionWithoutSource(sessionId);
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
@@ -237,7 +240,7 @@ function createWorkspaceSetupStart({
           renewal,
           // The output keeps the reason, so Expand and the next attempt's
           // history show why, not only that this step stopped.
-          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message))
+          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", ...connectedLinks, toText(error?.message))
         };
         const state = error?.code === CONNECTED_LINK_REQUIRED
           ? await connectedChoiceRequired(runtime, sessionId, stopped)

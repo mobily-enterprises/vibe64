@@ -53,8 +53,8 @@ requirements still apply.
 ## Shared development checkouts
 
 Connected repositories (for example JSKIT and Genesis) are checkouts owned by a
-receiving contribution session in their own project, which a person linked to
-the consuming session. `.development/connected.json` lists each one's `sourceRoot`; treat it
+receiving contribution session in their own project, linked to the consuming
+session. `.development/connected.json` lists each one's `sourceRoot`; treat it
 as an integration workspace with an owning agent, not an unrestricted shared
 editor. Existing permission to edit a dependency still applies; coordination
 does not require another human approval.

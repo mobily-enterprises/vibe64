@@ -20,21 +20,25 @@ function librarySession(sessionId, { metadata = {}, ...rest } = {}) {
 }
 
 /**
- * A working session in one project, connected to "library", whose sessions are
- * the ones given. The real connected actions run; only the stores, Git and the
- * session creation behind them are doubles.
+ * A working session in one project, connected to "library" and, when `other`
+ * is given, to "other", whose sessions are the ones given. The real connected
+ * actions run; only the stores, Git and the session creation behind them are
+ * doubles.
  * @param {object[]} sessions
  * @param {(world: object) => Promise<void>} run
+ * @param {object[]} [other]
  */
-async function withConnectedLibrary(sessions, run) {
+async function withConnectedLibrary(sessions, run, other) {
   await withRouteProject(async ({ projectContext, slug }) => {
     await mkdir(path.join(projectContext.projectsRoot, "library"));
+    await mkdir(path.join(projectContext.projectsRoot, "other"));
     const parent = { sessionId: "parent", sessionName: "Payments", status: "active", sourceReady: true, metadata: {
       assistant_routing: JSON.stringify({ mode: "senior", review: false })
     } };
     const world = { created: [], library: new Map(sessions.map(session => [session.sessionId, session])), parent,
       beforeBind: () => {}, failNextCreate: false };
-    const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: world.library };
+    const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: world.library,
+      other: new Map((other || []).map(session => [session.sessionId, session])) };
     const runtimeFor = projectSlug => ({
       async resolvePromptEnvironment() { return {}; },
       store: {
@@ -68,12 +72,14 @@ async function withConnectedLibrary(sessions, run) {
       async createRuntime() { return runtimeFor(currentProjectRequestContext().slug); },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async connectedProjectTargets() {
-        return [{ name: "Connected", repository: "https://github.com/example/library", fullName: "example/library",
-          relationship: "dependency", projectSlug: "library" }];
+        return (other ? ["library", "other"] : ["library"]).map(name => ({ name, repository: `https://github.com/example/${name}`,
+          fullName: `example/${name}`, relationship: "dependency", projectSlug: name }));
       },
-      async connectedContributionSource() { return { repository: "example/library", integrationBranch: "main", baseCommit: "c".repeat(40) }; },
+      async connectedContributionSource() {
+        return { repository: `example/${currentProjectRequestContext().slug}`, integrationBranch: "main", baseCommit: "c".repeat(40) };
+      },
       async readCurrentProject() { return { repositoryMode: "github", repository: { defaultBranch: "main",
-        github: { fullName: "example/library" } } }; },
+        github: { fullName: `example/${currentProjectRequestContext().slug}` } } }; },
       async runProjectSessionPolicyExclusive(operation) { return operation(); },
       async developmentDatabasePolicy() { return { creation: { canCreate: true }, limits: {} }; }
     };
@@ -95,7 +101,7 @@ async function withConnectedLibrary(sessions, run) {
         openBrowserConversation() { throw new Error("Source preparation must not start a conversation."); },
         async runConnectedSourcePreparation(id, _input, operation) {
           const projectSlug = currentProjectRequestContext().slug;
-          if (projectSlug === "library") await world.beforeBind();
+          if (projectSlug !== slug) await world.beforeBind();
           return operation({ runtime: runtimeFor(projectSlug), session: sessionsByProject[projectSlug].get(id) });
         },
         async recordSessionGitCommandActor() { return { ok: true }; },
@@ -119,7 +125,7 @@ async function withConnectedLibrary(sessions, run) {
       input: { sessionId: "parent", ...input }, context });
     await run(Object.assign(world, {
       choices: () => action("choices"),
-      link: connectedSessionId => action("link", { repository: "example/library", connectedSessionId }),
+      link: (connectedSessionId, repository = "example/library") => action("link", { repository, connectedSessionId }),
       prepare: () => action("prepare"),
       replace: review => action("replace", { repository: "example/library", review })
     }));
@@ -140,8 +146,9 @@ test("a first connection stops Prepare, offers the free sessions and uses the on
     librarySession("renewing", { metadata: { renewed_to: "elsewhere" } })
   ], async ({ choices, created, library, link, parent, prepare }) => {
     const stopped = await prepare();
-    assert.equal(stopped.code, LINK_REQUIRED);
+    assert.equal(stopped.code, LINK_REQUIRED, "two free sessions are a person's choice");
     assert.equal(stopped.error, "library needs a connected session. Choose in the workspace preparation notice to continue.");
+    assert.deepEqual(stopped.linked, []);
     assert.equal(parent.metadata.connected_sources, undefined, "stopping reserves nothing");
 
     assert.deepEqual((await choices()).choices, [{ name: "library", projectSlug: "library", reason: "", repository: "example/library",
@@ -166,7 +173,8 @@ test("a first connection stops Prepare, offers the free sessions and uses the on
 
 test("an archived or vanished link stops Prepare with its reason until a person relinks", async () => {
   const archivedOn = "2026-10-28T15:30:53.722Z";
-  await withConnectedLibrary([librarySession("first", { sessionName: "Library work" }), librarySession("second")],
+  await withConnectedLibrary([librarySession("first", { sessionName: "Library work" }), librarySession("second"),
+    librarySession("third"), librarySession("fourth")],
     async ({ choices, created, library, link, parent, prepare }) => {
       assert.equal((await link("first")).ok, true);
       Object.assign(library.get("first"), { status: "archived", archivedAt: archivedOn });
@@ -175,7 +183,7 @@ test("an archived or vanished link stops Prepare with its reason until a person 
       assert.equal(stopped.code, LINK_REQUIRED, "a stale link never survives into preparation");
       const [choice] = (await choices()).choices;
       assert.equal(choice.reason, "Its connected session Library work in example/library was archived on 2026-10-28.");
-      assert.deepEqual(choice.sessions.map(item => item.sessionId), ["second"]);
+      assert.deepEqual(choice.sessions.map(item => item.sessionId), ["second", "third", "fourth"]);
       assert.equal(created.length, 0, "an archived link creates nothing");
 
       assert.equal((await link("second")).ok, true);
@@ -189,9 +197,86 @@ test("an archived or vanished link stops Prepare with its reason until a person 
     });
 });
 
+test("exactly one free session is linked by Prepare, which carries on and says which one", async () => {
+  await withConnectedLibrary([librarySession("only", { sessionName: "Library work" }), librarySession("not-ready", { sourceReady: false })],
+    async ({ choices, created, library, parent, prepare }) => {
+      const prepared = await prepare();
+      assert.equal(prepared.ok, true, JSON.stringify(prepared));
+      assert.equal(prepared.prepared[0].sessionId, "only");
+      assert.deepEqual(prepared.linked, [{ repository: "example/library", projectSlug: "library", sessionId: "only", sessionName: "Library work" }]);
+      const [binding] = sessionConnectedSources(parent);
+      assert.equal(binding.contribution.sessionId, "only");
+      assert.deepEqual(JSON.parse(library.get("only").metadata.connected_contribution), binding.contribution);
+      assert.deepEqual((await choices()).choices, []);
+      assert.equal(created.length, 0, "linking the only free session creates nothing");
+
+      const again = await prepare();
+      assert.deepEqual(again.linked, [], "only the attempt that links reports it");
+      assert.equal(sessionConnectedSources(parent)[0].contribution.id, binding.contribution.id);
+    });
+});
+
+test("Retry after an archived link takes the only free session", async () => {
+  await withConnectedLibrary([librarySession("first"), librarySession("second")], async ({ created, library, link, parent, prepare }) => {
+    assert.equal((await link("first")).ok, true);
+    const stale = sessionConnectedSources(parent)[0].contribution.id;
+    library.get("first").status = "archived";
+
+    const retried = await prepare();
+    assert.equal(retried.ok, true, JSON.stringify(retried));
+    assert.equal(retried.prepared[0].sessionId, "second");
+    assert.deepEqual(retried.linked.map(item => item.sessionId), ["second"]);
+    const bindings = sessionConnectedSources(parent);
+    assert.equal(bindings.length, 1, "the new link replaces the stale one");
+    assert.notEqual(bindings[0].contribution.id, stale);
+    assert.equal(created.length, 0);
+  });
+});
+
+test("a session taken at the last moment falls back to the choice instead of failing", async () => {
+  const taken = JSON.stringify({ schemaVersion: 1, id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", repository: "example/library",
+    integrationBranch: "main", baseCommit: BASE });
+  await withConnectedLibrary([librarySession("only")], async world => {
+    const { choices, library, parent, prepare } = world;
+    world.beforeBind = () => { library.get("only").metadata.connected_contribution = taken; };
+    const stopped = await prepare();
+    assert.equal(stopped.code, LINK_REQUIRED);
+    assert.deepEqual(stopped.linked, []);
+    assert.deepEqual(sessionConnectedSources(parent), [], "the refused link leaves no reservation");
+    assert.equal(library.get("only").metadata.connected_contribution, taken, "the winner keeps its link");
+    assert.deepEqual((await choices()).choices[0].sessions, []);
+  });
+});
+
+test("each connected project is settled on its own, and preparation carries on after the last one", async () => {
+  await withConnectedLibrary([librarySession("only")], async ({ choices, link, parent, prepare }) => {
+    const stopped = await prepare();
+    assert.equal(stopped.code, LINK_REQUIRED);
+    assert.equal(stopped.error, "other needs a connected session. Choose in the workspace preparation notice to continue.");
+    assert.deepEqual(stopped.linked.map(item => item.sessionId), ["only"], "the stop still reports the automatic link");
+    assert.deepEqual(stopped.prepared.map(item => item.sessionId), ["only"]);
+    assert.deepEqual((await choices()).choices.map(item => item.name), ["other"]);
+
+    assert.equal((await link("two", "example/other")).ok, true);
+    const prepared = await prepare();
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    assert.deepEqual(prepared.prepared.map(item => item.sessionId), ["only", "two"]);
+    assert.equal(sessionConnectedSources(parent).length, 2);
+  }, [librarySession("one"), librarySession("two")]);
+
+  await withConnectedLibrary([librarySession("only")], async ({ parent, prepare }) => {
+    const prepared = await prepare();
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    assert.deepEqual(prepared.linked.map(item => item.sessionId).sort(), ["only", "single"]);
+    assert.equal(sessionConnectedSources(parent).length, 2, "two links at once keep each other's binding");
+  }, [librarySession("single")]);
+});
+
 test("no free session is said plainly, and nothing is created or reserved", async () => {
   await withConnectedLibrary([], async ({ choices, created, link, parent, prepare }) => {
-    assert.equal((await prepare()).code, LINK_REQUIRED);
+    const stopped = await prepare();
+    assert.equal(stopped.code, LINK_REQUIRED);
+    assert.deepEqual(stopped.linked, []);
     assert.deepEqual((await choices()).choices[0].sessions, []);
     assert.equal((await link("invented")).code, NOT_FREE);
     assert.equal(parent.metadata.connected_sources, undefined);
@@ -230,25 +315,26 @@ test("a contribution session is offered only sessions that use nothing, so links
     integrationBranch: "main", baseCommit: BASE };
   const consumer = librarySession("consumer", { metadata: { connected_sources: JSON.stringify({ schemaVersion: 1,
     sources: [{ projectSlug: "other", contribution }] }) } });
-  await withConnectedLibrary([consumer, librarySession("plain")], async ({ choices, link, parent }) => {
+  await withConnectedLibrary([consumer, librarySession("plain")], async ({ choices, link, parent, prepare }) => {
     const offered = async () => (await choices()).choices[0].sessions.map(item => item.sessionId);
     assert.deepEqual(await offered(), ["consumer", "plain"], "nothing links to an ordinary session, so it cannot close a cycle");
+    assert.equal((await prepare()).code, LINK_REQUIRED);
     parent.metadata.connected_contribution = JSON.stringify({ ...contribution, id: "ffffffff-ffff-4fff-8fff-ffffffffffff" });
     assert.deepEqual(await offered(), ["plain"]);
     assert.equal((await link("consumer")).code, NOT_FREE);
-    assert.equal((await link("plain")).ok, true);
+    assert.deepEqual((await prepare()).linked.map(item => item.sessionId), ["plain"], "Prepare links from the list a person is offered");
   });
 });
 
 test("a link interrupted before its session took it asks again, and that session is still offered", async () => {
-  await withConnectedLibrary([librarySession("wanted")], async ({ choices, library, link, parent, prepare }) => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("zother")], async ({ choices, library, link, parent, prepare }) => {
     assert.equal((await link("wanted")).ok, true);
     delete library.get("wanted").metadata.connected_contribution;
 
     assert.equal((await prepare()).code, LINK_REQUIRED);
     const [choice] = (await choices()).choices;
     assert.equal(choice.reason, "The link to wanted in example/library was not finished.");
-    assert.deepEqual(choice.sessions.map(item => item.sessionId), ["wanted"]);
+    assert.deepEqual(choice.sessions.map(item => item.sessionId), ["wanted", "zother"]);
     const before = sessionConnectedSources(parent)[0].contribution.id;
     assert.equal((await link("wanted")).ok, true);
     assert.notEqual(sessionConnectedSources(parent)[0].contribution.id, before);
@@ -269,7 +355,8 @@ test("a confirmed replacement that was never created is finished from the choice
     const reserved = sessionConnectedSources(parent)[0].contribution;
     assert.equal(reserved.replaces, binding.contribution.id);
 
-    assert.equal((await prepare()).code, LINK_REQUIRED, "Prepare creates nothing, even for a confirmed replacement");
+    assert.equal((await prepare()).code, LINK_REQUIRED,
+      "Prepare creates nothing for a confirmed replacement, and does not drop it for the only free session");
     assert.equal(created.length, 0);
     const [choice] = (await choices()).choices;
     assert.equal(choice.reason, "The replacement contribution for example/library was confirmed but not created.");

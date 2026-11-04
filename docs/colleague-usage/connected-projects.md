@@ -135,9 +135,9 @@ not appear in `node_modules`. A cloned repository alone does not establish that
 Preview or tests use its changes.
 Use the existing **Prepare workspace** action (or its **Retry** action after a
 failure). When Stack declares `Connected development`, preparation uses the
-sessions you linked for this task, stopping for you to
-[choose one](connected-contributions.md#choose-a-connected-session) where a project
-has none. It then writes the declared source
+sessions linked for this task. Where a project has none, it links that project's
+only free session, used as it stands, or stops for you to
+[choose one](connected-contributions.md#choose-a-connected-session). It then writes the declared source
 map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
 commands in order. Success requires those commands to succeed. If a non-custom
 connection exists without a Verify command, preparation is blocked with
@@ -173,10 +173,12 @@ declares and verifies its own commands.
 For API clients, the explicit **Prepare connected sources** operation is
 `POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare`. It uses the
 session's configured list and requires access to each registered receiving
-project plus GitHub write access. When a project has no usable link it fails with
-`vibe64_connected_link_required`: `GET .../connected/choices` lists the projects
-that need a session and their free sessions, and `POST .../connected/link` saves
-one choice as `{ repository, connectedSessionId }`. The returned `prepared` entries identify the
+project plus GitHub write access. A project with no usable link and exactly one
+free session is linked and reported in the returned `linked` list, on success and
+on a stop alike. Otherwise it fails with `vibe64_connected_link_required`:
+`GET .../connected/choices` lists the projects that need a session and their free
+sessions, and `POST .../connected/link` saves one choice as
+`{ repository, connectedSessionId }`. The returned `prepared` entries identify the
 receiving project/session and report source readiness and workspace setup.
 Once every receiving source is ready, the operation writes the Stack's
 `Sources file` and returns `development.status: "inputs-prepared"`. The JSON
@@ -199,7 +201,7 @@ with the task's saved bindings without changing files. The workspace runner uses
 commands and before accepting cached preparation. `inputs-prepared` still does
 not mean the Stack's development commands have run.
 After failure or a lost response, retry the same originating session; it creates
-no source. A failure retains the earlier
+no session. A failure retains the earlier
 `prepared` entries and identifies the receiving repository that failed. If an
 entry reports `sourceReady: false`, open that receiving session and use its
 source recovery controls before retrying; preparation does not replace the

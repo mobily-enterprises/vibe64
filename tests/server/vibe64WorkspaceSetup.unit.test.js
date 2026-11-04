@@ -332,8 +332,10 @@ test("a connected project with no usable link stops preparation for a person's c
       async finishWorkflow() {},
       async connectedPreparation({ mode }) {
         if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
-        return linked ? { ok: true, prepared: [] } : { ok: false, code: "vibe64_connected_link_required", prepared: [],
-          error: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." };
+        return linked ? { ok: true, prepared: [], linked: [{ repository: "example/vibe64", sessionName: "Payments" }] }
+          : { ok: false, code: "vibe64_connected_link_required", prepared: [],
+            linked: [{ repository: "example/genesis", sessionName: "Tooling" }],
+            error: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." };
       },
       project: {
         inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
@@ -348,6 +350,8 @@ test("a connected project with no usable link stops preparation for a person's c
     assert.equal(stopped.connectedChoiceRequired, true);
     assert.equal(stopped.diagnostic, "vibe64 needs a connected session. Choose in the workspace preparation notice to continue.");
     assert.equal(stopped.transcript.trim().split("\n").at(-1), "[Prepare connected sources] Needs a choice.");
+    assert.ok(stopped.transcript.includes("[Connected] genesis is now linked to Tooling, its only free session, which is used as it stands."),
+      "a stop still says what preparation linked by itself");
     const reread = workspaceSetupStateFromMetadata((await runtime.store.readSession(session.sessionId)).metadata);
     assert.equal(reread.connectedChoiceRequired, true, "the state survives a reload");
 
@@ -359,6 +363,8 @@ test("a connected project with no usable link stops preparation for a person's c
     })).completion;
     assert.equal(retried.status, "succeeded");
     assert.equal(retried.connectedChoiceRequired, undefined, "the next attempt clears the choice");
+    assert.ok(retried.transcript.includes("[Connected] vibe64 is now linked to Payments, its only free session, which is used as it stands."),
+      "an automatic link is never silent");
   });
 });
 

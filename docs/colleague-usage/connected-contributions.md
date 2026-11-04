@@ -4,31 +4,47 @@ This continues [Configure connected projects](connected-projects.md): how you ch
 
 ## Choose a connected session
 
-Vibe64 never starts a session in a connected project on its own. You choose which
-of that project's existing sessions this session uses.
+Vibe64 never starts a session in a connected project on its own. It uses one of
+that project's existing sessions, and what happens depends on how many are free
+when a session has no usable link yet: on its first connection, after its linked
+session was archived, and on **Retry**.
 
-The first time a session prepares a connected project, **Prepare workspace** stops
-at **Workspace setup needs a choice**. The notice names each project that needs a
-session and offers its free sessions in **Session in** *project*, with the first
-free one already selected. Pick one and choose **Link session**. Once the last
-project has its session, preparation continues by itself.
+- **Exactly one free session:** **Prepare workspace** links it by itself and
+  carries on. The output says so, for example `[Connected] vibe64 is now linked to
+  Payments, its only free session, which is used as it stands.` That session is
+  used exactly as it is, so if you want it on the latest main, open it and use
+  **Update this session (rebase)** before preparing, or start a second session
+  there so the choice is yours.
+- **Two or more free sessions:** preparation stops at **Workspace setup needs a
+  choice**. The notice names each project that needs a session and offers its free
+  sessions in **Session in** *project*, with the first free one already selected.
+  Pick one and choose **Link session**. Once the last project has its session,
+  preparation continues by itself.
+- **No free session:** preparation stops the same way and creates nothing; see
+  below.
+
+Each connected project is settled on its own, so one can link by itself while
+another waits for your choice.
 
 A session is free when it is open, its source is ready, it is not already linked
 to a contribution, and it does not work on its own branch or pull request. When
 this session is itself a contribution, a session that uses connected projects of
 its own is not free either. Vibe64 checks all this again when you link, so a
 session taken in the meantime is refused with **That session is no longer free.
-Choose again.** and leaves the list.
+Choose again.** and leaves the list. If that happens to a session preparation was
+linking by itself, it stops for your choice instead of failing.
 
 When the project has no free session, the notice says so and creates nothing.
 Choose **Open** *project*, start a session there, then come back and choose
-**Retry**.
+**Retry**, which links that session when it is the only free one.
 
 Linking keeps the session's commits, unsaved work and name. It also changes where
 that session saves: from then on its Save goes to a contribution branch for review
 in the receiving project's **Incoming changes**, not straight to its main branch.
-This cannot be undone from the notice, so link a session you mean to use for this
-work. A working link is not changed from the notice either. A linked session stays
+This applies to a session preparation linked by itself too. It cannot be undone
+from the notice, so link a session you mean to use for this work, and keep a
+project's only free session out of the way if it is for something else. A working
+link is not changed from the notice either. A linked session stays
 on the commit it started from until its contribution is pushed, so when you need
 the project's latest commits, use **Update this session (rebase)** in that session
 before linking it.
@@ -37,8 +53,9 @@ Linking records your Git identity for that receiving session. You can inspect an
 save its contribution without first opening an AI conversation there. GitHub
 access is still checked when used.
 
-Colleague can explain this choice and offer **Retry**, but choosing a session is
-yours: it cannot link one for you.
+Colleague can explain this choice and offer **Retry**, which links a project's
+only free session as above. Choosing between sessions is yours: it cannot pick one
+for you.
 
 ## How connected sessions relate
 
@@ -156,11 +173,12 @@ connection metadata through the existing recovery archive, then removes the live
 checkout. Use normal renewal when you want a fresh conversation that continues the
 same contribution.
 
-If it was archived anyway, the next **Prepare workspace** stops at **Workspace
-setup needs a choice**, saying which session was archived and when. It does not
-select another session or silently use an npm package. Choose a free session, as
-in [Choose a connected session](#choose-a-connected-session); the archived work
-does not move there. To carry on with that work instead, retain the archive and
+If it was archived anyway, the next **Prepare workspace** follows
+[Choose a connected session](#choose-a-connected-session): it links the project's
+only free session and says so, or stops at **Workspace setup needs a choice**,
+saying which session was archived and when. It never silently uses an npm package,
+and the archived work does not move to the new session. To carry on with that work
+instead, retain the archive and
 ask the administrator to recover its source through the existing archive
 facilities. Colleague can explain the choice; it cannot substitute another
 checkout or clear the integration requirement to make Save succeed.

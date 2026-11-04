@@ -21,8 +21,10 @@ test("connected preparation reauthorizes the receiver and uses the session a per
     } };
     const librarySession = { sessionId: "library-session", status: "active", sourceReady: true, metadata: { base_commit: source.baseCommit } };
     const returnSession = { sessionId: "return-session", status: "active", sourceReady: true, metadata: { base_commit: source.baseCommit } };
+    // Spare sessions keep a choice of more than one, so linking stays a person's until the return trip.
+    const spareSession = sessionId => [sessionId, { sessionId, status: "active", sourceReady: true, metadata: { base_commit: source.baseCommit } }];
     const sessionsByProject = { [slug]: new Map([["parent", parent], ["return-session", returnSession]]),
-      library: new Map([["library-session", librarySession]]) };
+      library: new Map([["library-session", librarySession], spareSession("spare-1"), spareSession("spare-2")]) };
     const sourceFor = projectSlug => ({ ...source, repository: `example/${projectSlug}` });
     let preparingSession = parent;
     let preparingProject = slug;
@@ -182,14 +184,17 @@ test("connected preparation reauthorizes the receiver and uses the session a per
     const prepare = () => actions.execute({ actionId: "vibe64.sessions.connected.prepare", input: { sessionId: "parent" }, context });
     const link = connectedSessionId => actions.execute({ actionId: "vibe64.sessions.connected.link",
       input: { sessionId: "parent", repository: source.repository, connectedSessionId }, context });
-    const stopped = await prepare();
-    assert.equal(stopped.code, "vibe64_connected_link_required");
-    assert.deepEqual(stopped.prepared, []);
-    assert.equal(parent.metadata.connected_sources, undefined, "preparation alone reserves nothing");
+    const denied = await prepare();
+    assert.equal(denied.code, "receiver_forbidden");
+    assert.deepEqual(denied.prepared, []);
+    assert.equal(denied.failedRepository, "https://github.com/example/library");
     assert.equal((await link("library-session")).code, "receiver_forbidden");
     assert.equal(parent.metadata.connected_sources, undefined);
 
     allowReceiver = true;
+    const stopped = await prepare();
+    assert.equal(stopped.code, "vibe64_connected_link_required");
+    assert.equal(parent.metadata.connected_sources, undefined, "preparation alone reserves nothing");
     const linked = await link("library-session");
     assert.deepEqual(linked, { ok: true, repository: source.repository, sessionId: "library-session" });
     const reserved = parent.metadata.connected_sources;
@@ -417,16 +422,9 @@ test("connected preparation reauthorizes the receiver and uses the session a per
     } } };
     const prepareReturn = () => actions.execute({ actionId: "vibe64.sessions.connected.prepare",
       input: { sessionId: successor.sessionId }, context: returningContext });
-    const returnInput = connectedSessionId => ({ sessionId: successor.sessionId, repository: `example/${slug}`, connectedSessionId });
-    const linkReturn = connectedSessionId => actions.execute({ actionId: "vibe64.sessions.connected.link",
-      input: returnInput(connectedSessionId), context: returningContext });
-    assert.equal((await prepareReturn()).code, "vibe64_connected_link_required");
-    const returnChoices = await actions.execute({ actionId: "vibe64.sessions.connected.choices",
-      input: { sessionId: successor.sessionId }, context: returningContext });
-    assert.deepEqual(returnChoices.choices[0].sessions.map(item => item.sessionId), ["return-session"],
-      "B connecting back to repository A cannot attach A's originating session");
-    assert.equal((await linkReturn("parent")).code, "vibe64_connected_session_not_free");
-    assert.equal((await linkReturn("return-session")).ok, true);
+    const returned = await prepareReturn();
+    assert.deepEqual(returned.linked.map(item => item.sessionId), ["return-session"],
+      "B connecting back to repository A cannot attach A's originating session, so A's other session is its only free one");
     const returnBinding = sessionConnectedSources(successor)[0];
     assert.equal(returnBinding.contribution.repository, `example/${slug}`);
     assert.notEqual(returnBinding.contribution.id, replacementBinding.contribution.id);
