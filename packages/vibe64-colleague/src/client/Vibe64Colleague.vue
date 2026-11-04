@@ -1,7 +1,6 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
-import { COLLEAGUE_VOICE_SOCKET_URL } from "@local/vibe64-voice/shared/routes";
-import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
+import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -10,8 +9,6 @@ import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/sh
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
-import { createAssistantApi } from "@jskit-ai/assistant-core/client";
-import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
@@ -20,11 +17,11 @@ import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation, navigateColleagueBrowser } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
 import { createColleagueModel } from "./colleagueModel.js";
+import { isColleagueBinding, useColleagueConversation } from "./useColleagueConversation.js";
 import { useColleagueFreshStart } from "./useColleagueFreshStart.js";
 import { useColleagueHistory } from "./useColleagueHistory.js";
 import { useColleagueLearning } from "./useColleagueLearning.js";
 import { useColleagueTeachMe } from "./useColleagueTeachMe.js";
-import { useColleagueVoicePreviews } from "./useColleagueVoicePreviews.js";
 import { useColleagueWatchesAndOperations } from "./useColleagueWatchesAndOperations.js";
 import ColleagueFreshDialog from "./ColleagueFreshDialog.vue";
 import ColleagueOperationsDialog from "./ColleagueOperationsDialog.vue";
@@ -41,7 +38,6 @@ const emit = defineEmits(["message-submit", "voice-visual"]);
 const open = ref(false);
 const { xs } = useDisplay();
 const voice = useVibe64Voice();
-const isColleagueBinding = binding => binding?.socketUrl === COLLEAGUE_VOICE_SOCKET_URL;
 const inlineVoice = computed(() => voice.controller.state.binding?.presentation === "inline"
   && !isColleagueBinding(voice.controller.state.binding)
   && !voice.controller.state.nextTarget);
@@ -75,7 +71,7 @@ function reopenConversation() {
 }
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
-  open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice.controller.state.session, onError: reportFailure
+  open: () => openVoice(), enabled: () => props.holdToTalk && !shown.value && !voice.controller.state.session, onError: reportFailure
 });
 async function toggleConversation() {
   const opening = !shown.value;
@@ -84,49 +80,11 @@ async function toggleConversation() {
     open.value = false;
     launcher.value?.$el?.focus();
   } else if (voice.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
-  else if (voice) {
+  else {
     open.value = true;
     await openVoice();
-  } else open.value = true;
+  }
   if (opening && bodyVisible.value) await focusConversationComposer();
-}
-async function openVoice() {
-  if (freshOperation.value || freshBusy.value) return false;
-  if (!conversation.runtime.value) await refresh();
-  const target = conversation.runtime.value;
-  if (!target) throw new Error(connectionError.value || "Colleague is not connected yet. Try again.");
-  let retained;
-  const binding = {
-    preferenceTarget: "colleague",
-    presentation: "inline",
-    id: JSON.stringify(["colleague", target.identity.actorKey]),
-    conversationId: target.identity.conversationId,
-    get label() { return props.name; },
-    get state() {
-      return projectConversationVoiceState({ turns: target.turns.value, status: target.snapshot.value?.status, interimReply: target.snapshot.value?.interimReply });
-    },
-    get available() { return mounted && target.current.value; },
-    get adapter() { return conversation.runtime.value === target ? adapter.value : null; },
-    setConversationTarget(element) { voicePanelTarget.value = element; },
-    retain() { retained = target.retain(); },
-    release() { retained?.release(); retained = null; },
-    socketUrl: COLLEAGUE_VOICE_SOCKET_URL,
-    captureContext: () => ({ ...props.focus }),
-    submitText(text, { messageId, context }) {
-      return sendMessage(text, { messageId, focus: context || {} }, target);
-    },
-    cancelWork: () => target.cancel(),
-    onTranscript(value, { canTake = false } = {}) {
-      if (mounted && conversation.runtime.value === target) voiceTranscript.value = value ? { ...value, canTake } : null;
-    },
-    onVisual(value) { emit("voice-visual", value); },
-    onError: reportFailure
-  };
-  const opened = await voice.open(binding);
-  if (!mounted || conversation.runtime.value !== target) return false;
-  open.value = false;
-  if (opened) return voice.controller.state.session;
-  return false;
 }
 async function closeText() {
   try {
@@ -141,13 +99,14 @@ const launcher = ref(null);
 const composerInput = ref(null);
 async function focusConversationComposer() {
   await nextTick();
-  composerInput.value?.focus?.({ preventScroll: true });
+  composerInput.value?.focus({ preventScroll: true });
 }
 const panelTarget = ref(null);
 const desktopPanelTarget = ref(null);
 const conversationTarget = computed(() => xs.value ? panelTarget.value : desktopPanelTarget.value);
 const voicePanelTarget = ref(null);
 const voiceToolsTarget = ref(null);
+const voiceFeedbackTarget = ref(null);
 // The face starts as the person last left it; only Minimise and Show change it.
 const avatarVisible = computed(() => voice.avatarVisibleFor("colleague") ?? null);
 const avatarSize = computed({
@@ -165,9 +124,7 @@ const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
 const clientId = crypto.randomUUID();
-const working = computed(() => conversation.runtime.value?.snapshot.value?.status === "working");
 let mounted = true;
-let revision = 0;
 const isMounted = () => mounted;
 
 function reportFailure(error) {
@@ -180,33 +137,6 @@ async function requestColleague(suffix = "", options = {}) {
   const result = await props.request(`/api/vibe64/colleague${suffix}`, options);
   if (result?.ok === false) throw new Error(result.error || result.errors?.[0]?.message || "Colleague could not complete this request.");
   return result;
-}
-function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
-  if (!mounted || expectedRevision !== revision || expectedActor !== actorKey.value) return false;
-  const runtime = conversation.runtime.value;
-  const changingConversation = Boolean(product.value.conversationId && result.conversationId &&
-    product.value.conversationId !== result.conversationId);
-  // Switching between Develop and a Learn thread (L, or another lesson) is
-  // the person's own choice, never another tab's change: each thread keeps
-  // its own draft and nothing needs resolving.
-  const changingThread = Boolean(product.value.thread && result.thread &&
-    (product.value.thread.kind !== result.thread.kind || product.value.thread.attemptId !== result.thread.attemptId));
-  if (changingConversation && !changingThread && runtime?.current.value && runtime.identity.actorKey === expectedActor) {
-    if (voiceSession.value?.hasUnsentSpeech.value || pointerNotice.value && !allowRetarget) {
-      pointerNotice.value = "Colleague changed in another tab. Resolve the old speech first: pause the microphone and discard newer words, or explicitly Stop voice chat. Then choose Refresh conversation. Your typed draft stays unsent.";
-      return false;
-    }
-  }
-  // The original runtime owns drafts. Preserve the same person's CURRENT draft
-  // before its binding changes; actor changes never enter this copy path.
-  const savedDraft = changingConversation && !changingThread && runtime?.current.value && runtime.identity.actorKey === expectedActor
-    ? runtime.draft.value : null;
-  const { conversationId, thread, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error } = result;
-  product.value = { conversationId, thread, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error };
-  if (savedDraft !== null && actorKey.value === expectedActor) conversation.adapter.value.actions.setDraft(savedDraft);
-  pointerNotice.value = "";
-  void handleNavigation(navigation);
-  return true;
 }
 const colleagueNavigation = createColleagueNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
@@ -222,91 +152,27 @@ const colleagueNavigation = createColleagueNavigation({
 });
 const handleNavigation = colleagueNavigation.handle;
 const realtimeSocket = useRealtimeSocket();
-const api = createAssistantApi({
-  request: (url, options) => props.request(url, options),
-  resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app"
+const { conversation, working, voiceSession, staleVoice, voicePreview, bodyVisible, adapter, draft, sending, connectionError,
+  turnError, nextRevision, apply, refresh, sendMessage, waitForConversation, openVoice, submit, stop, saveSelection, selectModel
+} = useColleagueConversation({
+  request: (url, options) => props.request(url, options), requestColleague, clientId, actorKey, socket: realtimeSocket, voice, open,
+  voiceTranscript, voicePanelTarget, product, productError, pointerNotice, handleNavigation,
+  readName: () => props.name, readFocus: () => props.focus,
+  readFreshOperation: () => freshOperation.value, readFreshBusy: () => freshBusy.value,
+  onMessageSubmit: messageId => emit("message-submit", messageId), onVoiceVisual: visual => emit("voice-visual", visual),
+  isMounted, reportFailure
 });
-const nativeApplicationAdmission = snapshot => ["codex", "claude", "opencode"].includes(snapshot?.engine);
-const conversation = useAssistantConversation({
-  conversationId: () => product.value.conversationId,
-  actorKey, surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "",
-  socket: realtimeSocket,
-  api: { ...api, sendConversationMessage(id, input) {
-    emit("message-submit", input.messageId);
-    const activeVoice = voice.controller.state;
-    if (isColleagueBinding(activeVoice?.binding)) activeVoice.session.inviteSpeech(input.messageId);
-    return api.sendConversationMessage(id, input);
-  } },
-  clearDraftOn: "accepted", queueWhileSending: true,
-  admitWhileWorking: nativeApplicationAdmission, deferWhileWorking: snapshot => !nativeApplicationAdmission(snapshot),
-  draftWhileLoading: true,
-  // The app selects tab-local scope; the original shared runtime owns the
-  // opaque draft/delivery format, restoration and write lifecycle.
-  draftStorage: () => {
-    try {
-      const storage = typeof window !== "undefined" ? window.sessionStorage : null;
-      return storage && actorKey.value && product.value.conversationId ? { storage,
-        key: `vibe64:colleague-composer:v1:${JSON.stringify([actorKey.value, product.value.conversationId])}` } : null;
-    } catch { return null; }
-  },
-  data: () => ({ clientId, focus: { ...props.focus } }),
-  onEvent(event) {
-    if (event.type === "application") {
-      void conversation.runtime.value?.reload();
-      void refresh();
-    }
-  },
-  presentation: () => ({
-    assistantLabel: props.name, systemLabel: "Vibe64", variant: "task", visible: open.value,
-    userMessageFormat: "plain", progressPreviewLimit: 0,
-    welcomeMessage: product.value.thread?.kind === "learn"
-      ? "I'm your teacher here. Ask me about a lesson, or press Teach me on a step."
-      : "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64.",
-    previewMessage: voicePreview.value,
-    ariaLabel: `Message ${props.name}`, placeholder: `Talk it through with ${props.name}…`, rows: 1, layout: "compact",
-    submitAriaLabel: conversation.runtime.value?.steerable.value ? `Steer ${props.name}` : `Send to ${props.name}`,
-    submitLabel: conversation.runtime.value?.steerable.value ? "Steer" : "Send"
-  })
-});
-const voiceSession = computed(() => {
-  const state = voice.controller.state;
-  const identity = conversation.runtime.value?.identity;
-  return isColleagueBinding(state?.binding) &&
-    state.binding.conversationId === identity?.conversationId &&
-    state.binding.id === JSON.stringify(["colleague", identity?.actorKey]) ? state.session : null;
-});
-// Colleague's voice controls belong to one conversation. After a thread switch
-// (L, another lesson) they still hold the previous thread's conversation.
-const staleVoice = computed(() => isColleagueBinding(voice.controller.state.binding) && !voiceSession.value);
 // A shown Colleague stays shown and its voice controls follow to the new thread.
 watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) => {
   if (!id || !previous || !staleVoice.value || !voice.controller.state.visible) return;
   waitForConversation().then(() => staleVoice.value && openVoice()).catch(reportFailure);
 });
-
-const { voicePreviews, voicePreview } = useColleagueVoicePreviews({ voiceTranscript, voiceSession, conversation, isMounted });
-const bodyVisible = computed(() => open.value || Boolean((voiceSession.value || staleVoice.value) && voice.controller.state.visible));
-
-const adapter = computed(() => {
-  const supplied = conversation.adapter.value;
-  return { ...supplied,
-    conversation: { ...supplied.conversation, reloadable: false, retainWhenHidden: true, visible: bodyVisible.value, previewMessages: voicePreviews.value },
-    composer: { ...supplied.composer, canSend: supplied.composer.canSend && !voiceSession.value?.composerBlocked.value && !freshOperation.value && !freshBusy.value }
-  };
-});
-const draft = computed({ get: () => adapter.value.composer.draft, set: value => adapter.value.actions.setDraft(value) });
-const voiceFeedbackTarget = ref(null);
-const sending = computed(() => conversation.runtime.value?.delivery.state.sending === true);
-const connectionError = computed(() => productError.value || conversation.runtime.value?.error.value || "");
-// A native snapshot reports no error as an empty string; it must not hide a
-// failed Colleague turn such as an unverified application operation.
-const turnError = computed(() => conversation.runtime.value?.snapshot.value?.error || product.value.error);
 const { historyOpen, historyLoading, historyError, historyConversations, historyHasMore, historyId, historyPages,
   historyUnconfirmed, historyUnconfirmedDelivery, historyTurns, historyPagination, closeHistory, loadHistory, readHistoryPage
 } = useColleagueHistory({ actorKey, requestColleague, isMounted });
 const { freshConfirm, freshBusy, freshError, freshOperation, freshBlocked, showFreshConfirmation, closeFreshConfirmation, startFresh } =
   useColleagueFreshStart({ conversation, voice, voiceSession, voiceTranscript, actorKey, product, productError, pointerNotice, open,
-    working, sending, isMounted, nextRevision: () => ++revision, requestColleague, apply, openVoice, closeHistory, reportFailure });
+    working, sending, isMounted, nextRevision, requestColleague, apply, openVoice, closeHistory, reportFailure });
 realtimeSocket.on("connect", refresh);
 // The server picks the thread from the mode and the current lesson.
 useRealtimeEvent({
@@ -314,42 +180,6 @@ useRealtimeEvent({
   matches: ({ payload } = {}) => ["learning-mode", "lesson"].includes(payload?.reason),
   onEvent: () => { void refresh(); }
 });
-async function refresh(options = {}) {
-  // A lost fresh response must be retried by its original operation, not
-  // silently retargeted by a background product read.
-  if (freshOperation.value) return;
-  const expectedRevision = ++revision;
-  const expectedActor = actorKey.value;
-  try {
-    const result = await requestColleague(`?clientId=${encodeURIComponent(clientId)}`, { method: "GET" });
-    apply(result, expectedRevision, expectedActor, options?.allowRetarget === true);
-    if (mounted && expectedRevision === revision && expectedActor === actorKey.value) productError.value = "";
-  } catch (error) {
-    if (mounted && expectedRevision === revision && expectedActor === actorKey.value) productError.value = error.message;
-  }
-}
-async function sendMessage(message, options = {}, target = conversation.runtime.value) {
-  if (!target?.available.value) return false;
-  return target.send({ message, data: { clientId, focus: options.focus } }, { messageId: options.messageId });
-}
-/** Resolves with Colleague's available conversation; fails after timeoutMs or once Colleague leaves this view. */
-function waitForConversation(timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
-    let stop = null;
-    const timer = setTimeout(() => finish(new Error(connectionError.value || "Colleague is not connected yet. Press Teach me again.")), timeoutMs);
-    function finish(error, target) {
-      clearTimeout(timer);
-      if (stop) stop();
-      else queueMicrotask(() => stop?.());
-      if (error) reject(error);
-      else resolve(target);
-    }
-    stop = watch(() => conversation.runtime.value?.available.value ? conversation.runtime.value : null, target => {
-      if (!mounted) finish(new Error("Colleague left this browser view."));
-      else if (target) finish(null, target);
-    }, { immediate: true });
-  });
-}
 // Teach me on a step: reveal this conversation (voice stays as it is) and send
 // the step's fixed message through the ordinary send with the current browser focus.
 const { teachNeedsModel, revealForLearning } = useColleagueTeachMe({ product, refresh, reopenConversation, waitForConversation,
@@ -358,46 +188,6 @@ const stopLearningRequests = watchColleagueLearningRequests({ learning: learning
   reveal: revealForLearning, report: reportFailure,
   send: async message => sendMessage(message, { focus: { ...props.focus } }) });
 onBeforeUnmount(stopLearningRequests);
-async function submit() {
-  if (freshOperation.value || freshBusy.value || voiceSession.value?.composerBlocked.value) return;
-  const target = conversation.runtime.value;
-  // Without an AI the banner already says what to do; the draft stays put.
-  if (product.value.modelSetupRequired) return;
-  if (!target?.canSubmit.value) {
-    if (draft.value.trim() && connectionError.value) reportFailure(connectionError.value);
-    return;
-  }
-  const result = await adapter.value.actions.submit();
-  if ((result === false || result?.ok === false) && target.current.value) {
-    const failure = target.delivery.find(target.draftMessageId.value)?.error || target.error.value;
-    // A missing AI shows once, as the banner, not again as a snackbar.
-    await refresh();
-    if (failure && !product.value.modelSetupRequired) reportFailure(failure);
-  }
-}
-async function stop() {
-  const target = conversation.runtime.value;
-  if (await target?.cancel() === false && target.current.value && target.error.value) reportFailure(target.error.value);
-}
-// `selection` is { assistantSelection }. Only the model menu reports failures here.
-async function saveSelection(selection, { report = true } = {}) {
-  if (freshOperation.value || freshBusy.value) return { ok: false, error: "Colleague is busy; try again in a moment." };
-  const expectedRevision = ++revision;
-  const expectedActor = actorKey.value;
-  try {
-    const result = await api.selectConversation(product.value.conversationId, selection);
-    apply(result, expectedRevision, expectedActor);
-    if (mounted && expectedActor === actorKey.value) {
-      productError.value = "";
-      conversation.runtime.value?.reload();
-    }
-    return result;
-  } catch (error) {
-    if (report && expectedActor === actorKey.value) reportFailure(error);
-    return { ok: false, error: String(error?.message || error) };
-  }
-}
-const selectModel = assistantSelection => saveSelection({ assistantSelection });
 // AI onboarding reads and switches this Colleague's model through the bridge.
 const colleagueModel = createColleagueModel({ product, productError, refresh, requestColleague, saveSelection, waitForConversation,
   sendMessage, reopenConversation, focusConversationComposer, readFocus: () => props.focus });
@@ -408,7 +198,7 @@ const { watchDetails, operationDetails, watches, operations, assignments, watchC
   navigate: target => props.navigate(target) });
 watch(open, value => { if (value) void refresh(); });
 watch(actorKey, () => {
-  revision += 1;
+  nextRevision();
   freshOperation.value = null;
   freshConfirm.value = false;
   freshBusy.value = false;
@@ -431,7 +221,7 @@ watch([actorKey, () => props.focus], ([actor], [previousActor]) => {
   focusBinding.update();
 }, { deep: true, immediate: true });
 onMounted(() => {
-  if (voice) voice.launcher.value = launcher.value?.$el;
+  voice.launcher.value = launcher.value?.$el;
   void refresh();
   unregisterModel = colleagueModels.register(colleagueModel);
   window.addEventListener("blur", cancelAvatarPress);
@@ -445,7 +235,7 @@ onBeforeUnmount(() => {
   mounted = false;
   if (isColleagueBinding(voice.controller.state.binding)) void voice.controller.end({ discard: true });
   cancelAvatarPress();
-  revision += 1;
+  nextRevision();
   window.removeEventListener("blur", cancelAvatarPress);
   window.removeEventListener("pagehide", cancelAvatarPress);
 });

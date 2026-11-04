@@ -24,6 +24,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/composables/useVibe64AgentSettings.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-colleague/src/client/useColleagueConversation.js`
 - `packages/vibe64-colleague/src/client/useColleagueVoicePreviews.js`
 - `src/App.vue`
 
@@ -246,7 +247,8 @@ the original voice controls.
 ## Combined-body ownership adaptation and original evidence
 
 The original root controller and Colleague binding remain in Vibe64VoiceHost.vue
-and Vibe64Colleague.vue. The application frame selects the desktop or phone
+and Colleague's conversation composable (`useColleagueConversation.js`, used by
+Vibe64Colleague.vue). The application frame selects the desktop or phone
 presentation target; the original shared host body slot is retained for target
 switches. The aside, adapter and voice session are not rebuilt when it moves.
 The root preserves live adapter/state/access getters; the binding's equality ID

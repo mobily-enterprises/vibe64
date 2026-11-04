@@ -78,6 +78,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/shared/learningFocus.js`
 - `packages/vibe64-colleague/src/shared/navigationPanes.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-colleague/src/client/useColleagueConversation.js`
 - `packages/vibe64-colleague/src/client/useColleagueLearning.js`
 - `packages/vibe64-colleague/src/client/useColleagueTeachMe.js`
 - `packages/vibe64-colleague/src/client/useColleagueFreshStart.js`

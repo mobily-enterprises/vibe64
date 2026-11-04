@@ -19,7 +19,6 @@ import { useColleagueFreshStart } from "../../packages/vibe64-colleague/src/clie
 import { useColleagueHistory } from "../../packages/vibe64-colleague/src/client/useColleagueHistory.js";
 import { useColleagueLearning } from "../../packages/vibe64-colleague/src/client/useColleagueLearning.js";
 import { useColleagueTeachMe } from "../../packages/vibe64-colleague/src/client/useColleagueTeachMe.js";
-import { useColleagueVoicePreviews } from "../../packages/vibe64-colleague/src/client/useColleagueVoicePreviews.js";
 import { useColleagueWatchesAndOperations } from "../../packages/vibe64-colleague/src/client/useColleagueWatchesAndOperations.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
@@ -41,14 +40,10 @@ const presentationStub = registerHooks({
     return nextLoad(url, context);
   }
 });
-let createAssistantApi;
-let projectConversationVoiceState;
-let useAssistantConversation;
+let isColleagueBinding;
+let useColleagueConversation;
 try {
-  ({ createAssistantApi } = await import("@jskit-ai/assistant-core/client"));
-  ({ projectConversationVoiceState } = await import("@jskit-ai/assistant-voice/client"));
-  ({ useAssistantConversation } = await import(new URL("./composables/useAssistantConversation.js",
-    import.meta.resolve("@jskit-ai/assistant-runtime/client"))));
+  ({ isColleagueBinding, useColleagueConversation } = await import("../../packages/vibe64-colleague/src/client/useColleagueConversation.js"));
 } finally {
   presentationStub.deregister();
 }
@@ -1016,11 +1011,11 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@local/vibe64-training/shared/learner-events": { VIBE64_TRAINING_LEARNER_CHANGED_EVENT: "vibe64.training.learner.changed" },
     "/src/lib/vibe64ColleagueModelBridge.js": { useVibe64ColleagueModel: () => ({ register: () => () => {} }) },
     "./colleagueModel.js": { createColleagueModel },
+    "./useColleagueConversation.js": { isColleagueBinding, useColleagueConversation },
     "./useColleagueFreshStart.js": { useColleagueFreshStart },
     "./useColleagueHistory.js": { useColleagueHistory },
     "./useColleagueLearning.js": { useColleagueLearning },
     "./useColleagueTeachMe.js": { useColleagueTeachMe },
-    "./useColleagueVoicePreviews.js": { useColleagueVoicePreviews },
     "./useColleagueWatchesAndOperations.js": { useColleagueWatchesAndOperations },
     "./ColleagueFreshDialog.vue": { default: {} },
     "./ColleagueOperationsDialog.vue": { default: {} },
@@ -1030,12 +1025,9 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
-    "@local/vibe64-voice/shared/routes": { COLLEAGUE_VOICE_SOCKET_URL: "/api/vibe64/colleague/voice/ws" },
     "./colleagueNavigation.js": { createColleagueNavigation, navigateColleagueBrowser },
-    "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
+    "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {},
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
-    "@jskit-ai/assistant-runtime/client": { useAssistantConversation },
-    "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
     "/src/lib/vibe64AssistantHost.js": assistantHostKeys,
