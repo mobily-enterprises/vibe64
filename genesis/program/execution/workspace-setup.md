@@ -83,7 +83,7 @@ that file nor runs commands. A ready inspection only means the declaration is
 valid. Explicit connected-source preparation now asks Project to write the
 declared input map from authorized receiving sessions. That owner reports
 `inputs-prepared`; it does not run the recipe. Normal workspace preparation uses
-the same allocation owner, then executes ordinary setup followed by connected
+the same resolving owner, then executes ordinary setup followed by connected
 Prepare and Verify commands through the existing managed runner. Project's
 combined inspection includes both recipe identities and the exact source map.
 Sessions reauthorizes the receiving sources before each command and before
@@ -92,8 +92,8 @@ request; the map itself grants no filesystem authority. Node.js consumption
 has a focused real npm/import proof; other toolchains remain unproven.
 
 A requested run (session creation, Prepare or Retry) with connected development
-first saves a running `Preparing connected projects` state and returns; the
-allocation and the rest of the recipe continue in the observed background run,
+first saves a running `Preparing connected projects` state and returns; resolving
+the linked sessions and the rest of the recipe continue in the observed background run,
 so creating a session no longer waits for every connected checkout. Sessions
 reports which connected projects remain through that running label and publishes
 each change. An unrequested start keeps cached-success reuse and runs the same

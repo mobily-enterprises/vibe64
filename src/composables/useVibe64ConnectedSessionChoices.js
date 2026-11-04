@@ -32,41 +32,42 @@ function preselectedSessions(choices, previous) {
 
 /**
  * The connected projects of a session that need a person's choice. The server
- * owns that list and which sessions are free, and checks a choice again when
- * it is saved, so every outcome reloads from it.
+ * owns that list and which sessions are free, checks a choice again when it is
+ * saved, and carries preparation on after the last one, so every outcome
+ * reloads from it.
  * @param {{
  *   projectSlug: import("vue").MaybeRefOrGetter<string>,
  *   sessionId: import("vue").MaybeRefOrGetter<string>,
- *   revision: import("vue").MaybeRefOrGetter<string>,
- *   onResolved: () => void
- * }} options `revision` changes whenever preparation records a new state;
- *   `onResolved` runs once the last project has its session.
+ *   revision: import("vue").MaybeRefOrGetter<string>
+ * }} options `revision` changes whenever preparation records a new state.
  */
-function useVibe64ConnectedSessionChoices({ projectSlug, sessionId, revision, onResolved }) {
+function useVibe64ConnectedSessionChoices({ projectSlug, sessionId, revision }) {
   const choices = ref(/** @type {ConnectedSessionChoice[]} */ ([]));
   const selections = ref(/** @type {Record<string, string>} */ ({}));
   const error = ref("");
+  const loading = ref(true);
   const pendingRepository = ref("");
   const busy = computed(() => Boolean(pendingRepository.value));
+  const settled = computed(() => !loading.value && !error.value && !choices.value.length);
 
   /** @param {string} suffix */
   function sessionUrl(suffix) {
     return scopedDevelopmentApiUrl(vibe64SessionPath(`/api${VIBE64_SESSIONS_API_SUFFIX}`, toValue(sessionId), suffix), toValue(projectSlug));
   }
 
-  /** @returns {Promise<boolean>} whether the list now is the server's, for the session still shown */
   async function load() {
     const path = sessionUrl("/connected/choices");
+    loading.value = !choices.value.length;
     try {
       const result = await getHttpWebClient().request(path, { method: "GET" });
       if (result?.ok !== true) throw vibe64ApiError(result, "The connected projects could not be checked.");
-      if (path !== sessionUrl("/connected/choices")) return false;
+      if (path !== sessionUrl("/connected/choices")) return;
       choices.value = result.choices;
       selections.value = preselectedSessions(result.choices, selections.value);
-      return true;
     } catch (cause) {
       if (path === sessionUrl("/connected/choices")) error.value = cause.message;
-      return false;
+    } finally {
+      if (path === sessionUrl("/connected/choices")) loading.value = false;
     }
   }
 
@@ -89,10 +90,9 @@ function useVibe64ConnectedSessionChoices({ projectSlug, sessionId, revision, on
     } catch (cause) {
       refusal = cause.message;
     }
-    const current = await load();
+    await load();
     error.value = refusal || error.value;
     pendingRepository.value = "";
-    if (!refusal && current && !choices.value.length) onResolved();
   }
 
   /** @param {ConnectedSessionChoice} choice */
@@ -116,7 +116,7 @@ function useVibe64ConnectedSessionChoices({ projectSlug, sessionId, revision, on
     return load();
   }, { immediate: true });
 
-  return { busy, choices, error, finishReplacement, linkSession, pendingRepository, selections };
+  return { busy, choices, error, finishReplacement, linkSession, loading, pendingRepository, selections, settled };
 }
 
 export { useVibe64ConnectedSessionChoices };

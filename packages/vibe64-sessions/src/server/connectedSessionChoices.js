@@ -15,6 +15,8 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 
 /**
  * Choosing connected sessions: which connected projects of a session need one,
@@ -24,9 +26,11 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {object} dependencies
  * @param {(projectSlug: string, actionId: string, input: object, requestContext?: object) => Promise<object>} dependencies.executeConnectedAction
  * @param {ProjectService} dependencies.project
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {TerminalsService} dependencies.terminals
+ * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
-function createConnectedSessionChoices({ executeConnectedAction, project, terminals }) {
+function createConnectedSessionChoices({ executeConnectedAction, project, setupRunner, terminals, workspaceSetup }) {
   /**
    * The receiving project's answer about one connected project of this
    * session: its saved link, and the free sessions when that link does not hold.
@@ -52,7 +56,7 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
    * @param {object} input
    * @param {object} requestContext
    */
-  async function inspectConnectedChoices(sessionId, input, requestContext) {
+  async function listConnectedChoices(sessionId, input, requestContext) {
     return sessionResult(async () => {
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(sessionId);
@@ -85,10 +89,62 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
   }
 
   /**
+   * Preparation that stopped for a choice picks itself up here once nothing is
+   * left to choose, so it never depends on the browser that chose. Connected
+   * work needs a person's authenticated request, so this runs in the last link
+   * and in the next look at the list, which covers a restart between the two.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} requestContext
+   */
+  async function resumeWaitingPreparation(sessionId, input, requestContext) {
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
+    if (session.workspaceSetup?.connectedChoiceRequired !== true || setupRunner.isRunning(sessionId)) return;
+    await workspaceSetup.retryWorkspaceSetup(sessionId, input, requestContext);
+  }
+
+  /**
+   * What a person sees in the notice. An empty list on a waiting session means
+   * the last choice is made, so preparation carries on.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} requestContext
+   */
+  async function inspectConnectedChoices(sessionId, input, requestContext) {
+    return sessionResult(async () => {
+      const listed = await listConnectedChoices(sessionId, input, requestContext);
+      if (listed?.ok === true && !listed.choices.length) await resumeWaitingPreparation(sessionId, input, requestContext);
+      return listed;
+    });
+  }
+
+  /**
+   * What stops a renewal before anything is frozen, or "": its new session is
+   * hidden, so nobody could choose for it. This session's notice still can. A
+   * session using no connected sessions has nothing to carry over.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} requestContext
+   * @returns {Promise<string>}
+   */
+  async function connectedLinkProblem(sessionId, input, requestContext) {
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
+    if (!sessionConnectedSources(session).length && session.workspaceSetup?.connectedChoiceRequired !== true) return "";
+    const listed = await listConnectedChoices(sessionId, input, requestContext);
+    if (listed?.ok !== true) return normalizeText(listed?.error) || "The connected projects could not be checked.";
+    if (!listed.choices.length) return "";
+    const needs = listed.choices.map(({ name, reason }) => `${name} needs a connected session.${reason ? ` ${reason}` : ""}`);
+    return `${needs.join(" ")} Use Prepare workspace here, choose in its notice, then confirm this renewal again.`;
+  }
+
+  /**
    * Reserves the link, then has the receiving project take it. The binding is
    * written first, as a lost response or crash then leaves a link Prepare asks
-   * about, never a session bound to a contribution nothing uses. A refusal
-   * restores the earlier bindings.
+   * about, never a session bound to a contribution nothing uses: Prepare finds
+   * either a finished link or one to choose again. Only the receiving project's
+   * refusal, which means it took nothing, restores the earlier bindings.
    * @param {object} link
    * @param {{ sessionId: string, baseCommit: string }} link.chosen
    * @param {{ source: object }} link.choice
@@ -124,30 +180,30 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
     const writeSources = value =>
       runtime.store.writeMetadataValue(session.sessionId, "connected_sources", serializeSessionConnectedSources(value));
     await writeSources([...sources.filter(item => item.contribution.repository !== target.fullName), binding]);
-    let bound;
-    try {
-      bound = await executeConnectedAction(target.projectSlug, ACTION_BIND_CONNECTED_SESSION, {
-        contribution: binding.contribution,
-        onlyIfUntouched,
-        originIsContribution
-      }, requestContext);
-    } finally {
-      if (bound?.ok !== true) await writeSources(sources);
-    }
+    const bound = await executeConnectedAction(target.projectSlug, ACTION_BIND_CONNECTED_SESSION, {
+      contribution: binding.contribution,
+      onlyIfUntouched,
+      originIsContribution
+    }, requestContext);
+    if (bound?.ok === false) await writeSources(sources);
     return { binding, bound };
   }
 
   /**
    * Links a person's chosen session to this one. The server decides again
    * here: the project must still need a choice and the session must still be
-   * free.
+   * free. A running preparation owns this session's bindings, as it may be
+   * linking too. Preparation resumes from here after the lease is free again.
    * @param {string} sessionId
    * @param {{ repository: string, connectedSessionId: string }} input
    * @param {object} requestContext
    */
   async function linkConnectedSession(sessionId, input, requestContext) {
-    return sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
+    const linked = await sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
       assertProjectEffectAdmission();
+      if (setupRunner.isRunning(sessionId)) {
+        throw vibe64Error("Workspace preparation is running. Choose once it stops.", "vibe64_workspace_setup_running");
+      }
       const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
       const target = targets.find(item => item.fullName === input.repository);
       if (!target) {
@@ -164,6 +220,8 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
       if (bound.ok !== true) return bound;
       return { ok: true, repository: target.fullName, sessionId: chosen.sessionId };
     }));
+    if (linked?.ok === true) await inspectConnectedChoices(sessionId, input, requestContext);
+    return linked;
   }
 
   /**
@@ -207,6 +265,7 @@ function createConnectedSessionChoices({ executeConnectedAction, project, termin
   }
 
   return Object.freeze({
+    connectedLinkProblem,
     inspectConnectedChoices,
     linkConnectedSession,
     linkOnlyFreeSession

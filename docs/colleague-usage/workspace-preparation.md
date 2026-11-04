@@ -32,7 +32,9 @@ session if exactly one is free and it is untouched: no commits of its own, no un
 work and nothing running in it. It uses that session as it stands and says so in the
 output, so update it first if you want it on the latest main. Otherwise, with work in
 that session, two or more free, or none, it stops at **Workspace setup needs a
-choice**, naming that project and why, and you settle it in the notice. See
+choice**, naming that project and why, and you settle it in the notice. Preview
+stays unavailable until then, and after your last choice the server carries on by
+itself. See
 [Choose a connected session](connected-contributions.md#choose-a-connected-session).
 
 A successful result records the previous recipe execution. It does not prove

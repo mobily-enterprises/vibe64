@@ -6,7 +6,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
-import { ACTION_RETRY_WORKSPACE_SETUP, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { ACTION_CHECK_SESSION_UPDATES, ACTION_RETRY_WORKSPACE_SETUP, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
@@ -35,8 +35,9 @@ async function withConnectedLibrary(sessions, run, other) {
     const parent = { sessionId: "parent", sessionName: "Payments", status: "active", sourceReady: true, metadata: {
       assistant_routing: JSON.stringify({ mode: "senior", review: false })
     } };
-    const world = { aiRunning: false, created: [], library: new Map(sessions.map(session => [session.sessionId, session])), parent,
-      beforeBind: () => {}, failNextCreate: false, readWork: () => ({}), setupStarts: [] };
+    const world = { afterList: () => {}, aiRunning: false, created: [], library: new Map(sessions.map(session => [session.sessionId, session])),
+      parent, beforeBind: () => {}, duringCheck: () => {}, failNextCreate: false, readSession: (runtime, id) => runtime.getSession(id),
+      readWork: () => ({}), setupRunning: false, setupStarts: [] };
     const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: world.library,
       other: new Map((other || []).map(session => [session.sessionId, session])) };
     const runtimeFor = projectSlug => ({
@@ -53,8 +54,12 @@ async function withConnectedLibrary(sessions, run, other) {
         if (!session) throw Object.assign(new Error("Session not found."), { code: "vibe64_session_not_found" });
         return structuredClone(session);
       },
-      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
-      async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()].filter(session => session.status === "active"); },
+      getSessionWithoutSource(sessionId) { return world.readSession(this, sessionId); },
+      async listSessionSummaries() {
+        const listed = structuredClone([...sessionsByProject[projectSlug].values()].filter(session => session.status === "active"));
+        await world.afterList();
+        return listed;
+      },
       async createSession(input) {
         if (world.failNextCreate) {
           world.failNextCreate = false;
@@ -81,11 +86,16 @@ async function withConnectedLibrary(sessions, run, other) {
       async readCurrentProject() { return { repositoryMode: "github", repository: { defaultBranch: "main",
         github: { fullName: `example/${currentProjectRequestContext().slug}` } } }; },
       async runProjectSessionPolicyExclusive(operation) { return operation(); },
+      async runProjectSourceExclusive(operation) { return operation(); },
       async developmentDatabasePolicy() { return { creation: { canCreate: true }, limits: {} }; }
     };
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
-    const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
-      setupRunner: { start: async (input) => { world.setupStarts.push(input); return { completion: null }; }, isRunning: () => false },
+    const service = createService({ project, initializeModelRouting: async () => ({ ok: true }),
+      actions: Object.create(actions, { execute: { value(request) {
+        if (world.loseBindResponse && request.actionId === "vibe64.sessions.connected.sessions.bind") throw new Error("The response was lost.");
+        return actions.execute(request);
+      } } }),
+      setupRunner: { start: async (input) => { world.setupStarts.push(input); return { completion: null }; }, isRunning: () => world.setupRunning },
       terminals: {
         async inspectSessionWork(_id, { session, inspectContributionPublication }) {
           return { ok: true, unsaved: false, ahead: 0, baseCommit: BASE, sessionHead: session.metadata.base_commit,
@@ -95,7 +105,10 @@ async function withConnectedLibrary(sessions, run, other) {
         },
         async agentSessionState() { return { turn: { active: false } }; },
         async sessionAiWorkRunning() { return world.aiRunning; },
-        async checkSessionUpdates() { return { ok: true, ahead: 0, behind: 0, canonicalCommit: BASE }; },
+        async checkSessionUpdates() {
+          await world.duringCheck();
+          return { ok: true, ahead: 0, behind: 0, canonicalCommit: world.mainCommit || BASE };
+        },
         async inspectIncomingContributions(_sessionId, { id }) {
           return { ok: true, repository: "example/library", contributions: [{ id, status: "discarded", activeHead: "",
             discardedHead: "b".repeat(40), review: world.incomingReview }] };
@@ -126,8 +139,16 @@ async function withConnectedLibrary(sessions, run, other) {
     const context = { channel: "api", surface: "app", requestMeta: { request } };
     const action = (name, input = {}, channel = "api") => actions.execute({ actionId: `vibe64.sessions.connected.${name}`,
       input: { sessionId: "parent", ...input }, context: { ...context, channel } });
+    actions.register({ contributorId: "connected-test", domain: "sessions", actions: [{
+      ...createSessionActions({ sessions: service }).find(item => item.id === "vibe64.sessions.connected.choices"),
+      channels: ["api", "internal"], id: "vibe64.sessions.connected.test.linkProblem", surfaces: ["app"],
+      execute: (input, requestContext) => service.connectedLinkProblem(input.sessionId, input, requestContext)
+    }] });
+    const inLibrary = { ...context, requestMeta: { request: { headers: request.headers, params: { slug: "library" } } } };
     await run(Object.assign(world, {
+      checkLibrary: sessionId => actions.execute({ actionId: ACTION_CHECK_SESSION_UPDATES, input: { sessionId, force: true }, context: inLibrary }),
       choices: () => action("choices"),
+      linkProblem: () => action("test.linkProblem"),
       link: (connectedSessionId, repository = "example/library") => action("link", { repository, connectedSessionId }),
       prepare: channel => action("prepare", {}, channel),
       retry: channel => actions.execute({ actionId: ACTION_RETRY_WORKSPACE_SETUP, input: { sessionId: "parent" },
@@ -439,5 +460,140 @@ test("a confirmed replacement that was never created is finished from the choice
     assert.equal(finished.sessionId, reserved.id);
     assert.equal(created.length, 1);
     assert.deepEqual((await choices()).choices, []);
+  });
+});
+
+test("an update check in flight during a link leaves the linked session on its contribution", async () => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("sibling")], async world => {
+    const { checkLibrary, library, link, parent } = world;
+    world.mainCommit = "c".repeat(40);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    world.duringCheck = async () => { entered.resolve(); await release.promise; };
+
+    const check = checkLibrary("wanted");
+    await entered.promise;
+    assert.equal((await link("wanted")).ok, true);
+    release.resolve();
+    assert.equal((await check).ok, true);
+
+    const session = library.get("wanted");
+    assert.equal(session.metadata.canonical_commit, BASE, "the late check does not write main's commit over the contribution's base");
+    assert.equal(session.metadata.repository_update_check, undefined, "its answer about the old branch is not kept");
+    assert.equal(sessionConnectedSources(parent)[0].contribution.sessionId, "wanted");
+  });
+});
+
+test("a canonical commit spread to the project's sessions skips one linked since the list was read", async () => {
+  await withConnectedLibrary([librarySession("checked"), librarySession("linked-late"), librarySession("plain")], async world => {
+    const { checkLibrary, library } = world;
+    const contribution = JSON.stringify({ schemaVersion: 1, id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", sessionId: "linked-late",
+      repository: "example/library", integrationBranch: "main", baseCommit: BASE });
+    world.mainCommit = "c".repeat(40);
+    world.afterList = () => {
+      world.afterList = () => {};
+      Object.assign(library.get("linked-late").metadata, { canonical_commit: BASE, connected_contribution: contribution });
+    };
+
+    assert.equal((await checkLibrary("checked")).ok, true);
+    assert.equal(library.get("linked-late").metadata.canonical_commit, BASE);
+    assert.equal(library.get("plain").metadata.canonical_commit, "c".repeat(40), "an unlinked session still follows main");
+  });
+});
+
+test("the last link carries preparation on from the server, with no browser left to ask", async () => {
+  await withConnectedLibrary([librarySession("first"), librarySession("first-b")], async ({ link, parent, setupStarts }) => {
+    parent.workspaceSetup = { connectedChoiceRequired: true, status: "ambiguous" };
+    assert.equal((await link("first")).ok, true);
+    assert.equal(setupStarts.length, 0, "the other project still needs its choice");
+    assert.equal((await link("two", "example/other")).ok, true);
+    assert.equal(setupStarts.length, 1);
+    assert.equal(setupStarts[0].retry, true);
+    assert.equal(setupStarts[0].agentRequested, false);
+  }, [librarySession("two"), librarySession("three")]);
+});
+
+test("a link saved just before a restart carries on at the next look, and an ordinary session is left alone", async () => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("zother")], async world => {
+    const { choices, link, parent, setupStarts } = world;
+    assert.equal((await link("wanted")).ok, true);
+    assert.deepEqual((await choices()).choices, []);
+    assert.equal(setupStarts.length, 0, "nothing was waiting, so nothing starts");
+
+    parent.workspaceSetup = { connectedChoiceRequired: true, status: "ambiguous" };
+    assert.deepEqual((await choices()).choices, []);
+    assert.equal(setupStarts.length, 1, "the wait outlived the link, and the server ends it");
+
+    world.setupRunning = true;
+    assert.deepEqual((await choices()).choices, []);
+    assert.equal(setupStarts.length, 1, "a running preparation is not started twice");
+  });
+});
+
+test("a person's link waits for a running preparation, which may be linking too", async () => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("zother")], async world => {
+    world.setupRunning = true;
+    assert.equal((await world.link("wanted")).code, "vibe64_workspace_setup_running");
+    assert.deepEqual(sessionConnectedSources(world.parent), []);
+  });
+});
+
+test("a reservation that crashed before its session was taken by someone else asks again, naming the project", async () => {
+  const taken = { schemaVersion: 1, id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", repository: "example/library",
+    integrationBranch: "main", baseCommit: BASE };
+  await withConnectedLibrary([librarySession("wanted", { sessionName: "Library work" }), librarySession("spare"), librarySession("spare-2")],
+    async ({ choices, library, link, parent, prepare }) => {
+      assert.equal((await link("wanted")).ok, true);
+      library.get("wanted").metadata.connected_contribution = JSON.stringify(taken);
+
+      const stopped = await prepare();
+      assert.equal(stopped.code, LINK_REQUIRED, "Prepare is not stuck on a refusal with no way out");
+      assert.match(stopped.error, /Library work in example\/library went to another contribution before this link was finished\./u);
+      const [choice] = (await choices()).choices;
+      assert.deepEqual(choice.sessions.map(item => item.sessionId), ["spare", "spare-2"]);
+      assert.equal((await link("spare")).ok, true);
+      assert.equal(sessionConnectedSources(parent)[0].contribution.sessionId, "spare");
+    });
+});
+
+test("a link that was made stays made when announcing it fails", async () => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("zother")], async world => {
+    const { library, link, parent, prepare } = world;
+    world.readSession = (runtime, id) => {
+      if (id === "wanted" && library.get("wanted").metadata.connected_contribution) throw new Error("The session could not be read.");
+      return runtime.getSession(id);
+    };
+    assert.equal((await link("wanted")).ok, true);
+    world.readSession = (runtime, id) => runtime.getSession(id);
+
+    const [binding] = sessionConnectedSources(parent);
+    assert.deepEqual(JSON.parse(library.get("wanted").metadata.connected_contribution), binding.contribution,
+      "the origin keeps the link its session took, so neither side is left bound to nothing");
+    assert.equal((await prepare()).prepared[0].sessionId, "wanted");
+  });
+});
+
+test("a link the receiving project may have taken keeps its reservation, for Prepare to settle", async () => {
+  await withConnectedLibrary([librarySession("wanted"), librarySession("zother")], async world => {
+    const { link, parent, prepare } = world;
+    world.loseBindResponse = true;
+    assert.match((await link("wanted")).error, /response was lost/u);
+    world.loseBindResponse = false;
+
+    assert.equal(sessionConnectedSources(parent)[0].contribution.sessionId, "wanted", "an unknown outcome is not a refusal");
+    assert.equal((await prepare()).code, LINK_REQUIRED, "it never bound, so Prepare asks again");
+  });
+});
+
+test("a connected link that no longer holds stops a renewal before anything is frozen, naming the project and reason", async () => {
+  await withConnectedLibrary([librarySession("first", { sessionName: "Library work" }), librarySession("second")], async world => {
+    const { library, link, linkProblem, parent } = world;
+    assert.equal(await linkProblem(), "", "a session using nothing has nothing to carry over");
+    assert.equal((await link("first")).ok, true);
+    assert.equal(await linkProblem(), "");
+    library.get("first").status = "archived";
+    assert.equal(await linkProblem(), "library needs a connected session. Its connected session Library work in example/library was archived. " +
+      "Use Prepare workspace here, choose in its notice, then confirm this renewal again.");
+    assert.equal(sessionConnectedSources(parent).length, 1);
   });
 });

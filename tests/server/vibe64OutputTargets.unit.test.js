@@ -461,6 +461,16 @@ test("workspace setup disables outputs only for a failed current recipe", () => 
   }), "");
 });
 
+test("a stop recorded before any recipe holds Preview back even when inspection says ready", () => {
+  const ready = { recipeHash: "sha256:recipe", status: "ready" };
+  assert.equal(workspaceSetupLaunchDisabledReason({
+    workspaceSetup: { connectedChoiceRequired: true, diagnostic: "vibe64 needs a connected session.", recipeHash: "", status: "ambiguous" }
+  }, ready), "vibe64 needs a connected session.");
+  assert.equal(workspaceSetupLaunchDisabledReason({
+    workspaceSetup: { diagnostic: "Connected project vibe64: not ready", recipeHash: "", status: "failed" }
+  }, ready), "Connected project vibe64: not ready");
+});
+
 test("a pending workspace recipe remains runnable so the request can prepare it", async (t) => {
   const context = await outputContext(t);
   context.session.workspaceSetup = { status: "unconfigured" };

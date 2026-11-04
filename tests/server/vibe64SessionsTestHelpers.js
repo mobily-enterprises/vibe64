@@ -22,7 +22,8 @@ const NEUTRAL_TERMINAL_OPERATIONS = Object.freeze({
   workspaceSetupIsRunning: () => false
 });
 const NEUTRAL_PROJECT_OPERATIONS = Object.freeze({
-  releaseSessionResources: async () => {}
+  releaseSessionResources: async () => {},
+  runProjectSourceExclusive: operation => operation()
 });
 
 function withOperations(double, operations) {

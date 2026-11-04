@@ -150,7 +150,9 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
   if (currentRecipe && storedStatus === "running") {
     return "";
   }
-  if (currentRecipe && ["ambiguous", "failed"].includes(storedStatus)) {
+  // A stop recorded before any recipe (connected preparation stops there)
+  // cannot go stale with a recipe, so it holds until preparation runs again.
+  if ((currentRecipe || !storedRecipeHash) && ["ambiguous", "failed"].includes(storedStatus)) {
     return String(
       stored.diagnostic || "Workspace preparation must be fixed before managed preview can start."
     ).trim();

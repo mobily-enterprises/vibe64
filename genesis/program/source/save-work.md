@@ -150,23 +150,22 @@ Contribution UUIDs remain immutable across renewal; the authorized work snapshot
 identifies the actual receiving session that currently owns the source.
 
 
-Explicit `vibe64.sessions.connected.prepare` now reserves source identities in
-the origin session's `connected_sources` metadata and dispatches receiving
-inspection/allocation through the original action catalogue. Each receiving
-operation authenticates the original connection and authorizes that project
-again. Projects checks fresh repository write access and its integration target;
-Sessions reuses normal capacity admission and source creation. A lost response
-retries the reserved session identity and refuses a different existing binding.
-Trusted contribution creation allocates the receiving checkout without starting
-that receiving session's workspace setup. The originating Stack recipe treats
-its finite direct source map; allocation cannot recursively traverse receiving
-connection lists or cycles. Ordinary session creation still starts setup, and
-an explicit receiving-session Prepare remains its own operation.
+Explicit `vibe64.sessions.connected.prepare` now resolves the origin session's
+`connected_sources` bindings through the receiving projects, and creates no
+session: a project without a usable link is linked or left for a person, as
+[Workspaces](../sessions/workspaces.md) explains. Each receiving operation
+authenticates the original connection and authorizes that project again. Projects
+checks fresh repository write access and its integration target. Only a confirmed
+replacement creates a contribution session, through normal capacity admission and
+source creation, without starting that session's workspace setup. The originating
+Stack recipe treats its finite direct source map; preparation cannot recursively
+traverse receiving connection lists or cycles. Ordinary session creation still
+starts setup, and an explicit receiving-session Prepare remains its own operation.
 The Git checkout stays under the receiving project's managed session source root.
 Renewal retains these source bindings as well as exact submissions.
 Preparation failures retain completed receiver summaries, including when a later
 action throws. An unready source returns a failure with its existing receiving
-session identity; allocation does not replace it or claim preparation succeeded.
+session identity; preparation does not replace it or claim it succeeded.
 
 Automatic preparation, standalone connected-project ownership, task execution
 selection and Stack-declared development placement/treatment remain incomplete.

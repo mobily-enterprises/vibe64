@@ -117,9 +117,13 @@ function createReceivingContributions({
       visited.add(session.sessionId);
       const saved = sessionConnectedContribution(session);
       if (!saved) throw connectedLinkRequired(`The link to ${connectedSessionLabel(session)} in ${contribution.repository} was not finished.`);
+      if (saved.id !== contribution.id) {
+        throw connectedLinkRequired(`${connectedSessionLabel(session)} in ${contribution.repository} went to another ` +
+          "contribution before this link was finished.");
+      }
       if (!isDeepStrictEqual(saved, contribution)) {
         throw vibe64Error(
-          "The receiving source binding changed. Preserve its checkout and review the connection.",
+          `The receiving source binding for ${contribution.repository} changed. Preserve its checkout and review the connection.`,
           "vibe64_contribution_authority_changed",
           { details: { sessionId: session.sessionId }, messageCode: "vibe64_connected_receiving_binding_changed" }
         );
@@ -527,11 +531,24 @@ function createReceivingContributions({
           vibe64User: trustedAssistantUser(input)
         });
         if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
-        await runtime.store.writeMetadataValue(sessionId, "canonical_commit", contribution.baseCommit);
-        await runtime.store.writeMetadataValue(sessionId, "connected_contribution", JSON.stringify(contribution));
-        const linked = await runtime.getSessionWithoutSource(sessionId);
-        await publishSessionChanged(sessionId, { operation: "updated", reason: "session-connected-linked", session: linked });
-        return publicSession(linked);
+        // An update check records its canonical commit under this same lock.
+        await project.runProjectSourceExclusive(async () => {
+          await runtime.store.writeMetadataValue(sessionId, "canonical_commit", contribution.baseCommit);
+          await runtime.store.writeMetadataValue(sessionId, "connected_contribution", JSON.stringify(contribution));
+        });
+        // The link is made. Announcing it must not read as a refusal, which
+        // would have the origin drop a link this session now keeps.
+        try {
+          const linked = await runtime.getSessionWithoutSource(sessionId);
+          await publishSessionChanged(sessionId, { operation: "updated", reason: "session-connected-linked", session: linked });
+          return publicSession(linked);
+        } catch (error) {
+          vibe64SessionDebugLog("server.sessions.connected.link.publish.error", {
+            error: vibe64SessionDebugError(error),
+            sessionId
+          });
+          return publicSession(session);
+        }
       });
     });
   }

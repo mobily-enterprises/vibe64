@@ -116,7 +116,7 @@ test("connected preparation reauthorizes the receiver and uses the session a per
     };
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
-      setupRunner: { start: async () => { setupStarts++; return { completion: null }; } },
+      setupRunner: { start: async () => { setupStarts++; return { completion: null }; }, isRunning: () => false },
       terminals: {
         async inspectSessionWork(id, { session, inspectContributionPublication }) {
           calls.push(`inspect work:${id}`);

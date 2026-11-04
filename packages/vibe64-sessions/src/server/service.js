@@ -96,7 +96,9 @@ function createService({
     actions,
     logger,
     project,
-    terminals
+    setupRunner,
+    terminals,
+    workspaceSetup
   });
   const work = createSessionWork({
     connectedContributions: connected,
@@ -150,6 +152,9 @@ function createService({
     workOperations
   });
   const renewal = createSessionRenewalController({
+    connectedLinkProblem: (sessionId, input) => connected.connectedLinkProblem(sessionId, input, {
+      requestMeta: currentProjectActionRequestMeta()
+    }),
     prepareArchive: archive.prepareArchive,
     project,
     publishSessionChanged,
@@ -240,6 +245,7 @@ function createService({
     retrySessionRenewal: renewal.retrySessionRenewal,
     updateSessionRenewalDraft: renewal.updateSessionRenewalDraft,
 
+    connectedLinkProblem: connected.connectedLinkProblem,
     inspectConnectedChoices: connected.inspectConnectedChoices,
     inspectConnectedDevelopmentInputs: connected.inspectConnectedDevelopmentInputs,
     linkConnectedSession: connected.linkConnectedSession,

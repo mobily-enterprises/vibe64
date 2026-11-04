@@ -2979,6 +2979,7 @@ test("preparation's own link reads the session's real Git: commits, unsaved work
     const project = githubProject(root, fixture.remote);
     const session = { ...await sessionForRemote(root, fixture), sourceReady: true, status: "active" };
     const source = session.sourcePath;
+    let workRunning = false;
     const runtime = {
       async getSessionWithoutSource() { return session; },
       store: { async writeMetadataValue(_id, key, value) { session.metadata[key] = value; } }
@@ -3001,7 +3002,7 @@ test("preparation's own link reads the session's real Git: commits, unsaved work
         runConnectedSourcePreparation: (_id, _input, operation) => operation({ runtime, session }),
         async sessionAiWorkRunning() { return false; }
       },
-      workOperations: { isRunning: () => false }
+      workOperations: { isRunning: () => workRunning }
     });
     const bind = () => receiving.bindConnectedSession({
       contribution: { schemaVersion: 1, id: "abababab-abab-4bab-8bab-abababababab", sessionId: session.sessionId,
@@ -3033,6 +3034,10 @@ test("preparation's own link reads the session's real Git: commits, unsaved work
     await rename(path.join(source, ".git"), path.join(source, ".git-hidden"));
     await refused("its work could not be checked.");
     await rename(path.join(source, ".git-hidden"), path.join(source, ".git"));
+
+    workRunning = true;
+    await refused("a Save or Update is running in it.");
+    workRunning = false;
 
     const generated = path.join(source, GENESIS_DERIVED_ARTIFACT_PATHS[0]);
     await mkdir(path.dirname(generated), { recursive: true });

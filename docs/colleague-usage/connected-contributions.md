@@ -22,7 +22,9 @@ session was archived, and on **Retry**.
 - **Two or more free sessions:** preparation stops the same way. The notice names
   each project that needs a session and offers its free sessions in **Session in**
   *project*, with the first free one already selected. Pick one and choose **Link
-  session**. Once the last project has its session, preparation continues by itself.
+  session**. Once the last project has its session, the server carries preparation
+  on by itself, even if you close the tab or the page reloads. If a restart interrupts
+  that, opening the session again finishes it. Until then Preview stays unavailable.
 - **No free session:** preparation stops the same way and creates nothing; see
   below.
 
@@ -53,13 +55,18 @@ A session is free when it is open, its source is ready, it is not already linked
 to a contribution, and it does not work on its own branch or pull request. When
 this session is itself a contribution, a session that uses connected projects of
 its own is not free either. Vibe64 checks all this again when you link, so a
-session taken in the meantime is refused with **That session is no longer free.
-Choose again.** and leaves the list. If that happens to a session preparation was
-linking by itself, it stops for your choice instead of failing.
+session that changed in the meantime is refused with a message saying why and
+leaves the list, for example **That session is no longer free. Choose again.**,
+**That session is already linked to another contribution. Choose again.** or **That
+session moved to another commit. Choose again.** If that happens to a session
+preparation was linking by itself, it stops for your choice instead of failing.
 
 When the project has no free session, the notice says so and creates nothing.
 Choose **Open** *project*, start a session there, then come back and choose
-**Retry**, which links that session when it is the only free one and untouched.
+**Retry**, which links that session when it is the only free one and untouched. A
+project normally allows three open sessions, or one when its sessions share a
+development database, and a linked session stays open until you archive it. If
+**New session** is unavailable there, archive a session you no longer need first.
 
 Linking keeps the session's commits, unsaved work and name. It also changes where
 that session saves: from then on its Save goes to a contribution branch for review
@@ -70,14 +77,26 @@ notice either. A linked session stays on the commit it started from until its co
 the project's latest commits, use **Update this session (rebase)** in that session
 before linking it.
 
-Linking records your Git identity for that receiving session. You can inspect and
-save its contribution without first opening an AI conversation there. GitHub
+Linking records your Git identity for that receiving session, unless it already
+has one, which it keeps. You can inspect and save its contribution without first opening an AI conversation there. GitHub
 access is still checked when used.
 
 Colleague can explain this choice and run **Retry** when you ask. A Retry it runs
 never links a session by itself, not even an untouched one: linking cannot be
 undone, so it stops for you to choose in the notice. A **Retry** you press yourself
 follows the rules above.
+
+## Renew a session that uses connected sessions
+
+A renewed session keeps its links, and its new session stays hidden until the renewal
+finishes, so nobody could choose for it. Confirming a renewal therefore checks every
+link first. If one no longer holds, the confirmation is refused before anything
+stops, naming the project and why, and the renewal stays open for review. Use
+**Prepare workspace** in this session, choose in its notice, then confirm again.
+
+If a link stops holding after you confirmed, the renewal fails with the same project
+and reason, and a renewal never links a session by itself. Cancel it, choose in this
+session's notice, then renew again.
 
 ## How connected sessions relate
 
@@ -113,8 +132,8 @@ the repository, integration target and exact discarded commit, then choose
 This creates a new receiving session and contribution ID, selects it for this
 originating task and updates the development source map. It does not push anything.
 It is the one time Vibe64 creates a connected session, because you confirmed it.
-The new session takes this session's name and follows later renames here until
-you rename it yourself. Use **Open replacement session** to revise that source.
+The new session starts without a name of its own, so it shows its session identity
+until you rename it. Use **Open replacement session** to revise that source.
 
 The replacement starts at the discarded commit. The old checkout, including
 unsaved edits, remains intact; copy any wanted unsaved edits into the replacement
@@ -129,8 +148,9 @@ revision, merge it through the receiving project's Incoming changes, and Update
 the replacement session to the accepted target before Main Save. If creation's
 response is lost, retry the same confirmation: it reuses the reserved replacement.
 **Prepare workspace** never creates it for you: if the session was not created, it
-stops at **Workspace setup needs a choice** and the notice offers **Finish
-replacement** beside any free sessions. A changed review, revoked access or
+stops at **Workspace setup needs a choice** and the notice offers **Start a new
+session in** *project* **for the replacement** beside any free sessions. That button
+is the only one here that creates a session, for the replacement you confirmed. A changed review, revoked access or
 unavailable source stops with an error and preserves both sources. Colleague can review and
 create a replacement through the same actions after an explicit request; it
 cannot silently discard or move unsaved edits.

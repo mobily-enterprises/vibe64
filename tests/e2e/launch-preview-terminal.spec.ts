@@ -1631,16 +1631,19 @@ function connectedChoice(overrides: Record<string, unknown> = {}) {
 
 // Preparation stopped for a connected session: the server double answers what
 // the picker asks, and records what it saves.
-async function openConnectedChoice(page: Page, choices: unknown[], transcript = "[Prepare connected sources] Needs a choice.") {
-  await page.setViewportSize({ width: 600, height: 844 });
+async function openConnectedChoice(page: Page, choices: unknown[], transcript = "[Prepare connected sources] Needs a choice.", width = 600) {
+  await page.setViewportSize({ width, height: 844 });
   await mockLaunchTerminalSocket(page);
   const session = { ...sessionPayload(), workspaceSetup: { connectedChoiceRequired: true, status: "ambiguous",
     updatedAt: "2026-09-29T07:00:00Z", transcript,
     diagnostic: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." } };
   await mockLaunchSession(page, { session });
   const server = { choices, linkBodies: [] as unknown[], linkAnswer: { ok: true } as Record<string, unknown>,
-    choicesAfterLink: [] as unknown[], retries: 0 };
-  await page.route(/\/connected\/choices(?:\?.*)?$/u, route => fulfillJson(route, { ok: true, choices: server.choices }));
+    choicesAfterLink: [] as unknown[], holdChoices: Promise.resolve() as Promise<unknown>, retries: 0 };
+  await page.route(/\/connected\/choices(?:\?.*)?$/u, async (route) => {
+    await server.holdChoices;
+    return fulfillJson(route, { ok: true, choices: server.choices });
+  });
   await page.route(/\/connected\/link(?:\?.*)?$/u, (route) => {
     server.linkBodies.push(route.request().postDataJSON());
     server.choices = server.choicesAfterLink;
@@ -1650,12 +1653,13 @@ async function openConnectedChoice(page: Page, choices: unknown[], transcript = 
     server.retries += 1;
     return fulfillJson(route, { ok: true });
   });
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
-  return { choice: page.getByTestId("connected-session-choice"), server };
+  const open = () => page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+  return { choice: page.getByTestId("connected-session-choice"), open, server };
 }
 
-test("@preparation-notice a first connection links the session a person picks, then preparation continues", async ({ page }, testInfo) => {
-  const { choice, server } = await openConnectedChoice(page, [connectedChoice()]);
+test("@preparation-notice a first connection links the session a person picks, then the server carries on", async ({ page }, testInfo) => {
+  const { choice, open, server } = await openConnectedChoice(page, [connectedChoice()]);
+  await open();
   await expect(choice).toContainText("vibe64 needs a connected session.");
   await expect(page.getByText("Workspace setup needs a choice", { exact: true }).first()).toBeVisible();
   await expect(choice.getByText("First free", { exact: true })).toBeVisible();
@@ -1668,12 +1672,14 @@ test("@preparation-notice a first connection links the session a person picks, t
 
   await expect(choice).toHaveCount(0);
   expect(server.linkBodies).toEqual([{ repository: "example/vibe64", connectedSessionId: "free-2" }]);
-  await expect.poll(() => server.retries).toBe(1);
+  await expect(page.getByText("Every connected project has its session.", { exact: false })).toBeVisible();
+  expect(server.retries).toBe(0);
 });
 
 test("@preparation-notice an archived link says why, and a session taken meanwhile is refused and gone from the list", async ({ page }) => {
   const reason = "Its connected session Payments in example/vibe64 was archived on 2026-10-28.";
-  const { choice, server } = await openConnectedChoice(page, [connectedChoice({ reason })]);
+  const { choice, open, server } = await openConnectedChoice(page, [connectedChoice({ reason })]);
+  await open();
   await expect(choice).toContainText(reason);
   await expect(choice.getByText("First free", { exact: true })).toBeVisible();
 
@@ -1691,12 +1697,13 @@ test("@preparation-notice an archived link says why, and a session taken meanwhi
   await choice.getByRole("button", { name: "Link session", exact: true }).click();
   await expect(choice).toHaveCount(0);
   expect(server.linkBodies.at(-1)).toEqual({ repository: "example/vibe64", connectedSessionId: "free-2" });
-  await expect.poll(() => server.retries).toBe(1);
+  expect(server.retries).toBe(0);
 });
 
 test("@preparation-notice an automatic link is named in the output while another project stops for a choice", async ({ page }) => {
   const line = "[Connected] genesis is now linked to Tooling, its only free session, which has no work in it and is used as it stands.";
-  const { choice, server } = await openConnectedChoice(page, [connectedChoice()], `${line}\n[Prepare connected sources] Needs a choice.`);
+  const { choice, open, server } = await openConnectedChoice(page, [connectedChoice()], `${line}\n[Prepare connected sources] Needs a choice.`);
+  await open();
   await expect(choice).toHaveCount(1);
   await expect(choice).toContainText("vibe64 needs a connected session.");
   const notice = page.locator(".vibe64-temporary-action-terminal:visible").filter({ hasText: /Workspace setup needs a choice/ });
@@ -1706,14 +1713,40 @@ test("@preparation-notice an automatic link is named in the output while another
 });
 
 test("@preparation-notice no free session says what to do and offers nothing to create", async ({ page }) => {
-  const { choice, server } = await openConnectedChoice(page, [connectedChoice({ sessions: [] })]);
+  const { choice, open, server } = await openConnectedChoice(page, [connectedChoice({ sessions: [] })]);
+  await open();
   await expect(choice).toContainText("vibe64 has no free session");
-  await expect(choice).toContainText("Start a session in vibe64, then choose Retry here.");
+  await expect(choice).toContainText("start a session there, then come back and choose Retry.");
   await expect(choice.getByRole("button", { name: "Link session", exact: true })).toHaveCount(0);
   await expect(choice.getByRole("combobox")).toHaveCount(0);
   await expect(choice.getByRole("link", { name: "Open vibe64", exact: true })).toHaveAttribute("href", /\/vibe64\/?$/u);
   await expect(page.getByRole("button", { name: "Retry", exact: true })).toBeEnabled();
   expect(server.linkBodies).toEqual([]);
+});
+
+test("@preparation-notice the picker says it is checking, and fits a 390 pixel phone with its longest labels", async ({ page }) => {
+  const replacementReview = { repository: "example/vibe64", targetBranch: "main", targetHead: "a".repeat(40),
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", activeHead: "", discardedHead: "b".repeat(40) };
+  const reason = "The replacement contribution for example/vibe64 was confirmed but not created.";
+  const { choice, open, server } = await openConnectedChoice(page, [connectedChoice({ reason, replacementReview })],
+    "[Prepare connected sources] Needs a choice.", 390);
+  let release = () => {};
+  server.holdChoices = new Promise((resolve) => { release = () => resolve(null); });
+  await open();
+  await expect(page.getByText("Checking which sessions are free…", { exact: true })).toBeVisible();
+  await expect(choice).toHaveCount(0);
+  release();
+
+  await expect(choice).toContainText(reason);
+  await expect(page.getByText("Checking which sessions are free…", { exact: true })).toHaveCount(0);
+  const replacement = choice.getByRole("button", { name: "Start a new session in vibe64 for the replacement", exact: true });
+  await expect(replacement).toBeVisible();
+  for (const control of [choice, replacement, choice.getByRole("button", { name: "Link session", exact: true })]) {
+    const box = await control.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("@preview-lifecycle Codex interactive terminal keeps one attachment queue and retries handoff", async ({ page }) => {

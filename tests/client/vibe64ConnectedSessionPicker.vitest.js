@@ -14,14 +14,13 @@ let app;
 async function mount(first) {
   mocks.request.mockResolvedValueOnce(first);
   const props = reactive({ projectSlug: "consumer", sessionId: "task", revision: "one", disabled: false });
-  const resolved = vi.fn();
   const component = { ...Vibe64ConnectedSessionPicker, render: () => null };
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
-    .createApp({ render: () => h(component, { ...props, onResolved: resolved }) });
+    .createApp({ render: () => h(component, { ...props }) });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   await settled();
-  return { props, resolved, state: app._instance.subTree.component.setupState };
+  return { props, state: app._instance.subTree.component.setupState };
 }
 beforeEach(() => mocks.request.mockReset());
 afterEach(() => app?.unmount());
@@ -43,45 +42,71 @@ it("preselects the first free session and keeps a choice that is still on offer"
   expect(state.selections["example/library"]).toBe("first");
 });
 
-it("links the selected session and asks to continue only when no project still needs a choice", async () => {
+it("links the selected session and leaves carrying on to the server", async () => {
   const two = [choice(free("first")), choice(free("other"), { repository: "example/other" })];
-  const { resolved, state } = await mount(answer(...two));
+  const { state } = await mount(answer(...two));
   mocks.request.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(answer(two[1]));
   await state.linkSession(state.choices[0]);
   expect(mocks.request.mock.calls[1]).toEqual(["/api/app/consumer/vibe64/sessions/task/connected/link",
     { method: "POST", body: { repository: "example/library", connectedSessionId: "first" } }]);
-  expect(resolved).not.toHaveBeenCalled();
+  expect(state.settled).toBe(false);
 
   mocks.request.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(answer());
   await state.linkSession(state.choices[0]);
-  expect(resolved).toHaveBeenCalledTimes(1);
+  expect(state.settled).toBe(true);
   expect(state.busy).toBe(false);
+  expect(mocks.request).toHaveBeenCalledTimes(5);
 });
 
-it("keeps a refusal's message, shows the server's new list and never continues", async () => {
-  const { resolved, state } = await mount(answer(choice(free("taken", "free"))));
+it("says it is checking until the server answers, and an empty answer is never a blank picker", async () => {
+  let answerNow;
+  const { state } = await mount(new Promise(done => { answerNow = done; }));
+  expect(state.loading).toBe(true);
+  expect(state.settled).toBe(false);
+  answerNow(answer());
+  await settled();
+  expect(state.loading).toBe(false);
+  expect(state.settled).toBe(true);
+});
+
+it("stops checking and shows why when the list cannot be read", async () => {
+  mocks.request.mockRejectedValueOnce(new Error("Connection lost"));
+  const props = reactive({ projectSlug: "consumer", sessionId: "task", revision: "one", disabled: false });
+  const component = { ...Vibe64ConnectedSessionPicker, render: () => null };
+  app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ render: () => h(component, { ...props }) });
+  app.provide(ssrContextKey, { modules: new Set() });
+  app.mount({});
+  await settled();
+  const state = app._instance.subTree.component.setupState;
+  expect(state.loading).toBe(false);
+  expect(state.error).toBe("Connection lost");
+  expect(state.settled).toBe(false);
+});
+
+it("keeps a refusal's message and shows the server's new list", async () => {
+  const { state } = await mount(answer(choice(free("taken", "free"))));
   mocks.request.mockResolvedValueOnce({ ok: false, code: "vibe64_connected_session_not_free", error: "That session is no longer free. Choose again." })
     .mockResolvedValueOnce(answer(choice(free("free"))));
   await state.linkSession(state.choices[0]);
   expect(state.error).toBe("That session is no longer free. Choose again.");
   expect(state.selections["example/library"]).toBe("free");
-  expect(resolved).not.toHaveBeenCalled();
 
   mocks.request.mockRejectedValueOnce(new Error("Connection lost")).mockResolvedValueOnce(answer());
   await state.linkSession(state.choices[0]);
   expect(state.error).toBe("Connection lost");
-  expect(resolved).not.toHaveBeenCalled();
+  expect(state.settled).toBe(false);
 });
 
 it("finishes a confirmed replacement through its own review", async () => {
   const replacementReview = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40),
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", activeHead: "", discardedHead: "b".repeat(40) };
-  const { resolved, state } = await mount(answer(choice([], { replacementReview })));
+  const { state } = await mount(answer(choice([], { replacementReview })));
   mocks.request.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(answer());
   await state.finishReplacement(state.choices[0]);
   expect(mocks.request.mock.calls[1]).toEqual(["/api/app/consumer/vibe64/sessions/task/connected/replacement",
     { method: "POST", body: { repository: "example/library", review: replacementReview } }]);
-  expect(resolved).toHaveBeenCalledTimes(1);
+  expect(state.settled).toBe(true);
 });
 
 it("ignores an answer for a session no longer shown", async () => {

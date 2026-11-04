@@ -248,8 +248,29 @@ that session's own `base_commit`. A binding with no `sessionId` means the sessio
 with the contribution's own ID, as replacements still create. The reservation is
 written first, then the receiving session's write lease re-checks its freedom and
 base, resets `canonical_commit` to that base and writes `connected_contribution`,
-so concurrent links cannot share a session. A refusal restores the earlier
-bindings; a crash leaves a binding the next Prepare reports as not finished.
+so concurrent links cannot share a session. Only the receiving project's refusal
+restores the earlier bindings. An unknown outcome keeps the reservation, which the
+next Prepare finds either finished or reports as not finished, and a session another
+contribution took in that window asks again the same way. Once the link is written,
+a failure announcing it cannot read as a refusal. Update checks do not take the
+write lease, so the link writes `canonical_commit` and `connected_contribution`
+under the project source lock, and a check records what it read under that lock
+only if the session's contribution has not changed since; otherwise it would leave
+a linked session's canonical away from its contribution's base, which reads as a
+removed contribution and which Update cannot repair.
+
+A stopped preparation resumes on the server: the last `connected.link` starts it
+again, and so does the next `connected.choices` that finds nothing left to choose on
+a waiting session, which covers a restart in between. Connected work needs a
+person's authenticated request, so nothing can resume it at startup. A person's
+link is refused while preparation runs, as it may be rewriting the same bindings.
+Output targets stay disabled during the wait: a stored `ambiguous` or `failed` stop
+with no `recipeHash` holds until preparation runs again, whatever inspection says.
+
+Renewal never links: its successor is hidden, so confirmation first refuses, with
+each project and reason, a session whose bindings no longer hold, before anything is
+frozen. A link that stops holding after that fails the workflow with the diagnostic,
+and the person cancels, chooses in the predecessor and renews again.
 
 A linked session's work stays as it was, and it then follows its contribution:
 Save publishes to the incoming branch, and renewal preserves the logical
@@ -260,10 +281,10 @@ a session that uses no connected sessions of its own. Replacement creates a new
 child on the person's confirmation, the only way a contribution session is
 created; renewal-chain cycle checks protect a different lifecycle.
 
-A replacement session takes the originating session's display name (its label, or
-its identity) and records it as `connected_session_name`; later preparations update
-the label only while it still equals that recorded value, so a person's own rename
-is kept. A linked session keeps its own name.
+A replacement session shows its own identity until someone renames it: creation
+assigns no label and `sessionName` falls back to the session ID, so the served-name
+step that would record `connected_session_name` leaves it alone. A linked session
+keeps its own name.
 
 Archiving one session remains local to its existing lifecycle owner. Connected
 bindings and submitted revisions remain in the full archive metadata, while
@@ -902,7 +923,8 @@ through Incoming's existing Git owner. `connected.replace` repeats that review
 under ordinary originating source-write admission, reserves a new binding, creates
 its session through `connected.replacement.create`, then calls ordinary connected
 preparation. Retry reuses that binding, and a reservation whose session was never
-created offers its rebuilt review as **Finish replacement** in the session picker.
+created offers its rebuilt review in the session picker, as a button saying it starts a
+new session in that project.
 Old receiving sessions and `connected_submissions` are preserved. The new binding's
 optional `replaces` UUID identifies its predecessor, and `replacesSessionId` the
 predecessor's session when it was linked; its base is the reviewed published

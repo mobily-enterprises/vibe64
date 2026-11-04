@@ -538,7 +538,7 @@ function createRenewalWorkflow({
       admission.assertWorkflowAdmissionOpen();
       if (!["succeeded", "unconfigured"].includes(toText(setup?.status))) {
         throw renewalError(
-          toText(setup?.error) || "The renewed session workspace is not ready.",
+          toText(setup?.error) || toText(setup?.diagnostic) || "The renewed session workspace is not ready.",
           "vibe64_session_renewal_successor_setup_failed",
           { retryable: true }
         );

@@ -32,6 +32,8 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 
 /**
  * A preparation that reports no progress.
@@ -86,13 +88,17 @@ function connectedChoiceResult(entries, renewal) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {TerminalsService} dependencies.terminals
+ * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
 function createConnectedContributions({
   actions,
   logger,
   project,
-  terminals
+  setupRunner,
+  terminals,
+  workspaceSetup
 }) {
   function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
     const origin = currentProjectRequestContext();
@@ -122,10 +128,11 @@ function createConnectedContributions({
   }
 
   const {
+    connectedLinkProblem,
     inspectConnectedChoices,
     linkConnectedSession,
     linkOnlyFreeSession
-  } = createConnectedSessionChoices({ executeConnectedAction, project, terminals });
+  } = createConnectedSessionChoices({ executeConnectedAction, project, setupRunner, terminals, workspaceSetup });
 
   async function inspectConnectedWork(session, requestContext, bindings = sessionConnectedSources(session), captureSnapshots = false) {
     const submissions = sessionConnectedSubmissions(session);
@@ -622,6 +629,7 @@ function createConnectedContributions({
     inspectConnectedDevelopmentInputs,
     inspectConnectedWork,
     linkConnectedSession,
+    connectedLinkProblem,
     prepareConnectedSources,
     prepareConnectedSourcesInsideAgentWrite,
     replaceConnectedSource,

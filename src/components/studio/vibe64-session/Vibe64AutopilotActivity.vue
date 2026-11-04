@@ -191,7 +191,6 @@
       v-if="workspaceSetupConnectedChoice && !workspaceSetupDismissed"
       :project-slug="projectSlug" :session-id="sessionId" :revision="props.session.workspaceSetup.updatedAt"
       :disabled="workspaceSetupRetryDisabled"
-      @resolved="retryWorkspaceSetup"
     />
     <WorkspaceSetupToolRows
       v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed"

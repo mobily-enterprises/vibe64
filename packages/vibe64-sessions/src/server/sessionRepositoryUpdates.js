@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
+import { isDeepStrictEqual } from "node:util";
+import { sessionConnectedContribution, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import {
   normalizeRepositoryUpdateCheck,
   REPOSITORY_UPDATE_CHECK_METADATA,
@@ -87,6 +88,29 @@ function createSessionRepositoryUpdates({
   const activeRepositoryUpdateChecks = new Map();
 
   /**
+   * Records a canonical commit read earlier, unless the session was linked to
+   * a contribution since that read: a linked session's canonical source is its
+   * contribution until it is pushed, and a commit from its former branch would
+   * read as a contribution that was removed. The link writes under this same
+   * lock, so neither can slip past the other.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} observed the session as that read saw it
+   * @param {string} canonicalCommit
+   * @param {boolean} [reconciled] the check also moved the session's base here
+   * @returns {Promise<boolean>} whether the commit still applied
+   */
+  function recordObservedCanonical(runtime, observed, canonicalCommit, reconciled = false) {
+    const { sessionId } = observed;
+    return project.runProjectSourceExclusive(async () => {
+      const current = await runtime.getSessionWithoutSource(sessionId);
+      if (!isDeepStrictEqual(sessionConnectedContribution(current), sessionConnectedContribution(observed))) return false;
+      await runtime.store.writeMetadataValue(sessionId, "canonical_commit", canonicalCommit);
+      if (reconciled) await runtime.store.writeMetadataValue(sessionId, "base_commit", canonicalCommit);
+      return true;
+    });
+  }
+
+  /**
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sourceSessionId
    * @param {string} canonicalCommit
@@ -111,11 +135,7 @@ function createSessionRepositoryUpdates({
         return;
       }
       if (authorityKey(candidate) !== sourceAuthority) return;
-      await runtime.store.writeMetadataValue(
-        candidateId,
-        "canonical_commit",
-        canonicalCommit
-      );
+      if (!await recordObservedCanonical(runtime, candidate, canonicalCommit)) return;
       await publishSessionChanged(candidateId, {
         operation: "updated",
         originId: normalizeText(originId),
@@ -165,10 +185,9 @@ function createSessionRepositoryUpdates({
           runtime,
           session
         });
-        await runtime.store.writeMetadataValue(sessionId, "canonical_commit", result.canonicalCommit);
-        if (result.reconciled === true) {
-          await runtime.store.writeMetadataValue(sessionId, "base_commit", result.canonicalCommit);
-        }
+        // A link that landed during the check leaves its answer about a branch
+        // the session no longer follows, so it is returned but not kept.
+        if (!await recordObservedCanonical(runtime, session, result.canonicalCommit, result.reconciled === true)) return result;
         const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, result);
         await publishSessionChanged(sessionId, {
           operation: "updated",
