@@ -273,10 +273,11 @@ function createAssignmentOperations({
     assignment.reviewerConversationId ||= `review-${randomUUID()}`;
     await persist(state);
     try {
-      await execute(context, assignment, "vibe64.terminals.temporary-conversation.create", {
+      // The review is the session's AI task; it waits for Colleague's first request.
+      await execute(context, assignment, "vibe64.ai-tasks.start", {
         sessionId: assignment.sessionId,
-        conversationId: assignment.reviewerConversationId,
-        presentation: { title: "Colleague review" }
+        kind: "colleague-review",
+        taskId: assignment.reviewerConversationId
       });
       assignment.reviewCreated = true;
     } catch (error) {
@@ -492,7 +493,22 @@ function createAssignmentOperations({
       state.record.observations = state.record.observations.filter((item) => item.assignmentId !== assignment.assignmentId);
     }
     await persist(state);
+    if (assignment.reviewCreated && ["ready", "cancelled"].includes(input.status)) await endReview(context, assignment, input.status);
     return { ok: true, assignment: assignmentDetail(assignment) };
+  }
+
+  /**
+   * The assignment ended, so its review task does too: Finish when the work is ready, Cancel otherwise or when the
+   * review still waits on something, so it never holds the session's one AI task.
+   */
+  async function endReview(context, assignment, status) {
+    const target = { sessionId: assignment.sessionId, taskId: assignment.reviewerConversationId };
+    try {
+      const finished = status === "ready" ? await execute(context, assignment, "vibe64.ai-tasks.finish", target) : null;
+      if (!["done", "not_done"].includes(finished?.task?.phase)) await execute(context, assignment, "vibe64.ai-tasks.cancel", target);
+    } catch {
+      // A person already closed the review: the assignment's outcome stands either way.
+    }
   }
 
   return Object.freeze({

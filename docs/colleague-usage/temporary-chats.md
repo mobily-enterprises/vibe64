@@ -1,18 +1,10 @@
 # Choose the AI for a temporary chat
 
-Open **Temporary AI** from the session toolbar, or from **Session actions** in
-a chat too narrow for it. If the session already has temporary chats, it shows
-them and creates nothing; it starts a new chat only when there are none. Just
-after a session opens, it waits for the saved chats to load before deciding. If
-they cannot be loaded, it shows the error and **Try again** instead of starting
-one. To add another chat, select **New temporary AI task** (the plus beside the
-tabs). Select the temporary chat you want to change. Its **Chat mode** icon is
+**New AI task** in the session header has replaced **Temporary AI**: a request of
+your own now runs in the AI task window ([Fix a problem with AI in the AI task
+window](ai-tasks.md)). Temporary chats saved before this change stay where they are
+until the upgrade that removes them. Inside a task's **Chat**, the **Chat mode** icon is
 inside the message box.
-
-In **New temporary chat**, **Cancel** returns directly to Main when starting the
-first chat. If another temporary or host conversation was selected, it stays
-selected with its draft intact. Dismissing the dialog has the same effect; no
-chat is created and no message is sent. This applies on desktop and narrow screens.
 
 Ordinary temporary chats offer **Fix it with AI**, **Custom**, **Senior** and
 **Junior**; a team member's offer **Fix it with AI** and **Custom**. **Fix it with

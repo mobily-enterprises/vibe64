@@ -466,14 +466,8 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_CREATE_TEMPORARY_CONVERSATION,
       input: temporaryConversationCreateActionInputValidator,
-      extensions: {
-        assistant: temporaryConversationTool(
-          "Create a separate temporary conversation in a session. " +
-            TEMPORARY_ROUTING +
-            " Omitted, the owner's chat follows Main chat's mode (Auto becomes Senior) and a team member's uses fix. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser. Only when requested, includeRecentChatContext=true captures up to forty visible Main messages as independent initial context."
-        ),
-        vibe64: PROJECT_OPERATION
-      },
+      // AI tasks own these conversations: Colleague starts and closes them as AI tasks.
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.createTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({
@@ -516,12 +510,8 @@ function createTerminalActions({ terminals }) {
       ...VIBE64_COMMAND,
       id: ACTION_DELETE_TEMPORARY_CONVERSATION,
       input: temporaryConversationInputValidator,
-      extensions: {
-        assistant: temporaryConversationTool(
-          "Explicitly close this temporary conversation and remove its saved chat and native provider histories. Use only when the user requests closing or removing it."
-        ),
-        vibe64: PROJECT_OPERATION
-      },
+      // AI tasks own these conversations: Colleague starts and closes them as AI tasks.
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.deleteTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({

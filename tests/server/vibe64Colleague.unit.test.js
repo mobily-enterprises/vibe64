@@ -23,6 +23,7 @@ import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-coll
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
+import { createAiTaskActions } from "../../packages/vibe64-ai-tasks/src/server/aiTaskActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { __testables as codexAppServerHelperThreadsTestables } from "@local/vibe64-runtime/server/codexAppServerHelperThreads";
@@ -66,6 +67,24 @@ function modelStream() {
     write(delta, reason = null) { if (!settled) controller.enqueue(new TextEncoder().encode(modelFrame(delta, reason))); },
     finish
   };
+}
+
+/** The AI task actions an assignment's review uses, over the fake terminals: a review is a temporary conversation. */
+function reviewTaskActions(terminals, observations) {
+  const ended = (taskId, phase) => {
+    (observations.reviewEnded ||= []).push({ taskId, phase });
+    return { ok: true, task: { id: taskId, phase } };
+  };
+  const aiTasks = {
+    async start(sessionId, input) {
+      observations.createdReview = { sessionId, input };
+      await terminals.createTemporaryConversation(sessionId, { conversationId: input.taskId, presentation: { title: "Colleague review" } });
+      return { ok: true, task: { id: input.taskId, kind: input.kind, phase: "needs_you", reason: "your_turn" } };
+    },
+    finish: async (_sessionId, input) => ended(input.taskId, "done"),
+    cancel: async (_sessionId, input) => ended(input.taskId, "not_done")
+  };
+  return createAiTaskActions({ aiTasks }).filter(({ id }) => ["vibe64.ai-tasks.start", "vibe64.ai-tasks.finish", "vibe64.ai-tasks.cancel"].includes(id));
 }
 
 async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [], resolveName = nameColleague } = {}) {
@@ -123,7 +142,6 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     },
     async readTemporaryConversation(_sessionId, input) { observations.reads += 1; return structuredClone(observations.conversations[input.conversationId] || observations.target); },
     async createTemporaryConversation(sessionId, input) {
-      observations.createdReview = { sessionId, input };
       observations.conversations[input.conversationId] ||= { ok: true, conversationId: input.conversationId, status: "completed", runId: "", messages: [] };
       return structuredClone(observations.conversations[input.conversationId]);
     },
@@ -282,7 +300,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   });
   const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
   if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => ["vibe64.terminals.temporary-conversation.read", "vibe64.terminals.outputs.read"].includes(id) ||
-    (assigning && ["vibe64.terminals.temporary-conversation.create", "vibe64.terminals.temporary-conversation.turn.start"].includes(id))), ...createSessionActions({ sessions: withMainChatOperations({
+    (assigning && id === "vibe64.terminals.temporary-conversation.turn.start")), ...(assigning ? reviewTaskActions(terminals, observations) : []), ...createSessionActions({ sessions: withMainChatOperations({
     async inspectSession() { observations.reads += 1; return structuredClone(observations.session); },
     async readSessionConversationLog() { return { ok: true, conversationLog: structuredClone(observations.log) }; },
     async sendAgentMessage(sessionId, input) {
@@ -687,7 +705,8 @@ test("assignment retains the real request, follows a reply into same-session rev
   assert.equal(result.status, "ready", result.error);
   const reviewer = result.assignments[0].reviewerConversationId;
   assert.ok(reviewer.startsWith("review-"));
-  assert.equal(f.observations.createdReview.sessionId, "session-1");
+  const { sessionId: reviewSession, input: { kind: reviewKind, taskId: reviewTask } } = f.observations.createdReview;
+  assert.deepEqual([reviewSession, reviewKind, reviewTask], ["session-1", "colleague-review", reviewer]);
   assert.equal(f.observations.sent[1].conversationId, reviewer);
   const prompt = f.observations.starts[3].data;
   assert.equal(prompt.autonomous, true);
@@ -697,6 +716,7 @@ test("assignment retains the real request, follows a reply into same-session rev
   result = await finishAssignedTurn(f, reviewer, "Reviewed reset and reload persistence; both have passing checks, no defects found.");
   assert.equal(result.status, "ready", result.error);
   assert.equal(result.assignments[0].status, "ready");
+  assert.deepEqual(f.observations.reviewEnded, [{ taskId: reviewer, phase: "done" }], "the finished assignment finishes its review task");
   assert.equal(result.assignments[0].turnsUsed, 2);
   assert.equal(f.observations.sent.length, 2);
   assert.equal(result.messages.at(-1).role, "assistant");

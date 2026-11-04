@@ -229,11 +229,10 @@ the server reads the current diagnostics and builds the same request itself, and
 the task's check re-reads this inspection until it no longer needs setup.
 Colleague reads the same `vibe64.project.onboarding.read` action for setup state,
 bounded diagnostics, compact available request kinds and configured starter
-identities. An ordinary explanatory read omits the potentially large delegated
-request body. After direct authorization, `includeSetupRequests` returns the
-exact same request as the UI; the action also accepts a purpose for preparing an
-adopt/create request. Reading never starts an agent. Colleague delegates an agreed request through the existing Junior
-temporary-conversation actions, then rereads setup after completion. Starter
+identities; the action also accepts a purpose, which offers adopt. Reading never
+starts an agent. After direct authorization, Colleague starts the agreed request as
+the same `project-setup` AI task the UI starts, with its mode and purpose, and the
+task's own check rereads setup when the AI finishes. Starter
 selection uses the same `vibe64.project.templates.apply` action and source locks.
 The tool pages starters ten at a time and excludes repository locations and
 environment values. Application readiness still requires inspecting its outputs;

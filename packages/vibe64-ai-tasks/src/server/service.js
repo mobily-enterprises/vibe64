@@ -104,14 +104,17 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
 
   /**
    * Opens this problem's task. The same problem reopens the open task; another open task refuses
-   * it; one that has ended and only waits for Close is closed first.
+   * it; one that has ended and only waits for Close is closed first. A caller that names the task, as
+   * Colleague does so a retry is safe, gets that task back while it exists.
    * @param {string} sessionId
-   * @param {{ kind: string, input?: object, vibe64User?: object | null }} request
+   * @param {{ kind: string, input?: object, taskId?: string, vibe64User?: object | null }} request
    */
-  async function start(sessionId, { kind: kindId, input = {}, vibe64User = null }) {
+  async function start(sessionId, { kind: kindId, input = {}, taskId: requestedId = "", vibe64User = null }) {
     const kind = kinds[kindId];
     if (!kind) throw new AppError(400, "Vibe64 has no such AI task.", { code: "vibe64_ai_task_kind_unknown" });
     const records = await taskRecords(sessionId);
+    const named = requestedId && records.find(record => record.conversationId === requestedId);
+    if (named) return { ok: true, task: presentAiTask(named) };
     const open = records.find(record => !aiTaskEnded(record.task));
     const runtime = await project.createRuntimeWithoutSource();
     const problem = await kind.problem({ runtime, sessionId }, input).catch((error) => {
@@ -123,7 +126,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
       throw openTaskRefusal(open);
     }
     for (const ended of records) await closeEnded(sessionId, ended, vibe64User);
-    const taskId = randomUUID();
+    const taskId = requestedId || randomUUID();
     const task = createAiTask({
       kind,
       problem,
@@ -133,6 +136,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
       sendId: `message_${randomUUID()}`
     });
     await terminals.createTemporaryConversation(sessionId, {
+      ...problem.conversation,
       conversationId: taskId,
       presentation: { title: task.title },
       vibe64User

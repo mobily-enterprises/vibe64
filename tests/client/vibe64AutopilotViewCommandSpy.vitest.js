@@ -1007,7 +1007,7 @@ describe("Vibe64 direct session view", () => {
     const temporaryAiFixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
     const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
-    expect(component).toContain("Open temporary AI");
+    expect(component).toContain('aria-label="New AI task"');
     expect(temporaryAiFixAction).toContain("Fix it with AI");
     expect(component).toContain("<Vibe64TemporaryAiWorkspace");
     expect(temporaryAi).toContain("grid-row: 3 / -1");

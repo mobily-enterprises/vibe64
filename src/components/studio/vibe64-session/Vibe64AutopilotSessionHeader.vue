@@ -65,25 +65,22 @@
     </v-chip>
     <!-- After Save, actions keep the header in priority order; the lowest move into Session actions first. -->
     <div class="studio-autopilot__header-actions">
-      <v-badge
-        v-if="headerActions.inline.includes('temporary-ai')"
-        color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="4" offset-y="4"
-      >
-        <v-btn
-          :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
-          class="studio-autopilot__header-action"
-          data-vibe64-temporary-ai-action
-          data-vibe64-header-action="temporary-ai"
-          :disabled="!sessionId || props.sessionSelectionArchived"
-          height="var(--session-action-size, 36px)"
-          :icon="mdiIncognito"
-          :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
-          type="button"
-          variant="text"
-          width="var(--session-action-size, 36px)"
-          @click="openTemporaryAi"
-        />
-      </v-badge>
+      <v-btn
+        v-if="headerActions.inline.includes('new-ai-task')"
+        ref="newAiTaskButton"
+        aria-label="New AI task"
+        class="studio-autopilot__header-action"
+        data-vibe64-new-ai-task-action
+        data-vibe64-header-action="new-ai-task"
+        :disabled="!sessionId || props.sessionSelectionArchived"
+        height="var(--session-action-size, 36px)"
+        :icon="mdiRobotOutline"
+        title="Ask the AI for something in its own window"
+        type="button"
+        variant="text"
+        width="var(--session-action-size, 36px)"
+        @click="openNewAiTask"
+      />
       <v-badge
         v-if="headerActions.inline.includes('renew')"
         :color="sessionRenewalActionPresentation.color || 'primary'"
@@ -168,20 +165,15 @@
         </template>
         <v-list aria-label="Session actions" density="compact" min-width="17rem">
           <v-list-item
-            v-if="headerActions.overflow.includes('temporary-ai')"
+            v-if="headerActions.overflow.includes('new-ai-task')"
             class="studio-autopilot__session-action-item"
-            data-vibe64-temporary-ai-action
+            data-vibe64-new-ai-task-action
             :disabled="!sessionId || props.sessionSelectionArchived"
-            :subtitle="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation'"
-            title="Temporary AI"
-            @click="openTemporaryAi"
-          >
-            <template #prepend>
-              <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages">
-                <v-icon :icon="mdiIncognito" />
-              </v-badge>
-            </template>
-          </v-list-item>
+            :prepend-icon="mdiRobotOutline"
+            subtitle="Ask the AI for something in its own window"
+            title="New AI task"
+            @click="openNewAiTask"
+          />
           <v-list-item
             v-if="headerActions.overflow.includes('renew')"
             class="studio-autopilot__session-action-item"
@@ -229,6 +221,9 @@
         </v-list>
       </v-menu>
     </div>
+    <Vibe64NewAiTaskDialog
+      v-model:open="newAiTaskOpen" :main-has-messages="chatTurns.length > 0" :opener="newAiTaskOpener"
+    />
   </header>
 </template>
 
@@ -239,13 +234,14 @@ import {
   mdiClockOutline,
   mdiContentSaveOutline,
   mdiDotsVertical,
-  mdiIncognito,
+  mdiRobotOutline,
   mdiSourceBranch,
   mdiSourceBranchSync,
   mdiSourceCommit,
   mdiSourcePull,
   mdiWrenchOutline
 } from "@mdi/js";
+import Vibe64NewAiTaskDialog from "./Vibe64NewAiTaskDialog.vue";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";
@@ -260,7 +256,7 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  checkTemporaryAiUpdate, connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
+  chatTurns, checkTemporaryAiUpdate, connectedUpdateActionVisible, createPullRequestOpen, emit, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,
   retryWorkspaceSetup, revealApprovals, saveConnectedFirst, saveWorkActivityLabel, saveWorkDisabled,
   saveWorkError, saveWorkHeaderAriaLabel, saveWorkHeaderVisible, saveWorkOperationActive,
@@ -279,7 +275,6 @@ const sessionRenewalActionPresentation = computed(() => (
   }
 ));
 const sessionActionsTrigger = ref(null);
-const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
 // Session names get the header's room first, then Save, then these actions in
 // priority order; whatever does not fit moves into Session actions.
 const sessionHeader = ref(null);
@@ -305,7 +300,7 @@ watch(sessionHeader, (header, _previous, onCleanup) => {
   onCleanup(() => observer.disconnect());
 });
 const headerActionsAvailable = computed(() => [
-  "temporary-ai",
+  "new-ai-task",
   props.sessionRenewal?.visible && "renew",
   props.session?.sourceReady && !props.sessionSelectionArchived && "pin",
   githubProject.value && "pull-request",
@@ -320,12 +315,10 @@ const headerActions = computed(() => {
 });
 const sessionActionsMenuVisible = computed(() => headerActions.value.overflow.length > 0 || connectedUpdateActionVisible.value);
 const sessionActionsAttention = computed(() =>
-  (headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention === true) ||
-  (headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value));
+  headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention === true);
 const sessionActionsLabel = computed(() => [
   "Session actions",
-  headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : "",
-  headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value ? "Unread temporary AI messages" : ""
+  headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""
 ].filter(Boolean).join(": "));
 const sessionArchiveDisabled = computed(() => Boolean(
   props.sessionSelectionArchived ||
@@ -340,12 +333,16 @@ function showRepositoryProblem() {
   emit("chat-attention");
 }
 
-function openTemporaryAi() {
-  if (!sessionId.value || props.sessionSelectionArchived) {
-    return false;
-  }
-  temporaryAiWorkspace.value?.showWorkspace?.();
-  return true;
+// New AI task: the form, then the AI task window. Focus comes back to the header, or to Session actions when
+// the action sits in that menu.
+const newAiTaskOpen = ref(false);
+const newAiTaskButton = ref(null);
+function openNewAiTask() {
+  if (!sessionId.value || props.sessionSelectionArchived) return;
+  newAiTaskOpen.value = true;
+}
+function newAiTaskOpener() {
+  return newAiTaskButton.value?.$el || sessionActionsTrigger.value?.$el || null;
 }
 
 const saveWorkChecking = ref(false);

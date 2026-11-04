@@ -5,8 +5,10 @@ works on it, the proof that it worked, and an outcome. People find it in one
 window that presents the problem and its solution, or the lack of one, together.
 A task ends **Done** or **Not done**. Done is proved, never assumed; Not done is
 decided by a person. Update, Save, workspace preparation, preview sign-in, incoming
-merge, project setup and the Data overview have moved to AI tasks so far. Other repairs, and repairs recorded before this change, stay in
-[temporary assistance](temporary-assistance.md) until they move.
+merge, project setup and the Data overview have moved to AI tasks so far, and so have
+the person's own requests (**New AI task**) and Colleague's requests and reviews.
+Temporary chats recorded before this change stay in
+[temporary assistance](temporary-assistance.md) until the upgrade that removes them.
 
 ## The server owns a task
 
@@ -43,12 +45,20 @@ inspection; one kind covers repair, adopt, inspect and create, so its problem na
 the task (`title`, `noun`, `opening`). The Data overview's check reads the overview
 back through the database service: present, valid against the refreshed schema and,
 for a whole or new-tables review, with no table unreviewed. A database that can't be
-read is not the AI's to repair. Input is untrusted text: a check hands it
+read is not the AI's to repair. A request kind (`free` for New AI task, `colleague`,
+`colleague-review`) has nothing Vibe64 can prove, so it is checked by a person: its
+turns send no result schema, each ended turn stops at `needs_you(your_turn)`, and
+Finish ends it Done. It follows the starter's chat mode (`routing: "inherit"`) and can
+copy recent Main messages into its conversation; both choices come with the request
+(`problem.conversation`). A kind with no opening message starts at
+`needs_you(your_turn)`: a Colleague review waits for Colleague's first request.
+Input is untrusted text: a check hands it
 back to its owner, which validates it again. Any other failed check goes
 back to the same conversation up to three times.
 
 One task at a time runs in a session, whatever its kind and whoever started it.
-Starting the same problem reopens the open task; starting another is refused. A task
+Starting the same problem reopens the open task; starting another is refused. A
+caller may name the task (`taskId`), so Colleague's retry finds the same task. A task
 that ended and waits for Close doesn't block: starting a new one closes it.
 Repository operations refuse to start during a task that changes the repository,
 apart from the task's own check. The session's Update, Save and Prepare actions,
@@ -104,3 +114,11 @@ else closes hears how the task ended.
 Chat reuses the temporary conversation's delivery, draft and attachment code through
 an ownership filter. A record with `task` belongs to the window and never appears as a
 temporary chat; a record without one belongs to the temporary workspace.
+
+The session header's **New AI task** opens a small form, then the window. A refused
+start keeps the form open with what the person typed. Colleague reaches tasks through
+the task actions (`list`, `read`, `start`, `cancel`, `finish`, `close`), which return a
+bounded summary of each task; temporary conversations are no longer created or closed
+as Colleague tools. Its review of an assignment is a `colleague-review` task named by
+the assignment, finished when the work is ready and cancelled otherwise. Colleague's
+"open this conversation" opens a task in its window.

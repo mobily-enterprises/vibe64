@@ -7,6 +7,8 @@
  * @property {string} [title] names this task when its kind covers requests that read differently
  * @property {"fix"|"task"} [noun] the same, for Cancel's label
  * @property {string} [opening] the same, for the first message the person sees
+ * @property {{ includeRecentChatContext?: boolean, assistantRouting?: object }} [conversation] how the task's
+ *   conversation starts, for a kind that follows the starter's choices
  */
 
 /**

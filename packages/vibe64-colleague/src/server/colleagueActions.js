@@ -271,7 +271,7 @@ function createColleagueActions({
       },
       extensions: {
         assistant: {
-          description: "Retain a user-requested implementation assignment before sending work. Use the actual current user messageId, exact project/session and optional temporary implementer conversationId. Omit conversationId for Main. Resolve the agent using existing routing; do not require the user to name Senior/Junior. Capture the original acceptance criteria. Default allowance is eight agent turns including implementation, plan approval and review; use another limit only when requested. Reuse assignmentId on retry. This records intent but does not send work. Ordinary questions or watches do not authorize creating assignments.",
+          description: "Retain a user-requested implementation assignment before sending work. Use the actual current user messageId, exact project/session and optional implementer conversationId, the id of a colleague AI task. Omit conversationId for Main, which leaves the session's one AI task free for review. Resolve the agent using existing routing; do not require the user to name Senior/Junior. Capture the original acceptance criteria. Default allowance is eight agent turns including implementation, plan approval and review; use another limit only when requested. Reuse assignmentId on retry. This records intent but does not send work. Ordinary questions or watches do not authorize creating assignments.",
           output: assignmentOutput
         },
         vibe64: PROJECT_OPERATION
@@ -332,7 +332,7 @@ function createColleagueActions({
       input: { schema: createSchema({ assignmentId: clientId }), mode: "create" },
       extensions: {
         assistant: {
-          description: "Create or retrieve the assignment's temporary review conversation in the SAME session and worktree after the implementer answers. Uses existing configured routing. This does not send a review request; use assignment.message.send with recipient reviewer, original criteria and a request to review without editing. Separate sessions do not share unsaved source.",
+          description: "Create or retrieve the assignment's review AI task in the SAME session and worktree after the implementer answers. Uses existing configured routing. It is the session's one AI task until the assignment is ready or cancelled, which ends it. This does not send a review request; use assignment.message.send with recipient reviewer, original criteria and a request to review without editing. Separate sessions do not share unsaved source.",
           output: assignmentOutput
         },
         vibe64: WORKSPACE_OPERATION

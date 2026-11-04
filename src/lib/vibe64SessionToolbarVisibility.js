@@ -25,7 +25,7 @@ function visibleVibe64ToolbarSessions({
 // listed: it always stays in the header. The last action moves into Session
 // actions first when the header runs out of room.
 const SESSION_HEADER_ACTION_PRIORITY = Object.freeze([
-  "temporary-ai",
+  "new-ai-task",
   "renew",
   "pin",
   "pull-request",

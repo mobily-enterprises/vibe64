@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { DASHBOARD_PATH } from "./support/base-shell-data";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import {
-  endTurn, expectPhase, openFix, openStarted, quietWorld, saveTaskWorld, taskWindow, workspaceSetupWorld
+  endTurn, expectPhase, openFix, openStarted, quietWorld, saveTaskWorld, taskIdOf, taskWindow, workspaceSetupWorld
 } from "./support/ai-task-world";
 
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
@@ -126,5 +127,32 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
         await expect(window).toHaveCount(0);
       });
     }
+
+    test("free: New AI task starts the person's request, and the person's Finish ends it Done", async ({ page }) => {
+      await quietWorld(page, shared.server);
+      await page.goto(`${shared.server.url}${DASHBOARD_PATH}/repository`);
+      if (!(await page.locator("[data-vibe64-header-action=new-ai-task]").isVisible())) {
+        await page.getByRole("button", { name: /^Session actions(?::|$)/u }).click();
+      }
+      await page.locator("[data-vibe64-new-ai-task-action]:visible").first().click();
+      const form = page.locator("[data-vibe64-new-ai-task]");
+      await form.getByLabel("What should the AI do?").fill("Tidy the README.");
+      await form.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(form).toHaveCount(0);
+      await expectPhase(page, "working");
+      const window = taskWindow(page);
+      await expect(window.getByText("Tidy the README.").first()).toBeVisible();
+      // A person's own request has no schema: the AI's turn just ends, and the person decides.
+      const { captured } = shared.server.temporary!;
+      await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
+      await shared.server.temporary!.endNativeTurn(taskIdOf(page), { text: "Tidied it.", message: "Tidied it." });
+      await shared.server.aiTasks.settled();
+      await expectPhase(page, "needs_you", "your_turn");
+      await window.getByRole("button", { name: "Finish", exact: true }).click();
+      await expectPhase(page, "done");
+      await expect(window.getByText("You finished this task.")).toBeVisible();
+      await window.locator("[data-vibe64-ai-task-close]").click();
+      await expect(window).toHaveCount(0);
+    });
   });
 }

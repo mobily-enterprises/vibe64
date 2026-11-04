@@ -2,6 +2,7 @@ import { createDatabaseOverviewKind } from "./kinds/databaseOverview.js";
 import { createIncomingMergeKind } from "./kinds/incomingMerge.js";
 import { createPreviewIdentityKind } from "./kinds/previewIdentity.js";
 import { createProjectSetupKind } from "./kinds/projectSetup.js";
+import { createRequestKinds } from "./kinds/request.js";
 import { createSaveKind } from "./kinds/save.js";
 import { createUpdateKind } from "./kinds/update.js";
 import { createWorkspaceSetupKind } from "./kinds/workspaceSetup.js";
@@ -29,7 +30,8 @@ function createAiTaskKinds({ databaseTools, project, sessions, terminals }) {
     createPreviewIdentityKind({ terminals }),
     createIncomingMergeKind({ sessions }),
     createProjectSetupKind({ project }),
-    createDatabaseOverviewKind({ databaseTools })
+    createDatabaseOverviewKind({ databaseTools }),
+    ...createRequestKinds()
   ];
   return Object.freeze(Object.fromEntries(kinds.map(kind => [kind.id, kind])));
 }

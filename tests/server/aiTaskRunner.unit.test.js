@@ -9,6 +9,7 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { createAiTaskActions } from "../../packages/vibe64-ai-tasks/src/server/aiTaskActions.js";
 import { createAiTasksService } from "../../packages/vibe64-ai-tasks/src/server/service.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -879,6 +880,65 @@ test("Close removes the task with its conversation, and repeating it is harmless
   assert.deepEqual(await running.aiTasks.close(SESSION, { taskId: task.id, vibe64User: OWNER }), { ok: true, closed: true });
   assert.deepEqual((await running.aiTasks.list(SESSION)).tasks, []);
 }));
+
+test("New AI task sends the person's request unstructured, stops at your turn and ends when the person finishes it", () => withFixture(async (f) => {
+  const running = f.boot();
+  await assert.rejects(f.start(running.aiTasks, OWNER, "free", { message: "  " }), error => error.code === "vibe64_ai_task_message_missing");
+  const { task } = await f.start(running.aiTasks, OWNER, "free", { message: "Tidy the README.\nKeep the badges." });
+  assert.deepEqual([task.title, task.noun, task.problem.summary], ["AI task", "task", "Tidy the README."]);
+  await f.quiet(running.aiTasks);
+  assert.equal(f.native.turns[0].message, "Tidy the README.\nKeep the badges.");
+  assert.equal(f.native.turns[0].schema, undefined);
+  await f.finishTurn(running);
+  const waiting = await f.task(task.id);
+  assert.deepEqual([waiting.phase, waiting.reason], ["needs_you", "your_turn"]);
+  await running.aiTasks.finish(SESSION, { taskId: task.id, vibe64User: OWNER });
+  const saved = await f.task(task.id);
+  assert.deepEqual([saved.phase, saved.message], ["done", "You finished this task."]);
+}, { updateFailure: null }));
+
+test("a request follows the starter's chat mode and copies recent Main messages only when asked", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "colleague", {
+    message: "Summarise the open issues.", title: "Issue summary", includeRecentChatContext: true, assistantRouting: { mode: "junior" }
+  });
+  assert.equal(task.title, "Issue summary");
+  const record = await f.store.readSessionConversation(SESSION, task.id);
+  assert.equal(JSON.parse(record.routingMetadata.assistant_routing).mode, "junior");
+  assert.ok(record.recentChatContext);
+}, { updateFailure: null }));
+
+test("a Colleague review waits for its first request, a retry finds the same task, and Colleague's message starts it", () => withFixture(async (f) => {
+  const running = f.boot();
+  const start = () => running.aiTasks.start(SESSION, { kind: "colleague-review", taskId: "review-1", vibe64User: OWNER });
+  const { task } = await start();
+  assert.equal(task.id, "review-1");
+  assert.deepEqual([task.phase, task.reason, task.title], ["needs_you", "your_turn", "Colleague review"]);
+  await f.quiet(running.aiTasks);
+  assert.equal(f.native.turns.length, 0);
+  assert.equal((await start()).task.id, "review-1");
+  await assert.rejects(f.start(running.aiTasks, OWNER, "free", { message: "Something else." }), error => error.code === "vibe64_ai_task_open");
+  await running.conversations.startTemporaryConversationTurn(SESSION, {
+    conversationId: "review-1", messageId: "colleague-1", message: "Review the change without editing.", vibe64User: OWNER
+  }, { vibe64User: OWNER });
+  await f.quiet(running.aiTasks);
+  assert.equal((await f.task("review-1")).phase, "working");
+  await f.finishTurn(running);
+  assert.equal((await f.task("review-1")).reason, "your_turn");
+}, { updateFailure: null }));
+
+test("Colleague can list, read, start, cancel, finish and close tasks, and reads only a bounded summary", () => {
+  const tools = new Map(createAiTaskActions({ aiTasks: {} }).filter(action => action.extensions.assistant)
+    .map(action => [action.id.replace("vibe64.ai-tasks.", ""), action.extensions.assistant]));
+  assert.deepEqual([...tools.keys()], ["list", "read", "start", "cancel", "finish", "close"]);
+  const task = { id: "t1", kind: "free", title: "AI task", phase: "done", reason: "", message: "m".repeat(5000),
+    report: "r", problem: { key: "secret key", summary: "Tidy", details: "d" }, log: [{ text: "x" }], startedBy: { id: "owner" } };
+  const shown = tools.get("read").transformResult({ ok: true, task });
+  assert.deepEqual(Object.keys(shown.task), ["id", "kind", "title", "phase", "reason", "summary", "message", "report"]);
+  assert.equal(shown.task.message.length, 2000);
+  assert.equal(tools.get("list").transformResult({ ok: true, tasks: Array(12).fill(task) }).tasks.length, 10);
+  assert.match(tools.get("start").description, /one AI task at a time/);
+});
 
 async function settle() {
   await new Promise(resolve => setTimeout(resolve, 50));

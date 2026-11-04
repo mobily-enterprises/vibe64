@@ -57,12 +57,14 @@ function useAiTaskHost({
    * @param {string} kind
    * @param {HTMLElement | null} opener what focus returns to; a request from a dialog that closed has none
    * @param {object} input what only the page knows about the problem, such as a failed sign-in
+   * @returns {Promise<object | null>} the task, or null when it was refused, so a form can stay open
    */
   async function start(kind, opener, input) {
     const task = await tasks.start(kind, input);
     if (task) await nextTick();
     if (task) taskWindow.show(opener);
     else toast.value = { text: tasks.error.value, action: false };
+    return task;
   }
 
   async function close() {

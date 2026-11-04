@@ -19,7 +19,8 @@ const PERSON_FINISHED_MESSAGE = "You finished this task.";
 const ARCHIVED_MESSAGE = "The session was archived before this finished.";
 
 /**
- * A new task, still `starting`, with its opening message owed to the AI.
+ * A new task, still `starting`, with its opening message owed to the AI. A kind with no opening message, such as
+ * a Colleague review that waits for its first request, starts at `needs_you(your_turn)` instead.
  * @param {object} input
  * @param {AiTaskKind} input.kind
  * @param {import("./types.js").AiTaskProblem} input.problem
@@ -31,6 +32,7 @@ const ARCHIVED_MESSAGE = "The session was archived before this finished.";
  */
 function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
   const { check } = kind;
+  const brief = kind.brief(problem);
   return {
     kind: kind.id,
     title: problem.title || kind.title,
@@ -53,9 +55,9 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     doneMessage: kind.done,
     repository: kind.repository === true,
     revision: 0,
-    phase: PHASES.STARTING,
-    active: true,
-    reason: "",
+    phase: brief ? PHASES.STARTING : PHASES.NEEDS_YOU,
+    active: Boolean(brief),
+    reason: brief ? "" : REASONS.YOUR_TURN,
     message: "",
     waiting: false,
     problem,
@@ -65,8 +67,8 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     diagnostic: "",
     retryKeys: [],
     report: "",
-    pending: { effect: "send", id: sendId, message: kind.brief(problem), display: problem.opening || kind.opening },
-    turnMessageId: sendId,
+    pending: brief ? { effect: "send", id: sendId, message: brief, display: problem.opening || kind.opening } : null,
+    turnMessageId: brief ? sendId : "",
     log: [{ at, text: "Vibe64 started this task." }],
     endedBy: null,
     endedAt: ""

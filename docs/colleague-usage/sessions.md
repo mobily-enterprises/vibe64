@@ -110,11 +110,11 @@ the unknown session. Switching projects always starts the next project from its
 own sessions, never the previous project's.
 
 The session header gives its room to session names first, then **Save**, which
-never leaves the header. The other actions follow in priority order: **Temporary
-AI**, **Renew session**, **Pin session**, **Pull request** and **Prepare
+never leaves the header. The other actions follow in priority order: **New AI
+task**, **Renew session**, **Pin session**, **Pull request** and **Prepare
 workspace**. When the pane is too narrow, the lowest-priority action moves into
 **Session actions** (three dots) first, so Prepare workspace goes first and
-Temporary AI last; widening the pane brings them back. All header actions use
+New AI task last; widening the pane brings them back. All header actions use
 small, light outline icons. Update uses a vertical line through a circle,
 distinct from the branching pull-request icon. Hover or focus a control to read
 its action label.
@@ -299,7 +299,7 @@ With Claude, **Reply ready · background task still running…** (Main) means
 Claude has posted its answer, but a command it started in the background is
 still running. The answer above is complete and readable. The turn stays active
 until that command finishes or times out, and Claude may then add a short
-follow-up reply after the answer; earlier replies stay visible. Temporary chat
+follow-up reply after the answer; earlier replies stay visible. An AI task's chat
 shows the same text. Press **Stop** if you do not need the background command.
 
 Colleague can explain these states. It should verify current session activity

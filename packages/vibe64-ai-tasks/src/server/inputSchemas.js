@@ -17,7 +17,8 @@ const taskId = { type: "string", noTrim: false, required: true, minLength: 1, ma
 const aiTaskSessionInput = validator({});
 const aiTaskStartInput = validator({
   kind: { type: "string", noTrim: false, required: true, minLength: 1, maxLength: 64 },
-  input: { type: "object", required: false, additionalProperties: true }
+  input: { type: "object", required: false, additionalProperties: true },
+  taskId: { ...taskId, required: false }
 });
 const aiTaskInput = validator({ taskId });
 const aiTaskCheckInput = validator({

@@ -187,14 +187,15 @@ test("Colleague reads a Main goal and closes a project on request, but never cha
 
 test("Colleague's temporary-chat tools offer every routing choice with the team-member and repair limits", () => {
   const definitions = new Map(createTerminalActions({ terminals: {} }).map(definition => [definition.id, definition]));
-  for (const operation of ["create", "update"]) {
-    const { description } = definitions.get(`vibe64.terminals.temporary-conversation.${operation}`).extensions.assistant;
-    for (const pattern of [/\bfix\b.*Fix it with AI/su, /custom.*override.*never invent/su, /Senior and Junior are the workspace owner's only/u, /Auto is Main chat only/u]) {
-      assert.match(description, pattern, operation);
-    }
+  const { description } = definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant;
+  for (const pattern of [/\bfix\b.*Fix it with AI/su, /custom.*override.*never invent/su, /Senior and Junior are the workspace owner's only/u, /Auto is Main chat only/u]) {
+    assert.match(description, pattern);
   }
-  assert.match(definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant.description, /repair chat.*only fix or custom/su);
-  assert.match(definitions.get("vibe64.terminals.temporary-conversation.create").extensions.assistant.description, /team member's uses fix/u);
+  assert.match(description, /repair chat.*only fix or custom/su);
+  // Colleague starts and closes these conversations as AI tasks.
+  for (const operation of ["create", "delete"]) {
+    assert.equal(definitions.get(`vibe64.terminals.temporary-conversation.${operation}`).extensions.assistant.exclude, true, operation);
+  }
 });
 
 test("output and attachment action downloads stream exact bytes and close their handles", async () => {

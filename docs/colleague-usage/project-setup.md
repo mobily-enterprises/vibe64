@@ -91,10 +91,12 @@ use **Show project** to see setup and **Show chat** to follow the conversation.
 
 Ask “What does this setup screen need?” for an explanation. Colleague can read
 onboarding state without preparing a large coding request, discuss the product,
-create an authorized first session, and send an explicitly requested inspection
-or setup to that session's coding agent. After you request the task or accept its
-offer, Colleague retrieves that exact setup request before sending it.
-It can follow the conversation and report the observed result. It does not inspect
+create an authorized first session, and start an explicitly requested inspection
+or setup there. After you request the task or accept its offer, Colleague starts it
+as the session's **Project setup** AI task, the same one **Set up project**,
+**Inspect it for me** or **Fix it with AI** would start, and Vibe64 inspects the
+project when the AI finishes ([Fix a problem with AI in the AI task window](ai-tasks.md)).
+It can follow the task and report the observed result. It does not inspect
 the repository itself. An explanation or offer starts no coding work; a direct
 request or accepted offer authorizes the specified task. Missing project access,
 assistant access or resources must be resolved through their existing setup flow.

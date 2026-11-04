@@ -40,7 +40,7 @@ Colleague retains the actual request, target, acceptance criteria and bounded
 turn allowance using its existing assignment controls. It sends implementation to
 the configured coding agent, waits for the original receipt/watch, and asks for
 actual changed-file, validation and relevant exercise/diagram evidence. It creates
-the existing temporary reviewer in that SAME session after implementation settles.
+the assignment's review AI task in that SAME session after implementation settles.
 The reviewer checks the existing source without editing; corrections return to
 the implementer and require another review of the latest work. Routine follow-up
 within the assignment is supported. New scope, extra turns or an unresolved

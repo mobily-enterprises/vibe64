@@ -1620,7 +1620,7 @@ test("@session-toolbar gives names and Save room first, then overflows the lowes
   const save = header.locator("[data-vibe64-guide=save]");
   const inline = () => header.locator("[data-vibe64-header-action]").evaluateAll((elements) =>
     elements.filter((element) => element.getClientRects().length > 0).map((element) => element.getAttribute("data-vibe64-header-action")));
-  const priority = ["temporary-ai", "renew", "pin", "pull-request", "prepare-workspace"];
+  const priority = ["new-ai-task", "renew", "pin", "pull-request", "prepare-workspace"];
   await expect(save).toBeVisible();
   await expect.poll(async () => (await inline()).length).toBeGreaterThan(1);
   await header.screenshot({ path: testInfo.outputPath("toolbar-roomy.png") });

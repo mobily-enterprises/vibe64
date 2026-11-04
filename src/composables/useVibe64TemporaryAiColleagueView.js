@@ -1,13 +1,16 @@
 import { inject, nextTick, onBeforeUnmount, watchEffect } from "vue";
+import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 import { VIBE64_COLLEAGUE_VIEW_KEY } from "@/lib/vibe64AssistantHost.js";
 
 /**
  * Tells Colleague which session view is selected and lets it open one of the
  * view's conversations, a file, or a lesson message. Removing the view
- * withdraws it and invalidates any open still in progress.
+ * withdraws it and invalidates any open still in progress. An AI task's conversation opens in its window; a
+ * session panel without an AI task host has none.
  */
 function useVibe64TemporaryAiColleagueView({ props, emit, temporary, hostConversation, selectionRevision }) {
   const colleagueView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+  const aiTasks = inject(VIBE64_AI_TASKS_KEY, null);
   const activeTask = temporary.activeTask;
   const selectedView = {
     get projectSlug() { return props.projectSlug; },
@@ -16,7 +19,10 @@ function useVibe64TemporaryAiColleagueView({ props, emit, temporary, hostConvers
     get selectionRevision() { return selectionRevision.value; },
     get hostConversationSelected() { return Boolean(hostConversation?.value?.selected); },
     get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
-    get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
+    get conversationId() {
+      if (aiTasks?.open && aiTasks.task) return aiTasks.task.id;
+      return this.temporarySelected ? activeTask.value?.conversationId || "" : "";
+    },
     // A Learning "Show me" for a file opens it in the ordinary Working Files view.
     openFile(path) { return typeof props.openFile === "function" && props.openFile(path) === true; },
     // A lesson beat's Do it for me sends its prompt to this session's Main chat.
@@ -24,9 +30,14 @@ function useVibe64TemporaryAiColleagueView({ props, emit, temporary, hostConvers
     async openConversation(conversationId, isCurrent = () => true) {
       if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
       if (!conversationId) {
+        if (aiTasks?.open) aiTasks.hide();
         hostConversation?.value?.close();
         temporary.closeWorkspace();
         emit("select-main-chat");
+        return;
+      }
+      if (aiTasks?.task?.id === conversationId) {
+        aiTasks.show(null);
         return;
       }
       const projectSlug = props.projectSlug;
