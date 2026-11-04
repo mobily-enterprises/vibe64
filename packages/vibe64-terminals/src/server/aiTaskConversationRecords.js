@@ -8,19 +8,19 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { sessionConversationKey } from "./assistantChangeover.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
-import { temporaryConversationNamespace } from "./temporaryConversationRules.js";
+import { aiTaskConversationNamespace } from "./aiTaskConversationRules.js";
 
 /** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**
- * A temporary chat's saved record: reading and saving it under the session mutation, its change
+ * An AI task chat's saved record: reading and saving it under the session mutation, its change
  * events, the context its assistant sees, its native bindings and the modes it offers.
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {PublishNativeConversation} dependencies.publishConversation
  */
-function createTemporaryConversationRecords({ sessionAgent, publishConversation }) {
+function createAiTaskConversationRecords({ sessionAgent, publishConversation }) {
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
     if (!record) {
@@ -82,7 +82,7 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
 
   function publish(ctx, conversationId, event) {
     const sessionId = ctx.session.sessionId;
-    return publishConversation({ sessionId, namespace: temporaryConversationNamespace(ctx.runtime, sessionId, conversationId), event });
+    return publishConversation({ sessionId, namespace: aiTaskConversationNamespace(ctx.runtime, sessionId, conversationId), event });
   }
 
   function selectedContext(ctx, record) {
@@ -155,5 +155,5 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
 }
 
 export {
-  createTemporaryConversationRecords
+  createAiTaskConversationRecords
 };

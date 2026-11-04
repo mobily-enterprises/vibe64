@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
-  ACTION_START_TEMPORARY_CONVERSATION_TURN,
-  ACTION_STOP_TEMPORARY_CONVERSATION,
-  ACTION_UPDATE_TEMPORARY_CONVERSATION
+  ACTION_START_AI_TASK_CONVERSATION_TURN,
+  ACTION_STOP_AI_TASK_CONVERSATION,
+  ACTION_UPDATE_AI_TASK_CONVERSATION
 } from "./terminalActions.js";
 import {
-  temporaryConversationTurnActionInputValidator,
-  temporaryConversationUpdateInputValidator
+  aiTaskConversationTurnActionInputValidator,
+  aiTaskConversationUpdateInputValidator
 } from "./inputSchemas.js";
 import {
   assistantRoutingPreferences,
@@ -18,7 +18,7 @@ import {
 import { assistantCancelledMessageIds } from "./assistantRouting.js";
 import {
   messageFields,
-  temporaryConversationNamespace,
+  aiTaskConversationNamespace,
   requireSuccess,
   routingRequest,
   attemptedChangeover,
@@ -26,7 +26,7 @@ import {
   conversationClosingRefusal,
   teamTemporaryModesRefusal,
   temporaryAutoModeRefusal
-} from "./temporaryConversationRules.js";
+} from "./aiTaskConversationRules.js";
 
 /** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -35,18 +35,18 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
-/** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
-/** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
+/** @typedef {import("./types.js").AiTaskConversationRecords} AiTaskConversationRecords */
+/** @typedef {import("./types.js").AiTaskConversationTurns} AiTaskConversationTurns */
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
-/** @typedef {ReturnType<typeof import("./temporaryConversationLifecycle.js").createTemporaryConversationLifecycle>} TemporaryConversationLifecycle */
+/** @typedef {ReturnType<typeof import("./aiTaskConversationLifecycle.js").createAiTaskConversationLifecycle>} AiTaskConversationLifecycle */
 
 /**
- * What a person does in a temporary chat: its browser binding and the commands it carries, sending
+ * What a person does in an AI task chat: its browser binding and the commands it carries, sending
  * and cancelling messages, checking a delivery, and changing its name, draft, mode or model.
  * @param {object} dependencies
- * @param {TemporaryConversationRecords} dependencies.chatRecords
- * @param {TemporaryConversationTurns} dependencies.chatTurns
- * @param {TemporaryConversationLifecycle} dependencies.chatLifecycle
+ * @param {AiTaskConversationRecords} dependencies.chatRecords
+ * @param {AiTaskConversationTurns} dependencies.chatTurns
+ * @param {AiTaskConversationLifecycle} dependencies.chatLifecycle
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {ActionCatalogue} dependencies.actions
@@ -56,7 +56,7 @@ import {
  * @param {AssistantRouting} dependencies.routing
  * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
-function createTemporaryConversationInteraction({
+function createAiTaskConversationInteraction({
   chatRecords,
   chatTurns,
   chatLifecycle,
@@ -69,13 +69,13 @@ function createTemporaryConversationInteraction({
   routing,
   conversationTurns
 }) {
-  const temporaryConversationDataSchema = createSchema(Object.fromEntries(messageFields.map(key =>
-    [key, temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions()[key]])));
-  const temporaryConversationSelectionSchema = createSchema(Object.fromEntries(["agentSettings", "assistantRouting"].map(key =>
-    [key, temporaryConversationUpdateInputValidator.schema.getFieldDefinitions()[key]])));
+  const aiTaskConversationDataSchema = createSchema(Object.fromEntries(messageFields.map(key =>
+    [key, aiTaskConversationTurnActionInputValidator.schema.getFieldDefinitions()[key]])));
+  const aiTaskConversationSelectionSchema = createSchema(Object.fromEntries(["agentSettings", "assistantRouting"].map(key =>
+    [key, aiTaskConversationUpdateInputValidator.schema.getFieldDefinitions()[key]])));
 
   async function conversationBinding(sessionId, openingContext) {
-    const conversationId = openingContext.temporaryConversationId;
+    const conversationId = openingContext.aiTaskConversationId;
     const record = await chatRecords.recordFor(openingContext, conversationId);
     const scope = { sessionId, conversationId };
     const { runtime } = openingContext;
@@ -95,10 +95,10 @@ function createTemporaryConversationInteraction({
     }
     return {
       sessionId,
-      namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
+      namespace: aiTaskConversationNamespace(runtime, sessionId, conversationId),
       engine: record.assistantSelection.engineId,
       async read(context, query = { limit: 12 }) {
-        const observed = requireSuccess(await chatLifecycle.readTemporaryConversation(sessionId, { conversationId }, {
+        const observed = requireSuccess(await chatLifecycle.readAiTaskConversation(sessionId, { conversationId }, {
           ...context,
           transcriptQuery: query
         }));
@@ -149,7 +149,7 @@ function createTemporaryConversationInteraction({
       },
       commands: {
         send(input, context) {
-          return execute(ACTION_START_TEMPORARY_CONVERSATION_TURN, {
+          return execute(ACTION_START_AI_TASK_CONVERSATION_TURN, {
             ...Object.fromEntries(messageFields.filter(key => Object.hasOwn(input.data || {}, key)).map(key => [key, input.data[key]])),
             messageId: input.messageId,
             message: input.text,
@@ -157,19 +157,19 @@ function createTemporaryConversationInteraction({
             ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
           }, context);
         },
-        cancel: (_input, context) => execute(ACTION_STOP_TEMPORARY_CONVERSATION, {}, context),
+        cancel: (_input, context) => execute(ACTION_STOP_AI_TASK_CONVERSATION, {}, context),
         select(input, context) {
           if (!input || Object.keys(input).some(key => !["agentSettings", "assistantRouting"].includes(key))) {
             throw new AppError(400, "Choose this conversation's declared mode or model.", { code: "conversation_input_invalid" });
           }
-          return execute(ACTION_UPDATE_TEMPORARY_CONVERSATION, input, context);
+          return execute(ACTION_UPDATE_AI_TASK_CONVERSATION, input, context);
         },
-        inspectDelivery: (input, context) => inspectTemporaryConversationDelivery(sessionId, { ...input, conversationId }, context)
+        inspectDelivery: (input, context) => inspectAiTaskConversationDelivery(sessionId, { ...input, conversationId }, context)
       }
     };
   }
 
-  async function inspectTemporaryConversationDelivery(sessionId, input, options = {}) {
+  async function inspectAiTaskConversationDelivery(sessionId, input, options = {}) {
     // A cancelled message has no other receipt.
     if (await routing.isCancelled(sessionId, input.messageId, { ...options, conversationId: input.conversationId })) {
       return { status: "cancelled", messageId: input.messageId };
@@ -193,7 +193,7 @@ function createTemporaryConversationInteraction({
     });
   }
 
-  async function updateTemporaryConversation(sessionId, input, options = {}) {
+  async function updateAiTaskConversation(sessionId, input, options = {}) {
     // Drafts and names save while the assistant works, without its write lock.
     const presentationOnly = input.presentation && Object.keys(input.presentation).length === 1 &&
       ["draft", "title"].includes(Object.keys(input.presentation)[0]) &&
@@ -210,7 +210,7 @@ function createTemporaryConversationInteraction({
       }
       await chatRecords.save(ctx, { conversationId: input.conversationId }, fields, { requireOpen: true });
       await publishSessionChanged(sessionId, {
-        reason: "temporary-conversation-renamed",
+        reason: "ai-task-conversation-renamed",
         payload: { conversationId: input.conversationId }
       });
       return { ok: true, title: fields.title };
@@ -313,7 +313,7 @@ function createTemporaryConversationInteraction({
     return result.value;
   }
 
-  async function startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
+  async function startAiTaskConversationTurn(sessionId, input = {}, options = {}) {
     const { conversationId, messageId } = input;
     await conversationTurns.starting(sessionId, { conversationId, messageId });
     try {
@@ -331,11 +331,11 @@ function createTemporaryConversationInteraction({
   /**
    * Cancel of one unsent or unconfirmed message in this chat; it always succeeds.
    */
-  function cancelTemporaryConversationMessage(sessionId, input = {}, options = {}) {
+  function cancelAiTaskConversationMessage(sessionId, input = {}, options = {}) {
     return routing.cancelMessage(sessionId, { messageId: input.messageId }, { ...options, conversationId: input.conversationId });
   }
 
-  function cancelTemporaryConversationRouting(sessionId, input = {}, options = {}) {
+  function cancelAiTaskConversationRouting(sessionId, input = {}, options = {}) {
     return routing.cancel(sessionId, { ...options, conversationId: input.conversationId, routingCleanup: true }, {
       waitForCleanup: true,
       expectedMessageId: input.messageId
@@ -343,17 +343,17 @@ function createTemporaryConversationInteraction({
   }
 
   return Object.freeze({
-    temporaryConversationDataSchema,
-    temporaryConversationSelectionSchema,
+    aiTaskConversationDataSchema,
+    aiTaskConversationSelectionSchema,
     conversationBinding,
-    inspectTemporaryConversationDelivery,
-    updateTemporaryConversation,
-    startTemporaryConversationTurn,
-    cancelTemporaryConversationMessage,
-    cancelTemporaryConversationRouting
+    inspectAiTaskConversationDelivery,
+    updateAiTaskConversation,
+    startAiTaskConversationTurn,
+    cancelAiTaskConversationMessage,
+    cancelAiTaskConversationRouting
   });
 }
 
 export {
-  createTemporaryConversationInteraction
+  createAiTaskConversationInteraction
 };

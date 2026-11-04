@@ -5,7 +5,7 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { Vibe64ConversationsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
-import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { mainConversationId, aiTaskConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -61,7 +61,7 @@ test("standalone Main and temporary conversations use the selected local project
     const retained = [];
     app.get("/:kind", async request => {
       const target = { projectSlug: request.query.project || slug, sessionId: "session-1", conversationId: "temporary-1" };
-      const id = request.params.kind === "main" ? mainConversationId(target) : temporaryConversationId(target);
+      const id = request.params.kind === "main" ? mainConversationId(target) : aiTaskConversationId(target);
       const conversation = await conversations.open({ id, context: { requestMeta: { request } } });
       retained.push(conversation);
       const release = await conversation.subscribe(() => {});
@@ -141,7 +141,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       return { ok: true, method };
     };
     const sessions = Object.fromEntries(["listSessions", "renameSession", "archiveSession", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog"].map((name) => [name, record(name)]));
-    const terminals = Object.fromEntries(["readSessionWorkPlan", "listTemporaryConversations", "createTemporaryConversation", "readTemporaryConversation", "startTemporaryConversationTurn", "stopTemporaryConversation", "deleteTemporaryConversation"].map((name) => [name, record(name)]));
+    const terminals = Object.fromEntries(["readSessionWorkPlan", "listAiTaskConversations", "createAiTaskConversation", "readAiTaskConversation", "startAiTaskConversationTurn", "stopAiTaskConversation", "deleteAiTaskConversation"].map((name) => [name, record(name)]));
     actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, {
@@ -164,10 +164,10 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       ["POST", "/sessions/:sessionId/archive", "vibe64.sessions.archive", {}, "archiveSession"],
       ["POST", "/sessions/:sessionId/workspace-setup/retry", "vibe64.sessions.workspace-setup.retry", {}, "retryWorkspaceSetup"],
       ["POST", "/sessions/:sessionId/preview-state", "vibe64.sessions.preview-state.broadcast", { projectSlug: slug, route: "/preview", originId: "browser" }, "broadcastSessionPreviewState"],
-      ["GET", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.list", {}, "listTemporaryConversations"],
-      ["GET", "/sessions/:sessionId/temporary-conversations/:conversationId", "vibe64.terminals.temporary-conversation.read", {}, "readTemporaryConversation"],
-      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", "vibe64.terminals.temporary-conversation.turn.start", { message: "What is happening?", messageId: "msg-1" }, "startTemporaryConversationTurn"],
-      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", "vibe64.terminals.temporary-conversation.stop", {}, "stopTemporaryConversation"]
+      ["GET", "/sessions/:sessionId/ai-task-conversations", "vibe64.terminals.ai-task-conversation.list", {}, "listAiTaskConversations"],
+      ["GET", "/sessions/:sessionId/ai-task-conversations/:conversationId", "vibe64.terminals.ai-task-conversation.read", {}, "readAiTaskConversation"],
+      ["POST", "/sessions/:sessionId/ai-task-conversations/:conversationId/turns", "vibe64.terminals.ai-task-conversation.turn.start", { message: "What is happening?", messageId: "msg-1" }, "startAiTaskConversationTurn"],
+      ["POST", "/sessions/:sessionId/ai-task-conversations/:conversationId/stop", "vibe64.terminals.ai-task-conversation.stop", {}, "stopAiTaskConversation"]
     ];
     for (const [method, suffix, actionId, body, serviceMethod] of cases) {
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
@@ -225,7 +225,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       allowed = true;
     }
     const count = calls.length;
-    await assert.rejects(actions.execute({ actionId: "vibe64.terminals.temporary-conversation.turn.start", input: {
+    await assert.rejects(actions.execute({ actionId: "vibe64.terminals.ai-task-conversation.turn.start", input: {
       projectSlug: slug, sessionId: "session-1", conversationId: "temporary-1", message: [], messageId: "bad"
     }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
     assert.equal(calls.length, count);
@@ -275,7 +275,7 @@ test("conversation facades and subscription checks preserve real Fastify request
       const context = { channel: "internal", surface: "app", requestMeta: { request } };
       if (request.params.kind === "subscribe") return actions.execute({ actionId: access.subscribeActionId, input: {}, context });
       const target = { projectSlug: slug, sessionId: "session-1", conversationId: "saved-temporary" };
-      const id = request.params.kind === "temporary" ? temporaryConversationId(target) : mainConversationId(target);
+      const id = request.params.kind === "temporary" ? aiTaskConversationId(target) : mainConversationId(target);
       const conversation = await conversations.open({ id, context });
       retained.push(conversation);
       return conversation.readGoal();
@@ -355,7 +355,7 @@ test("browser conversation methods retain fresh project context through delayed 
     } });
     const target = { projectSlug: slug, sessionId: "session-1", conversationId: "saved-temporary" };
     const retained = [];
-    for (const [kind, id] of [["main", mainConversationId(target)], ["temporary", temporaryConversationId(target)]]) {
+    for (const [kind, id] of [["main", mainConversationId(target)], ["temporary", aiTaskConversationId(target)]]) {
       const browser = await facade.open({ id, context: { surface: "app", channel: "internal" } });
       retained.push(browser);
       assert.equal(currentProjectRequestContext(), null);

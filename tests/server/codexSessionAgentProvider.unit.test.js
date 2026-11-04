@@ -31,7 +31,7 @@ const { CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile } = __
 const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 
 // These adapter units mock the public runtime boundary. The original actual
-// service/runtime/native-owner cases remain in codexTemporaryConversationLifecycle.
+// service/runtime/native-owner cases remain in codexAiTaskConversationLifecycle.
 function createCodexMainFixture(controller, open) {
   const conversationRuntime = { open };
   const provider = createCodexSessionAgentProvider({ controller, conversationRuntime });
@@ -338,7 +338,7 @@ test("Codex adapter forwards the authenticated Vibe64 user to every human turn",
 
 test("Codex adapter reports every active Temporary AI turn", async () => {
   const runOwner = {
-    hasActiveTemporaryConversation(sessionId) {
+    hasActiveAiTaskConversation(sessionId) {
       assert.equal(sessionId, "session-1");
       return true;
     }
@@ -351,13 +351,13 @@ test("Codex adapter reports every active Temporary AI turn", async () => {
   // Keep the original provider-envelope assertion at its original boundary;
   // the actual adapter projects activity read through the runtime and driver.
   const provider = {
-    hasActiveTemporaryConversation: context => adapter.projectConversationResult(
-      "hasActiveTemporaryConversation",
+    hasActiveAiTaskConversation: context => adapter.projectConversationResult(
+      "hasActiveAiTaskConversation",
       () => conversationRuntime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
     )
   };
 
-  assert.deepEqual(await provider.hasActiveTemporaryConversation({
+  assert.deepEqual(await provider.hasActiveAiTaskConversation({
     sessionId: "session-1"
   }), {
     active: true,

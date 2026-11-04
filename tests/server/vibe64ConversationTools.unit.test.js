@@ -16,14 +16,14 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
     messages: Array.from({ length: 25 }, (_, index) => ({ id: `message-${index}`, role: "assistant", text: "x".repeat(8000), privateField: "private-value" }))
   };
   const terminals = {
-    async updateTemporaryConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true,
+    async updateAiTaskConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true,
       routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, review: false }),
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
-    async readTemporaryConversation(...args) { calls.push(args); return native; },
-    async listTemporaryConversations() { return { ok: true, conversations: Array(60).fill(native) }; },
-    async stopTemporaryConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; },
+    async readAiTaskConversation(...args) { calls.push(args); return native; },
+    async listAiTaskConversations() { return { ok: true, conversations: Array(60).fill(native) }; },
+    async stopAiTaskConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; },
     async readAgentPlanUsage() { return { status: "available", providerLabel: "DeepSeek", checkedAt: Date.UTC(2026, 9, 24), apiKey: "private-key",
       balances: [{ currency: "USD", amount: "12.40", token: "private-balance" }],
       windows: [{ id: "seven_day", remainingPercent: 68, windowDurationMins: 10080, resetsAt: Date.UTC(2026, 9, 30) / 1000 }] }; },
@@ -85,7 +85,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
       toolName: tool.name, argumentsText: JSON.stringify({ projectSlug: slug, ...input }), context, toolSet
     });
   }
-  const read = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: "session-1", conversationId: "chat-1" });
+  const read = await execute("vibe64.terminals.ai-task-conversation.read", { sessionId: "session-1", conversationId: "chat-1" });
   assert.equal(read.ok, true, JSON.stringify(read));
   const inspected = await execute("vibe64.sessions.inspect", { sessionId: "session-1" });
   assert.equal(inspected.result.agentStatus, "inProgress");
@@ -113,7 +113,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(read.result.messages[0].truncated, true);
   assert.equal(JSON.stringify(read).includes("private-"), false);
   assert.equal(calls[0][1].vibe64User.username, "member");
-  const list = await execute("vibe64.terminals.temporary-conversation.list", { sessionId: "session-1" });
+  const list = await execute("vibe64.terminals.ai-task-conversation.list", { sessionId: "session-1" });
   assert.equal(list.ok, true, JSON.stringify(list));
   assert.equal(list.result.conversations.length, 40);
   assert.equal(list.result.conversationsTruncated, true);
@@ -137,12 +137,12 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const archived = await execute("vibe64.terminals.work-plan.archive", { sessionId: "session-1", expectedRevision: "c".repeat(64), expectedProgressRevision: "d".repeat(64) });
   assert.deepEqual(archived.result, { ok: true, available: false, sessionId: "session-1", notice: "Archived “Plan”. It remains available in Plan history." });
   assert.equal(JSON.stringify([history, files, usage, archived]).includes("private"), false);
-  const failed = await execute("vibe64.terminals.temporary-conversation.stop", { sessionId: "session-1", conversationId: "chat-1" });
+  const failed = await execute("vibe64.terminals.ai-task-conversation.stop", { sessionId: "session-1", conversationId: "chat-1" });
   assert.equal(failed.ok, true);
   assert.equal(failed.result.ok, false);
   assert.equal(failed.result.code, "vibe64_busy");
   const beforeInvalidRead = calls.length;
-  const invalid = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: "session-1", conversationId: "chat-1", messageLimit: 200 });
+  const invalid = await execute("vibe64.terminals.ai-task-conversation.read", { sessionId: "session-1", conversationId: "chat-1", messageLimit: 200 });
   assert.equal(invalid.ok, false);
   assert.equal(calls.length, beforeInvalidRead);
   // Main chat starts on the workspace owner's AI setup; creation takes no engine.
@@ -188,7 +188,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(JSON.stringify(plan).includes("secret"), false);
   assert.equal((await execute("vibe64.terminals.work-plan.read", { sessionId: "session-1", limit: 16001 })).ok, false);
   assert.equal((await execute("vibe64.terminals.work-plan.read", {})).ok, false);
-  const temporaryMode = await execute("vibe64.terminals.temporary-conversation.update", {
+  const temporaryMode = await execute("vibe64.terminals.ai-task-conversation.update", {
     sessionId: "session-1", conversationId: "chat-1", assistantRouting: { mode: "junior", review: true }
   });
   assert.equal(temporaryMode.ok, true, JSON.stringify(temporaryMode));
@@ -198,12 +198,12 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(JSON.stringify(temporaryMode).includes("private"), false);
   const count = calls.length;
   for (const assistantRouting of [{}, { mode: "auto" }, { mode: "invented" }]) {
-    assert.equal((await execute("vibe64.terminals.temporary-conversation.update", {
+    assert.equal((await execute("vibe64.terminals.ai-task-conversation.update", {
       sessionId: "session-1", conversationId: "chat-1", assistantRouting
     })).ok, false);
   }
   assert.equal(calls.length, count);
-  const temporaryTool = toolSet.tools.find(({ actionId }) => actionId === "vibe64.terminals.temporary-conversation.update");
+  const temporaryTool = toolSet.tools.find(({ actionId }) => actionId === "vibe64.terminals.ai-task-conversation.update");
   const temporarySchema = catalog.toOpenAiToolSchema(temporaryTool).function.parameters;
   const routingSchema = temporarySchema.definitions[temporarySchema.properties.assistantRouting.allOf[0].$ref.split("/").at(-1)];
   assert.deepEqual(routingSchema.properties.mode.enum, ["custom", "senior", "junior", "fix"]);

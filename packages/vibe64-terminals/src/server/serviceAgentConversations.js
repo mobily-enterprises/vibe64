@@ -15,7 +15,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate } from "./sessionRenewalHandover.js";
 import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
-import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
+import { sessionHasActiveAiTask } from "./aiTaskConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
@@ -211,7 +211,7 @@ function createServiceAgentConversations({
         if (native?.ok === false || native?.turn?.active || native?.terminal?.status === "running") {
           fail("Stop native work and close its terminal before replacing context.");
         }
-        const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
+        const temporary = await sessionAgent.hasActiveAiTaskConversation(sessionId, {}, context);
         if (temporary?.ok === false || temporary?.active || await sessionHasActiveAiTask(context.runtime.store, sessionId)) {
           fail("Finish temporary assistant work before replacing native context.");
         }
@@ -345,7 +345,7 @@ function createServiceAgentConversations({
         messageCode: "vibe64_session_renewal_routing_pending"
       }), { retryable: true });
     }
-    const conversation = await sessionAgent.hasActiveTemporaryConversation(
+    const conversation = await sessionAgent.hasActiveAiTaskConversation(
       sessionId,
       {},
       {
@@ -367,13 +367,13 @@ function createServiceAgentConversations({
 
   /**
    * Whether AI is at work in a session: its main turn, its AI terminal or a
-   * temporary AI task. A read that fails throws, so it never passes for idle.
+   * AI task. A read that fails throws, so it never passes for idle.
    */
   async function sessionAiWorkRunning(sessionId, options = {}) {
     const context = await sessionAccess.sessionContext(sessionId, options);
     const [main, temporary] = await Promise.all([
       sessionAgent.sessionState(sessionId, context),
-      sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context)
+      sessionAgent.hasActiveAiTaskConversation(sessionId, {}, context)
     ]);
     if (main?.ok === false || temporary?.ok === false) {
       throw new Error(main?.error || temporary?.error || "This session's AI work could not be read.");

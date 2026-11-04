@@ -70,11 +70,11 @@ repair chats recorded before AI tasks, as Close deletes one (`docs/state-upgrade
 - `src/lib/vibe64ConversationAttribution.js`
 - `src/lib/vibe64ThinkingPresentation.js`
 - `packages/vibe64-terminals/src/server/sessionConversations.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationLifecycle.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationRecords.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationTurns.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationLifecycle.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationInteraction.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationRules.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/assistantContracts.js`
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
@@ -234,7 +234,7 @@ The session header's **New AI task** opens a small form, then the window. A refu
 start keeps the form open with what the person typed. Colleague reaches tasks through
 the task actions (`list`, `read`, `start`, `cancel`, `finish`, `close`, `rename`), which return a
 bounded summary of each task, and reaches the task's conversation through the
-`vibe64.terminals.temporary-conversation.*` list, read, update, turn and stop tools.
+`vibe64.terminals.ai-task-conversation.*` list, read, update, turn and stop tools.
 Conversations are created only by starting a task and deleted only by closing one;
 there is no create or delete conversation action or route. Colleague's review of an
 assignment is a `colleague-review` task named by the assignment, finished when the
@@ -266,7 +266,7 @@ without it offers no Rename.
 
 A task's conversation is separate from Main chat: its exchanges never enter the main
 project conversation or session history, and it never appears in main History.
-Starting a task creates it through Terminals' `createTemporaryConversation` with the
+Starting a task creates it through Terminals' `createAiTaskConversation` with the
 task, inside the same write that refuses a second open task. The server stores its
 identity, settings, draft, task and attachments below its session's
 `conversations/` directory. It uses the existing JSKIT transcript policy with a
@@ -276,7 +276,7 @@ conversations are not native ephemeral threads.
 A conversation's presentation is only its `title` and its unsent `draft`. The title
 starts as the task's title; it is a plain name, whitespace collapsed, at most 80
 characters. A title-only update, like a draft-only update, saves without the
-assistant's write lock; a title change publishes `temporary-conversation-renamed`
+assistant's write lock; a title change publishes `ai-task-conversation-renamed`
 so other open views reread it. Each conversation stores its number once, at
 creation: one more than the highest among the session's open conversations. Listing
 still numbers a record saved without one by creation order and treats an old
@@ -289,7 +289,7 @@ one selector. The application server permits route parameters up to 1024
 characters so every task's conversation reaches the same authorized route. The
 collection GET lists the session's conversations, GET reads one, PATCH saves
 presentation and settings, and the turn and stop routes send and stop work. Creation
-publishes `temporary-conversation-created` once, when the record is first saved.
+publishes `ai-task-conversation-created` once, when the record is first saved.
 Feature routes wait for response delivery, including asynchronous response hooks,
 so error codes and messages reach the client instead of an empty response.
 
@@ -479,7 +479,7 @@ holding the same attempt settles it through its own owner. Retry then sends it
 normally. Cancel is decided by the server: JSKIT's delivery cancel aborts a running
 check and an unsent request, keeps the message as Cancelling… and calls
 `POST …/deliveries/:messageId/cancel`, which reaches
-`cancelTemporaryConversationMessage` without opening the native conversation. The
+`cancelAiTaskConversationMessage` without opening the native conversation. The
 shared routing `cancelMessage` records a durable tombstone, stops that
 conversation's route (`stopped` and `cancelled`) and classifier, and interrupts its
 persistent turn when the message may own it, all without the agent-write lock, then
@@ -597,7 +597,7 @@ stopping native work, sending no Stop or Delete request, and first sends the dra
 attachment and settings edits still waiting for their save, including one queued
 behind an unfinished save; their responses are not applied to the departed view.
 Each session keeps its own task conversation and saved draft. When
-`temporary-conversation-closed` names the bound conversation, the view cancels its
+`ai-task-conversation-closed` names the bound conversation, the view cancels its
 pending saves, releases its reader and ignores late responses that would restore it.
 A closed-conversation API error does the same, and Send never recreates a
 conversation closed by another browser. A reconnect rereads the list, which recovers

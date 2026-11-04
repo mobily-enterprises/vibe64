@@ -1,7 +1,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { isTrustedStudioWebSocketRequest, requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
-import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
+import { mainConversationTarget, aiTaskConversationTarget } from "../shared/conversationIdentity.js";
 import { conversationTransportSchema } from "./conversationTransportSchema.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -43,7 +43,7 @@ const NO_COLLEAGUE_CONVERSATIONS = Object.freeze({
  */
 function createConversationHost({ colleagueConversations, http, localhostCheckBypassed, mainConversations }) {
   function open(input) {
-    if (mainConversationTarget(input.id) || temporaryConversationTarget(input.id)) return mainConversations.open(input);
+    if (mainConversationTarget(input.id) || aiTaskConversationTarget(input.id)) return mainConversations.open(input);
     return colleagueConversations.open(input);
   }
 

@@ -4699,7 +4699,7 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
       async deleteEphemeralConversation(scope, input, options) {
         deletedHelpers.push({ scope, input, options });
         return { ok: deleteConfirmed, error: deleteConfirmed ? "" : "Helper deletion is not confirmed" };
-      } }), turns: new Map(), temporaryConversations: new Map(), publishSessionChanged: async () => {} });
+      } }), turns: new Map(), aiTaskConversations: new Map(), publishSessionChanged: async () => {} });
     const privateCleanup = { sessionId: successorId, runtime: f.runtime,
       session: await f.runtime.getSessionForRenewalWithoutSource(successorId),
       renewalCleanup: { kind: "successor", renewalId, sourceSessionId: "session-1" }, vibe64User: f.context.vibe64User };

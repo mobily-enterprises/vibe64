@@ -332,7 +332,7 @@ function createOpenCodeSessionAgentProvider({
   }
 
   async function projectConversationResult(method, perform) {
-    if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
+    if (method === "hasActiveAiTaskConversation") return { active: await perform(), ok: true };
     return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
   }
 
@@ -428,7 +428,7 @@ function createOpenCodeSessionAgentProvider({
       "deleteDetachedChatThread",
       "listNativeConversationStorage",
       "retireConversationHistory",
-      "hasActiveTemporaryConversation"
+      "hasActiveAiTaskConversation"
     ]),
     runDetachedChatTurn,
     streamDetachedChatTurn: runDetachedChatTurn,

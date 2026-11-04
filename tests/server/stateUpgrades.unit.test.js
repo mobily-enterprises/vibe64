@@ -1388,7 +1388,7 @@ test("learning-space reset boundary requires both owners, passes the projects ro
       assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", clonedDefaultBranchId));
     },
     closeOldTemporaryConversations: async context => {
-      calls.push(["temporary-conversations", context.apply]);
+      calls.push(["ai-task-conversations", context.apply]);
       assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", temporaryConversationsClosedId));
     } };
   assert.deepEqual(await runRegistryUpgrades(options), { pending: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId, clonedDefaultBranchId, temporaryConversationsClosedId], applied: [] });
@@ -1399,9 +1399,9 @@ test("learning-space reset boundary requires both owners, passes the projects ro
   calls.length = 0;
   assert.deepEqual(await runRegistryUpgrades({ ...options, apply: true }), { pending: [], applied: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId, clonedDefaultBranchId, temporaryConversationsClosedId] });
   assert.deepEqual(calls, [["training", false], ["colleague", false], ["free-routing", false], ["free-colleague", false],
-    ["team-sessions", false], ["team-routing", false], ["codex-caches", false], ["cloned-branches", false], ["temporary-conversations", false],
+    ["team-sessions", false], ["team-routing", false], ["codex-caches", false], ["cloned-branches", false], ["ai-task-conversations", false],
     ["training", true], ["colleague", true], ["free-routing", true], ["free-colleague", true], ["team-sessions", true], ["team-routing", true],
-    ["codex-caches", true], ["cloned-branches", true], ["temporary-conversations", true]]);
+    ["codex-caches", true], ["cloned-branches", true], ["ai-task-conversations", true]]);
 
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");

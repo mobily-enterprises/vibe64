@@ -235,10 +235,10 @@ function createServiceAgentReconcile({
     const temporaryFailures = [];
     for (const session of migration.sessions) {
       try {
-        const restored = await sessionConversations.listTemporaryConversations(session.sessionId, options);
+        const restored = await sessionConversations.listAiTaskConversations(session.sessionId, options);
         for (const conversation of restored.conversations) {
           if (conversation.state === "closing") {
-            await sessionConversations.deleteTemporaryConversation(
+            await sessionConversations.deleteAiTaskConversation(
               session.sessionId,
               { conversationId: conversation.conversationId },
               options

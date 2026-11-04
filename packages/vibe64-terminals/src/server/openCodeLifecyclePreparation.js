@@ -47,7 +47,7 @@ function createOpenCodeLifecyclePreparation({
   presentation,
   resolveConnection
 }) {
-  const { temporaryConversations } = sharedRuntime;
+  const { aiTaskConversations } = sharedRuntime;
   const {
     prepareProcess,
     storedUpstreamSessionId,
@@ -74,7 +74,7 @@ function createOpenCodeLifecyclePreparation({
       await closeTerminalSessionsForNamespace(
         opencodeTerminalNamespace(target.sessionId)
       );
-      for (const entry of temporaryConversations.values()) {
+      for (const entry of aiTaskConversations.values()) {
         if (entry.reasoningSummary && entry.target?.abortController === target.abortController) {
           await disposeReasoningSummary(entry);
         }

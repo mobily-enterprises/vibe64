@@ -161,7 +161,7 @@ function createClaudeSessionAgentProvider(options) {
 
   const facade = { ...provider, manager,
     open: context => conversations.open({ id: context.sessionId, context }),
-    hasActiveTemporaryConversation: context => provider.projectConversationResult("hasActiveTemporaryConversation", () =>
+    hasActiveAiTaskConversation: context => provider.projectConversationResult("hasActiveAiTaskConversation", () =>
       conversations.inspectNativeTemporaryActivity({ id: context.sessionId, context })),
     generateSessionRenewalHandover: (context, input) => conversations.generateNativeRenewalHandover({ id: context.sessionId, context, input }),
     seedSessionRenewalHandover: (context, input) => conversations.seedNativeRenewalHandover({ id: context.sessionId, context, input }),
@@ -691,7 +691,7 @@ test("Claude replacement forgets its cached main binding and blocks admission wh
 });
 
 test("restoring Claude conversations preserves another engine's main identity", async (t) => {
-  for (const operation of ["hasActiveTemporaryConversation", "closeSession", "reconcileSessions"]) {
+  for (const operation of ["hasActiveAiTaskConversation", "closeSession", "reconcileSessions"]) {
     await t.test(operation, async (t) => {
       const f = await fixture(t);
       const main = await f.provider.sessionState(f.context);
@@ -723,11 +723,11 @@ test("restoring Claude conversations preserves another engine's main identity", 
         const result = await restored[operation](context);
         // A restored owner answers from the work it runs: the temporary turn
         // saved as active ended with the server that started it.
-        if (operation === "hasActiveTemporaryConversation") assert.equal(result.active, false);
+        if (operation === "hasActiveAiTaskConversation") assert.equal(result.active, false);
       }
       for (const [key, value] of Object.entries(identity)) assert.equal(f.context.session.metadata[key], value, key);
       assert.equal(f.context.session.metadata.claude_conversation_id, main.thread.id);
-      if (operation !== "hasActiveTemporaryConversation") assert.deepEqual(stopped, ["test-0"]);
+      if (operation !== "hasActiveAiTaskConversation") assert.deepEqual(stopped, ["test-0"]);
       assert.equal(f.processes.length, 1);
 
       // Explicitly returning to Claude must activate the cached main entry.
@@ -747,7 +747,7 @@ test("Claude closes and inspects a session whose workspace was never prepared", 
   // Source creation failed: the session keeps its Claude selection and has no workspace.
   delete f.context.session.metadata.source_path;
   f.context.session.metadata.source_creation_failed = "yes";
-  assert.deepEqual(await f.provider.hasActiveTemporaryConversation(f.context), { ok: true, active: false });
+  assert.deepEqual(await f.provider.hasActiveAiTaskConversation(f.context), { ok: true, active: false });
   const closed = await f.provider.closeSession(f.context);
   assert.equal(closed.ok, true, JSON.stringify(closed));
 });

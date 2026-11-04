@@ -78,7 +78,7 @@ function reviewTaskActions(terminals, observations) {
   const aiTasks = {
     async start(sessionId, input) {
       observations.createdReview = { sessionId, input };
-      await terminals.createTemporaryConversation(sessionId, { conversationId: input.taskId, presentation: { title: "Colleague review" } });
+      await terminals.createAiTaskConversation(sessionId, { conversationId: input.taskId, presentation: { title: "Colleague review" } });
       return { ok: true, task: { id: input.taskId, kind: input.kind, phase: "needs_you", reason: "your_turn" } };
     },
     finish: async (_sessionId, input) => ended(input.taskId, "done"),
@@ -140,12 +140,12 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       (observations.outputReads ||= []).push(sessionId);
       return structuredClone(observations.output || { ok: true, activeTerminal: null });
     },
-    async readTemporaryConversation(_sessionId, input) { observations.reads += 1; return structuredClone(observations.conversations[input.conversationId] || observations.target); },
-    async createTemporaryConversation(sessionId, input) {
+    async readAiTaskConversation(_sessionId, input) { observations.reads += 1; return structuredClone(observations.conversations[input.conversationId] || observations.target); },
+    async createAiTaskConversation(sessionId, input) {
       observations.conversations[input.conversationId] ||= { ok: true, conversationId: input.conversationId, status: "completed", runId: "", messages: [] };
       return structuredClone(observations.conversations[input.conversationId]);
     },
-    async startTemporaryConversationTurn(sessionId, input) {
+    async startAiTaskConversationTurn(sessionId, input) {
       observations.sent.push({ sessionId, ...input });
       if (observations.sendFailure) throw observations.sendFailure;
       const target = observations.conversations[input.conversationId] || observations.target;
@@ -299,8 +299,8 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     async execute(input, context) { observations.mutations.push(input.value); await observations.onOperation?.(input, context); if (observations.failure) throw observations.failure; return { ok: true }; }
   });
   const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
-  if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => ["vibe64.terminals.temporary-conversation.read", "vibe64.terminals.outputs.read"].includes(id) ||
-    (assigning && id === "vibe64.terminals.temporary-conversation.turn.start")), ...(assigning ? reviewTaskActions(terminals, observations) : []), ...createSessionActions({ sessions: withMainChatOperations({
+  if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => ["vibe64.terminals.ai-task-conversation.read", "vibe64.terminals.outputs.read"].includes(id) ||
+    (assigning && id === "vibe64.terminals.ai-task-conversation.turn.start")), ...(assigning ? reviewTaskActions(terminals, observations) : []), ...createSessionActions({ sessions: withMainChatOperations({
     async inspectSession() { observations.reads += 1; return structuredClone(observations.session); },
     async readSessionConversationLog() { return { ok: true, conversationLog: structuredClone(observations.log) }; },
     async sendAgentMessage(sessionId, input) {

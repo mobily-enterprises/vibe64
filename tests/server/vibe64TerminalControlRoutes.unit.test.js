@@ -6,7 +6,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
   createTerminalActions,
-  ACTION_START_TEMPORARY_CONVERSATION_TURN
+  ACTION_START_AI_TASK_CONVERSATION_TURN
 } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import {
   findRegisteredRoute,
@@ -303,11 +303,11 @@ test("temporary AI creation and turns use the authenticated Vibe64 actor", async
     };
     assert.equal(findRegisteredRoute(app, {
       method: "POST",
-      path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations`
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/ai-task-conversations`
     }), null, "AI tasks create their own conversations");
     const turnRoute = findRegisteredRoute(app, {
       method: "POST",
-      path: `${apiRouteBase}/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns`
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/ai-task-conversations/:conversationId/turns`
     });
     assert.ok(turnRoute);
 
@@ -327,7 +327,7 @@ test("temporary AI creation and turns use the authenticated Vibe64 actor", async
 
     assert.deepEqual(calls, [
       {
-        actionId: ACTION_START_TEMPORARY_CONVERSATION_TURN,
+        actionId: ACTION_START_AI_TASK_CONVERSATION_TURN,
         input: {
           attachmentIds: ["22222222-2222-4222-8222-222222222222"],
           conversationId: "conversation-1",

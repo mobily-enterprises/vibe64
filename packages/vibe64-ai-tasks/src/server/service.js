@@ -98,7 +98,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
   }
 
   async function closeEnded(sessionId, record, vibe64User) {
-    await terminals.deleteTemporaryConversation(sessionId, { conversationId: record.conversationId });
+    await terminals.deleteAiTaskConversation(sessionId, { conversationId: record.conversationId });
     runner.forget(record.conversationId);
     await publishSessionChanged(sessionId, {
       reason: "ai-task-changed",
@@ -139,7 +139,7 @@ function createAiTasksService({ databaseTools, logger, project, publishSessionCh
       at: new Date().toISOString(),
       sendId: `message_${randomUUID()}`
     });
-    await terminals.createTemporaryConversation(sessionId, {
+    await terminals.createAiTaskConversation(sessionId, {
       ...problem.conversation,
       conversationId: taskId,
       presentation: { title: task.title },

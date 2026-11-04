@@ -5,7 +5,7 @@ import { useAiTaskConversationMessages } from "@/composables/useAiTaskConversati
 import { useAiTaskConversationRecord } from "@/composables/useAiTaskConversationRecord.js";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
-import { vibe64TemporaryConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { vibe64AiTaskConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const SENDING_LABEL = "Sending to assistant…";
 const WORKING_LABEL = "AI is working…";
@@ -125,7 +125,7 @@ function useAiTaskConversation({
   /** @param {object} preferences the chat mode, review and custom selection to route the next request with */
   async function updateRouting(preferences) {
     const current = task.value;
-    const result = await aiTaskRequest(vibe64TemporaryConversationPath(current.apiPath, current.sessionId, current.conversationId), {
+    const result = await aiTaskRequest(vibe64AiTaskConversationPath(current.apiPath, current.sessionId, current.conversationId), {
       method: "PATCH", body: { assistantRouting: preferences }
     });
     if (saves.canApply(current)) {

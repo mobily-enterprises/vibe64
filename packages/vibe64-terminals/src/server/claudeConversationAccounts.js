@@ -134,7 +134,7 @@ function createClaudeConversationAccounts({
   }
 
   /**
-   * A session's main and temporary chats follow the workspace's current account
+   * A session's main and AI task chats follow the workspace's current account
    * and keep their history; scoped helpers stay bound to their request's account.
    */
   function prepareAccount(entry) {

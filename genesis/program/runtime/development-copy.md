@@ -7,7 +7,7 @@ identity while dropping execution state belonging to its original machine.
 
 - Main: `packages/vibe64-runtime/src/server/prepareDevelopmentCopy.js`
 - `packages/vibe64-terminals/src/server/claudeConversationStorage.js`
-- `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
+- `packages/vibe64-terminals/src/server/aiTaskConversationRules.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingRequests.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
 - `packages/vibe64-colleague/src/server/conversationRecord.js`

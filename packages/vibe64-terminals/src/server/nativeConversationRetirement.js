@@ -8,7 +8,7 @@ function isNativeConversationBindingKey(name) {
 
 /**
  * Only saved main bindings and acknowledged replacements are eligible here.
- * Temporary conversations retain their existing explicit-close lifecycle.
+ * AI task conversations retain their existing explicit-close lifecycle.
  */
 function nativeConversationBindings(session, options = {}) {
   const { retiredOnly = false } = options;

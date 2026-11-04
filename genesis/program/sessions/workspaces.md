@@ -361,7 +361,7 @@ The panel lists, retains and selects only the project's own sessions through its
 API; one load error covers its hosts. Ordinary New session, renewal and archive
 are not lesson operations.
 
-Session and temporary-conversation actions resolve their project and acting user
+Session and ai-task-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
 an action argument. HTTP URL selection and explicit action selection must agree;
 automation enters the same project context as HTTP. Hosts recheck authentication

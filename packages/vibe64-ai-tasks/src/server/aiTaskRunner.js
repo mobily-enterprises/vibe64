@@ -157,7 +157,7 @@ function createAiTaskRunner({
     const { pending } = task;
     let event = { type: "turn_admitted" };
     try {
-      const sent = await terminals.startTemporaryConversationTurn(sessionId, {
+      const sent = await terminals.startAiTaskConversationTurn(sessionId, {
         conversationId,
         messageId: pending.id,
         message: pending.message,
@@ -175,7 +175,7 @@ function createAiTaskRunner({
 
   async function interrupt(sessionId, record, drive) {
     const { conversationId } = record;
-    await terminals.stopTemporaryConversation(sessionId, { conversationId }).catch((error) => {
+    await terminals.stopAiTaskConversation(sessionId, { conversationId }).catch((error) => {
       warn(sessionId, "interrupt_failed", error, "An AI task's turn could not be stopped; the task ends anyway.");
     });
     await apply(sessionId, conversationId, { type: "turn_stopped" });

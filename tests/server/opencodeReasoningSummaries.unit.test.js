@@ -230,7 +230,7 @@ test("a stalled cosmetic helper cannot keep a completed main turn busy or write 
   Object.assign(harness.runtime.store, createConversationTranscript({ storage: createMemoryConversationStorage() }));
   await harness.controller.sendMessage("session-1", { message: "Review", messageId: "held-summary" });
   await until(() => summaries(harness).length === 1);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false,
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false,
     "Cosmetic summaries must not advertise separate active work");
   response.text = "Done.";
   response.pending = false;

@@ -53,7 +53,7 @@ function createConversationSummary({
 
   async function read(state, input, context) {
     const result = await actions.execute({
-      actionId: input.conversationId ? "vibe64.terminals.temporary-conversation.read" : "vibe64.sessions.conversation-log.read",
+      actionId: input.conversationId ? "vibe64.terminals.ai-task-conversation.read" : "vibe64.sessions.conversation-log.read",
       input: input.conversationId ? {
         sessionId: input.sessionId,
         conversationId: input.conversationId,

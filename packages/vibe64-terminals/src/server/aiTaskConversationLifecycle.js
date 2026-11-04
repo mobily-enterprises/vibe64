@@ -13,24 +13,24 @@ import {
   presentation,
   recentChatContext,
   numberedConversations,
-  temporaryConversationNamespace,
+  aiTaskConversationNamespace,
   routingRequest
-} from "./temporaryConversationRules.js";
+} from "./aiTaskConversationRules.js";
 
 /** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
-/** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
-/** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
+/** @typedef {import("./types.js").AiTaskConversationRecords} AiTaskConversationRecords */
+/** @typedef {import("./types.js").AiTaskConversationTurns} AiTaskConversationTurns */
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
 /**
- * A temporary chat from creation to Close: creating, listing and reading chats, stopping a turn,
+ * An AI task chat from creation to Close: creating, listing and reading chats, stopping a turn,
  * closing and retiring chats, and saving an idle turn before its review.
  * @param {object} dependencies
- * @param {TemporaryConversationRecords} dependencies.chatRecords
- * @param {TemporaryConversationTurns} dependencies.chatTurns
+ * @param {AiTaskConversationRecords} dependencies.chatRecords
+ * @param {AiTaskConversationTurns} dependencies.chatTurns
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -39,7 +39,7 @@ import {
  * @param {AssistantRouting} dependencies.routing
  * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
-function createTemporaryConversationLifecycle({
+function createAiTaskConversationLifecycle({
   chatRecords,
   chatTurns,
   conversationRuntime,
@@ -54,7 +54,7 @@ function createTemporaryConversationLifecycle({
    * `options.aiTask`, from the AI tasks feature only, makes this chat that task's conversation: it receives
    * the session's conversations inside this write, and returns the task to save or throws its refusal.
    */
-  async function createTemporaryConversation(sessionId, input, options = {}) {
+  async function createAiTaskConversation(sessionId, input, options = {}) {
     let created = false;
     const { aiTask = null, ...writeOptions } = options;
     const result = await chatTurns.writeSnapshot(sessionId, writeOptions, async (ctx) => {
@@ -65,7 +65,7 @@ function createTemporaryConversationLifecycle({
       created = true;
       const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
       const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
-      // Team members' temporary chats run on their own Fix it with AI or Custom model.
+      // Team members' AI task chats run on their own Fix it with AI or Custom model.
       const owner = isAssistantRoutingOwner(input.vibe64User || options.vibe64User);
       let inheritedPreferences = { mode: "fix" };
       if (owner) {
@@ -107,14 +107,14 @@ function createTemporaryConversationLifecycle({
     // Other open views of this session list the new chat; Close has the same notice.
     if (created && result?.ok !== false) {
       await publishSessionChanged(sessionId, {
-        reason: "temporary-conversation-created",
+        reason: "ai-task-conversation-created",
         payload: { conversationId: result.conversationId }
       });
     }
     return result;
   }
 
-  async function listTemporaryConversations(sessionId, options = {}) {
+  async function listAiTaskConversations(sessionId, options = {}) {
     let context;
     const list = async (ctx, savedOnly = false) => {
       context = ctx;
@@ -145,14 +145,14 @@ function createTemporaryConversationLifecycle({
   }
 
   /**
-   * A temporary chat as its views show it, or the requested page of its messages. `options.transcriptQuery` narrows
+   * An AI task chat as its views show it, or the requested page of its messages. `options.transcriptQuery` narrows
    * the transcript the conversation runtime reads.
    * @param {string} sessionId
    * @param {object} input
    * @param {object} [options]
    * @param {object} [options.transcriptQuery]
    */
-  async function readTemporaryConversation(sessionId, input, options = {}) {
+  async function readAiTaskConversation(sessionId, input, options = {}) {
     const { transcriptQuery, ...context } = options;
     let deferred = false;
     try {
@@ -178,7 +178,7 @@ function createTemporaryConversationLifecycle({
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
   }
 
-  async function stopTemporaryConversation(sessionId, input, options = {}) {
+  async function stopAiTaskConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
       const record = await chatRecords.recordFor(ctx, input.conversationId);
@@ -215,12 +215,12 @@ function createTemporaryConversationLifecycle({
   /** Removes a chat's open runtime entry, with its handles, from memory. */
   function retireOpenEntry(runtime, sessionId, conversationId) {
     return conversationRuntime.retireOpenConversation({
-      namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
+      namespace: aiTaskConversationNamespace(runtime, sessionId, conversationId),
       sessionId
     });
   }
 
-  async function deleteTemporaryConversation(sessionId, input, options = {}) {
+  async function deleteAiTaskConversation(sessionId, input, options = {}) {
     try {
       await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }, { waitForCleanup: true });
     } catch (error) {
@@ -248,7 +248,7 @@ function createTemporaryConversationLifecycle({
       // The closed chat's open runtime entry and its handles leave memory now.
       await retireOpenEntry(context.runtime, sessionId, input.conversationId);
       await publishSessionChanged(sessionId, {
-        reason: "temporary-conversation-closed",
+        reason: "ai-task-conversation-closed",
         payload: { conversationId: input.conversationId }
       });
     }
@@ -256,10 +256,10 @@ function createTemporaryConversationLifecycle({
   }
 
   /**
-   * Archive: once its source is gone a session's temporary chats cannot
+   * Archive: once its source is gone a session's AI task chats cannot
    * reopen, so their open runtime entries leave memory with it.
    */
-  async function retireTemporaryConversations(sessionId, options = {}) {
+  async function retireAiTaskConversations(sessionId, options = {}) {
     const { runtime } = await readSessionContext(sessionId, options);
     for (const record of await runtime.store.listSessionConversations(sessionId)) {
       await retireOpenEntry(runtime, sessionId, record.conversationId);
@@ -299,17 +299,17 @@ function createTemporaryConversationLifecycle({
   }
 
   return Object.freeze({
-    createTemporaryConversation,
-    listTemporaryConversations,
-    readTemporaryConversation,
-    stopTemporaryConversation,
+    createAiTaskConversation,
+    listAiTaskConversations,
+    readAiTaskConversation,
+    stopAiTaskConversation,
     readConversationTurn,
-    deleteTemporaryConversation,
-    retireTemporaryConversations,
+    deleteAiTaskConversation,
+    retireAiTaskConversations,
     afterTemporaryTurn
   });
 }
 
 export {
-  createTemporaryConversationLifecycle
+  createAiTaskConversationLifecycle
 };

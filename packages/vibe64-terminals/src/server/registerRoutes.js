@@ -25,7 +25,7 @@ import {
   ACTION_CLOSE_PROJECT_RUNTIME,
   ACTION_DELETE_AGENT_ATTACHMENT,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
-  ACTION_LIST_TEMPORARY_CONVERSATIONS,
+  ACTION_LIST_AI_TASK_CONVERSATIONS,
   ACTION_OPEN_OUTPUT_TARGET,
   ACTION_OPEN_PROJECT_RUNTIME,
   ACTION_PREPARE_AGENT_SESSION,
@@ -38,7 +38,7 @@ import {
   ACTION_READ_GLOBAL_TERMINAL_STATUS,
   ACTION_READ_OUTPUTS,
   ACTION_READ_OUTPUT_TERMINAL,
-  ACTION_READ_TEMPORARY_CONVERSATION,
+  ACTION_READ_AI_TASK_CONVERSATION,
   ACTION_READ_WORK_PLAN,
   ACTION_RECONCILE_AGENT_SESSIONS,
   ACTION_RECORD_PREVIEW_DIAGNOSTIC,
@@ -47,11 +47,11 @@ import {
   ACTION_START_AGENT_TERMINAL,
   ACTION_START_GLOBAL_TERMINAL,
   ACTION_START_OUTPUT_TARGET,
-  ACTION_START_TEMPORARY_CONVERSATION_TURN,
+  ACTION_START_AI_TASK_CONVERSATION_TURN,
   ACTION_STOP_OUTPUT_TARGET,
-  ACTION_STOP_TEMPORARY_CONVERSATION,
+  ACTION_STOP_AI_TASK_CONVERSATION,
   ACTION_UPDATE_AGENT_GOAL,
-  ACTION_UPDATE_TEMPORARY_CONVERSATION,
+  ACTION_UPDATE_AI_TASK_CONVERSATION,
   ACTION_WRITE_AGENT_TERMINAL_KEY,
   ACTION_WRITE_AGENT_TERMINAL_TEXT,
   ACTION_WRITE_GLOBAL_TERMINAL_KEY,
@@ -247,39 +247,39 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
 
   registerTerminalTransferRoutes(routes);
 
-  routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations", {
-    actionId: ACTION_LIST_TEMPORARY_CONVERSATIONS,
+  routes.actionRoute("GET", "/sessions/:sessionId/ai-task-conversations", {
+    actionId: ACTION_LIST_AI_TASK_CONVERSATIONS,
     buildInput: (request) => ({ sessionId: request.params.sessionId }),
-    summary: "Restore Vibe64 temporary conversations."
+    summary: "Restore Vibe64 AI task conversations."
   });
-  routes.actionRoute("PATCH", "/sessions/:sessionId/temporary-conversations/:conversationId", {
-    actionId: ACTION_UPDATE_TEMPORARY_CONVERSATION,
-    buildInput: (request) => ({ ...requestBody(request), ...temporaryConversationInput(request) }),
-    summary: "Save a Vibe64 temporary conversation draft and settings."
-  });
-
-  routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations/:conversationId", {
-    actionId: ACTION_READ_TEMPORARY_CONVERSATION,
-    buildInput: (request) => ({ ...requestQuery(request), ...temporaryConversationInput(request) }),
-    summary: "Read a Vibe64 temporary conversation."
+  routes.actionRoute("PATCH", "/sessions/:sessionId/ai-task-conversations/:conversationId", {
+    actionId: ACTION_UPDATE_AI_TASK_CONVERSATION,
+    buildInput: (request) => ({ ...requestBody(request), ...aiTaskConversationInput(request) }),
+    summary: "Save a Vibe64 AI task conversation draft and settings."
   });
 
-  routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", {
-    actionId: ACTION_START_TEMPORARY_CONVERSATION_TURN,
+  routes.actionRoute("GET", "/sessions/:sessionId/ai-task-conversations/:conversationId", {
+    actionId: ACTION_READ_AI_TASK_CONVERSATION,
+    buildInput: (request) => ({ ...requestQuery(request), ...aiTaskConversationInput(request) }),
+    summary: "Read a Vibe64 AI task conversation."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/ai-task-conversations/:conversationId/turns", {
+    actionId: ACTION_START_AI_TASK_CONVERSATION_TURN,
     buildInput: (request) => withoutVibe64User({
       ...requestBody(request),
-      ...temporaryConversationInput(request)
+      ...aiTaskConversationInput(request)
     }),
-    summary: "Start a turn in a Vibe64 temporary conversation."
+    summary: "Start a turn in a Vibe64 AI task conversation."
   });
 
-  routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", {
-    actionId: ACTION_STOP_TEMPORARY_CONVERSATION,
+  routes.actionRoute("POST", "/sessions/:sessionId/ai-task-conversations/:conversationId/stop", {
+    actionId: ACTION_STOP_AI_TASK_CONVERSATION,
     buildInput: (request) => ({
       ...requestBody(request),
-      ...temporaryConversationInput(request)
+      ...aiTaskConversationInput(request)
     }),
-    summary: "Stop a Vibe64 temporary conversation."
+    summary: "Stop a Vibe64 AI task conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/prompt-hints", {
@@ -371,7 +371,7 @@ function sessionInput(request) {
   };
 }
 
-function temporaryConversationInput(request) {
+function aiTaskConversationInput(request) {
   return {
     conversationId: request.params.conversationId,
     sessionId: request.params.sessionId

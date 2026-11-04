@@ -102,7 +102,7 @@ function createOpenCodeHostPreparation({
   resolveConnection,
   sharedRuntime
 }) {
-  const { processes, temporaryConversations } = sharedRuntime;
+  const { processes, aiTaskConversations } = sharedRuntime;
   const sessionEnvironments = new Map();
 
   function promptContext(conversationKind = "main", assistantScope = null) {
@@ -147,7 +147,7 @@ function createOpenCodeHostPreparation({
 
   async function writeSessionEnvironmentRegistry() {
     const { registryPath } = sharedRoots();
-    const temporaryEnvironments = [...temporaryConversations.values()]
+    const temporaryEnvironments = [...aiTaskConversations.values()]
       .filter((entry) => entry.promptContext && toText(entry.conversationId))
       .map((entry) => {
         const environment = sessionEnvironments.get(entry.target?.key);

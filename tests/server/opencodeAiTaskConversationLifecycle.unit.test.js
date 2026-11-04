@@ -126,7 +126,7 @@ test("OpenCode temporary Start returns admission while the provider is still wor
   assert.ok(admitted, "Start waited for a final answer, leaving the browser's Stop button disabled");
   assert.equal(admitted.status, "inProgress");
   assert.ok(admitted.runId);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
 });
 
 test("OpenCode temporary Stop rejects an unconfirmed abort and permits retry", async (t) => {
@@ -171,9 +171,9 @@ test("OpenCode temporary reads remain working and failed Stop preserves the acti
   await assert.rejects(harness.controller.stopConversation("session-1", { conversationId }), {
     code: "vibe64_opencode_interrupt_unconfirmed"
   });
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
   await harness.controller.stopConversation("session-1", { conversationId });
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
   assert.equal((await harness.controller.readConversation("session-1", { conversationId })).status, "interrupted");
   assert.equal(harness.processStops.length, 0);
 });
@@ -203,13 +203,13 @@ test("OpenCode temporary admission can retry and Stop cancels a held history rea
   await assert.rejects(harness.controller.startConversationTurn("session-1", {
     conversationId, message: "Rejected admission"
   }), { statusCode: 503 });
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
   await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
   await reading.promise;
   const stopped = await harness.controller.stopConversation("session-1", { conversationId });
   assert.equal(stopped.stopped, true);
   assert.equal(aborted, true);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
 });
 
 test("OpenCode temporary completion and observer failure remain readable", async (t) => {
@@ -259,9 +259,9 @@ test("OpenCode temporary Stop times out and permits a confirmed retry", async (t
   await assert.rejects(harness.controller.stopConversation("session-1", { conversationId }), {
     code: "vibe64_opencode_interrupt_timeout", statusCode: 504
   });
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
   await harness.controller.stopConversation("session-1", { conversationId });
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
   assert.equal(harness.processStops.length, 0);
 });
 
@@ -277,11 +277,11 @@ test("OpenCode deletion retires only its own observer and shutdown retires the r
   await harness.controller.startConversationTurn("session-1", { ...second, message: "Second" });
   await harness.controller.deleteConversation("session-1", first);
   assert.equal(harness.upstreamSessions.has(first.conversationId), false);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
   assert.equal((await harness.controller.readConversation("session-1", second)).status, "inProgress");
   assert.equal(harness.processStops.length, 0);
   await harness.controller.closeAllForProject();
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
 });
 
 test("temporary OpenCode observation loss stops admitted work and waits for an explicit new Send", async (t) => {
@@ -308,7 +308,7 @@ test("temporary OpenCode observation loss stops admitted work and waits for an e
   loss.resolve();
   await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /event connection ended/);
   assert.equal(interrupts, 1);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
   assert.equal(harness.promptCalls.length, 1);
   assert.deepEqual(harness.userMessages, []);
   reply.pending = false;
@@ -336,14 +336,14 @@ test("temporary OpenCode retains ownership after an unverified stop and can retr
   await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
   loss.resolve();
   await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /could not be verified/);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
   const pending = await harness.controller.readConversation("session-1", { conversationId });
   assert.equal(pending.ok, false);
   assert.equal(pending.status, "inProgress");
   assert.match(pending.error, /could not be verified/);
   exited = true;
   assert.equal((await harness.controller.stopConversation("session-1", { conversationId })).stopped, true);
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), false);
   assert.equal(harness.promptCalls.length, 1);
 });
 
@@ -385,7 +385,7 @@ test("shared OpenCode process loss stops temporary-only sessions without writing
   await settled;
   assert.equal(harness.processStops.length, 1);
   for (const [id] of conversations) {
-    assert.equal(await harness.controller.hasActiveTemporaryConversation(id), false);
+    assert.equal(await harness.controller.hasActiveAiTaskConversation(id), false);
   }
   assert.equal(harness.promptCalls.length, 2);
   assert.deepEqual(harness.userMessages, []);
@@ -453,7 +453,7 @@ test("temporary OpenCode steers its observed conversation and follows the new pr
   const guided = await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, steer: true, messageId: "guidance", message: "Read logs first" });
   assert.equal(guided.deliveryMode, "steer");
   assert.equal(harness.promptCalls.at(-1).input.delivery, "steer");
-  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveAiTaskConversation("session-1"), true);
   reply.pending = false;
   reply.text = "Read the logs.";
   const completed = await harness.controller.waitForConversationTurn("session-1", { conversationId, persistent: true });

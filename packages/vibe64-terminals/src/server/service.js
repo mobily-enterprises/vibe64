@@ -124,7 +124,7 @@ function createService({
     logger
   });
   /*
-   * The parts that call back into each other: a turn's follow-up reaches routing, goals and temporary chats, which
+   * The parts that call back into each other: a turn's follow-up reaches routing, goals and AI task chats, which
    * publish through it; routing interrupts through goals; the Main conversation host and the assistant read each
    * other. They are built below, after the collaborators that call back into them.
    */
@@ -314,7 +314,7 @@ function createService({
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: sessionAccess.runMainAgentWrite,
-    // A temporary chat's routing waits for a sibling's assistant startup as long as Main chat does.
+    // An AI task chat's routing waits for a sibling's assistant startup as long as Main chat does.
     routingWaitMs: AGENT_WRITE_WAIT_MS,
     /**
      * Always rereads the session; a conversation's caller may hold an older copy.
@@ -475,22 +475,22 @@ function createService({
   }
 
   return Object.freeze({
-    temporaryConversationDataSchema: sessionConversations.temporaryConversationDataSchema,
-    temporaryConversationSelectionSchema: sessionConversations.temporaryConversationSelectionSchema,
+    aiTaskConversationDataSchema: sessionConversations.aiTaskConversationDataSchema,
+    aiTaskConversationSelectionSchema: sessionConversations.aiTaskConversationSelectionSchema,
     conversationBinding: sessionConversations.conversationBinding,
-    inspectTemporaryConversationDelivery: sessionConversations.inspectTemporaryConversationDelivery,
-    createTemporaryConversation: sessionConversations.createTemporaryConversation,
-    listTemporaryConversations: sessionConversations.listTemporaryConversations,
-    readTemporaryConversation: sessionConversations.readTemporaryConversation,
-    updateTemporaryConversation: sessionConversations.updateTemporaryConversation,
-    cancelTemporaryConversationMessage: sessionConversations.cancelTemporaryConversationMessage,
-    cancelTemporaryConversationRouting: sessionConversations.cancelTemporaryConversationRouting,
-    stopTemporaryConversation: sessionConversations.stopTemporaryConversation,
+    inspectAiTaskConversationDelivery: sessionConversations.inspectAiTaskConversationDelivery,
+    createAiTaskConversation: sessionConversations.createAiTaskConversation,
+    listAiTaskConversations: sessionConversations.listAiTaskConversations,
+    readAiTaskConversation: sessionConversations.readAiTaskConversation,
+    updateAiTaskConversation: sessionConversations.updateAiTaskConversation,
+    cancelAiTaskConversationMessage: sessionConversations.cancelAiTaskConversationMessage,
+    cancelAiTaskConversationRouting: sessionConversations.cancelAiTaskConversationRouting,
+    stopAiTaskConversation: sessionConversations.stopAiTaskConversation,
     readConversationTurn: sessionConversations.readConversationTurn,
-    deleteTemporaryConversation: sessionConversations.deleteTemporaryConversation,
-    retireTemporaryConversations: sessionConversations.retireTemporaryConversations,
+    deleteAiTaskConversation: sessionConversations.deleteAiTaskConversation,
+    retireAiTaskConversations: sessionConversations.retireAiTaskConversations,
     afterTemporaryTurn: sessionConversations.afterTemporaryTurn,
-    startTemporaryConversationTurn: assistant.startTemporaryConversationTurn,
+    startAiTaskConversationTurn: assistant.startAiTaskConversationTurn,
     readClaudeAccountStatus,
     recordPreviewDiagnostic: terminals.recordPreviewDiagnostic,
     configureAssistantRuntime: hostSlots.configureAssistantRuntime,

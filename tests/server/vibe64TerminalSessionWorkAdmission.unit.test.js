@@ -484,7 +484,7 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
       listConnections: provider.controllerOptions.listConnections
     });
     runtime.renderPrompt = async (_sessionId, input) => ({ prompt: input.request });
-    await service.createTemporaryConversation(session.sessionId, {
+    await service.createAiTaskConversation(session.sessionId, {
       conversationId: "temporary",
       assistantRouting: { mode: "junior", review: false }
     });
@@ -511,7 +511,7 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
   // The original controlled provider rejects inference; preparation is deterministic.
   let temporaryMessage = 0;
   const send = () => kind === "temporary"
-    ? service.startTemporaryConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue.", messageId: `skills-preparation-${++temporaryMessage}` })
+    ? service.startAiTaskConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue.", messageId: `skills-preparation-${++temporaryMessage}` })
     : kind === "goal"
       ? service.updateAgentGoal(session.sessionId, { action: "set", objective: "Check this fixture.", engineId: "opencode" })
       : service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" });
@@ -1137,11 +1137,11 @@ test("rebase, assistant preparation and temporary repair identify their lock req
     code: "vibe64_agent_write_mode_busy"
   });
   assert.equal((await service.ensureAgentSession(session.sessionId)).code, "vibe64_agent_write_mode_busy");
-  const temporaryFailure = await service.startTemporaryConversationTurn(session.sessionId, {
+  const temporaryFailure = await service.startAiTaskConversationTurn(session.sessionId, {
     conversationId: "temporary", message: "Repair this update.", messageId: "blocked-repair"
   }).catch(error => error);
   assert.equal(temporaryFailure.code, "vibe64_agent_write_mode_busy");
-  assert.deepEqual(operations, ["update-session-work", "prepare-agent-session", "temporary-conversation"]);
+  assert.deepEqual(operations, ["update-session-work", "prepare-agent-session", "ai-task-conversation"]);
 });
 
 test("workspace setup reuses an already-held session agent-write lock", async (t) => {
@@ -1772,12 +1772,12 @@ test("shutdown requested by a dependent feature closes main and temporary routin
   const { service, session } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
   session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
   session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: false });
-  await service.createTemporaryConversation(session.sessionId, { conversationId: "shutdown-chat" });
+  await service.createAiTaskConversation(session.sessionId, { conversationId: "shutdown-chat" });
   const shutdown = await service.invalidateAgentRuntimes({ reason: "server-shutdown" });
   assert.notEqual(shutdown.ok, false, JSON.stringify(shutdown));
   const input = { messageId: "late-send", message: "Do not send this after shutdown.", submissionKind: "send" };
   await assert.rejects(service.sendAgentMessage(session.sessionId, input), /shutting down/);
-  await assert.rejects(service.startTemporaryConversationTurn(session.sessionId, {
+  await assert.rejects(service.startAiTaskConversationTurn(session.sessionId, {
     ...input, conversationId: "shutdown-chat"
   }), /shutting down/);
   assert.equal(provider.promptCalls.length, 0);
@@ -2469,7 +2469,7 @@ test("a Main or temporary send refused while the agent-write lock is busy is a d
   const sends = [
     ["main-while-busy", () => service.sendAgentMessage(session.sessionId,
       { messageId: "main-while-busy", message: "Say OK." }, { lockWaitMs: 0 })],
-    ["temporary-while-busy", () => service.startTemporaryConversationTurn(session.sessionId,
+    ["temporary-while-busy", () => service.startAiTaskConversationTurn(session.sessionId,
       { conversationId: "chat", messageId: "temporary-while-busy", message: "Say OK." }, { lockWaitMs: 0 })]
   ];
   for (const [messageId, send] of sends) {

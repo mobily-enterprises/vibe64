@@ -239,7 +239,7 @@ function createClaudeConversationHost({
             JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
           throw claudeConversationError("The scoped helper profile changed. Start a new helper.", { code: "vibe64_claude_helper_profile_changed" });
         }
-        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.", { code: "vibe64_claude_main_conversation_delete_refused" });
+        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as an AI task chat.", { code: "vibe64_claude_main_conversation_delete_refused" });
       }
     };
   }
@@ -397,7 +397,7 @@ function createClaudeConversationHost({
   }
 
   async function projectConversationResult(method, perform) {
-    if (method === "hasActiveTemporaryConversation") return { ok: true, active: await perform() };
+    if (method === "hasActiveAiTaskConversation") return { ok: true, active: await perform() };
     return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
   }
 
@@ -578,7 +578,7 @@ function createClaudeConversationHost({
       "deleteDetachedChatThread",
       "listNativeConversationStorage",
       "retireConversationHistory",
-      "hasActiveTemporaryConversation",
+      "hasActiveAiTaskConversation",
       "releaseRenewalPredecessorProcessExitProof",
       "releaseRenewalSuccessorProcessExitProof"
     ]),

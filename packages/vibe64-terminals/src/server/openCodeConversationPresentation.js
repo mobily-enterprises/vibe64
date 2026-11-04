@@ -44,13 +44,13 @@ function openCodeReasoningHeadline(value = "") {
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {OpenCodeSharedRuntime["turns"]} dependencies.turns
- * @param {OpenCodeSharedRuntime["temporaryConversations"]} dependencies.temporaryConversations
+ * @param {OpenCodeSharedRuntime["aiTaskConversations"]} dependencies.aiTaskConversations
  */
 function createOpenCodeConversationPresentation({
   getAssistantManager,
   publishSessionChanged,
   turns,
-  temporaryConversations,
+  aiTaskConversations,
   logger
 }) {
   const progressPublishes = new Map();
@@ -72,7 +72,7 @@ function createOpenCodeConversationPresentation({
     const agent = getAssistantManager();
     if (!agent || !state.actorKnown) return "";
     const context = state.context;
-    for (const previous of temporaryConversations.values()) {
+    for (const previous of aiTaskConversations.values()) {
       if (previous.reasoningSummary && previous !== state && previous.context.key === context.key) {
         await disposeReasoningSummary(previous);
       }
@@ -194,7 +194,7 @@ function createOpenCodeConversationPresentation({
       await state.completion;
       await cleanupReasoningSummary(state.context);
       state.entries.clear();
-      temporaryConversations.delete(state.key);
+      aiTaskConversations.delete(state.key);
     }).finally(() => {
       state.disposal = null;
     });

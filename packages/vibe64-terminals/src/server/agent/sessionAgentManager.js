@@ -162,7 +162,7 @@ function createSessionAgentManager({
     ensureSession: providerCalls.ensureSession,
     updateSessionSettings: providerCalls.updateSessionSettings,
     generateSessionRenewalHandover: providerCalls.generateSessionRenewalHandover,
-    hasActiveTemporaryConversation: providerCalls.hasActiveTemporaryConversation,
+    hasActiveAiTaskConversation: providerCalls.hasActiveAiTaskConversation,
     interruptDetachedChatTurn: providerCalls.interruptDetachedChatTurn,
     interruptTurn: providerCalls.interruptTurn,
     invalidateRuntimes: lifecycle.invalidateRuntimes,

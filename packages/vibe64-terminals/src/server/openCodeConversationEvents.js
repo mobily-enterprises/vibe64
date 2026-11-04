@@ -122,7 +122,7 @@ function createOpenCodeConversationEvents({
   sharedRuntime,
   presentation
 }) {
-  const { turns, temporaryConversations } = sharedRuntime;
+  const { turns, aiTaskConversations } = sharedRuntime;
   const {
     disposeReasoningSummary,
     publishOpenCodeProgress,
@@ -305,7 +305,7 @@ function createOpenCodeConversationEvents({
           target
         };
         turn.reasoning = reasoning;
-        temporaryConversations.set(reasoning.key, reasoning);
+        aiTaskConversations.set(reasoning.key, reasoning);
         return {
           observation: () => observationProjection(context, options.onEvent),
           eventReady: options.eventReady,

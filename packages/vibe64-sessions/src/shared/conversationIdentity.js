@@ -1,7 +1,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 
 const MAIN_CONVERSATION_PREFIX = "vibe64-main:";
-const TEMPORARY_CONVERSATION_PREFIX = "vibe64-temporary:";
+const AI_TASK_CONVERSATION_PREFIX = "vibe64-temporary:";
 
 function invalidConversation(kind) {
   return new AppError(400, `Invalid ${kind} conversation identity.`, { code: "vibe64_conversation_identity_invalid", params: { kind } });
@@ -34,18 +34,18 @@ function mainConversationTarget(id) {
   return { projectSlug: target[0], sessionId: target[1] };
 }
 
-function temporaryConversationId({ projectSlug, sessionId, conversationId } = {}) {
+function aiTaskConversationId({ projectSlug, sessionId, conversationId } = {}) {
   if ([projectSlug, sessionId, conversationId].some(value => typeof value !== "string" || !value.trim())) {
-    throw new TypeError("A temporary conversation requires its project, session and saved logical identity.");
+    throw new TypeError("An AI task conversation requires its project, session and saved logical identity.");
   }
-  return `${TEMPORARY_CONVERSATION_PREFIX}${JSON.stringify([projectSlug, sessionId, conversationId])}`;
+  return `${AI_TASK_CONVERSATION_PREFIX}${JSON.stringify([projectSlug, sessionId, conversationId])}`;
 }
 
-function temporaryConversationTarget(id) {
-  if (typeof id !== "string" || !id.startsWith(TEMPORARY_CONVERSATION_PREFIX)) return null;
+function aiTaskConversationTarget(id) {
+  if (typeof id !== "string" || !id.startsWith(AI_TASK_CONVERSATION_PREFIX)) return null;
   let target;
   try {
-    target = JSON.parse(id.slice(TEMPORARY_CONVERSATION_PREFIX.length));
+    target = JSON.parse(id.slice(AI_TASK_CONVERSATION_PREFIX.length));
   } catch {
     throw invalidConversation("temporary");
   }
@@ -55,4 +55,4 @@ function temporaryConversationTarget(id) {
   return { projectSlug: target[0], sessionId: target[1], conversationId: target[2] };
 }
 
-export { mainConversationId, mainConversationTarget, temporaryConversationId, temporaryConversationTarget };
+export { mainConversationId, mainConversationTarget, aiTaskConversationId, aiTaskConversationTarget };

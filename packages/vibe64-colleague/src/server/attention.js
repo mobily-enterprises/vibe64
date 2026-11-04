@@ -21,7 +21,7 @@ async function readWatchedConversation(actions, watch, context) {
   };
   let status, runId, messages, error, route;
   if (watch.conversationId) {
-    const result = await execute("vibe64.terminals.temporary-conversation.read", {
+    const result = await execute("vibe64.terminals.ai-task-conversation.read", {
       sessionId: watch.sessionId,
       conversationId: watch.conversationId,
       messageLimit: 12

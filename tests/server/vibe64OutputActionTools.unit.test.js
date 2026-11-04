@@ -128,6 +128,6 @@ test("output definitions keep no lesson access; a practice project's output is a
     await assert.rejects(action.execute({ sessionId: "initial-session" }, {}), { code: "vibe64_invalid_project_slug" });
   }
   assert.equal(calls.length, 0);
-  for (const suffix of ["agent-terminal.start", "global-terminal.start", "temporary-conversation.turn.start"])
+  for (const suffix of ["agent-terminal.start", "global-terminal.start", "ai-task-conversation.turn.start"])
     assert.equal(Boolean(definitions.find(item => item.id === `vibe64.terminals.${suffix}`)?.extensions.vibe64.learningAccess), false);
 });

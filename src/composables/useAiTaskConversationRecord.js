@@ -5,18 +5,18 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { normalizeVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
-import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
+import { aiTaskConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { useAiTaskConversationSaves } from "@/composables/useAiTaskConversationSaves.js";
 import { aiTaskConversationView, aiTaskRequest, aiTaskTurnIsActive } from "@/lib/vibe64AiTaskConversation.js";
 import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import { VIBE64_SESSION_CHANGED_EVENT, vibe64TemporaryConversationsPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { VIBE64_SESSION_CHANGED_EVENT, vibe64AiTaskConversationsPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 
 /** The fields the server's conversation read reports, applied as it reports them. */
 const OBSERVED_FIELDS = ["routingMetadata", "purposes", "canSteer", "assistantSelection", "goal"];
 /** The conversation notices for the bound conversation, besides its creation. */
-const CONVERSATION_NOTICES = ["temporary-conversation-closed", "temporary-conversation-renamed", "assistant-routing-changed"];
+const CONVERSATION_NOTICES = ["ai-task-conversation-closed", "ai-task-conversation-renamed", "assistant-routing-changed"];
 
 /**
  * The AI task's conversation record: binds the task's saved conversation for the session and viewer,
@@ -86,7 +86,7 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
     // Declared first: the binding asks whether it is active while it is still being acquired.
     let binding;
     binding = markRaw(acquireConversation({
-      conversationId: temporaryConversationId({ projectSlug: toValue(projectSlug), sessionId: record.sessionId,
+      conversationId: aiTaskConversationId({ projectSlug: toValue(projectSlug), sessionId: record.sessionId,
         conversationId: record.conversationId }),
       active: () => !disposed && conversation.value?.binding === binding
     }));
@@ -153,7 +153,7 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
         if (!disposed && generation === restoreGeneration) return restore();
         return;
       }
-      restoring = aiTaskRequest(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), { method: "GET" })
+      restoring = aiTaskRequest(vibe64AiTaskConversationsPath(apiPath, ownerSessionId), { method: "GET" })
         .finally(() => restorations.delete(key));
       restorations.set(key, restoring);
       const response = await restoring;
@@ -196,7 +196,7 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
   useRealtimeEvent({ event: "connect", onEvent: () => void restore() });
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: ({ payload = {} }) => matchesSession(payload) && payload.reason === "temporary-conversation-created" &&
+    matches: ({ payload = {} }) => matchesSession(payload) && payload.reason === "ai-task-conversation-created" &&
       payload.conversationId === toValue(taskId) && !closedConversationIds.has(payload.conversationId) && !conversation.value,
     onEvent: () => void restore()
   });
@@ -205,10 +205,10 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
     matches: ({ payload = {} }) => matchesSession(payload) && CONVERSATION_NOTICES.includes(payload.reason),
     onEvent: ({ payload }) => {
       const current = conversation.value?.conversationId === payload.conversationId ? conversation.value : null;
-      if (payload.reason === "temporary-conversation-closed") {
+      if (payload.reason === "ai-task-conversation-closed") {
         if (current) releaseConversation(current.id);
         else closedConversationIds.add(payload.conversationId);
-      } else if (payload.reason === "temporary-conversation-renamed") void restore();
+      } else if (payload.reason === "ai-task-conversation-renamed") void restore();
       else if (current && payload.assistantRoutingRequest) followRoute(current, payload.assistantRoutingRequest);
     }
   });

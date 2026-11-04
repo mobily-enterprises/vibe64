@@ -28,7 +28,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createSessionActions } from "../../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "@local/vibe64-terminals/server/actions";
-import { mainConversationId, temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
+import { mainConversationId, aiTaskConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createMainBrowserConversations } from "../../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { withMainChatOperations } from "../../server/vibe64SessionsTestHelpers.js";
 import { Vibe64ConversationsFeature } from "../../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
@@ -132,14 +132,14 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     if (sessionId !== session.sessionId) throw Object.assign(new Error("Unknown status-test session."), { statusCode: 404 });
   }
   let aiTaskService = null;
-  const temporary = temporaryEngineId ? await temporaryConversationsFixture({
+  const temporary = temporaryEngineId ? await aiTaskConversationsFixture({
     engineId: temporaryEngineId, session, actions,
     publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, event),
     conversationTurns: {
       starting: (sessionId, turn) => aiTaskService.onTurnStarting({ sessionId, ...turn }),
       settled: (sessionId, conversationId, failure = null) => aiTaskService.onTurnSettled({ sessionId, conversationId, failure })
     },
-    onSubscribe: conversationId => state.subscriptions.push(temporaryConversationId({
+    onSubscribe: conversationId => state.subscriptions.push(aiTaskConversationId({
       projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId, conversationId
     }))
   }) : null;
@@ -291,7 +291,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   actions.register({ contributorId: "test.status.terminals", domain: "vibe64-terminals",
     actions: createTerminalActions({ terminals }).filter(action => [
       "vibe64.terminals.agent-goal.canonical.read", "vibe64.terminals.agent-goal.canonical.update"
-    ].includes(action.id) || temporary && action.id.startsWith("vibe64.terminals.temporary-conversation."))
+    ].includes(action.id) || temporary && action.id.startsWith("vibe64.terminals.ai-task-conversation."))
       .map(action => ({ surfaces: ["app"], channels: ["api", "internal"], ...action })) });
   if (temporary) {
     const current = new Proxy({}, { get: (_target, name) => aiTaskService[name] });
@@ -301,7 +301,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   }
   if (temporary) registerTerminalRoutes({ ...http, router: {
     register(method, route, ...options) {
-      if (route.includes("/temporary-conversations")) return http.router.register(method, route, ...options);
+      if (route.includes("/ai-task-conversations")) return http.router.register(method, route, ...options);
     }
   } }, { terminals, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
     fastify: { get() {} }, // This fixture does not expose the unrelated native terminal WebSocket routes.
@@ -424,7 +424,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   app.addHook("onRequest", async request => {
     if (request.url.startsWith("/api/assistant/") || colleague && request.url.startsWith("/api/vibe64/colleague")) {
       state.requests.push(`${request.method} ${request.url}`);
-    } else if (temporary && request.url.includes("/temporary-conversations")) {
+    } else if (temporary && request.url.includes("/ai-task-conversations")) {
       const route = new URL(request.url, "http://127.0.0.1").pathname.replace(/^\/api(?:\/app\/[^/]+)?/u, "");
       state.requests.push(`${request.method} ${route}`);
     }
@@ -504,7 +504,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === "/vibe64/sessions/current") result = { ok: true, sessionId: session.sessionId };
       else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: state.conversationLog, pagination: { count: state.conversationLog.length, totalTurnCount: state.conversationLog.length, hasMoreBefore: false, limit: 20 } };
       else if (route === `${sessionRoute}/assistant-access`) result = state.assistantAccess;
-      else if (route === `${sessionRoute}/temporary-conversations`) result = { ok: true, conversations: [] };
+      else if (route === `${sessionRoute}/ai-task-conversations`) result = { ok: true, conversations: [] };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/work-plan`) result = { ok: true, sessionId: session.sessionId, available: false, current: null, history: [] };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
@@ -637,7 +637,7 @@ export async function relayConversation(page: Page, server: { url: string; tempo
     await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
   });
   await relay("**/api/assistant/**");
-  if (server.temporary) await relay(/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u);
+  if (server.temporary) await relay(/\/(?:ai-task-conversations|ai-tasks)(?:[/?]|$)/u);
   await page.routeWebSocket(/\/socket\.io\//u, (route) => {
     const url = new URL(route.url());
     const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
@@ -657,16 +657,16 @@ export async function relayConversation(page: Page, server: { url: string; tempo
 // write lock, attachments, routing selection and controlled native method seam.
 // Canonical history, receipts, command coordination and publication stay real.
 // Its scratch root is removed by close(), or here when setup itself fails.
-async function temporaryConversationsFixture(options) {
+async function aiTaskConversationsFixture(options) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-browser-conversations-"));
-  try { return await temporaryConversationsFixtureAt(root, options); }
+  try { return await aiTaskConversationsFixtureAt(root, options); }
   catch (error) {
     await rm(root, { recursive: true, force: true, maxRetries: 5 });
     throw error;
   }
 }
 
-async function temporaryConversationsFixtureAt(root, { engineId, session, actions, publishSessionChanged, onSubscribe, conversationTurns }) {
+async function aiTaskConversationsFixtureAt(root, { engineId, session, actions, publishSessionChanged, onSubscribe, conversationTurns }) {
   const targetRoot = path.join(root, "project");
   await mkdir(targetRoot);
   const selection = { engineId, modelProviderId: engineId === "opencode" ? "deepseek" : "openai",
@@ -802,27 +802,27 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
       native.get(record.providerConversationId).status = status;
     },
     async seed(records) {
-      for (const record of records) await service.createTemporaryConversation(session.sessionId, {
+      for (const record of records) await service.createAiTaskConversation(session.sessionId, {
         conversationId: record.conversationId, presentation: { title: record.title, draft: record.draft }, agentSettings: record.agentSettings
       });
     },
     terminals: {
       ...service,
-      async createTemporaryConversation(sessionId, input, ...options) {
+      async createAiTaskConversation(sessionId, input, ...options) {
         captured.temporaryCreates.push({ ...commandInput(input), conversationId: input.conversationId });
-        return service.createTemporaryConversation(sessionId, input, ...options);
+        return service.createAiTaskConversation(sessionId, input, ...options);
       },
-      async startTemporaryConversationTurn(sessionId, input, ...options) {
+      async startAiTaskConversationTurn(sessionId, input, ...options) {
         captured.temporaryTurns.push(commandInput(input));
-        return service.startTemporaryConversationTurn(sessionId, input, ...options);
+        return service.startAiTaskConversationTurn(sessionId, input, ...options);
       },
-      async deleteTemporaryConversation(sessionId, input) {
+      async deleteAiTaskConversation(sessionId, input) {
         captured.temporaryDeletes += 1;
-        return service.deleteTemporaryConversation(sessionId, input);
+        return service.deleteAiTaskConversation(sessionId, input);
       },
       async openTemporaryBrowserConversation(sessionId, conversationId, options) {
         const handle = await common.open({ id: sessionId, context: { ...options, sessionId,
-          temporaryConversationId: conversationId, runtime, session: await runtime.getSession(sessionId) } });
+          aiTaskConversationId: conversationId, runtime, session: await runtime.getSession(sessionId) } });
         return { ...handle, subscribe(listener) { onSubscribe(conversationId); return handle.subscribe(listener); } };
       }
     },

@@ -113,7 +113,7 @@ function sessionDriverOutput(input) {
     ...(conversationKind === "main"
       ? ["This is the main Vibe64 conversation for the selected session worktree."]
       : [
-          "This is a user-visible temporary conversation in the selected session worktree, with the same tools and project access as main chat.",
+          "This is a user-visible AI task conversation in the selected session worktree, with the same tools and project access as main chat.",
           "Its messages stay out of main History. Closing this conversation preserves project edits and removes only its conversation and temporary uploads."
         ]),
     "Do not edit Vibe64 runtime/session state or artifacts.",

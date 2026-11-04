@@ -37,27 +37,27 @@ test("the root test command requires one explicit test file", async () => {
 test("the targeted test command always fixes file concurrency at one", () => {
   assert.deepEqual(
     targetedTestArguments([
-      "tests/server/codexTemporaryConversationLifecycle.unit.test.js"
+      "tests/server/codexAiTaskConversationLifecycle.unit.test.js"
     ]),
     [
       "--test-concurrency=1",
-      "tests/server/codexTemporaryConversationLifecycle.unit.test.js"
+      "tests/server/codexAiTaskConversationLifecycle.unit.test.js"
     ]
   );
   assert.deepEqual(
     targetedTestArguments([
       "--runInBand",
-      "tests/server/codexTemporaryConversationLifecycle.unit.test.js"
+      "tests/server/codexAiTaskConversationLifecycle.unit.test.js"
     ]),
     [
       "--test-concurrency=1",
-      "tests/server/codexTemporaryConversationLifecycle.unit.test.js"
+      "tests/server/codexAiTaskConversationLifecycle.unit.test.js"
     ]
   );
   assert.throws(
     () => targetedTestArguments([
       "--test-concurrency=2",
-      "tests/server/codexTemporaryConversationLifecycle.unit.test.js"
+      "tests/server/codexAiTaskConversationLifecycle.unit.test.js"
     ]),
     /concurrency is fixed at 1/u
   );
