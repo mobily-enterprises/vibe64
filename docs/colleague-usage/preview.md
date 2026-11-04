@@ -106,7 +106,8 @@ retry after you inspect the failure.
 If the page opens while the application cannot be reached, for example during the
 second or two a development server takes to restart after an Env change, Preview
 shows **Starting preview.** and waits. It checks about once a second and opens the
-page by itself as soon as the application answers, so you do not need to reload.
+page by itself, in its default identity, as soon as the application answers, so
+you do not need to reload.
 If it keeps waiting, the application is not answering: use **Show run output** to
 see why.
 

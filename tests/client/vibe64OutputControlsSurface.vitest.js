@@ -1139,6 +1139,7 @@ it("retires an in-flight identity grant when the displayed preview is suspended"
   f.outputs.requestPreviewIdentityGrant.mockImplementation(() => new Promise(resolve => { grant = resolve; }));
   f.outputs.previewIdentity.value = { available: true, identities: [{ name: "operator" }], defaultIdentity: "operator" };
   f.load();
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
   await nextTick();
   expect(f.outputs.requestPreviewIdentityGrant).toHaveBeenCalledTimes(1);
   f.state.suspendPreview();
@@ -1157,6 +1158,7 @@ it("keeps ordinary Reload recoverable when it retires a pending identity grant",
   f.outputs.requestPreviewIdentityGrant.mockImplementation(() => new Promise(resolve => { grant = resolve; }));
   f.outputs.previewIdentity.value = { available: true, identities: [{ name: "operator" }] };
   f.load();
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
   await nextTick();
   await f.state.reloadPreview();
   grant({ ok: true, grant: "retired-grant" });
@@ -1164,6 +1166,19 @@ it("keeps ordinary Reload recoverable when it retires a pending identity grant",
   expect(f.state.previewIdentityBusy.value).toBe(false);
   expect(f.state.previewIdentityError.value).toBe("");
   expect(f.posts.some(post => post.data.grant === "retired-grant")).toBe(false);
+});
+
+it("the default identity waits for a bridge, so a page without one neither fails it nor spends its attempt", async () => {
+  const f = mountPreviewSurface();
+  f.outputs.requestPreviewIdentityGrant.mockImplementation(() => new Promise(() => {}));
+  f.outputs.previewIdentity.value = { available: true, identities: [{ name: "operator" }] };
+  f.load();
+  await nextTick();
+  expect(f.outputs.requestPreviewIdentityGrant).not.toHaveBeenCalled();
+  expect(f.state.previewIdentityError.value).toBe("");
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
+  await nextTick();
+  expect(f.outputs.requestPreviewIdentityGrant).toHaveBeenCalledTimes(1);
 });
 
 it("a page from a preview that stopped running is removed rather than left looking alive", async () => {

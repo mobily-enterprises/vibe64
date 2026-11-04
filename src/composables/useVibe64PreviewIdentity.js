@@ -26,6 +26,7 @@ function useVibe64PreviewIdentity({ frame, outputs, props }) {
   const {
     cancelPreviewBridgeRequests,
     orientation,
+    previewBridgeAnnounced,
     previewFrameLoaded,
     previewFrameRequestId,
     previewIdentityLifecycleKey,
@@ -171,6 +172,9 @@ function useVibe64PreviewIdentity({ frame, outputs, props }) {
     if (
       !lifecycle ||
       !previewIdentityAvailable.value ||
+      // Without a bridge, as on the starting page, the attempt could only fail
+      // and would be spent: it waits for the page whose bridge announces itself.
+      !previewBridgeAnnounced() ||
       previewIdentityAutomaticAttempt === lifecycle
     ) {
       return false;

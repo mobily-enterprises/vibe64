@@ -35,7 +35,8 @@ const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
  * `identityBusy()` says whether an identity switch is in flight;
  * `followIdentityReload(frameRequestId)` moves an identity reload in flight to
  * a newer frame request; `identityFrameReady(frameRequestId)` reports a ready
- * page; `resourceRetryCount()` is the current page's resource retries.
+ * page, again when a bridge announces itself in a page already ready;
+ * `resourceRetryCount()` is the current page's resource retries.
  * @param {{
  *   identityBusy: () => boolean,
  *   followIdentityReload: (frameRequestId: number) => void,
@@ -164,6 +165,11 @@ function useVibe64PreviewFrame({
     previewDebugLog("bridge.reset", {
       reason
     });
+  }
+
+  /** Whether the page in the frame has a bridge: the Preview's starting page has none. */
+  function previewBridgeAnnounced() {
+    return Boolean(previewBridgeOrigin);
   }
 
   function postToPreviewBridge(message = {}) {
@@ -386,7 +392,8 @@ function useVibe64PreviewFrame({
   // from a page already loaded means it reloaded inside the same frame.
   function receivePreviewBridgeMessage(event) {
     const bridgeReady = isPreviewBridgeReadyMessage(event.data);
-    if (bridgeReady && previewFrameLoaded.value) {
+    const frameAlreadyReady = bridgeReady && previewFrameLoaded.value;
+    if (frameAlreadyReady) {
       orientation.close();
       resetPreviewBridge("bridge-document-ready");
     }
@@ -399,6 +406,8 @@ function useVibe64PreviewFrame({
       // The bridge announces readiness as soon as its listeners are installed.
       // Application modules and rendering may still be pending.
       markPreviewFrameReady(previewFrameRequestId.value, "bridge-ready");
+      // The page before this one may have had no bridge, so what waits for one starts now.
+      if (frameAlreadyReady) identityFrameReady(previewFrameRequestId.value);
     }
     return bridgeReady;
   }
@@ -421,6 +430,7 @@ function useVibe64PreviewFrame({
     orientation,
     postToPreviewBridge,
     previewBaseUrl,
+    previewBridgeAnnounced,
     previewBridgeRequests,
     previewBridgeVersion,
     previewDebugLog,

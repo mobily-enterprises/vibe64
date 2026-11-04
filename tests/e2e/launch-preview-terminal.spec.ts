@@ -566,31 +566,17 @@ test("@preview-lifecycle renders through the proxy and displays the target URL",
 });
 
 test("@preview-lifecycle a page caught while the target is down opens the app by itself once the target answers", async ({ page }) => {
-  const target = createHttpServer((request, response) => {
-    response.setHeader("content-type", "text/html");
-    response.end(request.url === "/next"
-      ? "<h1>Next page</h1>"
-      : '<h1>App is back</h1><a href="/next">Next page</a>');
-  });
-  await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
-  const { port } = target.address() as AddressInfo;
-  await new Promise((resolve) => target.close(resolve));
-  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
+  const target = await proxiedTargetThatIsDown((url) => url === "/next"
+    ? "<h1>Next page</h1>"
+    : '<h1>App is back</h1><a href="/next">Next page</a>');
   try {
-    // The real proxy connects to the real target and presents the address the mocked status names.
-    const proxy = await registry.ensure({
-      editorOrigin: BASE_URL,
-      sessionId: SESSION_ID,
-      targetHref: TARGET_APP_URL
-    }, `http://127.0.0.1:${port}/home`);
-    const proxyOrigin = new URL(proxy.href).origin;
     const requests: PlaywrightRequest[] = [];
     page.on("request", (request) => {
-      if (request.url().startsWith(proxyOrigin)) requests.push(request);
+      if (request.url().startsWith(target.proxyOrigin)) requests.push(request);
     });
     const documents = () => requests.filter((request) => request.isNavigationRequest()).length;
     await mockLaunchTerminalSocket(page);
-    await mockLaunchSession(page, { initialLaunchStatus: launchStatusPayload({ previewHref: proxy.href }) });
+    await mockLaunchSession(page, { initialLaunchStatus: launchStatusPayload({ previewHref: target.previewHref }) });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
@@ -601,7 +587,7 @@ test("@preview-lifecycle a page caught while the target is down opens the app by
     await expect.poll(() => requests.filter((request) => request.resourceType() === "fetch").length).toBeGreaterThan(2);
     expect(documents()).toBe(loaded);
 
-    await new Promise<void>((resolve) => target.listen(port, "127.0.0.1", resolve));
+    await target.bringUp();
 
     await expect(preview.getByRole("heading", { name: "App is back" })).toBeVisible();
     // The editor still follows the page, so it treated the reload as its own frame's.
@@ -610,9 +596,50 @@ test("@preview-lifecycle a page caught while the target is down opens the app by
     await expect(page.getByLabel("Preview URL")).toHaveValue("/next");
   } finally {
     await page.unrouteAll({ behavior: "wait" });
-    await registry.closeAll();
-    target.closeAllConnections();
-    await new Promise((resolve) => target.close(resolve));
+    await target.close();
+  }
+});
+
+test("@preview-identity the default identity waits for the app when the first page load meets the starting page", async ({ page }) => {
+  const target = await proxiedTargetThatIsDown(() => "<h1>App is back</h1>");
+  try {
+    let exchanges = 0;
+    await page.route(`${target.proxyOrigin}${PREVIEW_IDENTITY_CONTROL_PATH}`, async (route) => {
+      exchanges += 1;
+      await fulfillJson(route, {
+        identity: {
+          email: "ada@example.com",
+          login: "",
+          selector: { type: "email", value: "ada@example.com" },
+          userId: "app-user-admin",
+          username: "Ada App"
+        },
+        ok: true
+      });
+    });
+    await mockLaunchTerminalSocket(page);
+    const previewIdentity = previewIdentityCapability();
+    await mockLaunchSession(page, {
+      initialLaunchStatus: launchStatusPayload({ previewHref: target.previewHref, previewIdentity }),
+      previewIdentity
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const preview = page.frameLocator(".vibe64-launch-controls__preview-frame");
+    const identityButton = page.getByRole("button", { name: /Previewing as|Switching preview identity|Preview identity failed/u });
+    await expect(preview.getByText("Starting preview.", { exact: true })).toBeVisible();
+    await expect(identityButton).toHaveAttribute("aria-label", "Previewing as Identity not confirmed");
+    expect(exchanges).toBe(0);
+
+    await target.bringUp();
+
+    await expect(identityButton).toHaveAttribute("aria-label", "Previewing as admin — ada@example.com");
+    await expect(preview.getByRole("heading", { name: "App is back" })).toBeVisible();
+    expect(exchanges).toBe(1);
+  } finally {
+    await page.unrouteAll({ behavior: "wait" });
+    await target.close();
   }
 });
 
@@ -5381,6 +5408,36 @@ function previewAppHtml({
       targetOrigin
     }
   );
+}
+
+/**
+ * The real proxy in front of a real target that stays down until `bringUp()`. The proxy connects to that target and
+ * presents the address the mocked status names.
+ */
+async function proxiedTargetThatIsDown(html: (url: string) => string) {
+  const target = createHttpServer((request, response) => {
+    response.setHeader("content-type", "text/html");
+    response.end(html(String(request.url)));
+  });
+  await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+  const { port } = target.address() as AddressInfo;
+  await new Promise((resolve) => target.close(resolve));
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env });
+  const proxy = await registry.ensure({
+    editorOrigin: BASE_URL,
+    sessionId: SESSION_ID,
+    targetHref: TARGET_APP_URL
+  }, `http://127.0.0.1:${port}/home`);
+  return {
+    previewHref: proxy.href,
+    proxyOrigin: new URL(proxy.href).origin,
+    bringUp: () => new Promise<void>((resolve) => target.listen(port, "127.0.0.1", resolve)),
+    async close() {
+      await registry.closeAll();
+      target.closeAllConnections();
+      await new Promise((resolve) => target.close(resolve));
+    }
+  };
 }
 
 async function startPreviewAppServer({
