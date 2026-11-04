@@ -60,8 +60,8 @@ import { mdiClose, mdiCodeTags } from "@mdi/js";
 import { CERTAINTY_TEXT, NOT_IGNORED_TEXT, callGroups, callMethodText, coverageText, functionLabel, joinText } from "./usageModel.js";
 
 const props = defineProps({
-  node: { type: Object, required: true },
-  detail: { type: Object, default: null },
+  node: { type: /** @type {import("vue").PropType<import("./usageModel.js").UsageWebNode>} */ (Object), required: true },
+  detail: { type: /** @type {import("vue").PropType<import("./usageModel.js").UsageFunctionDetail | null>} */ (Object), default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: "" },
   // In Recording: function id → times it ran in the request (null: ran, not counted).

@@ -31,12 +31,19 @@ const USAGE_MODES = Object.freeze([
 const USAGE_QUERY_KEYS = Object.freeze(["view", "entry", "mode", "subsystem", "recording", "request"]);
 const MAX_NODES = 300;
 const MORE_NODES = 1000;
+// A search box reads once typing pauses this long.
+const SEARCH_DELAY_MS = 200;
 
 function entryKind(kind) {
   return USAGE_ENTRY_KINDS.find((item) => item.kind === kind) || { kind, label: kind, plural: kind, icon: mdiFileDocumentOutline };
 }
 
 const text = (value) => (typeof value === "string" ? value.trim() : Array.isArray(value) ? text(value[0]) : "");
+
+/**
+ * Usage's address state: the view, and in Usage its mode, entry, zoomed subsystem, recording and request.
+ * @typedef {ReturnType<typeof usageStateFromQuery>} UsageState
+ */
 
 // The address keeps the usage state; Map is the default and writes nothing.
 function usageStateFromQuery(query = {}) {
@@ -154,6 +161,34 @@ function edgeCounts(edges = []) {
   }
   return { out, into };
 }
+
+/**
+ * One file or function the zoomed web draws, alike for Imports, Calls and Recording.
+ * @typedef {object} UsageWebNode
+ * @property {string} id
+ * @property {string} [functionId] a function's id; a file has none
+ * @property {string} title
+ * @property {string} subtitle
+ * @property {string} file
+ * @property {{ line: number, column: number } | null} start
+ * @property {number | null} [count] in Recording, how often it ran (null: ran, not counted)
+ * @property {string} [join] in Recording, how it was joined to the last scan
+ * @property {string} [reason] in Recording, why it could not be joined
+ * @property {number} [outCount]
+ * @property {number} [inCount]
+ */
+
+/**
+ * The usage answer for one function: its calls, its callers and the calls the scan could not resolve.
+ * @typedef {object} UsageFunctionDetail
+ * @property {{ id: string, file: string, start: { line: number, column: number }, coverage?: string }} function
+ * @property {object[]} calls
+ * @property {object[]} calledBy
+ * @property {{ callee: string, start: { line: number, column: number } }[]} unresolved
+ * @property {{ unresolved: number }} totals
+ * @property {boolean} truncated
+ * @property {{ list: number }} limits
+ */
 
 // One display shape for files (Imports), reached functions (Calls) and
 // functions that ran (Recording), so the zoomed view draws them alike.
@@ -401,6 +436,7 @@ export {
   NODE,
   NOT_IGNORED_TEXT,
   NOT_SCANNED_CODE,
+  SEARCH_DELAY_MS,
   USAGE_MODES,
   CERTAINTY_TEXT,
   callGroups,

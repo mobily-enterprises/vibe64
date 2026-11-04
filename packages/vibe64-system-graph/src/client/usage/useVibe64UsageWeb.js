@@ -218,6 +218,8 @@ function useVibe64UsageWeb({ sessionId }) {
   };
 }
 
+/** @typedef {ReturnType<typeof useVibe64UsageWeb>} Vibe64UsageWeb */
+
 export {
   useVibe64UsageWeb
 };

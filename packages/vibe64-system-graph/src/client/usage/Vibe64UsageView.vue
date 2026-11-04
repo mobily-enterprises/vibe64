@@ -172,7 +172,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, toRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, toRef, watch } from "vue";
 import { mdiCheck, mdiRecordCircleOutline, mdiRefresh } from "@mdi/js";
 import { Vibe64UsageRecordDialog } from "@local/vibe64-usage-recording/client";
 
@@ -182,7 +182,6 @@ import Vibe64UsageFunctionPanel from "./Vibe64UsageFunctionPanel.vue";
 import Vibe64UsageRecordingResults from "./Vibe64UsageRecordingResults.vue";
 import Vibe64UsageWebCanvas from "./Vibe64UsageWebCanvas.vue";
 import {
-  MAX_NODES,
   MORE_NODES,
   NOT_IGNORED_TEXT,
   NOT_SCANNED_CODE,
@@ -192,11 +191,11 @@ import {
   interactionTitle,
   isBackgroundRequest,
   pathParts,
-  recordingWeb,
   requestTitle,
-  unavailableRuntimes,
   webNodes
 } from "./usageModel.js";
+import { useVibe64UsageEntries } from "./useVibe64UsageEntries.js";
+import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
 import { useVibe64UsageWeb } from "./useVibe64UsageWeb.js";
 
 const COMPACT_WIDTH = 600;
@@ -204,9 +203,6 @@ const WIDE_WIDTH = 1040;
 // Below the rail plus two function columns (280 + 32 + 544 + 32) a call
 // cannot be drawn whole, so the canvas lists functions as on a phone.
 const GRAPH_WIDTH = 888;
-const SEARCH_DELAY_MS = 200;
-const LIVE_REFRESH_MS = 5000;
-const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
 
 // The Usage half of Architecture. Its address state (entry, mode, zoomed
 // subsystem, recording, request) belongs to the parent, which keeps it in the
@@ -214,8 +210,8 @@ const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
 const props = defineProps({
   active: { type: Boolean, default: true },
   sessionId: { type: String, required: true },
-  state: { type: Object, required: true },
-  findRequest: { type: Object, default: null },
+  state: { type: /** @type {import("vue").PropType<import("./usageModel.js").UsageState>} */ (Object), required: true },
+  findRequest: { type: /** @type {import("vue").PropType<import("./useVibe64UsageState.js").UsageFindRequest | null>} */ (Object), default: null },
   snapshotKey: { type: String, default: "" },
   refreshing: { type: Boolean, default: false }
 });
@@ -226,25 +222,16 @@ const root = ref(null);
 const compact = ref(false);
 const wide = ref(true);
 const listCanvas = ref(false);
-const search = ref("");
-const kind = ref("");
-const exactOnly = ref(false);
-const maxNodes = ref(MAX_NODES);
 const showUntouched = ref(false);
 const showPlumbing = ref(false);
 const selected = shallowRef(null);
 const pickerOpen = ref(false);
 const recordOpen = ref(false);
-const requestSearch = ref("");
-const includeEmpty = ref(false);
 
 const mode = computed(() => props.state.mode || "calls");
 const snapshot = computed(() => usage.snapshot.value || usage.web.data.value?.snapshot || null);
-const recordings = computed(() => usage.recordings.data.value?.recordings || []);
-const unavailable = computed(() => unavailableRuntimes(usage.targets.data.value?.targets || []));
 // Before the first scan there is nothing to retry: every read needs a scan.
 const notScanned = computed(() => [usage.entries, usage.web, usage.result].some((read) => read.errorCode.value === NOT_SCANNED_CODE));
-const noEntries = computed(() => notScanned.value || (!usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value)));
 const busy = computed(() => [usage.web, usage.result, usage.requests].some((read) => read.loading.value));
 
 function update(patch) {
@@ -256,40 +243,25 @@ function setMode(value) {
   update({ mode: value, subsystem: "" });
 }
 
-// ---------------------------------------------------------------- entries
+// ---------------------------------------------------------------- one function
 
-let searchTimer;
-let loadedKey = "";
-const loadEntries = () => usage.entries.search({ q: search.value, kind: kind.value });
-watch([search, kind], () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(loadEntries, SEARCH_DELAY_MS);
-});
-watch([() => props.active, () => props.sessionId, () => props.snapshotKey], ([active, sessionId, key]) => {
-  if (!active || !sessionId || loadedKey === `${sessionId}\n${key}`) return;
-  loadedKey = `${sessionId}\n${key}`;
-  void loadEntries();
-}, { immediate: true });
-
-function selectEntry(entry) {
-  pickerOpen.value = false;
-  if (entry.id !== props.state.entry) update({ entry: entry.id, subsystem: "" });
+function selectNode(node) {
+  selected.value = node;
+  if (node.functionId) void usage.detail.run(node.functionId);
+  else usage.detail.reset();
 }
 
-// "Show usage" from Map: the entry when exactly one matches, else the
-// filtered list. A request naming an entry (Pick) is handled below.
-let handledFind = null;
-watch(() => props.findRequest, async (request) => {
-  if (!request || request === handledFind || request.entryId) return;
-  handledFind = request;
-  search.value = String(request.q || "").slice(0, 80);
-  kind.value = request.kind || "";
-  await nextTick();
-  clearTimeout(searchTimer);
-  const page = await loadEntries();
-  if (page?.entries.length === 1 && !page.nextCursor) selectEntry(page.entries[0]);
-  else if (compact.value) pickerOpen.value = true;
-}, { immediate: true });
+function closePanel() {
+  selected.value = null;
+  usage.detail.reset();
+}
+
+// ---------------------------------------------------------------- entries, Imports and Calls
+
+const { search, kind, exactOnly, maxNodes, loadEntries, selectEntry, loadWeb, webData, webEntry, webFresh } = useVibe64UsageEntries({
+  props, usage, mode, compact, pickerOpen, update, closePanel
+});
+const noEntries = computed(() => notScanned.value || (!usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value)));
 
 const railBindings = computed(() => ({
   entries: usage.entries.items.value,
@@ -311,160 +283,12 @@ const railHandlers = {
   refresh: () => emit("refresh")
 };
 
-// ---------------------------------------------------------------- Imports and Calls
-
-const webQuery = computed(() => (props.state.entry && mode.value !== "recording" ? {
-  entryId: props.state.entry,
-  mode: mode.value,
-  certainty: mode.value === "calls" && exactOnly.value ? "exact" : undefined,
-  subsystemId: props.state.subsystem || undefined,
-  maxNodes: maxNodes.value === MAX_NODES ? undefined : maxNodes.value
-} : null));
-let webKey = "";
-function loadWeb(force = false) {
-  const key = JSON.stringify([webQuery.value, props.sessionId, props.snapshotKey]);
-  if (!props.active || !webQuery.value || (!force && key === webKey)) return;
-  webKey = key;
-  void usage.web.run(webQuery.value);
-}
-watch([() => props.state.entry, mode, () => props.state.subsystem], () => { maxNodes.value = MAX_NODES; closePanel(); });
-watch([() => JSON.stringify(webQuery.value), () => props.active, () => props.sessionId, () => props.snapshotKey], () => loadWeb(), { immediate: true });
-
-const webData = computed(() => usage.web.data.value);
-const webEntry = computed(() => webData.value?.entry || {});
-
-// Pick in Preview opens one entry, which may be far down the list: once the
-// web names it, its title becomes the list's search so the row is in view.
-let handledPick = null;
-let pickedEntry = "";
-watch([() => props.findRequest, webEntry], ([request, entry]) => {
-  if (request?.entryId && request !== handledPick) {
-    handledPick = request;
-    pickedEntry = request.entryId;
-  }
-  if (!pickedEntry || entry.id !== pickedEntry) return;
-  pickedEntry = "";
-  kind.value = "";
-  search.value = String(entry.title || "").slice(0, 80);
-}, { immediate: true });
-const webFresh = computed(() => Boolean(webData.value && webData.value.entry.id === props.state.entry && webData.value.mode === mode.value
-  && (mode.value !== "calls" || webData.value.certainty === (exactOnly.value ? "exact" : "all"))));
-
 // ---------------------------------------------------------------- Recording
 
-const recordingActive = computed(() => props.active && mode.value === "recording");
-const selectedRecording = computed(() => recordings.value.find((recording) => recording.id === props.state.recording) || null);
-async function loadRecordings() {
-  await Promise.all([usage.recordings.run(), usage.targets.run(), usage.routes.value.length ? null : usage.loadRoutes()]);
-}
-let recordingsKey = "";
-watch([recordingActive, () => props.sessionId, () => props.snapshotKey], ([on, sessionId, key]) => {
-  if (!on || recordingsKey === `${sessionId}\n${key}`) return;
-  recordingsKey = `${sessionId}\n${key}`;
-  void loadRecordings();
-}, { immediate: true });
-watch(recordings, (list) => {
-  if (mode.value === "recording" && list.length && !list.some((recording) => recording.id === props.state.recording)) {
-    update({ recording: list[0].id, request: "", subsystem: "" });
-  }
-});
-
-// A recording opened while it runs lists its newest requests first, so new
-// ones appear on top; one opened after it stopped reads in recorded order.
-const live = computed(() => LIVE_STATES.has(selectedRecording.value?.state));
-const newestFirst = ref(false);
-watch(() => selectedRecording.value?.id, (id) => { if (id) newestFirst.value = live.value; }, { immediate: true });
-
-let requestTimer;
-const requestFilter = () => ({ recordingId: props.state.recording, q: requestSearch.value.trim(), includeEmpty: includeEmpty.value, newestFirst: newestFirst.value });
-const loadRequests = (read = "run") => (recordingActive.value && selectedRecording.value ? usage.requests[read](requestFilter()) : null);
-watch(requestSearch, () => {
-  clearTimeout(requestTimer);
-  requestTimer = setTimeout(loadRequests, SEARCH_DELAY_MS);
-});
-watch([recordingActive, () => selectedRecording.value?.id, includeEmpty, newestFirst, () => props.snapshotKey], () => { void loadRequests(); }, { immediate: true });
-
-let resultKey = "";
-function loadResult(force = false) {
-  const { recording, request } = props.state;
-  const key = JSON.stringify([recording, request, props.sessionId, props.snapshotKey]);
-  if (!recordingActive.value || !recording || !request || (!force && key === resultKey)) return;
-  resultKey = key;
-  void usage.result.run({ recordingId: recording, requestId: request });
-}
-watch([recordingActive, () => props.state.recording, () => props.state.request, () => props.snapshotKey], () => loadResult(), { immediate: true });
-watch(() => props.state.request, () => closePanel());
-
-// While a recording runs, its requests list follows it, and reads once more
-// when it stops so its last requests are listed too.
-watch(() => recordingActive.value && live.value, (following, wasFollowing, onCleanup) => {
-  if (!following) {
-    if (wasFollowing) void loadRequests("refresh");
-    return;
-  }
-  const timer = setInterval(() => { void usage.recordings.run(); void loadRequests("refresh"); }, LIVE_REFRESH_MS);
-  onCleanup(() => clearInterval(timer));
-});
-
-const resultFresh = computed(() => {
-  const data = usage.result.data.value;
-  return Boolean(data && data.recordingId === props.state.recording && data.requestId === props.state.request);
-});
-const recorded = computed(() => (resultFresh.value ? recordingWeb(usage.result.data.value.functions, usage.result.data.value.join) : null));
-// The scan the recording ran against is no longer the one its functions were joined to.
-const changedSinceRecording = computed(() => {
-  const recordedScan = selectedRecording.value?.sourceIdentity;
-  const currentScan = resultFresh.value ? usage.result.data.value.join?.snapshot?.sourceIdentity : null;
-  return Boolean(recordedScan && currentScan && recordedScan !== currentScan);
-});
-const requestRows = computed(() => usage.requests.data.value?.requests || []);
-const requestTotal = computed(() => usage.requests.data.value?.total ?? null);
-// The chosen request's row from the pages read, else the one its result carries.
-const resultRead = computed(() => (resultFresh.value ? usage.result.data.value : null));
-const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request)
-  || (resultRead.value?.request?.id === props.state.request ? resultRead.value.request : null));
-const selectedInteraction = computed(() => {
-  const id = selectedRequest.value?.interaction;
-  return id ? [...(usage.requests.data.value?.interactions || []), ...(resultRead.value?.interactions || [])].find((item) => item.id === id) || null : null;
-});
-
-const recordingBindings = computed(() => ({
-  sessionId: props.sessionId,
-  recordings: recordings.value,
-  recordingId: props.state.recording,
-  requests: requestRows.value,
-  interactions: usage.requests.data.value?.interactions || [],
-  total: requestTotal.value,
-  hasMore: Boolean(usage.requests.data.value?.nextCursor) && (requestTotal.value == null || requestRows.value.length < requestTotal.value),
-  newestFirst: newestFirst.value,
-  requestId: props.state.request,
-  search: requestSearch.value,
-  includeEmpty: includeEmpty.value,
-  routes: usage.routes.value,
-  unavailable: unavailable.value,
-  loading: usage.recordings.loading.value,
-  requestsLoading: usage.requests.loading.value,
-  error: usage.recordings.error.value || usage.requests.error.value
-}));
-const recordingHandlers = {
-  deleted: () => {
-    update({ recording: "", request: "", subsystem: "" });
-    void loadRecordings();
-  },
-  "update:recordingId": (id) => update({ recording: id, request: "", subsystem: "" }),
-  "update:requestId": (id) => { pickerOpen.value = false; update({ request: id, subsystem: "" }); },
-  "update:search": (value) => { requestSearch.value = value; },
-  "update:includeEmpty": (value) => { includeEmpty.value = value; },
-  more: () => usage.requests.more(),
-  retry: () => { void loadRecordings(); void loadRequests(); }
-};
-
-function recordingStarted(event = {}) {
-  const id = event.recording?.id;
-  if (id) update({ mode: "recording", recording: id, request: "", subsystem: "" });
-  recordingsKey = "";
-  void loadRecordings();
-}
+const {
+  recordings, unavailable, loadRecordings, loadResult, resultFresh, recorded, changedSinceRecording,
+  requestRows, selectedRequest, selectedInteraction, recordingBindings, recordingHandlers, recordingStarted
+} = useVibe64UsageRecording({ props, usage, mode, pickerOpen, update, closePanel });
 
 // ---------------------------------------------------------------- the web
 
@@ -507,19 +331,6 @@ const canvasHandlers = {
   select: selectNode,
   "update:showUntouched": (value) => { showUntouched.value = value; }
 };
-
-// ---------------------------------------------------------------- one function
-
-function selectNode(node) {
-  selected.value = node;
-  if (node.functionId) void usage.detail.run(node.functionId);
-  else usage.detail.reset();
-}
-
-function closePanel() {
-  selected.value = null;
-  usage.detail.reset();
-}
 
 // A function picked from Calls or Called by becomes the selection.
 function selectFunction(fn) {
@@ -576,8 +387,6 @@ watch(root, (element) => {
 }, { flush: "post" });
 onBeforeUnmount(() => {
   observer?.disconnect();
-  clearTimeout(searchTimer);
-  clearTimeout(requestTimer);
 });
 
 defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
