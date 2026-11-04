@@ -520,7 +520,7 @@ test("a person's reply in needs_you sends the task back to work with fresh tries
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
   await f.finishTurn(running, { kind: "question", message: "Which one?", report: "" });
-  await running.conversations.startAiTaskConversationTurn(SESSION, {
+  await running.conversations.startTemporaryConversationTurn(SESSION, {
     conversationId: task.id, messageId: "person-1", message: "Keep the newer one.", vibe64User: OWNER
   }, { vibe64User: OWNER });
   await f.quiet(running.aiTasks);
@@ -541,7 +541,7 @@ test("a message during a check is refused, and nothing reaches the AI", () => wi
   f.server.update = () => new Promise((resolve) => { release = resolve; });
   const finishing = f.finishTurn(running);
   await waitFor(async () => (await f.task(task.id)).phase === "checking" && Boolean(release));
-  await assert.rejects(running.conversations.startAiTaskConversationTurn(SESSION, {
+  await assert.rejects(running.conversations.startTemporaryConversationTurn(SESSION, {
     conversationId: task.id, messageId: "person-1", message: "Wait", vibe64User: OWNER
   }, { vibe64User: OWNER }), /finish checking/);
   release({ ok: true });
@@ -553,7 +553,7 @@ test("Stop in the chat ends the turn and leaves the task for the person", () => 
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
-  await running.conversations.stopAiTaskConversation(SESSION, { conversationId: task.id });
+  await running.conversations.stopTemporaryConversation(SESSION, { conversationId: task.id });
   await f.quiet(running.aiTasks);
   assert.equal((await f.task(task.id)).reason, "stopped");
 }));
@@ -562,7 +562,7 @@ test("Continue sends one recorded message and goes back to work", () => withFixt
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
-  await running.conversations.stopAiTaskConversation(SESSION, { conversationId: task.id });
+  await running.conversations.stopTemporaryConversation(SESSION, { conversationId: task.id });
   await f.quiet(running.aiTasks);
   await running.aiTasks.continueTask(SESSION, { taskId: task.id });
   await f.quiet(running.aiTasks);
@@ -596,8 +596,8 @@ test("an AI account change does nothing to a running task", () => withFixture(as
 // Crash injection: the wrapped call does its work (or not) and then never returns, as if the
 // server died there. A new server over the same store and the same AI takes over.
 const crashingSend = ({ after }) => terminals => ({ ...terminals,
-  async startAiTaskConversationTurn(...args) {
-    if (after) await terminals.startAiTaskConversationTurn(...args);
+  async startTemporaryConversationTurn(...args) {
+    if (after) await terminals.startTemporaryConversationTurn(...args);
     return never();
   } });
 
@@ -885,14 +885,14 @@ const OLD_RECOVERY_FIELDS = {
 test("an archived session whose old repair chat keeps its recovery fields still reads, and no reader takes it for a task", () => withFixture(async (f) => {
   const { aiTasks, conversations } = f.boot();
   await f.store.writeConversationUserMessage(SESSION, { text: "Main question", messageId: "main" });
-  await conversations.createAiTaskConversation(SESSION, {
+  await conversations.createTemporaryConversation(SESSION, {
     conversationId: "old-repair", presentation: { title: "Fix Update", draft: "Leftover draft" }, vibe64User: OWNER
   });
   await f.store.writeSessionConversation(SESSION, "old-repair", OLD_RECOVERY_FIELDS);
-  const listed = await conversations.listAiTaskConversations(SESSION);
+  const listed = await conversations.listTemporaryConversations(SESSION);
   assert.deepEqual(listed.conversations.map(chat => [chat.conversationId, chat.title, chat.draft]),
     [["old-repair", "Fix Update", "Leftover draft"]]);
-  assert.notEqual((await conversations.readAiTaskConversation(SESSION, { conversationId: "old-repair" })).ok, false);
+  assert.notEqual((await conversations.readTemporaryConversation(SESSION, { conversationId: "old-repair" })).ok, false);
 
   await f.store.writeStatus(SESSION, "archived");
   await f.store.publishSessionArchive(SESSION);
@@ -903,7 +903,7 @@ test("an archived session whose old repair chat keeps its recovery fields still 
   assert.deepEqual((await aiTasks.list(SESSION, { vibe64User: OWNER })).tasks, [], "an old chat is not a task");
   await assert.rejects(aiTasks.read(SESSION, { taskId: "old-repair" }), error => error.code === "vibe64_ai_task_closed");
   // The chat's own reader refuses an archived session, as it refuses any, before it reads the record.
-  await assert.rejects(conversations.listAiTaskConversations(SESSION), error => error.code === "vibe64_session_archived");
+  await assert.rejects(conversations.listTemporaryConversations(SESSION), error => error.code === "vibe64_session_archived");
 }));
 
 test("Close removes the task with its conversation, and repeating it is harmless", () => withFixture(async (f) => {
@@ -989,7 +989,7 @@ test("a Colleague review waits for its first request, a retry finds the same tas
   assert.equal(f.native.turns.length, 0);
   assert.equal((await start()).task.id, "review-1");
   await assert.rejects(f.start(running.aiTasks, OWNER, "free", { message: "Something else." }), error => error.code === "vibe64_ai_task_open");
-  await running.conversations.startAiTaskConversationTurn(SESSION, {
+  await running.conversations.startTemporaryConversationTurn(SESSION, {
     conversationId: "review-1", messageId: "colleague-1", message: "Review the change without editing.", vibe64User: OWNER
   }, { vibe64User: OWNER });
   await f.quiet(running.aiTasks);

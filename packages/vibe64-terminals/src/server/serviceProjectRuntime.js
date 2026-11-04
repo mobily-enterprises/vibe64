@@ -15,7 +15,7 @@ import { PROJECT_RUNTIME_IDLE_TIMEOUT_REASON, projectRuntimeDormancyState } from
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";
 import { closeProjectScopedTerminalNamespaces } from "./serviceSessionTerminals.js";
-import { sessionHasActiveAiTask } from "./aiTaskConversationRules.js";
+import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {ReturnType<typeof import("./serviceSessionTerminals.js").createServiceSessionTerminals>} ServiceSessionTerminals */
@@ -212,7 +212,7 @@ function createServiceProjectRuntime({
           dormant: false,
           ok: true,
           skipped: true,
-          reason: "active-ai-task-conversation",
+          reason: "active-temporary-conversation",
           runtime,
           projectSlug: context.projectSlug,
           projectContextRoot: context.projectContextRoot

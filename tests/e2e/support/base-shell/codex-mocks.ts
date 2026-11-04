@@ -32,7 +32,7 @@ async function mockDirectChatSession(page) {
   await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}`, async (route) => {
     await fulfillJson(route, directChatSessionPayload);
   });
-  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/ai-task-conversations`, async (route) => {
+  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations`, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     await fulfillJson(route, { ok: true, conversations: [] });
   });

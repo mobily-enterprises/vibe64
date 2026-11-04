@@ -754,7 +754,7 @@ account identity guard remains enforced rather than relabelling an old thread.
 
 Conversation watches are ordinary create/list/cancel/resume actions. Each user
 can retain up to 16 active or paused watches, with exact project/session and
-optional ai-task-conversation identity. Conditions cover completed replies,
+optional temporary-conversation identity. Conditions cover completed replies,
 finished turns and explicit attention states; failures are reported for every
 condition. Ordinary reply watches accept canonical completed assistant/commentary
 responses during active work, preserving truthful `working` and `settled` facts.
@@ -884,7 +884,7 @@ action supplies those when needed. The drawer lists open assignments separately
 from ordinary watches and receives their changes while minimized. The server
 watch scheduler still observes its targets; the browser does not poll.
 
-Assignment sends invoke the existing Main or ai-task-conversation actions,
+Assignment sends invoke the existing Main or temporary-conversation actions,
 reserve an agent-directed turn before dispatch and automatically attach an
 existing one-shot watch with its pre-send cursor and message identity. Repeated
 send IDs do not spend another turn or send again. Unknown admissions retain their

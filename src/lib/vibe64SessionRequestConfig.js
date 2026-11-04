@@ -187,32 +187,32 @@ function vibe64AgentAttachmentFilePath(
   return `${vibe64AgentAttachmentPath(sessionsApiPath, sessionId)}/${encodePathSegment(attachmentId)}`;
 }
 
-function vibe64AiTaskConversationsPath(sessionsApiPath = "", sessionId = "") {
-  return vibe64SessionPath(sessionsApiPath, sessionId, "/ai-task-conversations");
+function vibe64TemporaryConversationsPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/temporary-conversations");
 }
 
-function vibe64AiTaskConversationPath(
+function vibe64TemporaryConversationPath(
   sessionsApiPath = "",
   sessionId = "",
   conversationId = ""
 ) {
-  return `${vibe64AiTaskConversationsPath(sessionsApiPath, sessionId)}/${encodePathSegment(conversationId)}`;
+  return `${vibe64TemporaryConversationsPath(sessionsApiPath, sessionId)}/${encodePathSegment(conversationId)}`;
 }
 
-function vibe64AiTaskConversationTurnsPath(
+function vibe64TemporaryConversationTurnsPath(
   sessionsApiPath = "",
   sessionId = "",
   conversationId = ""
 ) {
-  return `${vibe64AiTaskConversationPath(sessionsApiPath, sessionId, conversationId)}/turns`;
+  return `${vibe64TemporaryConversationPath(sessionsApiPath, sessionId, conversationId)}/turns`;
 }
 
-function vibe64AiTaskConversationStopPath(
+function vibe64TemporaryConversationStopPath(
   sessionsApiPath = "",
   sessionId = "",
   conversationId = ""
 ) {
-  return `${vibe64AiTaskConversationPath(sessionsApiPath, sessionId, conversationId)}/stop`;
+  return `${vibe64TemporaryConversationPath(sessionsApiPath, sessionId, conversationId)}/stop`;
 }
 
 function vibe64AgentTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
@@ -475,9 +475,9 @@ export {
   vibe64SourceEditorResolvePathPath,
   vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath,
-  vibe64AiTaskConversationPath,
-  vibe64AiTaskConversationsPath,
-  vibe64AiTaskConversationStopPath,
-  vibe64AiTaskConversationTurnsPath,
+  vibe64TemporaryConversationPath,
+  vibe64TemporaryConversationsPath,
+  vibe64TemporaryConversationStopPath,
+  vibe64TemporaryConversationTurnsPath,
   vibe64SessionsQueryKey
 };

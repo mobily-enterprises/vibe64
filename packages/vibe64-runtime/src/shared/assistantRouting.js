@@ -200,7 +200,7 @@ const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
 const withArticle = (label) => `${/^[AEIOU]/u.test(label) ? "an" : "a"} ${label}`;
 
 /**
- * An AI task chat's Custom model is the person's own choice, not main chat.
+ * A temporary chat's Custom model is the person's own choice, not main chat.
  */
 const isMainChatPurpose = (purpose, options = {}) => {
   const { temporaryChat = false } = options;

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { aiTaskConversationId } from "@local/vibe64-sessions/shared/conversation";
+import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { DASHBOARD_PATH, WORKSPACE_SLUG } from "./support/base-shell-data";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import { quietWorld, taskWindow } from "./support/ai-task-world";
@@ -72,7 +72,7 @@ for (const engineId of ["codex", "opencode"]) {
       expect(presence.some((entry) => entry.conversationId === task.id && entry.typing === true)).toBe(true);
       expect(presence.every((entry) => !Object.hasOwn(entry, "draft"))).toBe(true);
       expect(pageErrors).toEqual([]);
-      const id = aiTaskConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: server.state.session.sessionId, conversationId: task.id });
+      const id = temporaryConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: server.state.session.sessionId, conversationId: task.id });
       const canonical = `/api/assistant/app/conversations/${encodeURIComponent(id)}`;
       expect(server.state.requests.filter(request => request === `POST ${canonical}/messages`)).toHaveLength(1);
       expect(server.state.subscriptions).toContain(id);

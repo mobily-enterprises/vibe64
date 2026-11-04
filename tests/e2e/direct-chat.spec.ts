@@ -1413,9 +1413,9 @@ async function mockDirectChat(page: Page, {
       });
       return;
     }
-    if (url.pathname.includes("/ai-task-conversations")) {
+    if (url.pathname.includes("/temporary-conversations")) {
       // The session has no AI task, so it has no task conversations.
-      if (method === "GET" && url.pathname.endsWith("/ai-task-conversations")) {
+      if (method === "GET" && url.pathname.endsWith("/temporary-conversations")) {
         await fulfillJson(route, { conversations: [], ok: true });
         return;
       }

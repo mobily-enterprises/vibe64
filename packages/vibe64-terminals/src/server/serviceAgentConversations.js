@@ -15,7 +15,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate } from "./sessionRenewalHandover.js";
 import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
-import { sessionHasActiveAiTask } from "./aiTaskConversationRules.js";
+import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
@@ -367,7 +367,7 @@ function createServiceAgentConversations({
 
   /**
    * Whether AI is at work in a session: its main turn, its AI terminal or a
-   * AI task. A read that fails throws, so it never passes for idle.
+   * temporary AI task. A read that fails throws, so it never passes for idle.
    */
   async function sessionAiWorkRunning(sessionId, options = {}) {
     const context = await sessionAccess.sessionContext(sessionId, options);

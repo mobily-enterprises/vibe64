@@ -278,7 +278,7 @@ async function changeIncomingContributionDirect({
         project
       });
       if (merged.conflictPaths.length) {
-        // Preserve the receiving source before offering an AI task. This is
+        // Preserve the receiving source before offering Temporary AI. This is
         // the same private checkpoint owner as Update; files/index/HEAD stay put.
         const checkpoint = await captureSessionWorkUpdateCheckpointDirect({
           project,

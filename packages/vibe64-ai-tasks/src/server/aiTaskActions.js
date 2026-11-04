@@ -79,15 +79,15 @@ const TOOLS = Object.freeze({
   list: aiTaskTool(`List the AI tasks of an exact session: the open one, and any that ended and wait for Close. ${SESSION_RUNS_ONE}`),
   read: aiTaskTool(
     "Read one AI task's phase, why it needs someone when it does, and how it ended. needs_you with reason your_turn means the AI's turn ended. " +
-      "Read the task's messages with the ai-task-conversation read tool, using the task id as conversationId."
+      "Read the task's messages with the temporary-conversation read tool, using the task id as conversationId."
   ),
   start: aiTaskTool(
     "Start an AI task in an exact session only when the user asked for this work or accepted your offer. kind colleague runs your request in its own " +
       "conversation: input.message is the request, input.title names it, input.includeRecentChatContext=true gives it recent Main messages, and " +
-      "input.assistantRouting picks its chat mode as ai-task-conversation update describes. kind project-setup runs the setup screen's request: " +
+      "input.assistantRouting picks its chat mode as temporary-conversation update describes. kind project-setup runs the setup screen's request: " +
       "input.mode is create, inspect, adopt (with the user's input.purpose) or repair; Vibe64 inspects the project itself when the AI finishes. " +
       "Supply a stable taskId so a retry returns the same task. " + SESSION_RUNS_ONE +
-      " Another open task refuses this with vibe64_ai_task_open: tell the user and offer to wait. Send follow-ups with the ai-task-conversation turn " +
+      " Another open task refuses this with vibe64_ai_task_open: tell the user and offer to wait. Send follow-ups with the temporary-conversation turn " +
       "tool and the task id as conversationId. A colleague task ends only when it is finished."
   ),
   cancel: aiTaskTool("Cancel an AI task only when the user asks. Cancel is always accepted; the task shows Cancelling until its running turn or check stops."),

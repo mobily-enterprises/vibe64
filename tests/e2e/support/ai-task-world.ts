@@ -82,7 +82,7 @@ async function repositoryWorld(page: Page, server: StatusServer, failure: Record
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
-    if (/\/(?:ai-task-conversations|ai-tasks)(?:[/?]|$)/u.test(url.pathname)) return route.fallback();
+    if (/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u.test(url.pathname)) return route.fallback();
     if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
       await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true }, fix: { available: true } } });
       return;

@@ -119,7 +119,7 @@ function createVibe64SessionStore(options = {}) {
     archiveAccess,
     conversationStore
   });
-  const aiTaskConversationRemoval = createSessionTemporaryConversationRemoval({
+  const temporaryConversationRemoval = createSessionTemporaryConversationRemoval({
     storePaths,
     recordFiles,
     prepareSessionStateUpgrade: upgrades.prepareSessionStateUpgrade
@@ -138,8 +138,8 @@ function createVibe64SessionStore(options = {}) {
     prepareConversationStorageUpgrade: upgrades.prepareConversationStorageUpgrade,
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
-    prepareTemporaryConversationRemoval: aiTaskConversationRemoval.prepareTemporaryConversationRemoval,
-    removeEmptyConversationFolders: aiTaskConversationRemoval.removeEmptyConversationFolders,
+    prepareTemporaryConversationRemoval: temporaryConversationRemoval.prepareTemporaryConversationRemoval,
+    removeEmptyConversationFolders: temporaryConversationRemoval.removeEmptyConversationFolders,
     conversationMessageIdExists: conversationStore.conversationMessageIdExists,
     conversationMessageIdExistsForRenewal: conversationStore.conversationMessageIdExistsForRenewal,
     findSubmittedConversationTurn: conversationStore.findSubmittedConversationTurn,

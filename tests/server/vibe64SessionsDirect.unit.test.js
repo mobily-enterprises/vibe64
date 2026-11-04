@@ -54,7 +54,7 @@ import { createSessionsService as createService, withMainChatOperations } from "
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { mainConversationId, aiTaskConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import {
   developmentDatabasePolicy
 } from "../../packages/vibe64-project/src/server/developmentDatabasePolicy.js";
@@ -868,7 +868,7 @@ test("Main and temporary browser Cancel reach their chat's cancel without openin
         calls.push({ chat: "main", sessionId, input, actor: options.browserAuthority.actorId });
         return { ok: true, cancelled: true, messageId: input.messageId, interrupted: false };
       },
-      async cancelAiTaskConversationMessage(sessionId, input, options) {
+      async cancelTemporaryConversationMessage(sessionId, input, options) {
         calls.push({ chat: "temporary", sessionId, input, actor: options.browserAuthority.actorId });
         return { ok: true, cancelled: true, messageId: input.messageId, interrupted: true };
       }
@@ -877,7 +877,7 @@ test("Main and temporary browser Cancel reach their chat's cancel without openin
   const main = await conversations.open({ id: mainConversationId(target), context: { surface: "app", channel: "internal" } });
   assert.deepEqual(await main.cancelDelivery({ messageId: "unconfirmed" }),
     { ok: true, cancelled: true, messageId: "unconfirmed", interrupted: false });
-  const temporary = await conversations.open({ id: aiTaskConversationId({ ...target, conversationId: "chat" }),
+  const temporary = await conversations.open({ id: temporaryConversationId({ ...target, conversationId: "chat" }),
     context: { surface: "app", channel: "internal" } });
   assert.deepEqual(await temporary.cancelDelivery({ messageId: "pending" }),
     { ok: true, cancelled: true, messageId: "pending", interrupted: true });
@@ -2788,7 +2788,7 @@ test("archive cancels exact pending routing outside its lock and retains deliver
       });
     };
     const service = createService({ project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
-      terminals: { cancelAssistantRoutingForSelection: cancel, cancelAiTaskConversationRouting: cancel,
+      terminals: { cancelAssistantRoutingForSelection: cancel, cancelTemporaryConversationRouting: cancel,
         closeSessionTerminals: async (id, options) => {
           assert.equal(options.forgetConversationBinding, true, "an archived session's conversations leave memory");
           calls.push("stop-native");

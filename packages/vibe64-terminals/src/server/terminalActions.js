@@ -5,7 +5,7 @@ import {
   mainGoalPauseTool,
   mainGoalBlockTool,
   planUsageTool,
-  aiTaskConversationTool,
+  temporaryConversationTool,
   workPlanChangeTool,
   workPlanTool
 } from "./assistantContracts.js";
@@ -33,11 +33,11 @@ import {
   previewIdentityActionInputValidator,
   previewDiagnosticActionInputValidator,
   sessionPromptHintsActionInputValidator,
-  aiTaskConversationListInputValidator,
-  aiTaskConversationUpdateInputValidator,
-  aiTaskConversationReadInputValidator,
-  aiTaskConversationStopActionInputValidator,
-  aiTaskConversationTurnActionInputValidator
+  temporaryConversationListInputValidator,
+  temporaryConversationUpdateInputValidator,
+  temporaryConversationReadInputValidator,
+  temporaryConversationStopActionInputValidator,
+  temporaryConversationTurnActionInputValidator
 } from "./inputSchemas.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
@@ -80,17 +80,17 @@ const ACTION_OPEN_OUTPUT_TARGET = "vibe64.terminals.output-target.open";
 const ACTION_SELECT_PREVIEW_IDENTITY = "vibe64.terminals.preview-identity.select";
 const ACTION_UPLOAD_AGENT_ATTACHMENT = "vibe64.terminals.agent-attachment.upload";
 const ACTION_DELETE_AGENT_ATTACHMENT = "vibe64.terminals.agent-attachment.delete";
-const ACTION_LIST_AI_TASK_CONVERSATIONS = "vibe64.terminals.ai-task-conversation.list";
-const ACTION_UPDATE_AI_TASK_CONVERSATION = "vibe64.terminals.ai-task-conversation.update";
-const ACTION_READ_AI_TASK_CONVERSATION = "vibe64.terminals.ai-task-conversation.read";
-const ACTION_START_AI_TASK_CONVERSATION_TURN = "vibe64.terminals.ai-task-conversation.turn.start";
-const ACTION_STOP_AI_TASK_CONVERSATION = "vibe64.terminals.ai-task-conversation.stop";
+const ACTION_LIST_TEMPORARY_CONVERSATIONS = "vibe64.terminals.temporary-conversation.list";
+const ACTION_UPDATE_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.update";
+const ACTION_READ_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.read";
+const ACTION_START_TEMPORARY_CONVERSATION_TURN = "vibe64.terminals.temporary-conversation.turn.start";
+const ACTION_STOP_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.stop";
 const ACTION_GENERATE_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.generate";
 const ACTION_CANCEL_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.cancel";
 const ACTION_READ_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.read";
 const ACTION_UPDATE_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.update";
 
-const AI_TASK_ROUTING = "assistantRouting.mode is fix (Fix it with AI: the model AI setup chose for fixes), custom (send override with an exact observed selection: engineId, modelProviderId, modelId, variantId, agentId, catalogRevision from the session's assistant access or an AI setup choice; never invent one), senior or junior. Senior and Junior are the workspace owner's only: a team member's chat uses fix or custom. Auto is Main chat only.";
+const TEMPORARY_ROUTING = "assistantRouting.mode is fix (Fix it with AI: the model AI setup chose for fixes), custom (send override with an exact observed selection: engineId, modelProviderId, modelId, variantId, agentId, catalogRevision from the session's assistant access or an AI setup choice; never invent one), senior or junior. Senior and Junior are the workspace owner's only: a team member's chat uses fix or custom. Auto is Main chat only.";
 
 /**
  * @param {object} dependencies
@@ -434,65 +434,65 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: ACTION_LIST_AI_TASK_CONVERSATIONS,
-      input: aiTaskConversationListInputValidator,
+      id: ACTION_LIST_TEMPORARY_CONVERSATIONS,
+      input: temporaryConversationListInputValidator,
       extensions: {
-        assistant: aiTaskConversationTool(
-          "List saved AI task conversations in the specified project and session. These are separate from Main chat."
+        assistant: temporaryConversationTool(
+          "List saved temporary conversations in the specified project and session. These are separate from Main chat."
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.listAiTaskConversations(input.sessionId)
+      execute: (input) => terminals.listTemporaryConversations(input.sessionId)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: ACTION_UPDATE_AI_TASK_CONVERSATION,
-      input: aiTaskConversationUpdateInputValidator,
+      id: ACTION_UPDATE_TEMPORARY_CONVERSATION,
+      input: temporaryConversationUpdateInputValidator,
       extensions: {
-        assistant: aiTaskConversationTool(
-          "Update an existing AI task conversation's saved draft or its chat mode for the next message (rename a New AI task with vibe64.ai-tasks.rename). " +
-            AI_TASK_ROUTING +
-            " A task started by Fix it with AI accepts only fix or custom. This does not send a message."
+        assistant: temporaryConversationTool(
+          "Update an existing temporary conversation's title/draft presentation (an empty title restores its Temporary N name) or its chat mode for the next message. " +
+            TEMPORARY_ROUTING +
+            " A repair chat opened by an Update conflict's Fix it with AI accepts only fix or custom. This does not send a message."
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.updateAiTaskConversation(input.sessionId, input)
+      execute: (input) => terminals.updateTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: ACTION_READ_AI_TASK_CONVERSATION,
-      input: aiTaskConversationReadInputValidator,
+      id: ACTION_READ_TEMPORARY_CONVERSATION,
+      input: temporaryConversationReadInputValidator,
       extensions: {
-        assistant: aiTaskConversationTool(
-          "Read an AI task conversation's saved status and up to twelve recent messages. Use beforeMessageId to read earlier messages. Deferred reconciliation means live provider status may be newer. Text may be truncated; never invent omitted text or assume a failed read means work stopped."
+        assistant: temporaryConversationTool(
+          "Read a temporary conversation's saved status and up to twelve recent messages. Use beforeMessageId to read earlier messages. Deferred reconciliation means live provider status may be newer. Text may be truncated; never invent omitted text or assume a failed read means work stopped."
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.readAiTaskConversation(input.sessionId, input)
+      execute: (input) => terminals.readTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: ACTION_START_AI_TASK_CONVERSATION_TURN,
-      input: aiTaskConversationTurnActionInputValidator,
+      id: ACTION_START_TEMPORARY_CONVERSATION_TURN,
+      input: temporaryConversationTurnActionInputValidator,
       extensions: {
-        assistant: aiTaskConversationTool(
-          "Send a prompt to the selected AI task conversation. Supply a unique messageId and reuse it on retry. Use submissionKind steer for guidance during an active turn. This requests coding-agent work; the returned state does not mean the work is complete."
+        assistant: temporaryConversationTool(
+          "Send a prompt to the selected temporary conversation. Supply a unique messageId and reuse it on retry. Use submissionKind steer for guidance during an active turn. This requests coding-agent work; the returned state does not mean the work is complete."
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.startAiTaskConversationTurn(input.sessionId, input)
+      execute: (input) => terminals.startTemporaryConversationTurn(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: ACTION_STOP_AI_TASK_CONVERSATION,
-      input: aiTaskConversationStopActionInputValidator,
+      id: ACTION_STOP_TEMPORARY_CONVERSATION,
+      input: temporaryConversationStopActionInputValidator,
       extensions: {
-        assistant: aiTaskConversationTool(
-          "Stop the coding agent in this AI task conversation. This preserves its transcript and does not stop Colleague or speech."
+        assistant: temporaryConversationTool(
+          "Stop the coding agent in this temporary conversation. This preserves its transcript and does not stop Colleague or speech."
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.stopAiTaskConversation(input.sessionId, input)
+      execute: (input) => terminals.stopTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -522,7 +522,7 @@ export {
   ACTION_CLOSE_PROJECT_RUNTIME,
   ACTION_DELETE_AGENT_ATTACHMENT,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
-  ACTION_LIST_AI_TASK_CONVERSATIONS,
+  ACTION_LIST_TEMPORARY_CONVERSATIONS,
   ACTION_OPEN_OUTPUT_TARGET,
   ACTION_OPEN_PROJECT_RUNTIME,
   ACTION_PREPARE_AGENT_SESSION,
@@ -538,7 +538,7 @@ export {
   ACTION_READ_OUTPUTS,
   ACTION_READ_OUTPUT_RESULT,
   ACTION_READ_OUTPUT_TERMINAL,
-  ACTION_READ_AI_TASK_CONVERSATION,
+  ACTION_READ_TEMPORARY_CONVERSATION,
   ACTION_READ_WORK_PLAN,
   ACTION_RECONCILE_AGENT_SESSIONS,
   ACTION_RECORD_PREVIEW_DIAGNOSTIC,
@@ -547,12 +547,12 @@ export {
   ACTION_START_AGENT_TERMINAL,
   ACTION_START_GLOBAL_TERMINAL,
   ACTION_START_OUTPUT_TARGET,
-  ACTION_START_AI_TASK_CONVERSATION_TURN,
+  ACTION_START_TEMPORARY_CONVERSATION_TURN,
   ACTION_STOP_OUTPUT_TARGET,
-  ACTION_STOP_AI_TASK_CONVERSATION,
+  ACTION_STOP_TEMPORARY_CONVERSATION,
   ACTION_UPDATE_AGENT_GOAL,
   ACTION_UPDATE_CANONICAL_AGENT_GOAL,
-  ACTION_UPDATE_AI_TASK_CONVERSATION,
+  ACTION_UPDATE_TEMPORARY_CONVERSATION,
   ACTION_UPLOAD_AGENT_ATTACHMENT,
   ACTION_WRITE_AGENT_TERMINAL_KEY,
   ACTION_WRITE_AGENT_TERMINAL_TEXT,

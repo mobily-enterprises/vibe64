@@ -21,7 +21,7 @@ import {
   readMainConversationHistory,
   MAIN_CONVERSATION_PRESENTATION
 } from "./mainConversationBinding.js";
-import { conversationClosingRefusal, requireSuccess, routingRequest, presentation } from "./aiTaskConversationRules.js";
+import { conversationClosingRefusal, requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
@@ -33,7 +33,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
-/** @typedef {import("./types.js").AiTaskConversationRecords} AiTaskConversationRecords */
+/** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
@@ -91,12 +91,12 @@ async function prepareAiTaskMessage(sessionId, input, record, ctx, prepared) {
 }
 
 /**
- * An AI task chat's turns on the shared conversation runtime: the facilities it lends that runtime,
+ * A temporary chat's turns on the shared conversation runtime: the facilities it lends that runtime,
  * snapshots, the session write coordinator, coalesced output saves, and the chat's own routing with
  * the scoped context and native agent it routes through.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {AiTaskConversationRecords} dependencies.chatRecords
+ * @param {TemporaryConversationRecords} dependencies.chatRecords
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {SessionAttachments} dependencies.attachments
@@ -110,7 +110,7 @@ async function prepareAiTaskMessage(sessionId, input, record, ctx, prepared) {
  * @param {number} dependencies.temporarySaveDelayMs
  * @param {ConversationTurnPublishers} dependencies.conversationTurns
  */
-function createAiTaskConversationTurns({
+function createTemporaryConversationTurns({
   chatRecords,
   sessionAgent,
   conversationRuntime,
@@ -127,7 +127,7 @@ function createAiTaskConversationTurns({
   conversationTurns
 }) {
   if (!Number.isSafeInteger(routingWaitMs) || routingWaitMs < 0) {
-    throw new TypeError("AI task conversations require the assistant routing lock wait.");
+    throw new TypeError("Temporary conversations require the assistant routing lock wait.");
   }
 
   /**
@@ -135,7 +135,7 @@ function createAiTaskConversationTurns({
    * session write coordinator so a late read cannot recreate a closed record.
    */
   const write = (sessionId, options, operation) => runAgentWrite(sessionId, options, operation, {
-    operation: "ai-task-conversation",
+    operation: "temporary-conversation",
     waitMs: options.lockWaitMs ?? 10_000,
     // A zero-wait attempt always falls back to saved state or a later save,
     // so its refusal is routine rather than a warning.
@@ -251,7 +251,7 @@ function createAiTaskConversationTurns({
   });
 
   /**
-   * Reuse the routing lifecycle with the AI task chat's existing metadata and
+   * Reuse the routing lifecycle with the temporary chat's existing metadata and
    * transcript scope. Native providers continue to receive the actual store.
    */
   async function routingContext(ctx, conversationId, options = {}) {
@@ -344,7 +344,7 @@ function createAiTaskConversationTurns({
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
-        throw new AppError(409, "This AI task chat has unsupported Codex history. Start a new AI task to use Codex. Its saved history has not been changed.", {
+        throw new AppError(409, "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed.", {
           code: "vibe64_codex_history_unsupported",
           messageCode: "vibe64_codex_temporary_history_unsupported"
         });
@@ -504,7 +504,7 @@ function createAiTaskConversationTurns({
               sessionId: sessionId,
               code: error?.code,
               error: error?.message
-            }, "A recovered AI task chat turn could not be routed; the next read retries it."));
+            }, "A recovered temporary chat turn could not be routed; the next read retries it."));
         }
         const page = readPage ? await readPage() : null;
         return {
@@ -705,5 +705,5 @@ function createAiTaskConversationTurns({
 }
 
 export {
-  createAiTaskConversationTurns
+  createTemporaryConversationTurns
 };

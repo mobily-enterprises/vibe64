@@ -112,9 +112,9 @@ function createServiceAssistant({
    * A temporary send refused before admission uses Main's definite rejection,
    * and its failure is logged as Main's is, with the cause the person never sees.
    */
-  async function startAiTaskConversationTurn(sessionId, input = {}, options = {}) {
+  async function startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
     try {
-      return await sessionConversations.startAiTaskConversationTurn(sessionId, input, options);
+      return await sessionConversations.startTemporaryConversationTurn(sessionId, input, options);
     } catch (error) {
       logOperationalEvent(logger, "warn", {
         code: error?.code,
@@ -126,7 +126,7 @@ function createServiceAssistant({
         messageId: input.messageId,
         sessionId,
         submissionKind: input.submissionKind
-      }, "Vibe64 AI task chat message delivery failed.");
+      }, "Vibe64 temporary chat message delivery failed.");
       if (error?.delivery === "not-sent") throw notSentDeliveryError(error, input.messageId);
       throw error;
     }
@@ -643,7 +643,7 @@ function createServiceAssistant({
       context: {
         ...context,
         sessionId,
-        aiTaskConversationId: conversationId,
+        temporaryConversationId: conversationId,
         browserProjectContext: captureProjectRequestContext()
       }
     });
@@ -681,7 +681,7 @@ function createServiceAssistant({
     resolveConversationConnection,
     resumeIntegrationContinuation,
     sendAgentMessage,
-    startAiTaskConversationTurn,
+    startTemporaryConversationTurn,
     updateAssistantModelAccess,
     verifyAssistantConnection
   });

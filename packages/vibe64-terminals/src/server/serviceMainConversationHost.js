@@ -133,7 +133,7 @@ function createServiceMainConversationHost({
         );
       }
       if (operation !== "create" && operation !== "ensure" && operation !== "updateSettings" && operation !== "dispose" &&
-          operation !== "generateRenewalHandover" && operation !== "seedRenewalHandover" && context.aiTaskConversationId && !context.scopedConversationId && !context.assistantScope) {
+          operation !== "generateRenewalHandover" && operation !== "seedRenewalHandover" && context.temporaryConversationId && !context.scopedConversationId && !context.assistantScope) {
         return sessionConversations.conversationBinding(id, context);
       }
       const engine = context.providerId ||
@@ -158,7 +158,7 @@ function createServiceMainConversationHost({
         runtime,
         prepareInput: (message, current) => current.prepareInput ? current.prepareInput(message) : message
       });
-      if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.aiTaskConversationId && actions) {
+      if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.temporaryConversationId && actions) {
         binding.applicationTools = {
           storage: runtime.store.conversationStorage,
           async prepareContext(current, admitted) {

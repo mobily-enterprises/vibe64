@@ -109,7 +109,7 @@ function createServiceTurnPublication({
           event: "vibe64.assistant_routing.temporary_review_deferred",
           sessionId,
           code: error.code
-        }, "AI task chat review needs attention.");
+        }, "Temporary chat review needs attention.");
       }));
       return;
     }

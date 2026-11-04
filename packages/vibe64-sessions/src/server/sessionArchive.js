@@ -221,7 +221,7 @@ function createSessionArchive({
           // Routing owns its own agent-write admission and cleanup callbacks.
           // Wait outside the archive lock, then recheck all archive guards.
           for (const { conversationId, request } of exclusive.value.routingToCancel) {
-            const cancel = conversationId ? terminals.cancelAiTaskConversationRouting : terminals.cancelAssistantRoutingForSelection;
+            const cancel = conversationId ? terminals.cancelTemporaryConversationRouting : terminals.cancelAssistantRoutingForSelection;
             if (typeof cancel !== "function") {
               throw Object.assign(vibe64Error(
                 "Chat routing cancellation is unavailable. Retry Close after reconnecting the workspace.",

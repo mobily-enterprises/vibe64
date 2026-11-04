@@ -33,7 +33,7 @@ function openAccountConnections(request) {
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
 const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix, fix: mdiWrenchOutline };
-// AI task chats add Fix it with AI; modes reserved for the owner are not listed.
+// Temporary chats add Fix it with AI; modes reserved for the owner are not listed.
 const modes = computed(() => (props.temporary ? [...ASSISTANT_MODES.filter(({ id }) => id !== "auto"), ASSISTANT_FIX_MODE] : ASSISTANT_MODES)
   .filter(({ id }) => (!props.requiredMode || id === "custom" || id === props.requiredMode) && !decisions.value[id]?.approvalRequired));
 const modeLabel = computed(() => assistantModeLabel(mode.value));

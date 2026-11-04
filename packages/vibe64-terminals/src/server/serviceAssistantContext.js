@@ -22,7 +22,7 @@ function createServiceAssistantContext({ sessionAccess, actions }) {
      */
     isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId) &&
       Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
-        (context.browserAuthority || context.mainGoalControl) && !context.aiTaskConversationId &&
+        (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
         !context.assistantScope && !context.scopedConversationId)
   });
   function applicationToolManifest(context) {
@@ -30,7 +30,7 @@ function createServiceAssistantContext({ sessionAccess, actions }) {
     const selection = context.assistantSelection ||
       vibe64AssistantSelectionFromMetadata(context.session?.metadata, { required: false });
     const mainClaude = selection?.engineId === "claude" && !context.runtime?.learningScope &&
-      !context.assistantScope && !context.aiTaskConversationId && !context.scopedConversationId;
+      !context.assistantScope && !context.temporaryConversationId && !context.scopedConversationId;
     if (!mainClaude) return context;
     const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });
     return { ...context, applicationTools: { schemas: toolSet.tools.map(mainToolCatalog.toOpenAiToolSchema) } };

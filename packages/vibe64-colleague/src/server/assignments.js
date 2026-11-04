@@ -370,7 +370,7 @@ function createAssignmentOperations({
       const result = await execute(
         context,
         assignment,
-        conversationId ? "vibe64.terminals.ai-task-conversation.turn.start" : "vibe64.sessions.agent-message.send",
+        conversationId ? "vibe64.terminals.temporary-conversation.turn.start" : "vibe64.sessions.agent-message.send",
         {
           sessionId: assignment.sessionId,
           ...(conversationId ? { conversationId } : {}),
@@ -435,7 +435,7 @@ function createAssignmentOperations({
           turn.status = "sent";
         }
         if (assignment.reviewerConversationId && !assignment.reviewCreated) {
-          const observed = await execute(context, assignment, "vibe64.terminals.ai-task-conversation.read", {
+          const observed = await execute(context, assignment, "vibe64.terminals.temporary-conversation.read", {
             sessionId: assignment.sessionId,
             conversationId: assignment.reviewerConversationId,
             messageLimit: 1

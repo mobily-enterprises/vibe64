@@ -95,8 +95,8 @@
 /** @typedef {ReturnType<typeof import("./serviceWorkspacePreparation.js").createServiceWorkspacePreparation>} ServiceWorkspacePreparation */
 /** @typedef {ReturnType<typeof import("./serviceAssistantPreparation.js").createServiceAssistantPreparation>} ServiceAssistantPreparation */
 /** @typedef {ReturnType<typeof import("./codexSessionRegistration.js").createCodexSessionRegistration>} CodexSessionRegistration */
-/** @typedef {ReturnType<typeof import("./aiTaskConversationRecords.js").createAiTaskConversationRecords>} AiTaskConversationRecords */
-/** @typedef {ReturnType<typeof import("./aiTaskConversationTurns.js").createAiTaskConversationTurns>} AiTaskConversationTurns */
+/** @typedef {ReturnType<typeof import("./temporaryConversationRecords.js").createTemporaryConversationRecords>} TemporaryConversationRecords */
+/** @typedef {ReturnType<typeof import("./temporaryConversationTurns.js").createTemporaryConversationTurns>} TemporaryConversationTurns */
 /** @typedef {ReturnType<typeof import("./workspaceSetupRunnerState.js").createWorkspaceSetupRunnerState>} WorkspaceSetupRunnerState */
 /** @typedef {ReturnType<typeof import("./workspaceSetupExecution.js").createWorkspaceSetupExecution>} WorkspaceSetupExecution */
 
@@ -126,7 +126,7 @@
 /** @typedef {ServiceAssistantPreparation["prepareAgentSkillsInsideAgentWrite"]} PrepareAgentSkills */
 /** @typedef {SessionAgentManager["prepareSelection"]} PrepareAssistantSelection */
 /** @typedef {ConversationRuntime["publishNative"]} PublishNativeConversation */
-/** @typedef {(sessionId: string, options?: object) => Promise<object>} ReadSessionContext the session context the AI task chats read */
+/** @typedef {(sessionId: string, options?: object) => Promise<object>} ReadSessionContext the session context the temporary chats read */
 
 /** @typedef {ReturnType<typeof import("./serviceTurnPublication.js").createServiceTurnPublication>} ServiceTurnPublication */
 /** @typedef {ServiceTurnPublication["publishAgentSessionChanged"]} PublishAgentSessionChanged */

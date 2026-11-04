@@ -1,4 +1,4 @@
-import { vibe64AiTaskConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { vibe64TemporaryConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { aiTaskConversationView, aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
 
 /** The changes a save sends: the draft as presentation, the agent settings, and the draft's attachments. */
@@ -129,7 +129,7 @@ function useAiTaskConversationSaves({ conversation, closedConversationIds, isDis
       await previous;
       if (!flush && (!canApply(value) || conversation.value.state === "closing")) return false;
       markSent();
-      const saved = await aiTaskRequest(vibe64AiTaskConversationPath(value.apiPath, value.sessionId, value.conversationId), {
+      const saved = await aiTaskRequest(vibe64TemporaryConversationPath(value.apiPath, value.sessionId, value.conversationId), {
         method: "PATCH", body
       });
       if (canApply(value)) acceptSave(value, fields, version, { saved, savedSettings });

@@ -59,7 +59,7 @@
         "surfaces": [
           {
             "subpath": "./shared/conversation",
-            "summary": "Exports main and AI task conversation identities and targets."
+            "summary": "Exports main and temporary conversation identities and targets."
           },
           {
             "subpath": "./shared/project-watch",

@@ -72,9 +72,9 @@ const agentAttachmentDeleteActionInputValidator = validator({
   attachmentId: requiredText,
   sessionId: sessionIdField
 });
-const aiTaskConversationListInputValidator = validator({ sessionId: sessionIdField });
-const aiTaskConversationPresentationField = { type: "object", additionalProperties: true, required: false };
-const aiTaskConversationRoutingField = {
+const temporaryConversationListInputValidator = validator({ sessionId: sessionIdField });
+const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
+const temporaryConversationRoutingField = {
   type: "object",
   required: false,
   schema: createSchema({
@@ -91,24 +91,24 @@ const aiTaskConversationRoutingField = {
     }
   })
 };
-const aiTaskConversationUpdateInputValidator = validator({
+const temporaryConversationUpdateInputValidator = validator({
   conversationId: requiredText,
   sessionId: sessionIdField,
-  assistantRouting: aiTaskConversationRoutingField,
+  assistantRouting: temporaryConversationRoutingField,
   agentSettings: { type: "object", additionalProperties: true, required: false },
-  presentation: aiTaskConversationPresentationField,
+  presentation: temporaryConversationPresentationField,
   attachmentIds: attachmentIdsField
 });
-const aiTaskConversationInputValidator = validator({
+const temporaryConversationInputValidator = validator({
   conversationId: requiredText,
   sessionId: sessionIdField
 });
-const aiTaskConversationReadInputValidator = validator({
-  ...aiTaskConversationInputValidator.schema.getFieldDefinitions(),
+const temporaryConversationReadInputValidator = validator({
+  ...temporaryConversationInputValidator.schema.getFieldDefinitions(),
   beforeMessageId: optionalText,
   messageLimit: { type: "integer", min: 1, max: 12, required: false }
 });
-const aiTaskConversationTurnActionInputValidator = validator({
+const temporaryConversationTurnActionInputValidator = validator({
   planRevision: optionalText,
   reviewAction: { type: "string", enum: ["retry"], required: false },
   submissionKind: { type: "string", enum: ["send", "steer"], required: false },
@@ -121,14 +121,14 @@ const aiTaskConversationTurnActionInputValidator = validator({
   conversationId: requiredText,
   messageId: requiredText,
   displayMessage: optionalText,
-  presentation: aiTaskConversationPresentationField,
+  presentation: temporaryConversationPresentationField,
   message: requiredText,
   outputSchema: { type: "object", additionalProperties: true, required: false },
   promptLabel: optionalText,
   sessionId: sessionIdField,
   vibe64User: vibe64UserField
 });
-const aiTaskConversationStopActionInputValidator = validator({
+const temporaryConversationStopActionInputValidator = validator({
   conversationId: requiredText,
   runId: optionalText,
   sessionId: sessionIdField
@@ -315,12 +315,12 @@ export {
   sessionPromptHintsActionInputValidator,
   terminalControlKeyInputValidator,
   terminalControlTextInputValidator,
-  aiTaskConversationListInputValidator,
-  aiTaskConversationUpdateInputValidator,
-  aiTaskConversationInputValidator,
-  aiTaskConversationReadInputValidator,
-  aiTaskConversationStopActionInputValidator,
-  aiTaskConversationTurnActionInputValidator
+  temporaryConversationListInputValidator,
+  temporaryConversationUpdateInputValidator,
+  temporaryConversationInputValidator,
+  temporaryConversationReadInputValidator,
+  temporaryConversationStopActionInputValidator,
+  temporaryConversationTurnActionInputValidator
 };
 
 export const mainGoalBlockInputValidator = validator({ reason: { ...requiredText, maxLength: 1000 } });

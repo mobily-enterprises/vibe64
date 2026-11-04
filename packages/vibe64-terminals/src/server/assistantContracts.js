@@ -51,7 +51,7 @@ function summary(result = {}, options = {}) {
   let preferences;
   try {
     if (result.routingMetadata) preferences = assistantRoutingFromMetadata(result.routingMetadata);
-  } catch { /* No verified AI task chat preferences. */ }
+  } catch { /* No verified temporary-chat preferences. */ }
   return {
     ...(preferences ? {
       chatMode: preferences.mode,
@@ -79,7 +79,7 @@ function summary(result = {}, options = {}) {
  * Native conversation records contain provider bindings, preferences and
  * attachments. Tools return only the public identity, state and bounded text.
  */
-function aiTaskConversationTool(description) {
+function temporaryConversationTool(description) {
   return {
     description,
     output: conversationOutput,
@@ -138,7 +138,7 @@ function workPlanTool() {
     hasMore: { type: "boolean", required: false }
   };
   return {
-    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Archive the current plan with work-plan.archive and make an archive current with work-plan.restore; execute, change or reopen it over a current plan through an explicit chat request; Auto routes by intent. AI task chats do not support Auto plans.",
+    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Archive the current plan with work-plan.archive and make an archive current with work-plan.restore; execute, change or reopen it over a current plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
     output: { mode: "replace", schema: createSchema(fields) },
     transformResult(result = {}) {
       return Object.fromEntries(Object.entries(result).filter(([key]) => Object.hasOwn(fields, key)));
@@ -235,4 +235,4 @@ function planUsageTool() {
   };
 }
 
-export { planUsageTool, aiTaskConversationTool, workPlanChangeTool, workPlanTool };
+export { planUsageTool, temporaryConversationTool, workPlanChangeTool, workPlanTool };

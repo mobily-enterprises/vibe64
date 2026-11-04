@@ -11,7 +11,7 @@ import {
   ACTION_UPDATE_ASSISTANT_SELECTION
 } from "./sessionActions.js";
 import { agentMessageActionInputValidator, assistantSelectionUpdateActionInputValidator } from "./inputSchemas.js";
-import { mainConversationTarget, aiTaskConversationTarget } from "../shared/conversationIdentity.js";
+import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -69,7 +69,7 @@ function operationResult(result) {
  */
 function createMainBrowserConversations({ actions, terminals }) {
   async function open({ id, context }) {
-    const temporary = aiTaskConversationTarget(id);
+    const temporary = temporaryConversationTarget(id);
     const target = temporary || mainConversationTarget(id);
     if (!target) throw unavailable();
     const accessTarget = { projectSlug: target.projectSlug, sessionId: target.sessionId };
@@ -145,7 +145,7 @@ function createMainBrowserConversations({ actions, terminals }) {
      */
     async function cancelDelivery(input) {
       return withTerminals(options => temporary
-        ? terminals.cancelAiTaskConversationMessage(target.sessionId, {
+        ? terminals.cancelTemporaryConversationMessage(target.sessionId, {
           conversationId: target.conversationId,
           messageId: input.messageId
         }, options)
@@ -183,10 +183,10 @@ function createMainBrowserConversations({ actions, terminals }) {
   }
 
   return Object.freeze({
-    // Main and AI task conversations share one transport; each accepts its own envelope.
-    conversationDataSchema: conversationTransportSchema([mainConversationDataSchema, terminals.aiTaskConversationDataSchema]),
+    // Main and temporary conversations share one transport; each accepts its own envelope.
+    conversationDataSchema: conversationTransportSchema([mainConversationDataSchema, terminals.temporaryConversationDataSchema]),
     conversationSelectionSchema: conversationTransportSchema([mainConversationSelectionSchema,
-      terminals.aiTaskConversationSelectionSchema]),
+      terminals.temporaryConversationSelectionSchema]),
     open
   });
 }

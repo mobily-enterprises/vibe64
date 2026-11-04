@@ -1385,8 +1385,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/agent/sessionAgentConversationOperations.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentGoals.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentLifecycle.js`
-- `packages/vibe64-terminals/src/server/aiTaskConversationRecords.js`
-- `packages/vibe64-terminals/src/server/aiTaskConversationTurns.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
 - `packages/vibe64-sessions/src/server/mainConversationAuthority.js`
@@ -1553,7 +1553,7 @@ lowest-priority actions move into Session actions first. Header actions are ligh
 Update uses the commit icon, a vertical line through a circle, distinct from the
 pull-request branch glyph.
 
-Session and ai-task-conversation actions resolve their project and acting user
+Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
 an action argument. HTTP URL selection and explicit action selection must agree;
 automation enters the same project context as HTTP. Hosts recheck authentication
@@ -3473,8 +3473,8 @@ application binding. The shared constructor assembles admission, identity,
 transcript, selection and delivery reads, preserving passive/native read behavior.
 The lower `createMainConversationBinding` storage facet, `openMainConversation`,
 `readMainConversationHistory`, lazy `readStream` and scoped authority guard remain
-in that same module. `aiTaskConversationRecords.js` owns Temporary's
-`selectedContext` and `providerInput`, and `aiTaskConversationTurns.js` its
+in that same module. `temporaryConversationRecords.js` owns Temporary's
+`selectedContext` and `providerInput`, and `temporaryConversationTurns.js` its
 `persistentConversationOptions` and `routingContext`: its logical identity and
 history remain distinct from Main.
 Before a native ID exists, manager `createConversation` completes its original

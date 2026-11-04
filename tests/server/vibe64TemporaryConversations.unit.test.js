@@ -15,15 +15,15 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
-import { mainConversationId, aiTaskConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
   ACTION_DELETE_AGENT_ATTACHMENT,
-  ACTION_READ_AI_TASK_CONVERSATION,
-  ACTION_START_AI_TASK_CONVERSATION_TURN,
-  ACTION_STOP_AI_TASK_CONVERSATION,
+  ACTION_READ_TEMPORARY_CONVERSATION,
+  ACTION_START_TEMPORARY_CONVERSATION_TURN,
+  ACTION_STOP_TEMPORARY_CONVERSATION,
   createTerminalActions
 } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
@@ -50,7 +50,7 @@ test("Main and temporary browser history default to ten messages and forward opa
   });
   const target = { projectSlug: "unit_project", sessionId: "one" };
   const cursor = 'message:["000001","assistant"]';
-  for (const id of [mainConversationId(target), aiTaskConversationId({ ...target, conversationId: "chat" })]) {
+  for (const id of [mainConversationId(target), temporaryConversationId({ ...target, conversationId: "chat" })]) {
     const browser = await facade.open({ id, context: { requestMeta: { request: {} } } });
     await browser.read();
     await browser.read({ beforeTurnId: cursor });
@@ -62,31 +62,31 @@ test("Main and temporary browser history default to ten messages and forward opa
 test("temporary conversation actions use durable conversation ownership", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const terminals = {
-    async readAiTaskConversation(...args) {
+    async readTemporaryConversation(...args) {
       calls.push(["read", ...args]);
       return { ok: true };
     },
-    async startAiTaskConversationTurn(...args) {
+    async startTemporaryConversationTurn(...args) {
       calls.push(["start", ...args]);
       return { ok: true };
     },
-    async stopAiTaskConversation(...args) {
+    async stopTemporaryConversation(...args) {
       calls.push(["stop", ...args]);
       return { ok: true };
     }
   };
   const actions = createTerminalActions({ terminals });
 
-  await actionById(actions, ACTION_READ_AI_TASK_CONVERSATION).execute({
+  await actionById(actions, ACTION_READ_TEMPORARY_CONVERSATION).execute({
     conversationId: "temporary-1",
     sessionId: "session-1"
   });
-  await actionById(actions, ACTION_START_AI_TASK_CONVERSATION_TURN).execute({
+  await actionById(actions, ACTION_START_TEMPORARY_CONVERSATION_TURN).execute({
     conversationId: "temporary-1",
     message: "Resolve the conflict.",
     sessionId: "session-1"
   });
-  await actionById(actions, ACTION_STOP_AI_TASK_CONVERSATION).execute({
+  await actionById(actions, ACTION_STOP_TEMPORARY_CONVERSATION).execute({
     conversationId: "temporary-1",
     runId: "turn-1",
     sessionId: "session-1"
@@ -229,10 +229,10 @@ test("a temporary send waits for the session write lock as long as the service's
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
     const service = f.restart({ routingWaitMs: 54_321 });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     f.locks.length = 0;
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
-    const routing = f.locks.filter(lock => lock.operation === "ai-task-conversation");
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
+    const routing = f.locks.filter(lock => lock.operation === "temporary-conversation");
     assert.ok(routing.length > 0);
     // A sibling chat's slow Claude startup holds this lock; the send waits it out.
     assert.deepEqual([...new Set(routing.map(lock => lock.waitMs))], [54_321]);
@@ -263,10 +263,10 @@ test("temporary provisional rows require exact native admission across read fail
       admitted.add(input.messageId);
       return result;
     };
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
     const input = { conversationId: "chat", messageId: "uncertain-steer", message: "Continue carefully", submissionKind: "steer" };
-    const response = await f.service.startAiTaskConversationTurn("one", input);
+    const response = await f.service.startTemporaryConversationTurn("one", input);
     assert.equal(response.ok, false);
     assert.equal(response.delivered, false);
     assert.equal(response.status, "uncertain");
@@ -277,22 +277,22 @@ test("temporary provisional rows require exact native admission across read fail
     assert.equal(f.native.starts, 2);
     await f.service.close();
     const restored = f.restart();
-    await assert.rejects(restored.startAiTaskConversationTurn("one", input), /Native history unavailable/);
-    const failedRead = await restored.readAiTaskConversation("one", { conversationId: "chat" });
+    await assert.rejects(restored.startTemporaryConversationTurn("one", input), /Native history unavailable/);
+    const failedRead = await restored.readTemporaryConversation("one", { conversationId: "chat" });
     assert.equal(failedRead.readError, true);
     assert.equal(failedRead.messages.find(message => message.id === input.messageId).receipt, false);
     readFailure = false;
     for (let check = 0; check < 2; check += 1) {
-      const unknown = await restored.startAiTaskConversationTurn("one", input);
+      const unknown = await restored.startTemporaryConversationTurn("one", input);
       assert.equal(unknown.ok, false);
       assert.equal(unknown.delivered, false);
       assert.equal(unknown.code, "vibe64_changeover_delivery_unconfirmed");
       assert.equal(f.native.starts, 2);
     }
     admitted.add(input.messageId);
-    const accepted = await restored.startAiTaskConversationTurn("one", input);
+    const accepted = await restored.startTemporaryConversationTurn("one", input);
     assert.equal(accepted.delivered, true);
-    const observed = await restored.readAiTaskConversation("one", { conversationId: "chat" });
+    const observed = await restored.readTemporaryConversation("one", { conversationId: "chat" });
     assert.equal(observed.messages.find(message => message.id === input.messageId).receipt, undefined);
     assert.equal(f.native.starts, 2);
     assert.ok(reads.some(read => read.conversationId === "native" && read.messageId === input.messageId));
@@ -307,7 +307,7 @@ test("temporary provisional rows require exact native admission across read fail
 test("temporary historical provisional receipt inspection uses its recorded native binding", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     await f.store.writeConversationUserMessage({ sessionId: "one", conversationId: "chat" }, {
       text: "Earlier direct message", messageId: "historical", turnMetadata: { assistantSelection: f.selection }
     });
@@ -321,7 +321,7 @@ test("temporary historical provisional receipt inspection uses its recorded nati
       reads.push({ threadId: input.conversationId, messageId: input.messageId, selection: context.assistantSelection });
       return { ok: true, admitted: true, runId: "original-turn", status: "completed", messages: [] };
     };
-    const result = await f.service.startAiTaskConversationTurn("one", {
+    const result = await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "historical", message: "Earlier direct message"
     });
     assert.equal(result.delivered, true);
@@ -346,8 +346,8 @@ test("a fresh Update repair routes independently of its parent's older Codex his
     for (const [key, value] of Object.entries(parentHistory)) await f.store.writeMetadataValue("one", key, value);
     const parent = await f.store.readSession("one");
     const service = f.restart({ prepareSelection: prepareCodexModelRouting });
-    await service.createAiTaskConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
-    await service.startAiTaskConversationTurn("one", {
+    await service.createTemporaryConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
+    await service.startTemporaryConversationTurn("one", {
       conversationId: "repair", messageId: "fix-update", message: "Fix this Update problem without losing work."
     });
     assert.equal(f.native.starts, 1);
@@ -363,19 +363,19 @@ test("a fresh Update repair routes independently of its parent's older Codex his
 test("temporary direct Junior ignores an unusable working plan and persists no plan snapshot", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-    await f.service.updateAiTaskConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior", review: false } });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior", review: false } });
     const planPath = path.join(f.store.paths("one").conversationsRoot, "chat", "work-plan", "plan.md");
     await mkdir(planPath, { recursive: true });
     const message = "Explain how the staff roster relates to a contact.";
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "question", message });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "question", message });
     assert.equal(f.native.starts, 1);
     assert.equal(f.native.lastInput.displayMessage, message);
     assert.match(f.native.lastInput.message, /Unrelated requests do not need a plan and must leave existing plans unchanged/);
     assert.ok(!f.native.lastInput.message.includes(planPath));
     f.native.status = "completed";
     await f.service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
-    const restored = await f.restart().readAiTaskConversation("one", { conversationId: "chat" });
+    const restored = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
     const request = JSON.parse(restored.routingMetadata.assistant_routing_request);
     assert.equal(request.status, "complete");
     assert.equal(request.workPlan, null);
@@ -389,8 +389,8 @@ test("the idle completion retries a busy lease instead of leaving the saved turn
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
     const service = f.restart({ temporaryCompletionAttempts: 5, temporaryCompletionRetryMs: 200 });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "question", message: "Explain this" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "question", message: "Explain this" });
     f.native.status = "completed";
     const idle = { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } };
     const hold = () => {
@@ -429,20 +429,20 @@ test("the idle completion retries a busy lease instead of leaving the saved turn
 test("temporary conversation reads page backwards by stable message identity without touching Main", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const scope = { sessionId: "one", conversationId: "chat" };
     for (let index = 0; index < 8; index += 1) {
       await f.store.writeConversationUserMessage(scope, { messageId: `question-${index}`, text: `Question ${index}` });
       await f.store.writeConversationAssistantMessage(scope, { messageId: `answer-${index}`, text: `Answer ${index}` });
     }
-    const latest = await f.service.readAiTaskConversation("one", { conversationId: "chat", messageLimit: 4 });
+    const latest = await f.service.readTemporaryConversation("one", { conversationId: "chat", messageLimit: 4 });
     assert.deepEqual(latest.messages.map((message) => message.id), ["question-6", "answer-6", "question-7", "answer-7"]);
     assert.equal(latest.earlierMessages, true);
-    const earlier = await f.service.readAiTaskConversation("one", { conversationId: "chat", beforeMessageId: "question-6", messageLimit: 12 });
+    const earlier = await f.service.readTemporaryConversation("one", { conversationId: "chat", beforeMessageId: "question-6", messageLimit: 12 });
     assert.equal(earlier.messages.length, 12);
     assert.equal(earlier.messages.at(-1).id, "answer-5");
     assert.equal(earlier.earlierMessages, false);
-    await assert.rejects(f.service.readAiTaskConversation("one", { conversationId: "chat", beforeMessageId: "absent" }), { code: "vibe64_conversation_cursor_missing" });
+    await assert.rejects(f.service.readTemporaryConversation("one", { conversationId: "chat", beforeMessageId: "absent" }), { code: "vibe64_conversation_cursor_missing" });
     assert.equal((await f.store.readConversationLog("one")).length, 0);
   });
 });
@@ -450,20 +450,20 @@ test("temporary conversation reads page backwards by stable message identity wit
 test("temporary chats reject Auto at creation, preference updates and request admission", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await assert.rejects(f.service.createAiTaskConversation("one", {
+    await assert.rejects(f.service.createTemporaryConversation("one", {
       conversationId: "rejected", assistantRouting: { mode: "auto" }
     }), /Main chat only/);
     assert.equal(await f.store.readSessionConversation("one", "rejected"), null);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const record = await f.store.readSessionConversation("one", "chat");
-    await assert.rejects(f.service.updateAiTaskConversation("one", {
+    await assert.rejects(f.service.updateTemporaryConversation("one", {
       conversationId: "chat", assistantRouting: { mode: "auto", review: true }
     }), /Main chat only/);
     assert.deepEqual((await f.store.readSessionConversation("one", "chat")).routingMetadata, record.routingMetadata);
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: {
       ...record.routingMetadata, assistant_routing: JSON.stringify({ mode: "auto", review: true })
     } });
-    await assert.rejects(f.service.startAiTaskConversationTurn("one", {
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "blocked", message: "Implement it"
     }), /Main chat only/);
     assert.equal(f.native.starts, 0);
@@ -474,8 +474,8 @@ test("temporary chats reject Auto at creation, preference updates and request ad
 test("temporary Auto requests cannot retry or continue into planning or review", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Explain this" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Explain this" });
     const record = await f.store.readSessionConversation("one", "chat");
     const request = { ...JSON.parse(record.routingMetadata.assistant_routing_request), mode: "auto", resolvedMode: "junior", review: true };
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
@@ -488,7 +488,7 @@ test("temporary Auto requests cannot retry or continue into planning or review",
     for (const delivery of ["failed", "pending", "uncertain"]) {
       await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
         assistant_routing_request: JSON.stringify({ ...request, messageId: "pending", status: "waiting", delivery }) } });
-      await assert.rejects(f.service.startAiTaskConversationTurn("one", {
+      await assert.rejects(f.service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "pending", message: "Explain this",
         ...(delivery === "pending" ? { reviewAction: "retry" } : {})
       }), /Main chat only/);
@@ -502,7 +502,7 @@ test("archive routing cleanup can finish a closing temporary chat without reopen
     const f = await conversationFixture(root);
     let cleanupSucceeds = false;
     f.sessionAgent.deleteEphemeralConversation = async () => ({ ok: cleanupSucceeds });
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const record = await f.store.readSessionConversation("one", "chat");
     const helperRoot = path.join(f.runtime.stateRoot, "assistant-helpers", "saved-router");
     const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
@@ -510,20 +510,20 @@ test("archive routing cleanup can finish a closing temporary chat without reopen
     await f.store.writeSessionConversation("one", "chat", { state: "closing", routingMetadata: { ...record.routingMetadata,
       assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "failed", messageId: "owned-helper",
         input: { message: "Preserved request" }, mode: "auto", helper }) } });
-    await assert.rejects(f.service.cancelAiTaskConversationRouting("one", { conversationId: "chat", messageId: "other" }), /routing request changed/);
-    await assert.rejects(f.service.cancelAiTaskConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" }), /helper could not be closed/);
+    await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "other" }), /routing request changed/);
+    await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" }), /helper could not be closed/);
     let retained = await f.store.readSessionConversation("one", "chat");
     assert.equal(retained.state, "closing");
     assert.equal(JSON.parse(retained.routingMetadata.assistant_routing_request).helper.runId, "router-turn");
     cleanupSucceeds = true;
-    await f.restart().cancelAiTaskConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" });
+    await f.restart().cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" });
     retained = await f.store.readSessionConversation("one", "chat");
     const request = JSON.parse(retained.routingMetadata.assistant_routing_request);
     assert.equal(retained.state, "closing");
     assert.equal(request.helper, null);
     assert.equal(request.stopped, true);
     assert.equal(request.input.message, "Preserved request");
-    await assert.rejects(f.service.startAiTaskConversationTurn("one", { conversationId: "chat", message: "No" }), /closing/);
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", { conversationId: "chat", message: "No" }), /closing/);
     assert.equal(f.native.starts, 0);
   });
 });
@@ -533,19 +533,19 @@ test("Close retains a temporary chat when its saved helper cannot be cleaned up"
     const f = await conversationFixture(root);
     let cleanupSucceeds = false;
     f.sessionAgent.deleteEphemeralConversation = async () => ({ ok: cleanupSucceeds });
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const record = await f.store.readSessionConversation("one", "chat");
     const helperRoot = path.join(f.runtime.stateRoot, "assistant-helpers", "saved-router");
     const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
       scope: { id: "saved-router", runtimeRoot: path.join(helperRoot, "runtime"), workdir: path.join(helperRoot, "workdir") } };
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
       assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "failed", messageId: "owned-helper", input: { message: "Preserved request" }, mode: "auto", helper }) } });
-    await assert.rejects(f.service.deleteAiTaskConversation("one", { conversationId: "chat" }), /routing helper could not be closed/);
+    await assert.rejects(f.service.deleteTemporaryConversation("one", { conversationId: "chat" }), /routing helper could not be closed/);
     const retained = await f.store.readSessionConversation("one", "chat");
     assert.equal(retained.state, "open");
     assert.equal(JSON.parse(retained.routingMetadata.assistant_routing_request).helper.runId, "router-turn");
     cleanupSucceeds = true;
-    assert.equal((await f.service.deleteAiTaskConversation("one", { conversationId: "chat" })).deleted, true);
+    assert.equal((await f.service.deleteTemporaryConversation("one", { conversationId: "chat" })).deleted, true);
     assert.equal(await f.store.readSessionConversation("one", "chat"), null);
   });
 });
@@ -554,18 +554,18 @@ for (const [engineId, model] of [["codex", "gpt-6-astra"], ["opencode", "deepsee
   test(`temporary ${engineId} validates and retains its own model without changing main chat`, async () => {
     await withTemporaryRoot(async (root) => {
       const { service, store, native, selection, restart } = await conversationFixture(root, engineId);
-      await service.createAiTaskConversation("one", { conversationId: "chat" });
-      await service.updateAiTaskConversation("one", {
+      await service.createTemporaryConversation("one", { conversationId: "chat" });
+      await service.updateTemporaryConversation("one", {
         conversationId: "chat", agentSettings: { providerId: engineId, model, thinking: "ultra" }
       });
-      await restart().startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "input", message: "Question" });
+      await restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "Question" });
       assert.equal(native.createdSelection.modelId, model);
       assert.equal(native.turnSelection.modelId, model);
       assert.equal(native.turnSelection.variantId, "ultra");
       assert.equal(native.turnSelection.modelProviderId, selection.modelProviderId);
       assert.equal(native.turnSelection.catalogRevision, `sha256:${"b".repeat(64)}`);
       assert.equal((await store.readSession("one")).metadata.assistant_selection, serializeVibe64AssistantSelection(selection));
-      assert.equal((await restart().listAiTaskConversations("one")).conversations[0].agentSettings.model, model);
+      assert.equal((await restart().listTemporaryConversations("one")).conversations[0].agentSettings.model, model);
     });
   });
 }
@@ -573,11 +573,11 @@ for (const [engineId, model] of [["codex", "gpt-6-astra"], ["opencode", "deepsee
 test("temporary model and effort must be currently available before native work starts", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, native, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     for (const agentSettings of [
       { model: "missing-model" }, { model: "disabled-model" }, { model: "gpt-6-astra", thinking: "unsupported" }
     ]) {
-      await assert.rejects(service.updateAiTaskConversation("one", {
+      await assert.rejects(service.updateTemporaryConversation("one", {
         conversationId: "chat", agentSettings
       }), { code: "vibe64_assistant_selection_unavailable" });
     }
@@ -590,7 +590,7 @@ test("temporary model and effort must be currently available before native work 
 test("a temporary draft saves while another assistant operation holds the source lease", { timeout: 5000 }, async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store, native } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const holding = store.runSessionExclusive("one", "agent-write-mode", async () => {
@@ -598,17 +598,17 @@ test("a temporary draft saves while another assistant operation holds the source
       await release.promise;
     }, { operation: "prepare-agent-session" });
     await entered.promise;
-    const saving = service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Ideas?" } });
+    const saving = service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Ideas?" } });
     try {
       assert.equal((await saving).ok, true);
       assert.equal((await store.readSessionConversation("one", "chat")).draft, "Ideas?");
       assert.equal(native.starts, 0);
-      const mixed = await service.updateAiTaskConversation("one", {
+      const mixed = await service.updateTemporaryConversation("one", {
         conversationId: "chat", presentation: { draft: "Mixed", title: "New title" }
       }, { lockWaitMs: 0 });
       assert.equal(mixed.code, "vibe64_agent_write_mode_busy");
       assert.equal(mixed.retryable, true);
-      await assert.rejects(service.startAiTaskConversationTurn("one", {
+      await assert.rejects(service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "blocked-start", message: "Do not dispatch while busy"
       }, { lockWaitMs: 0 }), { code: "vibe64_agent_write_mode_busy" });
       assert.equal(native.starts, 0);
@@ -625,20 +625,20 @@ test("temporary chat numbers stay unique after a reload, including chats saved w
     // Before numbers were stored, each page load restarted the browser's
     // counter, so a chat created after a reload was saved as Temporary 1 again.
     for (const [conversationId, title] of [["first", "Temporary 1"], ["second", "Temporary 1"], ["repair", "Fix preview identity"]]) {
-      await service.createAiTaskConversation("one", { conversationId, presentation: { title } });
+      await service.createTemporaryConversation("one", { conversationId, presentation: { title } });
       await store.writeSessionConversation("one", conversationId, { number: undefined });
       await new Promise(resolve => setTimeout(resolve, 5));
     }
-    const created = await service.createAiTaskConversation("one", { conversationId: "new", presentation: { title: "" } });
+    const created = await service.createTemporaryConversation("one", { conversationId: "new", presentation: { title: "" } });
     assert.equal(created.number, 4);
-    const labels = async () => (await restart().listAiTaskConversations("one")).conversations
+    const labels = async () => (await restart().listTemporaryConversations("one")).conversations
       .map(({ conversationId, number, title }) => [conversationId, number, title]);
     assert.deepEqual(await labels(), [
       ["first", 1, ""], ["second", 2, ""], ["repair", 3, "Fix preview identity"], ["new", 4, ""]
     ]);
     // Stored numbers never move; reading did not backfill the older chats.
     await store.deleteSessionConversation("one", "first");
-    assert.equal((await service.createAiTaskConversation("one", { conversationId: "later" })).number, 5);
+    assert.equal((await service.createTemporaryConversation("one", { conversationId: "later" })).number, 5);
     assert.deepEqual((await labels()).map(([id, number]) => [id, number]),
       [["second", 1], ["repair", 2], ["new", 4], ["later", 5]]);
     assert.equal(Object.hasOwn(await store.readSessionConversation("one", "second"), "number"), false);
@@ -648,7 +648,7 @@ test("temporary chat numbers stay unique after a reload, including chats saved w
 test("renaming a temporary chat saves a plain name without the assistant's lease", { timeout: 5000 }, async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store, events, restart } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const holding = store.runSessionExclusive("one", "agent-write-mode", async () => {
@@ -657,7 +657,7 @@ test("renaming a temporary chat saves a plain name without the assistant's lease
     }, { operation: "prepare-agent-session" });
     await entered.promise;
     try {
-      const renamed = await service.updateAiTaskConversation("one", {
+      const renamed = await service.updateTemporaryConversation("one", {
         conversationId: "chat", presentation: { title: "  Login\n  bug  " }
       });
       assert.deepEqual(renamed, { ok: true, title: "Login bug" });
@@ -665,14 +665,14 @@ test("renaming a temporary chat saves a plain name without the assistant's lease
       release.resolve();
       await holding;
     }
-    assert.deepEqual(events.at(-1), ["one", { reason: "ai-task-conversation-renamed", payload: { conversationId: "chat" } }]);
-    const [listed] = (await restart().listAiTaskConversations("one")).conversations;
+    assert.deepEqual(events.at(-1), ["one", { reason: "temporary-conversation-renamed", payload: { conversationId: "chat" } }]);
+    const [listed] = (await restart().listTemporaryConversations("one")).conversations;
     assert.equal(listed.title, "Login bug");
     assert.equal(listed.number, 1);
-    await assert.rejects(service.updateAiTaskConversation("one", {
+    await assert.rejects(service.updateTemporaryConversation("one", {
       conversationId: "chat", presentation: { title: "x".repeat(81) }
     }), { statusCode: 400 });
-    await service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { title: " " } });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: " " } });
     assert.equal((await store.readSessionConversation("one", "chat")).title, "");
   });
 });
@@ -680,13 +680,13 @@ test("renaming a temporary chat saves a plain name without the assistant's lease
 test("plain drafts cannot recreate a closed chat or write into one that is closing", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     await store.writeSessionConversation("one", "chat", { state: "closing" });
-    await assert.rejects(service.updateAiTaskConversation("one", {
+    await assert.rejects(service.updateTemporaryConversation("one", {
       conversationId: "chat", presentation: { draft: "Late" }
     }), { code: "vibe64_conversation_closing" });
     await store.deleteSessionConversation("one", "chat");
-    await assert.rejects(service.updateAiTaskConversation("one", {
+    await assert.rejects(service.updateTemporaryConversation("one", {
       conversationId: "chat", presentation: { draft: "Later" }
     }), { code: "vibe64_conversation_closed" });
     assert.equal(await store.readSessionConversation("one", "chat"), null);
@@ -696,7 +696,7 @@ test("plain drafts cannot recreate a closed chat or write into one that is closi
 test("a newly created chat gives its initial draft a durable revision", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", {
+    await service.createTemporaryConversation("one", {
       conversationId: "chat", presentation: { draft: "Initial idea" }
     });
     const record = await store.readSessionConversation("one", "chat");
@@ -708,7 +708,7 @@ test("a newly created chat gives its initial draft a durable revision", async ()
 test("a queued draft merges into current lifecycle state and refuses a renewed session", async () => {
   await withTemporaryRoot(async root => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const queuedService = f.restart({ readSessionContext: async (sessionId, options = {}) => {
@@ -716,7 +716,7 @@ test("a queued draft merges into current lifecycle state and refuses a renewed s
       entered.resolve(); await release.promise;
       return { ...options, runtime: f.runtime, session };
     } });
-    const saving = queuedService.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Later draft" } });
+    const saving = queuedService.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Later draft" } });
     await entered.promise;
     const lifecycle = { status: "completed", providerConversationId: "existing-native",
       runId: "existing-run", attachments: [{ attachmentId: "retained-file" }], routingMetadata: { retained: "policy" } };
@@ -727,7 +727,7 @@ test("a queued draft merges into current lifecycle state and refuses a renewed s
     for (const [key, value] of Object.entries(lifecycle)) assert.deepEqual(saved[key], value);
     assert.equal(saved.draft, "Later draft");
     await f.store.quiesceSessionForRenewal({ sourceSessionId: "one", renewalId: "renewal-test" });
-    await assert.rejects(f.service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Too late" } }),
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Too late" } }),
       { code: "vibe64_session_renewal_quiesced" });
     assert.equal((await f.store.readSessionConversation("one", "chat")).draft, "Later draft");
   });
@@ -736,7 +736,7 @@ test("a queued draft merges into current lifecycle state and refuses a renewed s
 test("two session stores preserve draft-before-Close and reject draft-after-Close order", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const secondStore = createVibe64SessionStore({
       projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root)
     });
@@ -746,12 +746,12 @@ test("two session stores preserve draft-before-Close and reject draft-after-Clos
     const secondService = f.restart({ readSessionContext: async (sessionId, options = {}) => ({
       ...options, runtime: secondRuntime, session: await secondRuntime.getSession(sessionId)
     }) });
-    await secondService.updateAiTaskConversation("one", {
+    await secondService.updateTemporaryConversation("one", {
       conversationId: "chat", presentation: { draft: "Before Close" }
     });
     await f.store.writeSessionConversation("one", "chat", { state: "closing" });
     assert.equal((await secondStore.readSessionConversation("one", "chat")).draft, "Before Close");
-    await assert.rejects(secondService.updateAiTaskConversation("one", {
+    await assert.rejects(secondService.updateTemporaryConversation("one", {
       conversationId: "chat", presentation: { draft: "After Close" }
     }), { code: "vibe64_conversation_closing" });
     assert.equal((await f.store.readSessionConversation("one", "chat")).draft, "Before Close");
@@ -761,7 +761,7 @@ test("two session stores preserve draft-before-Close and reject draft-after-Clos
 test("saved conversation history remains readable while source work holds the lease", { timeout: 5000 }, async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     await store.writeConversationUserMessage({ sessionId: "one", conversationId: "chat" }, {
       messageId: "saved-1", text: "Saved question"
     });
@@ -776,26 +776,26 @@ test("saved conversation history remains readable while source work holds the le
     }, { operation: "prepare-agent-session" });
     await entered.promise;
     try {
-      const listed = await service.listAiTaskConversations("one");
-      const read = await service.readAiTaskConversation("one", { conversationId: "chat" });
+      const listed = await service.listTemporaryConversations("one");
+      const read = await service.readTemporaryConversation("one", { conversationId: "chat" });
       assert.equal(listed.conversations[0].deferredReconciliation, true);
       assert.equal(read.deferredReconciliation, true);
       assert.equal(read.messages[0].text, "Saved question");
       assert.equal(read.messages[0].receipt, false);
-      const latest = await service.readAiTaskConversation("one", { conversationId: "chat", messageLimit: 1 });
+      const latest = await service.readTemporaryConversation("one", { conversationId: "chat", messageLimit: 1 });
       assert.deepEqual(latest.messages.map(message => message.id), ["saved-2"]);
       assert.equal(latest.earlierMessages, true);
-      const earlier = await service.readAiTaskConversation("one", {
+      const earlier = await service.readTemporaryConversation("one", {
         conversationId: "chat", beforeMessageId: "saved-2", messageLimit: 1
       });
       assert.deepEqual(earlier.messages.map(message => message.id), ["saved-1"]);
-      await assert.rejects(service.readAiTaskConversation("one", { conversationId: "chat", beforeMessageId: "unknown" }),
+      await assert.rejects(service.readTemporaryConversation("one", { conversationId: "chat", beforeMessageId: "unknown" }),
         { code: "vibe64_conversation_cursor_missing" });
     } finally {
       release.resolve();
       await holding;
     }
-    assert.equal((await service.readAiTaskConversation("one", { conversationId: "chat" })).deferredReconciliation, undefined);
+    assert.equal((await service.readTemporaryConversation("one", { conversationId: "chat" })).deferredReconciliation, undefined);
   });
 });
 
@@ -803,8 +803,8 @@ for (const newerDraft of ["Question B", "Question A"]) {
   test(`native admission cannot clear a newer ${newerDraft === "Question A" ? "identical" : "different"} draft saved during source work`, { timeout: 5000 }, async () => {
     await withTemporaryRoot(async (root) => {
       const f = await conversationFixture(root);
-      await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-      await f.service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Question A" } });
+      await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+      await f.service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Question A" } });
       const entered = Promise.withResolvers();
       const release = Promise.withResolvers();
       const startNative = f.sessionAgent.startConversationTurn;
@@ -813,12 +813,12 @@ for (const newerDraft of ["Question B", "Question A"]) {
         await release.promise;
         return startNative(...args);
       };
-      const sending = f.service.startAiTaskConversationTurn("one", {
+      const sending = f.service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "question-a", message: "Question A", presentation: { draft: "" }
       });
       await entered.promise;
       try {
-        assert.equal((await f.service.updateAiTaskConversation("one", {
+        assert.equal((await f.service.updateTemporaryConversation("one", {
           conversationId: "chat", presentation: { draft: newerDraft }
         })).ok, true);
       } finally {
@@ -826,7 +826,7 @@ for (const newerDraft of ["Question B", "Question A"]) {
       }
       await sending;
       assert.equal((await f.store.readSessionConversation("one", "chat")).draft, newerDraft);
-      await f.service.readAiTaskConversation("one", { conversationId: "chat" });
+      await f.service.readTemporaryConversation("one", { conversationId: "chat" });
       assert.equal((await f.store.readSessionConversation("one", "chat")).draft, newerDraft);
     });
   });
@@ -836,8 +836,8 @@ for (const operation of ["list", "read"]) {
   test(`temporary ${operation} availability checks do not block another conversation's saved draft`, async () => {
     await withTemporaryRoot(async (root) => {
       const f = await conversationFixture(root);
-      await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-      await f.service.createAiTaskConversation("one", { conversationId: "other" });
+      await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+      await f.service.createTemporaryConversation("one", { conversationId: "other" });
       const entered = Promise.withResolvers();
       const release = Promise.withResolvers();
       f.sessionAgent.inspectAssistantPurposes = async () => {
@@ -845,12 +845,12 @@ for (const operation of ["list", "read"]) {
         await release.promise;
         return { senior: { available: true } };
       };
-      const reading = operation === "list" ? f.service.listAiTaskConversations("one")
-        : f.service.readAiTaskConversation("one", { conversationId: "chat" });
+      const reading = operation === "list" ? f.service.listTemporaryConversations("one")
+        : f.service.readTemporaryConversation("one", { conversationId: "chat" });
       await entered.promise;
       try {
         const saving = await runVibe64AgentWriteExclusive(f.runtime, "one", () =>
-          f.service.updateAiTaskConversation("one", { conversationId: "other", presentation: { draft: "Still editable" } }));
+          f.service.updateTemporaryConversation("one", { conversationId: "other", presentation: { draft: "Still editable" } }));
         assert.equal(saving.acquired, true, "provider availability must not hold the session write lock");
         assert.equal(saving.value.ok, true);
         assert.equal((await f.store.readSessionConversation("one", "other")).draft, "Still editable");
@@ -868,15 +868,15 @@ for (const operation of ["list", "read"]) {
 test("recovered admission retains attachments added after the submitted draft", async () => {
   await withTemporaryRoot(async root => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Question A" } });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "question-a", message: "Question A" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Question A" } });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "question-a", message: "Question A" });
     // Recreate the persisted boundary after dispatch but before its acknowledgement.
     await f.store.writeSessionConversation("one", "chat", { status: "starting" });
     const upload = await f.attachments.uploadAttachment({ sessionId: "one" }, {
       fileName: "later.txt", stream: Readable.from(["For the next question"])
     });
-    await f.service.updateAiTaskConversation("one", { conversationId: "chat", attachmentIds: [upload.attachmentId] });
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat", attachmentIds: [upload.attachmentId] });
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" });
     assert.equal((await f.store.readSessionConversation("one", "chat")).attachments[0]?.attachmentId, upload.attachmentId);
     const retained = await f.attachments.readAttachment({ sessionId: "one" }, upload.attachmentId);
     assert.equal(await retained.fileHandle.readFile("utf8"), "For the next question");
@@ -888,19 +888,19 @@ test("recovered admission retains attachments added after the submitted draft", 
 test("Close publishes its exact conversation after deletion, including retries, without recreating it on publication failure", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store, restart, events } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    assert.deepEqual(events.splice(0), [["one", { reason: "ai-task-conversation-created", payload: { conversationId: "chat" } }]],
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    assert.deepEqual(events.splice(0), [["one", { reason: "temporary-conversation-created", payload: { conversationId: "chat" } }]],
       "other views learn of a new chat once; repeating an acknowledged creation is silent");
     const failingPublisher = restart({ publishSessionChanged: async () => {
       assert.equal(await store.readSessionConversation("one", "chat"), null);
       throw new Error("Realtime unavailable");
     } });
-    await assert.rejects(failingPublisher.deleteAiTaskConversation("one", { conversationId: "chat" }), /Realtime unavailable/);
+    await assert.rejects(failingPublisher.deleteTemporaryConversation("one", { conversationId: "chat" }), /Realtime unavailable/);
     assert.equal(await store.readSessionConversation("one", "chat"), null);
-    await service.deleteAiTaskConversation("one", { conversationId: "chat" });
-    assert.deepEqual(events, [["one", { reason: "ai-task-conversation-closed", payload: { conversationId: "chat" } }]]);
-    await assert.rejects(service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Late save" } }), { code: "vibe64_conversation_closed" });
+    await service.deleteTemporaryConversation("one", { conversationId: "chat" });
+    assert.deepEqual(events, [["one", { reason: "temporary-conversation-closed", payload: { conversationId: "chat" } }]]);
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Late save" } }), { code: "vibe64_conversation_closed" });
     assert.equal(await store.readSessionConversation("one", "chat"), null);
   });
 });
@@ -914,23 +914,23 @@ test("Close and archive retire a temporary chat's open runtime entry and its old
       host: { conversation: ({ id, context }) => service.conversationBinding(id, context) }
     });
     service = f.restart({ conversationRuntime: common, publishConversation: event => common.publishNative(event) });
-    const open = async (conversationId) => common.open({ id: "one", context: { sessionId: "one", aiTaskConversationId: conversationId,
+    const open = async (conversationId) => common.open({ id: "one", context: { sessionId: "one", temporaryConversationId: conversationId,
       runtime: f.runtime, session: await f.runtime.getSession("one") } });
     try {
-      await service.createAiTaskConversation("one", { conversationId: "closed-chat" });
-      await service.createAiTaskConversation("one", { conversationId: "kept-chat" });
+      await service.createTemporaryConversation("one", { conversationId: "closed-chat" });
+      await service.createTemporaryConversation("one", { conversationId: "kept-chat" });
       const closing = await open("closed-chat");
       const kept = await open("kept-chat");
       const closingEvents = [];
       await closing.subscribe(event => closingEvents.push(event));
       await kept.subscribe(() => {});
 
-      assert.equal((await service.deleteAiTaskConversation("one", { conversationId: "closed-chat" })).ok, true);
+      assert.equal((await service.deleteTemporaryConversation("one", { conversationId: "closed-chat" })).ok, true);
       assert.ok(closingEvents.length > 0, "the clear-stream event reaches the chat's view before it retires");
       await assert.rejects(closing.subscribe(() => {}), { code: "conversation_handle_closed" });
       assert.ok(await kept.read(), "another chat's entry stays open");
 
-      assert.deepEqual(await service.retireAiTaskConversations("one"), { ok: true });
+      assert.deepEqual(await service.retireTemporaryConversations("one"), { ok: true });
       await assert.rejects(kept.subscribe(() => {}), { code: "conversation_handle_closed" });
       assert.ok(await f.store.readSessionConversation("one", "kept-chat"), "archive keeps the chat's saved record");
     } finally {
@@ -944,13 +944,13 @@ test("temporary conversations survive a new service, stream and reconcile withou
     const { service, restart, store, native } = await conversationFixture(root);
     await store.writeConversationUserMessage("one", { text: "Main question", messageId: "main" });
     const main = await store.readConversationLog("one");
-    const created = await service.createAiTaskConversation("one", {
+    const created = await service.createTemporaryConversation("one", {
       conversationId: "chat", presentation: { title: "Investigate", draft: "Edit this file" }, agentSettings: { model: "chosen" }
     });
     assert.equal(created.conversationId, "chat");
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "input", message: "hidden context", displayMessage: "Edit this file" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "hidden context", displayMessage: "Edit this file" });
     native.messages = [{ id: "answer", role: "assistant", text: "Editing", complete: false }];
-    const restored = (await restart().listAiTaskConversations("one")).conversations[0];
+    const restored = (await restart().listTemporaryConversations("one")).conversations[0];
     assert.equal(restored.title, "Investigate");
     assert.equal(restored.status, "inProgress");
     assert.equal(restored.agentSettings.model, "main-model", "a new Plan chat uses its configured role, not copied parent model settings");
@@ -958,10 +958,10 @@ test("temporary conversations survive a new service, stream and reconcile withou
     native.messages[0] = { id: "answer", role: "assistant", text: "Edited.", complete: true };
     native.status = "completed";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const reply = await restart().readAiTaskConversation("one", { conversationId: "chat" });
+      const reply = await restart().readTemporaryConversation("one", { conversationId: "chat" });
       assert.deepEqual(reply.messages.map((message) => message.text), ["Edit this file", "Edited."]);
     }
-    await restart().startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "input", message: "hidden context" });
+    await restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "hidden context" });
     assert.equal(native.starts, 1, "an admitted retry must not start another turn");
     assert.deepEqual(await store.readConversationLog("one"), main);
   });
@@ -973,27 +973,27 @@ test("Close retains a retryable record until stop, native deletion and attachmen
     const edit = path.join(root, "user-edit.txt");
     await writeFile(edit, "preserve me");
     const upload = await attachments.uploadAttachment({ sessionId: "one" }, { fileName: "notes.txt", stream: Readable.from(["notes"]) });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "input", message: "Use this", attachmentIds: [upload.attachmentId] });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "Use this", attachmentIds: [upload.attachmentId] });
     const saved = await attachments.readAttachment({ sessionId: "one" }, upload.attachmentId);
     const filePath = saved.attachment.path;
     await saved.fileHandle.close();
     native.stopError = "Stop not confirmed";
-    await assert.rejects(service.deleteAiTaskConversation("one", { conversationId: "chat" }), /Stop not confirmed/);
+    await assert.rejects(service.deleteTemporaryConversation("one", { conversationId: "chat" }), /Stop not confirmed/);
     assert.equal(native.deletes, 0);
-    const closing = (await restart().listAiTaskConversations("one")).conversations[0];
+    const closing = (await restart().listTemporaryConversations("one")).conversations[0];
     assert.equal(closing.status, "closing");
-    await assert.rejects(service.startAiTaskConversationTurn("one", { conversationId: "chat", message: "No" }), /closing/);
+    await assert.rejects(service.startTemporaryConversationTurn("one", { conversationId: "chat", message: "No" }), /closing/);
     native.stopError = "";
     native.deleteError = "Delete unavailable";
-    await assert.rejects(restart().deleteAiTaskConversation("one", { conversationId: "chat" }), /Delete unavailable/);
-    assert.equal(events.some(([, event]) => event.reason === "ai-task-conversation-closed"), false);
+    await assert.rejects(restart().deleteTemporaryConversation("one", { conversationId: "chat" }), /Delete unavailable/);
+    assert.equal(events.some(([, event]) => event.reason === "temporary-conversation-closed"), false);
     await access(filePath);
     native.deleteError = "";
-    await restart().deleteAiTaskConversation("one", { conversationId: "chat" });
-    await restart().deleteAiTaskConversation("one", { conversationId: "chat" });
+    await restart().deleteTemporaryConversation("one", { conversationId: "chat" });
+    await restart().deleteTemporaryConversation("one", { conversationId: "chat" });
     assert.equal(native.deletes, 1);
-    assert.deepEqual((await restart().listAiTaskConversations("one")).conversations, []);
+    assert.deepEqual((await restart().listTemporaryConversations("one")).conversations, []);
     await assert.rejects(access(filePath), { code: "ENOENT" });
     assert.equal(await readFile(edit, "utf8"), "preserve me");
     assert.deepEqual(await store.readConversationLog("one"), []);
@@ -1004,16 +1004,16 @@ test("saved temporary draft attachments survive restart and cannot take ownershi
   await withTemporaryRoot(async (root) => {
     const { service, restart, attachments } = await conversationFixture(root);
     const upload = await attachments.uploadAttachment({ sessionId: "one" }, { fileName: "draft.txt", stream: Readable.from(["draft file"]) });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Review [File #1]" }, attachmentIds: [upload.attachmentId] });
-    const restored = (await restart().listAiTaskConversations("one")).conversations[0];
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Review [File #1]" }, attachmentIds: [upload.attachmentId] });
+    const restored = (await restart().listTemporaryConversations("one")).conversations[0];
     assert.equal(restored.draft, "Review [File #1]");
     assert.equal(restored.attachments[0].attachmentId, upload.attachmentId);
     await assert.rejects(attachments.prepareMessage({ sessionId: "one" }, { message: "Main", attachmentIds: [upload.attachmentId] }), /another conversation/);
     const mainUpload = await attachments.uploadAttachment({ sessionId: "one" }, { fileName: "main.txt", stream: Readable.from(["main file"]) });
     await attachments.prepareMessage({ sessionId: "one" }, { message: "Main", attachmentIds: [mainUpload.attachmentId] });
-    await assert.rejects(service.updateAiTaskConversation("one", { conversationId: "chat", attachmentIds: [mainUpload.attachmentId] }), /another conversation/);
-    await service.deleteAiTaskConversation("one", { conversationId: "chat" });
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "chat", attachmentIds: [mainUpload.attachmentId] }), /another conversation/);
+    await service.deleteTemporaryConversation("one", { conversationId: "chat" });
     const main = await attachments.readAttachment({ sessionId: "one" }, mainUpload.attachmentId);
     assert.equal(await main.fileHandle.readFile("utf8"), "main file");
     await main.fileHandle.close();
@@ -1024,13 +1024,13 @@ test("saved temporary draft attachments survive restart and cannot take ownershi
 test("session conversation routing preserves native completed status for a stale steer", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, native, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
     native.admitted = false;
     const input = { conversationId: "chat", messageId: "followup", message: "Continue carefully" };
     for (const status of ["completed", "interrupted", "stopped", "failed", "unverified", "ready"]) {
       native.status = status;
-      await assert.rejects(service.startAiTaskConversationTurn("one", { ...input, submissionKind: "steer" }), error => {
+      await assert.rejects(service.startTemporaryConversationTurn("one", { ...input, submissionKind: "steer" }), error => {
         assert.equal(error.code, status === "completed" ? "conversation_steer_turn_finished" : "conversation_not_steerable");
         assert.equal(error.delivery, "not-sent");
         return true;
@@ -1039,12 +1039,12 @@ test("session conversation routing preserves native completed status for a stale
       assert.equal(await store.conversationMessageIdExists({ sessionId: "one", conversationId: "chat" }, input.messageId), false);
     }
     native.status = "completed";
-    const sent = await service.startAiTaskConversationTurn("one", { ...input, submissionKind: "send" });
+    const sent = await service.startTemporaryConversationTurn("one", { ...input, submissionKind: "send" });
     assert.equal(sent.delivered, true);
     assert.equal(native.starts, 2);
     assert.equal(native.lastInput.messageId, input.messageId);
     assert.equal(native.lastInput.steer, false);
-    await service.startAiTaskConversationTurn("one", { ...input, submissionKind: "send" });
+    await service.startTemporaryConversationTurn("one", { ...input, submissionKind: "send" });
     assert.equal(native.starts, 2, "retrying the accepted fallback must not send twice");
     await service.close();
   });
@@ -1069,28 +1069,28 @@ test("a definitely rejected temporary steer preserves the earlier answer's owner
       admitted.add(input.messageId);
       return result;
     };
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "First" });
-    await assert.rejects(f.service.startAiTaskConversationTurn("one", {
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "First" });
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "second", message: "Second", submissionKind: "steer"
     }), error => error.delivery === "not-sent" && error.code === "conversation_steer_turn_finished");
     const scope = { sessionId: "one", conversationId: "chat" };
     let history = await f.store.readConversationLog(scope);
     assert.equal(history.find(turn => turn.user?.messageId === "first").assistant?.text, "FIRST-OK");
     assert.equal(history.find(turn => turn.user?.messageId === "second").assistant, null);
-    const rejected = await f.service.readAiTaskConversation("one", { conversationId: "chat" });
+    const rejected = await f.service.readTemporaryConversation("one", { conversationId: "chat" });
     assert.equal(rejected.messages.find(message => message.id === "first").receipt, undefined);
     assert.equal(rejected.messages.find(message => message.id === "second").receipt, false);
     assert.equal((await f.store.readSessionConversation("one", "chat")).messageId, "first");
     await f.service.close();
     const current = f.restart();
     const next = { conversationId: "chat", messageId: "second", message: "Second", submissionKind: "send" };
-    const sent = await current.startAiTaskConversationTurn("one", next);
+    const sent = await current.startTemporaryConversationTurn("one", next);
     assert.equal(sent.delivered, true);
     f.native.status = "completed";
     f.native.messages.push({ id: "second-answer", role: "assistant", text: "SECOND-OK", complete: true });
-    await current.readAiTaskConversation("one", { conversationId: "chat" });
-    await current.startAiTaskConversationTurn("one", next);
+    await current.readTemporaryConversation("one", { conversationId: "chat" });
+    await current.startTemporaryConversationTurn("one", next);
     history = await f.store.readConversationLog(scope);
     assert.equal(history.find(turn => turn.user?.messageId === "first").assistant?.text, "FIRST-OK");
     assert.equal(history.find(turn => turn.user?.messageId === "second").assistant?.text, "SECOND-OK");
@@ -1103,12 +1103,12 @@ test("a definitely rejected temporary steer preserves the earlier answer's owner
 test("temporary conversations steer active work without changing its model or preparing source", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, native, restart, store } = await conversationFixture(root);
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
     native.admitted = false;
     let preparations = 0;
     const current = restart({ prepareAgentSkills: async () => { preparations += 1; } });
-    await current.startAiTaskConversationTurn("one", {
+    await current.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "steer", message: "Focus on the logs", agentSettings: { model: "missing-model" }
     });
     assert.equal(native.lastInput.steer, true);
@@ -1117,7 +1117,7 @@ test("temporary conversations steer active work without changing its model or pr
     const log = await store.readConversationLog({ sessionId: "one", conversationId: "chat" });
     assert.deepEqual(log.filter(turn => turn.user).map(turn => turn.user.text), ["Investigate", "Focus on the logs"]);
     assert.deepEqual(await store.readConversationLog("one"), []);
-    await current.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "steer", message: "Focus on the logs" });
+    await current.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "steer", message: "Focus on the logs" });
     assert.equal(native.starts, 2);
   });
 });
@@ -1205,14 +1205,14 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   };
   let service = f.restart({ systemRoot: root, prepareSelection: preparation });
   await manager.assistantAccess("one", { session: await f.store.readSession("one"), ...options });
-  await service.createAiTaskConversation("one", { conversationId: "chat" }, options);
+  await service.createTemporaryConversation("one", { conversationId: "chat" }, options);
   return { ...f, native, calls, failures, manager, options, senior, junior, helper,
     get service() { return service; },
     restart(overrides = {}) { service = f.restart({ systemRoot: root, prepareSelection: preparation, ...overrides }); return service; },
     record: () => f.store.readSessionConversation("one", "chat"),
     async send(mode, messageId, message = `Request ${messageId}`) {
-      await service.updateAiTaskConversation("one", { conversationId: "chat", assistantRouting: { mode, review } }, options);
-      return service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId, message }, options);
+      await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode, review } }, options);
+      return service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId, message }, options);
     },
     async finish(reply) {
       const record = await f.store.readSessionConversation("one", "chat");
@@ -1233,15 +1233,15 @@ test("temporary goals retain identity while settings remain editable during acti
     f.native.get(record.providerConversationId).goal = goal;
     await f.finish("Paused the goal.");
     assert.equal(f.calls.starts.length, 1, "a goal never starts automatic review");
-    const restored = (await f.restart().listAiTaskConversations("one", f.options)).conversations[0];
+    const restored = (await f.restart().listTemporaryConversations("one", f.options)).conversations[0];
     assert.deepEqual(restored.goal, goal);
-    await assert.rejects(f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "auto", review: true }
     }, f.options), { statusCode: 400, code: "vibe64_temporary_chat_auto_unavailable", message: /Auto is available in Main chat only/ });
     const configuration = createAssistantRoutingStore({ systemRoot: root });
     const saved = await configuration.read();
     await configuration.write({ ...saved, owner: { ...saved.owner, junior: f.senior } }, saved.revision);
-    await assert.rejects(f.service.startAiTaskConversationTurn("one", {
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "changed-coder", message: "Continue."
     }, f.options), /Finish or cancel the current goal before changing its AI/);
     assert.equal(f.calls.starts.length, 1);
@@ -1255,7 +1255,7 @@ test("temporary goals retain identity while settings remain editable during acti
     try {
       for (const status of ["paused", "active"]) {
         goal.status = status;
-        const result = await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+        const result = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
           assistantRouting: { mode: "senior", review: false, override: f.senior }
         }, { ...f.options, lockWaitMs: 0 });
         assert.equal(result.ok, true);
@@ -1272,7 +1272,7 @@ test("temporary goals retain identity while settings remain editable during acti
     assert.deepEqual(f.calls.stops, []);
     const pinned = (await f.record()).routingMetadata.assistant_routing_goal;
     f.failures.read = true;
-    assert.equal((await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    assert.equal((await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "junior", review: false }
     }, f.options)).ok, true);
     assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing).mode, "junior");
@@ -1284,18 +1284,18 @@ test("temporary goals retain identity while settings remain editable during acti
 test("temporary availability uses its own actor and override without inferring or exposing connection identities", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
-    const initial = await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    const initial = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.deepEqual(JSON.parse(initial.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
     assert.equal(initial.purposes.fix.effectiveSelection.engineId, "opencode");
     assert.equal(initial.purposes.auto.available, false);
-    await assert.rejects(f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "senior", review: false } }, f.options), /Senior and Junior are for the workspace owner/);
-    const updated = await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    const updated = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", review: false, override: f.junior }
     }, f.options);
     assert.equal(updated.purposes.custom.effectiveSelection.modelId, "deepseek-flash");
     assert.doesNotMatch(JSON.stringify(updated.purposes), /connectionIdentity|backupUsed/);
-    const owner = await f.service.readAiTaskConversation("one", { conversationId: "chat" }, {
+    const owner = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, {
       vibe64User: { username: "owner", role: "owner" }
     });
     assert.equal(owner.purposes.junior.effectiveSelection.engineId, "codex");
@@ -1310,16 +1310,16 @@ test("team members' temporary chats and every repair chat use Fix it with AI", a
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true }));
-    await assert.rejects(f.service.createAiTaskConversation("one", { conversationId: "generated",
+    await assert.rejects(f.service.createTemporaryConversation("one", { conversationId: "generated",
       assistantRouting: { mode: "junior", review: false } }, f.options),
     { message: /Senior and Junior are for the workspace owner/, statusCode: 403, code: "vibe64_assistant_owner_required" });
     for (const [input, options] of [[{ conversationId: "generated" }, f.options],
       [{ conversationId: "repair" }, { ...f.options, aiTask: () => ({ turn: { routing: "fix", structured: true } }) }]]) {
-      const created = await f.service.createAiTaskConversation("one", input, options);
+      const created = await f.service.createTemporaryConversation("one", input, options);
       assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
       assert.equal(created.purposes.fix.effectiveSelection.engineId, "opencode");
     }
-    const ownerRepair = await f.service.createAiTaskConversation("one", { conversationId: "owner-repair" },
+    const ownerRepair = await f.service.createTemporaryConversation("one", { conversationId: "owner-repair" },
       { vibe64User: { username: "owner", role: "owner" }, aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
     assert.deepEqual(JSON.parse(ownerRepair.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
     assert.equal(ownerRepair.purposes.fix.effectiveSelection.modelId, "deepseek-flash");
@@ -1333,12 +1333,12 @@ test("a temporary personal turn restricts steering without blocking the member's
     await f.send("senior", "owner-plan");
     const input = { conversationId: "chat" };
     const member = { vibe64User: { username: "member", role: "member" } };
-    const during = await f.service.readAiTaskConversation("one", input, member);
+    const during = await f.service.readTemporaryConversation("one", input, member);
     assert.equal(during.canSteer, false);
     assert.equal(during.purposes.fix.available, true);
     assert.equal(during.purposes.fix.effectiveSelection.engineId, "opencode");
     await f.finish("Here is the plan.");
-    const after = await f.service.readAiTaskConversation("one", input, member);
+    const after = await f.service.readTemporaryConversation("one", input, member);
     assert.equal(after.canSteer, null);
     assert.equal(after.purposes.fix.available, true);
   });
@@ -1388,16 +1388,16 @@ test("temporary replies retain their routed identity across multiple native mess
     const record = await f.record();
     const row = f.native.get(record.providerConversationId);
     row.messages.push({ role: "assistant", id: "code-start", text: "I am implementing it.", complete: true });
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     row.messages.push({ role: "thinking", id: "code-progress", text: "Checking the changed file.", complete: true });
     await f.finish("Implemented the file.");
     assert.equal(f.calls.starts.length, 1, "Fix it with AI never starts a reviewer");
     await f.send("fix", "member-senior", "Explain your findings.");
     row.messages.push({ role: "assistant", id: "review-start", text: "I am reviewing it.", complete: true });
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     row.messages.push({ role: "thinking", id: "review-progress", text: "Checking the result.", complete: true });
     await f.finish("Reviewed the file.");
-    const snapshot = (await f.restart().listAiTaskConversations("one", f.options)).conversations[0];
+    const snapshot = (await f.restart().listTemporaryConversations("one", f.options)).conversations[0];
     const codeIds = ["member-code", "code-start", "code-progress", "reply-turn-1"];
     const reviewIds = ["review-start", "review-progress", "reply-turn-2"];
     for (const id of [...codeIds, ...reviewIds]) {
@@ -1485,8 +1485,8 @@ test("a session's temporary chats save completed output with one write per burst
       return start(id, input, options);
     };
     for (const conversationId of ["chat", "chat-2"]) {
-      await service.createAiTaskConversation("one", { conversationId });
-      await service.startAiTaskConversationTurn("one", { conversationId, messageId: `${conversationId}-request`, message: "Begin" });
+      await service.createTemporaryConversation("one", { conversationId });
+      await service.startTemporaryConversationTurn("one", { conversationId, messageId: `${conversationId}-request`, message: "Begin" });
     }
     assert.equal(onEvents.length, 2);
     const emit = async (index, id) => {
@@ -1530,7 +1530,7 @@ test("a temporary Fix it with AI read observes completion without starting revie
     const record = await f.record();
     const row = f.native.get(record.providerConversationId);
     row.status = "completed";
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.equal(f.calls.starts.length, 1);
     await f.service.afterTemporaryTurn("one", { conversationId: row.id,
       temporaryRun: { active: false, state: "completed", providerTurnId: record.runId } }, f.options);
@@ -1551,7 +1551,7 @@ for (const role of ["owner", "member"]) {
       assert.equal(f.calls.starts.length, 1);
       const waiting = await f.record();
       assert.equal(JSON.parse(waiting.routingMetadata.assistant_routing_request).reviewStatus, undefined);
-      const restored = await f.restart().readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+      const restored = await f.restart().readTemporaryConversation("one", { conversationId: "chat" }, f.options);
       assert.equal(restored.messages.at(-1).text, question);
       assert.equal(restored.assistantSelection.modelId, waiting.assistantSelection.modelId);
       assert.equal(f.calls.starts.length, 1);
@@ -1568,8 +1568,8 @@ test("temporary HTTP Fix it with AI input records its actor and never starts a r
   await withTemporaryRoot(async (root) => {
     const member = { role: "member", username: "collaborator" };
     const f = await temporaryChangeoverFixture(root, member, true);
-    await f.service.updateAiTaskConversation("one", { conversationId: "chat", assistantRouting: { mode: "fix", review: true } }, f.options);
-    await f.service.startAiTaskConversationTurn("one", {
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "fix", review: true } }, f.options);
+    await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "http-member-code", message: "Implement the agreed design", vibe64User: member
     });
     assert.deepEqual(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).submittedBy, member);
@@ -1612,15 +1612,15 @@ test("temporary changeover stops before selection changes and Close retries only
     assert.deepEqual(failed.assistantSelection, original.assistantSelection);
     assert.equal(f.native.size, 1);
     f.failures.stop = "";
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
     const sharedId = (await f.record()).providerConversationId;
     f.failures.delete = sharedId;
-    await assert.rejects(f.service.deleteAiTaskConversation("one", { conversationId: "chat" }, f.options), /deletion not confirmed/);
+    await assert.rejects(f.service.deleteTemporaryConversation("one", { conversationId: "chat" }, f.options), /deletion not confirmed/);
     const closing = await f.record();
     assert.equal(closing.state, "closing");
     assert.deepEqual(Object.keys(closing.nativeBindings), ["opencode"]);
     f.failures.delete = "";
-    await f.restart().deleteAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.restart().deleteTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.equal(await f.record(), null);
     assert.deepEqual(f.calls.deletes, [original.providerConversationId, sharedId, sharedId]);
     assert.equal(f.manager.binding("one"), "codex");
@@ -1641,7 +1641,7 @@ test("temporary foreign delivery recovers its exact receipt after restart withou
     f.failures.loseAdmission = false;
     f.failures.read = false;
     assert.equal(f.native.get(pending.providerConversationId).status, "inProgress");
-    const recovered = await f.restart().startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
+    const recovered = await f.restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
     assert.equal(recovered.delivered, true);
     assert.equal(f.calls.starts.length, 2);
     const turns = await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" });
@@ -1675,7 +1675,7 @@ for (const pinned of [false, true]) {
         await assert.rejects(f.send(mode, `return-${mode}`), {
           code: "vibe64_codex_history_unsupported",
           statusCode: 409,
-          message: /Start a new AI task to use Codex/
+          message: /Start a new temporary chat/
         });
         const after = await f.record();
         assert.deepEqual(after.assistantSelection, record.assistantSelection);
@@ -1697,10 +1697,10 @@ test("ordinary temporary chats start in Senior with review off and retain their 
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true }));
-    await f.service.createAiTaskConversation("one", { conversationId: "plan-chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "plan-chat" });
     const record = await f.store.readSessionConversation("one", "plan-chat");
     assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "plan-chat", messageId: "discuss", message: "Discuss the design" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "plan-chat", messageId: "discuss", message: "Discuss the design" });
     assert.match(f.native.lastInput.message, /Vibe64 role: Senior/);
     assert.equal(JSON.parse((await f.store.readSessionConversation("one", "plan-chat")).routingMetadata.assistant_routing_request).review, false);
   });
@@ -1714,14 +1714,14 @@ test("temporary chats inherit Main's role and custom model; Auto becomes Senior"
       const preferences = { mode, review: true, ...(mode === "auto" ? {} : { override }) };
       await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify(preferences));
       const parent = await f.store.readSession("one");
-      const created = await f.service.createAiTaskConversation("one", { conversationId: mode });
+      const created = await f.service.createTemporaryConversation("one", { conversationId: mode });
       assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), {
         ...preferences, mode: mode === "auto" ? "senior" : mode, review: false, autoSave: false
       });
       assert.deepEqual((await f.store.readSession("one")).metadata, parent.metadata);
       assert.equal(created.providerConversationId, "");
     }
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "junior", messageId: "hello", message: "Explain the project" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "junior", messageId: "hello", message: "Explain the project" });
     assert.equal(f.native.turnSelection.modelId, "chosen");
     assert.equal(f.native.turnSelection.variantId, "ultra");
     assert.match(f.native.lastInput.message, /Vibe64 role: Junior/);
@@ -1734,20 +1734,20 @@ test("inherited temporary choices stay independent across Main changes and resta
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", review: false }));
-    const first = await f.service.createAiTaskConversation("one", { conversationId: "first" });
+    const first = await f.service.createTemporaryConversation("one", { conversationId: "first" });
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "senior", review: false }));
     const service = f.restart();
-    const restored = await service.readAiTaskConversation("one", { conversationId: "first" });
+    const restored = await service.readTemporaryConversation("one", { conversationId: "first" });
     assert.deepEqual(restored.routingMetadata, first.routingMetadata);
-    const second = await service.createAiTaskConversation("one", { conversationId: "second" });
+    const second = await service.createTemporaryConversation("one", { conversationId: "second" });
     assert.equal(JSON.parse(second.routingMetadata.assistant_routing).mode, "senior");
-    const changed = await service.updateAiTaskConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true } });
+    const changed = await service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true } });
     assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
-    await assert.rejects(service.updateAiTaskConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Custom, Senior, Junior, or Auto/);
-    await assert.rejects(service.updateAiTaskConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);
-    const explicit = await service.createAiTaskConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Custom, Senior, Junior, or Auto/);
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);
+    const explicit = await service.createTemporaryConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });
     assert.equal(JSON.parse(explicit.routingMetadata.assistant_routing).mode, "junior");
-    const repair = await service.createAiTaskConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
+    const repair = await service.createTemporaryConversation("one", { conversationId: "repair" }, { aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
     assert.equal(JSON.parse(repair.routingMetadata.assistant_routing).mode, "fix");
   });
 });
@@ -1755,7 +1755,7 @@ test("inherited temporary choices stay independent across Main changes and resta
 test("a Main chat without routing preferences passes its exact AI into a new temporary chat", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    const created = await f.service.createAiTaskConversation("one", { conversationId: "legacy-main" });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "legacy-main" });
     const preferences = JSON.parse(created.routingMetadata.assistant_routing);
     assert.equal(preferences.mode, "senior");
     assert.equal(preferences.override.modelId, f.selection.modelId);
@@ -1769,24 +1769,24 @@ test("existing idle merge repairs use Fix it with AI without rewriting saved pre
     const f = await temporaryChangeoverFixture(root);
     await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
     const before = await f.record();
-    const observed = await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    const observed = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.equal(JSON.parse(observed.routingMetadata.assistant_routing).mode, "fix");
     assert.deepEqual((await f.record()).routingMetadata, before.routingMetadata);
-    await assert.rejects(f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "junior" } }, f.options), { statusCode: 400, code: "vibe64_repair_chat_mode_invalid" });
-    const started = await f.service.startAiTaskConversationTurn("one", {
+    const started = await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "repair", message: "Resolve this merge while preserving both changes."
     }, f.options);
     assert.notEqual(started.ok, false, JSON.stringify(started));
     assert.equal(f.calls.starts[0].selection.modelId, "deepseek-flash", "the owner's Fix it with AI follows Junior");
     assert.match(f.calls.starts[0].input.message, /Vibe64 role: Fix it with AI/);
     assert.equal(f.calls.starts[0].input.turnMetadata.assistantRouting.resolvedMode, "fix");
-    assert.equal((await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    assert.equal((await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", override: f.helper } }, f.options)).ok, true);
     assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing).override.modelId, f.helper.modelId);
     assert.equal(f.calls.starts.length, 1, "Saving the next repair model does not start another turn");
     assert.deepEqual(f.calls.stops, []);
-    await f.service.stopAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
     await f.service.close();
   });
 });
@@ -1795,20 +1795,20 @@ test("a repair can move to a chosen Codex model after Stop and retains history a
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root);
     const main = (await f.store.readSession("one")).metadata;
-    await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", override: f.helper } }, f.options);
-    await f.service.startAiTaskConversationTurn("one", {
+    await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "original", message: "Preserve the booking validation while repairing this merge."
     }, f.options);
     await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
-    await f.service.stopAiTaskConversation("one", { conversationId: "chat" }, f.options);
-    const changed = await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    const changed = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", override: f.senior } }, f.options);
     const preferences = JSON.parse(changed.routingMetadata.assistant_routing);
     assert.equal(preferences.mode, "custom");
     assert.equal(preferences.override.modelId, "gpt-6-astra");
     assert.deepEqual((await f.record()).task, { turn: { routing: "fix", structured: true } });
-    const result = await f.service.startAiTaskConversationTurn("one", {
+    const result = await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "take-over", message: "Check the merge and finish it correctly."
     }, f.options);
     assert.notEqual(result.ok, false, JSON.stringify(result));
@@ -1816,9 +1816,9 @@ test("a repair can move to a chosen Codex model after Stop and retains history a
     assert.equal(f.calls.starts[1].selection.modelId, "gpt-6-astra");
     assert.match(f.calls.starts[1].input.message, /Preserve the booking validation/);
     assert.match(f.calls.starts[1].input.message, /Vibe64 role: Custom/);
-    assert.equal((await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options)).messages.filter(message => message.role === "user").length, 2);
+    assert.equal((await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options)).messages.filter(message => message.role === "user").length, 2);
     assert.deepEqual((await f.store.readSession("one")).metadata, main);
-    await f.service.stopAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
     await f.service.close();
   });
 });
@@ -1829,10 +1829,10 @@ test("temporary Custom changes orchestrator with conversation context and leaves
     const main = (await f.store.readSession("one")).metadata;
     await f.send("senior", "first", "Remember the bicycle is blue.");
     await f.finish("The bicycle is blue.");
-    const changed = await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+    const changed = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
       assistantRouting: { mode: "custom", override: f.helper } }, f.options);
     assert.equal(changed.purposes.custom.available, true);
-    const result = await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "custom", message: "What colour is it?" }, f.options);
+    const result = await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "custom", message: "What colour is it?" }, f.options);
     assert.notEqual(result.ok, false, JSON.stringify(result));
     assert.equal(f.calls.starts[1].selection.engineId, "opencode");
     assert.match(f.calls.starts[1].input.message, /bicycle is blue/);
@@ -1890,7 +1890,7 @@ test("temporary canonical facade uses the original logical record, actions, stre
     definitions = createTerminalActions({ terminals: service });
     const terminals = { ...service, openBrowserConversation() { throw new Error("Unexpected Main open"); },
       async openTemporaryBrowserConversation(sessionId, conversationId, options) {
-        return common.open({ id: sessionId, context: { ...options, sessionId, aiTaskConversationId: conversationId,
+        return common.open({ id: sessionId, context: { ...options, sessionId, temporaryConversationId: conversationId,
           runtime: f.runtime, session: await f.runtime.getSession(sessionId) } });
       }
     };
@@ -1898,11 +1898,11 @@ test("temporary canonical facade uses the original logical record, actions, stre
     assert.ok(facade.conversationSelectionSchema.getFieldDefinitions().assistantRouting.schema.getFieldDefinitions().mode.enum.includes("auto"));
     assert.equal(facade.conversationDataSchema.getFieldDefinitions().planRevision.maxLength, undefined);
     const open = conversationId => facade.open({
-      id: aiTaskConversationId({ projectSlug: project.slug, sessionId: "one", conversationId }),
+      id: temporaryConversationId({ projectSlug: project.slug, sessionId: "one", conversationId }),
       context: { requestMeta: { request: { vibe64User: user } } }
     });
-    await service.createAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Saved draft" } });
-    await service.createAiTaskConversation("one", { conversationId: "peer" });
+    await service.createTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Saved draft" } });
+    await service.createTemporaryConversation("one", { conversationId: "peer" });
     const original = await f.store.readSessionConversation("one", "chat");
     const mainMetadata = (await f.runtime.getSession("one")).metadata;
     const browser = await open("chat");
@@ -1937,7 +1937,7 @@ test("temporary canonical facade uses the original logical record, actions, stre
     const sent = await browser.send({ messageId: "canonical-input", text: "Change this file." });
     assert.equal(sent.delivered, true);
     assert.equal(f.native.lastInput.messageId, "canonical-input");
-    assert.equal(actionCalls.find(call => call.actionId === ACTION_START_AI_TASK_CONVERSATION_TURN).input.conversationId, "chat");
+    assert.equal(actionCalls.find(call => call.actionId === ACTION_START_TEMPORARY_CONVERSATION_TURN).input.conversationId, "chat");
     assert.equal((await browser.send({ messageId: "canonical-input", text: "Change this file." })).delivered, true);
     assert.equal(f.native.starts, 1);
     await onEvent({ type: "message", threadId: "native", turnId: "turn-1",
@@ -1980,10 +1980,10 @@ test("temporary canonical facade uses the original logical record, actions, stre
     await assert.rejects(browser.read(), error => error.code === "conversation_forbidden");
     revokeDuringRead = false;
     const beforeRevokedPublication = events.length;
-    await service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { title: "Changed privately" } });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: "Changed privately" } });
     assert.equal(events.length, beforeRevokedPublication, "each publication rechecks the retained reader's access");
     allowed = true;
-    await service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { title: "Still requires a new subscription" } });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: "Still requires a new subscription" } });
     assert.equal(events.length, beforeRevokedPublication, "a revoked subscriber is removed rather than revived");
     await common.close();
     assert.ok(await f.store.readSessionConversation("one", "chat"));
@@ -2005,7 +2005,7 @@ test("temporary canonical inspection recovers the original foreign receipt befor
     assert.equal(sourceState.engines.opencode.pending.messageId, "second");
     const restored = f.restart();
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      assert.deepEqual(await restored.inspectAiTaskConversationDelivery("one", {
+      assert.deepEqual(await restored.inspectTemporaryConversationDelivery("one", {
         conversationId: "chat", messageId: "second"
       }, f.options), { status: "unknown", messageId: "second" });
     }
@@ -2024,7 +2024,7 @@ test("temporary canonical inspection recovers the original foreign receipt befor
       }
       return writeRecord(sessionId, conversationId, patch);
     };
-    const recovered = await restored.inspectAiTaskConversationDelivery("one", {
+    const recovered = await restored.inspectTemporaryConversationDelivery("one", {
       conversationId: "chat", messageId: "second"
     }, f.options);
     assert.equal(recovered.status, "accepted");
@@ -2043,7 +2043,7 @@ async function unconfirmedTemporarySend(f) {
   f.failures.loseAdmission = true;
   await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
   f.failures.read = false;
-  const read = async () => (await f.service.conversationBinding("one", { ...f.options, aiTaskConversationId: "chat",
+  const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
     runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
   assert.equal((await read()).status, "unconfirmed");
   return read;
@@ -2053,7 +2053,7 @@ test("a stopped temporary request whose delivery is unknown is no longer reporte
   await withTemporaryRoot(async root => {
     const f = await temporaryChangeoverFixture(root);
     const read = await unconfirmedTemporarySend(f);
-    await f.service.cancelAiTaskConversationRouting("one", { conversationId: "chat", messageId: "lost" }, f.options);
+    await f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "lost" }, f.options);
     const route = JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
     assert.equal(route.stopped, true);
     assert.equal(route.delivery, "uncertain", "Stopping does not invent a delivery outcome");
@@ -2076,7 +2076,7 @@ test("Cancel of an unconfirmed temporary message answers while a sibling chat ho
     await entered.promise;
     try {
       const result = await Promise.race([
-        f.service.cancelAiTaskConversationMessage("one", { conversationId: "chat", messageId: "lost" }, f.options),
+        f.service.cancelTemporaryConversationMessage("one", { conversationId: "chat", messageId: "lost" }, f.options),
         new Promise((_resolve, reject) => setTimeout(() => reject(new Error("Cancel waited for the write lock.")), 2000))
       ]);
       assert.deepEqual(result, { ok: true, cancelled: true, messageId: "lost", interrupted: true });
@@ -2086,13 +2086,13 @@ test("Cancel of an unconfirmed temporary message answers while a sibling chat ho
       const after = await read();
       assert.notEqual(after.status, "unconfirmed");
       assert.equal(after.pendingRequest, null, "the snapshot never offers it again, even before the native attempt is discarded");
-      assert.deepEqual(await f.service.inspectAiTaskConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
+      assert.deepEqual(await f.service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
         { status: "cancelled", messageId: "lost" });
     } finally {
       release.resolve();
       await startup;
     }
-    await assert.rejects(f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options),
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options),
       { code: "vibe64_assistant_message_cancelled", delivery: "not-sent" });
     assert.equal(f.calls.starts.length, 1, "a cancelled message is never sent again");
     await f.service.close();
@@ -2126,16 +2126,16 @@ test("a temporary message the AI proved it never received is not sent and leaves
     await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
     f.failures.read = false;
     const route = async () => JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
-    const binding = async () => service.conversationBinding("one", { ...f.options, aiTaskConversationId: "chat",
+    const binding = async () => service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
       runtime: f.runtime, session: await f.runtime.getSession("one") });
     assert.equal((await route()).delivery, "uncertain");
     assert.equal((await (await binding()).read(f.options)).status, "unconfirmed");
     f.native.get((await f.record()).providerConversationId).accepted.delete("lost");
     f.native.get((await f.record()).providerConversationId).status = "interrupted";
-    assert.deepEqual(await service.inspectAiTaskConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
+    assert.deepEqual(await service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
       { status: "unknown", messageId: "lost" }, "absence alone is not proof");
     notAdmitted = true;
-    const receipt = await service.inspectAiTaskConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options);
+    const receipt = await service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options);
     assert.equal(receipt.status, "not-sent");
     assert.equal((await route()).delivery, "failed");
     const read = await (await binding()).read(f.options);
@@ -2143,7 +2143,7 @@ test("a temporary message the AI proved it never received is not sent and leaves
     assert.equal(read.pendingRequest, null);
     assert.equal(f.calls.starts.length, 1, "inspection never sends");
     f.failures.loseAdmission = false;
-    await service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options);
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options);
     assert.equal(f.calls.starts.length, 2, "Retry sends the unsent message once");
     assert.equal((await route()).delivery, "accepted");
     await service.close();
@@ -2153,7 +2153,7 @@ test("a temporary message the AI proved it never received is not sent and leaves
 test("missed completion stays deferred during source work and reconciles once after release", { timeout: 5000 }, async () => {
   await withTemporaryRoot(async root => {
     const f = await temporaryChangeoverFixture(root);
-    await f.service.startAiTaskConversationTurn("one", {
+    await f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "original", message: "Explain the booking validation."
     }, f.options);
     f.native.get((await f.record()).providerConversationId).status = "completed";
@@ -2177,15 +2177,15 @@ test("missed completion stays deferred during source work and reconciles once af
     await entered.promise;
     try {
       for (let read = 0; read < 3; read++) {
-        const saved = await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+        const saved = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
         assert.equal(saved.deferredReconciliation, true);
       }
       assert.equal(completions, 0);
       assert.equal(f.calls.starts.length, 1);
     } finally { release.resolve(); await holding; }
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     await completed.promise;
-    await f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
     assert.equal(completions, 1);
     assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).messageId, "original");
     assert.equal(f.calls.starts.length, 1);
@@ -2198,9 +2198,9 @@ test("temporary repair model preferences survive recovered completion in either 
     await withTemporaryRoot(async (root) => {
       const f = await temporaryChangeoverFixture(root);
       const main = (await f.store.readSession("one")).metadata;
-      await f.service.updateAiTaskConversation("one", { conversationId: "chat",
+      await f.service.updateTemporaryConversation("one", { conversationId: "chat",
         assistantRouting: { mode: "custom", override: f.helper } }, f.options);
-      await f.service.startAiTaskConversationTurn("one", {
+      await f.service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "original", message: "Preserve the booking validation."
       }, f.options);
       await f.store.writeSessionConversation("one", "chat", { task: { turn: { routing: "fix", structured: true } } });
@@ -2260,8 +2260,8 @@ test("temporary repair model preferences survive recovered completion in either 
         }
       };
       try {
-        reading = f.service.readAiTaskConversation("one", { conversationId: "chat" }, f.options);
-        updating = f.service.updateAiTaskConversation("one", { conversationId: "chat",
+        reading = f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+        updating = f.service.updateTemporaryConversation("one", { conversationId: "chat",
           assistantRouting: { mode: "custom", override: f.senior } }, f.options);
         const changed = await updating;
         await bounded(completionWritten.promise, "completion write");
@@ -2306,7 +2306,7 @@ test("temporary context captures forty visible messages once, without reasoning 
       text: `/goal ${assistantModePrompt("junior", "Keep my authored objective")}`, messageId: "goal"
     });
     const parentBefore = await f.store.readConversationLog("one");
-    const created = await f.service.createAiTaskConversation("one", { conversationId: "context", includeRecentChatContext: true });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "context", includeRecentChatContext: true });
     const snapshot = created.recentChatContext;
     assert.equal(snapshot.messages.length, 40);
     assert.equal(snapshot.messages[0].text, "Question 3");
@@ -2317,11 +2317,11 @@ test("temporary context captures forty visible messages once, without reasoning 
     assert.deepEqual(await f.store.readConversationLog("one"), parentBefore);
     assert.deepEqual(await f.store.readConversationLog({ sessionId: "one", conversationId: "context" }), []);
     await f.store.writeConversationAssistantMessage("one", { text: "Later Main reply" });
-    const retry = await f.service.createAiTaskConversation("one", { conversationId: "context", includeRecentChatContext: true });
+    const retry = await f.service.createTemporaryConversation("one", { conversationId: "context", includeRecentChatContext: true });
     assert.deepEqual(retry.recentChatContext, snapshot);
-    const ordinary = await f.service.createAiTaskConversation("one", { conversationId: "empty" });
+    const ordinary = await f.service.createTemporaryConversation("one", { conversationId: "empty" });
     assert.equal(ordinary.recentChatContext, undefined);
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "context", messageId: "ask", message: "Explain that progress" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "context", messageId: "ask", message: "Explain that progress" });
     assert.match(f.native.lastInput.message, /Question 3/);
     assert.match(f.native.lastInput.message, /Visible progress/);
     assert.ok(!f.native.lastInput.message.includes("Later Main reply"));
@@ -2338,7 +2338,7 @@ test("temporary context is UTF-8 bounded and reports omitted older text", async 
     const f = await conversationFixture(root);
     await f.store.writeConversationUserMessage("one", { text: "Old "+"🐨".repeat(30000), messageId: "big" });
     await f.store.writeConversationAssistantMessage("one", { text: "Most recent answer" });
-    const created = await f.service.createAiTaskConversation("one", { conversationId: "bounded", includeRecentChatContext: true });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "bounded", includeRecentChatContext: true });
     assert.equal(created.recentChatContext.truncated, true);
     assert.equal(created.recentChatContext.messages.at(-1).text, "Most recent answer");
     assert.ok(created.recentChatContext.messages.reduce((total, message) => total + Buffer.byteLength(message.text), 0) <= 64 * 1024);
@@ -2365,7 +2365,7 @@ test("temporary context uses existing visible goal and integration projections",
     await f.store.writeConversationUserMessage("one", { text: "Please configure the integration", messageId: "integration" });
     await f.store.writeConversationAssistantMessage("one", { text: 'Configure this connection.\n```vibe64-integration\n{"integrationId":"private-slot"}\n```' });
     await f.store.writeConversationSystemMessage("one", { text: "INTERNAL SYSTEM TEXT" });
-    const created = await f.service.createAiTaskConversation("one", { conversationId: "visible", includeRecentChatContext: true });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "visible", includeRecentChatContext: true });
     assert.deepEqual(created.recentChatContext.messages.map(message => message.text), [
       "My own instructions remain verbatim", "Goal set: ordinary authored explanation",
       "I will continue writing the report.", "Please configure the integration", "Configure this connection."
@@ -2381,7 +2381,7 @@ test("temporary context follows visible chronology across interleaved native tur
     await f.store.writeConversationUserMessage("one", { text: "Start the report", messageId: "first", at: "2026-10-16T01:00:00.000Z" });
     await f.store.writeConversationAssistantMessage("one", { text: "The final result", at: "2026-10-16T01:00:03.000Z" });
     await f.store.writeConversationUserMessage("one", { text: "Include this correction", messageId: "steer", at: "2026-10-16T01:00:02.000Z" });
-    const created = await f.service.createAiTaskConversation("one", { conversationId: "chronology", includeRecentChatContext: true });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "chronology", includeRecentChatContext: true });
     assert.deepEqual(created.recentChatContext.messages.map(message => message.text), [
       "Start the report", "Include this correction", "The final result"
     ]);
@@ -2397,7 +2397,7 @@ test("mixed temporary settings updates retain source exclusion while settings-on
       prepared += 1;
       return f.attachments.prepareMessage(...args);
     } } });
-    await service.createAiTaskConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const holding = f.store.runSessionExclusive("one", "agent-write-mode", async () => {
@@ -2409,19 +2409,19 @@ test("mixed temporary settings updates retain source exclusion while settings-on
         { agentSettings: {}, attachmentIds: [] },
         { assistantRouting: { mode: "junior" }, presentation: { draft: "Blocked draft" } }
       ]) {
-        const result = await service.updateAiTaskConversation("one", { conversationId: "chat", ...patch }, { lockWaitMs: 0 });
+        const result = await service.updateTemporaryConversation("one", { conversationId: "chat", ...patch }, { lockWaitMs: 0 });
         assert.equal(result.code, "vibe64_agent_write_mode_busy");
         assert.equal(result.retryable, true);
       }
       assert.equal(prepared, 0, "blocked mixed input cannot prepare attachments");
       assert.equal((await f.store.readSessionConversation("one", "chat")).draft, undefined);
-      assert.equal((await service.updateAiTaskConversation("one", { conversationId: "chat", agentSettings: {} })).ok, true);
-      assert.equal((await service.updateAiTaskConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior" } })).ok, true);
+      assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", agentSettings: {} })).ok, true);
+      assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior" } })).ok, true);
       assert.equal(JSON.parse((await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing).mode, "junior");
     } finally {
       release.resolve(); await holding;
     }
-    assert.equal((await service.updateAiTaskConversation("one", { conversationId: "chat", agentSettings: {}, attachmentIds: [] })).ok, true);
+    assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", agentSettings: {}, attachmentIds: [] })).ok, true);
     assert.equal(prepared, 1);
     await service.close(); await f.service.close();
   });
@@ -2430,21 +2430,21 @@ test("mixed temporary settings updates retain source exclusion while settings-on
 test("temporary update publication releases storage before waiting for subscribers", async () => {
   await withTemporaryRoot(async root => {
     const f = await conversationFixture(root);
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     let publications = 0;
     const service = f.restart({ publishConversation: async () => {
       if (++publications === 1) { entered.resolve(); await release.promise; }
     } });
-    const updating = service.updateAiTaskConversation("one", {
+    const updating = service.updateTemporaryConversation("one", {
       conversationId: "chat", agentSettings: { model: "chosen", thinking: "high" }
     });
     let draft;
     let timer;
     try {
       await entered.promise;
-      draft = service.updateAiTaskConversation("one", { conversationId: "chat", presentation: { draft: "Keep typing" } });
+      draft = service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Keep typing" } });
       await Promise.race([draft, new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error("Draft save waited for the held publisher.")), 2000);
       })]);
@@ -2466,18 +2466,18 @@ test("showing a settled temporary chat answers from its saved transcript without
     let reads = 0;
     const readConversation = f.sessionAgent.readConversation;
     f.sessionAgent.readConversation = async (...args) => { reads += 1; return readConversation(...args); };
-    await f.service.createAiTaskConversation("one", { conversationId: "chat" });
-    await f.service.startAiTaskConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Explain the build" });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Explain the build" });
     Object.assign(f.native, { status: "completed",
       messages: [{ id: "answer", requestMessageId: "first", role: "assistant", text: "It uses Vite.", complete: true }] });
     // Work that may still produce output is read from the assistant, which saves it.
     reads = 0;
-    const working = await f.restart().readAiTaskConversation("one", { conversationId: "chat" });
+    const working = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
     assert.ok(reads > 0);
     assert.equal(working.status, "completed");
     reads = 0;
-    const shown = await f.restart().readAiTaskConversation("one", { conversationId: "chat" });
-    const [listed] = (await f.restart().listAiTaskConversations("one")).conversations;
+    const shown = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
+    const [listed] = (await f.restart().listTemporaryConversations("one")).conversations;
     assert.equal(reads, 0, "showing a settled chat read its assistant");
     for (const view of [shown, listed]) {
       assert.equal(view.status, "completed");

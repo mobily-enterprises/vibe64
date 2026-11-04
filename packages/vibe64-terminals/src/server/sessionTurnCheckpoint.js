@@ -10,7 +10,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 // The persisted task identity keeps its Codex name; checkpoints cover every
-// session assistant, including writable AI task conversations.
+// session assistant, including writable temporary conversations.
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 
 async function checkpointSessionTurn({

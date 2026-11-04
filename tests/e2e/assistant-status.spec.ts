@@ -139,7 +139,7 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
   };
   await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
   await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
-  await page.route("**/ai-task-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+  await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
   await openChat(page);
   for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 420 }, { width: 768, height: 1024 }, { width: 1280, height: 844 }]) {
     await page.setViewportSize(viewport);
@@ -190,7 +190,7 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
   };
   await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
   await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
-  await page.route("**/ai-task-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+  await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
   await openChat(page);
   await composer(page).fill("Keep my unsent draft.");
   for (const width of [390, 768, 1280]) {
@@ -241,7 +241,7 @@ for (const viewport of viewports) {
     await page.route("**/agent-goal", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
     await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
     await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
-    await page.route("**/ai-task-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+    await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
     await openChat(page);
     await composer(page).fill("Keep this draft while I sign in.");
     await expect(steer(page)).toBeEnabled();

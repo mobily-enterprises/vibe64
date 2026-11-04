@@ -31,7 +31,7 @@ const { CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile } = __
 const { codexAppServerHelperTurnSettings } = codexAppServerHelperThreadsTestables;
 
 // These adapter units mock the public runtime boundary. The original actual
-// service/runtime/native-owner cases remain in codexAiTaskConversationLifecycle.
+// service/runtime/native-owner cases remain in codexTemporaryConversationLifecycle.
 function createCodexMainFixture(controller, open) {
   const conversationRuntime = { open };
   const provider = createCodexSessionAgentProvider({ controller, conversationRuntime });

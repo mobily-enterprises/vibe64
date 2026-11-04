@@ -1,7 +1,7 @@
-import { createAiTaskConversationRecords } from "./aiTaskConversationRecords.js";
-import { createAiTaskConversationTurns } from "./aiTaskConversationTurns.js";
-import { createAiTaskConversationLifecycle } from "./aiTaskConversationLifecycle.js";
-import { createAiTaskConversationInteraction } from "./aiTaskConversationInteraction.js";
+import { createTemporaryConversationRecords } from "./temporaryConversationRecords.js";
+import { createTemporaryConversationTurns } from "./temporaryConversationTurns.js";
+import { createTemporaryConversationLifecycle } from "./temporaryConversationLifecycle.js";
+import { createTemporaryConversationInteraction } from "./temporaryConversationInteraction.js";
 
 /** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").PrepareAssistantSelection} PrepareAssistantSelection */
@@ -16,9 +16,9 @@ import { createAiTaskConversationInteraction } from "./aiTaskConversationInterac
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
- * A session's AI task chats. Session storage owns discovery and the
+ * A session's temporary chats. Session storage owns discovery and the
  * transcript, existing provider adapters own native turns, and only an
- * explicit Close removes a user-facing AI task chat. The parts are built
+ * explicit Close removes a user-facing temporary chat. The parts are built
  * once, in dependency order, and the result names each of their functions.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
@@ -58,8 +58,8 @@ function createSessionConversations({
   temporaryCompletionAttempts = 6,
   temporaryCompletionRetryMs = 500
 }) {
-  const chatRecords = createAiTaskConversationRecords({ sessionAgent, publishConversation });
-  const chatTurns = createAiTaskConversationTurns({
+  const chatRecords = createTemporaryConversationRecords({ sessionAgent, publishConversation });
+  const chatTurns = createTemporaryConversationTurns({
     chatRecords,
     sessionAgent,
     conversationRuntime,
@@ -75,7 +75,7 @@ function createSessionConversations({
     logger,
     conversationTurns
   });
-  const chatLifecycle = createAiTaskConversationLifecycle({
+  const chatLifecycle = createTemporaryConversationLifecycle({
     chatRecords,
     chatTurns,
     conversationRuntime,
@@ -86,7 +86,7 @@ function createSessionConversations({
     routing: chatTurns.routing,
     conversationTurns
   });
-  const chatInteraction = createAiTaskConversationInteraction({
+  const chatInteraction = createTemporaryConversationInteraction({
     chatRecords,
     chatTurns,
     chatLifecycle,
@@ -102,28 +102,28 @@ function createSessionConversations({
 
   return Object.freeze({
     close: chatTurns.close,
-    aiTaskConversationDataSchema: chatInteraction.aiTaskConversationDataSchema,
-    aiTaskConversationSelectionSchema: chatInteraction.aiTaskConversationSelectionSchema,
+    temporaryConversationDataSchema: chatInteraction.temporaryConversationDataSchema,
+    temporaryConversationSelectionSchema: chatInteraction.temporaryConversationSelectionSchema,
     conversationBinding: chatInteraction.conversationBinding,
-    inspectAiTaskConversationDelivery: chatInteraction.inspectAiTaskConversationDelivery,
-    createAiTaskConversation: chatLifecycle.createAiTaskConversation,
-    listAiTaskConversations: chatLifecycle.listAiTaskConversations,
-    readAiTaskConversation: chatLifecycle.readAiTaskConversation,
-    updateAiTaskConversation: chatInteraction.updateAiTaskConversation,
-    startAiTaskConversationTurn: chatInteraction.startAiTaskConversationTurn,
-    cancelAiTaskConversationMessage: chatInteraction.cancelAiTaskConversationMessage,
-    cancelAiTaskConversationRouting: chatInteraction.cancelAiTaskConversationRouting,
-    stopAiTaskConversation: chatLifecycle.stopAiTaskConversation,
+    inspectTemporaryConversationDelivery: chatInteraction.inspectTemporaryConversationDelivery,
+    createTemporaryConversation: chatLifecycle.createTemporaryConversation,
+    listTemporaryConversations: chatLifecycle.listTemporaryConversations,
+    readTemporaryConversation: chatLifecycle.readTemporaryConversation,
+    updateTemporaryConversation: chatInteraction.updateTemporaryConversation,
+    startTemporaryConversationTurn: chatInteraction.startTemporaryConversationTurn,
+    cancelTemporaryConversationMessage: chatInteraction.cancelTemporaryConversationMessage,
+    cancelTemporaryConversationRouting: chatInteraction.cancelTemporaryConversationRouting,
+    stopTemporaryConversation: chatLifecycle.stopTemporaryConversation,
     readConversationTurn: chatLifecycle.readConversationTurn,
-    deleteAiTaskConversation: chatLifecycle.deleteAiTaskConversation,
-    retireAiTaskConversations: chatLifecycle.retireAiTaskConversations,
+    deleteTemporaryConversation: chatLifecycle.deleteTemporaryConversation,
+    retireTemporaryConversations: chatLifecycle.retireTemporaryConversations,
     afterTemporaryTurn: chatLifecycle.afterTemporaryTurn
   });
 }
 
 export {
   prepareCopiedSessionConversation
-} from "./aiTaskConversationRules.js";
+} from "./temporaryConversationRules.js";
 export {
   createSessionConversations
 };

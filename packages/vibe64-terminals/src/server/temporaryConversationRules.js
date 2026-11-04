@@ -1,6 +1,6 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationMessageVersion } from "@jskit-ai/assistant-core/server/conversation";
-import { aiTaskConversationTurnActionInputValidator } from "./inputSchemas.js";
+import { temporaryConversationTurnActionInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
 import {
   assistantGoalManagementMessage,
@@ -13,14 +13,14 @@ import {
 
 // A conversation's presentation is its title and its unsent draft.
 const textFields = ["title", "draft"];
-const messageFields = Object.keys(aiTaskConversationTurnActionInputValidator.schema.getFieldDefinitions())
+const messageFields = Object.keys(temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions())
   .filter(key => !["sessionId", "conversationId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"].includes(key));
 /**
  * @param {Vibe64SessionRuntime} runtime
  * @param {string} sessionId
  * @param {string} conversationId
  */
-const aiTaskConversationNamespace = (runtime, sessionId, conversationId) =>
+const temporaryConversationNamespace = (runtime, sessionId, conversationId) =>
   `${runtime.stateRoot}\0${sessionId}\0temporary\0${conversationId}`;
 
 /** Destination-only preparation; native bindings and the unsent draft survive. */
@@ -153,7 +153,7 @@ function requireSuccess(result) {
 }
 
 const teamTemporaryModesRefusal = () => new AppError(403, "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom.", { code: "vibe64_assistant_owner_required" });
-const temporaryAutoModeRefusal = () => new AppError(400, "AI task chats use Senior or Junior. Auto is available in Main chat only.", {
+const temporaryAutoModeRefusal = () => new AppError(400, "Temporary chats use Senior or Junior. Auto is available in Main chat only.", {
   code: "vibe64_temporary_chat_auto_unavailable"
 });
 const conversationClosingRefusal = () => new AppError(409, "This conversation is closing.", { code: "vibe64_conversation_closing" });
@@ -171,5 +171,5 @@ export {
   routingRequest,
   teamTemporaryModesRefusal,
   temporaryAutoModeRefusal,
-  aiTaskConversationNamespace
+  temporaryConversationNamespace
 };

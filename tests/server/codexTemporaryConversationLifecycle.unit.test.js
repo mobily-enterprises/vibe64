@@ -1707,7 +1707,7 @@ async function withConversationController(operation, {
   codexToolHomeSource = undefined,
   codexSystemRoot = undefined
 } = {}) {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-ai-task-conversation-"));
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversation-"));
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "test";
   const calls = [];
@@ -2465,7 +2465,7 @@ test("archive retires the session's open temporary chats while an ordinary sessi
   await withAgentMessageController(async ({ terminals, sessionId, project }) => {
     const projectRecord = await project.readCurrentProject();
     await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
-      await terminals.createAiTaskConversation(sessionId, { conversationId: "archived-chat" },
+      await terminals.createTemporaryConversation(sessionId, { conversationId: "archived-chat" },
         { vibe64User: { username: "owner", role: "owner" } });
       const handle = await terminals.openTemporaryBrowserConversation(sessionId, "archived-chat", { browserAuthority: {
         actorId: "owner", conversationId: "archived-chat", projectSlug: projectRecord.slug, sessionId } });
@@ -6661,7 +6661,7 @@ test("temporary conversations expose the human message from structured progress"
 test("an expired temporary conversation never falls back to persistent thread history", async () => {
   await withConversationController(async ({ calls, controller }) => {
     const result = await controller.readConversation("session-1", {
-      conversationId: "expired-ai-task-conversation",
+      conversationId: "expired-temporary-conversation",
       ephemeral: true,
       runId: "expired-turn"
     });

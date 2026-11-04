@@ -50,7 +50,7 @@ function codexAppServerExpiredEphemeralConversation(conversationId = "", input =
   return {
     conversationExpired: true,
     conversationId: normalizeText(conversationId),
-    error: "This AI task ended when Vibe64 restarted. Send the message again to start a new task.",
+    error: "This Temporary AI task ended when Vibe64 restarted. Send the message again to start a new task.",
     message: "",
     ok: true,
     progressUpdates: [],

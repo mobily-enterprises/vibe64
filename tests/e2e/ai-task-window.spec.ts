@@ -468,7 +468,7 @@ test.describe("what the rest of the page does", () => {
     await routeApiEndpoint(page, "/vibe64/sessions/current", route => fulfillJson(route, { ok: true,
       sessionId: route.request().method() === "PUT" ? route.request().postDataJSON().sessionId : directChatSessionId }));
     await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}`, route => fulfillJson(route, other));
-    await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}/ai-task-conversations`,
+    await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}/temporary-conversations`,
       route => fulfillJson(route, { ok: true, conversations: [] }));
     await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}/ai-tasks`,
       route => fulfillJson(route, { ok: true, tasks: [], viewerId: "" }));
@@ -476,7 +476,7 @@ test.describe("what the rest of the page does", () => {
     await expectPhase(page, "working");
     await taskWindow(page).getByRole("tab", { name: "Chat" }).click();
     const input = taskWindow(page).getByRole("textbox", { name: "Message the AI" });
-    const saved = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().includes("/ai-task-conversations/"));
+    const saved = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().includes("/temporary-conversations/"));
     await input.fill("Preserve this reply for the original session.");
     await saved;
     await page.keyboard.press("Escape");
