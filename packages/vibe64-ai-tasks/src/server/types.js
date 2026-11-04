@@ -42,6 +42,7 @@
  * @property {AiTaskProblem} problem
  * @property {object} input
  * @property {object | null} startedBy
+ * @property {string} diagnostic what the last failed check said, in its owner's words
  * @property {number} attempt
  * @property {string[]} retryKeys
  * @property {string} report

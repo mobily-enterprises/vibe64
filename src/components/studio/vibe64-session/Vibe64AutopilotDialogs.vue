@@ -18,7 +18,7 @@
         <v-btn
           color="primary" variant="flat" height="auto" min-height="48" style="max-width: 100%"
           :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
-          @click="applyResolvedUpdate(temporaryAiWorkspace?.updateRepairTask, reportTemporaryRecovery)"
+          @click="confirmResolvedUpdate"
         >
           <span class="text-wrap">I've resolved these conflicts — apply Update</span>
         </v-btn>
@@ -104,7 +104,8 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, inject } from "vue";
+import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 
 // The session's confirmations: applying a resolved Update, a message that
 // does not fit the assistant's memory, and Save.
@@ -120,6 +121,17 @@ const {
   saveWorkConnectedReview, saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
   selectSessionTool, sessionPullRequest, sourceOperationsSuspended, temporaryAiWorkspace, updateWorkDisabled
 } = view;
+const aiTasks = inject(VIBE64_AI_TASKS_KEY);
+// An open Update task runs its own check: the person's review just tells it which one.
+function confirmResolvedUpdate() {
+  if (!aiTasks.task || aiTasks.projection.ended) {
+    applyResolvedUpdate(temporaryAiWorkspace.value?.updateRepairTask, reportTemporaryRecovery);
+    return;
+  }
+  const { reviewId } = resolvedUpdateReview.value;
+  resolvedUpdateReview.value = null;
+  void aiTasks.check({ reviewedConflictId: reviewId });
+}
 const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value && githubProject.value &&
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const publicationLabel = computed(() => {

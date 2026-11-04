@@ -35,6 +35,17 @@
         >
           {{ workNotice.message }}
         </v-alert>
+        <v-alert
+          v-if="aiTaskRunning"
+          class="mt-3"
+          data-vibe64-archive-ai-task
+          density="compact"
+          role="status"
+          type="warning"
+          variant="tonal"
+        >
+          An AI task is still running. Archiving cancels it.
+        </v-alert>
       </v-card-text>
       <v-card-actions class="studio-ai-session-archive-dialog__actions">
         <v-btn
@@ -58,9 +69,11 @@
 </template>
 
 <script setup>
-import { computed, useId } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { mdiArchiveOutline } from "@mdi/js";
 import { sessionArchiveWorkNotice } from "@/lib/vibe64SessionRepositoryWorkState.js";
+import { temporaryAiRequest } from "@/lib/vibe64TemporaryAiTasks.js";
+import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const props = defineProps({
   archive: {
@@ -71,12 +84,25 @@ const props = defineProps({
     default: (sessionId) => String(sessionId || ""),
     type: Function
   },
+  sessionsApiPath: {
+    required: true,
+    type: [String, Object, Function]
+  },
   workState: {
     default: null,
     type: Object
   }
 });
 const workNotice = computed(() => sessionArchiveWorkNotice(props.workState));
+const aiTaskRunning = ref(false);
+// Worth a look only when the dialog opens: the task itself says whether it is running.
+watch(() => props.archive.open, async (open) => {
+  aiTaskRunning.value = false;
+  if (!open) return;
+  const path = `${readRefOrGetterValue(props.sessionsApiPath)}/${encodeURIComponent(props.archive.sessionId)}/ai-tasks`;
+  const answer = await temporaryAiRequest(path, { method: "GET" }).catch(() => ({ tasks: [] }));
+  aiTaskRunning.value = answer.tasks.some(task => task.active);
+});
 
 function updateOpen(open) {
   if (open !== true) {

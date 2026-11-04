@@ -62,6 +62,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     input: taskInput,
     startedBy,
     attempt: 1,
+    diagnostic: "",
     retryKeys: [],
     report: "",
     pending: { effect: "send", id: sendId, message: kind.brief(problem), display: kind.opening },
@@ -173,10 +174,10 @@ function turnResult(task, event) {
 
 /** The task's own check failed: back to the AI when it can repair this, otherwise to the person. */
 function checkFailed(task, event) {
-  const { message, retryKey, retryMessage, retryDisplay, hasDraft, sendId, facts } = event;
+  const { message, diagnostic, retryKey, retryMessage, retryDisplay, hasDraft, sendId, facts } = event;
   const tried = !task.pending.retryAi || !retryKey || task.retryKeys.includes(retryKey) ||
     task.attempt >= task.check.retryLimit;
-  const seen = { ...task, problem: { ...task.problem, facts: { ...task.problem.facts, ...facts } } };
+  const seen = { ...task, diagnostic, problem: { ...task.problem, facts: { ...task.problem.facts, ...facts } } };
   if (tried) return needsYou(seen, REASONS.CHECK_STUCK, event, message, message);
   if (hasDraft) return needsYou(seen, REASONS.DRAFT_WAITING, event, message, message);
   return moved(seen, {

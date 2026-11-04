@@ -15,6 +15,8 @@ export const VIBE64_BROWSER_NAVIGATION_KEY = Symbol("vibe64.browser.navigation")
 
 // The host keeps Colleague alive while routed headers supply its mobile launcher location.
 export const VIBE64_COLLEAGUE_LAUNCHER_KEY = Symbol("vibe64.colleague.launcher");
+// The app bar's place for the selected session's AI task chip.
+export const VIBE64_AI_TASK_TRAY_KEY = Symbol("vibe64.ai-task.tray");
 
 // An optional workspace conversation contributed by the composing host.
 export const VIBE64_HOST_CONVERSATION_KEY = Symbol("vibe64.host.conversation");

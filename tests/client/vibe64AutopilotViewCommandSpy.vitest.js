@@ -864,7 +864,7 @@ describe("Vibe64 direct session view", () => {
 
     expect(autopilot.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(2);
     expect(outputControls.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
-    expect(repository.match(/<Vibe64TemporaryAiFixAction/gu)).toHaveLength(1);
+    expect(repository.match(/<Vibe64AiTaskButton/gu)).toHaveLength(1);
     expect([autopilot, outputControls, repository].join("\n")).not.toContain(
       "Fix with temporary AI"
     );

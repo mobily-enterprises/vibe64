@@ -1477,7 +1477,13 @@ session and stop with it, even while the assistant service itself is shared.
 Assistant terminal commands retain readable shell text through the session
 wrapper instead of displaying an encoded payload and an inline reconnect warning.
 
-Temporary repair chats keep progress collapsible inside the conversation and
+Fix it with AI on Update opens one AI task window that holds the problem, the chat,
+the progress in a separate view, and the result. Vibe64 proves Done by running Update
+itself on the server, and only a person decides Not done, so the window closes only
+once the fix is one or the other.
+
+Other temporary repair chats, and Update repair chats saved before that window
+existed, keep progress collapsible inside the conversation and
 show one plain working status above the composer. Switching sessions preserves
 the selected temporary chat and its reply draft. Closing an incomplete Update
 repair warns that partial edits remain, waits for the AI to stop, and keeps the

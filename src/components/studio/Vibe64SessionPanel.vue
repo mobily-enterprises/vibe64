@@ -30,6 +30,7 @@
 
     <Vibe64SessionArchiveDialog
       :archive="sessionData.archive"
+      :sessions-api-path="sessionData.sessionsApiPath"
       :short-session-id="sessionData.shortSessionId"
       :work-state="archiveWorkState"
     />

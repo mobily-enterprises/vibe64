@@ -69,6 +69,7 @@ function checkEvent(kind, id, result, record) {
     type: "check_failed",
     id,
     message: result.message,
+    diagnostic: result.diagnostic,
     retryKey: result.retryKey,
     retryMessage: retry.message(result.diagnostic),
     retryDisplay: retry.display,

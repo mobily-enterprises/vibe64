@@ -1,0 +1,125 @@
+import { expect, type Page, type Request } from "@playwright/test";
+import { DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./base-shell-data";
+import { mockProjectGateReady } from "./base-shell-mocks";
+import { fulfillJson, routeApiEndpoint } from "./base-shell/http";
+import { assistantStatusServer, relayConversation } from "./assistant-status-server";
+
+type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
+
+const CONFLICT_PATHS = ["src/app.js", "package.json"];
+export const CONFLICT_FAILURE = {
+  status: "failed",
+  code: "vibe64_session_update_conflict",
+  error: "2 files need review before this session can update.",
+  conflictPaths: CONFLICT_PATHS,
+  conflictRecovery: { reviewId: "review-1", conflictPaths: CONFLICT_PATHS }
+};
+
+/** Update's answer when it still finds conflicts. A new review id makes it a new failure. */
+export function conflictAnswer(reviewId: string, paths = ["src/pricing.js"]) {
+  return {
+    ok: false,
+    code: "vibe64_session_update_conflict",
+    error: `Update stopped at ${paths.join(", ")}.`,
+    details: { conflictPaths: paths, conflictRecovery: { reviewId, conflictPaths: paths } }
+  };
+}
+
+/**
+ * A session whose Update has failed, on the real AI task routes. `world.updated` is what the page's
+ * repository reads see, so a scenario can end the failure as Update would.
+ */
+export async function aiTaskWorld(page: Page, server: StatusServer, failure: Record<string, any> = CONFLICT_FAILURE) {
+  const world = { updated: false, operationEvents: [] as { at: string; message: string }[] };
+  await server.temporary!.store.writeBackgroundTaskEvent(directChatSessionId, "update-session", { patch: failure });
+  await mockProjectGateReady(page);
+  await relayConversation(page, server);
+  await routeApiEndpoint(page, "/vibe64/repository", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/history")) {
+      await fulfillJson(route, { historySnapshotCommit: "canonical", nextCursor: "", ok: true, versions: [], updateCheck: {
+        ahead: 0, behind: 1, canonicalCommit: "canonical", checkedAt: "2026-11-04T10:00:00.000Z", sessionCommit: "session", updateAvailable: true
+      } });
+      return;
+    }
+    await fulfillJson(route, { ok: true });
+  }, { prefix: true });
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    if (/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u.test(url.pathname)) return route.fallback();
+    if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
+      await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true }, fix: { available: true } } });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith("/agent-session")) {
+      await fulfillJson(route, { ok: true, agentSession: directChatSessionPayload.agentSession });
+      return;
+    }
+    if (method === "PUT" && url.pathname.endsWith("/current")) {
+      await fulfillJson(route, { ok: true, sessionId: directChatSessionId });
+      return;
+    }
+    if (method === "POST" && url.pathname.endsWith("/updates/check")) {
+      await fulfillJson(route, world.updated
+        ? { ok: true, relationship: "current", ahead: 0, behind: 0, updateAvailable: false, incomingVersions: [] }
+        : { code: failure.code, error: failure.error, ok: false });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith("/work")) {
+      await fulfillJson(route, { ahead: 0, behind: world.updated ? 0 : 1, ok: true, operation: null, unsaved: true, updateAvailable: !world.updated,
+        updateOperation: world.updated ? null : {
+          operationId: "failed-update", kind: "update", status: "failed", code: failure.code,
+          error: failure.error, conflictRecovery: failure.conflictRecovery, events: world.operationEvents
+        } });
+      return;
+    }
+    if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
+      await fulfillJson(route, { ...directChatSessionPayload, workspaceSetup: { status: "unconfigured" } });
+      return;
+    }
+    await fulfillJson(route, { creation: { canCreate: true, mode: "direct" }, limits: { openSessionCount: 1 }, ok: true,
+      sessions: [{ ...directChatSessionPayload, workspaceSetup: { status: "unconfigured" } }] });
+  }, { prefix: true });
+  return world;
+}
+
+export const taskWindow = (page: Page) => page.locator("[data-vibe64-ai-task]");
+
+/** Opens the session and starts the fix from Update's notice, as a person does. */
+export async function openFix(page: Page, server: StatusServer, arrive: () => Promise<void> = async () => {}) {
+  await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+  await arrive();
+  const button = page.locator("[data-vibe64-ai-task-button]").filter({ visible: true }).first();
+  if (!await button.isVisible().catch(() => false)) {
+    const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+    if (await showChat.isVisible().catch(() => false)) await showChat.click();
+  }
+  await page.locator("[data-vibe64-ai-task-button]").filter({ visible: true }).first().click();
+  await expect(taskWindow(page)).toBeVisible();
+  return taskIdOf(page);
+}
+
+export function taskIdOf(page: Page) {
+  return new URL(page.url()).searchParams.get("aiTask") || "";
+}
+
+export const taskResult = (kind: string, message: string) => JSON.stringify({ kind, message, report: message });
+
+/** Ends the AI's turn the way a kind of result does, with no browser involved. */
+export async function endTurn(server: StatusServer, taskId: string, kind: string, message: string) {
+  const { captured } = server.temporary!;
+  await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
+  await server.temporary!.endNativeTurn(taskId, { text: taskResult(kind, message), message });
+  await server.aiTasks.settled();
+}
+
+export async function expectPhase(page: Page, phase: string, reason = "") {
+  await expect(taskWindow(page)).toHaveAttribute("data-vibe64-ai-task-phase", phase);
+  if (reason) await expect(taskWindow(page)).toHaveAttribute("data-vibe64-ai-task-reason", reason);
+}
+
+export function requestBody(request: Request) {
+  return request.postDataJSON() as Record<string, unknown>;
+}

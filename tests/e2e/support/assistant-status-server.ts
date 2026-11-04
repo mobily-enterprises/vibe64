@@ -33,6 +33,9 @@ import { createMainBrowserConversations } from "../../../packages/vibe64-session
 import { withMainChatOperations } from "../../server/vibe64SessionsTestHelpers.js";
 import { Vibe64ConversationsFeature } from "../../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { createSessionConversations } from "../../../packages/vibe64-terminals/src/server/sessionConversations.js";
+import { createAiTaskActions } from "../../../packages/vibe64-ai-tasks/src/server/aiTaskActions.js";
+import { registerRoutes as registerAiTaskRoutes } from "../../../packages/vibe64-ai-tasks/src/server/registerRoutes.js";
+import { createAiTasksService } from "../../../packages/vibe64-ai-tasks/src/server/service.js";
 import { createSessionAttachments } from "../../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createSessionAgentManager } from "../../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { sessionAgentManagerDefaults } from "../../fixtures/sessionAgentManagerDefaults.js";
@@ -128,13 +131,42 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   function requireSession(sessionId: string) {
     if (sessionId !== session.sessionId) throw Object.assign(new Error("Unknown status-test session."), { statusCode: 404 });
   }
+  let aiTaskService = null;
   const temporary = temporaryEngineId ? await temporaryConversationsFixture({
     engineId: temporaryEngineId, session, actions,
     publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, event),
+    conversationTurns: {
+      starting: (sessionId, turn) => aiTaskService.onTurnStarting({ sessionId, ...turn }),
+      settled: (sessionId, conversationId, failure = null) => aiTaskService.onTurnSettled({ sessionId, conversationId, failure })
+    },
     onSubscribe: conversationId => state.subscriptions.push(temporaryConversationId({
       projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId, conversationId
     }))
   }) : null;
+  // The real AI task service over the real conversations; only Update's answer is the scenario's.
+  const aiTaskWorld = {
+    updates: [] as Record<string, unknown>[],
+    update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    boot() {
+      aiTaskService = createAiTasksService({ logger: silentLogger, project: temporary!.project,
+        // A scenario moves a task from outside any request, so nothing names the project for it.
+        publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, { projectSlug: WORKSPACE_SLUG, ...event }),
+        terminals: temporary!.terminals,
+        sessions: { updateSessionWork: (_sessionId, input) => {
+          aiTaskWorld.updates.push(input);
+          return aiTaskWorld.update(input);
+        } } });
+    },
+    // A new server over the same records and the same AI, as a restart leaves them.
+    async restart() {
+      aiTaskService.closeRunner();
+      aiTaskWorld.boot();
+      await aiTaskService.resumeInterruptedTasks();
+    },
+    settled: () => aiTaskService.resumeInterruptedTasks(),
+    archive: () => aiTaskService.onSessionArchiving(session.sessionId)
+  };
+  if (temporary) aiTaskWorld.boot();
   const terminals = {
     ...temporary?.terminals,
     async openBrowserConversation(sessionId: string) {
@@ -215,6 +247,12 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       "vibe64.terminals.agent-goal.canonical.read", "vibe64.terminals.agent-goal.canonical.update"
     ].includes(action.id) || temporary && action.id.startsWith("vibe64.terminals.temporary-conversation."))
       .map(action => ({ surfaces: ["app"], channels: ["api", "internal"], ...action })) });
+  if (temporary) {
+    const current = new Proxy({}, { get: (_target, name) => aiTaskService[name] });
+    actions.register({ contributorId: "test.status.ai-tasks", domain: "vibe64-ai-tasks",
+      actions: createAiTaskActions({ aiTasks: current }).map(action => ({ surfaces: ["app"], channels: ["api", "internal"], ...action })) });
+    registerAiTaskRoutes(http, { localhostCheckBypassed: false, projectContext });
+  }
   if (temporary) registerTerminalRoutes({ ...http, router: {
     register(method, route, ...options) {
       if (route.includes("/temporary-conversations")) return http.router.register(method, route, ...options);
@@ -521,6 +559,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       }, { summary: false });
       applicationEvents.emit("conversation", { type: "transcript", patch: { type: "upsert-turn", turn: normalizeConversationTurn(conversation) } });
     },
+    aiTasks: aiTaskWorld,
     disconnect() {
       for (const socket of sockets) socket.conn.close();
     },
@@ -531,6 +570,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       app.server.closeAllConnections();
       try { await app.close(); }
       finally {
+        aiTaskService?.closeRunner();
         await temporary?.close();
         applicationEvents.removeAllListeners();
       }
@@ -551,7 +591,7 @@ export async function relayConversation(page: Page, server: { url: string; tempo
     await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
   });
   await relay("**/api/assistant/**");
-  if (server.temporary) await relay(/\/temporary-conversations(?:[/?]|$)/u);
+  if (server.temporary) await relay(/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u);
   await page.routeWebSocket(/\/socket\.io\//u, (route) => {
     const url = new URL(route.url());
     const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
@@ -580,7 +620,7 @@ async function temporaryConversationsFixture(options) {
   }
 }
 
-async function temporaryConversationsFixtureAt(root, { engineId, session, actions, publishSessionChanged, onSubscribe }) {
+async function temporaryConversationsFixtureAt(root, { engineId, session, actions, publishSessionChanged, onSubscribe, conversationTurns }) {
   const targetRoot = path.join(root, "project");
   await mkdir(targetRoot);
   const selection = { engineId, modelProviderId: engineId === "opencode" ? "deepseek" : "openai",
@@ -596,15 +636,19 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   await store.createSession({ runtimeKind: "genesis", sessionId: session.sessionId, metadata: {
     ...sourceMetadata(targetRoot, session.sessionId), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
-  const runtime = { store, stateRoot, getSession: id => store.readSession(id), getSessionWithoutSource: id => store.readSession(id) };
-  const attachments = createSessionAttachments({ project: { createRuntime: async () => runtime, createRuntimeWithoutSource: async () => runtime },
+  const runtime = { store, stateRoot, getSession: id => store.readSession(id), getSessionWithoutSource: id => store.readSession(id),
+    listSessionSummaries: async () => [{ sessionId: session.sessionId }] };
+  const project = { createRuntime: async () => runtime, createRuntimeWithoutSource: async () => runtime };
+  const attachments = createSessionAttachments({ project,
     env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = new Map();
   let nextNativeId = 0;
   const captured = { temporaryCreates: [] as Record<string, unknown>[], temporaryTurns: [] as Record<string, unknown>[],
-    temporaryDeletes: 0, outcome: (_turn: number) => "continue",
+    temporaryDeletes: 0, startedTurns: 0, outcome: (_turn: number) => "continue",
     // Awaited before each native start; a throw is that start's failure.
     beforeNativeTurn: async (_turn: number): Promise<void> => {},
+    // Awaited before a native stop, so a scenario can hold a Stop or Cancel in flight.
+    beforeNativeStop: async (): Promise<void> => {},
     // Replaces the completed native result, for example { status: "inProgress" }.
     nativeTurn: (_turn: number): Record<string, unknown> | null => null };
   const sessionAgent = {
@@ -638,9 +682,11 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
         Object.assign(record, { status: "completed", runId, text });
         record.messages.push({ id: `${runId}-assistant`, role: "assistant", text, at: new Date().toISOString(), complete: true });
       }
+      captured.startedTurns += 1;
       return { ok: true, runId, status: "inProgress" };
     },
     async stopConversation(_id, input) {
+      await captured.beforeNativeStop();
       native.get(input.conversationId).status = "interrupted";
       return { ok: true };
     },
@@ -677,14 +723,38 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
       return result.value;
     },
     publishSessionChanged,
-    publishConversation: event => common.publishNative(event)
+    publishConversation: event => common.publishNative(event),
+    conversationTurns
   });
   const commandInput = input => {
     const { sessionId, conversationId, vibe64User, originId, ...body } = input;
     return body;
   };
+  /** Moves the conversation's turn as its AI would, then tells Vibe64 it ended. */
+  async function endNativeTurn(conversationId: string, ending: { status?: string; text: string; message?: string; error?: string }) {
+    const record = await store.readSessionConversation(session.sessionId, conversationId);
+    const nativeRecord = native.get(record.providerConversationId);
+    Object.assign(nativeRecord, { status: ending.status || "completed", text: ending.text, error: ending.error || "" });
+    if (ending.message) nativeRecord.messages.push({ id: `${nativeRecord.runId}-assistant`, role: "assistant", text: ending.message,
+      at: new Date().toISOString(), complete: true });
+    await service.afterTemporaryTurn(session.sessionId, { conversationId: record.providerConversationId,
+      temporaryRun: { active: false, state: nativeRecord.status, providerTurnId: nativeRecord.runId } });
+  }
   return {
     captured,
+    endNativeTurn,
+    project,
+    store,
+    /** What the AI says about its work while its turn runs. */
+    async say(conversationId: string, text: string) {
+      const record = await store.readSessionConversation(session.sessionId, conversationId);
+      const nativeRecord = native.get(record.providerConversationId);
+      nativeRecord.messages.push({ id: `say-${nativeRecord.messages.length}`, role: "commentary", text, at: new Date().toISOString(), complete: true });
+    },
+    async setNativeStatus(conversationId: string, status: string) {
+      const record = await store.readSessionConversation(session.sessionId, conversationId);
+      native.get(record.providerConversationId).status = status;
+    },
     async seed(records) {
       for (const record of records) await service.createTemporaryConversation(session.sessionId, {
         conversationId: record.conversationId, presentation: { title: record.title, draft: record.draft }, agentSettings: record.agentSettings
@@ -692,13 +762,13 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
     },
     terminals: {
       ...service,
-      async createTemporaryConversation(sessionId, input) {
+      async createTemporaryConversation(sessionId, input, ...options) {
         captured.temporaryCreates.push({ ...commandInput(input), conversationId: input.conversationId });
-        return service.createTemporaryConversation(sessionId, input);
+        return service.createTemporaryConversation(sessionId, input, ...options);
       },
-      async startTemporaryConversationTurn(sessionId, input) {
+      async startTemporaryConversationTurn(sessionId, input, ...options) {
         captured.temporaryTurns.push(commandInput(input));
-        return service.startTemporaryConversationTurn(sessionId, input);
+        return service.startTemporaryConversationTurn(sessionId, input, ...options);
       },
       async deleteTemporaryConversation(sessionId, input) {
         captured.temporaryDeletes += 1;

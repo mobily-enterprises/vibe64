@@ -2,6 +2,7 @@
 import { h } from "vue";
 import PackageShellLayout from "@jskit-ai/shell-web/client/components/ShellLayout";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
+import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
@@ -16,6 +17,7 @@ export default {
       "top-right": (slotProps) => [
         h(ShellOutlet, { target: "shell-layout:top-right" }),
         slots["top-right"]?.(slotProps),
+        h(Vibe64AiTaskTrayTarget),
         h(Vibe64ColleagueLauncherTarget)
       ]
     });

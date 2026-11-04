@@ -1411,18 +1411,6 @@ test.describe("direct chat", () => {
       code: "vibe64_session_save_history_diverged",
       operationKey: "operation",
       promptLead: "Help resolve this Vibe64 Save problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
-    },
-    {
-      action: "Update",
-      code: "vibe64_session_update_conflict",
-      operationKey: "updateOperation",
-      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
-    },
-    {
-      action: "Update",
-      code: "vibe64_session_update_history_diverged",
-      operationKey: "updateOperation",
-      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
     }
   ]) {
     temporaryTest(`routes chat ${recovery.code} recovery through Temporary AI`, async ({ page, hintRealtime }) => {

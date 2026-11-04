@@ -22,29 +22,31 @@
       <Vibe64UsageRecordingIndicator :session-id="sessionId" @open-usage="openUsage" />
     </Teleport>
     <Vibe64CreatePullRequestDialog v-if="githubProject" v-model="createPullRequestOpen" :dashboard-context="dashboardContext" />
-    <section
-      ref="mainChat"
-      class="studio-autopilot__chat-panel"
-      aria-label="Session chat"
-      tabindex="-1"
-    >
-      <Vibe64AutopilotSessionHeader :view="view" />
+    <Vibe64AiTaskHost :view="view">
+      <section
+        ref="mainChat"
+        class="studio-autopilot__chat-panel"
+        aria-label="Session chat"
+        tabindex="-1"
+      >
+        <Vibe64AutopilotSessionHeader :view="view" />
 
-      <Vibe64AutopilotActivity :view="view" />
+        <Vibe64AutopilotActivity :view="view" />
 
-      <Vibe64AutopilotChat :view="view" />
-    </section>
+        <Vibe64AutopilotChat :view="view" />
+      </section>
 
-    <Vibe64AutopilotProjectPanel :view="view">
-      <template #dashboard="dashboardSlotProps">
-        <slot name="dashboard" v-bind="dashboardSlotProps" />
-      </template>
-      <template #ai-terminal="terminalSlotProps">
-        <slot name="ai-terminal" v-bind="terminalSlotProps" />
-      </template>
-    </Vibe64AutopilotProjectPanel>
+      <Vibe64AutopilotProjectPanel :view="view">
+        <template #dashboard="dashboardSlotProps">
+          <slot name="dashboard" v-bind="dashboardSlotProps" />
+        </template>
+        <template #ai-terminal="terminalSlotProps">
+          <slot name="ai-terminal" v-bind="terminalSlotProps" />
+        </template>
+      </Vibe64AutopilotProjectPanel>
 
-    <Vibe64AutopilotDialogs :view="view" />
+      <Vibe64AutopilotDialogs :view="view" />
+    </Vibe64AiTaskHost>
   </section>
 </template>
 
@@ -60,6 +62,7 @@ import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vi
 import { Vibe64UsageRecordingIndicator } from "@local/vibe64-usage-recording/client";
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
+import Vibe64AiTaskHost from "./Vibe64AiTaskHost.vue";
 import Vibe64AutopilotActivity from "./Vibe64AutopilotActivity.vue";
 import Vibe64AutopilotChat from "./Vibe64AutopilotChat.vue";
 import Vibe64AutopilotDialogs from "./Vibe64AutopilotDialogs.vue";

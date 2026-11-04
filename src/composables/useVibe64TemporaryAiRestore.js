@@ -28,6 +28,7 @@ function useVibe64TemporaryAiRestore({
   projectSlug,
   actorKey,
   assistantReady,
+  ownsRecord,
   currentSessionId,
   currentSessionsApiPath,
   isDisposed,
@@ -69,7 +70,7 @@ function useVibe64TemporaryAiRestore({
       const response = await restoring;
       if (isDisposed() || generation !== restoreGeneration) return;
       restoreError.value = "";
-      const records = response.conversations || [];
+      const records = (response.conversations || []).filter(ownsRecord);
       for (const task of persistedTasks) {
         if (!records.some((record) => record.conversationId === task.conversationId)) removeTask(task.id);
       }

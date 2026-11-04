@@ -662,7 +662,7 @@ temporary conversation record, and only the machine in this package writes it.
 - Directory `packages/vibe64-ai-tasks`
 
 ### Program
-- Nothing.
+- `genesis/program/conversation/ai-tasks.md`
 
 ### Data owned
 - Nothing.

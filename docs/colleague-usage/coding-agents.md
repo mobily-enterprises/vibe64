@@ -193,11 +193,10 @@ governs its turns (see [Goals and model changes](coding-agent-goals.md)). This
 applies on desktop and mobile.
 
 To change the model for an active Update merge repair, open **Chat mode** in
-that repair's composer, then **Choose model**. In **Custom AI**, choose a
-**Model** and select **Apply**. The repair keeps **Fix it with AI**, its history and its
-current turn. The next turn uses the selected model; Main chat's model is
-unchanged. On compact screens, reveal chat first; the controls are the same as
-on desktop.
+the **Chat** view of its [AI task window](ai-tasks.md), then **Choose model**. In
+**Custom AI**, choose a **Model** and select **Apply**. The repair keeps **Fix it with
+AI**, its history and its current turn. The next turn uses the selected model; Main
+chat's model is unchanged. The controls are the same at every screen size.
 
 Returning to Main chat or reloading the page keeps a saved temporary conversation.
 To remove it, use the **Close** control on that chat's tab. If stopping or cleanup

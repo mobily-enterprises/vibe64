@@ -204,7 +204,9 @@ Retry before asking again.`, and a source explanation or copilot that could not
 close is kept so the retry closes it. Resolve the named reason, often an AI
 account to reconnect, then retry **Archive session**. Archiving also closes the
 session's open temporary chats in the browser; their saved history stays with
-the archived session.
+the archived session. If a [Fix it with AI task](ai-tasks.md) is running, the dialog
+says **An AI task is still running. Archiving cancels it.** and archiving ends that
+fix as **Not done**.
 If the last open session cannot be archived, its chat is selected again so you
 can inspect the failure and retry. If another session is already selected, that
 selection stays in place and the failed session becomes available in its tab.

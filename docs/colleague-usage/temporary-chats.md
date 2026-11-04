@@ -80,24 +80,25 @@ message; uncertain delivery is checked before any resend.
 
 ## Hand a merge repair to another model
 
-**Fix it with AI** for an Update conflict opens a temporary repair on the Fix it
-with AI model and sends the repair instructions once. Its reply appears in that
-temporary chat; Main chat's history is unchanged.
+**Fix it with AI** for an Update conflict opens the [AI task window](ai-tasks.md) on
+the Fix it with AI model and sends the repair instructions once. Its conversation
+is the window's **Chat** view; it is not listed among temporary chats and Main
+chat's history is unchanged.
 Merge repair stays in Fix it with AI mode or on a model you choose. To hand it to Codex:
 
-1. If it is still working, press **Stop** and wait for it to stop.
+1. If it is still working, press **Stop** in **Chat** and wait for it to stop.
 2. Open its **Chat mode** icon and choose **Choose model**.
 3. Select **Codex**, the desired model and thinking level, then **Apply**.
 4. Send a follow-up asking it to inspect the current edits and continue the repair.
 
 The repair instructions, messages and work already in the session remain. A
-model change does not undo edits or prove the merge correct. **Check Update**
-retries Vibe64's repository operation without acknowledging unresolved conflicts.
+model change does not undo edits or prove the merge correct. **Check now** runs
+Vibe64's repository operation again without acknowledging unresolved conflicts.
 If the repair is already complete, choose **Review resolved conflicts**, inspect
 the file list, then **I've resolved these conflicts — apply Update**. This also
-works after a stopped or failed repair, or after edits made in Main chat. No
-additional AI turn is required. The same review is available on the Update error
-without opening a repair chat. See [Update conflict recovery](github-work.md#apply-an-update-after-resolving-conflicts).
+works after edits made in Main chat. No additional AI turn is required. The same
+review is available on the Update error without opening the window. See
+[Update conflict recovery](github-work.md#apply-an-update-after-resolving-conflicts).
 Only available models can be selected; an active goal must finish before a
 model change. An old request admitted to another role must be cancelled and
 resent to Senior; an already running turn must first be stopped.
@@ -133,9 +134,9 @@ real product decisions.
 While the session's Update has failed, is running or is waiting, Update is the
 one repair for the session. A setup, workspace preparation or verification
 repair that is already open tells you the session must be brought up to date
-first, then stops. Use **Fix it with AI** on the Update notice. After that
-repair, Vibe64 checks Update again, and setup is checked again against the
-updated session. See
+first, then stops. Use **Fix it with AI** on the Update notice, which opens the
+[AI task window](ai-tasks.md). After that repair, Vibe64 checks Update again, and
+setup is checked again against the updated session. See
 [Project setup waits for Update](workspace-preparation.md#project-setup-waits-for-update).
 
 ## Work elsewhere while a chat runs

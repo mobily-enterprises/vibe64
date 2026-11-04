@@ -98,7 +98,7 @@
       height="clamp(8rem, 22vh, 14rem)"
       :operation-key="saveWorkActivityKey"
       :output="saveWorkOutput"
-      :retryable="saveWorkRetryable"
+      :retryable="saveWorkRetryable && !aiTaskOpen"
       :stage="saveWorkStage"
       :starting="saveWorkSending"
       :status="saveWorkStatus"
@@ -110,14 +110,20 @@
     >
       <template v-if="saveWorkError && (saveWorkCanResolveWithTemporaryAi || saveWorkCanCreatePullRequest)" #error-actions>
         <v-btn
-          v-if="updateConflictRecovery" variant="tonal" height="48"
+          v-if="updateConflictRecovery && !aiTaskOpen" variant="tonal" height="48"
           :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
           @click="reviewResolvedUpdate"
         >
           Review resolved conflicts
         </v-btn>
+        <Vibe64AiTaskButton
+          v-if="saveWorkCanResolveWithTemporaryAi && saveWorkActivityIsUpdate"
+          :allowed="assistantFixAllowed"
+          kind="update"
+          :title="assistantFixAllowed ? 'Fix this Update with the AI' : assistantFixRestrictionMessage"
+        />
         <Vibe64TemporaryAiFixAction
-          v-if="saveWorkCanResolveWithTemporaryAi"
+          v-else-if="saveWorkCanResolveWithTemporaryAi"
           :disabled="repositoryRecoverySending || !assistantFixAllowed"
           :pending="repositoryRecoverySending"
           :title="assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage"
@@ -208,7 +214,8 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, ref } from "vue";
+import { computed, defineAsyncComponent, inject, ref } from "vue";
+import { Vibe64AiTaskButton, VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/WorkspaceSetupToolRows.vue";
@@ -243,6 +250,9 @@ const {
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning, workspaceSetupStatus, workspaceSetupTitle
 } = view;
+const aiTasks = inject(VIBE64_AI_TASKS_KEY);
+// While an AI task owns the problem, Retry and the manual route wait: its window offers them.
+const aiTaskOpen = computed(() => Boolean(aiTasks.task) && !aiTasks.projection.ended);
 const resourceRetryBusy = ref(false);
 // A missing Stack tool is fixed first; the database panel waits for it.
 const workspaceSetupToolsMissing = ref(false);

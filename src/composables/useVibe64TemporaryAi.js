@@ -29,6 +29,7 @@ function useVibe64TemporaryAi({
   assistantReady = () => false,
   onTaskFinished = null,
   operationBusy = () => false,
+  ownsRecord = record => !record.task,
   sessionId,
   sessionsApiPath
 } = {}) {
@@ -483,7 +484,7 @@ function useVibe64TemporaryAi({
     tasks, closingTaskIds, stoppingTaskIds, isDisposed, operationBusy, records, reportTaskFinished, updateDraft
   });
   const { restoreError, restoreTasks, stopRestoring } = useVibe64TemporaryAiRestore({
-    tasks, activeTaskId, open, closedConversationIds, projectSlug, actorKey, assistantReady,
+    tasks, activeTaskId, open, closedConversationIds, projectSlug, actorKey, assistantReady, ownsRecord,
     currentSessionId, currentSessionsApiPath, isDisposed, bindTask, records
   });
   onBeforeUnmount(() => {

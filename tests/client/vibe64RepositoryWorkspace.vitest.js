@@ -14,7 +14,7 @@ import {
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT
 } from "../../src/lib/vibe64SessionRequestConfig.js";
 
-vi.mock("@/components/studio/Vibe64TemporaryAiFixAction.vue", () => ({ default: { render: () => null } }));
+vi.mock("@local/vibe64-ai-tasks/client", () => ({ Vibe64AiTaskButton: { render: () => null } }));
 vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthroughComponent("button") }));
 vi.mock("vuetify/components/VChip", () => ({ VChip: passthroughComponent("span") }));
 vi.mock("vuetify/components/VIcon", () => ({ VIcon: passthroughComponent("span") }));
@@ -644,14 +644,14 @@ describe("Vibe64 Repository workspace", () => {
     expect(production).not.toMatch(/dashboard\/diff|Vibe64SessionDiff|useVibe64DiffDialog/u);
   });
 
-  it("exposes repository conflict recovery only through the existing Temporary AI workspace", async () => {
+  it("exposes repository conflict recovery only through the AI task window", async () => {
     const [repositoryWorkspace, autopilotView] = await Promise.all([
       repositoryWorkspaceSource(),
       source("src/components/studio/vibe64-session/Vibe64AutopilotView.vue")
     ]);
 
-    expect(repositoryWorkspace).toContain("Vibe64TemporaryAiFixAction");
-    expect(repositoryWorkspace).toContain(':disabled="resolvingUpdateProblem || dashboard.assistantFixAllowed === false"');
+    expect(repositoryWorkspace).toContain("<Vibe64AiTaskButton");
+    expect(repositoryWorkspace).toContain(':allowed="dashboard.assistantFixAllowed !== false"');
     expect(repositoryWorkspace).toContain("dashboard.assistantFixRestrictionMessage");
     expect(repositoryWorkspace).not.toMatch(/resolve conflict manually|accept incoming|accept current/iu);
     expect(autopilotView).toContain("requestTemporaryAi: fixRepositoryError");
@@ -665,7 +665,7 @@ describe("Vibe64 Repository workspace", () => {
       repositoryComposableSource()
     ]);
 
-    expect(repositoryWorkspace).toContain("dashboard.value.assistantFixAllowed === false");
+    expect(repositoryWorkspace).toContain(':allowed="dashboard.assistantFixAllowed !== false"');
     expect(repositoryWorkspace).toContain("dashboard.assistantFixRestrictionMessage");
     expect(repositoryComposable).not.toContain("assistantDirectAllowed");
     expect(repositoryWorkspace).toContain(':disabled="repositoryOperationBusy"');

@@ -32,7 +32,11 @@ export default [
   ...baseConfig,
   ...vueConfig,
   // Client code held to the typed client standard; the rest of the client converts one area at a time.
-  ...clientFeaturesConfig(["packages/vibe64-ai-tasks/src/client/**"]),
+  ...clientFeaturesConfig([
+    "packages/vibe64-ai-tasks/src/client/**",
+    "src/components/studio/vibe64-session/Vibe64AiTask*.vue",
+    "src/composables/useAiTaskConversation.js"
+  ]),
   ...webConfig,
   ...nodeConfig,
   // Server packages converted to typed features; the base config warns for the rest.

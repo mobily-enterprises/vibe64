@@ -16,6 +16,7 @@
     <div class="studio-app-shell-layout__top-right">
       <ShellOutlet target="shell-layout:top-right" />
       <slot name="top-right" />
+      <Vibe64AiTaskTrayTarget />
       <Vibe64ColleagueLauncherTarget />
     </div>
   </v-app-bar>
@@ -41,6 +42,7 @@
 <script setup>
 import { watch } from "vue";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
+import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 

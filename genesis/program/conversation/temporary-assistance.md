@@ -543,6 +543,8 @@ Creation publishes `temporary-conversation-created` once, when the chat is first
 saved. Other views that do not already show it reread the saved collection, and
 every view rereads it when its realtime connection returns, so a chat created
 while a view was disconnected also appears.
+Update repairs now run as [AI tasks](ai-tasks.md). Repair behaviour below describes
+repairs that have not moved yet and Update repair records saved before that change.
 Closing an incomplete Update repair requires confirmation that partial edits
 will remain and may still need repair. Closing waits for Stop and provider
 deletion to succeed; a failure leaves the chat available for retry, and a failed

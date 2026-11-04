@@ -132,14 +132,13 @@
         title="Project updates need attention"
       >
         <template #actions>
-          <Vibe64TemporaryAiFixAction
-            v-if="canResolveUpdateWithTemporaryAi && typeof dashboard.requestTemporaryAi === 'function'"
-            :disabled="resolvingUpdateProblem || dashboard.assistantFixAllowed === false"
-            :pending="resolvingUpdateProblem"
+          <Vibe64AiTaskButton
+            v-if="canResolveUpdateWithAi && typeof dashboard.requestTemporaryAi === 'function'"
+            :allowed="dashboard.assistantFixAllowed !== false"
+            kind="update"
             :title="dashboard.assistantFixAllowed === false
               ? dashboard.assistantFixRestrictionMessage
-              : 'Open temporary AI to resolve this repository update'"
-            @click="resolveUpdateProblem"
+              : 'Fix this Update with the AI'"
           />
         </template>
       </StudioErrorNotice>
@@ -247,7 +246,7 @@ import {
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
-import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
+import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
 import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
 import Vibe64RepositoryHistoryList from "@/components/studio/repository/Vibe64RepositoryHistoryList.vue";
 import Vibe64RepositoryVersionDialog from "@/components/studio/repository/Vibe64RepositoryVersionDialog.vue";
@@ -445,7 +444,7 @@ const repositoryUpdateDetail = computed(() => {
     ? ` Last checked ${formatVersionDate(repositoryStatus.value.checkedAt)}.`
     : "";
   if (relationship === "diverged") {
-    return `Someone saved new project work after this session started, and this session also has its own saved work. Vibe64 cannot simply move it forward. Updating this session will try to combine both without discarding either. If the same files conflict, nothing changes and Temporary AI can help.${checked}`;
+    return `Someone saved new project work after this session started, and this session also has its own saved work. Vibe64 cannot simply move it forward. Updating this session will try to combine both without discarding either. If the same files conflict, nothing changes and Fix it with AI can help.${checked}`;
   }
   if (behind > 0) {
     const updateEffect = changes.payload?.unsaved === true
@@ -458,31 +457,10 @@ const repositoryUpdateDetail = computed(() => {
   }
   return `It already includes the latest saved project version.${checked}`;
 });
-const canResolveUpdateWithTemporaryAi = computed(() => [
+const canResolveUpdateWithAi = computed(() => [
   "vibe64_session_update_conflict",
   "vibe64_session_update_history_diverged"
 ].includes(String(updates.errorCode || "").trim()));
-const resolvingUpdateProblem = ref(false);
-
-async function resolveUpdateProblem() {
-  if (
-    resolvingUpdateProblem.value ||
-    dashboard.value.assistantFixAllowed === false ||
-    typeof dashboard.value.requestTemporaryAi !== "function"
-  ) {
-    return false;
-  }
-  resolvingUpdateProblem.value = true;
-  try {
-    return await dashboard.value.requestTemporaryAi({
-      code: updates.errorCode,
-      error: updates.error,
-      title: "Resolve repository update"
-    });
-  } finally {
-    resolvingUpdateProblem.value = false;
-  }
-}
 
 async function openVersion(version) {
   versionSheetOpen.value = true;
