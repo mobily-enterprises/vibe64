@@ -1024,7 +1024,9 @@ describe("Vibe64 direct session view", () => {
 
   it("offers preview attachments as ordinary direct-chat controls", () => {
     const component = readAutopilotViewSource();
-    const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
+    // The prompt and the attachment logic it presents.
+    const promptTextarea = [promptTextareaPath, path.resolve("src/composables/useVibe64PromptAttachments.js")]
+      .map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
     expect(component).toContain("aria-label=\"Attach visible preview\"");
     expect(component).toContain("aria-label=\"Attach console & network\"");
