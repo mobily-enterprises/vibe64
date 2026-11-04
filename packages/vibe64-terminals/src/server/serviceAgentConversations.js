@@ -211,7 +211,7 @@ function createServiceAgentConversations({
         if (native?.ok === false || native?.turn?.active || native?.terminal?.status === "running") {
           fail("Stop native work and close its terminal before replacing context.");
         }
-        const temporary = await sessionAgent.hasActiveAiTaskConversation(sessionId, {}, context);
+        const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
         if (temporary?.ok === false || temporary?.active || await sessionHasActiveAiTask(context.runtime.store, sessionId)) {
           fail("Finish temporary assistant work before replacing native context.");
         }
@@ -345,7 +345,7 @@ function createServiceAgentConversations({
         messageCode: "vibe64_session_renewal_routing_pending"
       }), { retryable: true });
     }
-    const conversation = await sessionAgent.hasActiveAiTaskConversation(
+    const conversation = await sessionAgent.hasActiveTemporaryConversation(
       sessionId,
       {},
       {
@@ -373,7 +373,7 @@ function createServiceAgentConversations({
     const context = await sessionAccess.sessionContext(sessionId, options);
     const [main, temporary] = await Promise.all([
       sessionAgent.sessionState(sessionId, context),
-      sessionAgent.hasActiveAiTaskConversation(sessionId, {}, context)
+      sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context)
     ]);
     if (main?.ok === false || temporary?.ok === false) {
       throw new Error(main?.error || temporary?.error || "This session's AI work could not be read.");

@@ -110,7 +110,7 @@ function createServiceAssistantPreparation({
     if (sessionHasActiveAgentRun(context.session)) return;
     const projectRoot = sessionSourcePath(context.session);
     if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
-    const temporary = await sessionAgent.hasActiveAiTaskConversation(sessionId, {}, context);
+    const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
     if (temporary.active) return;
     const format = await inspectGenesisProjectFormat({ projectRoot });
     if (format.status !== "current") return;

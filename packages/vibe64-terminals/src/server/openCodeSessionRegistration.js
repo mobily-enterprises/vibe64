@@ -127,7 +127,7 @@ function createOpenCodeSessionRegistration({
       }, "Stopping the shared OpenCode process.");
     }
   });
-  const { turns, aiTaskConversations } = sharedRuntime;
+  const { turns, temporaryConversations } = sharedRuntime;
   const hostPreparation = createOpenCodeHostPreparation({
     agentDatabaseCommand,
     agentEnvCommand,
@@ -148,7 +148,7 @@ function createOpenCodeSessionRegistration({
     getAssistantManager,
     publishSessionChanged,
     turns,
-    aiTaskConversations,
+    temporaryConversations,
     logger
   });
   const events = createOpenCodeConversationEvents({

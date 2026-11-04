@@ -200,7 +200,7 @@ function createServiceProjectRuntime({
       if (session.sourceReady === false && session.purpose !== "learning") continue;
       let active;
       try {
-        const temporary = await sessionAgent.hasActiveAiTaskConversation(session.sessionId, {}, { session });
+        const temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
         active = temporary.active || await sessionHasActiveAiTask(store, session.sessionId);
       } catch (error) {
         sessionStateFailure(session, error);

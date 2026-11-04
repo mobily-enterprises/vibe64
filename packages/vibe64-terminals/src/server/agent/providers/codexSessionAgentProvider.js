@@ -542,7 +542,7 @@ function createCodexSessionAgentProvider({
   }
 
   async function projectConversationResult(method, perform) {
-    if (method === "hasActiveAiTaskConversation") return { active: await perform(), ok: true };
+    if (method === "hasActiveTemporaryConversation") return { active: await perform(), ok: true };
     if (method === "invalidateRuntimes") {
       const operation = perform();
       return vibe64Result(() => operation);
@@ -706,7 +706,7 @@ function createCodexSessionAgentProvider({
       "deleteDetachedChatThread",
       "listNativeConversationStorage",
       "retireConversationHistory",
-      "hasActiveAiTaskConversation"
+      "hasActiveTemporaryConversation"
     ]),
     prepareConversationRequest,
     projectConversationResult,

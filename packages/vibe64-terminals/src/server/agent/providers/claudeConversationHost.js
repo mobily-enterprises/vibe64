@@ -397,7 +397,7 @@ function createClaudeConversationHost({
   }
 
   async function projectConversationResult(method, perform) {
-    if (method === "hasActiveAiTaskConversation") return { ok: true, active: await perform() };
+    if (method === "hasActiveTemporaryConversation") return { ok: true, active: await perform() };
     return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
   }
 
@@ -578,7 +578,7 @@ function createClaudeConversationHost({
       "deleteDetachedChatThread",
       "listNativeConversationStorage",
       "retireConversationHistory",
-      "hasActiveAiTaskConversation",
+      "hasActiveTemporaryConversation",
       "releaseRenewalPredecessorProcessExitProof",
       "releaseRenewalSuccessorProcessExitProof"
     ]),

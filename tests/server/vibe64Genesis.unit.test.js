@@ -369,7 +369,7 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(output, /Use very short sentences/u);
     assert.match(output, /including progress updates and final responses/u);
     assert.match(output, /Use Australian English\./u);
-    assert.match(output, /temporary conversation in the selected session worktree/u);
+    assert.match(output, /AI task conversation in the selected session worktree/u);
     assert.match(output, /vibe64-helper env set/u);
     assert.match(output, /vibe64-helper database refresh/u);
     assert.match(output, /which earlier work is confirmed complete/u);

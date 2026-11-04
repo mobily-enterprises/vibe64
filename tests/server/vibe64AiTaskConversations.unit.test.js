@@ -1675,7 +1675,7 @@ for (const pinned of [false, true]) {
         await assert.rejects(f.send(mode, `return-${mode}`), {
           code: "vibe64_codex_history_unsupported",
           statusCode: 409,
-          message: /Start a new temporary chat/
+          message: /Start a new AI task to use Codex/
         });
         const after = await f.record();
         assert.deepEqual(after.assistantSelection, record.assistantSelection);

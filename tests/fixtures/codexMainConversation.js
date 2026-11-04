@@ -95,7 +95,7 @@ export function createCodexTerminalController(options = {}) {
     releaseRenewalSuccessorProcessExitProof(sessionId, current = {}) {
       return conversations.releaseNativeRenewalSuccessorProcessExitProof({ id: sessionId, context: current, input: current });
     },
-    hasActiveAiTaskConversation(sessionId) {
+    hasActiveTemporaryConversation(sessionId) {
       return conversations.inspectNativeTemporaryActivity({ id: sessionId, context: { sessionId } });
     },
     startConversationTurn: (sessionId, input = {}, current = {}) =>

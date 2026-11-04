@@ -110,7 +110,7 @@
 /**
  * The provider methods the session agent manager dispatches by name.
  * @typedef {"closeProject" | "closeSession" | "closeTerminal" | "createConversation" | "deleteAttachment" | "deleteConversation"
- *   | "deleteDetachedChatThread" | "ensureSession" | "generateSessionRenewalHandover" | "hasActiveAiTaskConversation"
+ *   | "deleteDetachedChatThread" | "ensureSession" | "generateSessionRenewalHandover" | "hasActiveTemporaryConversation"
  *   | "inspectMessageAdmission" | "interruptDetachedChatTurn" | "interruptTurn" | "invalidateRuntimes"
  *   | "listNativeConversationStorage" | "readConversation" | "readGoal" | "readTerminal" | "reconcileSessions"
  *   | "releaseRenewalPredecessorAttachments" | "releaseRenewalPredecessorProcessExitProof"

@@ -615,7 +615,7 @@ async function controllerHarness({
         const context = { ...options, sessionId };
         return (await conversations.disposeNative(provider.prepareConversationRequest("closeSession", context))).result;
       },
-      hasActiveAiTaskConversation(sessionId) {
+      hasActiveTemporaryConversation(sessionId) {
         return conversations.inspectNativeTemporaryActivity({ id: sessionId, context: { sessionId } });
       },
       startConversationTurn: (sessionId, input = {}, options = {}) => scopedOperation("send", sessionId, input, options),

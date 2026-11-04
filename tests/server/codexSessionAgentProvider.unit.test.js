@@ -338,7 +338,7 @@ test("Codex adapter forwards the authenticated Vibe64 user to every human turn",
 
 test("Codex adapter reports every active Temporary AI turn", async () => {
   const runOwner = {
-    hasActiveAiTaskConversation(sessionId) {
+    hasActiveTemporaryConversation(sessionId) {
       assert.equal(sessionId, "session-1");
       return true;
     }
@@ -351,13 +351,13 @@ test("Codex adapter reports every active Temporary AI turn", async () => {
   // Keep the original provider-envelope assertion at its original boundary;
   // the actual adapter projects activity read through the runtime and driver.
   const provider = {
-    hasActiveAiTaskConversation: context => adapter.projectConversationResult(
-      "hasActiveAiTaskConversation",
+    hasActiveTemporaryConversation: context => adapter.projectConversationResult(
+      "hasActiveTemporaryConversation",
       () => conversationRuntime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
     )
   };
 
-  assert.deepEqual(await provider.hasActiveAiTaskConversation({
+  assert.deepEqual(await provider.hasActiveTemporaryConversation({
     sessionId: "session-1"
   }), {
     active: true,

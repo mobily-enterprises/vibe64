@@ -429,8 +429,8 @@ function createSessionAgentProviderCalls({
     return callSessionProvider("generateSessionRenewalHandover", sessionId, input, options);
   }
 
-  function hasActiveAiTaskConversation(sessionId = "", input = {}, options = {}) {
-    return callSessionProvider("hasActiveAiTaskConversation", sessionId, input, options);
+  function hasActiveTemporaryConversation(sessionId = "", input = {}, options = {}) {
+    return callSessionProvider("hasActiveTemporaryConversation", sessionId, input, options);
   }
 
   function interruptDetachedChatTurn(sessionId = "", input = {}, options = {}) {
@@ -554,7 +554,7 @@ function createSessionAgentProviderCalls({
     deleteDetachedChatThread,
     ensureSession,
     generateSessionRenewalHandover,
-    hasActiveAiTaskConversation,
+    hasActiveTemporaryConversation,
     inspectMessageAdmission,
     interruptDetachedChatTurn,
     interruptTurn,

@@ -6344,7 +6344,7 @@ test("temporary turns remain active for renewal until completion", async () => {
       ephemeral: true
     });
 
-    assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     const turn = await controller.startConversationTurn("session-1", {
       conversationId: conversation.conversationId,
       ephemeral: true,
@@ -6352,7 +6352,7 @@ test("temporary turns remain active for renewal until completion", async () => {
     });
 
     assert.equal(turn.ok, true, JSON.stringify(turn));
-    assert.equal(await controller.hasActiveAiTaskConversation("session-1"), true);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
 
     emitCodexNotification(subscribers, codexEvent({
       message: "The focused issue is fixed.",
@@ -6360,7 +6360,7 @@ test("temporary turns remain active for renewal until completion", async () => {
     }));
     emitCodexNotification(subscribers, turnCompleted());
     await flushPromises();
-    assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
   });
 });
 
@@ -6380,7 +6380,7 @@ test("temporary turns remain active past the helper deadline and accept their ev
         conversationId: conversation.conversationId
       });
       assert.equal(working.status, "inProgress", JSON.stringify(working));
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       emitCodexNotification(subscribers, codexEvent({ message: "Checking the actual repair." }));
       t.mock.timers.tick(180_001);
       emitCodexNotification(subscribers, codexEvent({
@@ -6393,7 +6393,7 @@ test("temporary turns remain active past the helper deadline and accept their ev
       });
       assert.equal(completed.status, "completed");
       assert.equal(completed.message, "The repair is ready to verify.");
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   } finally {
     t.mock.timers.reset();
@@ -6420,7 +6420,7 @@ for (const failure of ["disconnect", "replacement"]) {
         });
         assert.equal(failed.status, "failed");
         assert.match(failed.error, /Connection to Codex was lost/u);
-        assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+        assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
         emitCodexNotification(subscribers, codexEvent({ message: "Late obsolete response.", phase: "final_answer" }));
         emitCodexNotification(subscribers, turnCompleted());
         await flushPromises();
@@ -6457,7 +6457,7 @@ test("temporary repair remains active until Codex confirms the interrupt", async
     try {
       await hold.entered;
       assert.equal(settled, false);
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       assert.equal((await controller.readConversation("session-1", input)).status, "inProgress");
       const blocked = await controller.startConversationTurn("session-1", {
         conversationId: input.conversationId, ephemeral: true, message: "Start another repair."
@@ -6466,7 +6466,7 @@ test("temporary repair remains active until Codex confirms the interrupt", async
       assert.equal(blocked.code, "vibe64_temporary_conversation_turn_active");
       hold.release();
       assert.equal((await stopping).ok, true);
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
       assert.equal((await controller.readConversation("session-1", input)).status, "interrupted");
     } finally {
       hold.release();
@@ -6511,7 +6511,7 @@ for (const operation of ["stop", "delete"]) {
       captures[operation === "stop" ? "failInterrupts" : "failDeletes"] = 1;
       const failed = await controller[`${operation}Conversation`]("session-1", input);
       assert.equal(failed.ok, false, JSON.stringify(failed));
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       emitCodexNotification(subscribers, codexEvent({ message: "Still inspecting the conflict." }));
       await flushPromises();
       const working = await controller.readConversation("session-1", input);
@@ -6520,7 +6520,7 @@ for (const operation of ["stop", "delete"]) {
       assert.ok(working.progressUpdates.some((update) => update.text === "Still inspecting the conflict."));
       const retried = await controller[`${operation}Conversation`]("session-1", input);
       assert.equal(retried.ok, true, JSON.stringify(retried));
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   });
 }
@@ -6543,7 +6543,7 @@ test("long-running temporary turns still stop on request", async (t) => {
       assert.equal((await controller.readConversation("session-1", {
         conversationId: conversation.conversationId
       })).status, "interrupted");
-      assert.equal(await controller.hasActiveAiTaskConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   } finally {
     t.mock.timers.reset();
@@ -8241,11 +8241,11 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
     assert.equal(betaTurn.ok, true, JSON.stringify(betaTurn));
     assert.equal(await runWithProjectRequestContext(
       alpha.context,
-      () => controller.hasActiveAiTaskConversation(sessionId)
+      () => controller.hasActiveTemporaryConversation(sessionId)
     ), false);
     assert.equal(await runWithProjectRequestContext(
       beta.context,
-      () => controller.hasActiveAiTaskConversation(sessionId)
+      () => controller.hasActiveTemporaryConversation(sessionId)
     ), true);
 
     captures.stopRuntimeResult = {
@@ -8285,7 +8285,7 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
     assert.equal(betaAfterCleanup.status, "inProgress");
     assert.equal(await runWithProjectRequestContext(
       beta.context,
-      () => controller.hasActiveAiTaskConversation(sessionId)
+      () => controller.hasActiveTemporaryConversation(sessionId)
     ), true);
 
     await runWithProjectRequestContext(
@@ -11093,7 +11093,7 @@ test("temporary Codex retains ownership after observation loss and retries the s
     const pending = await controller.readConversation(sessionId, { conversationId, ephemeral: true });
     assert.equal(pending.status, "inProgress");
     assert.match(pending.error, /stop is not yet confirmed/);
-    assert.equal(await controller.hasActiveAiTaskConversation(sessionId), true);
+    assert.equal(await controller.hasActiveTemporaryConversation(sessionId), true);
     const blocked = await controller.startConversationTurn(sessionId, {
       conversationId, ephemeral: true, message: "Must not overlap"
     });
@@ -11102,7 +11102,7 @@ test("temporary Codex retains ownership after observation loss and retries the s
     captures.stopRuntimeResult = { stopped: true };
     const stopped = await controller.stopConversation(sessionId, { conversationId, ephemeral: true, runId: turn.runId });
     assert.equal(stopped.ok, true, JSON.stringify(stopped));
-    assert.equal(await controller.hasActiveAiTaskConversation(sessionId), false);
+    assert.equal(await controller.hasActiveTemporaryConversation(sessionId), false);
     assert.equal(captures.stopRuntimes, 3);
     assert.equal(captures.turns.length, 1);
   });
@@ -11859,7 +11859,7 @@ test("shared Codex runtime loss settles providers that own only temporary conver
       await firstProvider.failObservation(new Error("Observation lost"));
       assert.equal(captures.stopRuntimes, 1);
       for (const [id, conversationId] of [[sessionId, first.conversationId], [secondId, second.conversationId]]) {
-        assert.equal(await controller.hasActiveAiTaskConversation(id), false);
+        assert.equal(await controller.hasActiveTemporaryConversation(id), false);
         assert.equal((await controller.readConversation(id, { conversationId, ephemeral: true })).status, "interrupted");
         assert.deepEqual(await store.readConversationLog(id), []);
       }
@@ -11963,7 +11963,7 @@ test("durable Codex chats keep native history and goal ownership across browser 
     let result = await controller.readConversation("session-1", { conversationId, persistent: true, messageId: "input" });
     assert.equal(result.admitted, true);
     assert.equal(result.status, "inProgress", "an active goal owns the interval between native turns");
-    assert.equal(await controller.hasActiveAiTaskConversation("session-1"), true);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
     assert.deepEqual(result.messages.map((message) => message.text), ["Checking files", "Edited."]);
     const firstOutputId = events[0].message.outputId;
     assert.match(firstOutputId, /^codex-[a-f0-9]{64}$/u);

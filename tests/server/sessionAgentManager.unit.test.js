@@ -589,7 +589,7 @@ test("session agent manager exposes active Temporary AI conversation state", asy
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
-      async hasActiveAiTaskConversation(context) {
+      async hasActiveTemporaryConversation(context) {
         receivedContext = context;
         return {
           active: true,
@@ -599,7 +599,7 @@ test("session agent manager exposes active Temporary AI conversation state", asy
     }]
   });
 
-  const state = await manager.hasActiveAiTaskConversation("session-1", {}, {
+  const state = await manager.hasActiveTemporaryConversation("session-1", {}, {
     runtime: { stateRoot: "/runtime" },
     session: { sessionId: "session-1" }
   });
