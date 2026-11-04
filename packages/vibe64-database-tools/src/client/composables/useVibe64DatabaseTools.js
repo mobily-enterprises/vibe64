@@ -23,6 +23,15 @@ function databaseSessionPath(apiPath = "", sessionId = "", suffix = "") {
   return `${apiPath}/sessions/${encodeSegment(sessionId)}${suffix}`;
 }
 
+/**
+ * One session's database for the signed-in viewer: its state, read while the workspace is active and reread when its
+ * layout, accounts or connections change, and the commands that query and change it.
+ * @param {{
+ *   active?: import("vue").MaybeRef<boolean> | import("vue").ComputedRef<boolean>,
+ *   projectSlug?: import("vue").MaybeRef<string> | import("vue").ComputedRef<string>,
+ *   sessionId?: import("vue").MaybeRef<string> | import("vue").ComputedRef<string>
+ * }} [options]
+ */
 function useVibe64DatabaseTools({
   active = true,
   projectSlug = "",
