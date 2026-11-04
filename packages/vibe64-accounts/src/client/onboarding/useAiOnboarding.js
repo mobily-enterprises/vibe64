@@ -243,5 +243,7 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     selectForColleague, verify };
 }
 
+/** @typedef {ReturnType<typeof useAiOnboarding>} AiOnboarding */
+
 export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingMainAi, aiOnboardingRows, aiOnboardingSnoozed, aiTeamSetupSnoozed,
   connectedEngine, snoozeAiOnboarding, snoozeAiTeamSetup, teamSummary, useAiOnboarding };

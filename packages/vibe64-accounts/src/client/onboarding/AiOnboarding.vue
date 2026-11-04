@@ -1,9 +1,10 @@
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { mdiArrowLeft, mdiArrowRight, mdiBugCheckOutline, mdiClose, mdiFileTreeOutline, mdiSitemapOutline } from "@mdi/js";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import AiSetup from "./AiSetup.vue";
+import { useStageTitleFocus } from "./useStageTitleFocus.js";
 
 // The fullscreen onboarding shell: top bar, step dots, the Why screen and the
 // phone dock, around the AI setup stage.
@@ -34,7 +35,7 @@ const STEP = { why: 1, choose: 2, connect: 3, routing: 3, success: 3 };
 // "why" shows the Why screen, "setup" the AI setup stage.
 const view = ref("why");
 const direction = ref("forward");
-const stage = ref(null);
+const { focusTitle, stage } = useStageTitleFocus();
 const setup = ref(null);
 // Hover styling waits for real pointer movement, so a resting cursor stays still.
 const pointerMoved = ref(false);
@@ -72,10 +73,6 @@ function chooseMyAi() {
 
 function close(reason, card = null) {
   if (!busy.value) emit("close", reason, card);
-}
-
-function focusTitle() {
-  nextTick(() => stage.value?.querySelector("h1")?.focus({ preventScroll: true }));
 }
 </script>
 

@@ -17,11 +17,13 @@ import AiSetupProviderCard from "./AiSetupProviderCard.vue";
 import AiSetupRoutingChoice from "./AiSetupRoutingChoice.vue";
 import AiSetupSuccessMark from "./AiSetupSuccessMark.vue";
 import AiTeamSetupCard from "./AiTeamSetupCard.vue";
-import { useAiOnboarding, usesProvider } from "./useAiOnboarding.js";
+import { useAiOnboarding } from "./useAiOnboarding.js";
+import { useAiSetupAttempt } from "./useAiSetupAttempt.js";
 import { provideAiSetupCards, useAiSetupCards } from "./useAiSetupCards.js";
 import { useAiSetupProviderLinks } from "./useAiSetupProviderLinks.js";
 import { useAiSetupSuccess } from "./useAiSetupSuccess.js";
 import { useAiTeamSetupOffer } from "./useAiTeamSetupOffer.js";
+import { useStageTitleFocus } from "./useStageTitleFocus.js";
 import { routingSelectionText } from "../studio/ModelRoutingRow.vue";
 import { useVibe64Learning } from "/src/composables/useVibe64Learning.js";
 
@@ -59,30 +61,15 @@ const { xs } = useDisplay();
 
 const screen = ref("choose");
 const direction = ref("forward");
-const stage = ref(null);
+const { focusTitle, stage } = useStageTitleFocus();
 const routingForm = ref(null);
 const wasSetUp = ref(false);
 // Setup was read and absent: only then does finishing move Colleague unasked.
 const firstRun = ref(false);
 const chosen = ref(null);
-// How step 1 stands: "" (not yet), "opened" (sign-up page opened) or "have".
-const signUp = ref("");
 const setupBusy = ref(false);
 const routingBusy = ref(false);
 const verifying = ref(false);
-const warning = ref("");
-const notReady = ref(false);
-const makeMain = ref(false);
-const routingReviewed = ref(false);
-const fullRouting = ref(false);
-const routingDetails = ref(false);
-// The Senior model in use when routing would change; none means apply without asking.
-const currentSenior = ref(null);
-// The tool the chosen provider is connected through, which "Use as main AI" keeps.
-const chosenEngine = ref("");
-// The connect step open is DeepSeek's, started from the team card.
-const teamFlow = ref(false);
-const autoRouting = ref(false);
 const outcome = ref({ routed: true, colleague: null, error: "" });
 const announcement = ref("");
 // Hover styling waits for real pointer movement, so a resting cursor stays still.
@@ -114,6 +101,11 @@ const learning = useVibe64Learning();
 const {
   colleagueNote, doneLabel, hello, inLesson, learn, proven, sayHello, switchColleague
 } = useAiSetupSuccess({ setup, learning, screen, chosen, outcome, verifying, announcement });
+// The provider being connected, and what finishing it found.
+const {
+  autoRouting, chosenEngine, connect, currentSenior, finishAttempt, fullRouting, keep, makeMain, makeMainAi, notReady,
+  resetAttempt, reviewRouting, routingDetails, routingReviewed, signUp, teamFlow, useAsMain, warning
+} = useAiSetupAttempt({ setup, screen, go, wasSetUp, firstRun, chosen, verifying, outcome, announcement, hello, routingForm });
 // One offer, once: the end of first-time setup (not a redo, not inline, not
 // in Learn) offers the course's orientation lesson; the done button is its
 // "not now". Starting it is the Learning controller's (openOrientation).
@@ -169,19 +161,6 @@ watch(routingForm, (form) => {
   if (form && autoRouting.value) useAsMain();
 });
 
-function resetAttempt() {
-  teamFlow.value = false;
-  warning.value = "";
-  chosenEngine.value = "";
-  notReady.value = false;
-  makeMain.value = false;
-  routingReviewed.value = false;
-  fullRouting.value = false;
-  routingDetails.value = false;
-  autoRouting.value = false;
-  hello.value = { state: "", reply: "", error: "" };
-}
-
 function go(next, back = false) {
   direction.value = back ? "back" : "forward";
   screen.value = next;
@@ -199,75 +178,14 @@ function close(reason, card = null) {
   emit("close", reason, card);
 }
 
-function focusTitle() {
-  nextTick(() => stage.value?.querySelector("h1")?.focus({ preventScroll: true }));
-}
-
-function connect(card, step = "") {
-  chosen.value = card;
-  signUp.value = step;
-  resetAttempt();
-  go("connect");
-}
-
-function makeMainAi(card) {
-  chosen.value = card;
-  resetAttempt();
-  makeMain.value = true;
-  return finish();
-}
-
-function keep(card) {
-  chosen.value = card;
-  resetAttempt();
-  return finish({ keep: true });
-}
-
 function openManage(card) {
   managedCard.value = card;
   manageOpen.value = true;
 }
 
-// Success needs the provider connected, a Senior model of it ready and, on a
-// known first setup or an explicit switch, Colleague moved onto that provider.
-async function finish({ keep: keeping = false } = {}) {
-  if (teamFlow.value) return finishTeam();
-  const card = chosen.value;
-  verifying.value = true;
-  warning.value = "";
-  notReady.value = false;
-  try {
-    const [result, current] = await Promise.all([setup.verify(card), setup.refreshColleague()]);
-    if (!result.connected) {
-      warning.value = `${card.name} isn't connected yet. Finish the connection step, then try again.`;
-      if (screen.value !== "connect") go("connect");
-      return;
-    }
-    chosenEngine.value = result.engineId;
-    if (wasSetUp.value && !keeping && !routingReviewed.value && result.routingWouldChange) {
-      currentSenior.value = result.currentSenior;
-      autoRouting.value = !result.currentSenior;
-      go("routing");
-      return;
-    }
-    if (!result.available) {
-      notReady.value = true;
-      if (screen.value !== "connect") go("connect");
-      announcement.value = `${card.name} is connected, but no model is ready for Colleague yet.`;
-      return;
-    }
-    let colleague = current;
-    let error = "";
-    if ((firstRun.value || makeMain.value) && !usesProvider(colleague, card)) {
-      ({ selection: colleague = colleague, error = "" } = await setup.selectForColleague(card));
-    }
-    outcome.value = { routed: result.routed, colleague, error };
-    go("success");
-  } catch (error) {
-    warning.value = error?.message || "We couldn't check the connection. Try again.";
-  } finally {
-    verifying.value = false;
-  }
+// Finishing the connect step: the team card's DeepSeek step, or the attempt.
+function finish() {
+  return teamFlow.value ? finishTeam() : finishAttempt();
 }
 
 // The team card on the overview, and the DeepSeek step it starts.
@@ -290,8 +208,8 @@ watch([() => props.focus, teamCardState, () => Boolean(ownerRoles.value)], async
     return;
   }
   await nextTick();
-  teamCard.value?.$el?.scrollIntoView?.({ block: "center" });
-  teamCard.value?.$el?.focus?.({ preventScroll: true });
+  teamCard.value?.$el.scrollIntoView({ block: "center" });
+  teamCard.value?.$el.focus({ preventScroll: true });
 }, { immediate: true });
 
 // Models: the setup screen with both setups; Team members opens on theirs.
@@ -310,24 +228,9 @@ const modelsSummary = computed(() => {
     .filter(([, value]) => value);
 });
 
-function reviewRouting() {
-  fullRouting.value = true;
-  go("routing");
-}
-
 function routingDone() {
   routingReviewed.value = true;
   return finish();
-}
-
-// "Use" saves the routing suggestions through the routing form; a failed save
-// leaves the form open with its errors.
-async function useAsMain() {
-  makeMain.value = true;
-  await routingForm.value?.applySuggested();
-  if (screen.value !== "routing") return;
-  autoRouting.value = false;
-  routingDetails.value = true;
 }
 
 watch(busy, (value) => emit("busy", value));

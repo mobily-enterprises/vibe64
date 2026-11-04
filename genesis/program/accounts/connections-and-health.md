@@ -98,6 +98,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiSetup.vue`
+- `packages/vibe64-accounts/src/client/onboarding/useAiSetupAttempt.js`
+- `packages/vibe64-accounts/src/client/onboarding/useStageTitleFocus.js`
 - `packages/vibe64-accounts/src/client/onboarding/useAiSetupCards.js`
 - `packages/vibe64-accounts/src/client/onboarding/useAiSetupTools.js`
 - `packages/vibe64-accounts/src/client/onboarding/useAiSetupSuccess.js`
@@ -386,8 +388,11 @@ Removal confirms the exact owning orchestrator/provider.
 AI onboarding is owned by the client `onboarding/` module of
 `packages/vibe64-accounts` and composes these same setup components in their
 embedded mode; it has no connection implementation of its own.
-`AiSetup` holds the flow: its screens, finishing, routing, the team focus and
-the tour offer. `useAiSetupCards` (with `useAiSetupTools` for each card's AI
+`AiSetup` holds the flow: its screens, the team focus and the tour offer.
+`useAiSetupAttempt` holds one attempt at a provider: choosing it, its connect
+step, finishing, and the routing decision finishing may need.
+`useStageTitleFocus` gives `AiSetup` and the `AiOnboarding` shell the focus
+move onto each new screen's title. `useAiSetupCards` (with `useAiSetupTools` for each card's AI
 tool on this computer) decides the cards' order, main AI and next action, and
 is provided to each `AiSetupProviderCard`; `useAiSetupSuccess` owns success's
 Colleague note and hello, `useAiTeamSetupOffer` the team card's offer, and

@@ -10,6 +10,23 @@ import { aiTeamSetupSnoozed, snoozeAiTeamSetup } from "./useAiOnboarding.js";
  * then fills the team setup; with DeepSeek already in Claude Code it fills at
  * once. Opened for the team (`focus` "team"), the card shows even when snoozed.
  * `teamFlow`: the connect step open is DeepSeek's for the team.
+ * @param {{
+ *   setup: import("./useAiOnboarding.js").AiOnboarding,
+ *   manager: import("../composables/useAiConnectionManager.js").AiConnectionManager,
+ *   cards: import("./useAiSetupCards.js").AiSetupCards["cards"],
+ *   ownerRoles: import("./useAiSetupCards.js").AiSetupCards["ownerRoles"],
+ *   ownerSenior: import("./useAiSetupCards.js").AiSetupCards["ownerSenior"],
+ *   wasSetUp: import("vue").Ref<boolean>,
+ *   canConfigure: import("vue").Ref<boolean>,
+ *   focus: import("vue").Ref<string>,
+ *   chosen: import("vue").Ref<object | null>,
+ *   teamFlow: import("vue").Ref<boolean>,
+ *   verifying: import("vue").Ref<boolean>,
+ *   warning: import("vue").Ref<string>,
+ *   announcement: import("vue").Ref<string>,
+ *   connect: (card: object, step?: string) => void,
+ *   go: (next: string, back?: boolean) => void
+ * }} options
  */
 function useAiTeamSetupOffer({
   setup,

@@ -8,6 +8,15 @@ import { usesProvider } from "./useAiOnboarding.js";
  * conversation is the teacher's: no hello goes into it, and the teacher uses the
  * choice from the next message; done returns to the lesson or to Learn. Develop
  * is as ever.
+ * @param {{
+ *   setup: import("./useAiOnboarding.js").AiOnboarding,
+ *   learning: import("/src/types.js").Vibe64Learning,
+ *   screen: import("vue").Ref<string>,
+ *   chosen: import("vue").Ref<object | null>,
+ *   outcome: import("vue").Ref<{ routed: boolean, colleague: object | null, error: string }>,
+ *   verifying: import("vue").Ref<boolean>,
+ *   announcement: import("vue").Ref<string>
+ * }} options
  */
 function useAiSetupSuccess({ setup, learning, screen, chosen, outcome, verifying, announcement }) {
   // Colleague's reply to a hello ("", "waiting", "replied", "failed" or "dismissed").
