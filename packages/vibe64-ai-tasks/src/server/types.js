@@ -1,0 +1,5 @@
+/**
+ * @typedef {object} AiTasksService
+ */
+
+export {};

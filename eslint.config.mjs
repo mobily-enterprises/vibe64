@@ -1,4 +1,4 @@
-import { baseConfig, formatterConfig, nodeConfig, sizeLimitsConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
+import { baseConfig, clientFeaturesConfig, formatterConfig, nodeConfig, sizeLimitsConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
 
 export default [
   {
@@ -31,6 +31,8 @@ export default [
   },
   ...baseConfig,
   ...vueConfig,
+  // Client code held to the typed client standard; the rest of the client converts one area at a time.
+  ...clientFeaturesConfig(["packages/vibe64-ai-tasks/src/client/**"]),
   ...webConfig,
   ...nodeConfig,
   // Server packages converted to typed features; the base config warns for the rest.
@@ -39,6 +41,7 @@ export default [
     "packages/studio-health/src/server/**",
     "packages/studio-terminal-core/src/server/**",
     "packages/vibe64-accounts/src/server/**",
+    "packages/vibe64-ai-tasks/src/server/**",
     "packages/vibe64-colleague/src/server/**",
     "packages/vibe64-core/src/server/**",
     "packages/vibe64-database-tools/src/server/**",

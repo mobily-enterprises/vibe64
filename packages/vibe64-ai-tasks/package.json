@@ -1,0 +1,53 @@
+{
+  "name": "@local/vibe64-ai-tasks",
+  "version": "0.1.0",
+  "description": "Runs a specific job for an agent as one AI task: the problem, the conversation, the proof and the outcome, in one window that survives reloads and restarts.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client/index.js",
+    "./server/types": "./src/server/types.js",
+    "./shared": "./src/shared/index.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.ai-tasks"
+      ],
+      "requires": [
+        "runtime.logger"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64AiTasksFeature.js",
+            "export": "Vibe64AiTasksFeature"
+          }
+        ],
+        "capabilities": [
+          "vibe64.ai-tasks"
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    },
+    "metadata": {
+      "apiSummary": {
+        "surfaces": [],
+        "capabilities": [
+          "vibe64.ai-tasks"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.2.4",
+    "vue": "^3.5.44",
+    "vuetify": "^4.0.0"
+  }
+}

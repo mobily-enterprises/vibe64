@@ -650,6 +650,26 @@ of regular Z.AI saved setup facts. Account writes and paid consent remain exclud
 ### Data used
 - Nothing.
 
+## `packages-vibe64-ai-tasks` AI tasks
+
+Holds every specific job given to an agent as one AI task: the problem, the
+conversation, the proof and the outcome. The server decides how a task ends, so a
+task keeps going without a browser and is right after a reload, on another
+device and for another team member. A task sits as a nested `task` field on its
+temporary conversation record, and only the machine in this package writes it.
+
+### Source
+- Directory `packages/vibe64-ai-tasks`
+
+### Program
+- Nothing.
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
 ## `packages-vibe64-terminals` Terminals & outputs
 
 Owns the Main cross-provider history allowance and the shared reader/writer of
