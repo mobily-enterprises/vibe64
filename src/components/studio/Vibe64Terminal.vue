@@ -88,159 +88,52 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, unref, watch } from "vue";
 import Vibe64TerminalSurface from "@/components/studio/Vibe64TerminalSurface.vue";
-import { useVibe64TerminalWindow } from "@/composables/useVibe64TerminalWindow.js";
-import { writeClipboardText } from "@/lib/clipboard.js";
+import { useVibe64TerminalElement } from "@/composables/useVibe64TerminalElement.js";
 
 const props = defineProps({
-  closeLabel: {
-    default: "Close",
-    type: String
-  },
-  collapsible: {
-    default: true,
-    type: Boolean
-  },
-  commandPreview: {
-    default: "",
-    type: String
-  },
-  dialogMaxWidth: {
-    default: 1080,
-    type: [Number, String]
-  },
-  disconnectWhenHidden: {
-    default: false,
-    type: Boolean
-  },
-  disposeDisplayWhenCollapsed: {
-    default: false,
-    type: Boolean
-  },
-  disposeDisplayWhenHidden: {
-    default: true,
-    type: Boolean
-  },
-  error: {
-    default: "",
-    type: String
-  },
-  errorTitle: {
-    default: "Terminal needs attention",
-    type: String
-  },
-  expanded: {
-    default: undefined,
-    type: null
-  },
-  fill: {
-    default: false,
-    type: Boolean
-  },
-  floatingStorageKey: {
-    default: "",
-    type: String
-  },
-  height: {
-    default: "clamp(18rem, 48vh, 34rem)",
-    type: String
-  },
-  launcherDisabled: {
-    default: false,
-    type: Boolean
-  },
-  launcherLabel: {
-    default: "Open terminal",
-    type: String
-  },
-  mobileTakeover: {
-    default: true,
-    type: Boolean
-  },
-  openErrorDetails: {
-    default: false,
-    type: Boolean
-  },
-  output: {
-    default: undefined,
-    type: null
-  },
-  persistent: {
-    default: true,
-    type: Boolean
-  },
+  closeLabel: { default: "Close", type: String },
+  collapsible: { default: true, type: Boolean },
+  commandPreview: { default: "", type: String },
+  dialogMaxWidth: { default: 1080, type: [Number, String] },
+  disconnectWhenHidden: { default: false, type: Boolean },
+  disposeDisplayWhenCollapsed: { default: false, type: Boolean },
+  disposeDisplayWhenHidden: { default: true, type: Boolean },
+  error: { default: "", type: String },
+  errorTitle: { default: "Terminal needs attention", type: String },
+  expanded: { default: undefined, type: Boolean },
+  fill: { default: false, type: Boolean },
+  floatingStorageKey: { default: "", type: String },
+  height: { default: "clamp(18rem, 48vh, 34rem)", type: String },
+  launcherDisabled: { default: false, type: Boolean },
+  launcherLabel: { default: "Open terminal", type: String },
+  mobileTakeover: { default: true, type: Boolean },
+  openErrorDetails: { default: false, type: Boolean },
+  output: { default: undefined, type: String },
+  persistent: { default: true, type: Boolean },
   presentation: {
     default: "inline",
     type: String,
-    validator: (value) => [
-      "dialog",
-      "floating",
-      "fullscreen",
-      "headless",
-      "inline"
-    ].includes(value)
+    validator: (value) => ["dialog", "floating", "fullscreen", "headless", "inline"].includes(value)
   },
-  retryable: {
-    default: false,
-    type: Boolean
-  },
-  showClose: {
-    default: true,
-    type: Boolean
-  },
-  showCopy: {
-    default: false,
-    type: Boolean
-  },
-  showInterrupt: {
-    default: true,
-    type: Boolean
-  },
-  showLauncher: {
-    default: false,
-    type: Boolean
-  },
-  startInput: {
-    default: () => ({}),
-    type: Object
-  },
-  startOnLaunch: {
-    default: false,
-    type: Boolean
-  },
-  stage: {
-    default: "",
-    type: String
-  },
-  surfaceClass: {
-    default: "",
-    type: [String, Array, Object]
-  },
-  surfaceStyle: {
-    default: null,
-    type: [String, Array, Object]
-  },
-  status: {
-    default: "",
-    type: String
-  },
-  subtitle: {
-    default: "",
-    type: String
-  },
+  retryable: { default: false, type: Boolean },
+  showClose: { default: true, type: Boolean },
+  showCopy: { default: false, type: Boolean },
+  showInterrupt: { default: true, type: Boolean },
+  showLauncher: { default: false, type: Boolean },
+  startInput: { default: () => ({}), type: Object },
+  startOnLaunch: { default: false, type: Boolean },
+  stage: { default: "", type: String },
+  surfaceClass: { default: "", type: [String, Array, Object] },
+  surfaceStyle: { default: null, type: [String, Array, Object] },
+  status: { default: "", type: String },
+  subtitle: { default: "", type: String },
   terminal: {
     required: true,
-    type: Object
+    type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Terminal>} */ (Object)
   },
-  title: {
-    default: "Terminal",
-    type: String
-  },
-  visible: {
-    default: undefined,
-    type: null
-  }
+  title: { default: "Terminal", type: String },
+  visible: { default: undefined, type: Boolean }
 });
 
 const emit = defineEmits([
@@ -263,221 +156,47 @@ const forwardedSlots = [
   "overlay"
 ];
 
-function terminalValue(name, fallback = null) {
-  const value = props.terminal?.[name];
-  const resolved = unref(value);
-  return typeof resolved === "undefined" ? fallback : resolved;
-}
-
-const visible = computed(() => typeof props.visible === "undefined"
-  ? Boolean(terminalValue("terminalVisible", true))
-  : Boolean(props.visible));
-const expanded = computed(() => {
-  if (!props.collapsible) {
-    return true;
-  }
-  return typeof props.expanded === "undefined"
-    ? Boolean(terminalValue("terminalExpanded", false))
-    : Boolean(props.expanded);
-});
-const floatingPresentation = computed(() => props.presentation === "floating");
-const dialogPresentation = computed(() => ["dialog", "fullscreen"].includes(props.presentation));
-const launcherVisible = computed(() => props.showLauncher && !visible.value);
-const running = computed(() => {
-  const status = String(terminalValue("terminalStatus", props.status) || "");
-  return Boolean(terminalValue("terminalSessionId", "")) && status !== "exited";
-});
-const starting = computed(() => Boolean(terminalValue("terminalStarting", false)));
-const surfaceProps = computed(() => ({
-  class: props.surfaceClass,
-  style: props.surfaceStyle,
-  closeLabel: props.closeLabel,
-  collapsible: props.collapsible,
-  commandPreview: props.commandPreview || String(terminalValue("terminalCommandPreview", "")),
-  error: props.error || String(terminalValue("terminalError", "")),
-  errorTitle: props.errorTitle,
-  exited: Boolean(terminalValue("terminalExited", false)),
-  expanded: expanded.value,
-  fill: expanded.value && (props.fill || floatingPresentation.value || dialogPresentation.value),
-  focused: Boolean(terminalValue("terminalFocused", false)),
-  height: props.height,
-  mobileTakeover: props.mobileTakeover,
-  openErrorDetails: props.openErrorDetails,
-  output: typeof props.output === "undefined"
-    ? String(terminalValue("terminalOutput", ""))
-    : String(props.output || ""),
-  retryable: props.retryable,
-  selectedText: String(terminalValue("terminalSelectedText", "")),
-  sessionId: String(terminalValue("terminalSessionId", "")),
-  showClose: props.showClose,
-  showCopy: props.showCopy,
-  showInterrupt: props.showInterrupt,
-  stage: props.stage,
-  starting: starting.value,
-  status: props.status || String(terminalValue("terminalStatus", "")),
-  subtitle: props.subtitle,
-  title: props.title
-}));
-
-const floatingWindow = useVibe64TerminalWindow({
-  active: computed(() => visible.value && floatingPresentation.value),
-  storageKey: computed(() => props.floatingStorageKey)
-});
-const floatingPanel = floatingWindow.panel;
-const floatingWindowStyle = floatingWindow.style;
-
-function setTerminalHost(element) {
-  props.terminal?.setTerminalHost?.(element);
-}
-
-async function ensureDisplay() {
-  if (!visible.value || !expanded.value || props.presentation === "headless") {
-    return false;
-  }
-  await nextTick();
-  if (!(await props.terminal?.setupTerminalUi?.())) {
-    return false;
-  }
-  if (terminalValue("terminalSessionId", "")) {
-    void props.terminal?.connectTerminalSocket?.();
-  }
-  return true;
-}
-
-async function launch() {
-  props.terminal?.showTerminal?.({ manual: true });
-  props.terminal?.expandTerminal?.({ manual: true });
-  emit("update:visible", true);
-  emit("update:expanded", true);
-  emit("launch");
-  if (props.startOnLaunch) {
-    await props.terminal?.startTerminal?.(props.startInput);
-  }
-  await ensureDisplay();
-}
-
-function toggleExpanded() {
-  const nextExpanded = !expanded.value;
-  if (typeof props.expanded === "undefined") {
-    if (nextExpanded) {
-      props.terminal?.expandTerminal?.({ manual: true });
-    } else {
-      props.terminal?.collapseTerminal?.({ manual: true });
-    }
-  }
-  emit("update:expanded", nextExpanded);
-}
-
-function requestClose() {
-  if (typeof props.visible === "undefined") {
-    props.terminal?.hideTerminal?.({ manual: true });
-  }
-  emit("update:visible", false);
-  emit("close");
-}
-
-function handleDialogVisibility(nextVisible) {
-  if (!nextVisible) {
-    requestClose();
-  }
-}
-
-async function interrupt() {
-  await props.terminal?.sendCtrlC?.();
-  emit("interrupt");
-}
-
-async function focus() {
-  await props.terminal?.focusTerminal?.();
-}
-
-async function copyTerminalText() {
-  const text = String(
-    terminalValue("terminalSelectedText", "") ||
-    terminalValue("terminalPlainOutput", "") ||
-    terminalValue("terminalOutput", "")
-  );
-  if (!text) {
-    return false;
-  }
-  await writeClipboardText(text);
-  emit("copy", text);
-  return true;
-}
-
-async function copySelection() {
-  const text = String(terminalValue("terminalSelectedText", ""));
-  if (!text) {
-    return false;
-  }
-  await writeClipboardText(text);
-  emit("copy", text);
-  return true;
-}
-
-async function copyTranscript() {
-  const text = String(
-    terminalValue("terminalPlainOutput", "") ||
-    terminalValue("terminalOutput", "")
-  );
-  if (!text) {
-    return false;
-  }
-  await writeClipboardText(text);
-  emit("copy", text);
-  return true;
-}
-
-watch(
-  () => [visible.value, expanded.value, props.presentation],
-  async ([isVisible, isExpanded]) => {
-    if (isVisible && isExpanded && props.presentation !== "headless") {
-      await ensureDisplay();
-      return;
-    }
-    if ((!isVisible && props.disposeDisplayWhenHidden) || (!isExpanded && props.disposeDisplayWhenCollapsed)) {
-      props.terminal?.disposeTerminalDisplay?.();
-    }
-    if (!isVisible && props.disconnectWhenHidden) {
-      props.terminal?.closeTerminalSocket?.();
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  () => props.output,
-  (output) => {
-    if (typeof output !== "undefined") {
-      props.terminal?.setTerminalOutput?.(output);
-    }
-  },
-  { immediate: true }
-);
+const {
+  copySelection,
+  copyTerminalText,
+  copyTranscript,
+  dialogPresentation,
+  floatingPanel,
+  floatingPresentation,
+  floatingWindow,
+  floatingWindowStyle,
+  focus,
+  handleDialogVisibility,
+  interrupt,
+  launch,
+  launcherVisible,
+  requestClose,
+  running,
+  setTerminalHost,
+  starting,
+  surfaceProps,
+  toggleExpanded,
+  visible
+} = useVibe64TerminalElement({ props, emit });
 
 defineExpose({
-  attach: (...args) => props.terminal?.attachTerminal?.(...args),
-  close: (...args) => props.terminal?.closeTerminal?.(...args),
-  collapse: (...args) => props.terminal?.collapseTerminal?.(...args),
+  attach: (...args) => props.terminal.attachTerminal(...args),
+  close: (...args) => props.terminal.closeTerminal(...args),
+  collapse: (...args) => props.terminal.collapseTerminal(...args),
   copySelection,
   copyTranscript,
-  detach: (...args) => props.terminal?.detachTerminal?.(...args),
-  expand: (...args) => props.terminal?.expandTerminal?.(...args),
+  detach: (...args) => props.terminal.detachTerminal(...args),
+  expand: (...args) => props.terminal.expandTerminal(...args),
   focus,
-  hide: (...args) => props.terminal?.hideTerminal?.(...args),
+  hide: (...args) => props.terminal.hideTerminal(...args),
   interrupt,
-  minimize: (...args) => props.terminal?.minimizeTerminal?.(...args),
-  restart: (...args) => props.terminal?.restartTerminal?.(...args),
-  sendKey: (...args) => props.terminal?.sendTerminalKey?.(...args),
-  show: (...args) => props.terminal?.showTerminal?.(...args),
-  start: (...args) => props.terminal?.startTerminal?.(...args),
-  waitForExit: (...args) => props.terminal?.waitForExit?.(...args),
-  write: (...args) => props.terminal?.sendTerminalData?.(...args)
-});
-
-onBeforeUnmount(() => {
-  setTerminalHost(null);
-  props.terminal?.disposeTerminalDisplay?.();
+  minimize: (...args) => props.terminal.minimizeTerminal(...args),
+  restart: (...args) => props.terminal.restartTerminal(...args),
+  sendKey: (...args) => props.terminal.sendTerminalKey(...args),
+  show: (...args) => props.terminal.showTerminal(...args),
+  start: (...args) => props.terminal.startTerminal(...args),
+  waitForExit: (...args) => props.terminal.waitForExit(...args),
+  write: (...args) => props.terminal.sendTerminalData(...args)
 });
 </script>
 

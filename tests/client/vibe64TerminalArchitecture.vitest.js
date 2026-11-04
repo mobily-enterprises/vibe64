@@ -6,6 +6,7 @@ const sourceRoot = path.resolve("src");
 const packageRoot = path.resolve("packages");
 const terminalDisplayPath = path.resolve("src/composables/useVibe64TerminalDisplay.js");
 const terminalElementPath = path.resolve("src/components/studio/Vibe64Terminal.vue");
+const terminalElementStatePath = path.resolve("src/composables/useVibe64TerminalElement.js");
 const terminalSurfacePath = path.resolve("src/components/studio/Vibe64TerminalSurface.vue");
 const terminalTakeoverPath = path.resolve("src/composables/useVibe64TerminalMobileTakeover.js");
 
@@ -92,7 +93,7 @@ describe("Vibe64 terminal architecture", () => {
   });
 
   it("keeps compact output and terminal controls in the shared presentation seam", () => {
-    const element = readFileSync(terminalElementPath, "utf8");
+    const element = readFileSync(terminalElementPath, "utf8") + readFileSync(terminalElementStatePath, "utf8");
     const surface = readFileSync(terminalSurfacePath, "utf8");
     const takeover = readFileSync(terminalTakeoverPath, "utf8");
 
