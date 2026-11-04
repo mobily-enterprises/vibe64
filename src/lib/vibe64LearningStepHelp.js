@@ -192,7 +192,7 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
     colleagueRequest.value = null;
   }
 
-  return Object.freeze({
+  return {
     colleagueRequest,
     showMe,
     teachMe,
@@ -201,7 +201,7 @@ function createLearningStepHelp({ state, currentLesson, modes, player, layout, c
     doItForMeKind,
     consumeColleagueRequest,
     reset
-  });
+  };
 }
 
 export { createLearningStepHelp };

@@ -86,7 +86,12 @@ function createLearningStepActions({ state, request, pending, currentLesson, mod
   function beginExercise(projectSlug) {
     const target = exerciseStep(projectSlug);
     if (!target || exerciseObservations.size >= MAX_EXERCISE_OBSERVATIONS) return null;
-    return Object.freeze({ ...target, projectSlug, actorKey: state.actorKey, viewer });
+    return Object.freeze({
+      ...target,
+      projectSlug,
+      actorKey: state.actorKey,
+      viewer
+    });
   }
 
   function exerciseCurrent(ticket) {

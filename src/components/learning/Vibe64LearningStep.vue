@@ -15,7 +15,7 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 // the shared L controller, so every surface shows the same saved results.
 const MAX_COMMAND_IDS = 64;
 const props = defineProps({
-  learning: { type: Object, required: true },
+  learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true },
   // The step heading's id (the host labels its region with it).
   headingId: { type: String, default: "" }
 });
@@ -30,7 +30,6 @@ const step = computed(() => props.learning.currentStep.value);
 const index = computed(() => steps.value.findIndex(value => value.id === step.value?.id));
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
 const busy = computed(() => props.learning.state.busy);
-const statusOf = stepId => props.learning.stepStatus(stepId);
 const kind = computed(() => step.value?.check?.kind || "none");
 
 // Choice: the selection is local until Check answer; the answer key never reaches the browser.
@@ -155,7 +154,7 @@ async function showMe() {
   }
 }
 // I'm stuck: on a step with something to do or check that has not passed.
-const stuckOffered = computed(() => Boolean(!ended.value && statusOf(step.value?.id) !== "passed" &&
+const stuckOffered = computed(() => Boolean(!ended.value && props.learning.stepStatus(step.value?.id) !== "passed" &&
   (["auto", "fact", "review"].includes(kind.value) || step.value?.beats?.some(beat => beat.kind === "do"))));
 function askStuck() {
   actionError.value = "";
@@ -174,7 +173,7 @@ const go = offset => {
   if (next) props.learning.selectStep(next.id);
 };
 // A reading step (no check) can be marked done too; marking it moves on.
-const readingDone = computed(() => kind.value === "none" && statusOf(step.value?.id) === "passed");
+const readingDone = computed(() => kind.value === "none" && props.learning.stepStatus(step.value?.id) === "passed");
 async function markRead() {
   const stepId = step.value.id;
   const result = await props.learning.done(stepId);
@@ -213,7 +212,7 @@ async function markRead() {
     <section v-if="!ended && kind === 'choice'" class="vibe64-learning-step__check" aria-label="Question">
       <h3>{{ step.check.question }}</h3>
       <!-- A passed question keeps its pass and is not compared again, so a later answer gets no verdict. -->
-      <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-answer-kept">You already passed this question, so answers are not checked again.</p>
+      <p v-if="learning.stepStatus(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-answer-kept">You already passed this question, so answers are not checked again.</p>
       <p v-else class="vibe64-learning-step__hint">Select every correct option, then choose Check answer.</p>
       <v-checkbox
         v-for="(option, optionIndex) in step.check.options"
@@ -226,7 +225,7 @@ async function markRead() {
       />
       <v-btn
         color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
-        :disabled="!selected.length || Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
+        :disabled="!selected.length || Boolean(busy) || learning.stepStatus(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
         @click="answer"
       >
         Check answer
@@ -246,7 +245,7 @@ async function markRead() {
     </section>
     <section v-else-if="!ended && kind === 'review'" class="vibe64-learning-step__check" aria-label="Review">
       <p>Your AI reviews your work in the practice project against this: <strong>{{ step.check.rubric }}</strong></p>
-      <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-review-saved">
+      <p v-if="learning.stepStatus(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-review-saved">
         {{ learning.reviewNote(learning.savedReview(step.id)) || "Passed ✓" }}
       </p>
       <template v-else>
@@ -262,17 +261,17 @@ async function markRead() {
     </section>
     <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-step__check" aria-label="Self check">
       <!-- The step text says when to press Done; a step already passed is said here, as for questions. -->
-      <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
+      <p v-if="learning.stepStatus(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
       <v-btn
         color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
-        :disabled="Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `done:${step.id}`"
+        :disabled="Boolean(busy) || learning.stepStatus(step.id) === 'passed'" :loading="busy === `done:${step.id}`"
         @click="learning.done(step.id)"
       >
         Done
       </v-btn>
     </section>
-    <p v-if="kind !== 'none'" class="vibe64-learning-step__status" :class="`is-${statusOf(step.id)}`" role="status" data-test="learning-step-status">
-      {{ STEP_STATUS_LABELS[statusOf(step.id)] }}
+    <p v-if="kind !== 'none'" class="vibe64-learning-step__status" :class="`is-${learning.stepStatus(step.id)}`" role="status" data-test="learning-step-status">
+      {{ STEP_STATUS_LABELS[learning.stepStatus(step.id)] }}
     </p>
     <template v-else-if="readingDone">
       <p class="vibe64-learning-step__status is-passed" role="status" data-test="learning-step-status">Done</p>

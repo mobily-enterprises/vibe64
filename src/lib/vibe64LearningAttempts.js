@@ -67,12 +67,12 @@ function createLearningPracticeList({ state, request }) {
     practice.value = EMPTY_PRACTICE;
   }
 
-  return Object.freeze({
+  return {
     practice,
     readPractice,
     showActionError,
     reset
-  });
+  };
 }
 
 /**
@@ -260,7 +260,7 @@ function createLearningAttempts({ state, request, pending, modes, practiceList }
     finishRun = null;
   }
 
-  return Object.freeze({
+  return {
     confirmArchive,
     opened,
     admitted,
@@ -275,7 +275,7 @@ function createLearningAttempts({ state, request, pending, modes, practiceList }
     deleteAttempt,
     deleteArchived,
     reset
-  });
+  };
 }
 
 export { createLearningAttempts, createLearningPracticeList };

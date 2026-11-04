@@ -1,7 +1,5 @@
 import { computed, reactive, readonly } from "vue";
-import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
-import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { createLessonPlayer } from "@/lib/vibe64LessonPlayer.js";
 import { createLearningAttempts, createLearningPracticeList } from "@/lib/vibe64LearningAttempts.js";
 import { createLearningCurrentLesson } from "@/lib/vibe64LearningCurrentLesson.js";
@@ -36,14 +34,6 @@ import { createLearningStepHelp } from "@/lib/vibe64LearningStepHelp.js";
 /** @typedef {import("./vibe64LearningModel.js").LearningRequest} LearningRequest */
 /** @typedef {import("./vibe64LearningModel.js").LearningRouter} LearningRouter */
 /** @typedef {import("./vibe64LearningModel.js").LearningState} LearningState */
-
-/**
- * The studio's HTTP request for a Training action.
- * @type {LearningRequest}
- */
-function requestStudio(url, options) {
-  return getHttpWebClient().request(resolveStudioRequestUrl(url), options);
-}
 
 /**
  * The host shell's Learning controller. It composes one factory per concern
@@ -198,7 +188,7 @@ function createVibe64Learning({
     return null;
   }
 
-  return Object.freeze({
+  return {
     state: readonly(state),
     get open() { return state.open; },
     get coursesOpen() { return state.open; },
@@ -296,7 +286,7 @@ function createVibe64Learning({
     deleteAttempt: attempts.deleteAttempt,
     readPractice: practiceList.readPractice,
     deleteArchived: attempts.deleteArchived
-  });
+  };
 }
 
 
@@ -366,12 +356,13 @@ export {
   withLesson,
   withoutLesson
 } from "@/lib/vibe64LearningModel.js";
+// The studio's HTTP request, which each host shell hands its Learning controller.
+export { requestStudio } from "@/lib/studioUrls.js";
 export {
   VIBE64_LEARNING_AI_REQUIRED_CODE,
   createVibe64Learning,
   openLessonLink,
   orientationSelection,
-  requestStudio,
   reviewNote,
   revealCurrentStep,
   stepStatus

@@ -42,7 +42,7 @@ Training actions.
 ## Public contract
 
 `createVibe64Learning({ browserNavigation, colleagueView, layout, pageFocus,
-pageActivity, router, request, runGuide?, now? })` returns one frozen
+pageActivity, router, request, runGuide?, now? })` returns one
 controller. Its host parts are required: `Vibe64AssistantShellContext` creates
 each one (the refs a mounted page or view publishes into, the page activity
 channel and the router), passes the studio's HTTP request (`requestStudio`)

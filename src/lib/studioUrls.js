@@ -1,3 +1,4 @@
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 import {
   currentProjectSlugFromLocation
@@ -13,6 +14,15 @@ function studioApiPath(relativePath) {
 
 function resolveStudioRequestUrl(url) {
   return scopedDevelopmentApiUrl(url, currentProjectSlugFromLocation());
+}
+
+/**
+ * The studio's HTTP request: the app's HTTP client, at the URL scoped to the project this page shows.
+ * @param {string} url
+ * @param {{ method: string, body?: object }} options
+ */
+function requestStudio(url, options) {
+  return getHttpWebClient().request(resolveStudioRequestUrl(url), options);
 }
 
 function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation(), {
@@ -89,6 +99,7 @@ function resolveWebSocketUrl(pathname, browserWindow = window) {
 }
 
 export {
+  requestStudio,
   resolveStudioRequestUrl,
   resolveWebSocketUrl,
   scopedDevelopmentApiPathname,

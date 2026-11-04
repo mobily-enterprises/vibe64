@@ -2214,7 +2214,7 @@ async function mountLocalColleagueHost(t, { route, push = async target => { Obje
       setup(props) { received = props; return () => null; } } },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
     "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value, requestStudio: async () => ({}) },
     "@/lib/vibe64AssistantHost.js": hostKeys
   };
   const load = (source) => {

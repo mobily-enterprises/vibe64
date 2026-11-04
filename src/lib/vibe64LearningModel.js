@@ -200,7 +200,7 @@ function rememberPlace(state) {
 const lessonShownIn = query => query?.lesson === "1";
 const withLesson = path => `${path}?lesson=1`;
 function withoutLesson(query = {}) {
-  const { lesson: _lesson, ...rest } = query || {};
+  const { lesson: _lesson, ...rest } = query;
   return rest;
 }
 
@@ -241,9 +241,14 @@ function normalizeLearningMode(result) {
   const mode = result?.ok === true && result.available !== false ? result.learningMode : null;
   if (!mode || typeof mode !== "object") return null;
   const value = key => text(mode[key]) ? mode[key] : "";
-  return Object.freeze({ on: mode.on === true, currentAttemptId: value("currentAttemptId"),
-    lessonCode: value("lessonCode"), lessonTitle: value("lessonTitle"), practiceSlug: value("practiceSlug"),
-    lessonStage: ["studio", "project"].includes(mode.lessonStage) ? mode.lessonStage : "" });
+  return Object.freeze({
+    on: mode.on === true,
+    currentAttemptId: value("currentAttemptId"),
+    lessonCode: value("lessonCode"),
+    lessonTitle: value("lessonTitle"),
+    practiceSlug: value("practiceSlug"),
+    lessonStage: ["studio", "project"].includes(mode.lessonStage) ? mode.lessonStage : ""
+  });
 }
 
 /**
@@ -263,12 +268,17 @@ function normalizePractice(result) {
     .map(entry => Object.freeze({ attemptId: entry.attemptId, name: lessonName(entry.lesson),
       reason: entry.reason === "finished" ? "finished" : "archived", archivedAt: String(entry.archivedAt || ""),
       hasProject: entry.hasProject === true }));
-  return Object.freeze({ current, archived: Object.freeze(archived), loaded: true });
+  return Object.freeze({
+    current,
+    archived: Object.freeze(archived),
+    loaded: true
+  });
 }
 
 // The studio home: where Learn mode lives outside any project. Public's is
 // /app/learning (the project page with no project selected); a host whose
 // studio has its own pages sets its own at startup.
+// readable-check: allow module-state - shared resource: the page's one studio home, which a composing host sets once at startup and every Learning view and address check on the page reads
 let studioHome = VIBE64_LEARNING_PAGE_PATH;
 // readable-check: allow setter-seam - filled by a composing host (its studio home); convert with its supplier
 function setLearningStudioHome(path) {
@@ -298,10 +308,23 @@ function modeRedirect({ mode = null, slug = "", path = "" } = {}) {
   const atLearnPage = String(path || "").replace(/\/+$/u, "") === VIBE64_LEARNING_PAGE_PATH;
   if (mode.on) {
     if (projectSlug ? projectSlug === mode.practiceSlug : !(atLearnPage && learnHomePath(mode) !== VIBE64_LEARNING_PAGE_PATH)) return null;
-    return Object.freeze({ path: learnHomePath(mode), note: projectSlug ? VIBE64_LEARNING_MODE_NOTE : "" });
+    return Object.freeze({
+      path: learnHomePath(mode),
+      note: projectSlug ? VIBE64_LEARNING_MODE_NOTE : ""
+    });
   }
-  if (atLearnPage) return Object.freeze({ path: DEVELOP_HOME_PATH, note: "" });
-  if (projectSlug && projectSlug === mode.practiceSlug) return Object.freeze({ path: DEVELOP_HOME_PATH, note: VIBE64_DEVELOP_MODE_NOTE });
+  if (atLearnPage) {
+    return Object.freeze({
+      path: DEVELOP_HOME_PATH,
+      note: ""
+    });
+  }
+  if (projectSlug && projectSlug === mode.practiceSlug) {
+    return Object.freeze({
+      path: DEVELOP_HOME_PATH,
+      note: VIBE64_DEVELOP_MODE_NOTE
+    });
+  }
   return null;
 }
 

@@ -7,7 +7,7 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 // of this learner. Only this signed-in learner reads it here; editing and
 // clearing go through the learner-notes actions. It never affects results.
 const props = defineProps({
-  learning: { type: Object, required: true }
+  learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true }
 });
 const notes = computed(() => props.learning.notes.value);
 const status = computed(() => props.learning.notesState);

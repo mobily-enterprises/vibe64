@@ -91,14 +91,14 @@ function createLearningNotes({ state, request, pending }) {
     Object.assign(notesState, { loading: false, saving: false, error: "" });
   }
 
-  return Object.freeze({
+  return {
     notes,
     notesState: readonly(notesState),
     readNotes,
     saveNotes,
     clearNotes,
     reset
-  });
+  };
 }
 
 export { createLearningNotes };

@@ -8,7 +8,7 @@ import { mdiDeleteOutline } from "@mdi/js";
 // Training action. Restarting and deleting ask once more in the row; until the
 // first practice.list read answers, the section shows a loader.
 const props = defineProps({
-  learning: { type: Object, required: true },
+  learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true },
   archived: Boolean
 });
 const practice = computed(() => props.learning.practice);

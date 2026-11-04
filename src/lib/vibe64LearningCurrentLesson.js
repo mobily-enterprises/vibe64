@@ -144,7 +144,7 @@ function createLearningCurrentLesson({ state, request }) {
     lesson.value = null;
   }
 
-  return Object.freeze({
+  return {
     lesson,
     results,
     steps,
@@ -158,7 +158,7 @@ function createLearningCurrentLesson({ state, request }) {
     setScroll,
     flushReader,
     reset
-  });
+  };
 }
 
 export { createLearningCurrentLesson };

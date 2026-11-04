@@ -9,9 +9,9 @@ import { courseProgress } from "@local/vibe64-training/client/course-progress";
 // practice project and conversation; Learn mode stays on), then offers the
 // next lesson of the same course and Back to courses.
 const props = defineProps({
-  learning: { type: Object, required: true },
+  learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true },
   // The Courses adapter (useVibe64LearningCourses): courses, saved lessons, start.
-  courses: { type: Object, required: true }
+  courses: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64LearningCourses>} */ (Object), required: true }
 });
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);

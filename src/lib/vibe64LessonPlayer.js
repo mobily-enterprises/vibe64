@@ -1,4 +1,4 @@
-import { computed, reactive, watch } from "vue";
+import { computed, onScopeDispose, reactive, watch } from "vue";
 import { clearTrainingGuide, showTrainingGuide, trainingGuide } from "@local/vibe64-training/client/guide";
 import { learningVocabulary, trainingGuideSteps, trainingPlaceShown } from "@local/vibe64-training/shared/learning-vocabulary";
 import { beatPlace } from "@local/vibe64-training/shared/beats";
@@ -219,7 +219,7 @@ function createLessonPlayer({
   watch(() => beat.value?.kind === "do" && active() && !local.confirmed && placeShown(beat.value), shown => {
     if (shown) confirm(beat.value);
   });
-  activity.subscribe(event => {
+  const stopHearingActivity = activity.subscribe(event => {
     if (practiceSlug() && event.projectSlug && event.projectSlug !== practiceSlug()) return;
     const history = stepActivity();
     history.events.push(event);
@@ -250,8 +250,19 @@ function createLessonPlayer({
     return receipt;
   }
 
-  return Object.freeze({
-    beats, beat, index, end,
+  // The player lives as long as the host shell that made it (the scope it was created in): it then stops hearing
+  // the page's activity, and its timers stop. A player made outside any scope lives as long as the page.
+  onScopeDispose(() => {
+    stopHearingActivity();
+    stopTimer();
+    clearTimeout(confirmTimer);
+  }, true);
+
+  return {
+    beats,
+    beat,
+    index,
+    end,
     // The step's verdict state: its check beat, or one past its last beat.
     get final() { return Boolean(beats.value.length) && index.value === end.value; },
     get paused() { return Boolean(state.beatPaused); },
@@ -260,8 +271,13 @@ function createLessonPlayer({
     get atStart() { return index.value === 0 && stepIndex.value <= 0; },
     get atEnd() { return index.value >= end.value && stepIndex.value >= steps.value.length - 1; },
     get confirmed() { return local.confirmed; },
-    next, back, start, togglePause, hold, point: () => beat.value && point(beat.value)
-  });
+    next,
+    back,
+    start,
+    togglePause,
+    hold,
+    point: () => beat.value && point(beat.value)
+  };
 }
 
 export { createLessonPlayer, showDuration };

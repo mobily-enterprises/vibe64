@@ -8,17 +8,26 @@ import { VIBE64_PAGE_ACTIVITY_KEY } from "@/lib/vibe64AssistantHost.js";
 // detail: { projectSlug, sessionId?, path? }.
 function createPageActivity() {
   const listeners = new Set();
+
+  function report(name, detail = {}) {
+    if (!learningVocabulary.events().has(name)) throw new TypeError(`Unknown page activity: ${name}`);
+    const event = Object.freeze({
+      name,
+      projectSlug: String(detail.projectSlug || ""),
+      sessionId: String(detail.sessionId || ""),
+      path: String(detail.path || "")
+    });
+    for (const listener of [...listeners]) listener(event);
+  }
+
+  function subscribe(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
   return Object.freeze({
-    report(name, detail = {}) {
-      if (!learningVocabulary.events().has(name)) throw new TypeError(`Unknown page activity: ${name}`);
-      const event = Object.freeze({ name, projectSlug: String(detail.projectSlug || ""),
-        sessionId: String(detail.sessionId || ""), path: String(detail.path || "") });
-      for (const listener of [...listeners]) listener(event);
-    },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }
+    report,
+    subscribe
   });
 }
 

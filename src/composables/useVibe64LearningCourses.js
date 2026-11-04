@@ -6,12 +6,15 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
 
-// The Courses overlay's adapter. It owns neither admission nor progress:
-// original Training actions reauthorize every captured attempt before changing
-// anything. `active` (a ref or getter) is the overlay's open state; requests
-// are made only while it is open, and it stays above the app, so app
-// navigation behind it does not retire them.
-export function useVibe64LearningCourses({ active } = {}) {
+/**
+ * The Courses overlay's adapter. It owns neither admission nor progress:
+ * original Training actions reauthorize every captured attempt before changing
+ * anything. `active` (a ref or getter) is the overlay's open state; requests
+ * are made only while it is open, and it stays above the app, so app
+ * navigation behind it does not retire them.
+ * @param {{ active: import("vue").MaybeRefOrGetter<boolean> }} options
+ */
+export function useVibe64LearningCourses({ active }) {
   /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
@@ -49,8 +52,12 @@ export function useVibe64LearningCourses({ active } = {}) {
       const result = await original.query.refetch(options);
       return { ...result, data: reader === actorKey.value && !disposed ? data.value : null };
     }
-    return Object.freeze({ ...original, data,
-      query: { ...original.query, data, refetch }, reload: () => refetch() });
+    return {
+      ...original,
+      data,
+      query: { ...original.query, data, refetch },
+      reload: () => refetch()
+    };
   }
 
   const coursesResource = readResource("courses", VIBE64_LEARNING_ROUTES.courses);
@@ -85,7 +92,11 @@ export function useVibe64LearningCourses({ active } = {}) {
     if (disposed || !actorKey.value || !open.value || !learnerId.value) {
       throw new Error("Open Courses and read your saved lessons before making a lesson request.");
     }
-    return Object.freeze({ actor: actorKey.value, learnerId: learnerId.value, generation });
+    return Object.freeze({
+      actor: actorKey.value,
+      learnerId: learnerId.value,
+      generation
+    });
   }
   const current = scope => !disposed && scope.actor === actorKey.value && scope.learnerId === learnerId.value
     && scope.generation === generation && open.value
@@ -231,7 +242,21 @@ export function useVibe64LearningCourses({ active } = {}) {
     }
   }
 
-  return Object.freeze({ active: open,
-    coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
-    refresh, hostRead, startLesson, resumeLesson, createCourse });
+  return {
+    active: open,
+    coursesResource,
+    learningResource,
+    availableResource,
+    installState,
+    installCourse,
+    learnerId,
+    busy,
+    starting,
+    startRetry,
+    refresh,
+    hostRead,
+    startLesson,
+    resumeLesson,
+    createCourse
+  };
 }

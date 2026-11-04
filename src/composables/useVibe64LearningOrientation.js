@@ -23,19 +23,37 @@ function exactFields(value, fields) {
     Object.keys(value).sort().join(",") === fields.slice().sort().join(",");
 }
 
-// Learner-origin App interaction capture for the Learning controller's
-// step.observe. The orientation protocol runs over one MessageChannel bound to
-// this exact Preview frame request, session, App run, App instance and a fresh
-// player identity. A trusted press, its request and the displayed response are
-// correlated while the frame stays visible; what the response must be belongs
-// to the step's declared check, which verifies these identities against the
-// App server.
-//
-// `preview()` returns the displayed Preview ({ frame, frameRequestId, loaded,
-// displayed, projectSlug, sessionId, terminalSessionId }) or null when none is
-// displayed; `frameVisible(frame)` says whether that frame is visible now. The
-// Preview surface admits announcements (exact frame window and origin) and
-// calls close() whenever it replaces or clears its frame.
+/**
+ * The displayed Preview, as the Preview surface describes it.
+ * @typedef {object} LearningOrientationPreview
+ * @property {HTMLIFrameElement | null} frame
+ * @property {number} frameRequestId
+ * @property {boolean} loaded
+ * @property {boolean} displayed
+ * @property {string} projectSlug
+ * @property {string | undefined} sessionId
+ * @property {string} terminalSessionId
+ */
+
+/**
+ * Learner-origin App interaction capture for the Learning controller's
+ * step.observe. The orientation protocol runs over one MessageChannel bound to
+ * this exact Preview frame request, session, App run, App instance and a fresh
+ * player identity. A trusted press, its request and the displayed response are
+ * correlated while the frame stays visible; what the response must be belongs
+ * to the step's declared check, which verifies these identities against the
+ * App server.
+ *
+ * `preview()` returns the displayed Preview ({ frame, frameRequestId, loaded,
+ * displayed, projectSlug, sessionId, terminalSessionId }) or null when none is
+ * displayed; `frameVisible(frame)` says whether that frame is visible now. The
+ * Preview surface admits announcements (exact frame window and origin) and
+ * calls close() whenever it replaces or clears its frame.
+ * @param {{
+ *   preview: () => LearningOrientationPreview | null,
+ *   frameVisible: (frame: HTMLIFrameElement) => boolean
+ * }} options
+ */
 function useVibe64LearningOrientation({ preview, frameVisible }) {
   const learning = useVibe64Learning();
   const reportActivity = usePageActivity();

@@ -270,7 +270,7 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
     mode.value = null;
   }
 
-  return Object.freeze({
+  return {
     mode,
     learnMode,
     focus,
@@ -293,7 +293,7 @@ function createLearningModes({ state, request, currentLesson, practiceList, layo
     showFinished,
     openCurrent,
     reset
-  });
+  };
 }
 
 export { createLearningModes };

@@ -10,7 +10,7 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // Verdicts come only from the Training actions (auto check, choice comparator,
 // self Done); this view displays the saved results.
 const props = defineProps({
-  learning: { type: Object, required: true },
+  learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true },
   // The reader is on screen: it then restores its saved scroll place.
   visible: { type: Boolean, default: true }
 });
@@ -19,7 +19,6 @@ const emit = defineEmits(["return"]);
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => props.learning.currentStep.value);
-const statusOf = stepId => props.learning.stepStatus(stepId);
 const requiredDone = computed(() => props.learning.complete);
 
 // Scroll: the reader returns to the saved place of the current step.
@@ -76,14 +75,14 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
               <button
                 type="button"
                 class="vibe64-learning-reader__step"
-                :class="[`is-${statusOf(value.id)}`, { 'is-current': value.id === step?.id }]"
+                :class="[`is-${learning.stepStatus(value.id)}`, { 'is-current': value.id === step?.id }]"
                 :aria-current="value.id === step?.id ? 'step' : undefined"
                 :data-step-id="value.id"
                 @click="learning.selectStep(value.id)"
               >
-                <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>
+                <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ learning.stepStatus(value.id) === 'passed' ? '✓' : position + 1 }}</span>
                 <span class="vibe64-learning-reader__step-title">{{ value.title }}</span>
-                <span class="vibe64-learning-reader__step-status">{{ value.required ? STEP_STATUS_LABELS[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
+                <span class="vibe64-learning-reader__step-status">{{ value.required ? STEP_STATUS_LABELS[learning.stepStatus(value.id)] : learning.stepStatus(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
               </button>
             </li>
           </ol>
