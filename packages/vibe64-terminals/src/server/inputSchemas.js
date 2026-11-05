@@ -99,6 +99,19 @@ const temporaryConversationUpdateInputValidator = validator({
   presentation: temporaryConversationPresentationField,
   attachmentIds: attachmentIdsField
 });
+const temporaryConversationCreateActionInputValidator = validator({
+  includeRecentChatContext: { type: "boolean", required: false },
+  assistantRouting: temporaryConversationRoutingField,
+  conversationId: optionalText,
+  presentation: temporaryConversationPresentationField,
+  agentSettings: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  },
+  sessionId: sessionIdField,
+  vibe64User: vibe64UserField
+});
 const temporaryConversationInputValidator = validator({
   conversationId: requiredText,
   sessionId: sessionIdField
@@ -317,6 +330,7 @@ export {
   terminalControlTextInputValidator,
   temporaryConversationListInputValidator,
   temporaryConversationUpdateInputValidator,
+  temporaryConversationCreateActionInputValidator,
   temporaryConversationInputValidator,
   temporaryConversationReadInputValidator,
   temporaryConversationStopActionInputValidator,

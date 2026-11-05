@@ -33,6 +33,27 @@ const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
 const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue");
+const temporaryAiPath = path.resolve(
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"
+);
+// The workspace view and the children and composables it is built from.
+const temporaryAiViewPaths = [
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue",
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue",
+  "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue",
+  "src/composables/useVibe64TemporaryAiColleagueView.js",
+  "src/composables/useVibe64TemporaryAiNewTask.js",
+  "src/composables/useVibe64TemporaryAiRename.js",
+  "src/composables/useVibe64TemporaryAiStopAndClose.js",
+  "src/composables/useVibe64TemporaryAiTaskElements.js"
+].map((file) => path.resolve(file));
+const temporaryAiComposablePaths = [
+  "src/composables/useVibe64TemporaryAi.js",
+  "src/composables/useVibe64TemporaryAiMessages.js",
+  "src/composables/useVibe64TemporaryAiRestore.js",
+  "src/composables/useVibe64TemporaryAiTaskRecords.js",
+  "src/lib/vibe64TemporaryAiTasks.js"
+].map((file) => path.resolve(file));
 
 // Match the original Colleague client renderer: compile the actual SFC setup,
 // use the real Vue instance and the published voice launcher and controls, and
@@ -930,6 +951,62 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).toContain('height="var(--session-action-size, 36px)"');
     expect(sessionHeader).toContain('width="var(--session-action-size, 36px)"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
+  });
+
+  it("keeps temporary AI separate, restorable, multi-task, and attachment-owned, with no repair flow", () => {
+    const component = readAutopilotViewSource();
+    const temporaryAiWorkspace = fs.readFileSync(temporaryAiPath, "utf8");
+    const temporaryAi = temporaryAiViewPaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+    const temporaryAiComposable = temporaryAiComposablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+
+    expect(component).toContain("<Vibe64TemporaryAiWorkspace");
+    expect(temporaryAi).toContain("grid-row: 3 / -1");
+    expect(temporaryAi).not.toContain("position: sticky");
+    expect(temporaryAiWorkspace.indexOf("<Vibe64TemporaryAiRecoveryRow")).toBeLessThan(
+      temporaryAiWorkspace.indexOf("<Vibe64EphemeralConversationMessages")
+    );
+    // The header's Temporary AI opens the workspace; Fix it with AI runs in the AI task window instead.
+    expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
+    expect(component).toContain('data-vibe64-header-action="temporary-ai"');
+    expect(component).not.toContain("<Vibe64NewAiTaskDialog");
+    for (const removed of ["startTask", "recoveryOperation", "recoveryContext", "updateRepairTask", "task-finished",
+      "check-update", "Return to main chat", "data-temporary-ai-recovery", "VIBE64_HOST_CONVERSATION_KEY"]) {
+      expect(`${temporaryAi}\n${temporaryAiComposable}`).not.toContain(removed);
+    }
+    // Switching sessions retains the temporary workspace; Main chat closes it.
+    expect(component).not.toContain("activateRealSession");
+    expect(component).toContain("@select-main-chat=\"showMainChat\"");
+    expect(component).toContain("temporaryAiWorkspace.value?.closeWorkspace?.()");
+    expect(component).toContain("mainChat.value?.focus?.({ preventScroll: true })");
+    expect(temporaryAi).toContain("Main chat");
+    expect(temporaryAi).toContain("data-temporary-ai-main-chat");
+    expect(temporaryAi).toContain("Main and temporary conversations");
+    expect(temporaryAi).toContain('aria-label="New temporary AI task"');
+    expect(temporaryAi).toContain("function showWorkspace()");
+    expect(temporaryAi).not.toContain("Not saved to session history");
+    expect(temporaryAi).not.toContain("vibe64-temporary-ai__header");
+    expect(temporaryAi).toContain('v-for="task in temporary.tasks.value"');
+    expect(temporaryAi).toContain("<Vibe64AgentSettingsMenu");
+    expect(temporaryAi).toContain("<Vibe64AutopilotPromptTextarea");
+    expect(temporaryAi).toContain("AI is working…");
+    expect(temporaryAi).toContain('class="vibe64-temporary-ai__activity"');
+    expect(temporaryAi).toContain("vibe64.temporary-ai.feedback");
+    expect(temporaryAi).toContain("finished. Review the result before continuing.");
+    expect(temporaryAi).toContain('aria-label="Attach preview screenshot"');
+    expect(temporaryAi).toContain('aria-label="Attach console and network diagnostics"');
+    expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
+    expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
+    expect(temporaryAiComposable).not.toContain("beforeunload");
+    expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)]");
+    expect(temporaryAiComposable).toContain("() => void restoreTasks(), { immediate: true });");
+    expect(temporaryAiComposable).toContain("for (const taskId of new Set([...saveTimers.keys(), ...unsentSaveFields.keys()])) void saveTask(taskId, { flush: true });");
+    expect(temporaryAiComposable).toContain("task.attachments.map((attachment) => attachment.attachmentId)");
+    expect(temporaryAiComposable).toContain("attachments: record.attachments || []");
+    expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
+    expect(temporaryAiComposable).toContain("useAssistantConversationFactory");
+    expect(temporaryAiComposable).toContain("temporaryAiMessages(runtime.turns.value)");
+    expect(temporaryAiComposable).toContain("displayMessage: draftPayload.displayMessage");
+    expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });
 
   it("keeps direct files, architecture, preview, terminal, and close controls", () => {

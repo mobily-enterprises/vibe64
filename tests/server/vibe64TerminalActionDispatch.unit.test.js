@@ -98,7 +98,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       "output-target.open", "output-target.start", "output-target.stop", "output-terminal.close",
       "output-terminal.read", "outputs.read", "preview-diagnostics.record", "preview-identity.select",
       "project-runtime.close", "project-runtime.open", "prompt-hints.cancel", "prompt-hints.generate",
-      "temporary-conversation.list", "temporary-conversation.read",
+      "temporary-conversation.create", "temporary-conversation.delete", "temporary-conversation.list", "temporary-conversation.read",
       "temporary-conversation.stop", "temporary-conversation.turn.start", "temporary-conversation.update", "work-plan.archive",
       "work-plan.read", "work-plan.restore"
     ].map((operation) => `vibe64.terminals.${operation}`));
@@ -187,15 +187,18 @@ test("Colleague reads a Main goal and closes a project on request, but never cha
 
 test("Colleague's temporary-chat tools offer every routing choice with the team-member and repair limits", () => {
   const definitions = new Map(createTerminalActions({ terminals: {} }).map(definition => [definition.id, definition]));
-  const { description } = definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant;
-  for (const pattern of [/\bfix\b.*Fix it with AI/su, /custom.*override.*never invent/su, /Senior and Junior are the workspace owner's only/u, /Auto is Main chat only/u]) {
-    assert.match(description, pattern);
+  for (const operation of ["create", "update"]) {
+    const { description } = definitions.get(`vibe64.terminals.temporary-conversation.${operation}`).extensions.assistant;
+    for (const pattern of [/\bfix\b.*Fix it with AI/su, /custom.*override.*never invent/su, /Senior and Junior are the workspace owner's only/u, /Auto is Main chat only/u]) {
+      assert.match(description, pattern, operation);
+    }
   }
-  assert.match(description, /repair chat.*only fix or custom/su);
-  // Colleague starts and closes these conversations as AI tasks, so there is no action to create or delete one.
-  for (const operation of ["create", "delete"]) {
-    assert.equal(definitions.has(`vibe64.terminals.temporary-conversation.${operation}`), false, operation);
-  }
+  assert.match(definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant.description, /repair chat.*only fix or custom/su);
+  const create = definitions.get("vibe64.terminals.temporary-conversation.create").extensions.assistant.description;
+  assert.match(create, /team member's uses fix/u);
+  // The person's own chat is a temporary conversation; work Colleague runs for them is an AI task.
+  assert.match(create, /only when the user asks for a temporary chat of their own.*AI task of kind colleague/su);
+  assert.equal(definitions.get("vibe64.terminals.temporary-conversation.delete").extensions.assistant.exclude, undefined);
 });
 
 test("output and attachment action downloads stream exact bytes and close their handles", async () => {

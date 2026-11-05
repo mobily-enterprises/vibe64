@@ -3,7 +3,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 
 const VIBE64_ASSISTANT_ENDPOINT = "/api/assistant/app";
 
-// Main chat and AI task chats reach the app assistant surface through the
+// Main chat, Temporary AI and AI task chats reach the app assistant surface through the
 // editor's HTTP client; JSKIT's default assistant client needs a CSRF session
 // route that a local editor lacks.
 function vibe64AssistantConversationOptions() {

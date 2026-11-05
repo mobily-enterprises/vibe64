@@ -235,7 +235,8 @@ function createServiceAgentReconcile({
     const temporaryFailures = [];
     for (const session of migration.sessions) {
       try {
-        const restored = await sessionConversations.listTemporaryConversations(session.sessionId, options);
+        // An interrupted Close finishes here, an AI task's conversation's as well.
+        const restored = await sessionConversations.listTemporaryConversations(session.sessionId, { ...options, includeAiTasks: true });
         for (const conversation of restored.conversations) {
           if (conversation.state === "closing") {
             await sessionConversations.deleteTemporaryConversation(

@@ -1,0 +1,880 @@
+import fs from "node:fs";
+import path from "node:path";
+import { compile } from "@vue/compiler-dom";
+import { compileScript, parse } from "@vue/compiler-sfc";
+import * as VueRuntime from "vue";
+import {
+  computed,
+  createRenderer,
+  defineComponent,
+  h,
+  nextTick,
+  ref,
+  ssrContextKey
+} from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const temporaryProvider = vi.hoisted(() => ({ value: null }));
+const presenceEvents = vi.hoisted(() => ({ receive: null }));
+
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent(options) { presenceEvents.receive = options.onEvent; },
+  useRealtimeSocket: () => ({ on() {}, off() {} })
+}));
+
+vi.mock("@/composables/useVibe64TemporaryAi.js", () => ({
+  useVibe64TemporaryAi: () => temporaryProvider.value
+}));
+
+vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
+  useUiFeedback: () => ({
+    error: vi.fn(),
+    success: vi.fn()
+  })
+}));
+
+vi.mock("@/components/studio/vibe64-session/Vibe64ChatModeControls.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
+vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: defineComponent({ render: () => null }) }));
+
+vi.mock("vuetify/components/VSelect", () => ({ VSelect: defineComponent({ render: () => null }) }));
+
+vi.mock("vuetify/components/VBtn", () => ({
+  VBtn: defineComponent({
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+      return () => h("button", attrs, slots.default?.());
+    }
+  })
+}));
+
+vi.mock("vuetify/components/VIcon", () => ({
+  VIcon: defineComponent({ render: () => null })
+}));
+
+vi.mock("vuetify/components/VDialog", () => ({
+  VDialog: defineComponent({ render: () => null })
+}));
+
+vi.mock("vuetify/components/VCard", () => ({
+  VCard: defineComponent({ render: () => null }),
+  VCardTitle: defineComponent({ render: () => null }),
+  VCardText: defineComponent({ render: () => null }),
+  VCardActions: defineComponent({ render: () => null })
+}));
+
+vi.mock("vuetify/components/VAlert", () => ({
+  VAlert: defineComponent({
+    inheritAttrs: false,
+    props: {
+      title: {
+        default: "",
+        type: String
+      }
+    },
+    setup(componentProps, { attrs, slots }) {
+      return () => h("section", attrs, [
+        h("strong", componentProps.title),
+        ...(slots.default?.() || [])
+      ]);
+    }
+  })
+}));
+
+vi.mock("@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
+vi.mock("@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
+vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", () => ({
+  default: defineComponent({
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) { return () => h("div", [h("textarea", attrs),
+      ...(slots.footer?.({ attachmentState: { canSubmit: true, canAddFiles: true } }) || [])]); }
+  })
+}));
+
+vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
+import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
+import Vibe64TemporaryAiTabs from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue";
+import Vibe64TemporaryAiRecoveryRow from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue";
+import Vibe64ComposerDelivery from "../../src/components/studio/vibe64-session/Vibe64ComposerDelivery.vue";
+import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
+import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
+
+import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
+import { VIBE64_COLLEAGUE_VIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
+import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
+import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
+
+for (const [name, component] of [
+  ...["AssistantConversationElement", "AssistantConversationStatus", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
+  ["AssistantComposerSupport", AssistantComposerSupport],
+  ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
+  ["Vibe64TemporaryAiTabs", Vibe64TemporaryAiTabs],
+  ["Vibe64TemporaryAiRecoveryRow", Vibe64TemporaryAiRecoveryRow],
+  ["Vibe64ComposerDelivery", Vibe64ComposerDelivery],
+  ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
+  ["Vibe64ConversationStatus", Vibe64ConversationStatus]
+]) {
+  // Each component, published or the project's own, compiled from its own file.
+  const componentPath = component.__file;
+  const componentSource = fs.readFileSync(componentPath, "utf8");
+  const { descriptor } = parse(componentSource, { filename: componentPath });
+  const script = compileScript(descriptor, { id: `${name}-test` });
+  const template = compile(descriptor.template.content, {
+    bindingMetadata: script.bindings,
+    mode: "function",
+    prefixIdentifiers: true
+  });
+  component.render = new Function("Vue", template.code)(VueRuntime);
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+function temporaryAiTestState() {
+  const tasks = ref([]);
+  const activeTaskId = ref("");
+  const open = ref(false);
+  return {
+    activeTask: computed(() => {
+      const task = tasks.value.find((task) => task.id === activeTaskId.value);
+      if (task && !Object.hasOwn(task, "adapter")) Object.defineProperty(task, "adapter", {
+        get: () => ({ conversation: { turns: conversationTurnsFromMessages(task.messages || []) }, delivery: task.delivery })
+      });
+      return task || null;
+    }),
+    activeTaskId,
+    closeTask: vi.fn(async (taskId) => {
+      tasks.value = tasks.value.filter((task) => task.id !== taskId);
+      activeTaskId.value = tasks.value[0]?.id || "";
+      open.value = tasks.value.length > 0;
+    }),
+    closeWorkspace: vi.fn(),
+    open,
+    openTask: vi.fn(),
+    createTask: vi.fn(async () => ({})),
+    restoreError: ref(""),
+    restoreTasks: vi.fn(),
+    selectTask: vi.fn((taskId) => {
+      activeTaskId.value = taskId;
+      open.value = true;
+    }),
+    send: vi.fn(),
+    showWorkspace: vi.fn(),
+    stopTask: vi.fn(),
+    tasks,
+    updateAgentSetting: vi.fn(),
+    updateAttachments: vi.fn(),
+    updateDraft: vi.fn()
+  };
+}
+
+function testRenderer() {
+  return createRenderer({
+    createComment: (text) => ({ text, type: "comment" }),
+    createElement: (type) => ({
+      children: [],
+      focus: vi.fn(),
+      parent: null,
+      props: {},
+      scrollIntoView: vi.fn(),
+      style: {},
+      type
+    }),
+    createText: (text) => ({ text, type: "text" }),
+    insert(child, parent, anchor = null) {
+      child.parent = parent;
+      const index = anchor ? parent.children.indexOf(anchor) : -1;
+      if (index < 0) {
+        parent.children.push(child);
+      } else {
+        parent.children.splice(index, 0, child);
+      }
+    },
+    nextSibling(node) {
+      const index = node.parent?.children?.indexOf(node) ?? -1;
+      return index >= 0 ? node.parent.children[index + 1] || null : null;
+    },
+    parentNode: (node) => node.parent,
+    patchProp(element, key, _previous, value) {
+      element.props[key] = value;
+    },
+    remove(child) {
+      const index = child.parent?.children?.indexOf(child) ?? -1;
+      if (index >= 0) {
+        child.parent.children.splice(index, 1);
+      }
+    },
+    setElementText(element, text) {
+      element.text = text;
+    },
+    setText(node, text) {
+      node.text = text;
+    }
+  });
+}
+
+function mountWorkspace(container, props, colleagueView = null) {
+  // The context-copy dialog is offered only when Main has messages to copy.
+  const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, { mainHasMessages: true, ...props });
+  if (colleagueView) app.provide(VIBE64_COLLEAGUE_VIEW_KEY, colleagueView);
+  app.component("VAlert", defineComponent({
+    inheritAttrs: false,
+    props: {
+      title: {
+        default: "",
+        type: String
+      }
+    },
+    setup(componentProps, { attrs, slots }) {
+      return () => h("section", attrs, [
+        h("strong", componentProps.title),
+        ...(slots.default?.() || [])
+      ]);
+    }
+  }));
+  app.component("VBtn", defineComponent({
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+      return () => h("button", attrs, slots.default?.());
+    }
+  }));
+  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog", "VChip", "VCheckbox"]) {
+    app.component(name, defineComponent({ setup: (_props, { attrs, slots }) => () => h("div", attrs, slots.default?.()) }));
+  }
+  app.provide(ssrContextKey, { modules: new Set() });
+  return { app, workspace: app.mount(container) };
+}
+
+function findNode(root, predicate) {
+  if (predicate(root)) {
+    return root;
+  }
+  for (const child of root.children || []) {
+    const match = findNode(child, predicate);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+}
+
+function nodeText(root) {
+  return [
+    root?.text || "",
+    ...(root?.children || []).map((child) => nodeText(child))
+  ].filter(Boolean).join(" ");
+}
+
+async function flushWorkspaceReveal() {
+  await nextTick();
+  await Promise.resolve();
+  await nextTick();
+}
+
+describe("Temporary AI workspace accessibility", () => {
+  it("uses Main delivery controls while sending and preserves each reply's recorded AI attribution", async () => {
+    const temporary = temporaryAiTestState();
+    const claude = { engineId: "claude", modelProviderId: "anthropic", modelId: "opus", variantId: "high" };
+    const codex = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6", variantId: "medium" };
+    const delivery = createAssistantMessageDelivery();
+    delivery.state.sending = true;
+    temporary.tasks.value = [{ id: "task-1", conversationId: "task-1", status: "inProgress", busy: true,
+      draft: "More guidance", agentSettings: {}, assistantSelection: codex, delivery, messages: [
+        { id: "answer-1", role: "assistant", text: "Earlier answer", assistantSelection: claude },
+        { id: "answer-2", role: "assistant", text: "Current answer", metadata: { assistantSelection: codex }, status: "inProgress" }
+      ] }];
+    temporary.activeTaskId.value = "task-1";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1", active: true });
+    try {
+      await flushWorkspaceReveal();
+      const steer = findNode(container, node => node.type === "button" && node.props?.["aria-label"] === "Steer assistant");
+      expect(steer).toBeTruthy();
+      expect(steer.props.disabled).toBe(false);
+      steer.props.onClick();
+      expect(temporary.send).toHaveBeenCalledWith("task-1", expect.any(Object));
+      const stop = findNode(container, node => node.type === "button" && node.props?.["aria-label"] === "Stop");
+      expect(stop.props.disabled).toBe(false);
+      stop.props.onClick();
+      await flushWorkspaceReveal();
+      expect(temporary.stopTask).toHaveBeenCalledWith("task-1");
+      expect(nodeText(container)).toContain("Claude Code (opus high)");
+      expect(nodeText(container)).toContain("Codex (gpt-6 medium)");
+      expect(findNode(container, node => node.props?.title?.includes("Provider: anthropic"))).toBeTruthy();
+      expect(findNode(container, node => node.props?.title?.includes("Provider: openai"))).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
+  it("attributes a restored answer to the role and model its turn recorded, not the chat's current mode", async () => {
+    const temporary = temporaryAiTestState();
+    const senior = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6", variantId: "high" };
+    const junior = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max" };
+    // History from the conversation owner: the answering role and model are turn metadata.
+    temporary.tasks.value = [{ id: "task-1", conversationId: "task-1", status: "completed", draft: "", agentSettings: {},
+      assistantSelection: senior, routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false }) },
+      delivery: createAssistantMessageDelivery(), adapter: { conversation: { turns: [{ turnId: "prior",
+        user: { role: "user", messageId: "prior-question", text: "An earlier question" },
+        assistant: { role: "assistant", messageId: "prior-answer", text: "An earlier answer" },
+        metadata: { assistantSelection: junior, assistantRouting: { resolvedMode: "junior" } } }] } } }];
+    temporary.tasks.value[0].adapter.delivery = temporary.tasks.value[0].delivery;
+    temporary.activeTaskId.value = "task-1";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1", active: true });
+    try {
+      await flushWorkspaceReveal();
+      expect(nodeText(container)).toContain("An earlier answer");
+      expect(nodeText(container)).toContain("Junior · Codex (deepseek-flash max)");
+      expect(nodeText(container)).not.toContain("Senior · Codex");
+      expect(findNode(container, node => node.props?.title?.includes("Provider: deepseek"))).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
+  it.each(["Cancel", "dismiss", "restored while open"])("returns the first temporary-chat dialog to Main on %s without creating or sending", async (action) => {
+    const temporary = temporaryAiTestState();
+    temporary.closeWorkspace.mockImplementation(() => { temporary.open.value = false; });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const selectedMain = vi.fn(() => workspace.closeWorkspace());
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, onSelectMainChat: selectedMain });
+    try {
+      workspace.showWorkspace();
+      await flushWorkspaceReveal();
+      expect(workspace.visible).toBe(true);
+      if (action === "restored while open") {
+        temporary.tasks.value = [{ id: "restored", title: "Saved chat", draft: "Keep this draft", messages: [],
+          agentSettings: {}, delivery: createAssistantMessageDelivery() }];
+        temporary.activeTaskId.value = "restored";
+        await nextTick();
+      }
+      if (action === "dismiss") {
+        findNode(container, node => node.props?.["aria-label"] === "New temporary chat").props["onUpdate:modelValue"](false);
+      } else {
+        findNode(container, node => node.type === "button" && nodeText(node) === "Cancel").props.onClick();
+      }
+      await nextTick();
+      expect(selectedMain).toHaveBeenCalledTimes(1);
+      expect(workspace.visible).toBe(false);
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.closeTask).not.toHaveBeenCalled();
+      if (action === "restored while open") expect(temporary.tasks.value[0].draft).toBe("Keep this draft");
+    } finally { app.unmount(); }
+  });
+
+  it("Cancel preserves an existing selected temporary conversation and draft", async () => {
+    const temporary = temporaryAiTestState();
+    const task = { id: "saved", title: "Saved chat", draft: "Keep this draft", messages: [],
+      agentSettings: {}, delivery: createAssistantMessageDelivery() };
+    temporary.tasks.value = [task];
+    temporary.activeTaskId.value = task.id;
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const selectedMain = vi.fn();
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "one", active: true, onSelectMainChat: selectedMain });
+    try {
+      await nextTick();
+      findNode(container, node => node.props?.["aria-label"] === "New temporary AI task").props.onClick();
+      await nextTick();
+      findNode(container, node => node.type === "button" && nodeText(node) === "Cancel").props.onClick();
+      await nextTick();
+      expect(selectedMain).not.toHaveBeenCalled();
+      expect(temporary.open.value).toBe(true);
+      expect(temporary.activeTaskId.value).toBe(task.id);
+      expect(temporary.tasks.value[0].draft).toBe("Keep this draft");
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.closeTask).not.toHaveBeenCalled();
+    } finally { app.unmount(); }
+  });
+
+  it("offers an unchecked context copy and waits for confirmed creation before closing", async () => {
+    const pending = deferred();
+    const temporary = temporaryAiTestState();
+    temporary.createTask.mockImplementation(() => pending.promise);
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true });
+    try {
+      workspace.showWorkspace();
+      await flushWorkspaceReveal();
+      const checkbox = findNode(container, node => node.props?.label === "Include recent chat context");
+      expect(checkbox.props.modelValue).toBe(false);
+      checkbox.props["onUpdate:modelValue"](true);
+      await nextTick();
+      const create = findNode(container, node => node.type === "button" && nodeText(node) === "Create chat");
+      const submitted = create.props.onClick();
+      await nextTick();
+      expect(temporary.createTask).toHaveBeenCalledWith({ includeRecentChatContext: true, taskId: "" });
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeTruthy();
+      pending.resolve({});
+      await submitted;
+      await nextTick();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+    } finally { app.unmount(); }
+  });
+
+  it("creates directly without the context dialog when Main has no messages, showing it only for a failure", async () => {
+    const temporary = temporaryAiTestState();
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages: false });
+    try {
+      const settle = () => new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      workspace.showWorkspace();
+      await settle();
+      expect(temporary.createTask).toHaveBeenCalledWith({ includeRecentChatContext: false, taskId: "" });
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+      temporary.createTask.mockRejectedValueOnce(Object.assign(new Error("No capacity"), { taskId: "retry-me" }));
+      workspace.showWorkspace();
+      await settle();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeTruthy();
+      expect(findNode(container, node => nodeText(node) === "No capacity")).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
+  it.each([false, true])("opening Temporary AI before saved chats load shows them and creates nothing (Main has messages: %s)", async (mainHasMessages) => {
+    const temporary = temporaryAiTestState();
+    const loaded = deferred();
+    temporary.restoreTasks.mockImplementation(async () => {
+      await loaded.promise;
+      temporary.tasks.value = [{ id: "saved", conversationId: "saved", label: "Temporary 1", draft: "", messages: [],
+        agentSettings: {}, delivery: createAssistantMessageDelivery() }];
+    });
+    temporary.showWorkspace.mockImplementation(() => {
+      temporary.activeTaskId.value = temporary.tasks.value[0].id;
+      temporary.open.value = true;
+    });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages });
+    const newChatDialog = () => findNode(container, node => node.props?.label === "Include recent chat context");
+    try {
+      const settle = () => new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      workspace.showWorkspace();
+      await settle();
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(newChatDialog()).toBeNull();
+      loaded.resolve();
+      await settle();
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(newChatDialog()).toBeNull();
+      expect(workspace.visible).toBe(true);
+      expect(findNode(container, node => node.props?.["data-temporary-ai-task-id"] === "saved")?.props["aria-current"]).toBe("page");
+    } finally { app.unmount(); }
+  });
+
+  it("does not start a chat from Temporary AI when the saved list cannot be read", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.restoreTasks.mockImplementation(async () => {
+      temporary.restoreError.value = "Temporary chats could not be restored: offline";
+    });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages: false });
+    try {
+      workspace.showWorkspace();
+      await new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+      expect(workspace.visible).toBe(true);
+    } finally { app.unmount(); }
+  });
+
+  it("hands a Colleague show-me guide this session's own file opener and reports only an actual open", async () => {
+    temporaryProvider.value = temporaryAiTestState();
+    const view = VueRuntime.shallowRef(null);
+    const openFile = vi.fn(path => path === "src/app.js");
+    const { app } = mountWorkspace({ children: [] }, {
+      active: true, sessionSelected: true, assistantReady: true, projectSlug: "alpha", sessionId: "one", openFile
+    }, view);
+    try {
+      expect(view.value.openFile("src/app.js")).toBe(true);
+      expect(view.value.openFile("missing.js")).toBe(false);
+      expect(openFile).toHaveBeenCalledWith("src/app.js");
+    } finally { app.unmount(); }
+    const { app: without } = mountWorkspace({ children: [] }, {
+      active: true, sessionSelected: true, assistantReady: true, projectSlug: "alpha", sessionId: "one"
+    }, view);
+    try { expect(view.value.openFile("src/app.js")).toBe(false); } finally { without.unmount(); }
+  });
+
+  it("retains the selected conversation owner while chat is hidden and withdraws it on deselection", async () => {
+    temporaryProvider.value = temporaryAiTestState();
+    const view = VueRuntime.shallowRef(null);
+    const selectedMain = vi.fn();
+    const { app, workspace } = mountWorkspace({ children: [] }, {
+      active: false, sessionSelected: true, assistantReady: true,
+      projectSlug: "alpha", sessionId: "one", onSelectMainChat: selectedMain
+    }, view);
+    try {
+      const owner = view.value;
+      expect(owner.sessionId).toBe("one");
+      expect(owner.ready).toBe(true);
+      await owner.openConversation("");
+      expect(selectedMain).toHaveBeenCalledOnce();
+      expect(temporaryProvider.value.restoreTasks).not.toHaveBeenCalled();
+      workspace.$.props.active = true;
+      await nextTick();
+      expect(view.value).toBe(owner);
+      workspace.$.props.active = false;
+      await nextTick();
+      expect(view.value).toBe(owner);
+      workspace.$.props.sessionSelected = false;
+      await nextTick();
+      expect(view.value).toBeNull();
+      await expect(owner.openConversation("")).rejects.toThrow("no longer available");
+      workspace.$.props.sessionSelected = true;
+      await nextTick();
+      expect(view.value).toBe(owner);
+    } finally {
+      app.unmount();
+    }
+    expect(view.value).toBeNull();
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (callback) => {
+      callback();
+      return 1;
+    });
+  });
+
+  afterEach(() => {
+    temporaryProvider.value = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("reports selection of temporary conversations to Main's companion owner", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.open.value = false;
+    temporaryProvider.value = temporary;
+    const { app, workspace } = mountWorkspace({ children: [], type: "root" }, { sessionId: "session-1" });
+    try {
+      expect(workspace.visible).toBe(false);
+      temporary.open.value = true;
+      expect(workspace.visible).toBe(true);
+      temporary.open.value = false;
+      expect(workspace.visible).toBe(false);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it.each([
+    ["skipped_incomplete", "Coding stopped. Automatic review was skipped."],
+    ["incomplete", "Review stopped before finishing."],
+    ["skipped_unconfirmed", "Automatic review skipped: coding completion could not be confirmed."],
+    ["cancelled", "Automatic review cancelled."],
+    ["skipped_question", "Waiting for your answer. Automatic review was skipped."]
+  ])("does not restore a permanent banner for %s review status", async (reviewStatus, message) => {
+    const temporary = temporaryAiTestState();
+    const request = { status: "done", reviewStatus, messageId: "request-1", resolvedMode: "junior" };
+    temporary.tasks.value = [{
+      id: "chat", conversationId: "chat", agentSettings: {}, delivery: createAssistantMessageDelivery(),
+      busy: false, draft: "My next question", error: "", messages: [], title: "Temporary 1",
+      routingMetadata: { assistant_routing_request: JSON.stringify(request) }
+    }];
+    temporary.activeTaskId.value = "chat";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { active: true, sessionId: "session-1" });
+    try {
+      await flushWorkspaceReveal();
+      const notice = findNode(container, (node) => node.props?.role === "status" && nodeText(node).includes(message));
+      expect(notice).toBeFalsy();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.tasks.value[0].draft).toBe("My next question");
+      temporary.tasks.value[0].routingMetadata.assistant_routing_request = JSON.stringify({ ...request, reviewStatus: "completed" });
+      await nextTick();
+      expect(nodeText(container)).not.toContain(message);
+      expect(nodeText(container)).not.toContain("Review finished");
+    } finally { app.unmount(); }
+  });
+
+  it("uses the shared status for typing only in the visible temporary conversation", async () => {
+    const temporary = temporaryAiTestState();
+    temporaryProvider.value = temporary;
+    temporary.tasks.value = ["one", "two"].map((id) => ({
+      id, conversationId: id, agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", messages: [], title: id
+    }));
+    temporary.activeTaskId.value = "one";
+    temporary.open.value = true;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, {
+      active: true, projectSlug: "beepollen", sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
+    });
+    const payload = {
+      actorId: "member", displayName: "John", originId: "other-tab", projectSlug: "beepollen",
+      sessionId: "session-1", conversationId: "two", typing: true, sequence: 1,
+      updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3000).toISOString()
+    };
+    try {
+      presenceEvents.receive({ payload });
+      await nextTick();
+      expect(nodeText(container)).not.toContain("John is typing");
+      presenceEvents.receive({ payload: { ...payload, conversationId: "one" } });
+      await nextTick();
+      expect(nodeText(container)).toContain("John is typing…");
+      temporary.selectTask("two");
+      await nextTick();
+      expect(nodeText(container)).not.toContain("John is typing");
+      presenceEvents.receive({ payload });
+      await nextTick();
+      expect(nodeText(container)).toContain("John is typing…");
+      temporary.tasks.value[1].busy = true;
+      await nextTick();
+      expect(nodeText(container)).toContain("AI is working…");
+      expect(nodeText(container)).not.toContain("John is typing");
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("preserves the main chat's two-update preview and resets completed progress to collapsed", async () => {
+    const pending = ref(true);
+    const messages = ref([1, 2, 3].map((id) => ({ id: String(id), text: `Progress ${id}.` })));
+    const app = testRenderer().createApp(defineComponent({
+      setup: () => () => h(Vibe64ConversationProgress, {
+        key: pending.value ? "active" : "completed", pending: pending.value, messages: messages.value
+      })
+    }));
+    app.provide(ssrContextKey, { modules: new Set() });
+    const container = { children: [], parent: null, type: "root" };
+    app.mount(container);
+    try {
+      expect(nodeText(container)).toBe("Show all 3 progress updates Progress 2. Progress 3.");
+      findNode(container, (node) => node.type === "button").props.onClick();
+      await nextTick();
+      expect(nodeText(container)).toBe("Show latest 2 progress updates Progress 1. Progress 2. Progress 3.");
+      pending.value = false;
+      await nextTick();
+      expect(nodeText(container)).toBe("Show all 3 progress updates");
+      findNode(container, (node) => node.type === "button").props.onClick();
+      await nextTick();
+      expect(nodeText(container)).toBe("Hide progress updates Progress 1. Progress 2. Progress 3.");
+    } finally { app.unmount(); }
+  });
+
+  it("keeps thinking in collapsed conversation details and the working status concise", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.tasks.value = [{
+      agentSettings: {}, delivery: createAssistantMessageDelivery(),
+      busy: true,
+      draft: "",
+      error: "",
+      id: "chat-task",
+      messages: [
+        {
+          id: "user-1",
+          progressUpdates: [{ id: "user-progress", text: "This is not assistant progress." }],
+          role: "user",
+          text: "Check this change."
+        },
+        {
+          id: "assistant-1",
+          progressUpdates: [
+            { id: "progress-1", text: "Inspecting the conflict." },
+            { id: "progress-2", text: "Checking the change." }
+          ],
+          role: "assistant",
+          status: "inProgress",
+          text: ""
+        }
+      ],
+      title: "Temporary 1"
+    }];
+    temporary.activeTaskId.value = "chat-task";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, {
+      sessionId: "session-1",
+      sessionsApiPath: "/api/vibe64/sessions"
+    });
+    try {
+      await flushWorkspaceReveal();
+      const progress = findNode(container, (node) => (
+        node.props?.["aria-label"] === "agent progress"
+      ));
+      expect(progress).toBeTruthy();
+      expect(nodeText(progress)).toBe("Show all 2 progress updates");
+      const toggle = findNode(progress, (node) => node.type === "button");
+      expect(toggle.props["aria-expanded"]).toBe(false);
+      toggle.props.onClick();
+      await nextTick();
+      expect(nodeText(progress)).toBe("Hide progress updates Inspecting the conflict. Checking the change.");
+      const activity = findNode(container, (node) => (
+        node.props?.class === "assistant-composer-support__assistant-status"
+      ));
+      expect(nodeText(activity)).toBe("AI is working…");
+      expect(findNode(container, (node) => (
+        node.props?.role === "status" && nodeText(node) === "AI is working…"
+      ))).toBeTruthy();
+      expect(findNode(container, (node) => node.type === "span" && nodeText(node) === "Working…")).toBeNull();
+
+      const userMessage = findNode(container, (node) => (
+        String(node.props?.class || "").split(" ").includes("assistant-transcript__message--user") && nodeText(node).includes("Check this change.")
+      ));
+      expect(userMessage).toBeTruthy();
+      expect(findNode(userMessage, (node) => (
+        node.props?.["aria-label"] === "agent progress"
+      ))).toBeNull();
+      expect(nodeText(container)).not.toContain("This is not assistant progress.");
+
+      temporary.tasks.value[0].messages[1].progressUpdates.push({
+        id: "progress-3",
+        text: "The change is ready for review."
+      });
+      await nextTick();
+      const updatedProgress = findNode(container, (node) => (
+        node.props?.["aria-label"] === "agent progress"
+      ));
+      expect(nodeText(updatedProgress)).toBe(
+        "Hide progress updates Inspecting the conflict. Checking the change. The change is ready for review."
+      );
+      expect(nodeText(activity)).toBe("AI is working…");
+      temporary.tasks.value[0].phase = "background";
+      await nextTick();
+      expect(nodeText(activity)).toBe("Reply ready · background task still running…");
+      temporary.tasks.value[0].phase = "";
+      await nextTick();
+      expect(nodeText(activity)).toBe("AI is working…");
+      toggle.props.onClick();
+      await nextTick();
+      expect(nodeText(updatedProgress)).toBe("Show all 3 progress updates");
+      expect(nodeText(container)).not.toContain("This is not assistant progress.");
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("scrolls an ordinary newly active task into view without stealing focus", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.tasks.value = [
+      {
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "first",
+        messages: [], title: "First"
+      },
+      {
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "second",
+        messages: [], title: "Second"
+      }
+    ];
+    temporary.activeTaskId.value = "first";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, {
+      sessionId: "session-1",
+      sessionsApiPath: "/api/vibe64/sessions"
+    });
+    await flushWorkspaceReveal();
+
+    const secondTaskButton = findNode(container, (node) => (
+      node.props?.["data-temporary-ai-task-id"] === "second"
+    ));
+    secondTaskButton.focus.mockClear();
+    secondTaskButton.scrollIntoView.mockClear();
+
+    workspace.showWorkspace();
+    await flushWorkspaceReveal();
+    const firstTaskButton = findNode(container, (node) => (
+      node.props?.["data-temporary-ai-task-id"] === "first"
+    ));
+    expect(firstTaskButton.scrollIntoView).toHaveBeenCalled();
+    expect(firstTaskButton.focus).not.toHaveBeenCalled();
+
+    temporary.activeTaskId.value = "second";
+    await flushWorkspaceReveal();
+
+    expect(secondTaskButton.scrollIntoView).toHaveBeenCalledWith({
+      block: "nearest",
+      inline: "nearest"
+    });
+    expect(secondTaskButton.focus).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it("offers Main chat first without closing or changing temporary tasks", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.tasks.value = [
+      {
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: true, draft: "", error: "", id: "first",
+        messages: [], title: "First"
+      },
+      {
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "second",
+        messages: [], title: "Second"
+      }
+    ];
+    temporary.activeTaskId.value = "first";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const selectMainChat = vi.fn();
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, {
+      onSelectMainChat: selectMainChat,
+      sessionId: "session-1",
+      sessionsApiPath: "/api/vibe64/sessions"
+    });
+    await flushWorkspaceReveal();
+
+    const conversationNavigation = findNode(container, (node) => (
+      node.props?.["aria-label"] === "Main and temporary conversations"
+    ));
+    const mainChatButton = findNode(container, (node) => (
+      node.props?.["data-temporary-ai-main-chat"] === ""
+    ));
+    const currentTaskButton = findNode(container, (node) => (
+      node.props?.["data-temporary-ai-task-id"] === "first"
+    ));
+
+    expect(conversationNavigation).toBeTruthy();
+    expect(mainChatButton).toBeTruthy();
+    expect(currentTaskButton.props["aria-current"]).toBe("page");
+    mainChatButton.props.onClick();
+
+    expect(selectMainChat).toHaveBeenCalledTimes(1);
+    expect(temporary.closeTask).not.toHaveBeenCalled();
+    expect(temporary.tasks.value).toHaveLength(2);
+    expect(temporary.activeTaskId.value).toBe("first");
+    const workspaceComponentSource = ["Vibe64TemporaryAiWorkspace", "Vibe64TemporaryAiTabs", "Vibe64TemporaryAiRecoveryRow"]
+      .map((name) => fs.readFileSync(path.resolve(`src/components/studio/vibe64-session/${name}.vue`), "utf8")).join("\n");
+    expect(workspaceComponentSource).not.toContain("position: sticky");
+    expect(mainChatButton.parent).not.toBe(currentTaskButton.parent.parent);
+    app.unmount();
+  });
+});
+
+describe("temporary chat working indicator", () => {
+  it("shows the assistant as working only from the server's turn report", () => {
+    const component = fs.readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue", import.meta.url), "utf8");
+    expect(component.match(/:working="[^"]*"/gu)).toEqual([':working="activeTask.nativeWorking"']);
+    const tabs = fs.readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue", import.meta.url), "utf8");
+    expect(tabs).toContain('<span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />');
+  });
+});

@@ -9,29 +9,29 @@ import {
 
 const root = path.resolve(import.meta.dirname, "../..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const ALL = ["prepare-workspace", "pull-request", "pin", "renew", "new-ai-task"];
+const ALL = ["prepare-workspace", "pull-request", "pin", "renew", "temporary-ai"];
 
 describe("session header priority overflow", () => {
   it("keeps Save out of the list so it never moves into Session actions", () => {
-    expect(SESSION_HEADER_ACTION_PRIORITY).toEqual(["new-ai-task", "renew", "pin", "pull-request", "prepare-workspace"]);
+    expect(SESSION_HEADER_ACTION_PRIORITY).toEqual(["temporary-ai", "renew", "pin", "pull-request", "prepare-workspace"]);
     expect(SESSION_HEADER_ACTION_PRIORITY).not.toContain("save");
   });
 
-  it("keeps New AI task inline longest and overflows Prepare workspace first", () => {
+  it("moves Prepare workspace first and Temporary AI last", () => {
     expect(splitVibe64SessionHeaderActions(ALL, Infinity)).toEqual({ inline: SESSION_HEADER_ACTION_PRIORITY, overflow: [] });
     expect(splitVibe64SessionHeaderActions(ALL, 4)).toEqual({
-      inline: ["new-ai-task", "renew", "pin", "pull-request"], overflow: ["prepare-workspace"]
+      inline: ["temporary-ai", "renew", "pin", "pull-request"], overflow: ["prepare-workspace"]
     });
     expect(splitVibe64SessionHeaderActions(ALL, 2)).toEqual({
-      inline: ["new-ai-task", "renew"], overflow: ["pin", "pull-request", "prepare-workspace"]
+      inline: ["temporary-ai", "renew"], overflow: ["pin", "pull-request", "prepare-workspace"]
     });
     expect(splitVibe64SessionHeaderActions(ALL, 0)).toEqual({ inline: [], overflow: SESSION_HEADER_ACTION_PRIORITY });
     expect(splitVibe64SessionHeaderActions(ALL, -3).inline).toEqual([]);
   });
 
   it("skips unavailable actions without changing the order", () => {
-    expect(splitVibe64SessionHeaderActions(["prepare-workspace", "new-ai-task", "pin"], 2)).toEqual({
-      inline: ["new-ai-task", "pin"], overflow: ["prepare-workspace"]
+    expect(splitVibe64SessionHeaderActions(["prepare-workspace", "temporary-ai", "pin"], 2)).toEqual({
+      inline: ["temporary-ai", "pin"], overflow: ["prepare-workspace"]
     });
   });
 

@@ -57,6 +57,7 @@ import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouti
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "../../src/components/studio/vibe64-session/Vibe64ProjectMessage.vue";
 import { aiTaskTranscript } from "../../src/lib/vibe64AiTaskConversation.js";
+import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
 Object.assign(SharedConversation.LongTextPreviewBlocks, {
   inheritAttrs: false,
@@ -99,7 +100,7 @@ for (const name of [
 attachClientRender(Vibe64ConversationLog, "vibe64-conversation-scroll-follow-test");
 attachClientRender(Vibe64ConversationAttachments, "vibe64-conversation-attachments-test");
 
-for (const component of [Vibe64ConversationStatus, Vibe64ProjectMessage]) {
+for (const component of [Vibe64ConversationStatus, Vibe64ProjectMessage, Vibe64EphemeralConversationMessages]) {
   attachClientRender(component, `${component.__name}-test`);
 }
 
@@ -455,7 +456,7 @@ describe("Vibe64 conversation scroll following", () => {
     await nextTick();
   }
 
-  it.each(["main", "AI task"])("shows only model updates, including when expanded, in %s chat", async (surface) => {
+  it.each(["main", "temporary", "AI task"])("shows only model updates, including when expanded, in %s chat", async (surface) => {
     const selection = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max" };
     const messages = ref([{ messageId: "detail-1", role: "thinking", text: "Raw reasoning before the update." }]);
     const working = ref(true);
@@ -465,7 +466,7 @@ describe("Vibe64 conversation scroll following", () => {
         working: working.value,
         turns: [{ turnId: "turn-1", metadata: { assistantSelection: selection }, messages: messages.value }]
       })
-      : h(AiTaskTranscript, {
+      : h(surface === "temporary" ? Vibe64EphemeralConversationMessages : AiTaskTranscript, {
         working: working.value,
         adapter: { conversation: { turns: [{
           turnId: "turn-1", metadata: { assistantSelection: selection }, messages: messages.value
@@ -516,7 +517,7 @@ describe("Vibe64 conversation scroll following", () => {
     }
   });
 
-  it.each(["main", "AI task"])("interleaves saved %s user messages and native replies by time, including steers inside one native turn", async (surface) => {
+  it.each(["main", "temporary", "AI task"])("interleaves saved %s user messages and native replies by time, including steers inside one native turn", async (surface) => {
     const at = minute => `2026-10-13T06:${minute}:00.000Z`;
     const user = (id, minute) => ({ turnId: id, user: { messageId: id, role: "user", text: id, at: at(minute) } });
     const reply = (id, minute) => ({ messageId: id, role: "assistant", text: id, at: at(minute) });
@@ -524,7 +525,7 @@ describe("Vibe64 conversation scroll following", () => {
       { turnId: "native-turn", messages: [reply("first-reply", "32"), reply("second-reply", "38")] }]);
     const app = testRenderer().createApp({ render: () => surface === "main"
       ? h(Vibe64ConversationLog, { visible: true, turns: turns.value })
-      : h(AiTaskTranscript, { adapter: { conversation: { turns: turns.value } } }) });
+      : h(surface === "temporary" ? Vibe64EphemeralConversationMessages : AiTaskTranscript, { adapter: { conversation: { turns: turns.value } } }) });
     for (const name of ["VAlert", "VIcon", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) app.component(name, passthroughComponent());
     app.component("VBtn", passthroughComponent("button"));
     app.provide(ssrContextKey, { modules: new Set() });
@@ -551,7 +552,7 @@ describe("Vibe64 conversation scroll following", () => {
     } finally { app.unmount(); }
   });
 
-  it.each(["main", "AI task"])("renders sending and unconfirmed delivery accurately in %s chat", async (surface) => {
+  it.each(["main", "temporary", "AI task"])("renders sending and unconfirmed delivery accurately in %s chat", async (surface) => {
     const delivery = createAssistantMessageDelivery();
     const response = Promise.withResolvers();
     const sending = delivery.send({ message: "Hello" }, { messageId: "message-1", deliver: () => response.promise });
@@ -564,7 +565,7 @@ describe("Vibe64 conversation scroll following", () => {
         visible: true, turns: chatTurnsWithRouting(delivery.turns(messages.value), route.value),
         onResendTurn: (id) => checks.push(id), onCancelTurn: id => cancellations.push(id)
       })
-      : h(AiTaskTranscript, {
+      : h(surface === "temporary" ? Vibe64EphemeralConversationMessages : AiTaskTranscript, {
         adapter: { delivery, conversation: { turns: conversationTurnsFromMessages(messages.value) } },
         routingRequest: route.value,
         onResend: (id) => checks.push(id)

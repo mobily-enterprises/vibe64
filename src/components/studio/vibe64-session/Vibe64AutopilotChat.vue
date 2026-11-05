@@ -21,7 +21,7 @@
     :scroll-key="conversationScrollKey"
     :source-root="sessionSourceRoot"
     :turns="chatTurns"
-    :visible="conversationLogVisible && !chatCollapsed"
+    :visible="conversationLogVisible && !chatCollapsed && !temporaryAiWorkspace?.visible"
     :welcome-message="emptyConversationWelcome"
     @cancel-turn="cancelOptimisticMessage"
     @edit-turn="editOptimisticMessage"
@@ -232,6 +232,25 @@
       </div>
     </template>
   </Vibe64ConversationLog>
+
+  <Vibe64TemporaryAiWorkspace
+    ref="temporaryAiWorkspace"
+    :active="props.active && !chatCollapsed"
+    :session-selected="props.active"
+    :assistant-selection="props.session?.assistantSelection"
+    :assistant-ready="Boolean(sessionId) && !props.sessionSelectionArchived"
+    :connection-unavailable="connectionRecoveryVisible"
+    :can-configure-routing="assistantCanConfigureRouting"
+    :preview-attachment-state="previewAttachmentState"
+    :project-slug="projectSlug"
+    :session-id="sessionId"
+    :main-has-messages="chatTurns.length > 0"
+    :sessions-api-path="props.sessionsApiPath"
+    :repository-busy="saveWorkOperationActive || saveWorkSending"
+    :open-file="openWorkingFile"
+    :send-lesson-message="sendLessonMessage"
+    @select-main-chat="showMainChat"
+  />
 </template>
 
 <script setup>
@@ -257,6 +276,7 @@ import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/ass
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64MainChatApprovals from "./Vibe64MainChatApprovals.vue";
+import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import {
   promptHintConversationFingerprint,
@@ -265,9 +285,9 @@ import {
 import {
   useVibe64SessionTypingPresence
 } from "@/composables/useVibe64SessionTypingPresence.js";
-import { useVibe64SessionColleagueView } from "@/composables/useVibe64SessionColleagueView.js";
 
-// Main chat and its composer.
+// Main chat and its composer, with the temporary AI conversations that can
+// take its place.
 const { view } = defineProps({
   // The Autopilot view's state and actions. It is never replaced, so its
   // members are read once.
@@ -282,16 +302,16 @@ const {
   chatTurns, composerAttachments, composerAttachmentsEnabled,
   composerAttachmentsSupported, composerCanSubmit, composerDisabled, composerDraft, composerHint,
   composerInput, composerKey, composerPlaceholder, composerSending, composerSubmitAriaLabel,
-  composerSubmitMode, composerSubmitTitle, conversationFollowLatestKey,
+  composerSubmitMode, composerSubmitTitle, connectionRecoveryVisible, conversationFollowLatestKey,
   conversationLogVisible, conversationScrollKey, dismissNumberedQuestions, editOptimisticMessage,
   emptyConversationWelcome, fileBookmarks, interrupting, loadMoreChatTurns, mainChat,
   mainChatApprovals, numberedQuestions, numberedQuestionSelectItems, openIntegrationRequest,
   openSourceEditorFile, openWorkingFile, phoneLayout, previewAttachmentState, projectSlug, props,
   questionAnswers, reasoningActive, reloadAssistantAccess, reloadChatPane, repositoryOperationActive,
   requestAgentInterrupt, resendOptimisticMessage,
-  routingRequest, runIntegrationRequest, saveWorkSending,
+  routingRequest, runIntegrationRequest, saveWorkOperationActive, saveWorkSending,
   selectedAnswerChoice, sendLessonMessage, sessionId, sessionSourceRoot, sourceOperationsSuspended,
-  structuredQuestionActive, submitComposerMessage, testApproval, thinkingLabel,
+  structuredQuestionActive, submitComposerMessage, temporaryAiWorkspace, testApproval, thinkingLabel,
   thinkingVisible, updateComposerAttachments,
   workspaceSetupRetrying, workspaceSetupRunning, workspaceSetupStatus
 } = view;
@@ -502,19 +522,10 @@ function applyPromptHint(text = "") {
 }
 
 async function showMainChat() {
+  temporaryAiWorkspace.value?.closeWorkspace?.();
   await nextTick();
   mainChat.value?.focus?.({ preventScroll: true });
 }
-
-useVibe64SessionColleagueView({
-  projectSlug,
-  sessionId,
-  ready: () => Boolean(sessionId.value) && !props.sessionSelectionArchived,
-  selected: () => props.active,
-  openFile: openWorkingFile,
-  sendLessonMessage,
-  showMainChat: () => void showMainChat()
-});
 </script>
 
 <style scoped>

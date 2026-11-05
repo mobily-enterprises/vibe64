@@ -165,9 +165,11 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       ["POST", "/sessions/:sessionId/workspace-setup/retry", "vibe64.sessions.workspace-setup.retry", {}, "retryWorkspaceSetup"],
       ["POST", "/sessions/:sessionId/preview-state", "vibe64.sessions.preview-state.broadcast", { projectSlug: slug, route: "/preview", originId: "browser" }, "broadcastSessionPreviewState"],
       ["GET", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.list", {}, "listTemporaryConversations"],
+      ["POST", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.create", {}, "createTemporaryConversation"],
       ["GET", "/sessions/:sessionId/temporary-conversations/:conversationId", "vibe64.terminals.temporary-conversation.read", {}, "readTemporaryConversation"],
       ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", "vibe64.terminals.temporary-conversation.turn.start", { message: "What is happening?", messageId: "msg-1" }, "startTemporaryConversationTurn"],
-      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", "vibe64.terminals.temporary-conversation.stop", {}, "stopTemporaryConversation"]
+      ["POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", "vibe64.terminals.temporary-conversation.stop", {}, "stopTemporaryConversation"],
+      ["DELETE", "/sessions/:sessionId/temporary-conversations/:conversationId", "vibe64.terminals.temporary-conversation.delete", {}, "deleteTemporaryConversation"]
     ];
     for (const [method, suffix, actionId, body, serviceMethod] of cases) {
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });

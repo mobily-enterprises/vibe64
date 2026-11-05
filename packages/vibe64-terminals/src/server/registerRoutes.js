@@ -23,7 +23,9 @@ import {
   ACTION_CLOSE_GLOBAL_TERMINAL,
   ACTION_CLOSE_OUTPUT_TERMINAL,
   ACTION_CLOSE_PROJECT_RUNTIME,
+  ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
+  ACTION_DELETE_TEMPORARY_CONVERSATION,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
   ACTION_LIST_TEMPORARY_CONVERSATIONS,
   ACTION_OPEN_OUTPUT_TARGET,
@@ -258,6 +260,12 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
     summary: "Save a Vibe64 temporary conversation draft and settings."
   });
 
+  routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations", {
+    actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(request)),
+    summary: "Create a Vibe64 temporary conversation."
+  });
+
   routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations/:conversationId", {
     actionId: ACTION_READ_TEMPORARY_CONVERSATION,
     buildInput: (request) => ({ ...requestQuery(request), ...temporaryConversationInput(request) }),
@@ -280,6 +288,12 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
       ...temporaryConversationInput(request)
     }),
     summary: "Stop a Vibe64 temporary conversation."
+  });
+
+  routes.actionRoute("DELETE", "/sessions/:sessionId/temporary-conversations/:conversationId", {
+    actionId: ACTION_DELETE_TEMPORARY_CONVERSATION,
+    buildInput: temporaryConversationInput,
+    summary: "Delete a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/prompt-hints", {

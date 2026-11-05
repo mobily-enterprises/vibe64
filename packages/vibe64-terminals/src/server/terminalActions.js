@@ -35,6 +35,8 @@ import {
   sessionPromptHintsActionInputValidator,
   temporaryConversationListInputValidator,
   temporaryConversationUpdateInputValidator,
+  temporaryConversationCreateActionInputValidator,
+  temporaryConversationInputValidator,
   temporaryConversationReadInputValidator,
   temporaryConversationStopActionInputValidator,
   temporaryConversationTurnActionInputValidator
@@ -82,9 +84,11 @@ const ACTION_UPLOAD_AGENT_ATTACHMENT = "vibe64.terminals.agent-attachment.upload
 const ACTION_DELETE_AGENT_ATTACHMENT = "vibe64.terminals.agent-attachment.delete";
 const ACTION_LIST_TEMPORARY_CONVERSATIONS = "vibe64.terminals.temporary-conversation.list";
 const ACTION_UPDATE_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.update";
+const ACTION_CREATE_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.create";
 const ACTION_READ_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.read";
 const ACTION_START_TEMPORARY_CONVERSATION_TURN = "vibe64.terminals.temporary-conversation.turn.start";
 const ACTION_STOP_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.stop";
+const ACTION_DELETE_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.delete";
 const ACTION_GENERATE_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.generate";
 const ACTION_CANCEL_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.cancel";
 const ACTION_READ_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.read";
@@ -438,7 +442,8 @@ function createTerminalActions({ terminals }) {
       input: temporaryConversationListInputValidator,
       extensions: {
         assistant: temporaryConversationTool(
-          "List saved temporary conversations in the specified project and session. These are separate from Main chat."
+          "List saved temporary conversations in the specified project and session. These are separate from Main chat; " +
+            "AI tasks are listed by the AI task list tool."
         ),
         vibe64: PROJECT_OPERATION
       },
@@ -457,6 +462,21 @@ function createTerminalActions({ terminals }) {
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => terminals.updateTemporaryConversation(input.sessionId, input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_CREATE_TEMPORARY_CONVERSATION,
+      input: temporaryConversationCreateActionInputValidator,
+      extensions: {
+        assistant: temporaryConversationTool(
+          "Create a separate temporary conversation in a session only when the user asks for a temporary chat of their own; it opens " +
+            "among their Temporary AI tabs. Work you run for the user is an AI task of kind colleague instead. " +
+            TEMPORARY_ROUTING +
+            " Omitted, the owner's chat follows Main chat's mode (Auto becomes Senior) and a team member's uses fix. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser. Only when requested, includeRecentChatContext=true captures up to forty visible Main messages as independent initial context."
+        ),
+        vibe64: PROJECT_OPERATION
+      },
+      execute: (input) => terminals.createTemporaryConversation(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -496,6 +516,19 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
+      id: ACTION_DELETE_TEMPORARY_CONVERSATION,
+      input: temporaryConversationInputValidator,
+      extensions: {
+        assistant: temporaryConversationTool(
+          "Explicitly close this temporary conversation and remove its saved chat and native provider histories. Use only when the user " +
+            "requests closing or removing it. An AI task's conversation closes with the AI task close tool instead."
+        ),
+        vibe64: PROJECT_OPERATION
+      },
+      execute: (input) => terminals.deleteTemporaryConversation(input.sessionId, input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
       id: ACTION_GENERATE_SESSION_PROMPT_HINTS,
       input: sessionPromptHintsActionInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -520,7 +553,9 @@ export {
   ACTION_CLOSE_GLOBAL_TERMINAL,
   ACTION_CLOSE_OUTPUT_TERMINAL,
   ACTION_CLOSE_PROJECT_RUNTIME,
+  ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
+  ACTION_DELETE_TEMPORARY_CONVERSATION,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
   ACTION_LIST_TEMPORARY_CONVERSATIONS,
   ACTION_OPEN_OUTPUT_TARGET,

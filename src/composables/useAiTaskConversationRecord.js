@@ -10,7 +10,7 @@ import { useAiTaskConversationSaves } from "@/composables/useAiTaskConversationS
 import { aiTaskConversationView, aiTaskRequest, aiTaskTurnIsActive } from "@/lib/vibe64AiTaskConversation.js";
 import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import { VIBE64_SESSION_CHANGED_EVENT, vibe64TemporaryConversationsPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { VIBE64_SESSION_CHANGED_EVENT, vibe64TemporaryConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 
 /** The fields the server's conversation read reports, applied as it reports them. */
@@ -136,14 +136,15 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
     });
   }
 
-  /** Reads the session's saved conversations and binds the task's one. */
+  /** Reads the task's saved conversation and binds it. The temporary chat list leaves AI tasks out. */
   async function restore() {
     clearTimeout(restoreRetryTimer);
     const generation = ++restoreGeneration;
     const ownerSessionId = currentSessionId();
     const apiPath = currentSessionsApiPath();
-    if (disposed || !actorKey.value || !toValue(assistantReady) || !toValue(taskId) || !ownerSessionId || !apiPath) return;
-    const key = JSON.stringify([apiPath, ownerSessionId, actorKey.value]);
+    const id = toValue(taskId);
+    if (disposed || !actorKey.value || !toValue(assistantReady) || !id || !ownerSessionId || !apiPath) return;
+    const key = JSON.stringify([apiPath, ownerSessionId, actorKey.value, id]);
     try {
       let restoring = restorations.get(key);
       if (restoring) {
@@ -153,16 +154,21 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
         if (!disposed && generation === restoreGeneration) return restore();
         return;
       }
-      restoring = aiTaskRequest(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), { method: "GET" })
+      restoring = aiTaskRequest(vibe64TemporaryConversationPath(apiPath, ownerSessionId, id), { method: "GET" })
         .finally(() => restorations.delete(key));
       restorations.set(key, restoring);
-      const response = await restoring;
+      const record = await restoring;
       if (disposed || generation !== restoreGeneration) return;
       restoreError.value = "";
-      const record = (response.conversations || []).find(entry => entry.task && entry.conversationId === toValue(taskId));
-      applyRecord(record, { ownerSessionId, apiPath });
+      applyRecord(record.task ? record : null, { ownerSessionId, apiPath });
     } catch (error) {
       if (disposed || generation !== restoreGeneration) return;
+      // A closed task has no conversation left to bind.
+      if (error.conversationExpired) {
+        restoreError.value = "";
+        applyRecord(null, { ownerSessionId, apiPath });
+        return;
+      }
       if (error.code === "vibe64_agent_write_mode_busy") {
         restoreError.value = "";
         restoreRetryTimer = setTimeout(() => void restore(), 1000);
@@ -216,7 +222,7 @@ function useAiTaskConversationRecord({ taskId, sessionId, sessionsApiPath, proje
     releaseAll();
     closedConversationIds.clear();
   }, { flush: "sync" });
-  // A task the server has just started: its conversation appears in the next saved list.
+  // Another task: its own conversation is read and bound.
   watch(() => toValue(taskId), (id) => {
     if (conversation.value && conversation.value.id !== id) releaseAll();
   }, { flush: "sync" });

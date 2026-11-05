@@ -13,11 +13,12 @@ afterEach(() => { while (unmounts.length) unmounts.pop()(); });
 function mountLayer() {
   const host = Vue.shallowRef(null);
   const props = Vue.reactive({ active: true, sessionSelectionArchived: false });
+  const temporaryAiWorkspace = Vue.ref({ visible: false });
   const bindings = {
     computed: Vue.computed, inject: Vue.inject,
     onBeforeUnmount: Vue.onBeforeUnmount, reactive: Vue.reactive, watchEffect: Vue.watchEffect,
     VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY,
-    chatCollapsed: Vue.ref(false), props, sessionId: Vue.ref("session-a")
+    chatCollapsed: Vue.ref(false), props, temporaryAiWorkspace, sessionId: Vue.ref("session-a")
   };
   const setupLayer = new Function(...Object.keys(bindings), `${layerSource}\nreturn assistantLayer;`);
   let layer;
@@ -29,11 +30,17 @@ function mountLayer() {
   app.provide(VIBE64_ASSISTANT_HOST_KEY, host);
   app.mount({});
   unmounts.push(() => app.unmount());
-  return { host, props, layer };
+  return { host, props, temporaryAiWorkspace, layer };
 }
 
-it("publishes Main's companion layer for the selected session", () => {
+it("withdraws Main's companion layer while another conversation is selected", async () => {
   const view = mountLayer();
+  expect(view.host.value).toBe(view.layer);
+  view.temporaryAiWorkspace.value.visible = true;
+  await Vue.nextTick();
+  expect(view.host.value).toBeNull();
+  view.temporaryAiWorkspace.value.visible = false;
+  await Vue.nextTick();
   expect(view.host.value).toBe(view.layer);
 });
 

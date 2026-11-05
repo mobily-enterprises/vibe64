@@ -2273,8 +2273,8 @@ test("the local Colleague host opens a session's Main chat itself, without carry
   const pending = navigation.value({ projectSlug: "demo", sessionId: "s1" });
   await flush();
   assert.deepEqual(pushed.at(-1), { path: "/app/project/demo", query: { session: "s1" } });
-  view.value = vue.reactive({ projectSlug: "demo", sessionId: "s1", ready: true, conversationId: "task-1",
-    async openConversation(id) { opened.push(id); this.conversationId = id; } });
+  view.value = vue.reactive({ projectSlug: "demo", sessionId: "s1", ready: true, conversationId: "",
+    temporarySelected: true, async openConversation(id) { opened.push(id); this.temporarySelected = false; } });
   const focus = await pending;
   assert.deepEqual(opened, [""]);
   assert.equal(focus.pane, "chat");

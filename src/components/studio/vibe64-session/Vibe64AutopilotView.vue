@@ -99,6 +99,7 @@ const composerInput = ref(null);
 const mainChat = ref(null);
 const approvalsPanel = ref(null);
 const { xs: phoneLayout } = useDisplay();
+const temporaryAiWorkspace = ref(null);
 // The AI task chat's composer while that chat is shown, which preview attachments go to.
 const aiTaskComposer = shallowRef(null);
 const testApproval = ref(null);
@@ -282,12 +283,12 @@ const view = {
   githubProject, lessonShown, mainChat, mainChatApprovals, openUsage, openWorkingFile, phoneLayout, props,
   reloadAssistantAccess, requestSessionRenewal, resourceRecoveryControl, revealApprovals,
   selectedAssistantSessionId, sessionPullRequest, sessionPullRequestTarget, sourceOperationsSuspended,
-  testApproval, updateTestApproval, usageOpenRequest
+  temporaryAiWorkspace, testApproval, updateTestApproval, usageOpenRequest
 };
 
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
-const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived);
+const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
 

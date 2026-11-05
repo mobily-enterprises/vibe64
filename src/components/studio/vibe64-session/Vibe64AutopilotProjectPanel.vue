@@ -244,7 +244,7 @@ const {
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
-  systemBackAvailable, systemRestoreRequest,
+  systemBackAvailable, systemRestoreRequest, temporaryAiWorkspace,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
 const aiTasks = inject(VIBE64_AI_TASKS_KEY);
@@ -292,7 +292,7 @@ function selectPreview() {
 }
 
 async function attachPreviewFile(file) {
-  const composer = aiTaskComposer.value || composerInput.value;
+  const composer = aiTaskComposer.value || temporaryAiWorkspace.value?.composer || composerInput.value;
   const uploaded = await composer?.attachFiles?.([file]);
   if (!Array.isArray(uploaded) || uploaded.length < 1) {
     throw new Error("Open the chat composer before attaching a preview file.");
@@ -301,7 +301,7 @@ async function attachPreviewFile(file) {
 }
 
 async function attachPreviewFileProducer(options = {}) {
-  const composer = aiTaskComposer.value || composerInput.value;
+  const composer = aiTaskComposer.value || temporaryAiWorkspace.value?.composer || composerInput.value;
   const uploaded = await composer?.attachFileProducer?.(options);
   return Array.isArray(uploaded) && uploaded.length > 0 ? uploaded[0] : null;
 }

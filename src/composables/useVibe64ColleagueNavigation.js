@@ -55,7 +55,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
         const view = currentView.value;
         const conversationId = typeof route.query.conversation === "string" ? route.query.conversation : "";
         if (!view?.ready || view.sessionId !== route.query.session || (!conversationId && route.query.chat !== "main")) return;
-        if (view.conversationId === conversationId) return;
+        if (view.conversationId === conversationId && (conversationId || !view.temporarySelected)) return;
         const revision = view.selectionRevision;
         restoringSelection.value = true;
         try {
@@ -76,6 +76,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
       ready: currentView.value?.ready,
       revision: currentView.value?.selectionRevision,
       conversationId: currentView.value?.conversationId,
+      temporarySelected: currentView.value?.temporarySelected,
       restoring: restoringSelection.value,
       path: route.path,
       routeSession: route.query.session
@@ -87,7 +88,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
       delete query.conversation;
       delete query.chat;
       if (selection.conversationId) query.conversation = selection.conversationId;
-      else query.chat = "main";
+      else if (!selection.temporarySelected) query.chat = "main";
       if (query.session !== route.query.session || query.conversation !== route.query.conversation || query.chat !== route.query.chat) {
         void router.replace({ path: route.path, query });
       }
@@ -248,7 +249,8 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
         if (!learningPanelMatches(command, displayed)) return false;
         if (!owner || !(openChat ? owner.chatVisible : owner.projectVisible)) return false;
         if (command.sessionId && (!view?.ready || restoringSelection.value ||
-            view.sessionId !== command.sessionId || view.conversationId !== (command.conversationId || ""))) return false;
+            view.sessionId !== command.sessionId || view.conversationId !== (command.conversationId || "") ||
+            (!command.conversationId && view.temporarySelected))) return false;
         if (command.databaseView && (database.value?.screen !== "workspace" || (!command.databaseTable && database.value.view !== command.databaseView))) return false;
         if (command.planView && !plan.value?.ready) return false;
         return !integrationSelection || Boolean(panel?.ready && panel.environment === integrationEnvironment &&

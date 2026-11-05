@@ -36,12 +36,15 @@ const SESSION_ID = "direct-chat-session";
 const SCROLL_TEST_COPY = "A deliberately detailed update keeps the conversation tall enough to exercise the real overflow container.";
 
 // The page's HTTP stays mocked; its chat uses the real conversation owner for
-// the page's session.
+// the page's session. With a temporary engine, that owner also serves Temporary
+// AI: the page reaches its temporary conversations through the same relay.
 const hintTest = test.extend<{
+  temporaryEngineId: "codex" | null;
   hintRealtime: Awaited<ReturnType<typeof assistantStatusServer>>;
 }>({
-  hintRealtime: [async ({ page }, use) => {
-    const realtime = await assistantStatusServer({ session: directSession() });
+  temporaryEngineId: [null, { option: true }],
+  hintRealtime: [async ({ page, temporaryEngineId }, use) => {
+    const realtime = await assistantStatusServer({ session: directSession(), temporaryEngineId });
     try {
       await relayConversation(page, realtime);
       await use(realtime);
@@ -50,8 +53,22 @@ const hintTest = test.extend<{
     }
   }, { auto: true }]
 });
+const temporaryTest = hintTest.extend({ temporaryEngineId: "codex" });
 
 const sessionChat = (page: Page) => page.getByRole("region", { name: "Session chat" });
+
+async function openTemporaryAiWorkspace(page: Page) {
+  await expect(sessionChat(page)).toBeVisible();
+  const expandedAction = page.getByRole("button", {
+    name: /^Open temporary AI(?::|$)/u
+  });
+  if (await expandedAction.isVisible()) {
+    await expandedAction.click();
+    return;
+  }
+  await page.getByRole("button", { name: /^Session actions(?::|$)/u }).click();
+  await page.locator("[data-vibe64-temporary-ai-action]").click();
+}
 
 test.describe("direct chat", () => {
   for (const engineId of ["codex", "claude", "opencode"]) {
@@ -124,15 +141,15 @@ test.describe("direct chat", () => {
     });
   }
 
-  {
-    hintTest("@attachment-batch queues six files and completes without retries in main chat", async ({ page }, testInfo) => {
+  for (const temporary of [false, true]) {
+    (temporary ? temporaryTest : hintTest)(`@attachment-batch queues six files and completes without retries in ${temporary ? "temporary" : "main"} chat`, async ({ page }, testInfo) => {
       const release = Promise.withResolvers<void>();
       const received: string[] = [];
       const names = [
         "bookings.HTML", "customers.csv", "daycare_bookings.HTML",
         "pet_notes.HTML", "products.csv", "staff.csv"
       ];
-      await mockDirectChat(page);
+      await mockDirectChat(page, { temporaryOwner: temporary });
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-attachments`, async route => {
         const form = await new globalThis.Response(route.request().postDataBuffer(), {
           headers: { "Content-Type": route.request().headers()["content-type"] }
@@ -150,11 +167,15 @@ test.describe("direct chat", () => {
       });
       try {
         await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-        const workspace = page.getByRole("region", { name: "Session chat", exact: true });
-        const input = workspace.getByLabel("Message AI assistant");
+        if (temporary) await openTemporaryAiWorkspace(page);
+        const workspace = page.getByRole("region", {
+          name: temporary ? "Temporary AI workspace" : "Session chat",
+          exact: true
+        });
+        const input = workspace.getByLabel(temporary ? "Message temporary AI" : "Message AI assistant");
         const send = workspace.getByRole("button", { name: "Send message", exact: true });
         await input.fill("These are the files.");
-        await workspace.getByRole("button", { name: "Add to message", exact: true }).click();
+        if (!temporary) await workspace.getByRole("button", { name: "Add to message", exact: true }).click();
         const chooser = page.waitForEvent("filechooser");
         await page.getByRole("button", { name: "Attach files", exact: true }).click();
         await (await chooser).setFiles(names.map(name => ({
@@ -174,12 +195,104 @@ test.describe("direct chat", () => {
         await expect(input).toHaveValue(/These are the files\./);
         expect(received).toEqual(names);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`six-uploads-main.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`six-uploads-${temporary ? "temporary" : "main"}.png`) });
       } finally {
         release.resolve();
       }
     });
   }
+
+  temporaryTest("@temporary-delivery shows the message before startup and uses shared failure actions to retry it once", async ({ page, hintRealtime }) => {
+    const startup = Promise.withResolvers<void>();
+    const captured = hintRealtime.temporary!.captured;
+    const message = "Explain the ongoing work.";
+    // The first native start waits, then rejects before the message reaches the
+    // AI. Routing keeps a native rejection's code, and the shared composer shows
+    // a coded rejection as failed (genesis/program/conversation/direct-chat.md).
+    captured.beforeNativeTurn = async (turn) => {
+      if (turn !== 1) return;
+      await startup.promise;
+      throw Object.assign(new Error("Assistant could not start."), {
+        code: "conversation_busy", statusCode: 409, delivery: "not-sent"
+      });
+    };
+    await mockDirectChat(page, { temporaryOwner: true });
+    try {
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await openTemporaryAiWorkspace(page);
+      const workspace = page.getByRole("region", { name: "Temporary AI workspace", exact: true });
+      const input = workspace.getByLabel("Message temporary AI");
+      await input.fill(message);
+      await workspace.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+      await expect(workspace.locator(".assistant-composer-support__assistant-status")).toHaveText("Sending to assistant…");
+      await expect(workspace.getByText("AI is working…", { exact: true })).not.toBeVisible();
+      await expect(workspace.getByText("Ask a focused question or investigate a problem without adding it to the main conversation.")).not.toBeVisible();
+      await expect.poll(() => captured.temporaryTurns.length).toBe(1);
+      await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+      await expect(workspace.locator(".assistant-composer-support__assistant-status")).toHaveText("Sending to assistant…");
+      startup.resolve();
+      await expect(workspace.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+      await expect(workspace.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+      await expect(workspace.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+      await expect(workspace.getByText("Failed: Assistant could not start.", { exact: true })).toHaveCount(1);
+      await input.fill("Keep this newer draft.");
+      await workspace.getByRole("button", { name: "Retry", exact: true }).click();
+      await expect(workspace.getByText("Temporary recovery complete.", { exact: true })).toBeVisible();
+      await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+      await expect(workspace.getByRole("button", { name: "Retry", exact: true })).not.toBeVisible();
+      await expect(input).toHaveValue("Keep this newer draft.");
+      expect(captured.temporaryTurns).toHaveLength(2);
+      // Retry resends the original message; the chat's saved draft is the newer one.
+      const [first, retry] = captured.temporaryTurns as Array<Record<string, any>>;
+      expect(retry).toEqual({ ...first, presentation: { ...first.presentation, draft: "Keep this newer draft." } });
+    } finally {
+      startup.resolve();
+    }
+  });
+
+  // Restoration starts when the session is available, without waiting for the
+  // main assistant's preparation (genesis/program/conversation/temporary-assistance.md).
+  hintTest("@startup-restoration restores during main preparation and handles contention without replacing main chat", async ({ page }) => {
+    const preparation = Promise.withResolvers<void>();
+    const events: string[] = [];
+    await mockDirectChat(page);
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, async route => {
+      events.push("preparing");
+      await preparation.promise;
+      events.push("ready");
+      await fulfillJson(route, { ok: true, ...directSession().agentSession });
+    });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations`, async route => {
+      if (!events.includes("busy")) {
+        events.push("busy");
+        await route.fulfill({ status: 409, json: {
+          ok: false, code: "vibe64_agent_write_mode_busy", retryable: true,
+          error: "The assistant is busy. Try again shortly."
+        } });
+      } else {
+        await fulfillJson(route, { ok: true, conversations: [] });
+        events.push("restored");
+      }
+    });
+    try {
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await expect.poll(() => events.filter(event => event !== "preparing")).toEqual(["busy", "restored"]);
+      expect(events).toContain("preparing");
+      expect(events).not.toContain("ready");
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      await expect(page.getByRole("region", { name: "Temporary AI workspace", exact: true })).not.toBeVisible();
+      await expect(page.getByText(/Temporary chats could not be restored:/)).not.toBeVisible();
+      preparation.resolve();
+      await expect.poll(() => events.at(-1)).toBe("ready");
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      await expect(page.getByRole("region", { name: "Temporary AI workspace", exact: true })).not.toBeVisible();
+      await expect(page.getByText(/Temporary chats could not be restored:/)).not.toBeVisible();
+      expect(events.filter(event => event === "busy" || event === "restored")).toEqual(["busy", "restored"]);
+    } finally {
+      preparation.resolve();
+    }
+  });
 
   hintTest("@chat-minimum-width keeps Send on the toolbar row at the resize limit", async ({ page, hintRealtime }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -1083,6 +1196,164 @@ test.describe("direct chat", () => {
     await expect(saveButton).toHaveCount(1);
   });
 
+  test.describe("temporary AI mobile navigation", () => {
+    test.use({
+      hasTouch: true,
+      viewport: { height: 844, width: 390 }
+    });
+
+    temporaryTest("switches between Main chat and temporary AI without stopping hidden work", async ({ page, hintRealtime }) => {
+      const captured = hintRealtime.temporary!.captured;
+      const messages = hintRealtime.state.messages;
+      // Temporary 1's message stays in flight until Main chat is shown.
+      const hiddenWork = Promise.withResolvers<void>();
+      const held = Promise.withResolvers<void>();
+      try {
+        await mockDirectChat(page, { temporaryOwner: true });
+        await page.route("**/api/assistant/**", async (route) => {
+          const { pathname } = new URL(route.request().url());
+          if (route.request().method() !== "POST" || !pathname.endsWith("/messages") ||
+              !decodeURIComponent(pathname).includes("vibe64-temporary:")) return route.fallback();
+          held.resolve();
+          await hiddenWork.promise;
+          await route.fallback();
+        });
+
+        // Custom choices come from the same catalogue as the conversation owner's.
+        const catalog = { ok: true, engines: [{ ...ASSISTANT_CATALOG.engines[0], revision: `sha256:${"b".repeat(64)}`,
+          defaults: { agentId: "codex", modelProviderId: "openai", modelId: "main-model", variantId: "high" },
+          modelProviders: [{ id: "openai", label: "OpenAI", connected: true, connectionStatus: "connected",
+            models: [{ id: "main-model", label: "Main model", status: "available", variants: [{ id: "high", label: "High" }] }] }] }] };
+        const session = { ...directSession(), assistantSelection: {
+          ...catalog.engines[0].defaults, engineId: "codex", catalogRevision: catalog.engines[0].revision
+        } };
+        await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+        await routeApiEndpoint(page, "/vibe64/assistants/capabilities", route => fulfillJson(route, catalog));
+        await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+        await openTemporaryAiWorkspace(page);
+
+        const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+        const navigation = workspace.getByRole("navigation", {
+          name: "Main and temporary conversations"
+        });
+        const input = workspace.getByLabel("Message temporary AI");
+        await expect(workspace).toBeVisible();
+        await expect(navigation.getByRole("button", { name: "Main chat", exact: true })).toBeVisible();
+        await input.fill("Inspect this without changing it.");
+        await workspace.getByRole("button", { name: /^Chat mode/ }).click();
+        await page.getByRole("button", { name: /^Custom/ }).click();
+        const custom = page.getByRole("dialog", { name: "Custom AI", exact: true });
+        await custom.getByRole("combobox", { name: "Model", exact: true }).click();
+        await openMenu(page).getByRole("option", { name: /Main model/ }).click();
+        await custom.getByRole("button", { name: "Apply", exact: true }).click();
+        await expect(custom).not.toBeVisible();
+        await expect(input).toHaveValue("Inspect this without changing it.");
+        await workspace.getByRole("button", { name: "Send message", exact: true }).click();
+        await held.promise;
+
+        await navigation.getByRole("button", { name: "New temporary AI task", exact: true }).click();
+        await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
+          "aria-current",
+          "page"
+        );
+
+        const coarseControls = [
+          navigation.getByRole("button", { name: "Main chat", exact: true }),
+          navigation.locator('[data-temporary-ai-task-id]').filter({ hasText: "Temporary 1" }),
+          navigation.locator('[data-temporary-ai-task-id]').filter({ hasText: "Temporary 2" }),
+          navigation.getByRole("button", { name: "Close Temporary 1", exact: true }),
+          navigation.getByRole("button", { name: "Close Temporary 2", exact: true }),
+          navigation.getByRole("button", { name: "New temporary AI task", exact: true }),
+        ];
+        for (const control of coarseControls) {
+          const bounds = await control.boundingBox();
+          expect(bounds?.height).toBeGreaterThanOrEqual(48);
+          expect(bounds?.width).toBeGreaterThanOrEqual(48);
+        }
+
+        await navigation.evaluate((element) => {
+          element.scrollLeft = element.scrollWidth;
+        });
+        const navigationBounds = await navigation.boundingBox();
+        const mainChatBounds = await navigation.getByRole("button", {
+          name: "Main chat",
+          exact: true
+        }).boundingBox();
+        expect(mainChatBounds?.x).toBeGreaterThanOrEqual(navigationBounds?.x || 0);
+        expect((mainChatBounds?.x || 0) - (navigationBounds?.x || 0)).toBeLessThan(12);
+
+        await navigation.getByRole("button", { name: "Main chat", exact: true }).click();
+        await expect(workspace).not.toBeVisible();
+        await expect(sessionChat(page)).toBeFocused();
+        await page.getByLabel("Message AI assistant").fill("Continue in the main conversation.");
+        await page.getByRole("button", { name: "Send message", exact: true }).click();
+        await expect.poll(() => messages).toHaveLength(1);
+        // The hidden temporary message is delivered and answered while Main chat is shown.
+        hiddenWork.resolve();
+        await expect.poll(() => captured.temporaryTurns.length).toBe(1);
+
+        await openTemporaryAiWorkspace(page);
+        await expect(workspace).toBeVisible();
+        const unreadTask = navigation.getByRole("button", { name: "Temporary 1: unread messages", exact: true });
+        await expect(unreadTask).toBeVisible();
+        await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
+          "aria-current",
+          "page"
+        );
+        await unreadTask.click();
+        await expect(workspace.getByText("Temporary recovery complete.", { exact: true })).toBeVisible();
+        await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveAttribute(
+          "aria-current",
+          "page"
+        );
+
+        await navigation.getByRole("button", { name: "Close Temporary 1", exact: true }).click();
+        await expect.poll(() => captured.temporaryDeletes).toBe(1);
+        await expect(workspace).toBeVisible();
+        await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveCount(0);
+        await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toBeVisible();
+        expect(captured.temporaryCreates).toHaveLength(2);
+        expect(captured.temporaryTurns).toHaveLength(1);
+        expect(captured.temporaryTurns[0]).toEqual(expect.objectContaining({
+          message: "Inspect this without changing it."
+        }));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      } finally {
+        hiddenWork.resolve();
+      }
+    });
+  });
+
+  for (const width of [960, 1600]) {
+    temporaryTest(`keeps Main chat navigation stable at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ height: 900, width });
+      await mockDirectChat(page, { temporaryOwner: true });
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await openTemporaryAiWorkspace(page);
+
+      const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+      const navigation = workspace.getByRole("navigation", {
+        name: "Main and temporary conversations"
+      });
+      await navigation.getByRole("button", { name: "New temporary AI task", exact: true }).click();
+      await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page"
+      );
+      await navigation.getByRole("button", { name: "Main chat", exact: true }).click();
+      await expect(workspace).not.toBeVisible();
+      await expect(sessionChat(page)).toBeFocused();
+
+      await openTemporaryAiWorkspace(page);
+      await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toBeVisible();
+      await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page"
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
   for (const width of [390, 1600]) {
     hintTest(`renders numbered question Markdown at ${width}px`, async ({ page, hintRealtime }, testInfo) => {
       await page.setViewportSize({ height: 900, width });
@@ -1338,6 +1609,7 @@ async function mockDirectChat(page: Page, {
   includeWorktreePaths = false,
   onSave = () => undefined,
   sessionMetadata = {},
+  temporaryOwner = false,
   workState = {
     operation: null,
     unsaved: true,
@@ -1351,6 +1623,8 @@ async function mockDirectChat(page: Page, {
   includeWorktreePaths?: boolean;
   onSave?: (body: Record<string, unknown>, sessionId: string) => unknown | Promise<unknown>;
   sessionMetadata?: Record<string, unknown>;
+  // True in a temporaryTest, whose conversation owner serves Temporary AI.
+  temporaryOwner?: boolean;
   workState?: Record<string, unknown>;
 } = {}) {
   await mockProjectGateReady(page);
@@ -1414,12 +1688,16 @@ async function mockDirectChat(page: Page, {
       return;
     }
     if (url.pathname.includes("/temporary-conversations")) {
-      // The session has no AI task, so it has no task conversations.
+      if (temporaryOwner) {
+        await route.fallback();
+        return;
+      }
+      // Without a temporary conversation owner the session has no temporary chats.
       if (method === "GET" && url.pathname.endsWith("/temporary-conversations")) {
         await fulfillJson(route, { conversations: [], ok: true });
         return;
       }
-      await route.fulfill({ status: 404, json: { error: "AI tasks are not part of this scenario.", ok: false } });
+      await route.fulfill({ status: 404, json: { error: "Temporary AI is not part of this scenario.", ok: false } });
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/work")) {
@@ -2085,14 +2363,16 @@ for (const width of [390, 820, 1280]) {
 }
 
 for (const width of [390, 820, 1280]) {
-  test(`@chat-return reload keeps Main selected and shows its latest messages at ${width}px`, async ({ page }, info) => {
-    // Main's history comes from the conversation owner, serving the page's session.
-    const server = await assistantStatusServer({ session: directSession() });
+  test(`@chat-return reload keeps Main selected and returning shows latest messages at ${width}px`, async ({ page }, info) => {
+    // Main and temporary history come from the conversation owner, serving the page's session.
+    const server = await assistantStatusServer({ session: directSession(), temporaryEngineId: "codex" });
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     try {
       await page.setViewportSize({ width, height: 900 });
       server.state.conversationLog = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
+      await server.temporary!.seed([{ conversationId: "saved-question", title: "Check the schema",
+        draft: "Keep this unsent question", agentSettings: {} }]);
       await mockDirectChat(page);
       // A request the person cancelled before it was sent.
       const routingRequest = { schemaVersion: 5, messageId: "old-request", mode: "senior", resolvedMode: "senior",
@@ -2112,8 +2392,18 @@ for (const width of [390, 820, 1280]) {
         Object.assign(routingRequest, { stopped: true, cancelled: true, error: undefined });
         server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });
       };
+      let restorations = 0;
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations`, async route => {
+        expect(route.request().method()).toBe("GET");
+        restorations++;
+        // Past mockDirectChat's session routes, to the fixture's conversation owner.
+        await route.continue();
+      });
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
       const body = page.locator(".studio-autopilot__conversation .assistant-transcript__body");
+      await expect.poll(() => restorations).toBe(1);
+      await expect(workspace).toBeHidden();
       await expect(body).toBeVisible();
       await expect(page.getByText("Request cancelled", { exact: true })).toHaveCount(0);
       await expect(page.getByText(routingError, { exact: true })).toHaveCount(0);
@@ -2121,12 +2411,28 @@ for (const width of [390, 820, 1280]) {
 
       await detachConversation(body, 700, width === 390 ? "touch" : "wheel");
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(600);
-      await page.reload();
-      await expect(body).toBeVisible();
+      await openTemporaryAiWorkspace(page);
+      await expect(workspace).toBeVisible();
+      await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Keep this unsent question");
+      await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
+      await expect(workspace).toBeHidden();
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(2);
       await expect(page.getByText("Request cancelled", { exact: true })).toHaveCount(0);
+
+      await page.reload();
+      await expect.poll(() => restorations).toBe(2);
+      await expect(workspace).toBeHidden();
+      await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(2);
+      await openTemporaryAiWorkspace(page);
+      await page.reload();
+      await expect.poll(() => restorations).toBe(3);
+      await expect(workspace).toBeHidden();
+      await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(2);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: info.outputPath(`main-chat-${width}.png`) });
+      await openTemporaryAiWorkspace(page);
+      await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Keep this unsent question");
+      await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
       // The same request is now unsent and waiting for the person; the server says so.
       routingRequest.stopped = false;
       server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });

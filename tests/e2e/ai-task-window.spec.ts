@@ -55,6 +55,31 @@ async function expectTouchTargets(page: Page) {
   expect(small).toEqual([]);
 }
 
+/** Opens the person's temporary chats from the session header, as a person does. */
+async function openTemporaryChats(page: Page) {
+  const action = page.getByRole("button", { name: /^Open temporary AI(?::|$)/u }).filter({ visible: true });
+  const actions = page.getByRole("button", { name: /^Session actions(?::|$)/u }).filter({ visible: true });
+  const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+  await expect(action.or(actions).or(showChat).first()).toBeVisible();
+  if (await showChat.isVisible()) await showChat.click();
+  if (await action.count()) await action.first().click();
+  else {
+    await actions.first().click();
+    await page.locator("[data-vibe64-temporary-ai-action]").filter({ visible: true }).click();
+  }
+  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+  await expect(workspace).toBeVisible();
+  return workspace;
+}
+
+/** The ids the server lists for the temporary chat tabs as the page loads. */
+function listedTemporaryChats(page: Page) {
+  return page.waitForResponse(response => response.request().method() === "GET" &&
+    new URL(response.url()).pathname.endsWith("/temporary-conversations"))
+    .then(async response => ((await response.json()).conversations as Array<{ conversationId: string }>)
+      .map(chat => chat.conversationId));
+}
+
 for (const viewport of VIEWPORTS) {
   const size = `${viewport.width}x${viewport.height}`;
   test.describe(`at ${size}`, () => {
@@ -169,6 +194,47 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
       await expectPhase(page, "done");
       await page.reload();
       await expectPhase(page, "done");
+      expect(taskIdOf(page)).toBe(taskId);
+    });
+
+    test("after a reload the person's temporary chat is a tab again and the running task stays in its own window", async ({ page }) => {
+      await aiTaskWorld(page, shared.server);
+      // The person's own temporary chat, saved as the header's New temporary chat saves it.
+      await shared.server.temporary!.seed([{ conversationId: "person-chat", title: "Check the schema",
+        draft: "Which index is missing?", agentSettings: {} }]);
+      const taskId = await openFix(page, shared.server);
+      await expectPhase(page, "working");
+      const tray = page.locator("[data-vibe64-ai-task-tray]");
+      const expectTabs = async () => {
+        const workspace = await openTemporaryChats(page);
+        await expect(workspace.locator("[data-temporary-ai-task-id]")).toHaveCount(1);
+        await expect(workspace.locator('[data-temporary-ai-task-id="person-chat"]')).toContainText("Check the schema");
+        await expect(workspace.locator(`[data-temporary-ai-task-id="${taskId}"]`)).toHaveCount(0);
+        await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Which index is missing?");
+        await expect(tray).toHaveAccessibleName("Fix Update: Fixing Update…");
+      };
+
+      await page.locator("[data-vibe64-ai-task-hide]").filter({ visible: true }).click();
+      await expect(taskWindow(page)).toBeHidden();
+      expect(taskIdOf(page)).toBe("");
+      let listed = listedTemporaryChats(page);
+      await page.reload();
+      expect(await listed).toEqual(["person-chat"]);
+      await expectTabs();
+      await page.goto(`${new URL(page.url()).origin}${new URL(page.url()).pathname}?aiTask=${encodeURIComponent(taskId)}`);
+      await expectPhase(page, "working");
+
+      // Again with the task's window open.
+      listed = listedTemporaryChats(page);
+      await page.reload();
+      expect(await listed).toEqual(["person-chat"]);
+      await expectPhase(page, "working");
+      expect(taskIdOf(page)).toBe(taskId);
+      await page.locator("[data-vibe64-ai-task-hide]").filter({ visible: true }).click();
+      await expect(taskWindow(page)).toBeHidden();
+      await expectTabs();
+      await tray.click();
+      await expectPhase(page, "working");
       expect(taskIdOf(page)).toBe(taskId);
     });
 
@@ -576,5 +642,12 @@ test.describe("what the rest of the page does", () => {
     expect(retry.messageId).toBe(failed.messageId);
     expect(retry.displayMessage).toBe("Keep the newer one.");
     expect(retry.presentation.draft).toBe("A newer draft.");
+  });
+
+  test("a chat of an AI task never appears as a temporary chat", async ({ page }) => {
+    await aiTaskWorld(page, shared.server);
+    await openFix(page, shared.server);
+    await expectPhase(page, "working");
+    await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toHaveCount(0);
   });
 });

@@ -20,7 +20,9 @@ import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
+  ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
+  ACTION_DELETE_TEMPORARY_CONVERSATION,
   ACTION_READ_TEMPORARY_CONVERSATION,
   ACTION_START_TEMPORARY_CONVERSATION_TURN,
   ACTION_STOP_TEMPORARY_CONVERSATION,
@@ -62,6 +64,14 @@ test("Main and temporary browser history default to ten messages and forward opa
 test("temporary conversation actions use durable conversation ownership", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const terminals = {
+    async createTemporaryConversation(...args) {
+      calls.push(["create", ...args]);
+      return { conversationId: "temporary-1", ok: true };
+    },
+    async deleteTemporaryConversation(...args) {
+      calls.push(["delete", ...args]);
+      return { ok: true };
+    },
     async readTemporaryConversation(...args) {
       calls.push(["read", ...args]);
       return { ok: true };
@@ -77,6 +87,10 @@ test("temporary conversation actions use durable conversation ownership", async 
   };
   const actions = createTerminalActions({ terminals });
 
+  await actionById(actions, ACTION_CREATE_TEMPORARY_CONVERSATION).execute({
+    agentSettings: { model: "gpt-test" },
+    sessionId: "session-1"
+  });
   await actionById(actions, ACTION_READ_TEMPORARY_CONVERSATION).execute({
     conversationId: "temporary-1",
     sessionId: "session-1"
@@ -92,8 +106,19 @@ test("temporary conversation actions use durable conversation ownership", async 
     sessionId: "session-1"
   });
 
-  assert.deepEqual(calls.map((entry) => entry[0]), ["read", "start", "stop"]);
-  for (const call of calls) {
+  await actionById(actions, ACTION_DELETE_TEMPORARY_CONVERSATION).execute({
+    conversationId: "temporary-1",
+    sessionId: "session-1"
+  });
+
+  assert.equal(calls[0][0], "create");
+  assert.equal(calls[0][1], "session-1");
+  assert.deepEqual(calls[0][2], {
+    agentSettings: { model: "gpt-test" },
+    sessionId: "session-1"
+  });
+  assert.deepEqual(calls.slice(1).map((entry) => entry[0]), ["read", "start", "stop", "delete"]);
+  for (const call of calls.slice(1)) {
     assert.equal(call[2].ephemeral, undefined);
   }
 }));
