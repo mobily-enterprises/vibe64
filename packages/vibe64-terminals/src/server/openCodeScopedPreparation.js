@@ -196,7 +196,8 @@ function createOpenCodeScopedPreparation({
         messageId: conversationMessageId,
         get inputMessageId() {
           return input.messageId ? upstreamMessageId(input.messageId) : "";
-        }
+        },
+        stoppedByShutdown: shutdownStoppedRun(context, input.stoppedByShutdown)
       },
       failure: throwVibe64OpenCodeError,
       onRemoved: writeSessionEnvironmentRegistry,
@@ -205,6 +206,34 @@ function createOpenCodeScopedPreparation({
       },
       get cleanupAfterDelete() {
         return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null;
+      }
+    };
+  }
+
+  /**
+   * The chat's run a previous server's shutdown stopped. The read that records
+   * it interrupted makes the checkpoint that shutdown left owed, once.
+   * @param {object} context
+   * @param {{ runId: string, checkpointTurnId?: string, routingConversationId: string } | undefined} stop
+   */
+  function shutdownStoppedRun(context, stop) {
+    if (!stop?.runId) return null;
+    return {
+      runId: stop.runId,
+      async ended() {
+        if (!stop.checkpointTurnId) return;
+        await checkpointSessionTurn({
+          project,
+          runtime: context.runtime,
+          session: context.session,
+          sessionId: context.sessionId,
+          outerTurnId: stop.checkpointTurnId,
+          outcome: "interrupted",
+          publishSessionChanged
+        });
+        await context.runtime.store.writeSessionConversation(context.sessionId, stop.routingConversationId, {
+          stoppedByShutdown: { runId: stop.runId, routingConversationId: stop.routingConversationId }
+        });
       }
     };
   }
@@ -297,18 +326,28 @@ function createOpenCodeScopedPreparation({
                   turnId: tracked.inputMessageId
                 };
               },
-              async afterClose({ stopped, outcome }) {
-                if (stopped && !executionProfile && !context.assistantScope) {
-                  await checkpointSessionTurn({
-                    project,
-                    runtime: context.runtime,
-                    session: context.session,
-                    sessionId,
-                    outerTurnId: `opencode:${conversationId}:${tracked.inputMessageId}`,
-                    outcome,
-                    publishSessionChanged
+              async afterClose({ stopped, outcome, stoppedByShutdown }) {
+                if (!stopped || executionProfile || context.assistantScope) return;
+                const outerTurnId = `opencode:${conversationId}:${tracked.inputMessageId}`;
+                const routingConversationId = input.persistent ? options.routingConversationId : "";
+                if (stoppedByShutdown && routingConversationId) {
+                  // The chat's next read, on the next server, records this turn
+                  // interrupted and makes its checkpoint, as the main chat's
+                  // recovery does. Made here, a Git snapshot would hold up shutdown.
+                  await context.runtime.store.writeSessionConversation(sessionId, routingConversationId, {
+                    stoppedByShutdown: { runId: tracked.inputMessageId, checkpointTurnId: outerTurnId, routingConversationId }
                   });
+                  return;
                 }
+                await checkpointSessionTurn({
+                  project,
+                  runtime: context.runtime,
+                  session: context.session,
+                  sessionId,
+                  outerTurnId,
+                  outcome,
+                  publishSessionChanged
+                });
               }
             };
           },

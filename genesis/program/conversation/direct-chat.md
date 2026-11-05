@@ -833,7 +833,16 @@ all share its single result and failure. They reject new Send requests, cancel p
 classification through its existing Stop owner, and await helper cleanup and the
 saved cancellation. A cleanup failure remains an explicit shutdown failure.
 Already admitted native turns keep their existing interruption/reconnect handling;
-shutdown does not start a review.
+shutdown does not start a review. An OpenCode turn the shutdown stops is marked
+`stoppedByShutdown` and its checkpoint is left to the next server: Main chat's
+saved run stays active with the mark, and the next server's readiness or goal
+reconciliation records it interrupted, with its checkpoint
+([openCodeConversationEvents.js](../../../packages/vibe64-terminals/src/server/openCodeConversationEvents.js));
+a temporary chat's record keeps the stopped run and its owed checkpoint, and the
+chat's next read reports the run interrupted and makes that checkpoint once
+([openCodeScopedPreparation.js](../../../packages/vibe64-terminals/src/server/openCodeScopedPreparation.js)).
+A Git snapshot therefore never holds up shutdown, and a restart is never
+reported as the turn's failure.
 The development example also awaits backend shutdown inside Vite's native
 `closeServer` hook, so Vite cannot exit before Claude execution cleanup is saved.
 A Vite configuration restart keeps the backend running.

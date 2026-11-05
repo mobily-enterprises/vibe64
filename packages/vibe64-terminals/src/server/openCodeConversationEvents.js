@@ -191,6 +191,8 @@ function createOpenCodeConversationEvents({
           ...(Object.hasOwn(turn, "submittedBy") ? { submittedBy: turn.submittedBy } : {}),
           error,
           observationError: toText(turn.observationError),
+          // The next server records a run the shutdown stopped as interrupted.
+          stoppedByShutdown: turn.stoppedByShutdown === true,
           phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? toText(turn.phase) : "",
           model: context.selection.modelId,
           modelProviderId: context.selection.modelProviderId,

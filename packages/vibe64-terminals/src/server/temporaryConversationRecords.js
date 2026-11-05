@@ -35,7 +35,9 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
       ...input,
       conversationId: record.providerConversationId,
       persistent: true,
-      agentSettings: input.agentSettings || record.agentSettings
+      agentSettings: input.agentSettings || record.agentSettings,
+      // The run a server's shutdown stopped reads as interrupted on the next one.
+      ...(record.stoppedByShutdown ? { stoppedByShutdown: record.stoppedByShutdown } : {})
     };
   }
 
