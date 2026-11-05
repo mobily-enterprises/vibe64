@@ -1,10 +1,16 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 // Controlled executable protocols transposed from the existing shared Codex and
 // Claude conversation fixtures. Production drivers, storage and tools stay real.
 export async function createControlledColleagueNativeCommands(root, responses) {
   const directory = path.join(root, "controlled-native");
+  // Codex's app-server listens on a Unix socket below its runtime directory. A
+  // socket path holds at most 107 bytes (103 on macOS), and TMPDIR, so the test
+  // root, may name a long folder; the runtime directory is a short one in /tmp,
+  // as the Preview fixture's sockets are, and its test removes it with the root.
+  const runtimeDirectory = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-test-native-"));
   await mkdir(path.join(directory, "claude"), { recursive: true });
   const trace = path.join(directory, "trace.jsonl");
   const account = path.join(directory, "account.txt");
@@ -366,9 +372,10 @@ export async function createControlledColleagueNativeCommands(root, responses) {
     });
   `, { mode: 0o700 });
   return {
+    runtimeDirectory,
     async enqueue(responses) { await writeFile(queue, JSON.stringify(responses)); },
     host(scope) {
-      return { workdir: scope.workdir, stateDirectory: scope.runtimeRoot, runtimeDirectory: directory,
+      return { workdir: scope.workdir, stateDirectory: scope.runtimeRoot, runtimeDirectory,
         // Omitted execution uses the original standalone local native owner.
         env: { ...process.env, HOME: directory, CODEX_HOME: path.join(directory, "codex"),
           CLAUDE_CONFIG_DIR: path.join(directory, "claude"), ANTHROPIC_AUTH_TOKEN: "", ANTHROPIC_API_KEY: "",

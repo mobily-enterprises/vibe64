@@ -101,6 +101,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   }
   if (!systemRoot) resources.roots.push(root);
   const nativeCommands = native === true ? await createControlledColleagueNativeCommands(root, responses) : native || null;
+  if (native === true) resources.roots.push(nativeCommands.runtimeDirectory);
   if (nativeCommands && native !== true) await nativeCommands.enqueue(responses);
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const observations = { starts: [], summaries: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
@@ -4340,6 +4341,7 @@ async function r11LiteralLegacyFixture(t, responses) {
   assert.deepEqual(await native.trace(), [], "published feature transformations do not run inference or native cleanup");
   const f = await fixture(t, responses, { systemRoot: root, native });
   t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(native.runtimeDirectory, { recursive: true, force: true }));
   return { ...f, file, legacy, originalBytes, nativeMarker, upgraded };
 }
 
@@ -4652,6 +4654,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.deepEqual(await native.trace(), traceBefore, "Numbered upgrades send no native requests or cleanup");
   const f = await fixture(t, [{ text: reply("The saved discussion continues.") }], { systemRoot: root, native });
   t.after(() => rm(root, { force: true, recursive: true }));
+  t.after(() => rm(native.runtimeDirectory, { force: true, recursive: true }));
   assert.deepEqual((await f.service.read({}, f.context)).messages.map(({ role, text }) => [role, text]),
     conversationLog.flatMap(row => row.messages.map(({ role, text }) => [role, text])));
   assert.deepEqual(await native.trace(), traceBefore, "Opening upgraded history starts no native work");
@@ -4867,6 +4870,7 @@ test("controlled native trace defers only an unfinished appended JSONL record", 
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-native-trace-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const native = await createControlledColleagueNativeCommands(root, []);
+  t.after(() => rm(native.runtimeDirectory, { recursive: true, force: true }));
   const file = path.join(root, "controlled-native", "trace.jsonl");
   await writeFile(file, '{"method":"thread/start"}\n{"method":"turn/');
   assert.deepEqual(await native.trace(), [{ method: "thread/start" }]);
