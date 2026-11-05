@@ -1,5 +1,6 @@
-// The one named browser window a project's launched outputs open in, and the
-// editor state remembered under that window's name.
+// The one named browser tab a project's launched outputs open in, and the
+// editor state remembered under that tab's name. No window features are passed,
+// so the browser opens a normal tab with an editable address bar, not a popup.
 import { stableLocalStorageKeyPart } from "@/lib/browserLocalStorage.js";
 import {
   currentProjectSlugFromLocation,
@@ -10,8 +11,6 @@ import {
   localPreviewBrowserHref,
   resolveLaunchPreviewDestination
 } from "@/lib/vibe64LaunchPreviewDestination.js";
-
-const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 
 function launchBrowserTargetName(session = {}, projectSlug = currentProjectSlugFromLocation()) {
   const projectScope = String(projectSlug || "").trim() ||
@@ -55,11 +54,7 @@ function openLaunchBrowserTarget(
   }
 
   const href = launchBrowserTargetHref(target, activeWindow);
-  const openedWindow = activeWindow.open(
-    href,
-    launchBrowserTargetName(session, projectSlug),
-    LAUNCH_BROWSER_WINDOW_FEATURES
-  );
+  const openedWindow = activeWindow.open(href, launchBrowserTargetName(session, projectSlug));
   if (!openedWindow) {
     return null;
   }
@@ -91,11 +86,7 @@ function openPendingLaunchBrowserWindow(
   if (!activeWindow?.open) {
     return null;
   }
-  const openedWindow = activeWindow.open(
-    "about:blank",
-    launchBrowserTargetName(session, projectSlug),
-    LAUNCH_BROWSER_WINDOW_FEATURES
-  );
+  const openedWindow = activeWindow.open("about:blank", launchBrowserTargetName(session, projectSlug));
   if (!openedWindow) {
     return null;
   }

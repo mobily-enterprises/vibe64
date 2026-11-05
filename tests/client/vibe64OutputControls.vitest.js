@@ -94,7 +94,7 @@ describe("Vibe64 launch controls", () => {
       .not.toBe(launchBrowserTargetName(firstSession, "beta_2"));
   });
 
-  it("opens launch targets in the named browser target", () => {
+  it("opens launch targets in the named browser tab without popup window features", () => {
     const browserWindow = fakeBrowserWindow();
     const target = {
       href: "http://127.0.0.1:4100",
@@ -108,8 +108,7 @@ describe("Vibe64 launch controls", () => {
 
     expect(browserWindow.open).toHaveBeenCalledWith(
       target.href,
-      launchBrowserTargetName(session),
-      "popup,width=1400,height=900,left=80,top=60"
+      launchBrowserTargetName(session)
     );
     expect(openedWindow.opener).toBeNull();
     expect(openedWindow.focus).toHaveBeenCalledTimes(1);
@@ -133,12 +132,11 @@ describe("Vibe64 launch controls", () => {
     expect(launchBrowserTargetHref(target, browserWindow)).toBe(target.previewHref);
     expect(browserWindow.open).toHaveBeenCalledWith(
       target.previewHref,
-      launchBrowserTargetName(session),
-      "popup,width=1400,height=900,left=80,top=60"
+      launchBrowserTargetName(session)
     );
   });
 
-  it("opens a pending browser window and navigates it when launch is ready", () => {
+  it("opens a pending browser tab and navigates it when launch is ready", () => {
     const browserWindow = fakeBrowserWindow();
     const session = {
       targetRoot: "/workspace/customer-app"
@@ -153,8 +151,7 @@ describe("Vibe64 launch controls", () => {
 
     expect(browserWindow.open).toHaveBeenCalledWith(
       "about:blank",
-      launchBrowserTargetName(session),
-      "popup,width=1400,height=900,left=80,top=60"
+      launchBrowserTargetName(session)
     );
     expect(readyWindow).toBe(pendingWindow);
     expect(pendingWindow.location.href).toBe(target.href);
