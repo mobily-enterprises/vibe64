@@ -274,6 +274,19 @@ function managedPlaywrightStorageState(applicationRoot = "", identity = "default
   };
 }
 
+// A config that never reads the supplied login runs every test signed out, which looks like broken
+// sign-in; saying which variable to read points at the one-line fix.
+function warnWhenConfigIgnoresLogin(applicationRoot = "") {
+  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
+    .find((name) => existsSync(path.join(applicationRoot, name)));
+  if (configName && !readFileSync(path.join(applicationRoot, configName), "utf8").includes("PLAYWRIGHT_STORAGE_STATE")) {
+    process.stderr.write(
+      "Vibe64 supplies the signed-in browser state in PLAYWRIGHT_STORAGE_STATE, but " + configName +
+      " never reads it, so these tests run signed out. Pass process.env.PLAYWRIGHT_STORAGE_STATE to use.storageState there.\\n"
+    );
+  }
+}
+
 function childEnv(runtime = {}, preview = {}, authentication = null) {
   return {
     ...process.env,
@@ -358,6 +371,9 @@ function managedExecution(runtime = {}, applicationRoot = "", {
   const authentication = preview.managed && preview.identityRequired
     ? managedPlaywrightStorageState(applicationRoot, identity, preview.baseUrl)
     : null;
+  if (authentication) {
+    warnWhenConfigIgnoresLogin(applicationRoot);
+  }
   return {
     cleanupRoot: authentication?.directory || "",
     env: childEnv(runtime, preview, authentication)
@@ -483,8 +499,7 @@ if (!runtime) {
 }
 if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.PLAYWRIGHT_STORAGE_STATE || "").trim())) {
   fail("--target uses its own managed Preview URL and identity. Remove PLAYWRIGHT_BASE_URL and PLAYWRIGHT_STORAGE_STATE.", 64);
-}
-let runner;
+}let runner;
 let runnerArgs;
 if (command === "test") {
   runner = "node";

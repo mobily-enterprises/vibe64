@@ -148,6 +148,8 @@ identity executable that still reads the normal database.
 The Playwright configuration must use `PLAYWRIGHT_BASE_URL` and
 `PLAYWRIGHT_STORAGE_STATE` when supplied, and omit its own `webServer` in
 that case. Keep standalone execution working with the application's own setup.
+When Vibe64 supplies a login and the configuration never reads
+`PLAYWRIGHT_STORAGE_STATE`, the run warns that its tests run signed out.
 Do not overwrite `DB_NAME` in the test runner just to satisfy a safety check:
 that cannot prove which database the independently running server uses.
 

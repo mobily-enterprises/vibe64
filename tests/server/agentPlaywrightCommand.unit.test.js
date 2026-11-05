@@ -826,6 +826,43 @@ test("managed Playwright test command reports a managed-preview blocker before s
   }
 });
 
+test("managed Playwright warns when the project's config never reads the supplied login", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-unread-login-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.61.1");
+    await writeAuthenticatedPreviewWrapper(
+      fixture.prepared.hostWrapperPath,
+      "http://127.0.0.1:4104/home",
+      path.join(fixture.runtimeRoot, "node26", "bin", "npm")
+    );
+    const configPath = path.join(fixture.projectRoot, "playwright.config.mjs");
+    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+      cwd: fixture.projectRoot,
+      env: {
+        ...process.env,
+        ...fixture.prepared.env,
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+      }
+    });
+
+    await writeFile(configPath, "export default { use: { storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n");
+    const reading = await run();
+    assert.doesNotMatch(reading.stderr, /never reads it/u);
+
+    await writeFile(configPath, "export default { use: { storageState: process.env.APP_LOGIN_STATE } };\n");
+    const ignoring = await run();
+    assert.match(ignoring.stderr, /playwright\.config\.mjs never reads it, so these tests run signed out/u);
+    assert.equal(JSON.parse(ignoring.stdout).storageStateExists, true, "The tests still run with the login supplied");
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("managed Playwright preserves browser startup diagnostics without claiming an authentication failure", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-browser-blocker-"));
   let fixture;
