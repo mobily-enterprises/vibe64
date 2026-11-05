@@ -241,6 +241,8 @@ function normalizeCodexSessionResult(result = {}) {
  * @param {RuntimeEnv} dependencies.env
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {CodexSessionTurnCheckpoint} dependencies.checkpoint
+ * @param {(context: object, stop: object | undefined) => object | null} dependencies.shutdownStoppedRun
+ *   A temporary chat's run a previous server's shutdown stopped, as its read takes it.
  */
 function createCodexSessionAgentProvider({
   connectionStatus,
@@ -257,7 +259,8 @@ function createCodexSessionAgentProvider({
   attachments,
   env,
   publishSessionChanged,
-  checkpoint: checkpointCodexAppServerTurn
+  checkpoint: checkpointCodexAppServerTurn,
+  shutdownStoppedRun
 }) {
   if (!codexAssistantCatalog) {
     throw new TypeError("Codex session agent provider requires its catalogue facility.");
@@ -501,7 +504,12 @@ function createCodexSessionAgentProvider({
       return {
         scopedConversationId: toText(input.conversationId) ? input.conversationId : undefined,
         get input() {
-          return message || { ...input, agentSettings: codexAssistantSettings(context, input) };
+          return message || {
+            ...input,
+            agentSettings: codexAssistantSettings(context, input),
+            ...(method === "readConversation" && input.stoppedByShutdown
+              ? { stoppedByShutdown: shutdownStoppedRun(context, input.stoppedByShutdown) } : {})
+          };
         }
       };
     }

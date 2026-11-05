@@ -5,7 +5,7 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
+import { checkpointSessionTurn, shutdownStoppedRun } from "./sessionTurnCheckpoint.js";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
@@ -197,7 +197,7 @@ function createOpenCodeScopedPreparation({
         get inputMessageId() {
           return input.messageId ? upstreamMessageId(input.messageId) : "";
         },
-        stoppedByShutdown: shutdownStoppedRun(context, input.stoppedByShutdown)
+        stoppedByShutdown: shutdownStoppedRun({ project, publishSessionChanged }, context, input.stoppedByShutdown)
       },
       failure: throwVibe64OpenCodeError,
       onRemoved: writeSessionEnvironmentRegistry,
@@ -206,34 +206,6 @@ function createOpenCodeScopedPreparation({
       },
       get cleanupAfterDelete() {
         return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null;
-      }
-    };
-  }
-
-  /**
-   * The chat's run a previous server's shutdown stopped. The read that records
-   * it interrupted makes the checkpoint that shutdown left owed, once.
-   * @param {object} context
-   * @param {{ runId: string, checkpointTurnId?: string, routingConversationId: string } | undefined} stop
-   */
-  function shutdownStoppedRun(context, stop) {
-    if (!stop?.runId) return null;
-    return {
-      runId: stop.runId,
-      async ended() {
-        if (!stop.checkpointTurnId) return;
-        await checkpointSessionTurn({
-          project,
-          runtime: context.runtime,
-          session: context.session,
-          sessionId: context.sessionId,
-          outerTurnId: stop.checkpointTurnId,
-          outcome: "interrupted",
-          publishSessionChanged
-        });
-        await context.runtime.store.writeSessionConversation(context.sessionId, stop.routingConversationId, {
-          stoppedByShutdown: { runId: stop.runId, routingConversationId: stop.routingConversationId }
-        });
       }
     };
   }

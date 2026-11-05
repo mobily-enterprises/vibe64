@@ -45,8 +45,8 @@ as such; expand **Technical details** for the original error and recovery steps.
 Vibe64 attempts another snapshot when the next assistant turn finishes, including
 failed or stopped turns—not immediately when you send a message. A successful
 snapshot clears the warning automatically. A Vibe64 restart does not cause this
-warning for an OpenCode turn it stopped: that turn's snapshot is saved after the
-restart (for a chat, once it is opened). A snapshot stops after two minutes at
+warning for a Codex or OpenCode turn it stopped: that turn's snapshot is saved
+after the restart (for a chat, once it is opened). A snapshot stops after two minutes at
 most, and a later snapshot removes the temporary files of one that was stopped.
 
 Select **Dismiss** to hide this particular failure. This takes effect immediately
@@ -86,7 +86,8 @@ this desktop/mobile recovery but cannot perform the host operation.
 If Codex stops while the editor restores its managed controls, its notice identifies
 that interruption. An interruption with no known cause is not reported as a
 provider failure. **Stop**, service restart, missing final-response delivery and a
-confirmed provider failure retain their distinct notices. Your saved file changes
+confirmed provider failure retain their distinct notices: a turn a Vibe64 restart
+stopped reads **Codex was interrupted by a Vibe64 restart before it could finish**. Your saved file changes
 remain; inspect the result and send a new message when ready to continue.
 
 If Codex reaches its total usage allowance, the chat shows the provider's limit

@@ -36,7 +36,9 @@ import {
   createCodexAppServerRunOwner
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
-  createCodexSessionTurnCheckpoint
+  createCodexDeferredTurnCheckpoint,
+  createCodexSessionTurnCheckpoint,
+  shutdownStoppedRun
 } from "./sessionTurnCheckpoint.js";
 import {
   vibe64ErrorResponse
@@ -358,6 +360,7 @@ function createCodexSessionRegistration({
     messageIdPrefix: "vibe64:",
     idlePublishPayload: VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD,
     checkpoint: checkpointCodexAppServerTurn,
+    deferCheckpoint: createCodexDeferredTurnCheckpoint({ project }),
     messageMetadata: {
       actor: currentConversationActorMetadata,
       delivered: codexDeliveredConversationMetadata,
@@ -531,7 +534,8 @@ function createCodexSessionRegistration({
     runNativeDetachedConversation,
     env,
     publishSessionChanged: publishCodexConversationEvent,
-    checkpoint: checkpointCodexAppServerTurn
+    checkpoint: checkpointCodexAppServerTurn,
+    shutdownStoppedRun: (context, stop) => shutdownStoppedRun({ project, publishSessionChanged }, context, stop)
   });
   return Object.freeze({
     provider,

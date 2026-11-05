@@ -14,9 +14,10 @@ directory is prepared. Wait for preparation to finish before using the chat.
 If preparation fails, resolve the reported error and retry; the saved conversation
 is retained and preparation does not send a message. Colleague can explain the
 error; an installation problem requires the workspace operator.
-A Vibe64 restart that stopped an OpenCode turn is not a failure: once Vibe64 runs
-again (for a chat, once it is opened), the turn ends without an error and its
-recovery snapshot is saved. An AI task then reads **Vibe64 restarted while the AI was working**; use
+A Vibe64 restart that stopped a Codex or OpenCode turn is not a failure: once
+Vibe64 runs again (for a chat, once it is opened), the turn ends without an error
+and its recovery snapshot is saved. In Main chat, Codex then reads **Codex was
+interrupted by a Vibe64 restart before it could finish**. An AI task then reads **Vibe64 restarted while the AI was working**; use
 **Continue**. In Main chat or a temporary chat, send a message when ready to
 continue.
 When Claude or OpenCode reports a model or execution failure, read the reported

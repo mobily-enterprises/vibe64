@@ -184,8 +184,8 @@ does not require connecting a different assistant just to stop that session.
 If a local editor ends uncleanly (a crash, a closed terminal or a forced
 shutdown) while Claude is working, its Claude process ends with it, and after
 the restart that chat can be read, messaged, archived and removed as usual.
-After a Vibe64 restart, an OpenCode turn it stopped ends without an error and
-gets its recovery snapshot.
+After a Vibe64 restart, a Codex or OpenCode turn it stopped ends without an
+error and gets its recovery snapshot.
 A session whose workspace could not be created never started its assistant, so
 archiving it skips that assistant's cleanup; it also does not hold the project
 open or make project Close fail.

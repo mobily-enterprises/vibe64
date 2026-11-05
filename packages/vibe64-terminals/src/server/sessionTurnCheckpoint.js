@@ -76,6 +76,27 @@ async function checkpointSessionTurn({
   return { ok: !failure, processed: true, task, ...(failure ? { error: failure } : { checkpoint }) };
 }
 
+function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
+  const normalizedTurnOutcome = normalizeText(turnOutcome);
+  if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
+    return "cancelled";
+  }
+  if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.SERVICE_RESTART) {
+    return "interrupted";
+  }
+  if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE) {
+    return "failed";
+  }
+  const normalizedStatus = normalizeText(status);
+  if (normalizedStatus === "interrupted") {
+    return "interrupted";
+  }
+  if (normalizedStatus === "completed") {
+    return "completed";
+  }
+  return "failed";
+}
+
 /**
  * Preserve the original Codex Main and temporary checkpoint projections.
  * The native owner still decides when the existing callback is invoked.
@@ -84,27 +105,6 @@ async function checkpointSessionTurn({
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
 function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
-  function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
-    const normalizedTurnOutcome = normalizeText(turnOutcome);
-    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
-      return "cancelled";
-    }
-    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.SERVICE_RESTART) {
-      return "interrupted";
-    }
-    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE) {
-      return "failed";
-    }
-    const normalizedStatus = normalizeText(status);
-    if (normalizedStatus === "interrupted") {
-      return "interrupted";
-    }
-    if (normalizedStatus === "completed") {
-      return "completed";
-    }
-    return "failed";
-  }
-
   async function checkpointCodexAppServerTurn(sessionId = "", options = {}) {
     const {
       status = "completed",
@@ -149,4 +149,63 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
   return checkpointCodexAppServerTurn;
 }
 
-export { checkpointSessionTurn, createCodexSessionTurnCheckpoint };
+/**
+ * The chat's run a previous server's shutdown stopped, as its assistant's read
+ * takes it. The read that records the run ended makes the checkpoint that
+ * shutdown left owed, once.
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {{ runtime?: object | null, session?: object | null, sessionId: string }} context
+ * @param {{ runId: string, checkpointTurnId?: string, routingConversationId: string, outcome?: string } | undefined} stop
+ */
+function shutdownStoppedRun({ project, publishSessionChanged }, context, stop) {
+  if (!stop?.runId) return null;
+  return {
+    runId: stop.runId,
+    async ended() {
+      if (!stop.checkpointTurnId) return;
+      const runtime = context.runtime || await project.createRuntimeWithoutSource();
+      await checkpointSessionTurn({
+        project,
+        runtime,
+        session: context.session,
+        sessionId: context.sessionId,
+        outerTurnId: stop.checkpointTurnId,
+        outcome: stop.outcome || "interrupted",
+        publishSessionChanged
+      });
+      await runtime.store.writeSessionConversation(context.sessionId, stop.routingConversationId, {
+        stoppedByShutdown: { runId: stop.runId, routingConversationId: stop.routingConversationId }
+      });
+    }
+  };
+}
+
+/**
+ * A temporary chat's Codex turn that the server's shutdown stops, or that ends
+ * while the server stops, leaves its checkpoint to the next server: the chat's
+ * record holds it until that server's read makes it. Made at shutdown, a Git
+ * snapshot would hold the shutdown up.
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ */
+function createCodexDeferredTurnCheckpoint({ project }) {
+  return async function deferCodexAppServerTurnCheckpoint(sessionId = "", options = {}) {
+    const { status = "completed", turnOutcome = "", outerTurnId = "", threadId = "", turnId = "" } = options;
+    const runtime = await project.createRuntimeWithoutSource();
+    const record = (await runtime.store.listSessionConversations(sessionId))
+      .find(conversation => conversation.providerConversationId === threadId);
+    if (!record) return;
+    await runtime.store.writeSessionConversation(sessionId, record.conversationId, {
+      stoppedByShutdown: {
+        runId: turnId,
+        checkpointTurnId: outerTurnId,
+        routingConversationId: record.conversationId,
+        outcome: checkpointOutcomeForCodexTurn(status, turnOutcome)
+      }
+    });
+  };
+}
+
+export { checkpointSessionTurn, createCodexDeferredTurnCheckpoint, createCodexSessionTurnCheckpoint, shutdownStoppedRun };

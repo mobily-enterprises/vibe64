@@ -841,6 +841,18 @@ reconciliation records it interrupted, with its checkpoint
 a temporary chat's record keeps the stopped run and its owed checkpoint, and the
 chat's next read reports the run interrupted and makes that checkpoint once
 ([openCodeScopedPreparation.js](../../../packages/vibe64-terminals/src/server/openCodeScopedPreparation.js)).
+A Codex turn follows the same contract through JSKIT's run owner, which hands
+each running turn over before any Codex process stops. Main chat's saved run
+stays active with the turn's mark, and the next server's recovery ends it
+interrupted with the restart notice ("Codex was interrupted by a Vibe64
+restart…") and its interrupted checkpoint. A temporary chat's turn goes to the
+owner's `deferCheckpoint`, which writes the same `stoppedByShutdown` record on
+the chat whose native thread it is; the chat's next read passes it back and
+makes that checkpoint once
+([sessionTurnCheckpoint.js](../../../packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js)).
+A Codex turn that ends on its own once its owner is closing is left to the next
+server the same way, with its own outcome. Both engines share
+`shutdownStoppedRun`, the read side of that record.
 A Git snapshot therefore never holds up shutdown, and a restart is never
 reported as the turn's failure.
 The development example also awaits backend shutdown inside Vite's native
