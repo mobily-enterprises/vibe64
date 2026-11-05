@@ -75,7 +75,7 @@
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
-    "@jskit-ai/http-web": "0.2.10",
+    "@jskit-ai/http-web": "0.2.11",
     "@jskit-ai/kernel": "0.2.5",
     "@jskit-ai/realtime": "0.2.9",
     "@jskit-ai/shell-web": "0.2.6",
