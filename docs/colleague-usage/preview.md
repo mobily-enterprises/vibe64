@@ -125,11 +125,19 @@ will retry automatically.** This refusal happens before the app starts; it does
 not create another lesson attempt. Other startup errors still require an explicit
 retry after you inspect the failure.
 
-If the page opens while the application cannot be reached, for example during the
-second or two a development server takes to restart after an Env change, Preview
-shows **Starting preview.** and waits. It checks about once a second and opens the
-page by itself, in its default identity, as soon as the application answers, so
-you do not need to reload.
+When the application's development server restarts itself after it has already
+answered, for example a moment after an Env change or a change to its own
+configuration, Preview holds the page's requests until the server answers again,
+for up to about 3 seconds. A page that was opening or still loading its modules
+at that moment then finishes loading as usual, instead of flashing the
+application's own error, such as "The application could not open". Form posts and
+other requests that carry data are never sent twice: one sent during the restart
+still fails, and the application reports it as usual.
+
+If the page opens while the application has not answered yet, or stays
+unreachable for longer than that, Preview shows **Starting preview.** and waits.
+It checks about once a second and opens the page by itself, in its default
+identity, as soon as the application answers, so you do not need to reload.
 If it keeps waiting, the application is not answering: use **Show run output** to
 see why.
 

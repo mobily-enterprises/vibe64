@@ -3,6 +3,7 @@
 
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { setTimeout as delay } from "node:timers/promises";
 import { PREVIEW_IDENTITY_CONTROL_PATH } from "@local/vibe64-core/server/previewAuth";
 import { vibe64SessionDebugDurationMs, vibe64SessionDebugError } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { activeUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
@@ -38,6 +39,31 @@ import {
 // An HTML page is buffered to inject the bridge; anything larger is refused
 // rather than held in the daemon's memory.
 const PREVIEW_HTML_INJECTION_LIMIT_BYTES = 16 * 1024 * 1024;
+
+// A development server that restarts itself, as Vite does when `.env` or its
+// config changes, stops listening for a moment and drops the requests it was
+// answering. A page loading in that moment would get an error for each module
+// it asked for, and an app whose module failed to load shows its own error
+// until the page is reloaded. So once the app has answered through this proxy,
+// a request the proxy can send again unchanged, a GET or HEAD without a body,
+// waits for the app to answer again, trying every
+// PREVIEW_TARGET_RETRY_INTERVAL_MS, for up to the proxy's restart wait. An app
+// that has never answered is still starting, and gets the proxy's own answer at
+// once, as does one that stays away for the whole wait. Vite's restart after an
+// `.env` change kept the app away for 3 to 1,352 ms (median 17 ms) in 90
+// measured restarts; the wait leaves room for a slower machine.
+const DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS = 3_000;
+const PREVIEW_TARGET_RETRY_INTERVAL_MS = 50;
+// Refused while the server is down; reset or broken when it closes a
+// connection it had not answered on yet.
+const PREVIEW_TARGET_AWAY_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "EPIPE"]);
+
+function requestCanBeSentAgain(request) {
+  const method = String(request.method || "GET").toUpperCase();
+  return ["GET", "HEAD"].includes(method) &&
+    !requestHeader(request, "transfer-encoding") &&
+    !(Number(requestHeader(request, "content-length")) > 0);
+}
 
 function rejectPreviewRequest(response) {
   response.writeHead(403, {
@@ -204,6 +230,8 @@ async function proxyPreviewRequest(request, response, {
   locatorSource = "",
   previewAuth = null,
   proxyOrigin = "",
+  targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS,
+  targetState = { answered: false },
   tracker,
   tokenScope = {},
   token = "",
@@ -284,6 +312,10 @@ async function proxyPreviewRequest(request, response, {
     if (recordedRequest) {
       response.once("close", () => recordedRequest.finish({ status: response.statusCode }));
     }
+    let browserWaiting = true;
+    response.once("close", () => {
+      browserWaiting = false;
+    });
     const targetResponse = await requestPreviewTarget(targetUrl, {
       body: request,
       headers: proxyRequestHeaders(request.headers, targetUrl, {
@@ -294,8 +326,11 @@ async function proxyPreviewRequest(request, response, {
         usageRequestId: recordedRequest?.requestId || ""
       }),
       method,
-      tracker
+      restartWaitMs: targetState.answered && requestCanBeSentAgain(request) ? targetRestartWaitMs : 0,
+      tracker,
+      waiting: () => browserWaiting
     });
+    targetState.answered = true;
     const contentType = String(targetResponse.headers["content-type"] || "");
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
       const html = await streamText(targetResponse, {
@@ -392,11 +427,46 @@ async function proxyPreviewRequest(request, response, {
 }
 
 /**
+ * The app's response, sent again while the app is away for up to
+ * `restartWaitMs` and the browser still `waiting()` (see
+ * DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS); 0 sends once.
  * @param {URL} targetUrl
  * @param {object} options
  * @param {import("node:http").IncomingMessage} options.body the browser's request, streamed upstream
+ * @param {number} [options.restartWaitMs]
+ * @param {() => boolean} [options.waiting]
  */
-function requestPreviewTarget(targetUrl, {
+async function requestPreviewTarget(targetUrl, {
+  body,
+  headers = {},
+  method = "GET",
+  restartWaitMs = 0,
+  tracker,
+  waiting = () => true
+}) {
+  const deadline = Date.now() + restartWaitMs;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      // The first attempt carries the browser's request; one sent again has no body to carry.
+      return await requestPreviewTargetOnce(targetUrl, { body: attempt === 0 ? body : null, headers, method, tracker });
+    } catch (error) {
+      if (!PREVIEW_TARGET_AWAY_CODES.has(error?.code) || Date.now() + PREVIEW_TARGET_RETRY_INTERVAL_MS > deadline) {
+        throw error;
+      }
+      await delay(PREVIEW_TARGET_RETRY_INTERVAL_MS);
+      if (!waiting()) {
+        throw error;
+      }
+    }
+  }
+}
+
+/**
+ * @param {URL} targetUrl
+ * @param {object} options
+ * @param {import("node:http").IncomingMessage | null} options.body the browser's request, streamed upstream; null sends none
+ */
+function requestPreviewTargetOnce(targetUrl, {
   body,
   headers = {},
   method = "GET",
@@ -412,6 +482,10 @@ function requestPreviewTarget(targetUrl, {
     });
     tracker.trackRequest(upstreamRequest, "upstream-http-request");
     upstreamRequest.once("error", reject);
+    if (!body) {
+      upstreamRequest.end();
+      return;
+    }
     // The browser's body streams through for every method, keeping its own
     // content-length or chunked framing; an aborted upload aborts upstream.
     body.once("close", () => {
@@ -557,6 +631,7 @@ function upgradeResponseHead(response) {
 }
 
 export {
+  DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS,
   proxyPreviewRequest,
   proxyPreviewUpgrade
 };

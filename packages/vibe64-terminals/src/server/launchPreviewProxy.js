@@ -31,7 +31,7 @@ import {
   trackPreviewServerSockets
 } from "./launchPreviewConnections.js";
 import { createPreviewIdentityGrantConsumer } from "./launchPreviewIdentity.js";
-import { proxyPreviewRequest, proxyPreviewUpgrade } from "./launchPreviewForwarding.js";
+import { DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS, proxyPreviewRequest, proxyPreviewUpgrade } from "./launchPreviewForwarding.js";
 import { createPreviewFrameLoadRecorder } from "./launchPreviewFrameLoads.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -58,10 +58,12 @@ function normalizePreviewProxySocketIdleTimeoutMs(value, env) {
  * @param {object} options
  * @param {RuntimeEnv} options.env the configured Preview env
  * @param {number} [options.socketIdleTimeoutMs]
+ * @param {number} [options.targetRestartWaitMs] how long a repeatable request waits for an app that went away
  */
 function createLaunchPreviewProxyRegistry({
   env,
-  socketIdleTimeoutMs = undefined
+  socketIdleTimeoutMs = undefined,
+  targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS
 }) {
   const proxies = new Map();
   const pendingStarts = new Map();
@@ -219,6 +221,7 @@ function createLaunchPreviewProxyRegistry({
         publicOrigin,
         recordFrameLoad: input.recordFrameLoad,
         socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs,
+        targetRestartWaitMs,
         token
       });
       if (pendingEntry.closeRequested) {
@@ -414,6 +417,7 @@ async function startLaunchPreviewProxy({
     publicOrigin = "",
     recordFrameLoad = () => {},
     socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS,
+    targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS,
     token
   } = options;
   if (!token) {
@@ -438,6 +442,8 @@ async function startLaunchPreviewProxy({
     ? createPreviewIdentityGrantConsumer(previewAuth)
     : null;
   let proxyOrigin = "";
+  // Whether the app has answered through this proxy, so a refusal now is a restart.
+  const targetState = { answered: false };
   // Editors that were handed this Preview; only they may talk to its bridge.
   const editorOrigins = new Set();
   // The project's Preview locator, inlined into each page's bridge.
@@ -452,6 +458,8 @@ async function startLaunchPreviewProxy({
       locatorSource,
       previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
+      targetRestartWaitMs,
+      targetState,
       tracker,
       token,
       tokenScope,

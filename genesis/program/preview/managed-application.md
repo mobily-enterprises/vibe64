@@ -560,7 +560,17 @@ Request bodies of every method stream to the application with the browser's own
 content-length or chunked framing; the proxy does not hold uploads in memory.
 HTML responses are buffered only to inject the bridge, up to 16 MB; a larger page
 fails with 502 `vibe64_preview_html_too_large` rather than the starting page.
-A page request that cannot reach the application gets that starting page, a 503.
+A development server that restarts itself, as Vite does after a `.env` or config
+change, refuses connections for a moment and drops the requests it had not answered.
+Once the application has answered through the proxy, a request the proxy can send
+again unchanged, a GET or HEAD without a body, is therefore sent again every 50 ms
+while the application refuses or drops it, for up to 3 seconds, so a page loading
+its modules in that moment gets them from the restarted server instead of failing
+on them and showing the application's own error. Vite's restart after a `.env`
+change was measured at 3 to 1,352 ms. An application that has never answered is
+still starting and is not waited for. A request with a body is sent once and fails
+with 502, so it is never repeated. A page request that still cannot reach the
+application gets that starting page, a 503.
 The editor requests its frame only when Preview becomes ready, so the page checks
 its own address once a second and reloads when the answer is no longer 503. It has
 no automatic refresh, which would make it blink while it waits. It has no bridge,

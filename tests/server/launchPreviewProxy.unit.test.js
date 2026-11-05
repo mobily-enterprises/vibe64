@@ -1971,6 +1971,74 @@ test("launch preview proxy records a page load that got the starting page and th
   }
 });
 
+test("a module the page asks for while its app restarts is answered by the restarted app", async () => {
+  const seen = [];
+  let dropNext = false;
+  const target = createServer((request, response) => {
+    seen.push(`${request.method} ${request.url}`);
+    if (dropNext) {
+      // A restarting dev server closes the connections it has not answered yet.
+      dropNext = false;
+      request.socket.destroy();
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "text/javascript" });
+    response.end(`export default ${JSON.stringify(request.url)};`);
+  });
+  const listen = (port = 0) => new Promise(resolve => target.listen(port, "127.0.0.1", resolve));
+  const stop = () => {
+    target.closeAllConnections();
+    return new Promise(resolve => target.close(resolve));
+  };
+  await listen();
+  const { port } = target.address();
+  await stop();
+  const targetRestartWaitMs = 5000;
+  const registry = createLaunchPreviewProxyRegistry({ env: process.env, targetRestartWaitMs });
+  try {
+    const preview = await registry.ensure("session-restart-wait", `http://127.0.0.1:${port}/home`);
+    const cookie = await previewBootstrapCookie(preview.href);
+    const load = (pathname, init = {}) => fetch(`${new URL(preview.href).origin}${pathname}`, {
+      ...init,
+      headers: { Accept: "*/*", Cookie: cookie }
+    });
+
+    // An app that has never answered is still starting: the starting page comes at once.
+    const askedAt = Date.now();
+    const starting = await load("/src/main.js");
+    assert.equal(starting.status, 503);
+    assert.match(await starting.text(), /Starting preview\./u);
+    assert.ok(Date.now() - askedAt < targetRestartWaitMs / 2);
+
+    await listen(port);
+    assert.equal((await load("/src/app.js")).status, 200);
+
+    // The app stops listening for a moment, as Vite does when `.env` changes.
+    await stop();
+    const waiting = load("/src/main.js");
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await listen(port);
+    const restarted = await waiting;
+    assert.equal(restarted.status, 200);
+    assert.equal(await restarted.text(), "export default \"/src/main.js\";");
+
+    dropNext = true;
+    const dropped = await load("/src/pages/home.vue");
+    assert.equal(dropped.status, 200);
+    assert.equal(await dropped.text(), "export default \"/src/pages/home.vue\";");
+    assert.equal(seen.filter(entry => entry === "GET /src/pages/home.vue").length, 2);
+
+    // A request with a body is never sent twice.
+    dropNext = true;
+    const write = await load("/api/save", { body: "once", method: "POST" });
+    assert.equal(write.status, 502);
+    assert.equal(seen.filter(entry => entry === "POST /api/save").length, 1);
+  } finally {
+    await registry.closeAll();
+    if (target.listening) await stop();
+  }
+});
+
 test("a terminal session's frame load records stop at their limit however often its target goes away", () => {
   const records = [];
   const frameLoads = createPreviewFrameLoadRecorder(record => records.push(record));
