@@ -1,24 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
-import { DASHBOARD_PATH } from "./support/base-shell-data";
+import { expect, test } from "@playwright/test";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import {
   endTurn, expectPhase, openFix, openStarted, quietWorld, saveTaskWorld, taskIdOf, taskWindow, workspaceSetupWorld
 } from "./support/ai-task-world";
 
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
-
-async function openNewAiTask(page: Page) {
-  // A phone shows the project first; the header is in the chat. The header settles its actions after it
-  // measures: New AI task is inline, or in Session actions.
-  const inline = page.locator("[data-vibe64-header-action=new-ai-task]");
-  const menu = page.getByRole("button", { name: /^Session actions(?::|$)/u });
-  const showChat = page.getByRole("button", { name: "Show chat", exact: true });
-  await expect(inline.or(menu).or(showChat).first()).toBeVisible();
-  if (await showChat.isVisible()) await showChat.click();
-  await expect(inline.or(menu).first()).toBeVisible();
-  if (!(await inline.isVisible())) await menu.click();
-  await page.locator("[data-vibe64-new-ai-task-action]:visible").first().click();
-}
 
 const INCOMING_REVIEW = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40), id: "contribution-1",
   activeHead: "b".repeat(40), discardedHead: "" };
@@ -133,7 +119,6 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
         await expectPhase(page, "working");
         const window = taskWindow(page);
         await expect(window.getByText(row.problem).first()).toBeVisible();
-        await expect(window.locator("[data-vibe64-ai-task-rename]"), "only a New AI task can be renamed").toHaveCount(0);
         await endTurn(shared.server, taskId, "complete", "Repaired it.");
         await expectPhase(page, "done");
         await expect(window.getByText(row.done)).toBeVisible();
@@ -143,18 +128,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       });
     }
 
-    test("free: New AI task starts the person's request, and the person's Finish ends it Done", async ({ page }) => {
+    test("colleague: Colleague's request opens in the window, and the person's Finish ends it Done", async ({ page }) => {
       await quietWorld(page, shared.server);
-      await page.goto(`${shared.server.url}${DASHBOARD_PATH}/repository`);
-      await openNewAiTask(page);
-      const form = page.locator("[data-vibe64-new-ai-task]");
-      await form.getByLabel("What should the AI do?").fill("Tidy the README.");
-      await form.getByRole("button", { name: "Start", exact: true }).click();
-      await expect(form).toHaveCount(0);
+      await openStarted(page, shared.server, "colleague", { message: "Tidy the README." });
       await expectPhase(page, "working");
       const window = taskWindow(page);
       await expect(window.getByText("Tidy the README.").first()).toBeVisible();
-      // A person's own request has no schema: the AI's turn just ends, and the person decides.
+      // A request has no schema: the AI's turn just ends, and the person decides.
       const { captured } = shared.server.temporary!;
       await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
       await shared.server.temporary!.endNativeTurn(taskIdOf(page), { text: "Tidied it.", message: "Tidied it." });
@@ -165,62 +145,6 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       await expect(window.getByText("You finished this task.")).toBeVisible();
       await window.locator("[data-vibe64-ai-task-close]").click();
       await expect(window).toHaveCount(0);
-    });
-
-    test("free: Rename names the task in every tab while the AI works, and a reload keeps the name", async ({ page }) => {
-      await quietWorld(page, shared.server);
-      await openStarted(page, shared.server, "free", { message: "Tidy the README." });
-      await expectPhase(page, "working");
-      const { captured } = shared.server.temporary!;
-      await expect.poll(() => captured.startedTurns).toBe(captured.temporaryTurns.length);
-      const turns = captured.temporaryTurns.length;
-      const title = (target: Page) => taskWindow(target).getByRole("heading", { level: 2 });
-      const window = taskWindow(page);
-      const dialog = page.locator("[data-vibe64-ai-task-rename-dialog]");
-      const field = dialog.getByLabel("Task name");
-      const other = await page.context().newPage();
-      try {
-        await quietWorld(other, shared.server);
-        await other.goto(page.url());
-        await expect(title(other)).toHaveText("AI task");
-
-        const pencil = window.getByRole("button", { name: "Rename AI task", exact: true });
-        if (viewport.width < 600) {
-          const box = await pencil.boundingBox();
-          expect(Math.min(box!.width, box!.height)).toBeGreaterThanOrEqual(48);
-        }
-        // Escape keeps the name, and leaves the task's window open.
-        await pencil.click();
-        await expect(field).toHaveValue("AI task");
-        await field.fill("Something else");
-        await page.keyboard.press("Escape");
-        await expect(dialog).toBeHidden();
-        await expect(title(page)).toHaveText("AI task");
-        await expect(window).toBeVisible();
-
-        // Enter saves it on one line, and every open tab and the tray follow.
-        await pencil.click();
-        await field.fill("README   tidy-up");
-        await field.press("Enter");
-        await expect(title(page)).toHaveText("README tidy-up");
-        await expect(title(other)).toHaveText("README tidy-up");
-        await expect(page.locator("[data-vibe64-ai-task-tray]")).toHaveAttribute("aria-label", /^README tidy-up: /u);
-        await expectPhase(page, "working");
-        expect(captured.temporaryTurns.length, "a name sends nothing to the AI").toBe(turns);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-
-        await page.reload();
-        await expect(title(page)).toHaveText("README tidy-up");
-
-        // An empty name gives back the usual one.
-        await window.getByRole("button", { name: "Rename README tidy-up", exact: true }).click();
-        await field.fill("");
-        await dialog.getByRole("button", { name: "Rename", exact: true }).click();
-        await expect(title(page)).toHaveText("AI task");
-        await expect(title(other)).toHaveText("AI task");
-      } finally {
-        await other.close();
-      }
     });
   });
 }

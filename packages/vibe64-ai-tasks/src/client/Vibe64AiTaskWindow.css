@@ -62,9 +62,8 @@
 .ai-task__glyph--done { color: rgb(var(--v-theme-success)); }
 .ai-task__glyph--not-done { color: rgb(var(--v-theme-error)); }
 
-/* The heading takes only the room its words need, so Rename sits beside the name. */
 .ai-task__heading {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -90,7 +89,6 @@
   display: flex;
   flex: 0 0 auto;
   gap: 0.125rem;
-  margin-inline-start: auto;
 }
 
 .ai-task__commands .v-btn,

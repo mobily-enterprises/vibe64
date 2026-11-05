@@ -19,7 +19,7 @@ for (const engineId of ["codex", "opencode"]) {
     const composer = (page: Page) => taskWindow(page).getByRole("textbox", { name: "Message the AI" });
     const typing = (page: Page) => taskWindow(page).locator("[data-assistant-composer-support]").filter({ hasText: "John is typing…" });
     try {
-      const { task } = await server.aiTasks.start("free", { message: "Look at the failing build." });
+      const { task } = await server.aiTasks.start("colleague", { message: "Look at the failing build." });
       // Typing shows once the AI's turn has ended: while it works, the chat says so instead.
       const { captured } = server.temporary!;
       await expect.poll(() => [captured.temporaryTurns.length, captured.startedTurns]).toEqual([1, 1]);

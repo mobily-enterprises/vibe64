@@ -210,16 +210,6 @@ test("AI task machine: Done and Not done are final", () => {
   }
 });
 
-test("AI task machine: a rename changes only the name, in every phase until Close", () => {
-  for (const phase of ["starting", "working", "checking", "needs_you", "cancelling", "done", "not_done"]) {
-    const from = taskIn(phase);
-    const { task } = advanceAiTask(from, event("rename", { title: "Price table" }));
-    assert.deepEqual(task, { ...from, title: "Price table", revision: from.revision + 1 }, phase);
-  }
-  const same = taskIn("working");
-  assert.equal(advanceAiTask(same, event("rename", { title: same.title })).task, same, "the same name changes nothing");
-});
-
 test("AI task machine: an event that does not apply leaves the task as it is", () => {
   const cases = [
     [taskIn("working"), event("check_passed", { id: "check-1" })],

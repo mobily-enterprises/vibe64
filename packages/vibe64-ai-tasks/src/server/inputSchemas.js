@@ -25,15 +25,10 @@ const aiTaskCheckInput = validator({
   taskId,
   reviewedConflictId: { type: "string", noTrim: false, required: false, maxLength: 200 }
 });
-const aiTaskRenameInput = validator({
-  taskId,
-  name: { type: "string", noTrim: false, required: false, maxLength: 1000 }
-});
 
 export {
   aiTaskCheckInput,
   aiTaskInput,
-  aiTaskRenameInput,
   aiTaskSessionInput,
   aiTaskStartInput
 };

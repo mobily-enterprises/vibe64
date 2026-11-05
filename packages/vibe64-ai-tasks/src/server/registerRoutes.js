@@ -75,11 +75,6 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     buildInput: taskInput,
     summary: "Finish an AI task a person decides."
   });
-  routes.actionRoute("POST", "/sessions/:sessionId/ai-tasks/:taskId/rename", {
-    actionId: AI_TASK_ACTIONS.RENAME,
-    buildInput: request => ({ ...withoutUser(requestBody(request)), ...taskInput(request) }),
-    summary: "Rename a person's own AI task."
-  });
   routes.actionRoute("DELETE", "/sessions/:sessionId/ai-tasks/:taskId", {
     actionId: AI_TASK_ACTIONS.CLOSE,
     buildInput: taskInput,

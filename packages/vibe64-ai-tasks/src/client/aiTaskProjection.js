@@ -155,7 +155,6 @@ function projectAiTask(task, { viewerId }) {
     steps: stepsOf(task, needs),
     actions: needs ? [...review, ...needs.actions] : [],
     cancelQuestion: WORDS.cancelQuestion(task.noun),
-    renamable: task.renamable === true,
     outcome: ended ? outcomeOf(task, viewerId) : null
   };
 }
@@ -171,16 +170,6 @@ function aiTaskFooterActions(actions, view) {
 }
 
 /**
- * Whether the window offers Rename: the task allows it and its source can save a name. A host's own task source
- * may offer no Rename at all.
- * @param {AiTaskProjection} projection
- * @param {Pick<import("./types.js").AiTaskSource, "rename">} source
- */
-function aiTaskOffersRename(projection, source) {
-  return projection.renamable && Boolean(source.rename);
-}
-
-/**
  * The time beside an activity line.
  * @param {string} at
  */
@@ -192,7 +181,6 @@ function aiTaskTime(at) {
 export {
   AI_TASK_ACTIONS,
   aiTaskFooterActions,
-  aiTaskOffersRename,
   aiTaskTime,
   projectAiTask
 };

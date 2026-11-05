@@ -109,7 +109,6 @@ function useAiTaskHost({
     hide: taskWindow.hide,
     open: taskWindow.open,
     projection,
-    rename: tasks.rename,
     returnFocusTarget,
     run,
     seeToastResult,

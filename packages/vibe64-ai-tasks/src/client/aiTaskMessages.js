@@ -42,12 +42,6 @@ const AI_TASK_MESSAGES = Object.freeze({
     activity: "Activity",
     unavailable: "Nothing is lost. The fix continues from here."
   }),
-  rename: Object.freeze({
-    heading: "Rename task",
-    hint: "Leave it empty for the task's usual name.",
-    label: "Task name",
-    submit: "Rename"
-  }),
   status: Object.freeze({
     aiStuck: "The AI could not finish this",
     aiUnavailable: "The AI account can't run this right now",
@@ -84,7 +78,6 @@ const AI_TASK_MESSAGES = Object.freeze({
   cancelConfirm: noun => `Cancel ${noun}`,
   cancelledByYou: noun => `You cancelled this ${noun}.`,
   cancelledBy: (name, noun) => `${name} cancelled this ${noun}.`,
-  renameTask: title => `Rename ${title}`,
   whatsNext: () => "The problem is still there. Anything the AI changed stays in the session. To try again, close this and choose Fix it with AI.",
   toast: (title, outcome) => `${title}: ${outcome}.`
 });

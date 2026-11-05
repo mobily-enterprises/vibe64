@@ -104,8 +104,6 @@ function useAiTasks({ sessionId, sessionsApiPath, projectSlug, enabled, request,
   const check = (input = {}) => act("/check", input);
   const continueTask = () => act("/continue");
   const finish = () => act("/finish");
-  /** @param {string} name an empty name gives the task back its usual name */
-  const rename = name => act("/rename", { name });
 
   async function close() {
     error.value = "";
@@ -160,7 +158,6 @@ function useAiTasks({ sessionId, sessionsApiPath, projectSlug, enabled, request,
     finish,
     load,
     loaded,
-    rename,
     start,
     starting,
     task,

@@ -3,7 +3,6 @@ import { aiTaskFit } from "../../packages/vibe64-ai-tasks/src/client/aiTaskFit.j
 import {
   AI_TASK_ACTIONS as ACTIONS,
   aiTaskFooterActions,
-  aiTaskOffersRename,
   projectAiTask
 } from "../../packages/vibe64-ai-tasks/src/client/aiTaskProjection.js";
 
@@ -108,32 +107,6 @@ describe("the footer", () => {
     const { actions } = projected({ phase: "needs_you", reason });
     expect(aiTaskFooterActions(actions, "progress").map(({ id }) => id)).toEqual(onProgress);
     expect(aiTaskFooterActions(actions, "chat").map(({ id }) => id)).toEqual(onChat);
-  });
-});
-
-describe("Rename", () => {
-  const free = { kind: "free", title: "AI task", noun: "task", renamable: true };
-
-  it.each([
-    ["working", {}],
-    ["your turn", { phase: "needs_you", reason: "your_turn" }],
-    ["cancelling", { phase: "cancelling" }],
-    ["done", { phase: "done", active: false }],
-    ["not done", { phase: "not_done", active: false }]
-  ])("a task the server lets a person rename offers it while %s", (_name, fields) => {
-    expect(projected({ ...free, ...fields }).renamable).toBe(true);
-  });
-
-  it("any other task, or one that does not say, offers no Rename", () => {
-    expect(projected({ renamable: false }).renamable).toBe(false);
-    expect(projected({}).renamable).toBe(false);
-  });
-
-  it("a window offers Rename only when its source can save a name", () => {
-    const rename = async () => {};
-    expect(aiTaskOffersRename(projected(free), { rename })).toBe(true);
-    expect(aiTaskOffersRename(projected(free), {})).toBe(false);
-    expect(aiTaskOffersRename(projected({}), { rename })).toBe(false);
   });
 });
 

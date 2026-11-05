@@ -4,7 +4,6 @@ import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFi
 import {
   aiTaskCheckInput,
   aiTaskInput,
-  aiTaskRenameInput,
   aiTaskSessionInput,
   aiTaskStartInput
 } from "./inputSchemas.js";
@@ -19,8 +18,7 @@ const AI_TASK_ACTIONS = Object.freeze({
   CHECK: "vibe64.ai-tasks.check",
   CONTINUE: "vibe64.ai-tasks.continue",
   FINISH: "vibe64.ai-tasks.finish",
-  CLOSE: "vibe64.ai-tasks.close",
-  RENAME: "vibe64.ai-tasks.rename"
+  CLOSE: "vibe64.ai-tasks.close"
 });
 
 // Check now and Continue are the person's, from the window: Colleague asks the person instead.
@@ -92,12 +90,7 @@ const TOOLS = Object.freeze({
   ),
   cancel: aiTaskTool("Cancel an AI task only when the user asks. Cancel is always accepted; the task shows Cancelling until its running turn or check stops."),
   finish: aiTaskTool("Finish a colleague task once its request is done and the AI's turn has ended (phase needs_you, reason your_turn)."),
-  close: aiTaskTool("Close an ended AI task (done or not_done), which removes its conversation. Read its result first. Closing it again does nothing."),
-  rename: aiTaskTool(
-    "Rename a New AI task (kind free) only when the user asks. name is the new name, one line of at most 80 characters; an empty " +
-      "name gives back AI task. It works in any phase until the task is closed and sends nothing to the AI. Other kinds refuse it with " +
-      "vibe64_ai_task_not_renamable."
-  )
+  close: aiTaskTool("Close an ended AI task (done or not_done), which removes its conversation. Read its result first. Closing it again does nothing.")
 });
 
 /**
@@ -161,13 +154,6 @@ function createAiTaskActions({ aiTasks }) {
       input: aiTaskInput,
       extensions: { ...extensions, assistant: TOOLS.close },
       execute: input => aiTasks.close(input.sessionId, input)
-    }),
-    Object.freeze({
-      ...VIBE64_COMMAND,
-      id: AI_TASK_ACTIONS.RENAME,
-      input: aiTaskRenameInput,
-      extensions: { ...extensions, assistant: TOOLS.rename },
-      execute: input => aiTasks.rename(input.sessionId, input)
     })
   ]);
 }

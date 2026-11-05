@@ -15,22 +15,13 @@ function requestContext() {
 }
 
 /**
- * A task's name as one line of at most TITLE_LIMIT characters: line breaks and runs of spaces become one space.
- * @param {unknown} value
- */
-function taskTitle(value) {
-  return normalizeText(value).replace(/[\s\p{Cc}]+/gu, " ").slice(0, TITLE_LIMIT).trimEnd();
-}
-
-/**
- * A task that is someone's own request: the person's New AI task, or what Colleague asks for. Nothing in Vibe64
- * can prove such a request is done, so whoever asked ends it with Finish. Each turn simply ends, so Colleague can
- * keep asking in the same conversation. A renamable kind lets a person rename the task; an empty name gives it back
- * the kind's title.
- * @param {{ id: string, title: string, tray: string, opening: string, startsIdle?: boolean, renamable?: boolean }} kind
+ * A task that is Colleague's own request. Nothing in Vibe64 can prove such a request is done, so it ends with
+ * Finish. Each turn simply ends, so Colleague can
+ * keep asking in the same conversation.
+ * @param {{ id: string, title: string, tray: string, opening: string, startsIdle?: boolean }} kind
  * @returns {AiTaskKind}
  */
-function requestKind({ id, title, tray, opening, startsIdle = false, renamable = false }) {
+function requestKind({ id, title, tray, opening, startsIdle = false }) {
   /**
    * The request is the problem. A routing or recent chat context choice applies to the conversation itself.
    * @param {{ runtime: object, sessionId: string }} _context
@@ -39,7 +30,7 @@ function requestKind({ id, title, tray, opening, startsIdle = false, renamable =
   async function readRequest(_context, input) {
     const message = String(input.message || "").trim().slice(0, MESSAGE_LIMIT);
     if (!message && !startsIdle) throw new AppError(400, "Say what the AI should do.", { code: "vibe64_ai_task_message_missing" });
-    const named = taskTitle(input.title);
+    const named = normalizeText(input.title).slice(0, TITLE_LIMIT);
     const summary = message.split("\n")[0].slice(0, 200) || opening;
     return {
       key: JSON.stringify([id, named, message]),
@@ -68,15 +59,16 @@ function requestKind({ id, title, tray, opening, startsIdle = false, renamable =
     context: requestContext,
     steps: ["The AI works on the request", "You finish the task"],
     check: { by: "person" },
-    done: "You finished this task.",
-    ...(renamable ? { rename: name => taskTitle(name) || title } : {})
+    done: "You finished this task."
   });
 }
 
-/** The person's New AI task, Colleague's own requests, and the review conversation of a Colleague assignment. */
+/**
+ * Colleague's own requests and the review conversation of a Colleague assignment. A person's own request is a
+ * temporary chat, never an AI task.
+ */
 function createRequestKinds() {
   return [
-    requestKind({ id: "free", title: "AI task", tray: "Working on your request…", opening: "Work on this request.", renamable: true }),
     requestKind({ id: "colleague", title: "Colleague task", tray: "Working on Colleague's request…", opening: "Work on Colleague's request." }),
     requestKind({
       id: "colleague-review",
