@@ -1162,6 +1162,97 @@ test("command failure records a short diagnostic and leaves the session active",
   });
 });
 
+test("Cancel stops the running preparation step and every later one, and the next preparation runs every step", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const workflowOutcomes = [];
+    const commands = [];
+    let stopOnCancel = true;
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
+      async finishWorkflow(id, options) { workflowOutcomes.push({ id, ...options }); },
+      project: {
+        inspectWorkspaceSetup: () => readySetup({
+          steps: [{
+            argv: ["npm", "install"],
+            label: "Install JavaScript dependencies",
+            runtimeRequirements: ["nodejs"],
+            workdir: "."
+          }, {
+            argv: ["npm", "run", "migrate"],
+            label: "Prepare the database",
+            runtimeRequirements: ["nodejs"],
+            workdir: "."
+          }]
+        }),
+        ...readyProject()
+      },
+      runCommand(request) {
+        commands.push(request.args.join(" "));
+        if (!stopOnCancel) return { exitCode: 0, ok: true };
+        // As the command runner answers a stopped run once its processes are gone.
+        return new Promise((resolve) => {
+          request.signal.addEventListener("abort", () => resolve({
+            code: "vibe64_command_cancelled", error: "Command cancelled.", exitCode: null, ok: false
+          }), { once: true });
+        });
+      }
+    });
+
+    const cancel = new AbortController();
+    const started = await runner.start({ runtime, session, signal: cancel.signal });
+    assert.equal(started.state.status, "running");
+    await waitForCondition(() => commands.length === 1);
+    cancel.abort();
+    const stopped = await started.completion;
+    assert.equal(stopped.status, "failed");
+    assert.equal(stopped.currentLabel, "Install JavaScript dependencies");
+    assert.equal(stopped.diagnostic, "Workspace preparation was cancelled. Prepare workspace runs every step again.");
+    assert.match(stopped.transcript, /\[Install JavaScript dependencies\] Cancelled\./u);
+    assert.doesNotMatch(stopped.transcript, /Prepare the database/u);
+    assert.deepEqual(commands, ["install"], "no later step runs");
+    assert.deepEqual(workflowOutcomes, [{ id: "setup-workflow", outcome: "stopped", defer: true }]);
+    assert.equal((await runtime.store.readSession(session.sessionId)).status, "active");
+
+    stopOnCancel = false;
+    const retried = await runner.start({
+      retry: true,
+      runtime,
+      session: await runtime.getSessionWithoutSource(session.sessionId)
+    });
+    assert.equal((await retried.completion).status, "succeeded");
+    assert.deepEqual(commands, ["install", "install", "run migrate"]);
+    assert.deepEqual(workflowOutcomes[1], { id: "setup-workflow", outcome: "succeeded", defer: true });
+  });
+});
+
+test("a Cancel before preparation is admitted runs no step and leaves no workflow open", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const workflows = [];
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { workflows.push("started"); return { ok: true, workflow: { id: "setup-workflow" } }; },
+      async finishWorkflow() { workflows.push("finished"); },
+      project: { ...readyProject(), inspectWorkspaceSetup: () => readySetup() },
+      runCommand: () => assert.fail("No step runs after Cancel.")
+    });
+    const cancel = new AbortController();
+    cancel.abort();
+    const stopped = await (await runner.start({ runtime, session, signal: cancel.signal })).completion;
+    assert.equal(stopped.status, "failed");
+    assert.equal(stopped.diagnostic, "Workspace preparation was cancelled. Prepare workspace runs every step again.");
+    assert.deepEqual(workflows, []);
+  });
+});
+
+async function waitForCondition(condition) {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail("The condition never held.");
+}
+
 test("a failed setup runs again on an explicit start; a success stays cached", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);

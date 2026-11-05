@@ -134,8 +134,14 @@ browser watched the turn end. A failed check returns to the same conversation.
 A person's Check, Continue or review carries on from where the task stopped.
 
 Cancel is always accepted at once and recorded. A turn is stopped through the
-existing native Stop. Update, Save, Prepare and a sign-in have no real stop, so a task cancelled
-during such a check waits for the run to end, and says so.
+existing native Stop. A check that can stop receives an `AbortSignal`; the record
+write that saves Cancel aborts it, and the runner re-reads the task before the
+check starts so a Cancel saved meanwhile also stops it. Update stops before it
+changes the session's files and Prepare stops its running step; the stopped run's
+answer then ends the task Not done, and a run that finished first ends it Done.
+Save, a sign-in, a merge build, an inspection and an overview read have no real
+stop (`check.unstoppable`), so a task cancelled during one waits for the run to
+end, and says so.
 
 A turn lost to a restart stops at `needs_you(interrupted)` with Continue. A check
 interrupted by a restart runs again with the same request identity, so the

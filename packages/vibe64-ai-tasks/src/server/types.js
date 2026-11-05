@@ -85,12 +85,17 @@
  */
 
 /**
+ * A check that can stop passes `signal` on to its owner, which stops its run when Cancel aborts it and answers
+ * how the run ended; one that can't stop says so in `unstoppable`, and Cancel waits for its answer.
  * @typedef {{ by: "agent" } | { by: "person" } | {
  *   by: "vibe64",
  *   label: string,
  *   output: string,
- *   unstoppable: string,
- *   run: (context: { runtime: object, sessionId: string, taskId: string }, task: AiTask) => Promise<AiTaskCheckResult>,
+ *   unstoppable?: string,
+ *   run: (
+ *     context: { runtime: object, sessionId: string, signal: AbortSignal, taskId: string },
+ *     task: AiTask
+ *   ) => Promise<AiTaskCheckResult>,
  *   retry: { limit: number, display: string, message: (diagnostic: string) => string }
  * }} AiTaskCheck
  */

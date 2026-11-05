@@ -396,6 +396,7 @@ function createSessionWork({
           historyReview: input.historyReview,
           conflictRecovery,
           reviewedConflictId,
+          signal: input.signal || null,
           onRepositoryWriteAcquired: async () => {
             operationStarted = true;
             workOperations.start("update", sessionId, operationId);
@@ -480,9 +481,12 @@ function createSessionWork({
         if (!operationStarted) {
           throw error;
         }
+        // A cancelled Update changed nothing, so the conflicts it was resuming still stand for the next run.
+        const cancelled = input.signal?.aborted === true;
+        const recovery = error?.details?.conflictRecovery || (cancelled ? conflictRecovery : null);
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
-            kind: "update-failed",
+            kind: cancelled ? "update-cancelled" : "update-failed",
             message: normalizeText(error?.message) || "Session update failed.",
             status: "failed"
           },
@@ -490,8 +494,8 @@ function createSessionWork({
             code: normalizeText(error?.code),
             conflictPaths: Array.isArray(error?.details?.conflictPaths)
               ? error.details.conflictPaths
-              : [],
-            conflictRecovery: error?.details?.conflictRecovery || null,
+              : recovery?.conflictPaths || [],
+            conflictRecovery: recovery,
             error: normalizeText(error?.message) || "Session update failed.",
             operationId,
             status: "failed"

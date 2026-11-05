@@ -94,6 +94,8 @@ describe("what the window says for each state", () => {
   it("a Cancel during a check that cannot stop says so, and any other Cancel says nothing more", () => {
     expect(projected({ phase: "cancelling", checkRunning: true }).note).toBe(CHECK.unstoppable);
     expect(projected({ phase: "cancelling" }).note).toBe("");
+    expect(projected({ phase: "cancelling", checkRunning: true, check: { ...CHECK, unstoppable: "" } }).note,
+      "a check Cancel stops").toBe("");
   });
 });
 

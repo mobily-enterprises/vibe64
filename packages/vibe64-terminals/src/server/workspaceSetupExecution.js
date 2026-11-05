@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { executionCleanupRequired } from "@local/vibe64-execution/server";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import {
   workspaceSetupState,
@@ -24,10 +25,15 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
 
+const WORKSPACE_SETUP_CANCELLED = "Workspace preparation was cancelled. Prepare workspace runs every step again.";
+
 /**
  * Runs a prepared recipe's steps in an admitted resource workflow, inside the
  * session source and its connected sources, and observes each run until it
- * settles, recording a failure it did not record itself.
+ * settles, recording a failure it did not record itself. A run's `signal`
+ * (an AI task's Cancel) stops the step that is running and every later one;
+ * the run is recorded as failed and cancelled, and the next preparation runs
+ * every step again, as after a failed step.
  * @param {object} dependencies
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
@@ -59,6 +65,7 @@ function createWorkspaceSetupExecution({
     recipe,
     runtime,
     session,
+    signal = null,
     sourcePath,
     startedAt,
     preparedEnvironment
@@ -82,6 +89,18 @@ function createWorkspaceSetupExecution({
     if (currentSetup?.status !== "ready" || currentSetup.recipeHash !== recipe.recipeHash) {
       throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
     }
+    const cancelled = currentLabel => failed(runtime, session.sessionId, {
+      currentLabel,
+      diagnostic: WORKSPACE_SETUP_CANCELLED,
+      recipeHash: recipe.recipeHash,
+      redactionSecrets,
+      renewal: context.renewal,
+      runtimes: recipe.runtimes,
+      startedAt,
+      stepOutcome: "Cancelled",
+      transcript: context.transcript
+    });
+    if (signal?.aborted) return cancelled(context.currentLabel);
     const resource = await startWorkflow({
       session,
       sourceRoot: sourcePath,
@@ -111,6 +130,10 @@ function createWorkspaceSetupExecution({
         const connectedRoots = await connectedSourceRoots(admittedSetup, runtime, session);
         const currentLabel = safeSetupLabel(step.label, redactionSecrets);
         context.currentLabel = currentLabel;
+        if (signal?.aborted) {
+          outcome = "stopped";
+          return await cancelled(currentLabel);
+        }
         if (index > 0) {
           context.transcript = appendWorkspaceSetupTranscript(
             context.transcript,
@@ -148,12 +171,18 @@ function createWorkspaceSetupExecution({
           },
           purpose: "source",
           runtimes: recipe.runtimes,
+          ...(signal ? { signal } : {}),
           timeout: WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
         });
         context.transcript = appendWorkspaceSetupTranscript(
           context.transcript,
           capturedCommandOutput(result, redactionSecrets)
         );
+        // A step whose processes could not be stopped keeps that failure: it names what is still running.
+        if (result?.ok !== true && signal?.aborted && !executionCleanupRequired(result)) {
+          outcome = "stopped";
+          return await cancelled(currentLabel);
+        }
         if (result?.ok !== true) {
           return failed(runtime, session.sessionId, {
             currentLabel,

@@ -191,7 +191,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     await quiet(running.aiTasks);
   }
 
-  return { boot, finishTurn, incoming, native, published, quiet, saves, server, setups, signIns, start, store, task, updates };
+  return { boot, finishTurn, incoming, native, published, quiet, runtime, saves, server, setups, signIns, start, store, task, updates };
 }
 
 function withFixture(run, options) {
@@ -741,15 +741,17 @@ test("crash right after the retry went out: it is not sent again", () => withFix
 
 test("Cancel answers at once during a check that cannot be stopped, and the check's failure ends it Not done", () => withFixture(async (f) => {
   const running = f.boot();
-  const { task } = await f.start(running.aiTasks);
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
   await f.quiet(running.aiTasks);
   let release;
-  f.server.update = () => new Promise((resolve) => { release = resolve; });
+  f.server.save = () => new Promise((resolve) => { release = resolve; });
   const finishing = f.finishTurn(running);
   await waitFor(() => Boolean(release));
   const answer = await running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER });
   assert.equal(answer.task.phase, "cancelling");
-  release(conflictResult());
+  assert.equal(answer.task.check.unstoppable, "Save can't be interrupted. The fix ends as soon as this run finishes.");
+  assert.equal("signal" in f.saves[0], false, "Save is never handed a stop");
+  release({ ok: false, code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed." });
   await finishing;
   await f.quiet(running.aiTasks);
   const saved = await f.task(task.id);
@@ -757,6 +759,81 @@ test("Cancel answers at once during a check that cannot be stopped, and the chec
   assert.equal(saved.reason, "cancelled");
   assert.equal(f.native.turns.length, 1, "nothing goes back to the AI");
   assert.equal(f.native.stops, 0, "a running check is never interrupted");
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+/** A fake run that answers only once its stop is used, as a stopped Update or preparation does. */
+function stoppedRun(answer) {
+  return input => new Promise((resolve) => {
+    input.signal.addEventListener("abort", () => resolve(answer), { once: true });
+  });
+}
+
+const UPDATE_CANCELLED = { ok: false, code: "vibe64_session_update_cancelled", error: "Update was cancelled before it changed this session." };
+
+test("Cancel stops the Update run a fix started, and the task ends Not done once Update answers", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  f.server.update = stoppedRun(UPDATE_CANCELLED);
+  const finishing = f.finishTurn(running);
+  await waitFor(() => f.updates.length === 1);
+  assert.equal(f.updates[0].signal.aborted, false);
+  const answer = await running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER });
+  assert.equal(answer.task.phase, "cancelling");
+  assert.equal(answer.task.check.unstoppable, "", "the window says nothing about waiting for a run that stops");
+  assert.equal(f.updates[0].signal.aborted, true, "the write that records Cancel stops the run");
+  await finishing;
+  await f.quiet(running.aiTasks);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "not_done");
+  assert.equal(saved.reason, "cancelled");
+  assert.equal(f.updates.length, 1, "a cancelled Update is not run again");
+  assert.equal(f.native.turns.length, 1, "nothing goes back to the AI");
+}));
+
+test("Cancel stops the preparation a fix started, and the task ends Not done once preparation answers", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "workspace-setup");
+  await f.quiet(running.aiTasks);
+  f.server.setup = stoppedRun({ ok: true, workspaceSetup: { status: "failed",
+    diagnostic: "Workspace preparation was cancelled. Prepare workspace runs every step again." } });
+  const finishing = f.finishTurn(running);
+  await waitFor(() => f.setups.length === 1);
+  const answer = await running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER });
+  assert.equal(answer.task.phase, "cancelling");
+  assert.equal(f.setups[0].input.signal.aborted, true);
+  await finishing;
+  await f.quiet(running.aiTasks);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "not_done");
+  assert.equal(saved.reason, "cancelled");
+  assert.equal(f.setups.length, 1);
+}, { updateFailure: null, setupFailed: setupFailure }));
+
+test("a Cancel saved after the runner read a check it owes, before the check runs, still stops it", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  f.server.update = async input => (input.signal.aborted ? UPDATE_CANCELLED : { ok: true });
+  // The runner's read of what tasks owe returns before a Cancel is saved, and acts on what it read.
+  const store = f.runtime.store;
+  let cancelled = false;
+  f.runtime.store = { ...store, async listSessionConversations(sessionId) {
+    const records = await store.listSessionConversations(sessionId);
+    if (!cancelled && records.some(record => record.task?.pending?.effect === "check")) {
+      cancelled = true;
+      await running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER });
+    }
+    return records;
+  } };
+  await f.finishTurn(running);
+  await f.quiet(running.aiTasks);
+  assert.equal(cancelled, true);
+  assert.equal(f.updates.length, 1, "the runner ran the check it read");
+  assert.equal(f.updates[0].signal.aborted, true, "the check started already stopped");
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "not_done");
+  assert.equal(saved.reason, "cancelled");
 }));
 
 test("Cancel during a check that then passes ends Done, and says so", () => withFixture(async (f) => {

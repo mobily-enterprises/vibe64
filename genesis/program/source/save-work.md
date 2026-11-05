@@ -589,6 +589,17 @@ work before entering repository work. If preparation still owns the lock at
 timeout, the failure identifies reconnection and offers a later retry. The lock
 is never bypassed and the browser does not automatically resubmit publication.
 
+An AI task's Cancel passes Update an `AbortSignal`. It stops the checkpoint,
+prepare and regeneration stages, whose child forwards the stop to its own Git
+process groups, and every later stage; Update then fails with
+`vibe64_session_update_cancelled` and leaves the session unchanged, keeping the
+conflict evidence a reviewed run was resuming. The apply stage, which changes
+the session's files, never receives the signal and rolls back on its own. A Cancel
+before Update holds the repository write records nothing. A regeneration stopped
+part way leaves its `.vibe64-derived-worktree-*` checkout; the next regeneration,
+under the same source lock, removes it and prunes Git's worktree list first.
+A drain failure keeps its own code, naming what is still running.
+
 Before Update replaces source, including interrupted Update recovery, it
 invalidates the session's workspace preparation. That durable write must
 succeed before source changes; an unchanged setup recipe must run again for

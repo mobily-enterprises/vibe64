@@ -62,6 +62,10 @@ const OPERATION_IMPLEMENTATIONS = {
   "update-apply": applySessionWorkUpdateDirect
 };
 
+// Each Git command runs in its own process group, which a stop of this process does not reach. A stage
+// Cancel can stop (`stoppable`) stops them itself when it is stopped, and then answers as they fail.
+const stopping = new AbortController();
+
 function runLocalCommand(request = {}) {
   return runCaptureCommand(request.command, request.args, {
     cwd: request.cwd,
@@ -73,6 +77,7 @@ function runLocalCommand(request = {}) {
     input: request.input,
     maxBuffer: request.maxBuffer,
     outputEncoding: request.outputEncoding,
+    signal: stopping.signal,
     timeout: request.timeout
   });
 }
@@ -109,6 +114,7 @@ function errorResponse(error) {
 
 try {
   const payload = await readInput();
+  if (payload?.stoppable === true) process.once("SIGTERM", () => stopping.abort());
   configureVibe64Host(payload?.hostProfile || null);
   const implementation = OPERATION_IMPLEMENTATIONS[String(payload?.operation || "")];
   if (!implementation) {

@@ -59,7 +59,17 @@ function commandErrorResult(message = "", code = "vibe64_command_failed", extra 
   });
 }
 
+/**
+ * Whether a command's processes may still be running: its stop could not prove its execution scope empty.
+ * A command stopped this way ended with that failure, not as cancelled.
+ * @param {{ code?: string } | null | undefined} result
+ */
+function executionCleanupRequired(result) {
+  return ["vibe64_execution_cleanup_required", "vibe64_execution_drain_failed"].includes(result?.code);
+}
+
 export {
   commandErrorResult,
-  commandResult
+  commandResult,
+  executionCleanupRequired
 };

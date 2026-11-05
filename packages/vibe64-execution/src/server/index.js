@@ -37,6 +37,9 @@ export {
   runCaptureCommand
 } from "./engines/capture.js";
 export {
+  executionCleanupRequired
+} from "./result.js";
+export {
   VIBE64_MANAGED_EXECUTION_REQUIRED_ENV,
   finishVibe64Workflow,
   installVibe64ManagedExecutionProvider,

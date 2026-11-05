@@ -24,9 +24,9 @@ const STARTER_PREPARATION_WAIT_MS = 60_000;
 function createTerminalsSetupRunner({ terminals }) {
   const isRunning = (sessionId) => terminals.workspaceSetupIsRunning(sessionId);
 
-  const start = ({ agentRequested = false, retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
+  const start = ({ agentRequested = false, retry = false, runtime, session, signal = null, waitMs }) => terminals.prepareWorkspaceSetup(
     session.sessionId,
-    { agentRequested, retry, runtime, session, waitMs }
+    { agentRequested, retry, runtime, session, signal, waitMs }
   );
 
   const startRenewal = ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
@@ -133,7 +133,9 @@ function createSessionWorkspaceSetup({
         agentRequested: context.channel !== "api",
         retry: true,
         runtime,
-        session
+        session,
+        // An AI task's Cancel stops the run it started.
+        signal: input.signal || null
       });
       if (setup?.ok === false) {
         return setup;

@@ -111,12 +111,13 @@ function createUpdateKind({ sessions }) {
       by: "vibe64",
       label: "Running Update…",
       output: "Update output",
-      unstoppable: "Update can't be interrupted. The fix ends as soon as this run finishes.",
-      async run({ sessionId, taskId }, task) {
+      // Cancel stops Update until it starts changing the session's files.
+      async run({ sessionId, signal, taskId }, task) {
         return updateCheckResult(await sessions.updateSessionWork(sessionId, {
           aiTaskId: taskId,
           requestId: task.pending.id,
           reviewedConflictId: task.pending.reviewedConflictId || task.problem.facts.reviewId,
+          signal,
           vibe64User: task.startedBy
         }));
       },

@@ -229,9 +229,26 @@ If a fix ends while the window is hidden, a message offers **See result**.
 in the session. **Cancel fix** confirms; **Keep going** carries on. Cancelling always
 works. The button then says **Cancelling…** until Vibe64 confirms it.
 
-Vibe64's own checks (running Update, Save or workspace preparation, signing in,
-building a repaired merge, inspecting the project, reading the overview) can't be interrupted, so a Cancel
-during one says so and the task ends as soon as that run finishes.
+A Cancel while Vibe64 runs Update or workspace preparation for the fix stops that
+run within a few seconds, and the fix ends **Not done** once Vibe64 confirms it stopped:
+
+- A cancelled Update leaves the session exactly as it was. Update's activity card
+  says it needs attention: "Update was cancelled before it changed this session."
+  **Retry** runs Update again, and **Fix it with AI** picks up the conflicts the
+  cancelled run was resuming.
+  Once Update has started applying its result to the session's files it finishes
+  instead; the fix then ends **Done** with "This finished before the cancel took
+  effect."
+- A cancelled preparation stops the step that was running and runs no later step.
+  The preparation card shows **Workspace preparation failed** with "Workspace
+  preparation was cancelled. Prepare workspace runs every step again.", and its
+  output marks that step **Cancelled**. **Prepare workspace** or **Retry** runs
+  every step again. Preparing connected sources and upgrading an older project's
+  format finish before Cancel takes effect.
+
+Vibe64's other checks (Save, signing in, building a repaired merge, inspecting the
+project, reading the overview) can't be interrupted, so a Cancel during one says
+so and the task ends as soon as that run finishes.
 
 ## One at a time
 

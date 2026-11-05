@@ -65,7 +65,8 @@ function createServiceWorkspacePreparation({
       rerunFailed = false,
       retry = false,
       runtime: existingRuntime = null,
-      session: existingSession = null
+      session: existingSession = null,
+      signal = null
     } = options;
     const requestContext = captureProjectRequestContext();
     const runtime = existingRuntime || await project.createRuntimeWithoutSource();
@@ -76,7 +77,8 @@ function createServiceWorkspacePreparation({
       rerunFailed,
       retry,
       runtime,
-      session
+      session,
+      signal
     });
     const setupChanged = String(setup.state?.updatedAt || "") !==
       String(session.workspaceSetup?.updatedAt || "");

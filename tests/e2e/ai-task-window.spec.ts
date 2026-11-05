@@ -3,7 +3,7 @@ import { directChatSessionId, directChatSessionPayload } from "./support/base-sh
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import {
-  aiTaskWorld, conflictAnswer, endTurn, expectPhase, openFix, taskIdOf, taskWindow
+  aiTaskWorld, conflictAnswer, endTurn, expectPhase, openFix, saveTaskWorld, taskIdOf, taskWindow
 } from "./support/ai-task-world";
 
 const VIEWPORTS = [
@@ -336,25 +336,52 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
     });
 
     test("Cancel during a check that can't stop says so, stays pressable, and ends with the run", async ({ page }) => {
-      await aiTaskWorld(page, shared.server);
+      await saveTaskWorld(page, shared.server);
       const taskId = await openFix(page, shared.server);
       await expectPhase(page, "working");
       const release = Promise.withResolvers<Record<string, unknown>>();
-      shared.server.aiTasks.update = () => release.promise;
+      shared.server.aiTasks.save = () => release.promise;
+      void endTurn(shared.server, taskId, "complete", "Fixed the lint errors.");
+      await expectPhase(page, "checking");
+      const window = taskWindow(page);
+      await window.locator("[data-vibe64-ai-task-cancel]").click();
+      await window.locator("[data-vibe64-ai-task-cancel-confirm]").click();
+      await expectPhase(page, "cancelling");
+      await expect(window.getByText("Save can't be interrupted. The fix ends as soon as this run finishes.")).toBeVisible();
+      const cancel = window.locator("[data-vibe64-ai-task-cancel]");
+      await expect(cancel).toHaveText("Cancelling…");
+      await expect(cancel).toBeEnabled();
+      await cancel.click();
+      await expectPhase(page, "cancelling");
+      release.resolve({ ok: false, code: "vibe64_session_save_git_failed", error: "The pre-commit hook failed: lint found 2 errors." });
+      await expectPhase(page, "not_done");
+    });
+
+    test("Cancel during Update stops the run, stays Cancelling… and pressable until Update answers, then ends the fix", async ({ page }) => {
+      await aiTaskWorld(page, shared.server);
+      const taskId = await openFix(page, shared.server);
+      await expectPhase(page, "working");
+      const answer = Promise.withResolvers<void>();
+      // As Update does: once stopped, it answers after its processes are gone.
+      shared.server.aiTasks.update = input => new Promise<Record<string, unknown>>((resolve) => {
+        (input.signal as AbortSignal).addEventListener("abort", () => answer.promise.then(() => resolve({
+          ok: false, code: "vibe64_session_update_cancelled", error: "Update was cancelled before it changed this session."
+        })), { once: true });
+      });
       void endTurn(shared.server, taskId, "complete", "Merged both sides.");
       await expectPhase(page, "checking");
       const window = taskWindow(page);
       await window.locator("[data-vibe64-ai-task-cancel]").click();
       await window.locator("[data-vibe64-ai-task-cancel-confirm]").click();
       await expectPhase(page, "cancelling");
-      await expect(window.getByText("Update can't be interrupted. The fix ends as soon as this run finishes.")).toBeVisible();
+      await expect.poll(() => (shared.server.aiTasks.updates[0].signal as AbortSignal).aborted).toBe(true);
       const cancel = window.locator("[data-vibe64-ai-task-cancel]");
       await expect(cancel).toHaveText("Cancelling…");
       await expect(cancel).toBeEnabled();
-      await cancel.click();
-      await expectPhase(page, "cancelling");
-      release.resolve(conflictAnswer("review-2"));
-      await expectPhase(page, "not_done");
+      await expect(window.locator(".ai-task-progress__note")).toHaveCount(0);
+      answer.resolve();
+      await expectPhase(page, "not_done", "cancelled");
+      expect(shared.server.aiTasks.updates).toHaveLength(1);
     });
 
     test("an account change does nothing to a running task", async ({ page }) => {

@@ -199,7 +199,12 @@ When the repair turn completes, the task's check—not the assistant—runs the
 deterministic preparation retry on the server as a person's Prepare would, waits
 for it and reads its result. Success ends the task Done; another failure returns
 to the same conversation, and a choice only a person can make stops at
-`needs_you`. The retry is refused to everyone else while the task changes the
+`needs_you`. The task's Cancel passes the run an `AbortSignal`: the running
+step's command is stopped, no later step runs, the workflow finishes `stopped`
+and the state is recorded failed with the cancelled diagnostic and the step
+marked Cancelled, so the next preparation runs every step. Connected preparation
+and the Genesis migration run to their end first; a step whose processes could
+not be drained keeps that failure. The retry is refused to everyone else while the task changes the
 repository.
 
 

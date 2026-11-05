@@ -48,6 +48,10 @@ async function persistInspectedState(runtime, sessionId, previous, value, renewa
     : persist(runtime, sessionId, next, renewal);
 }
 
+/**
+ * A run that did not prepare the workspace. `stepOutcome` is how its last step ended in the output:
+ * Failed, or Cancelled for a run Cancel stopped.
+ */
 async function failed(runtime, sessionId, options = {}) {
   const {
     currentLabel = "",
@@ -58,6 +62,7 @@ async function failed(runtime, sessionId, options = {}) {
     renewal = false,
     runtimes = [],
     startedAt = "",
+    stepOutcome = "Failed",
     transcript = ""
   } = options;
   const safeLabel = safeSetupLabel(currentLabel, redactionSecrets);
@@ -73,7 +78,7 @@ async function failed(runtime, sessionId, options = {}) {
     status: "failed",
     transcript: appendWorkspaceSetupTranscript(
       sanitizeOperationText(transcript, redactionSecrets),
-      stepStatus(safeLabel, "Failed", redactionSecrets)
+      stepStatus(safeLabel, stepOutcome, redactionSecrets)
     )
   }, renewal);
 }

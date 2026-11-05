@@ -2267,6 +2267,79 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     event.workspaceSetup.status === "failed"));
 });
 
+test("a cancelled Update keeps the conflicts it was resuming, and a Cancel before it starts leaves its record alone", async () => {
+  const conflictRecovery = { canonicalCommit: "canonical", conflictPaths: ["shared.txt"], reviewId: "review-id" };
+  const conflicted = { status: "failed", code: "vibe64_session_update_conflict", conflictPaths: ["shared.txt"], conflictRecovery,
+    error: "One file needs review.", events: [{ kind: "update-failed" }] };
+  const tasks = new Map([["update-session", conflicted]]);
+  const session = { agentRuns: [], metadata: {}, sessionId: "session-1", status: "active" };
+  const runtime = {
+    async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask(_sessionId, taskId) { return tasks.get(taskId) || null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+        const prior = input.reset === true ? { events: [], id: taskId } : tasks.get(taskId) || { events: [], id: taskId };
+        const task = { ...prior, ...input.patch, events: [...(prior.events || []), input.event], id: taskId };
+        tasks.set(taskId, task);
+        return task;
+      }
+    }
+  };
+  const cancelledError = () => Object.assign(new Error("Update was cancelled before it changed this session."), {
+    code: "vibe64_session_update_cancelled"
+  });
+  const signals = [];
+  let cancel = null;
+  const service = createService({
+    project: {
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    async publishSessionChanged() {},
+    setupRunner: { async start() { assert.fail("A cancelled Update prepares nothing."); } },
+    terminals: {
+      // As terminals does: a Cancel while waiting for the session ends Update before it records a start.
+      async updateSessionWork(_sessionId, input) {
+        signals.push(input.signal);
+        if (input.signal.aborted) throw cancelledError();
+        await input.onRepositoryWriteAcquired();
+        // Cancel lands while Update runs: terminals stops it and answers so.
+        cancel.abort();
+        throw cancelledError();
+      }
+    }
+  });
+  const run = (input) => {
+    cancel = new AbortController();
+    return service.updateSessionWork("session-1", { ...input, signal: cancel.signal });
+  };
+
+  const answer = await run({ reviewedConflictId: "review-id" });
+  assert.equal(signals[0], cancel.signal, "Update is handed the Cancel's stop");
+  assert.equal(answer.ok, false);
+  assert.equal(answer.code, "vibe64_session_update_cancelled");
+  const record = tasks.get("update-session");
+  assert.equal(record.status, "failed");
+  assert.equal(record.code, "vibe64_session_update_cancelled");
+  assert.equal(record.error, "Update was cancelled before it changed this session.");
+  assert.deepEqual(record.conflictRecovery, conflictRecovery, "Fix with AI and the next Update resume the same conflicts");
+  assert.deepEqual(record.conflictPaths, ["shared.txt"]);
+  assert.deepEqual(record.events.map((event) => event.kind), ["update-started", "update-cancelled"]);
+
+  const plain = await run({});
+  assert.equal(plain.code, "vibe64_session_update_cancelled");
+  assert.equal(tasks.get("update-session").conflictRecovery, null, "an ordinary Update starts over, cancelled or not");
+
+  tasks.set("update-session", conflicted);
+  const early = new AbortController();
+  early.abort();
+  const before = await service.updateSessionWork("session-1", { reviewedConflictId: "review-id", signal: early.signal });
+  assert.equal(before.code, "vibe64_session_update_cancelled");
+  assert.equal(tasks.get("update-session"), conflicted);
+});
+
 test("one exact update check is shared, cached, and invalidates every sibling session", async () => {
   const metadata = [];
   const publications = [];

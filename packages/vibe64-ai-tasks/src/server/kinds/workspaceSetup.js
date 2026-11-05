@@ -115,9 +115,9 @@ function createWorkspaceSetupKind({ sessions }) {
       by: "vibe64",
       label: "Preparing the workspace…",
       output: "Preparation output",
-      unstoppable: "Preparation can't be interrupted. The fix ends as soon as this run finishes.",
-      async run({ sessionId, taskId }) {
-        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, { aiTaskId: taskId }, { channel: "api" }));
+      // Cancel stops the preparation step that is running.
+      async run({ sessionId, signal, taskId }) {
+        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, { aiTaskId: taskId, signal }, { channel: "api" }));
       },
       retry: {
         limit: 3,

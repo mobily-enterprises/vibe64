@@ -1,7 +1,7 @@
 // Session repository context, the managed Git command bridge, operation refs
 // and the tree helpers shared by Save, Update and Incoming changes.
 import crypto from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -33,6 +33,7 @@ const SESSION_WORK_OPERATION_COMMAND_PATH = fileURLToPath(new URL(
   import.meta.url
 ));
 
+const DERIVED_WORKTREE_PREFIX = ".vibe64-derived-worktree-";
 // A full SHA-1 or SHA-256 Git object id.
 const GIT_OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
 // Review diffs are bounded before they cross into the browser.
@@ -211,7 +212,9 @@ async function runSessionWorkOperation({
           project: sessionWorkOperationProject(context, project),
           session: sessionWorkOperationSession(context)
         },
-        operation
+        operation,
+        // A stage Cancel can stop stops its own Git commands when it is stopped.
+        stoppable: Boolean(commandOptions.signal)
       }),
       project
     }
@@ -598,6 +601,19 @@ async function treeWithDerivedArtifactsFromCommit(runCommand, context, {
   }
 }
 
+/**
+ * Regenerations run one at a time, under the project's source lock, so a temporary checkout already
+ * beside the session source was left by one that was stopped part way (Cancel, its time limit or a
+ * restart). It is removed, and Git forgets its worktree, before the next regeneration starts.
+ */
+async function removeStoppedDerivedWorktrees(runCommand, context, options) {
+  const parent = path.dirname(context.worktreePath);
+  const stopped = (await readdir(parent).catch(() => [])).filter((name) => name.startsWith(DERIVED_WORKTREE_PREFIX));
+  if (!stopped.length) return;
+  for (const name of stopped) await rm(path.join(parent, name), { force: true, recursive: true });
+  await git(runCommand, context, ["worktree", "prune"], { ...options, required: false });
+}
+
 async function regenerateDerivedArtifactTree(runCommand, context, {
   baseCommit,
   commandOptions,
@@ -610,6 +626,7 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
   if (!paths.length) {
     return tree;
   }
+  await removeStoppedDerivedWorktrees(runCommand, context, { commandOptions, project });
   const sourceCommit = await createVirtualCommit(runCommand, context, {
     baseCommit,
     commandOptions,
@@ -617,7 +634,7 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
     project,
     tree
   });
-  const temporaryRoot = await mkdtemp(path.join(path.dirname(context.worktreePath), ".vibe64-derived-worktree-"));
+  const temporaryRoot = await mkdtemp(path.join(path.dirname(context.worktreePath), DERIVED_WORKTREE_PREFIX));
   const temporaryWorktree = path.join(temporaryRoot, "source");
   const options = {
     additionalAllowedRoots: [temporaryRoot, temporaryWorktree],

@@ -146,7 +146,8 @@ function cancelledMessage(task) {
 
 /**
  * Cancel always ends what can end now; a turn or a check still running makes it
- * wait in `cancelling`. A running check is never interrupted: its answer settles the task.
+ * wait in `cancelling`. The runner stops a running check that can stop; either way the
+ * check's answer settles the task: a run that stopped ends it Not done, one that finished first Done.
  * @param {AiTask} task
  * @param {AiTaskEvent} event
  */

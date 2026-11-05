@@ -47,7 +47,9 @@ and its diagnostic. Use the available retry or **Fix it with AI** action to deal
 with that failure; do not assume a required preparation step has already failed.
 **Fix it with AI** opens the [AI task window](ai-tasks.md): the AI repairs the
 workspace, then Vibe64 runs preparation itself and the fix is **Done** only when
-it succeeds. A failure goes back to the same conversation.
+it succeeds. A failure goes back to the same conversation. Cancelling the fix
+while that preparation runs stops its running step; the card then reports the
+preparation as cancelled, and the next preparation runs every step again.
 
 ## Retrying a failed setup
 

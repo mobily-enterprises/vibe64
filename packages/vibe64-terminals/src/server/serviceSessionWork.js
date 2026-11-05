@@ -9,7 +9,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { requireCompletedConversationRewind } from "./assistantChangeover.js";
 import { changeIncomingContribution as changeManagedIncomingContribution } from "./sessionIncomingContributions.js";
-import { updateSessionWork as updateManagedSessionWork } from "./sessionWorkUpdate.js";
+import { throwIfUpdateCancelled, updateSessionWork as updateManagedSessionWork } from "./sessionWorkUpdate.js";
 import { recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
 import {
   prepareSessionPullRequestBranch,
@@ -459,8 +459,19 @@ function createServiceSessionWork({
     });
   }
 
+  /**
+   * `input.signal` (an AI task's Cancel) stops Update before it starts changing the session's files;
+   * a Cancel while Update waits for the session ends it before it records a start.
+   */
   async function updateSessionWork(sessionId, input = {}) {
-    return runSessionRepositoryWrite(sessionId, input, {
+    const { onRepositoryWriteAcquired = doNothing, signal = null } = input;
+    return runSessionRepositoryWrite(sessionId, {
+      ...input,
+      async onRepositoryWriteAcquired() {
+        throwIfUpdateCancelled(signal);
+        await onRepositoryWriteAcquired();
+      }
+    }, {
       operation: "update-session-work",
       activeCode: "vibe64_session_update_agent_active",
       activeMessage: "Wait for the assistant turn to finish before updating this session."
@@ -478,7 +489,8 @@ function createServiceSessionWork({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         runCommand: execution.runCommand,
         runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
-        session
+        session,
+        signal
       });
     });
   }

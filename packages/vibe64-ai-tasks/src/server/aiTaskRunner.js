@@ -83,7 +83,8 @@ function checkEvent(kind, id, result, record) {
  * The only code with side effects. Every effect a task owes is saved in `pending` by the
  * transition that owes it, so this performs what the record says, and a restart performs it
  * again: sends reuse their message id, checks their request id. Effects run one at a time per
- * session, outside every session lock, so Cancel's short record write never waits for a check.
+ * session, outside every session lock, so Cancel's short record write never waits for a check, and
+ * the write that records Cancel stops a check that can stop.
  * @param {object} dependencies
  * @param {Record<string, AiTaskKind>} dependencies.kinds
  * @param {RuntimeLogger} dependencies.logger
@@ -106,6 +107,8 @@ function createAiTaskRunner({
 }) {
   const drives = new Map();
   const timers = new Map();
+  // Each running check's stop, by task: Cancel aborts it.
+  const runningChecks = new Map();
   // Tasks this server has seen: an unseen one in `working` was left by a previous server.
   const seenTasks = new Set();
   let closed = false;
@@ -128,6 +131,7 @@ function createAiTaskRunner({
       changed = true;
       return store.writeSessionConversation(sessionId, taskId, { task });
     });
+    if (record?.task?.phase === AI_TASK_PHASES.CANCELLING) runningChecks.get(taskId)?.abort();
     if (changed) await publishSessionChanged(sessionId, { reason: "ai-task-changed", payload: { aiTask: present(record) } });
     return record;
   }
@@ -187,12 +191,19 @@ function createAiTaskRunner({
     const kind = kinds[task.kind];
     const { id } = task.pending;
     const runtime = await project.createRuntimeWithoutSource();
+    const stopping = new AbortController();
+    runningChecks.set(conversationId, stopping);
     let result;
     try {
-      result = await kind.check.run({ runtime, sessionId, taskId: conversationId }, task);
+      // A Cancel saved after this task was read and before its stop was held stops it here.
+      const latest = await runtime.store.readSessionConversation(sessionId, conversationId);
+      if (latest?.task?.phase === AI_TASK_PHASES.CANCELLING) stopping.abort();
+      result = await kind.check.run({ runtime, sessionId, signal: stopping.signal, taskId: conversationId }, task);
     } catch (error) {
       warn(sessionId, "check_failed", error, "An AI task's check gave no answer.");
       result = { unknown: true, message: error?.message };
+    } finally {
+      if (runningChecks.get(conversationId) === stopping) runningChecks.delete(conversationId);
     }
     const current = await runtime.store.readSessionConversation(sessionId, conversationId);
     if (!current?.task) return;

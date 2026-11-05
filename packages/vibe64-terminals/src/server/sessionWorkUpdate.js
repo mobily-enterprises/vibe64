@@ -5,6 +5,7 @@ import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/
 import { repositoryUpdateRelationship, repositoryUpdateStrategy } from "@local/vibe64-core/shared";
 import {
   createGitTurnCheckpoint,
+  executionCleanupRequired,
   runVibe64Command,
   writeGitWorktreeTree
 } from "@local/vibe64-execution/server";
@@ -41,6 +42,16 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 const INCOMING_VERSION_LIMIT = 5;
+const UPDATE_CANCELLED_CODE = "vibe64_session_update_cancelled";
+
+/**
+ * Cancel stops Update until it starts changing the session's files: what ran before only read the
+ * session and wrote Git objects, so a cancelled Update leaves the session as it was.
+ * @param {AbortSignal | null} signal
+ */
+function throwIfUpdateCancelled(signal) {
+  if (signal?.aborted) throw saveError("Update was cancelled before it changed this session.", UPDATE_CANCELLED_CODE);
+}
 
 async function incomingVersionsBetween(
   runCommand,
@@ -625,6 +636,11 @@ async function applySessionWorkUpdateDirect({
   return { ...prepared, ok: true, ...reconciliation };
 }
 
+/**
+ * Update's stages under the project's source lock. `signal` (an AI task's Cancel) stops a reading
+ * stage's processes and every later stage; the apply stage, which changes the session's files,
+ * always runs to its own end, rolling back what it could not finish.
+ */
 async function runSessionUpdateStages({
   beforeSourceChange = doNothing,
   derivedArtifactPaths = [],
@@ -633,17 +649,29 @@ async function runSessionUpdateStages({
   project = {},
   runProjectSourceExclusive = async (operation) => operation(),
   session = {},
+  signal = null,
   ...input
 }, runStage) {
   const context = repositoryContext(session, project);
-  const stage = (operation, values = {}) => runStage(operation, {
+  const run = (operation, values = {}, stageSignal = null) => runStage(operation, {
     ...input,
     derivedArtifactPaths,
     operationId,
     project,
     session,
+    signal: stageSignal,
     ...values
   });
+  const stage = async (operation, values = {}) => {
+    throwIfUpdateCancelled(signal);
+    try {
+      return await run(operation, values, signal);
+    } catch (error) {
+      // A stage whose processes could not be stopped keeps that failure: it names what is still running.
+      if (signal?.aborted && !executionCleanupRequired(error)) throwIfUpdateCancelled(signal);
+      throw error;
+    }
+  };
   await onProgress({ kind: "lock", message: "Waiting for exclusive repository access.", stage: "repository-lock" });
   return runProjectSourceExclusive(async () => {
     await onProgress({ kind: "checkpoint", message: "Capturing this session's complete worktree.", stage: "checkpointing" });
@@ -661,18 +689,19 @@ async function runSessionUpdateStages({
     });
     prepared = await stage("update-derived", { prepared });
     await onProgress({ ...prepared, kind: "update", message: "A conflict-free session update is ready.", stage: "prepared" });
+    throwIfUpdateCancelled(signal);
     await onProgress({ kind: "update", message: "Applying and verifying the session update.", stage: "mutating" });
     await beforeSourceChange();
-    return stage("update-apply", { prepared });
+    return run("update-apply", { prepared });
   }, { operation: `update-session:${context.sessionId}` });
 }
 
 async function updateSessionWork(input = {}) {
   const { commandOptions = {}, runCommand = runVibe64Command, ...options } = input;
   return runSessionUpdateStages(options, (operation, values) => {
-    const { project, session, operationId, ...stageInput } = values;
+    const { project, session, operationId, signal, ...stageInput } = values;
     return runSessionWorkOperation({
-      commandOptions,
+      commandOptions: signal ? { ...commandOptions, signal } : commandOptions,
       context: repositoryContext(session, project),
       input: stageInput,
       label: "Updating session from repository",
@@ -693,5 +722,6 @@ export {
   prepareSessionWorkUpdateDirect,
   readSessionAuthorityHeads,
   regenerateSessionWorkUpdateDirect,
+  throwIfUpdateCancelled,
   updateSessionWork
 };

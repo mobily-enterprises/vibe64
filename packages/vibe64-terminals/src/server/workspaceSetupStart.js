@@ -53,9 +53,12 @@ function createWorkspaceSetupStart({
    * `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
    * runs a failed recipe again instead of reporting the stored failure.
    * `agentRequested` marks a start an AI asked for: linking a connected session
-   * cannot be undone, so that one stops for a person instead.
+   * cannot be undone, so that one stops for a person instead. `signal` stops
+   * the run this start begins (an AI task's Cancel).
    */
-  async function start({ agentRequested = false, renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
+  async function start({
+    agentRequested = false, renewal = false, rerunFailed = false, retry = false, runtime, session, signal = null
+  } = {}) {
     const sessionId = toText(session?.sessionId);
     if (!sessionId || !runtime?.store) {
       throw new TypeError("Workspace preparation requires a stored Vibe64 session.");
@@ -147,6 +150,7 @@ function createWorkspaceSetupStart({
       session,
       sessionId,
       setup,
+      signal,
       sourcePath,
       stateBase
     };
@@ -215,6 +219,7 @@ function createWorkspaceSetupStart({
     session,
     sessionId,
     setup,
+    signal,
     sourcePath,
     stateBase
   }) {
@@ -401,6 +406,7 @@ function createWorkspaceSetupStart({
         recipe,
         runtime,
         session,
+        signal,
         sourcePath,
         startedAt,
         preparedEnvironment
