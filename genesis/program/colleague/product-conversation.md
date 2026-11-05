@@ -265,7 +265,11 @@ requested view from a clean query, waits up to 15 seconds for that exact view,
 and lets a newer navigation supersede an older one. A host may add its own
 dashboard panes, name the pane of a non-project page by its route, require one
 signed-in actor across a navigation, and keep the selected conversation in the
-URL; without that, navigation opens the conversation itself.
+URL; without that, navigation opens the conversation itself. With it, only the page
+and the URL's own session, conversation and chat move the URL's conversation into the
+session view: an address that adds something else, such as an AI task window opening
+as the view's selection, never reads as the URL asking for the conversation it named
+before.
 A failed Colleague turn shows its product error even when the native snapshot
 reports none.
 Before parsing or executing, the product settlement checks pending rows and

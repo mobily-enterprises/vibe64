@@ -54,8 +54,11 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
   const navigationGeneration = ref(0);
 
   if (conversationQuery) {
-    // The URL's conversation opens in the current session's view.
-    watch([() => route.fullPath, currentView, () => currentView.value?.ready, () => currentView.value?.sessionId],
+    // The URL's conversation opens in the current session's view. Only the page and the selection in the URL
+    // move it: an address that adds something else, such as an AI task window opening as the selection, is not
+    // the URL asking for the conversation it named before.
+    watch([() => route.path, () => route.query.session, () => route.query.conversation, () => route.query.chat,
+      currentView, () => currentView.value?.ready, () => currentView.value?.sessionId],
       async (_value, _previous, onCleanup) => {
         let current = true;
         onCleanup(() => { current = false; });
