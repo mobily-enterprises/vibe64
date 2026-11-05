@@ -227,7 +227,7 @@ Untouched is decided by `bindConnectedSession` with `onlyIfUntouched`, under the
 receiving session's write lease and immediately before the link, so work started
 just before is seen: `HEAD` equals its `base_commit`, session work inspection reports
 nothing unsaved (it ignores Genesis derived artifacts and ignored files), no AI turn,
-AI terminal or AI task turn runs, no Save or Update runs, and the session is
+AI terminal, temporary chat or AI task turn runs, no Save or Update runs, and the session is
 neither pinned nor closing. A check that cannot finish counts as not untouched.
 
 Only a start a person can answer for may link: workspace setup passes

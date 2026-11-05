@@ -251,8 +251,8 @@ switches. The aside, adapter and voice session are not rebuilt when it moves.
 The root preserves live adapter/state/access getters; the binding's equality ID
 is unchanged and its logical conversationId uses the original runtime identity.
 Main's logical ID uses the existing mainConversationId operation, with no new
-history, admission or composer implementation. The AI task chat and Database
-keep their own presentations and receive no voice launcher.
+history, admission or composer implementation. Temporary chats, the AI task chat
+and Database keep their own presentations and receive no voice launcher.
 
 Original evidence is tests/server/vibe64ColleagueClient.unit.test.js (focus and
 admission identity, model choice, delayed admission, provisional/live reply

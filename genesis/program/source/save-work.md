@@ -262,8 +262,8 @@ a completed Save. After an uncertain result it inspects the saved operation
 before retrying. Update does not publish work and may restart workspace
 preparation; acceptance of either operation does not establish completion.
 Save and Update retain their source coordination for assistant and repository
-changes while an AI task's saved conversation and plain draft text remain
-available through the short session-store path. An Update repair is an
+changes while saved temporary-chat history, an AI task's saved conversation and
+plain draft text remain available through the short session-store path. An Update repair is an
 [AI task](../conversation/ai-tasks.md) whose check records a request identity on the
 existing background task, so a lost response or a restart recovers confirmed progress
 without launching a duplicate Update. A Save repair is an AI task too: once the AI
@@ -541,6 +541,7 @@ branch. Fork sessions do not refresh the base project's clone cache.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.
+That shared activity remains visible above an open temporary chat.
 An Update or Save task's Progress view offers that operation's own transcript in
 a collapsed section. Checking an Update task runs in that task; it never creates a
 second task or conversation.
@@ -704,8 +705,8 @@ sharing the same mode, repository and branch. Local sessions retain their
 existing original-folder binding instead of using this catalogue override.
 
 Codex, Claude and OpenCode observed writable session turns create private Git
-recovery checkpoints on completion, interruption or failure. AI task
-conversations participate; scoped read-only helpers and naming profiles do not.
+recovery checkpoints on completion, interruption or failure. Temporary chats and
+AI task conversations participate; scoped read-only helpers and naming profiles do not.
 Checkpoints preserve the saveable files without advancing the project branch or
 changing the index. A turn's ref and the latest pointer are published in one Git
 transaction. If another writer advances latest, publication retries up to twice
