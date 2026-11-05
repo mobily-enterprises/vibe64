@@ -457,7 +457,7 @@ function createTerminalActions({ terminals }) {
         assistant: temporaryConversationTool(
           "Update an existing temporary conversation's title/draft presentation (an empty title restores its Temporary N name) or its chat mode for the next message. " +
             TEMPORARY_ROUTING +
-            " A repair chat opened by an Update conflict's Fix it with AI accepts only fix or custom. This does not send a message."
+            " A task started by Fix it with AI accepts only fix or custom. This does not send a message."
         ),
         vibe64: PROJECT_OPERATION
       },
