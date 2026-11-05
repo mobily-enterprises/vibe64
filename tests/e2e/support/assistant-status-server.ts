@@ -646,6 +646,8 @@ export async function relayConversation(page: Page, server: { url: string; tempo
     upstream.on("open", () => { for (const message of pending.splice(0)) upstream.send(message); });
     upstream.on("message", (data, isBinary) => route.send(isBinary ? data as Buffer : data.toString()));
     upstream.on("close", () => route.close().catch(() => {}));
+    // A reconnect after the test closed its server finds nothing listening.
+    upstream.on("error", () => route.close().catch(() => {}));
     route.onMessage((message) => {
       if (upstream.readyState === WebSocket.OPEN) upstream.send(message);
       else pending.push(String(message));

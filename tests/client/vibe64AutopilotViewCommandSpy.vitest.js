@@ -908,7 +908,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain("saveWorkTeleportTarget");
     expect(component).toContain(':aria-busy="saveWorkSending ? \'true\' : undefined"');
     expect(component).not.toContain(':loading="saveWorkSending"');
-    expect(component).toContain(":icon=\"mdiRobotOutline\"");
+    expect(component).toContain(":icon=\"mdiIncognito\"");
     expect(component).toContain("@click=\"confirmSaveWork\"");
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(

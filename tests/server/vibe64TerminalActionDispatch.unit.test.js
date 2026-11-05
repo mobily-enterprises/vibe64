@@ -193,7 +193,7 @@ test("Colleague's temporary-chat tools offer every routing choice with the team-
       assert.match(description, pattern, operation);
     }
   }
-  assert.match(definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant.description, /repair chat.*only fix or custom/su);
+  assert.match(definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant.description, /started by Fix it with AI accepts only fix or custom/u);
   const create = definitions.get("vibe64.terminals.temporary-conversation.create").extensions.assistant.description;
   assert.match(create, /team member's uses fix/u);
   // The person's own chat is a temporary conversation; work Colleague runs for them is an AI task.

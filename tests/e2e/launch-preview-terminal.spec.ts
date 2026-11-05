@@ -1585,7 +1585,8 @@ test("@temporary-model a temporary chat exposes the shared picker and retains Se
   const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
   await workspace.getByRole("button", { name: "Check the schema", exact: true }).click();
   await workspace.getByRole("button", { name: /^Chat mode/ }).click();
-  await page.getByRole("button", { name: /^Choose model/ }).click();
+  // A person's own chat offers every mode; Custom opens the shared picker.
+  await page.getByRole("button", { name: /^Custom/ }).click();
   const dialog = page.getByRole("dialog", { name: "Custom AI" });
   await expect(dialog).toBeVisible();
   await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Orchestrator", exact: true }) }).click();
