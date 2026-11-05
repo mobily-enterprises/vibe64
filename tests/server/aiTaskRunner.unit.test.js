@@ -870,7 +870,7 @@ test("archiving ends an open task before the session goes", () => withFixture(as
   assert.equal(saved.reason, "archived");
 }));
 
-// The upgrade that deleted the old temporary chats left ordinary archived sessions as they were, so their
+// The upgrade that removes old repair chats leaves ordinary archived sessions as they were, so their
 // records can still carry the client-writable recovery fields AI tasks removed. Every reader must still
 // read such a session, and none may take the old chat for a task. (A chat's snapshot passes its stored
 // record through, old fields included; no client reads them any more.)

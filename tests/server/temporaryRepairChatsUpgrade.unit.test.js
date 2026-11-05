@@ -7,15 +7,26 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import upgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261104-temporary-conversations-closed.js";
-import { closeOldTemporaryConversations } from "../../packages/vibe64-terminals/src/server/temporaryConversationsClosedUpgrade.js";
+import upgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261104-temporary-repair-chats-removed.js";
+import { removeTemporaryRepairChats } from "../../packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js";
 
 const exec = promisify(execFile);
 const claudeId = (number) => `0b5b8c55-0000-4000-8000-00000000000${number}`;
-const ids = { main: claudeId(1), live: claudeId(2), task: claudeId(3), closing: claudeId(4), prepared: claudeId(5), archived: claudeId(6) };
-const attachments = { live: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", task: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+const ids = { main: claudeId(1), live: claudeId(2), task: claudeId(3), closing: claudeId(4), prepared: claudeId(5), archived: claudeId(6),
+  mine: claudeId(9) };
+const attachments = { live: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", task: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  mine: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
 const selection = (engineId) => ({ engineId, modelId: `${engineId}-model` });
 const claudeChat = (conversationId) => ({ providerConversationId: conversationId, assistantSelection: selection("claude") });
+// The repair fields as the person's own chat saved them before AI tasks: present and empty.
+const EMPTY_REPAIR_FIELDS = {
+  displayMessage: "", completionMessage: "", dedupeKey: "", failureMessage: "", nextStepMessage: "", recoveryNotice: "",
+  recoveryOperation: "", recoveryConflictId: "", recoveryContext: "", recoveryOutcome: "", recoveryOutcomeMessage: "",
+  recoveryRequestId: "", runConflictId: "", recoveryAutoPaused: false, recoveryRetryKeys: []
+};
+// An Update repair since Fix it with AI saved its context, and an older workspace setup repair.
+const updateRepair = { ...EMPTY_REPAIR_FIELDS, title: "Resolve Update", recoveryOperation: "update", recoveryContext: "Merge both sides." };
+const setupRepair = { title: "Fix workspace preparation", dedupeKey: "workspace-setup:closing", completionMessage: "Workspace ready." };
 
 async function snapshot(root) {
   const entries = {};
@@ -79,22 +90,28 @@ async function fixture(t) {
   const savedClaude = (sessionId, conversationId) =>
     store.writeMetadataValue(sessionId, `claude_conversation_${conversationId}`, JSON.stringify({ nativeWorkdir: workdir }));
 
-  // A live session: a Claude repair chat (with Codex retained), a free OpenCode chat and an AI task.
+  // A live session: a Claude Update repair chat (with Codex retained), an OpenCode Fix it with AI chat
+  // retried twice, the person's own Claude chat, Colleague's OpenCode chat and an AI task.
   await createSession("live");
   await store.writeMetadataValue("live", "claude_conversation_id", ids.main);
   await savedClaude("live", ids.main);
   await savedClaude("live", ids.live);
-  await writeChat("live", "repair", { ...claudeChat(ids.live),
+  await savedClaude("live", ids.mine);
+  await writeChat("live", "repair", { ...updateRepair, ...claudeChat(ids.live),
     nativeBindings: { codex: { conversationId: "019a7c55-codex-thread", assistantSelection: selection("codex") } } });
-  await writeChat("live", "free", { providerConversationId: "ses_free", assistantSelection: selection("opencode") });
+  await writeChat("live", "retried", { ...EMPTY_REPAIR_FIELDS, title: "Fix preview", recoveryRetryKeys: ["preview:1", "preview:2"],
+    providerConversationId: "ses_retried", assistantSelection: selection("opencode") });
+  await writeChat("live", "mine", { ...EMPTY_REPAIR_FIELDS, title: "Temporary 1", draft: "Which index is missing?", ...claudeChat(ids.mine) });
+  await writeChat("live", "review-1", { title: "Review the change", providerConversationId: "ses_review", assistantSelection: selection("opencode") });
   await writeChat("live", "task", { ...claudeChat(ids.task), task: { kind: "update" } });
   await writeAttachment("live", attachments.live, "repair");
   await writeAttachment("live", attachments.task, "task");
-  for (const id of [ids.main, ids.live, ids.task]) await writeClaudeHistory(workdir, id);
+  await writeAttachment("live", attachments.mine, "mine");
+  for (const id of [ids.main, ids.live, ids.task, ids.mine]) await writeClaudeHistory(workdir, id);
 
   // A closing session whose repair chat has no saved Claude folder, so its managed source names it.
   await createSession("closing");
-  await writeChat("closing", "repair", claudeChat(ids.closing));
+  await writeChat("closing", "repair", { ...setupRepair, ...claudeChat(ids.closing) });
   await writeClaudeHistory(managedSource("closing"), ids.closing);
   const closingRoot = path.join(store.paths().closingSessionsRoot, "closing");
   await mkdir(path.dirname(closingRoot), { recursive: true });
@@ -104,7 +121,7 @@ async function fixture(t) {
   for (const sessionId of ["renewed", "archived"]) {
     await createSession(sessionId);
     await savedClaude(sessionId, ids[sessionId === "renewed" ? "prepared" : "archived"]);
-    await writeChat(sessionId, "repair", claudeChat(ids[sessionId === "renewed" ? "prepared" : "archived"]));
+    await writeChat(sessionId, "repair", { ...updateRepair, ...claudeChat(ids[sessionId === "renewed" ? "prepared" : "archived"]) });
     await writeChat(sessionId, "task", { ...claudeChat(claudeId(sessionId === "renewed" ? 7 : 8)), task: { kind: "save" } }, false);
     await writeClaudeHistory(workdir, ids[sessionId === "renewed" ? "prepared" : "archived"]);
     await store.writeStatus(sessionId, "archived");
@@ -123,7 +140,7 @@ async function fixture(t) {
     await writeFile(filePath, "engine-owned");
   }
 
-  const backupRoot = path.join(systemRoot, "upgrades/backups/20261104-temporary-conversations-closed");
+  const backupRoot = path.join(systemRoot, "upgrades/backups/20261104-temporary-repair-chats-removed");
   const reports = [];
   const report = (level, message) => reports.push(`${level}: ${message}`);
   return {
@@ -132,7 +149,7 @@ async function fixture(t) {
     closingRoot,
     preparedArchive: path.join(preparedRoot, "renewed.tar.gz"),
     ordinaryArchive: path.join(archivedRoot, "archived.tar.gz"),
-    run: (apply, reporter = report) => closeOldTemporaryConversations({
+    run: (apply, reporter = report) => removeTemporaryRepairChats({
       systemRoot, apply, backupRoot, report: reporter,
       env: { CLAUDE_CONFIG_DIR: configRoot }
     })
@@ -143,15 +160,20 @@ async function archiveMembers(archive) {
   return (await exec("tar", ["-tzf", archive])).stdout.split("\n").filter(Boolean);
 }
 
-async function assertClosed(f, { ordinaryArchive, claudeBytes }) {
+async function assertClosed(f, { ordinaryArchive, claudeBytes, kept }) {
   const live = f.livePaths;
-  assert.equal(await exists(path.join(live.conversationsRoot, "repair")), false);
-  assert.equal(await exists(path.join(live.conversationsRoot, "free")), false);
-  assert.equal(await exists(path.join(live.conversationsRoot, "task/conversation.json")), true);
+  for (const chat of ["repair", "retried"]) assert.equal(await exists(path.join(live.conversationsRoot, chat)), false);
+  // The person's chat and Colleague's are read back exactly as they were saved.
+  for (const chat of ["mine", "review-1", "task"]) {
+    assert.deepEqual(await readFile(path.join(live.conversationsRoot, chat, "conversation.json")), kept[chat]);
+  }
+  assert.deepEqual((await f.store.listSessionConversations("live")).map(record => record.conversationId).sort(), ["mine", "review-1", "task"]);
   assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.live)), false);
   assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.task, "file")), true);
+  assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.mine, "file")), true);
   assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.live}`)), false);
   assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.main}`)), true);
+  assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.mine}`)), true);
   assert.equal(await exists(path.join(f.closingRoot, "conversations/repair")), false);
   const members = await archiveMembers(f.preparedArchive);
   assert.ok(members.some((name) => name.endsWith("/conversations/task/conversation.json")));
@@ -163,7 +185,7 @@ async function assertClosed(f, { ordinaryArchive, claudeBytes }) {
     const backup = path.join(f.backupRoot, "claude", path.relative(path.join(f.root, "claude"), f.claudeHistory[id]));
     assert.deepEqual(await readFile(backup), claudeBytes[id]);
   }
-  for (const id of [ids.main, ids.task, ids.archived]) assert.deepEqual(await readFile(f.claudeHistory[id]), claudeBytes[id]);
+  for (const id of [ids.main, ids.task, ids.archived, ids.mine]) assert.deepEqual(await readFile(f.claudeHistory[id]), claudeBytes[id]);
   assert.equal(await readFile(f.codexRollout, "utf8"), "engine-owned");
   assert.equal(await readFile(f.opencodeDatabase, "utf8"), "engine-owned");
 }
@@ -171,23 +193,26 @@ async function assertClosed(f, { ordinaryArchive, claudeBytes }) {
 async function originals(f) {
   const claudeBytes = {};
   for (const [id, filePath] of Object.entries(f.claudeHistory)) claudeBytes[id] = await readFile(filePath);
+  const kept = {};
+  for (const chat of ["mine", "review-1", "task"]) kept[chat] = await readFile(path.join(f.livePaths.conversationsRoot, chat, "conversation.json"));
   return {
     ordinaryArchive: await readFile(f.ordinaryArchive),
     claudeBytes,
+    kept,
     repairRecord: await readFile(path.join(f.livePaths.conversationsRoot, "repair/conversation.json"))
   };
 }
 
-test("old temporary conversations are found read-only, then deleted with their attachments and Claude history", async (t) => {
+test("old repair chats are found read-only, then deleted with their attachments and Claude history, and the person's chats stay", async (t) => {
   const f = await fixture(t);
   const before = await originals(f);
   const tree = await snapshot(f.root);
   await f.run(false);
   assert.deepEqual(await snapshot(f.root), tree);
   assert.deepEqual(f.reports, [
-    "info: example: 4 old temporary conversation(s) to delete (3 in live sessions, 1 in prepared renewal archives) with " +
-      "1 attachment(s); 2 AI task conversation(s) kept.",
-    "info: Native conversations of these chats: 3 Claude to delete from Claude's own storage; 0 Claude, 1 Codex and 1 OpenCode " +
+    "info: example: 4 old repair chat(s) to delete (3 in live sessions, 1 in prepared renewal archives) with " +
+      "1 attachment(s); 2 temporary chat(s) and 2 AI task conversation(s) kept.",
+    "info: Native conversations of these repair chats: 3 Claude to delete from Claude's own storage; 0 Claude, 1 Codex and 1 OpenCode " +
       "left in their engine's own storage, which only the running engine can delete.",
     "info: 10 state file(s) to change."
   ]);
@@ -229,9 +254,11 @@ for (const stage of ["state file(s) to change", "Published state:"]) {
 
 for (const [label, change, expected] of [
   ["shares the main chat's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.main)),
-    /also the main chat's or an AI task's/],
+    /also the main chat's, an AI task's or a kept chat's/],
   ["shares an AI task's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.task)),
-    /also the main chat's or an AI task's/],
+    /also the main chat's, an AI task's or a kept chat's/],
+  ["shares the person's own chat's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.mine)),
+    /also the main chat's, an AI task's or a kept chat's/],
   ["has unreadable native bindings", (f) => f.store.writeSessionConversation("live", "repair", { nativeBindings: "lost" }),
     /native bindings are unreadable/],
   ["names an unknown engine", (f) => f.store.writeSessionConversation("live", "repair", { assistantSelection: selection("other") }),
@@ -239,7 +266,7 @@ for (const [label, change, expected] of [
   ["has an unreadable AI task", (f) => f.store.writeSessionConversation("live", "task", { task: "update" }),
     /AI task is unreadable/]
 ]) {
-  test(`a temporary conversation that ${label} stops the upgrade before any change`, async (t) => {
+  test(`a repair chat that ${label} stops the upgrade before any change`, async (t) => {
     const f = await fixture(t);
     await change(f);
     const tree = await snapshot(f.root);
@@ -251,7 +278,7 @@ for (const [label, change, expected] of [
 test("the numbered upgrade requires its Terminals owner and passes the runner's context through", async () => {
   await assert.rejects(upgrade.run({ systemRoot: "/state" }), /candidate upgrade-state command/);
   const calls = [];
-  await upgrade.run({ systemRoot: "/state", apply: true, closeOldTemporaryConversations: async (context) => calls.push(context) });
+  await upgrade.run({ systemRoot: "/state", apply: true, removeTemporaryRepairChats: async (context) => calls.push(context) });
   assert.deepEqual(calls, [{ systemRoot: "/state", apply: true }]);
-  assert.equal(upgrade.id, "20261104-temporary-conversations-closed");
+  assert.equal(upgrade.id, "20261104-temporary-repair-chats-removed");
 });

@@ -12,6 +12,13 @@ import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 
 const ENGINES = Object.freeze(["claude", "codex", "opencode"]);
+// What the repair flows stored on their chats (since 16 September 2026, beside the title and draft).
+// A person's own chat saved them empty or not at all, so one filled field marks a repair chat.
+const REPAIR_FIELDS = Object.freeze([
+  "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage", "recoveryNotice", "recoveryOperation",
+  "recoveryConflictId", "recoveryContext", "recoveryOutcome", "recoveryOutcomeMessage", "recoveryRequestId",
+  "runConflictId", "recoveryAutoPaused", "recoveryRetryKeys"
+]);
 const CLAUDE_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 async function fileDigest(filePath) {
@@ -99,7 +106,15 @@ function savedClaudeState(metadata, conversationId, label) {
   return state;
 }
 
-/** The Claude conversations a session keeps: its main chat's, its retired ones and its AI tasks'. */
+/** Whether a chat without a task was opened by a repair flow, rather than by the person or Colleague. */
+function isRepairChat(record) {
+  return REPAIR_FIELDS.some(field => {
+    const value = record[field];
+    return value === true || ((typeof value === "string" || Array.isArray(value)) && value.length > 0);
+  });
+}
+
+/** The Claude conversations a session keeps: its main chat's, its retired ones, its AI tasks' and its kept chats'. */
 function keptClaudeConversations(metadata, conversations, label) {
   let bindings;
   try {
@@ -109,7 +124,7 @@ function keptClaudeConversations(metadata, conversations, label) {
   }
   const kept = new Set(bindings.filter(binding => binding.engineId === "claude").map(binding => binding.conversationId));
   for (const { conversation } of conversations) {
-    if (!Object.hasOwn(conversation, "task")) continue;
+    if (!Object.hasOwn(conversation, "task") && isRepairChat(conversation)) continue;
     const bindings = Object.values(isRecord(conversation.nativeBindings) ? conversation.nativeBindings : {});
     for (const id of [conversation.providerConversationId, ...bindings.map(binding => binding?.conversationId)]) {
       if (typeof id === "string" && id) kept.add(id);
@@ -119,19 +134,21 @@ function keptClaudeConversations(metadata, conversations, label) {
 }
 
 /**
- * 20261104: every temporary conversation from before AI tasks (Update, Save and other repair chats
- * and free "Temporary AI" chats) is deleted as Close deletes one, in live sessions and prepared
- * renewal archives: its record and stored transcript, its session attachments and Claude's native
- * history. Records that carry `task` are AI tasks and stay; other archived sessions are not visited.
+ * 20261104: every repair chat from before AI tasks (the temporary chats that Fix it with AI, Update,
+ * Save, workspace setup and the other repair flows opened) is deleted as Close deletes one, in live
+ * sessions and prepared renewal archives: its record and stored transcript, its session attachments
+ * and Claude's native history. A repair chat is a record without `task` that has a filled repair
+ * field. The person's own temporary chats and Colleague's stay untouched, with their attachments and
+ * native history, and so do AI tasks (records with `task`); other archived sessions are not visited.
  * Codex threads and OpenCode sessions can only be deleted by their running engine, so their native
  * conversations stay in the engine's own storage; the report counts them. Upload copies of the
  * attachments are temporary host files the server's startup sweep expires; offline their folder
  * cannot be named (that needs the server's project context), so they are left to it.
  * @param {object} context the runner's upgrade context, with the command's `env`
  */
-async function closeOldTemporaryConversations(context) {
+async function removeTemporaryRepairChats(context) {
   const { systemRoot, apply, backupRoot, report, env } = context;
-  if (!isRecord(env)) throw new Error("Temporary conversation cleanup requires the command's environment.");
+  if (!isRecord(env)) throw new Error("Repair chat cleanup requires the command's environment.");
   const configRoot = path.resolve(claudeConfigRoot({ env }));
   const stores = (await listProjectRuntimeRoots(systemRoot)).map(projectRuntimeRoot => ({
     project: path.basename(projectRuntimeRoot),
@@ -145,7 +162,7 @@ async function closeOldTemporaryConversations(context) {
       const native = new Map();
       const claude = new Map();
       for (const { project, store } of stores) {
-        const counts = { live: 0, prepared: 0, attachments: 0, kept: 0 };
+        const counts = { live: 0, prepared: 0, attachments: 0, chats: 0, tasks: 0 };
         updates.push(...await store.prepareTemporaryConversationRemoval({
           temporaryRoot,
           select({ sessionId, metadata, archived, conversations }) {
@@ -157,7 +174,11 @@ async function closeOldTemporaryConversations(context) {
               const label = `${session}/${conversation.conversationId}`;
               if (Object.hasOwn(conversation, "task")) {
                 if (!isRecord(conversation.task)) throw new Error(`${label}: its AI task is unreadable. Inspect it before upgrading.`);
-                counts.kept += 1;
+                counts.tasks += 1;
+                continue;
+              }
+              if (!isRepairChat(conversation)) {
+                counts.chats += 1;
                 continue;
               }
               const metadataNames = [];
@@ -170,7 +191,8 @@ async function closeOldTemporaryConversations(context) {
                 kept ||= keptClaudeConversations(metadata, conversations, session);
                 const state = savedClaudeState(metadata, binding.conversationId, label);
                 if (kept.has(binding.conversationId) || state?.main === true) {
-                  throw new Error(`${label}: its Claude conversation is also the main chat's or an AI task's. Inspect it before upgrading.`);
+                  throw new Error(`${label}: its Claude conversation is also the main chat's, an AI task's or a kept chat's. ` +
+                    "Inspect it before upgrading.");
                 }
                 if (state) metadataNames.push(`claude_conversation_${binding.conversationId}`);
                 const workdir = typeof state?.nativeWorkdir === "string" && state.nativeWorkdir ? state.nativeWorkdir : executionRoot;
@@ -183,9 +205,10 @@ async function closeOldTemporaryConversations(context) {
             return chosen;
           }
         }));
-        report("info", `${project}: ${counts.live + counts.prepared} old temporary conversation(s) to delete ` +
+        report("info", `${project}: ${counts.live + counts.prepared} old repair chat(s) to delete ` +
           `(${counts.live} in live sessions, ${counts.prepared} in prepared renewal archives) with ` +
-          `${counts.attachments} attachment(s); ${counts.kept} AI task conversation(s) kept.`);
+          `${counts.attachments} attachment(s); ${counts.chats} temporary chat(s) and ${counts.tasks} AI task ` +
+          "conversation(s) kept.");
       }
       const engines = [...native.values()];
       const count = engineId => engines.filter(value => value === engineId).length;
@@ -194,7 +217,7 @@ async function closeOldTemporaryConversations(context) {
         report("warning", `${label}: its Claude history has no saved folder, so it is left in Claude's own storage.`);
         return false;
       });
-      report("info", `Native conversations of these chats: ${located.length} Claude to delete from Claude's own storage; ` +
+      report("info", `Native conversations of these repair chats: ${located.length} Claude to delete from Claude's own storage; ` +
         `${claude.size - located.length} Claude, ${count("codex")} Codex and ${count("opencode")} OpenCode left in ` +
         "their engine's own storage, which only the running engine can delete.");
       if (!apply) return updates;
@@ -223,4 +246,4 @@ async function closeOldTemporaryConversations(context) {
   if (folders) report("info", `Removed ${folders} emptied conversation and attachment folder(s).`);
 }
 
-export { closeOldTemporaryConversations };
+export { removeTemporaryRepairChats };
