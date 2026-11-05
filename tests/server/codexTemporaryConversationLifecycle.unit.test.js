@@ -3,6 +3,7 @@ import { createSessionConversationBinding, prepareSessionConversationDisposal } 
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -1699,6 +1700,14 @@ function throughCommonScopedConversation(controller, persistentContext = null) {
     deleteConversation: native("dispose") };
 }
 
+// A crashed or restarted fixture controller keeps its unref'd provider
+// wellbeing check, which can recreate a removed root's runtime folder after
+// its test; the finished process removes every conversation root once more.
+const conversationRoots = new Set();
+process.once("exit", () => {
+  for (const root of conversationRoots) rmSync(root, { force: true, recursive: true });
+});
+
 async function withConversationController(operation, {
   promptHints = null,
   codexHelperThreadLedgerFactory = null,
@@ -1708,6 +1717,7 @@ async function withConversationController(operation, {
   codexSystemRoot = undefined
 } = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversation-"));
+  conversationRoots.add(temporaryRoot);
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "test";
   const calls = [];

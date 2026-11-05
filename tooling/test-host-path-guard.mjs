@@ -113,6 +113,11 @@ if (!globalThis[GUARDED]) {
   });
   syncBuiltinESMExports();
   // Nor the person's own live session state: a test that names no session
-  // state root keeps its agent helpers and uploads in a private temporary one.
-  process.env.VIBE64_CODEX_ATTACHMENTS_ROOT ||= path.join(os.tmpdir(), `vibe64-test-${process.pid}`, "attachments");
+  // state root keeps its agent helpers and uploads in a private temporary one,
+  // which the process that chose it removes when it exits.
+  if (!process.env.VIBE64_CODEX_ATTACHMENTS_ROOT) {
+    const testStateRoot = path.join(os.tmpdir(), `vibe64-test-${process.pid}`);
+    process.env.VIBE64_CODEX_ATTACHMENTS_ROOT = path.join(testStateRoot, "attachments");
+    process.on("exit", () => fs.rmSync(testStateRoot, { force: true, recursive: true }));
+  }
 }
