@@ -70,7 +70,9 @@
   --v64-surface: rgb(var(--v-theme-surface));
   --v64-on-surface: rgb(var(--v-theme-on-surface));
   --v64-on-surface-variant: rgba(var(--v-theme-on-surface), 0.72);
-  --v64-outline: rgba(var(--v-theme-on-surface), 0.24);
+  /* At 44% an outline reaches 3:1 on the surface, the background and every
+     container tier, in light and dark; dividers stay at outline-variant. */
+  --v64-outline: rgba(var(--v-theme-on-surface), 0.44);
   --v64-outline-variant: rgba(var(--v-theme-on-surface), 0.12);
   --v64-surface-container-lowest: rgb(var(--v-theme-surface));
   --v64-surface-container-low: color-mix(in srgb, rgb(var(--v-theme-primary)) 3%, rgb(var(--v-theme-surface)));
