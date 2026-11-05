@@ -36,6 +36,10 @@ the server status dot, **Show run output**, **Stop preview** and **Restart**;
 these act on the app server behind every Preview page. On mobile the server
 group sits on its own row under the address.
 
+The open-in-new-tab button (titled **Preview**, or with the output's own name)
+opens the app in an ordinary browser tab, not a popup window, so you can edit
+its address. Choosing it again reuses that same tab for the project.
+
 Use **Suspend preview**, beside **Reload preview**, to unload
 only this displayed page and reduce browser CPU use. Unsaved changes inside the
 page may be lost. The app server, coding agents and goals continue running;
