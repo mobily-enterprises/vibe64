@@ -101,14 +101,15 @@ import { Vibe64UsageRecordingSummary } from "@local/vibe64-usage-recording/clien
 import { computed } from "vue";
 import { mdiCogOutline, mdiConsoleLine, mdiHeartPulse, mdiMagnify } from "@mdi/js";
 
-import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestGroups, requestTitle } from "./usageModel.js";
+import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestCount, requestGroups, requestTitle } from "./usageModel.js";
 
 const props = defineProps({
   recordings: { type: Array, default: () => [] },
   recordingId: { type: String, default: "" },
   requests: { type: Array, default: () => [] },
   interactions: { type: Array, default: () => [] },
-  // Matching requests on the server (null: not known); requests holds the pages read so far.
+  // Matching requests on the server, without start-up work or the readiness
+  // check (null: not known); requests holds the rows read so far.
   total: { type: Number, default: null },
   hasMore: { type: Boolean, default: false },
   newestFirst: { type: Boolean, default: false },
@@ -133,8 +134,9 @@ const selectedRecording = computed(() => props.recordings.find((recording) => re
 const groups = computed(() => requestGroups(props.requests, props.interactions));
 const footerText = computed(() => {
   if (!props.hasMore) return "Newest requests first";
-  const shown = props.total == null ? `Showing ${countLabel(props.requests.length, "request")}`
-    : `Showing ${props.requests.length.toLocaleString()} of ${countLabel(Math.max(props.total, props.requests.length), "request")}`;
+  const count = requestCount(props.requests);
+  const shown = props.total == null ? `Showing ${countLabel(count, "request")}`
+    : `Showing ${count.toLocaleString()} of ${countLabel(Math.max(props.total, count), "request")}`;
   return props.newestFirst ? `${shown}, newest first` : shown;
 });
 // The method column shows a labelled icon where there is no method: a

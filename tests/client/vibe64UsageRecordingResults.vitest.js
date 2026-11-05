@@ -33,6 +33,8 @@ describe("Recording requests list", () => {
     expect(all).not.toContain("Showing");
     expect(all).not.toContain("Show more");
     expect(await render({ requests: requests.requests, total: requests.total, newestFirst: true })).toContain("Newest requests first");
+    // The start-up row is listed but, like the recording's count, not counted as a request.
+    expect(await render({ requests: requests.requests, total: 450, hasMore: true })).toContain("Showing 3 of 450 requests");
   });
 
   it("wraps paths between folders and marks start-up work without a method", async () => {

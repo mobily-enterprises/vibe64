@@ -84,10 +84,16 @@ server that runs every request in one process is labelled "Not separated per
 request for this server" and shows everything that ran.
 
 Recording lists a recording's requests a page at a time with the matching
-total and Show more. A recording opened while it runs reads newest first and
+total and Show more. The total, like the recording's request count, counts
+requests and runs: start-up work and the launch readiness check are listed but
+not counted. A recording opened while it runs reads newest first and
 merges each refreshed first page in front of the rows already shown, so new
 requests appear on top without losing the pages read; a gap of more than one
 page starts the list again. The chosen request's result read carries its own
-row, so the heading names it even when the pages read do not hold it. Rows
+row, so the heading names it even when the pages read do not hold it. Beside
+the heading, or on a line of its own kept even while empty where the header is
+narrow, the click that caused it takes one line, shortened before its component
+file, so choosing a request never changes the header's height. Rows
 without a method (start-up work, the launch readiness check, a command's run)
-show a labelled icon in the method column.
+show a labelled icon in the method column. A zoomed function box keeps its
+line number apart from its file name, which is shortened when long.

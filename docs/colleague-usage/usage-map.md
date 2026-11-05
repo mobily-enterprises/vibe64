@@ -85,7 +85,8 @@ room for two columns of them they are boxes with arrows:
 - a short line ending in an open circle marks unresolved calls.
 
 Each box names the function and its file and line, such as
-**service.js:12**; its tooltip gives the full path.
+**service.js:12**; a long file name is shortened, but its line stays. Its
+tooltip gives the full path.
 
 On a phone, or beside the chat on a narrower screen, the same functions are
 a list instead, without the line legend. Each row says **only via probable
@@ -134,15 +135,19 @@ phone) shows:
   Vibe64 checking that the recorded launch started; it is not one of your
   requests.
 
-The list shows 200 requests at a time. Below it, **Showing 200 of 1,234
-requests** says how many there are, and **Show more** adds the next 200. A
+The list shows 200 rows at a time. Below it, **Showing 200 of 1,234
+requests** says how many requests there are, and **Show more** adds the next
+200. Like the recording's own count, it leaves out the start-up and readiness
+check rows, so it can read **Showing 199** when one of them is listed. A
 recording opened while it is still recording lists its newest requests first,
 and new ones appear at the top as they finish (**newest first** below the
 list).
 
 Pick a request to light up only the subsystems that ran. On a computer the
 heading names it, such as **Request: POST /api/sessions**, with the click that
-caused it beside it. Functions that ran in most requests of the recording,
+caused it beside it, or on the line below where the view is narrow. A long
+click is shortened to one line, keeping its component file; its tooltip gives
+it whole. Functions that ran in most requests of the recording,
 such as logging or request setup, are counted as **Shared plumbing** on each
 card; inside a subsystem they are hidden until you turn on **Show shared
 plumbing**. Each function shows how many times it ran. Arrows between them

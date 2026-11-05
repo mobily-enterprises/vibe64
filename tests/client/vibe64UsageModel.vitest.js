@@ -24,16 +24,18 @@ import {
   coverageText,
   crossingText,
   functionLabel,
+  interactionParts,
   interactionTitle,
+  locationParts,
   onlyBackground,
   recordedDepths,
   recordingWeb,
+  requestCount,
   requestGroups,
   requestTitle,
   routeTemplateFor,
   sameQuery,
   sameUsageState,
-  shortLocation,
   subsystemCard,
   subsystemSections,
   unavailableRuntimes,
@@ -77,9 +79,10 @@ describe("presentation", () => {
     expect(functionLabel({ name: "", start: { line: 12 } })).toBe("anonymous (line 12)");
     expect(functionLabel({ name: "read", container: "Store", start: { line: 1 } })).toBe("Store.read");
     expect(functionLabel({ name: "", kind: "module", file: "src/main.js", start: { line: 1 } })).toBe("main.js top level");
-    expect(shortLocation("packages/vibe64-sessions/src/server/service.js", 12)).toBe("service.js:12");
-    expect(shortLocation("packages/sessions/src/server/service.js")).toBe("…/src/server");
-    expect(shortLocation("src/main.js")).toBe("src");
+    // A box keeps its line apart from the file name, so a long name is shortened and the line stays.
+    expect(locationParts("packages/vibe64-sessions/src/server/service.js", 12)).toEqual({ name: "service.js", line: ":12" });
+    expect(locationParts("packages/sessions/src/server/service.js")).toEqual({ name: "…/src/server", line: "" });
+    expect(locationParts("src/main.js")).toEqual({ name: "src", line: "" });
     // Cards count functions; crossings count calls, and in Recording only the static calls between functions that ran.
     expect(subsystemCard("calls", { functionCount: 31, exact: 9, probable: 22 })).toEqual({ count: "31 functions", detail: "9 by exact calls · 22 only via probable" });
     expect(subsystemCard("imports", { fileCount: 1 })).toEqual({ count: "1 file", detail: "" });
@@ -138,6 +141,11 @@ describe("recordings", () => {
     expect(requestTitle(requests.requests[0], routes, requests.requests)).toBe("Start-up and work outside requests");
     expect(requestTitle(requests.requests[0], routes, [requests.requests[0]])).toBe("Not separated per request for this server");
     expect(interactionTitle(groups[1].interaction)).toBe("Click: button \"Add\" (SessionList.vue)");
+    expect(interactionParts(groups[1].interaction)).toEqual({ text: "Click: button \"Add\"", file: "(SessionList.vue)" });
+    expect(interactionTitle({ ...groups[1].interaction, componentFile: null })).toBe("Click: button \"Add\"");
+    expect(interactionTitle(null)).toBe("");
+    // Start-up work and the readiness check are listed, not counted as requests.
+    expect(requestCount([...requests.requests, { id: "r_000000", kind: "readiness" }])).toBe(3);
     expect(interactionTitle({ ...groups[1].interaction, kind: "enter", label: "textbox \"Title\"" })).toBe("Enter: textbox \"Title\" (SessionList.vue)");
     expect(interactionTitle({ ...groups[1].interaction, kind: "submit", label: "form \"New\"" })).toBe("Submit: form \"New\" (SessionList.vue)");
   });

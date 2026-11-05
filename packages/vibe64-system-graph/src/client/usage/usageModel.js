@@ -90,11 +90,12 @@ function fileName(filePath = "") {
   return String(filePath).split("/").pop();
 }
 
-// A node's one-line place: the file and line, or for a file its last folders.
-function shortLocation(filePath = "", line = null) {
-  if (line) return `${fileName(filePath)}:${line}`;
+// A node's one-line place: the file name and line apart, so a long name is
+// shortened and the line stays shown; for a file, its last folders.
+function locationParts(filePath = "", line = null) {
+  if (line) return { name: fileName(filePath), line: `:${line}` };
   const folders = String(filePath).split("/").slice(0, -1);
-  return folders.length > 2 ? `…/${folders.slice(-2).join("/")}` : folders.join("/");
+  return { name: folders.length > 2 ? `…/${folders.slice(-2).join("/")}` : folders.join("/"), line: "" };
 }
 
 // Path segments that keep their slash, so long paths wrap between folders.
@@ -169,6 +170,7 @@ function edgeCounts(edges = []) {
  * @property {string} [functionId] a function's id; a file has none
  * @property {string} title
  * @property {string} subtitle
+ * @property {{ name: string, line: string }} location the box's short file name and line (":12"), or a file's folders
  * @property {string} file
  * @property {{ line: number, column: number } | null} start
  * @property {number | null} [count] in Recording, how often it ran (null: ran, not counted)
@@ -197,7 +199,7 @@ function webNodes(mode, data = {}) {
   const { out, into } = edgeCounts(edges);
   if (mode === "imports") {
     return (data.files || []).map((file) => ({
-      id: file.id, title: fileName(file.path), subtitle: file.path, location: shortLocation(file.path), file: file.path, start: null, depth: file.depth,
+      id: file.id, title: fileName(file.path), subtitle: file.path, location: locationParts(file.path), file: file.path, start: null, depth: file.depth,
       certainty: null, outCount: out.get(file.id) || 0, inCount: into.get(file.id) || 0, unresolved: 0
     }));
   }
@@ -205,12 +207,12 @@ function webNodes(mode, data = {}) {
     const unresolved = new Map();
     for (const item of data.unresolved || []) unresolved.set(item.fromFunctionId, (unresolved.get(item.fromFunctionId) || 0) + 1);
     return (data.functions || []).map((fn) => ({
-      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, location: shortLocation(fn.file, fn.start.line), file: fn.file, start: fn.start,
+      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, location: locationParts(fn.file, fn.start.line), file: fn.file, start: fn.start,
       depth: fn.depth, certainty: fn.reach, outCount: fn.callCount || 0, inCount: fn.calledByCount || 0, unresolved: unresolved.get(fn.id) || 0
     }));
   }
   return recordedDepths(data.nodes || [], edges).map((node) => ({
-    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`, location: shortLocation(node.file, node.start.line),
+    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`, location: locationParts(node.file, node.start.line),
     file: node.file, start: node.start, depth: node.depth, certainty: null, count: node.count, plumbing: node.plumbing, join: node.join, reason: node.reason,
     outCount: out.get(node.id) || 0, inCount: into.get(node.id) || 0, unresolved: 0
   }));
@@ -322,6 +324,11 @@ const isBackgroundRequest = (request = {}) => request.kind === "background" || /
 const READINESS_TEXT = "Launch readiness check";
 const isReadinessRequest = (request = {}) => request.kind === "readiness";
 
+// The requests and runs among listed rows: start-up work and the readiness
+// check are listed but, as in the recording's count and the server's total,
+// not counted.
+const requestCount = (requests = []) => requests.filter((request) => !isBackgroundRequest(request) && !isReadinessRequest(request)).length;
+
 // True when project code ran only outside per-request scopes.
 function onlyBackground(requests = []) {
   const ran = requests.filter((request) => Number(request.functionCount || 0) > 0 && !isReadinessRequest(request));
@@ -350,10 +357,17 @@ function requestGroups(requests = [], interactions = []) {
 
 const INTERACTION_VERBS = Object.freeze({ click: "Click", enter: "Enter", submit: "Submit" });
 
-function interactionTitle(interaction) {
-  if (!interaction) return "";
+// What caused a request, and apart the component file it came from, so a
+// one-line header can shorten the first and keep the file.
+function interactionParts(interaction) {
+  if (!interaction) return { text: "", file: "" };
   const verb = INTERACTION_VERBS[interaction.kind] || INTERACTION_VERBS.click;
-  return `${verb}: ${interaction.label}${interaction.componentFile ? ` (${fileName(interaction.componentFile)})` : ""}`;
+  return { text: `${verb}: ${interaction.label}`, file: interaction.componentFile ? `(${fileName(interaction.componentFile)})` : "" };
+}
+
+function interactionTitle(interaction) {
+  const { text, file } = interactionParts(interaction);
+  return [text, file].filter(Boolean).join(" ");
 }
 
 // What ran in one request, joined to the call web and grouped by subsystem.
@@ -450,19 +464,21 @@ export {
   depthTitle,
   entryKind,
   functionLabel,
+  interactionParts,
   interactionTitle,
   isBackgroundRequest,
   isReadinessRequest,
   joinText,
+  locationParts,
   onlyBackground,
   pathParts,
   recordedDepths,
   recordingWeb,
+  requestCount,
   requestGroups,
   requestTitle,
   routeTemplateFor,
   sameQuery,
-  shortLocation,
   sameUsageState,
   subsystemCard,
   subsystemSections,

@@ -120,7 +120,10 @@
                 <span class="usage-node__title text-body-medium">{{ node.title }}</span>
                 <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
               </span>
-              <span class="usage-node__subtitle text-body-small">{{ node.location || node.subtitle }}</span>
+              <span class="usage-node__subtitle text-body-small">
+                <span class="usage-node__file">{{ node.location?.name ?? node.subtitle }}</span>
+                <span v-if="node.location?.line" class="usage-node__line">{{ node.location.line }}</span>
+              </span>
             </button>
           </div>
         </div>
@@ -273,8 +276,10 @@ function nodeLabel(node) {
 .usage-node--probable { border-style: dashed; }
 .usage-node--plumbing { opacity: .7; }
 .usage-node__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; }
-.usage-node__subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.usage-node__subtitle { color: var(--v64-on-surface-variant); }
+/* A long file name is shortened; its line stays shown. */
+.usage-node__subtitle { display: flex; min-width: 0; white-space: nowrap; color: var(--v64-on-surface-variant); }
+.usage-node__file { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.usage-node__line { flex: none; }
 .usage-node__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .usage-node__title { flex: 1; min-width: 0; }
 .usage-node__badge { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: var(--v64-shape-sm); background: var(--v64-surface-container-highest); color: var(--v64-on-surface-variant); }

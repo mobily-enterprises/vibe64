@@ -176,6 +176,13 @@ for (const viewport of [
     const addSession = rows ? usage.locator(".usage-web__rows .v-list-item").filter({ hasText: "addSession" }) : usage.getByRole("button", { name: /^addSession,/u });
     await expect(addSession).toBeVisible();
     await shot("2-functions");
+    if (!rows) {
+      // A box shortens a long file name and still shows its line.
+      await addSession.locator(".usage-node__file").evaluate((element) => { element.textContent = "aVeryLongComponentFileNameThatCannotFitTheBox.js"; });
+      const [box, line] = await Promise.all([addSession.boundingBox(), addSession.locator(".usage-node__line").boundingBox()]);
+      expect(line!.width).toBeGreaterThan(0);
+      expect(line!.x + line!.width).toBeLessThanOrEqual(box!.x + box!.width);
+    }
 
     // Level 3: a function's calls, by certainty.
     await addSession.click();
@@ -206,8 +213,16 @@ for (const viewport of [
     const requests = phone ? page.getByRole("dialog") : usage.getByRole("region", { name: "Recordings" });
     await expect(requests.getByText("Click: button \"Add\" (SessionList.vue)")).toBeVisible();
     await shot("5-requests");
+    const header = usage.locator(".usage-view__header");
+    if (!phone) await expect(usage.locator(".usage-view__entry")).toHaveText("Choose a request");
+    const headerHeight = phone ? 0 : (await header.boundingBox())!.height;
     await requests.getByRole("option").filter({ hasText: "16 functions" }).click();
     await expect(page).toHaveURL(/request=r_000004/u);
+    if (!phone) {
+      // Choosing a request under a click names both without moving the header.
+      await expect(usage.locator(".usage-view__click")).toHaveText("Click: button \"Add\" (SessionList.vue)");
+      expect((await header.boundingBox())!.height).toBe(headerHeight);
+    }
     const core = usage.locator(".usage-web__card").filter({ hasText: "Core" });
     await expect(core).toContainText("6 functions ran");
     await expect(core).toContainText("Shared plumbing (5)");

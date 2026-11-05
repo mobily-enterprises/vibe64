@@ -73,7 +73,9 @@ function recordingServer() {
     if (query.get("order") === "newest") matching.reverse();
     const page = pageOf(matching, { cursor: query.get("cursor") || "", limit: query.get("limit") || 100, maxLimit: 200 });
     const referenced = new Set(page.items.map((row) => row.interaction));
-    return { requests: page.items, interactions: [CLICK].filter((item) => referenced.has(item.id)), nextCursor: page.more ? page.next : null, total: matching.length };
+    // As the server counts: the start-up row is listed but is not a request.
+    const total = matching.filter((row) => row.kind !== "background").length;
+    return { requests: page.items, interactions: [CLICK].filter((item) => referenced.has(item.id)), nextCursor: page.more ? page.next : null, total };
   }
   function answer(path: string, query: URLSearchParams) {
     if (!path) return { recordings: [recording] };
@@ -143,7 +145,8 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       if (phone) await usage.getByRole("button", { name: "Choose a request" }).click({ timeout: 20_000 });
       const rail = phone ? page.getByRole("dialog") : usage.getByRole("region", { name: "Recordings" });
       const list = rail.getByRole("listbox", { name: "Requests" });
-      await expect(rail.getByText("Showing 200 of 451 requests")).toBeVisible({ timeout: 20_000 });
+      // The first 200 rows hold the start-up row and 199 requests.
+      await expect(rail.getByText("Showing 199 of 450 requests")).toBeVisible({ timeout: 20_000 });
       await expect(rail.getByRole("button", { name: "Show more" })).toBeVisible();
       expect(await list.evaluate((element: HTMLElement) => element.scrollHeight > element.clientHeight)).toBe(true);
       // Start-up work has an icon in the method column, not a method.
@@ -157,7 +160,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
 
       // Show more lists the next 200, then the rest.
       await rail.getByRole("button", { name: "Show more" }).click();
-      await expect(rail.getByText("Showing 400 of 451 requests")).toBeVisible();
+      await expect(rail.getByText("Showing 399 of 450 requests")).toBeVisible();
       await rail.getByRole("button", { name: "Show more" }).click();
       await expect(rail.getByText(/^Showing /u)).toHaveCount(0);
       await expect(rail.getByRole("option")).toHaveCount(451);
@@ -204,12 +207,12 @@ test("a live recording lists its newest requests first and adds new ones on top,
     const usage = await openRecording(page);
     const rail = usage.getByRole("region", { name: "Recordings" });
     await expect(rail.getByText("Recording now. New requests appear as they finish.")).toBeVisible({ timeout: 20_000 });
-    await expect(rail.getByText("Showing 200 of 451 requests, newest first")).toBeVisible();
+    await expect(rail.getByText("Showing 200 of 450 requests, newest first")).toBeVisible();
     await expect(rail.getByRole("option").first()).toContainText("/api/sessions");
     await expect(page).toHaveURL(/view=usage/u);
     server.rows.push(requestRow(REQUESTS + 1), requestRow(REQUESTS + 2));
     await expect(rail.getByRole("option").first()).toContainText("/api/app/demo/vibe64/accounts/452/settings", { timeout: 15_000 });
-    await expect(rail.getByText("Showing 202 of 453 requests, newest first")).toBeVisible();
+    await expect(rail.getByText("Showing 202 of 452 requests, newest first")).toBeVisible();
     await shot(page, "1280-5-live");
 
     // With the chat collapsed the rail keeps its height and still scrolls.

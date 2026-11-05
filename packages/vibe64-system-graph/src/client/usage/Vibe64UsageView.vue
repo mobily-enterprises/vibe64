@@ -17,7 +17,13 @@
         </div>
         <div v-if="!compact" class="usage-view__title">
           <h3 class="usage-view__entry text-title-medium" :class="{ 'usage-view__entry--none': !chosen }"><template v-for="(part, position) in pathParts(pickerLabel)" :key="position">{{ part }}<wbr></template></h3>
-          <p v-if="chosen && selectedInteraction" class="usage-view__click text-body-medium">{{ interactionTitle(selectedInteraction) }}</p>
+          <!-- In Recording the click's place is kept, so choosing a request never moves the header. -->
+          <p v-if="mode === 'recording'" class="usage-view__click text-body-medium" :title="clickTitle || undefined">
+            <template v-if="clickTitle">
+              <span class="usage-view__click-text">{{ clickParts.text }}</span>
+              <span v-if="clickParts.file" class="usage-view__click-file">{{ " " + clickParts.file }}</span>
+            </template>
+          </p>
         </div>
         <div class="usage-view__controls">
           <v-btn-toggle
@@ -189,6 +195,7 @@ import {
   USAGE_MODES,
   countLabel,
   functionLabel,
+  interactionParts,
   interactionTitle,
   isBackgroundRequest,
   pathParts,
@@ -364,6 +371,10 @@ const panelHandlers = {
 // ---------------------------------------------------------------- layout
 
 const chosen = computed(() => Boolean(mode.value === "recording" ? selectedRequest.value : props.state.entry));
+// The click behind the chosen request, for the desktop header.
+const clickInteraction = computed(() => (chosen.value ? selectedInteraction.value : null));
+const clickParts = computed(() => interactionParts(clickInteraction.value));
+const clickTitle = computed(() => interactionTitle(clickInteraction.value));
 const pickerLabel = computed(() => {
   if (mode.value === "recording") {
     const request = selectedRequest.value;
@@ -405,7 +416,15 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
 .usage-view__entry { margin: 0; min-width: 0; overflow-wrap: break-word; }
 .usage-view__entry--none { color: var(--v64-on-surface-variant); }
-.usage-view__click { margin: 0; min-width: 0; overflow-wrap: break-word; color: var(--v64-on-surface-variant); }
+/* The click is one line beside the heading, shortened to fit while keeping its
+   component file. Where that is too narrow it has a line of its own, kept even
+   while empty, so choosing a request never changes the header's height. */
+.usage-view__click { display: flex; flex: 1 1 0; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; color: var(--v64-on-surface-variant); }
+.usage-view__click-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.usage-view__click-file { flex: none; white-space: pre; }
+@container (max-width: 720px) {
+  .usage-view__click { flex-basis: 100%; min-height: 1lh; }
+}
 .usage-view__modes { flex: none; }
 .usage-view__record { margin-left: auto; }
 /* Narrow headers keep Record on the modes' row as an icon. */

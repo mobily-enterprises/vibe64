@@ -272,16 +272,18 @@ describe("Recording states", () => {
   it("names the chosen request and the click behind it on a desktop, in every mode's place", async () => {
     const html = await view({ mode: "recording", recording: recordingId, request: "r_000004" }, { recordings, requests: read(requests), result: read(joined) });
     expect(html).toMatch(/class="usage-view__entry[^"]*"[^>]*>Request: GET \/<wbr>api\/<wbr>sessions<wbr><\/h3>/u);
-    expect(html).toMatch(/class="usage-view__click[^"]*"[^>]*>Click: button &quot;Add&quot; \(SessionList\.vue\)</u);
+    // One line that shortens the click and keeps its component file; the tooltip holds it whole.
+    expect(html).toMatch(/class="usage-view__click[^"]*"[^>]*title="Click: button &quot;Add&quot; \(SessionList\.vue\)"[^>]*><span class="usage-view__click-text">Click: button &quot;Add&quot;<\/span><span class="usage-view__click-file"> \(SessionList\.vue\)<\/span><\/p>/u);
     // A request beyond the pages read (a reload after Show more) is named from the row its result carries.
     const firstPage = { ...requests, requests: requests.requests.slice(0, 1), interactions: [] };
     const named = { ...joined, request: requests.requests.find((row) => row.id === "r_000004"), interactions: requests.interactions };
     const beyond = await view({ mode: "recording", recording: recordingId, request: "r_000004" }, { recordings, requests: read(firstPage), result: read(named) });
     expect(beyond).toMatch(/class="usage-view__entry[^"]*"[^>]*>Request: GET \/<wbr>api\/<wbr>sessions<wbr><\/h3>/u);
-    expect(beyond).toMatch(/class="usage-view__click[^"]*"[^>]*>Click: button &quot;Add&quot;/u);
-    // The heading holds its place before a choice, so the header keeps its height.
-    expect(await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) }))
-      .toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose a request/u);
+    expect(beyond).toMatch(/class="usage-view__click-text">Click: button &quot;Add&quot;</u);
+    // The heading and the click's line hold their place before a choice, so the header keeps its height.
+    const unchosen = await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) });
+    expect(unchosen).toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose a request/u);
+    expect(unchosen).toMatch(/<p class="usage-view__click text-body-medium"[^>]*><\/p>/u);
     expect(await view({})).toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose an entry/u);
   });
 

@@ -608,8 +608,10 @@ function createService({
   }
 
   /**
-   * Oldest first unless order is "newest"; total counts every matching row.
-   * A requestId reads that one row, whatever the other filters say.
+   * Oldest first unless order is "newest"; total counts the matching requests
+   * and runs, as the recording's count does: start-up work and the readiness
+   * check are rows, not requests. A requestId reads that one row, whatever the
+   * other filters say.
    */
   async function readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
     const context = await sessionContext(sessionId);
@@ -625,7 +627,8 @@ function createService({
     const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
     const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
       .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
-    return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total: matching.length };
+    const total = matching.filter((row) => row.kind !== "background" && row.kind !== "readiness").length;
+    return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total };
   }
 
   async function readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit }) {

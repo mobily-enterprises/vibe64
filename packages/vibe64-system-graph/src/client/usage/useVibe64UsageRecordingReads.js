@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import { SEARCH_DELAY_MS, recordingWeb, unavailableRuntimes } from "./usageModel.js";
+import { SEARCH_DELAY_MS, recordingWeb, requestCount, unavailableRuntimes } from "./usageModel.js";
 
 const LIVE_REFRESH_MS = 5000;
 const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
@@ -105,7 +105,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
     requests: requestRows.value,
     interactions: usage.requests.data.value?.interactions || [],
     total: requestTotal.value,
-    hasMore: Boolean(usage.requests.data.value?.nextCursor) && (requestTotal.value == null || requestRows.value.length < requestTotal.value),
+    hasMore: Boolean(usage.requests.data.value?.nextCursor) && (requestTotal.value == null || requestCount(requestRows.value) < requestTotal.value),
     newestFirst: newestFirst.value,
     requestId: props.state.request,
     search: requestSearch.value,
