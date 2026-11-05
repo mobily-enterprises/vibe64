@@ -103,7 +103,20 @@ function createServiceProjectRuntime({
 }) {
   const projectRuntimeOpens = createKeyedQueue();
 
-  async function closeProjectRuntimeIfOpenMarkerMissing(eventName = "server.terminals.projectRuntime.markerMissing") {
+  /**
+   * A read of a closed project closes whatever it finds still running. It
+   * decides and closes in the open queue, like idle cleanup, so an open (a
+   * page, or a chat message reopening the project) is never refused or undone
+   * by it.
+   */
+  function closeProjectRuntimeIfOpenMarkerMissing(eventName = "server.terminals.projectRuntime.markerMissing") {
+    return projectRuntimeOpens.run(
+      sessionAccess.projectRuntimeContext().projectRuntimeRoot,
+      () => closeCurrentProjectRuntimeIfOpenMarkerMissing(eventName)
+    );
+  }
+
+  async function closeCurrentProjectRuntimeIfOpenMarkerMissing(eventName) {
     const { context, runtime } = await sessionAccess.currentProjectRuntimeOpenState();
     if (runtime.open === true) {
       return null;

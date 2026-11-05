@@ -12,6 +12,7 @@ const NEUTRAL_TERMINAL_OPERATIONS = Object.freeze({
   agentSessionState: async () => null,
   inspectSessionUpdateFailure: async () => ({}),
   listAssistantCapabilities: async () => ({ engines: [], ok: true, unavailable: true }),
+  openProjectRuntime: async () => ({ ok: true, runtime: { open: true } }),
   readAgentGoal: async () => null,
   removeOutputResultsForSession: async () => {},
   removeSessionCommandHelpers: async () => {},

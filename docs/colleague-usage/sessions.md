@@ -341,7 +341,9 @@ Idle cleanup otherwise closes an open project, with its Preview, terminals and
 assistant processes, 30 to 35 minutes after its last recorded activity (opening
 it, typing in one of its chats, session changes and assistant work). Opening the
 project while idle cleanup is closing it waits for that Close, then opens the
-project again. Leaving the project or closing the browser does not close it sooner; close the project yourself to free its
+project again. A chat message sent then, or after the Close, also reopens the
+project and then reaches the assistant; if the project cannot open, the message
+stays marked as not sent, with the reason. Leaving the project or closing the browser does not close it sooner; close the project yourself to free its
 memory at once, or ask Colleague to close it: it uses the same Close, which also
 stops other sessions' running work, and reports a failed Close as incomplete
 cleanup. A running assistant turn or active goal keeps it open. If one of the

@@ -13,6 +13,7 @@ import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/serv
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import process from "node:process";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { createSessionsService } from "./vibe64SessionsTestHelpers.js";
 
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });
@@ -142,6 +143,74 @@ test("opening a project during idle cleanup waits for its Close and opens the pr
   const idle = await outputs.terminals.closeDormantProjectRuntimes({ nowMs: Date.now() + 31 * 60 * 1000 });
   assert.ok(pendingOpen, "the open was requested while idle cleanup ran");
   assert.deepEqual(idle.results.map((result) => [result.reason, result.dormant, result.ok]), [["idle-timeout", true, true]]);
+  const reopened = await pendingOpen;
+  assert.equal(reopened.ok, true);
+  assert.equal(reopened.runtime.open, true);
+  assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
+  assert.deepEqual(published.map((event) => event.realtime?.payload?.action).filter(Boolean),
+    ["runtime-closed", "runtime-opened"]);
+});
+
+// 2026-11-05: a Main message sent as idle cleanup closed its project never
+// reached the assistant, and the person saw no error.
+test("a chat message sent during idle cleanup waits for its Close, opens the project again and reaches the assistant", async (t) => {
+  let sendDuringClose = null;
+  let pendingSend = null;
+  const fixture = await startDormancyFixture(t, {
+    onCreateRuntime() {
+      if (!sendDuringClose) return;
+      pendingSend = sendDuringClose();
+      sendDuringClose = null;
+    }
+  });
+  const { created, outputs, published, runtimeRoot, session } = fixture;
+  const actions = () => published.map((event) => event.realtime?.payload?.action).filter(Boolean);
+  const delivered = [];
+  const sessions = createSessionsService({
+    project: { async createRuntimeWithoutSource() { return created; } },
+    terminals: {
+      openProjectRuntime: (input) => outputs.terminals.openProjectRuntime(input),
+      async sendAgentMessage(sessionId, message) {
+        const { open } = await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot });
+        delivered.push({ sessionId, message: message.message, open, published: actions() });
+        return { delivered: true, ok: true };
+      }
+    }
+  });
+  await outputs.terminals.openProjectRuntime();
+  published.length = 0;
+  sendDuringClose = () => sessions.sendAgentMessage(session.sessionId, { message: "Make the header blue", messageId: "message:idle" });
+  const idle = await outputs.terminals.closeDormantProjectRuntimes({ nowMs: Date.now() + 31 * 60 * 1000 });
+  assert.ok(pendingSend, "the message was sent while idle cleanup ran");
+  assert.deepEqual(idle.results.map((result) => [result.reason, result.dormant, result.ok]), [["idle-timeout", true, true]]);
+  const sent = await pendingSend;
+  assert.equal(sent.ok, true);
+  assert.equal(sent.messageId, "message:idle");
+  assert.deepEqual(delivered, [{ sessionId: session.sessionId, message: "Make the header blue", open: true,
+    published: ["runtime-closed", "runtime-opened"] }], "the message reaches the assistant after the Close, in the reopened project");
+  assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
+});
+
+// A read of a closed project (the page's Preview status) closed what it found
+// outside the open queue, so an open landing during that Close was refused or
+// undone by it.
+test("opening a project while a read of the closed project closes it waits for that Close", async (t) => {
+  let openDuringClose = null;
+  let pendingOpen = null;
+  const fixture = await startDormancyFixture(t, {
+    onCreateRuntime() {
+      if (!openDuringClose) return;
+      pendingOpen = openDuringClose();
+      openDuringClose = null;
+    }
+  });
+  const { outputs, published, runtimeRoot, session } = fixture;
+  await outputs.terminals.openProjectRuntime();
+  await outputs.terminals.closeDormantProjectRuntimes({ nowMs: Date.now() + 31 * 60 * 1000 });
+  published.length = 0;
+  openDuringClose = () => outputs.terminals.openProjectRuntime({ reason: "chat-message" });
+  await outputs.terminals.outputTargetStatus(session.sessionId);
+  assert.ok(pendingOpen, "the open was requested while the read closed the project");
   const reopened = await pendingOpen;
   assert.equal(reopened.ok, true);
   assert.equal(reopened.runtime.open, true);

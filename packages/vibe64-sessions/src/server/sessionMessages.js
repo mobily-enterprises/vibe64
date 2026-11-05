@@ -72,9 +72,23 @@ function createSessionMessages({
       };
     }
     const startedAt = Date.now();
+    const messageId = normalizeText(input.messageId) || crypto.randomUUID();
+    // A message sent while idle cleanup closes the project, or after it closed
+    // it, waits for that Close and opens the project again before delivery. A
+    // project that cannot open leaves the message visibly unsent.
+    try {
+      await terminals.openProjectRuntime({ reason: "chat-message" });
+    } catch (error) {
+      return {
+        code: error?.code || "vibe64_project_open_failed",
+        error: `The project could not open, so the message was not sent. ${error?.message || ""}`.trim(),
+        messageId,
+        ok: false,
+        sessionId
+      };
+    }
     await setupRunner.wait(sessionId);
     const runtime = await project.createRuntimeWithoutSource();
-    const messageId = normalizeText(input.messageId) || crypto.randomUUID();
     vibe64SessionDebugLog("server.sessions.sendAgentMessage.dispatching", {
       durationMs: Date.now() - startedAt,
       messageId,

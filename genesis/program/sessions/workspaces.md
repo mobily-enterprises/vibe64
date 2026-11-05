@@ -905,7 +905,15 @@ named in the result, and is logged as the operational warning
 `vibe64.project_runtime.dormant_close_failed` with the project and session IDs.
 Idle cleanup decides and closes inside the project's open queue, so an open
 requested meanwhile waits for that Close and then reopens the project instead
-of being refused or undone. Typing presence records project activity through the
+of being refused or undone. A read that finds the open marker missing (the
+page's Preview status, agent reconciliation) closes what is still running in the
+same queue, so it neither refuses nor undoes an open either. A Main send
+(`sendAgentMessage` in `sessionMessages.js`) opens the project runtime through
+that queue, with reason `chat-message`, before it waits for workspace setup and
+delivers, so a message sent during or after idle cleanup reaches the reopened
+project; an open that fails returns `ok: false` with the open's code, the
+`messageId` and "The project could not open, so the message was not sent", and
+the assistant is never called. Typing presence records project activity through the
 same queue by refreshing the open marker's `updatedAt`; it never reopens a closed
 project. The open marker is replaced atomically, so no reader sees a partial one.
 A session whose source was never created ran no assistant, so idle cleanup,

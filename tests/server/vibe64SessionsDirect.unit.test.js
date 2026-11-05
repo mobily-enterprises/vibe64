@@ -808,6 +808,27 @@ test("a lesson-sent assistant message reaches the terminal owner as turn metadat
   assert.deepEqual(calls[0][1], { message: "Make it green", messageId: "message:lesson", turnMetadata: { source: "lesson" } });
 });
 
+test("a message whose project cannot open again is visibly not sent and never reaches the assistant", async () => {
+  const calls = [];
+  const runtime = { async getSessionWithoutSource() { return { sessionId: "session-1" }; } };
+  const service = createService({
+    project: { async createRuntimeWithoutSource() { return runtime; } },
+    terminals: {
+      async openProjectRuntime(input) {
+        calls.push(["open", input.reason]);
+        throw Object.assign(new Error("The project is still closing."), { code: "vibe64_project_cleanup_unfinished", status: 409 });
+      },
+      async sendAgentMessage() { calls.push(["send"]); return { delivered: true, ok: true }; }
+    }
+  });
+  const result = await service.sendAgentMessage("session-1", { message: "Make it green", messageId: "message:closed" });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_project_cleanup_unfinished");
+  assert.match(result.error, /could not open, so the message was not sent/u);
+  assert.equal(result.messageId, "message:closed");
+  assert.deepEqual(calls, [["open", "chat-message"]]);
+});
+
 test("empty assistant messages fail without starting a provider turn", async () => {
   const service = createService({
     project: {},
