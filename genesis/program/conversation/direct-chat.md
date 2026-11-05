@@ -2876,8 +2876,9 @@ under its existing project lock, observation-loss recovery selection, stale
 generation pruning and startup unsubscribe/retirement. Vibe64 supplies current
 session/metadata reads and its original write-exclusive recovery and readiness
 leases. Startup unsubscribe still retains a failed native unsubscribe and retries
-client retirement; it does not introduce a server Stop. Aggregate startup callers
-use the manager's configured common-runtime reconciliation and unsubscribe operations.
+client retirement; it does not introduce a server Stop. Vibe64 does not call that
+startup unsubscribe: its manager has no unsubscribe operation, and goal recovery after
+a restart uses the manager's configured common-runtime reconciliation operation.
 The same run owner now coordinates Main readiness and Send preparation. Readiness
 acquires the provider outside the existing startup gate; Send acquires it inside
 that gate. Vibe64 supplies authorized environment/settings, the gate, identity
@@ -3665,14 +3666,13 @@ OpenCode account cleanup also enter this configured runtime operation. Codex
 preserves its immediate shutdown fence before result formatting; OpenCode retains
 its original pending-start join, target release and failed-start retry operation.
 Their closing state belongs to those same native owners. Application guards read
-that state at their original admission positions. Startup reconciliation now
-uses `reconcileNativeSessions` on the same configured runtime. The manager keeps
+that state at their original admission positions. Goal recovery after a restart
+reconciles through `reconcileNativeSessions` on the same configured runtime. The manager keeps
 its original engine grouping, per-session access checks and custom-provider
 receiver; Codex retains concurrent recovery and generation/pruning, OpenCode
 retains per-session failure aggregation, and Claude retains fail-fast sequential
-restore/recover. Codex startup unsubscribe uses `unsubscribeNativeSessions` and
-still selects one configured provider before recovery. Neither operation opens
-a Main record, creates a new process owner or replays a submission.
+restore/recover. It opens no Main record, creates no new process owner and
+replays no submission.
 
 Claude explicit current/native-state reads acquire the original entry and snapshot
 inside the common driver. The application reader only appends actual PTY status

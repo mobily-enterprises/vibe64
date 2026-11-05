@@ -82,11 +82,6 @@ function prepareConversationReconciliation(provider, context, sessions, options)
   return { engine: provider.id, native: host.native, context, sessions, options };
 }
 
-function prepareConversationSubscriptionReset(provider, context, sessions) {
-  const host = synchronousConversationHost(provider, undefined, context, "unsubscription", "Subscription reset");
-  return { engine: provider.id, native: host.native, context, sessions };
-}
-
 /**
  * Explicit readiness prepares the selected host facilities without opening a
  * retained binding. Native readiness decisions belong to the common driver.
@@ -533,7 +528,6 @@ export {
   prepareProjectConversationCleanup,
   prepareConversationRuntimeInvalidation,
   prepareConversationReconciliation,
-  prepareConversationSubscriptionReset,
   prepareSessionConversationReadiness,
   prepareSessionConversationSettings,
   prepareSessionConversationCreation,

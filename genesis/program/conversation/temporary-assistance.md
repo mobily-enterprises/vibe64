@@ -9,11 +9,9 @@ reviews) is an [AI task](ai-tasks.md) and never appears as a temporary chat.
 
 Both live in one session conversation store. A record with a `task` field belongs
 to the AI task window; a record without one is a temporary chat. The list behind
-the tabs and Colleague's list tool (`listTemporaryConversations`) leaves out records
-that carry a task, so a tab never shows a task, even after a reload. Only the
-reconcile route (`serviceAgentReconcile.js`, `POST /agent-sessions/reconcile`)
-passes `includeAiTasks: true`; nothing in the app calls it. An interrupted Close
-of either kind finishes after its engine's next turn in the session
+the tabs and Colleague's list tool (`listTemporaryConversations`) always leaves out
+records that carry a task, so a tab never shows a task, even after a reload. An
+interrupted Close of either kind finishes after its engine's next turn in the session
 (`finishInterruptedCloses`, below). The AI task window binds its own conversation by
 reading it by id (`GET /sessions/:sessionId/temporary-conversations/:taskId`); it
 never reads the list. The conversation machinery below (records, turns, routing,
@@ -228,7 +226,6 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/terminalActions.js`
-- `packages/vibe64-terminals/src/server/serviceAgentReconcile.js`
 - `packages/vibe64-runtime/src/server/sessionTemporaryConversationRemoval.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/sessionConversationStore.js`

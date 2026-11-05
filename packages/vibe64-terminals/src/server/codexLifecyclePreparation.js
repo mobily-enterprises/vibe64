@@ -103,25 +103,6 @@ function createCodexLifecyclePreparation({
     };
   }
 
-  async function prepareCodexAppServerThreadUnsubscription(normalizedSessionId, options = {}) {
-    const {
-      providerOptions: providedProviderOptions = undefined,
-      runtime: providedRuntime = null,
-      session: providedSession = null
-    } = options;
-    const runtime = providedRuntime || await createRuntimeForSession();
-    const session = providedSession || await runtime.getSession(normalizedSessionId);
-    const providerOptions = providedProviderOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
-    const workdir = runtime.learningScope
-      ? (await runtime.store.readSessionNativeDescriptor(normalizedSessionId)).nativeExecutionRoot
-      : sessionSourcePath(session);
-    if (runtime.learningScope && !session.archived) {
-      await learningSessionExecutionRoot(runtime, normalizedSessionId, { allowClosing: true });
-    }
-    const threadId = codexThreadIdForWorkdir(session, workdir);
-    return { providerOptions, workdir, threadId };
-  }
-
   function codexAppServerReconciliationPreparation() {
     return {
       enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
@@ -303,7 +284,6 @@ function createCodexLifecyclePreparation({
 
   return Object.freeze({
     prepareNativeStorageProvider,
-    prepareCodexAppServerThreadUnsubscription,
     codexAppServerReconciliationPreparation,
     prepareCodexAppServerSessionReconciliation,
     prepareCodexSessionCleanup,

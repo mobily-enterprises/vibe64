@@ -223,14 +223,14 @@ and invalidates an open still in progress.
 A task's conversation is a session conversation record that carries `task`; a record
 without one is a person's temporary chat. Both use the conversation machinery that
 [temporary assistance](temporary-assistance.md) describes: records, routes, turns,
-routing, delivery, steering and Stop, attachments, native engines, Close and
-startup's reconcile. Its exchanges never enter Main chat or main History. Starting a
+routing, delivery, steering and Stop, attachments, native engines and Close. Its
+exchanges never enter Main chat or main History. Starting a
 task creates its conversation through Terminals' `createTemporaryConversation`
 with the task, inside the same write that refuses a second open task, and creation
 publishes `temporary-conversation-created` as for a chat. Its title starts as the
 task's title. The temporary chat list
-(`listTemporaryConversations`) leaves the record out unless startup's reconcile asks
-with `includeAiTasks`, so it is never shown as a temporary chat tab.
+(`listTemporaryConversations`) always leaves the record out, so it is never shown
+as a temporary chat tab.
 
 A message keeps the author's text, and the turn adds what the task's record says:
 the kind's context above a message from the person or Colleague, Update's brief on

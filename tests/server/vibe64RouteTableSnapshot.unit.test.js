@@ -180,7 +180,6 @@ POST /api/app/:slug/vibe64/accounts/codex-providers/remove public app - vibe64.a
 POST /api/app/:slug/vibe64/accounts/git-identity public app - vibe64.accounts.git-identity.save
 POST /api/app/:slug/vibe64/accounts/logout public app - vibe64.accounts.logout
 POST /api/app/:slug/vibe64/accounts/model-routing/preview public app - vibe64.accounts.model-routing.preview
-POST /api/app/:slug/vibe64/agent-sessions/reconcile public app - vibe64.terminals.agent-sessions.reconcile
 POST /api/app/:slug/vibe64/codex-terminal public app - vibe64.terminals.global-terminal.start
 POST /api/app/:slug/vibe64/codex-terminal/:terminalSessionId/control/check-text public app - vibe64.terminals.global-terminal.control.check-text
 POST /api/app/:slug/vibe64/codex-terminal/:terminalSessionId/control/key public app - vibe64.terminals.global-terminal.control.key

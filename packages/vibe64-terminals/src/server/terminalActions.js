@@ -47,7 +47,6 @@ import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFi
 
 const ACTION_READ_GLOBAL_TERMINAL_STATUS = "vibe64.terminals.global-terminal.status";
 const ACTION_START_GLOBAL_TERMINAL = "vibe64.terminals.global-terminal.start";
-const ACTION_RECONCILE_AGENT_SESSIONS = "vibe64.terminals.agent-sessions.reconcile";
 const ACTION_OPEN_PROJECT_RUNTIME = "vibe64.terminals.project-runtime.open";
 const ACTION_CLOSE_PROJECT_RUNTIME = "vibe64.terminals.project-runtime.close";
 const ACTION_RECORD_PREVIEW_DIAGNOSTIC = "vibe64.terminals.preview-diagnostics.record";
@@ -115,13 +114,6 @@ function createTerminalActions({ terminals }) {
       input: emptyInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.startGlobalCodexTerminal(input)
-    }),
-    Object.freeze({
-      ...VIBE64_COMMAND,
-      id: ACTION_RECONCILE_AGENT_SESSIONS,
-      input: emptyInputValidator,
-      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => terminals.reconcileOpenAgentSessions(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -575,7 +567,6 @@ export {
   ACTION_READ_OUTPUT_TERMINAL,
   ACTION_READ_TEMPORARY_CONVERSATION,
   ACTION_READ_WORK_PLAN,
-  ACTION_RECONCILE_AGENT_SESSIONS,
   ACTION_RECORD_PREVIEW_DIAGNOSTIC,
   ACTION_RESTORE_WORK_PLAN,
   ACTION_SELECT_PREVIEW_IDENTITY,

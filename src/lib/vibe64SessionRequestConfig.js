@@ -235,10 +235,6 @@ function vibe64AgentTerminalControlTextPath(
   )}/control/text`;
 }
 
-function vibe64AgentSessionsReconcilePath(vibe64ApiPath = "") {
-  return `${vibe64ApiPath}/agent-sessions/reconcile`;
-}
-
 function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/conversation-log");
 }
@@ -434,7 +430,6 @@ export {
   vibe64AssistantCapabilitiesQueryKey,
   vibe64AssistantModelAccessPath,
   vibe64AgentTerminalControlTextPath,
-  vibe64AgentSessionsReconcilePath,
   vibe64AgentTerminalPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,

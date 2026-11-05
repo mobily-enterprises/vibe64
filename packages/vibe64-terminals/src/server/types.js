@@ -116,7 +116,7 @@
  *   | "releaseRenewalPredecessorAttachments" | "releaseRenewalPredecessorProcessExitProof"
  *   | "releaseRenewalSuccessorProcessExitProof" | "resizeTerminal" | "resolveExecutionProfile" | "retireConversationHistory"
  *   | "runDetachedChatTurn" | "seedSessionRenewalHandover" | "sendMessage" | "sessionState" | "startConversationTurn"
- *   | "startTerminal" | "stopConversation" | "streamDetachedChatTurn" | "subscribeTerminal" | "unsubscribeSessions"
+ *   | "startTerminal" | "stopConversation" | "streamDetachedChatTurn" | "subscribeTerminal"
  *   | "updateGoal" | "updateSessionSettings" | "uploadAttachment" | "waitForConversationTurn" | "writeTerminal"} SessionAgentProviderMethod
  */
 /** @typedef {ReturnType<typeof import("./openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */

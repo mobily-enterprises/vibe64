@@ -1,5 +1,5 @@
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
-import { createSessionConversationBinding, prepareSessionConversationRenewal, prepareSessionConversationRenewalProof, prepareSessionConversationDisposal, prepareSessionConversationReadiness, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareConversationSubscriptionReset, prepareSessionConversationStorage, prepareSessionConversationActivity } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { createSessionConversationBinding, prepareSessionConversationRenewal, prepareSessionConversationRenewalProof, prepareSessionConversationDisposal, prepareSessionConversationReadiness, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationStorage, prepareSessionConversationActivity } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { createCodexDetachedConversationView } from "./codexDetachedConversation.js";
 import {
   codexAppServerFrozenTurnInterruptResponse,
@@ -55,7 +55,6 @@ export function createCodexTerminalController(options = {}) {
         })();
       }
       if (operation === "reconcileSessions") return prepareConversationReconciliation(provider, context, input, options);
-      if (operation === "unsubscribeSessions") return prepareConversationSubscriptionReset(provider, context, input);
       if (operation === "invalidateRuntimes") return prepareConversationRuntimeInvalidation(provider, context, input);
       if (operation === "closeProject") return prepareProjectConversationCleanup(provider, context, input);
       if (operation === "generateRenewalHandover" || operation === "seedRenewalHandover") {
@@ -137,11 +136,6 @@ export function createCodexTerminalController(options = {}) {
     reconcileThreads(sessions = [], options = {}) {
       return provider.projectConversationResult("reconcileSessions", () => conversations.reconcileNativeSessions({
         context: { providerId: provider.id, transportId: provider.transportId }, sessions, options
-      }));
-    },
-    unsubscribeKnownAppServerThreads(sessions = []) {
-      return provider.projectConversationResult("unsubscribeSessions", () => conversations.unsubscribeNativeSessions({
-        context: { providerId: provider.id, transportId: provider.transportId }, sessions
       }));
     },
     invalidateAppServerRuntimes(input = {}) {

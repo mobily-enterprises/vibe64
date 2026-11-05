@@ -347,15 +347,6 @@ function createSessionAgentProviderCalls({
 
   /**
    * @param {SessionAgentProviderMethod} method
-   * @param {unknown} input
-   * @param {object} [options]
-   */
-  async function callProvider(method, input, options = {}) {
-    return callProviderOperation(sessionBindings.providerFor(options), method, input, options);
-  }
-
-  /**
-   * @param {SessionAgentProviderMethod} method
    * @param {object} [input]
    * @param {object} [options]
    */
@@ -535,10 +526,6 @@ function createSessionAgentProviderCalls({
     return callSessionProvider("subscribeTerminal", sessionId, { subscriber, terminalSessionId }, options);
   }
 
-  function unsubscribeSessions(sessions = [], options = {}) {
-    return callProvider("unsubscribeSessions", sessions, options);
-  }
-
   function writeTerminal(sessionId = "", terminalSessionId = "", data = "", input = {}, options = {}) {
     return callSessionProvider("writeTerminal", sessionId, { data, input, terminalSessionId }, options);
   }
@@ -575,7 +562,6 @@ function createSessionAgentProviderCalls({
     stopEphemeralConversation,
     streamDetachedChatTurn,
     subscribeTerminal,
-    unsubscribeSessions,
     updateSessionSettings,
     uploadAttachment,
     waitForConversationTurn,

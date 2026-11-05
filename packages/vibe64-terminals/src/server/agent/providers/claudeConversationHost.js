@@ -544,10 +544,6 @@ function createClaudeConversationHost({
     })();
   }
 
-  async function unsubscribeSessions() {
-    return { ok: true };
-  }
-
   async function releaseRenewalPredecessorAttachments() {
     return { ok: true, released: 0 };
   }
@@ -601,7 +597,6 @@ function createClaudeConversationHost({
     resizeTerminal: terminalAccess.resizeTerminal,
     subscribeTerminal: terminalAccess.subscribeTerminal,
     writeTerminal: terminalAccess.writeTerminal,
-    unsubscribeSessions,
     releaseRenewalPredecessorAttachments
   });
 }

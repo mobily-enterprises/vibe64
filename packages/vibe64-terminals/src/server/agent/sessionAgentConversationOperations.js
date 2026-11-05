@@ -32,10 +32,6 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
     project: true,
     run: (runtime, context, sessions, options) => runtime.reconcileNativeSessions({ context, sessions, options })
   },
-  unsubscribeSessions: {
-    project: true,
-    run: (runtime, context, sessions) => runtime.unsubscribeNativeSessions({ context, sessions })
-  },
   hasActiveTemporaryConversation: {
     project: true,
     run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context })

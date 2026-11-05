@@ -121,15 +121,14 @@ function createTemporaryConversationLifecycle({
 
   /**
    * The person's temporary chats, as their tabs and Colleague's list read them. An AI task's conversation
-   * belongs to its task's window, so it is listed only with `includeAiTasks`, for startup's reconcile.
+   * belongs to its task's window, so it is never listed.
    */
   async function listTemporaryConversations(sessionId, options = {}) {
-    const { includeAiTasks = false, ...writeOptions } = options;
     let context;
     const list = async (ctx, savedOnly = false) => {
       context = ctx;
       const records = (await ctx.runtime.store.listSessionConversations(sessionId))
-        .filter(record => includeAiTasks || !record.task);
+        .filter(record => !record.task);
       const conversations = [];
       for (const record of records) {
         conversations.push(savedOnly
@@ -137,9 +136,9 @@ function createTemporaryConversationLifecycle({
       }
       return { ok: true, conversations: numberedConversations(conversations) };
     };
-    let result = await chatTurns.write(sessionId, { ...writeOptions, lockWaitMs: 0 }, list);
+    let result = await chatTurns.write(sessionId, { ...options, lockWaitMs: 0 }, list);
     if (result?.code === "vibe64_agent_write_mode_busy") {
-      context = await readSessionContext(sessionId, writeOptions);
+      context = await readSessionContext(sessionId, options);
       result = await list(context, true);
     }
     if (result?.ok === false) return result;

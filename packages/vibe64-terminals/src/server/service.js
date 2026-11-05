@@ -27,7 +27,6 @@ import { createServiceMainConversationHost } from "./serviceMainConversationHost
 import { createServiceAgentConversations } from "./serviceAgentConversations.js";
 import { createServiceSessionWork } from "./serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "./serviceSessionWorkInspection.js";
-import { createServiceAgentReconcile } from "./serviceAgentReconcile.js";
 import { createServiceProjectRuntime } from "./serviceProjectRuntime.js";
 import { createServiceShutdown } from "./serviceShutdown.js";
 import { createServiceHostSlots } from "./serviceHostSlots.js";
@@ -421,16 +420,10 @@ function createService({
     codexGitCommand,
     project
   });
-  const reconcile = createServiceAgentReconcile({
-    project,
-    sessionAgent,
-    sessionConversations
-  });
   const projectRuntime = createServiceProjectRuntime({
     sessionAccess,
     terminals,
     goals,
-    reconcile,
     agentPreviewCommand,
     outputTarget,
     project,
@@ -599,8 +592,6 @@ function createService({
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,
     continueGoalAfterAccountChange: goals.continueGoalAfterAccountChange,
     recoverActiveGoals: goals.recoverActiveGoals,
-    reconcileAgentSessions: reconcile.reconcileAgentSessions,
-    reconcileOpenAgentSessions: projectRuntime.reconcileOpenAgentSessions,
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,

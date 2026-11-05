@@ -39,7 +39,6 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     const cases = [
       ["GET", "/codex-terminal", "global-terminal.status", "globalCodexTerminalState", {}],
       ["POST", "/codex-terminal", "global-terminal.start", "startGlobalCodexTerminal", {}],
-      ["POST", "/agent-sessions/reconcile", "agent-sessions.reconcile", "reconcileOpenAgentSessions", {}],
       ["POST", "/project-runtime/open", "project-runtime.open", "openProjectRuntime", { reason: "project-open" }],
       ["POST", "/project-runtime/close", "project-runtime.close", "closeProjectRuntime", { reason: "user-request" }],
       ["GET", "/sessions/:sessionId/outputs", "outputs.read", "outputTargetStatus", {}],
@@ -90,7 +89,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     assert.deepEqual(actions.listDefinitions().map(({ id }) => id).sort(), [
       "agent-attachment.delete", "agent-attachment.read", "agent-attachment.upload", "agent-goal.canonical.read",
       "agent-goal.canonical.update", "agent-goal.read", "agent-goal.update", "agent-plan-usage.read",
-      "agent-session.prepare", "agent-sessions.reconcile", "agent-terminal.close", "agent-terminal.control.check-text",
+      "agent-session.prepare", "agent-terminal.close", "agent-terminal.control.check-text",
       "agent-terminal.control.key", "agent-terminal.control.snapshot", "agent-terminal.control.text", "agent-terminal.read",
       "agent-terminal.start", "global-terminal.close", "global-terminal.control.check-text", "global-terminal.control.key",
       "global-terminal.control.snapshot", "global-terminal.control.text", "global-terminal.read", "global-terminal.start",

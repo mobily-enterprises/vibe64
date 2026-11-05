@@ -185,7 +185,6 @@ function createSessionAgentManager({
     streamDetachedChatTurn: providerCalls.streamDetachedChatTurn,
     startTerminal: providerCalls.startTerminal,
     subscribeTerminal: providerCalls.subscribeTerminal,
-    unsubscribeSessions: providerCalls.unsubscribeSessions,
     uploadAttachment: providerCalls.uploadAttachment,
     waitForConversationTurn: providerCalls.waitForConversationTurn,
     writeTerminal: providerCalls.writeTerminal

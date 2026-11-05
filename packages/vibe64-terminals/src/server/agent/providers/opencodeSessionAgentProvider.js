@@ -384,10 +384,6 @@ function createOpenCodeSessionAgentProvider({
     );
   }
 
-  async function unsubscribeSessions() {
-    return { ok: true };
-  }
-
   async function writeTerminal(context, input = {}) {
     return terminals.writeTerminal(
       context.sessionId,
@@ -448,7 +444,6 @@ function createOpenCodeSessionAgentProvider({
     resolveExecutionProfile,
     startTerminal,
     subscribeTerminal,
-    unsubscribeSessions,
     writeTerminal
   });
 }

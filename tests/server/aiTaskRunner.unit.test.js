@@ -983,14 +983,13 @@ test("an archived session whose old repair chat keeps its recovery fields still 
   await assert.rejects(conversations.listTemporaryConversations(SESSION), error => error.code === "vibe64_session_archived");
 }));
 
-test("the temporary chat list holds only the person's chats; a Fix with AI task reads by its id, and startup's reconcile lists both", () => withFixture(async (f) => {
+test("the temporary chat list holds only the person's chats, and a Fix with AI task reads by its id", () => withFixture(async (f) => {
   const { aiTasks, conversations } = f.boot();
   await conversations.createTemporaryConversation(SESSION, { conversationId: "chat", vibe64User: OWNER });
   const { task } = await f.start(aiTasks);
   await f.quiet(aiTasks);
   const ids = result => result.conversations.map(chat => chat.conversationId).sort();
   assert.deepEqual(ids(await conversations.listTemporaryConversations(SESSION)), ["chat"], "the tabs never list a task");
-  assert.deepEqual(ids(await conversations.listTemporaryConversations(SESSION, { includeAiTasks: true })), ["chat", task.id].sort());
   const read = await conversations.readTemporaryConversation(SESSION, { conversationId: task.id });
   assert.equal(read.conversationId, task.id);
   assert.equal(read.task.kind, "update", "the task's window binds its conversation through this read");

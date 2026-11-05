@@ -265,7 +265,6 @@ function createCodexSessionAgentProvider({
   const { prepareCodexRenewalHandover, prepareCodexRenewalSeed, prepareRenewalProcessExitProof } = renewalPreparation;
   const {
     prepareNativeStorageProvider,
-    prepareCodexAppServerThreadUnsubscription,
     codexAppServerReconciliationPreparation,
     prepareCodexSessionCleanup,
     prepareCodexProjectCleanup
@@ -318,19 +317,6 @@ function createCodexSessionAgentProvider({
     if (mode === "reconciliation") {
       return {
         native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
-      };
-    }
-    if (mode === "unsubscription") {
-      return {
-        native: {
-          runOwner: codexAppServerRunOwner,
-          preparation: {
-            enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
-            session: prepareCodexAppServerThreadUnsubscription,
-            failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
-            cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
-          }
-        }
       };
     }
     if (mode === "invalidation") {
@@ -548,7 +534,7 @@ function createCodexSessionAgentProvider({
       return vibe64Result(() => operation);
     }
     if (method === "readGoal" || method === "updateGoal") return perform();
-    if (["inspectMessageAdmission", "closeProject", "reconcileSessions", "unsubscribeSessions",
+    if (["inspectMessageAdmission", "closeProject", "reconcileSessions",
       "generateSessionRenewalHandover", "seedSessionRenewalHandover"].includes(method)) return vibe64Result(perform);
     return normalizeCodexSessionResult(await vibe64Result(async () => {
       const result = await perform();
@@ -697,7 +683,6 @@ function createCodexSessionAgentProvider({
       "closeProject",
       "invalidateRuntimes",
       "reconcileSessions",
-      "unsubscribeSessions",
       "generateSessionRenewalHandover",
       "seedSessionRenewalHandover",
       "releaseRenewalPredecessorProcessExitProof",

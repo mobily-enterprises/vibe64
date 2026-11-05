@@ -11,7 +11,6 @@ import {
   prepareProjectConversationCleanup,
   prepareConversationRuntimeInvalidation,
   prepareConversationReconciliation,
-  prepareConversationSubscriptionReset,
   prepareSessionDetachedConversationCleanup,
   prepareSessionDetachedConversationRun,
   prepareSessionConversationStorage
@@ -112,9 +111,6 @@ function createServiceMainConversationHost({
     }
     if (operation === "inspectTemporaryActivity") {
       return prepareSessionConversationActivity(sessionAgent.conversationProvider(context.providerId), id, context);
-    }
-    if (operation === "unsubscribeSessions") {
-      return prepareConversationSubscriptionReset(sessionAgent.conversationProvider(context.providerId), context, input);
     }
     return (async () => {
       if (operation === "listNativeConversationStorage" || operation === "retireConversationHistory") {

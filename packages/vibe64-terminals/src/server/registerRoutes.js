@@ -42,7 +42,6 @@ import {
   ACTION_READ_OUTPUT_TERMINAL,
   ACTION_READ_TEMPORARY_CONVERSATION,
   ACTION_READ_WORK_PLAN,
-  ACTION_RECONCILE_AGENT_SESSIONS,
   ACTION_RECORD_PREVIEW_DIAGNOSTIC,
   ACTION_RESTORE_WORK_PLAN,
   ACTION_SELECT_PREVIEW_IDENTITY,
@@ -132,11 +131,6 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
   routes.actionRoute("POST", "/codex-terminal", {
     actionId: ACTION_START_GLOBAL_TERMINAL,
     summary: "Start a global Vibe64 Codex terminal."
-  });
-
-  routes.actionRoute("POST", "/agent-sessions/reconcile", {
-    actionId: ACTION_RECONCILE_AGENT_SESSIONS,
-    summary: "Reconnect assistant sessions for the current project."
   });
 
   routes.actionRoute("POST", "/project-runtime/open", {

@@ -21,7 +21,6 @@ import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {ReturnType<typeof import("./serviceSessionTerminals.js").createServiceSessionTerminals>} ServiceSessionTerminals */
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
-/** @typedef {ReturnType<typeof import("./serviceAgentReconcile.js").createServiceAgentReconcile>} ServiceAgentReconcile */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
@@ -76,12 +75,11 @@ function closedProjectOutputTargetStatus({
 
 /**
  * A project's runtime: opening it, closing it with every session's terminals, closing it when dormant
- * or when its open marker is gone, reconciling its open sessions, and the output target's status.
+ * or when its open marker is gone, and the output target's status.
  * @param {object} dependencies
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceSessionTerminals} dependencies.terminals
  * @param {ServiceGoals} dependencies.goals
- * @param {ServiceAgentReconcile} dependencies.reconcile
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {OutputTargetTerminalController} dependencies.outputTarget
  * @param {ProjectService} dependencies.project
@@ -93,7 +91,6 @@ function createServiceProjectRuntime({
   sessionAccess,
   terminals,
   goals,
-  reconcile,
   agentPreviewCommand,
   outputTarget,
   project,
@@ -542,26 +539,6 @@ function createServiceProjectRuntime({
     });
   }
 
-  async function reconcileOpenAgentSessions(options) {
-    const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
-      "server.terminals.reconcileOpenAgentSessions.closedProject"
-    );
-    if (closedRuntime) {
-      return {
-        closeResult: closedRuntime.closeResult,
-        failed: Array.isArray(closedRuntime.closeResult?.failed) ? closedRuntime.closeResult.failed : [],
-        ok: closedRuntime.closeResult?.ok !== false,
-        reason: closedRuntime.reason,
-        results: [],
-        runtime: closedRuntime.runtime,
-        sessionCount: 0,
-        skipped: true
-      };
-    }
-    const sessions = await sessionAccess.listOpenProjectRuntimeSessions();
-    return reconcile.reconcileAgentSessions(sessions, options);
-  }
-
   async function outputTargetStatus(sessionId, options = {}) {
     const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
       "server.terminals.outputTargetStatus.closedProject"
@@ -599,8 +576,7 @@ function createServiceProjectRuntime({
     closeProjectRuntime,
     noteProjectRuntimeActivity,
     openProjectRuntime,
-    outputTargetStatus,
-    reconcileOpenAgentSessions
+    outputTargetStatus
   });
 }
 
