@@ -33,7 +33,9 @@ draft intact. Dismissing the dialog has the same effect; no chat is created and
 no message is sent. This applies on desktop and narrow screens.
 
 The tabs start with **Main chat**, then one tab per temporary chat. **Main chat**
-stays in place while the other tabs scroll. Select a tab to switch to it.
+stays in place while the other tabs scroll. Select a tab to switch to it. The
+open chat's tab is filled and starts with a check mark; the other tabs, including
+**Main chat**, are outlined.
 
 ## Choose the AI for a temporary chat
 

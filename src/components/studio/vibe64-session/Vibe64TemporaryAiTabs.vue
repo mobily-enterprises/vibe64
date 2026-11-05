@@ -3,7 +3,7 @@
     class="vibe64-temporary-ai__tabs"
     aria-label="Main and temporary conversations"
   >
-    <div class="vibe64-temporary-ai__tab vibe64-temporary-ai__tab--main">
+    <div class="vibe64-temporary-ai__tab">
       <button
         class="vibe64-temporary-ai__tab-select"
         data-temporary-ai-main-chat
@@ -85,7 +85,8 @@
 import { mdiClose, mdiPencilOutline, mdiPlus } from "@mdi/js";
 
 // The temporary AI workspace's conversation tabs: Main chat and one tab per
-// temporary chat.
+// temporary chat. The selected tab is Material 3's selected chip; Main chat is
+// never selected here, because choosing it closes this workspace.
 const emit = defineEmits(["select-main-chat", "select-task", "rename", "close", "new-task"]);
 const props = defineProps({
   tasks: { type: Array, default: () => [] },
@@ -108,34 +109,41 @@ const props = defineProps({
 }
 
 .vibe64-temporary-ai__tabs {
+  --vibe64-temporary-ai-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
   align-items: flex-start;
-  background: rgba(var(--v-theme-tertiary), 0.06);
-  border-bottom: 1px solid rgba(var(--v-theme-tertiary), 0.18);
   display: flex;
   gap: 0.25rem;
   padding: 0.25rem 0.35rem;
 }
 
+/* The padding gives a tab's focus ring room inside this scroller, which would
+   clip it. The negative margins keep the strip's height, and the gap before it
+   stays, so a scrolled tab never meets Main chat. */
 .vibe64-temporary-ai__task-tabs {
   display: flex;
   flex: 1 1 auto;
   gap: 0.25rem;
+  margin: -0.25rem -0.25rem -0.25rem 0;
   min-width: 0;
   overflow-x: auto;
+  padding: 0.25rem;
   scrollbar-width: thin;
 }
 
+/* Material 3 chips: an unselected tab is outlined, and the selected one is the
+   tonal selected chip with a leading check. */
 .vibe64-temporary-ai__tab {
   align-items: center;
-  background: rgba(var(--v-theme-on-surface), 0.05);
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: inherit;
+  border: 1px solid var(--v64-outline-variant);
+  border-radius: var(--v64-shape-full);
+  color: var(--v64-on-surface-variant);
   display: inline-flex;
   flex: 0 0 auto;
+  isolation: isolate;
   max-width: 100%;
   min-height: 2rem;
   padding-left: 0.15rem;
+  position: relative;
 }
 
 .vibe64-temporary-ai__tab-select {
@@ -146,9 +154,35 @@ const props = defineProps({
   color: inherit;
   cursor: pointer;
   display: inline-flex;
+  font-weight: 500;
   gap: 0.35rem;
   min-width: 0;
   padding: 0.2rem 0.35rem 0.2rem 0.55rem;
+}
+
+/* The state layer covers the whole pill in the tab's content colour. */
+.vibe64-temporary-ai__tab-select::after {
+  background: currentColor;
+  border-radius: var(--v64-shape-full);
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--v64-duration-short) var(--v64-ease-standard);
+  z-index: -1;
+}
+
+.vibe64-temporary-ai__tab-select:hover::after {
+  opacity: var(--v64-state-hover);
+}
+
+.vibe64-temporary-ai__tab-select:focus-visible::after {
+  opacity: var(--v64-state-focus);
+}
+
+.vibe64-temporary-ai__tab-select:active::after {
+  opacity: var(--v64-state-pressed);
 }
 
 .vibe64-temporary-ai__tab-select > span:first-child {
@@ -162,20 +196,32 @@ const props = defineProps({
   flex: 0 0 auto;
 }
 
+/* The keyboard focus ring goes round the whole pill. */
 .vibe64-temporary-ai__tab-select:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
+  outline: none;
+}
+
+.vibe64-temporary-ai__tab:has(> .vibe64-temporary-ai__tab-select:focus-visible) {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: var(--v64-focus-ring-offset);
 }
 
 .vibe64-temporary-ai__tab--active {
-  background: rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-tertiary), 0.35);
-  font-weight: 650;
+  background: var(--v64-secondary-container);
+  border-color: transparent;
+  color: var(--v64-on-secondary-container);
 }
 
-.vibe64-temporary-ai__tab--main {
-  background: rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-tertiary), 0.22);
+/* The tonal fill alone is under 3:1 against the surface, so the selected
+   chip's check is the cue that stands out. */
+.vibe64-temporary-ai__tab--active > .vibe64-temporary-ai__tab-select::before {
+  background: currentColor;
+  content: "";
+  flex: 0 0 auto;
+  height: 1.125rem;
+  -webkit-mask: var(--vibe64-temporary-ai-check) center / contain no-repeat;
+  mask: var(--vibe64-temporary-ai-check) center / contain no-repeat;
+  width: 1.125rem;
 }
 
 .vibe64-temporary-ai__new-task {

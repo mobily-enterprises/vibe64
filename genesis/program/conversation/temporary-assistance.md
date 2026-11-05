@@ -588,6 +588,10 @@ workspace leaves the project session tabs and shared Save/Update activity
 available above it. Main chat stays outside the horizontally scrolling temporary
 tabs, so selecting or scrolling a task cannot cover the Main chat control.
 Main chat aligns with the other tab buttons above their horizontal scrollbar.
+The open chat's tab is Material 3's selected chip, a tonal fill with a leading
+check because the fill alone is under 3:1 against the surface; the other tabs are
+outlined, and Main chat never shows as selected because choosing it closes the
+workspace.
 Activity notices have a bounded height, and the temporary composer keeps its
 buttons visible while long drafts scroll within the input. During reconnection
 the shared connection notice takes precedence over a matching connection error;
