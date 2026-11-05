@@ -48,7 +48,7 @@ function sessionNavLabel(session = {}) {
  * What a Dashboard tool reads and calls: this pane's context for its session, or the session panel's empty-state
  * context (the project and its sessions path) while no session is selected. The session panel adds its session
  * toolbar to either before handing it to the Dashboard. The members only a session has are absent while none is
- * open, and Vibe64 Online adds the deployed release's members.
+ * open, and a host that deploys releases adds the deployed release's members.
  * @typedef {object} Vibe64DashboardContext
  * @property {Record<string, any>} projectContext The open project's record.
  * @property {import("vue").MaybeRefOrGetter<string>} sessionsApiPath
@@ -73,9 +73,9 @@ function sessionNavLabel(session = {}) {
  * @property {boolean} [assistantDraftAvailable]
  * @property {boolean} [assistantFixAllowed]
  * @property {string} [assistantFixRestrictionMessage]
- * @property {boolean} [owner] Vibe64 Online: whether the person owns the workspace.
- * @property {string} [productionIntegrationsApiPath] Vibe64 Online: the deployed release's integrations.
- * @property {string} [applicationPublicUrl] Vibe64 Online: the deployed application's address.
+ * @property {boolean} [owner] Host-supplied: whether the person owns the workspace.
+ * @property {string} [productionIntegrationsApiPath] Host-supplied: the deployed release's integrations.
+ * @property {string} [applicationPublicUrl] Host-supplied: the deployed application's address.
  */
 
 /** The right pane's session tools: the routed Dashboard tool and editor, database and system open requests. */
