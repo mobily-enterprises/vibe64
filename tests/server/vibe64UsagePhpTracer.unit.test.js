@@ -17,6 +17,7 @@ import {
   PHP_USAGE_INI_NAME,
   phpUsageScanDirectory
 } from "../../packages/vibe64-usage-recording/runtime/php/module.js";
+import { RECORDED_PATH_CASES, SECRET_SEGMENTS } from "./usageRecordedPathCases.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.resolve(TEST_DIR, "../fixtures/usage-recording/php-http");
@@ -212,6 +213,37 @@ test("prepare loads the built module through PHP_INI_SCAN_DIR and keeps PHP's ow
   } finally {
     process.env.VIBE64_USAGE_PHP_MODULE_CACHE = previous;
   }
+});
+
+// The module's label rule needs nothing from PHP, so this compiles it alone.
+test("the PHP module labels a local request's path with its opaque segments redacted", { skip: onPath("cc") ? false : "cc is not on PATH" }, () => {
+  const harness = path.join(SCRATCH, "recorded-path.c");
+  fs.writeFileSync(harness, [
+    "#include <stdio.h>",
+    `#include ${JSON.stringify(path.join(PHP_EXTENSION_DIRECTORY, "vibe64_path.h"))}`,
+    "int main(void) {",
+    "  static char line[8192];",
+    "  char out[257];",
+    "  while (fgets(line, sizeof line, stdin)) {",
+    "    v64_recorded_path(line, strcspn(line, \"\\n\"), out, 256);",
+    "    puts(out);",
+    "  }",
+    "  return 0;",
+    "}",
+    ""
+  ].join("\n"));
+  const binary = path.join(SCRATCH, "recorded-path");
+  const compiled = spawnSync("cc", ["-std=c11", "-Wall", "-Wextra", "-Werror", "-o", binary, harness], { encoding: "utf8" });
+  assert.equal(compiled.status, 0, compiled.stderr);
+  const input = RECORDED_PATH_CASES.map(([requestPath]) => requestPath);
+  const result = spawnSync(binary, { input: `${[...input, "/caf\u00e9/x", `/${"g".repeat(254)}\u00e9`].join("\n")}\n`, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.split("\n").slice(0, -1), [
+    ...RECORDED_PATH_CASES.map(([, recorded]) => recorded),
+    "/caf\u00e9/x",
+    // A cut never splits a character.
+    `/${"g".repeat(254)}`
+  ]);
 });
 
 test("the PHP module opens no socket", () => {
@@ -486,6 +518,21 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     assert.deepEqual(kinds, ["local-request", "request"]);
     for (const name of fs.readdirSync(directory)) {
       assert.equal(fs.readFileSync(path.join(directory, name), "utf8").includes("SECRET"), false, name);
+    }
+  });
+
+  test("a local request's label is written with its opaque segments redacted", async () => {
+    const directory = newRecordingDirectory();
+    const port = await freePort();
+    await withServer(["-S", `127.0.0.1:${port}`, "-t", "public"], { env: recordedEnvironment({ recordingDirectory: directory }), port }, async () => {
+      for (const [requestPath] of RECORDED_PATH_CASES) await request(port, requestPath);
+    });
+    const labels = readTrace(directory).flatMap((trace) => [...trace.scopes.values()])
+      .filter((scope) => scope.kind === "local-request").map((scope) => scope.label);
+    assert.deepEqual(labels.sort(), RECORDED_PATH_CASES.map(([, recorded]) => `GET ${recorded}`).sort());
+    for (const name of fs.readdirSync(directory)) {
+      const text = fs.readFileSync(path.join(directory, name), "utf8");
+      for (const secret of SECRET_SEGMENTS) assert.equal(text.includes(secret), false, `${secret} in ${name}`);
     }
   });
 

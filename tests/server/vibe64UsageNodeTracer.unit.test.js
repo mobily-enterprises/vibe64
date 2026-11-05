@@ -16,6 +16,7 @@ import { USAGE_RECORDING_LIMITS, usageTraceLineProblem } from "@local/vibe64-usa
 import { usageTracersForRuntimes } from "@local/vibe64-usage-recording/server/tracers";
 import { instrumentSource } from "../../packages/vibe64-usage-recording/runtime/node/instrument.mjs";
 import { createTraceWriter } from "../../packages/vibe64-usage-recording/runtime/node/writer.mjs";
+import { RECORDED_PATH_CASES, SECRET_SEGMENTS } from "./usageRecordedPathCases.js";
 
 const PRELOAD = fileURLToPath(new URL("../../packages/vibe64-usage-recording/runtime/node/preload.mjs", import.meta.url));
 const HTTP_FIXTURE = fileURLToPath(new URL("../fixtures/usage-recording/node-http", import.meta.url));
@@ -261,6 +262,17 @@ describe("a recorded web process", () => {
     assert.equal(trace.scopes.get(`l_${traced.pid}_3`).label, "GET /beta");
     for (const name of readdirSync(directory)) {
       assert.ok(!readFileSync(path.join(directory, name), "utf8").includes(secret), `${name} holds no request contents`);
+    }
+  });
+
+  test("a local request's label is written with its opaque segments redacted", async () => {
+    for (const [requestPath] of RECORDED_PATH_CASES) await request(traced.port, requestPath);
+    const ids = RECORDED_PATH_CASES.map((_, index) => `l_${traced.pid}_${index + 4}`);
+    const trace = await waitForScopes(directory, ids);
+    assert.deepEqual(ids.map((id) => trace.scopes.get(id).label), RECORDED_PATH_CASES.map(([, recorded]) => `GET ${recorded}`));
+    for (const name of readdirSync(directory)) {
+      const text = readFileSync(path.join(directory, name), "utf8");
+      for (const secret of SECRET_SEGMENTS) assert.ok(!text.includes(secret), `${secret} in ${name}`);
     }
   });
 });

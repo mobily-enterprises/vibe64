@@ -1,28 +1,33 @@
 // Attribution of each function entry: the Preview proxy's request id read at
 // Node's own HTTP boundary, else a local request scope, else the process's run
 // (terminal targets) or background (web targets) scope. Only the request id
-// header, the method and the path without its query are read from a request.
+// header, the method and the path without its query are read from a request,
+// and the path is written with its opaque segments redacted.
 import { AsyncLocalStorage } from "node:async_hooks";
 import http from "node:http";
 import https from "node:https";
 
-import { USAGE_RECORDING_REQUEST_HEADER, USAGE_REQUEST_ID_PATTERN } from "../../src/shared/contract.js";
+import {
+  USAGE_RECORDING_REQUEST_HEADER,
+  USAGE_REQUEST_ID_PATTERN,
+  recordedRequestPath
+} from "../../src/shared/contract.js";
 
-const PATH_LIMIT = 256;
 const METHOD_PATTERN = /^[A-Z]{1,16}$/u;
 
 function scopeRecord(id, kind, startedAt, label = "") {
   return { id, kind, label, startedAt, endedAt: "", counts: new Map(), lineWritten: false, endWritten: false };
 }
 
-// The path a local request scope is labelled with: never its query or fragment.
+// The path a local request scope is labelled with: never its query or
+// fragment, and no opaque segment such as a token.
 function requestPath(url = "") {
   const text = String(url || "");
   let pathname = text.split(/[?#]/u)[0];
   if (!pathname.startsWith("/")) {
     try { pathname = new URL(text).pathname; } catch { pathname = "/"; }
   }
-  return pathname.slice(0, PATH_LIMIT) || "/";
+  return recordedRequestPath(pathname);
 }
 
 /**

@@ -52,6 +52,15 @@ DEF_SEARCH_LINES = 64
 DEF_LINE = re.compile(r"([ \t\f]*)(?:async[ \t]+)?def[ \t]+(\w+)")
 LAMBDA = re.compile(r"\blambda\b")
 NEWLINE = re.compile(r"\r\n|\r|\n")
+# A local request's path segments that look opaque (a UUID, 20 or more hex
+# characters, or 20 or more base64url characters mixing letters and digits)
+# are written as REDACTED, before the path is cut: the recording contract's
+# recordedRequestPath rule.
+REDACTED = "[redacted]"
+UUID_OR_HEX_SEGMENT = re.compile(
+    r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{20,})\Z", re.IGNORECASE
+)
+TOKEN_SEGMENT = re.compile(r"(?=[A-Za-z_-]*[0-9])(?=[0-9_-]*[A-Za-z])[A-Za-z0-9_-]{20,}\Z")
 HANDLER_SCOPE = "_vibe64_usage_scope"
 PATCHED = "_vibe64_usage_patched"
 MISSING = object()
@@ -151,13 +160,20 @@ def lambda_start(code, source):
     return first, (before_body or columns)[-1]
 
 
+def recorded_path(path):
+    return "/".join(
+        REDACTED if UUID_OR_HEX_SEGMENT.match(segment) or TOKEN_SEGMENT.match(segment) else segment
+        for segment in path.split("/")
+    )[:PATH_LABEL_CHARS]
+
+
 def request_label(handler):
     method = str(getattr(handler, "command", "") or "?")[:16]
     target = str(getattr(handler, "path", "") or "")
     path = target.split("#", 1)[0].split("?", 1)[0]
     if not path.startswith("/"):
         path = "/" + path.split("://", 1)[-1].partition("/")[2]
-    return method + " " + path[:PATH_LABEL_CHARS]
+    return method + " " + recorded_path(path)
 
 
 def acquire_tool_id():

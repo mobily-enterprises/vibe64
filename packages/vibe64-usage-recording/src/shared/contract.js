@@ -67,6 +67,25 @@ const USAGE_SCOPE_KINDS = Object.freeze([
   Object.freeze({ kind: "background", pattern: /^bg_[0-9]+$/u })
 ]);
 
+// A request path as a recording keeps it: without query or fragment, and
+// with each opaque segment (a UUID, or 20 or more characters of hex, or of
+// base64url mixing letters and digits, as in reset links and signed URLs)
+// replaced before the path is cut to 256 characters, so no part of a secret
+// is kept. Shorter ids stay, and a replaced segment still matches a route's
+// parameter. The proxy's request log and every tracer's local request labels
+// are written this way (the Python and PHP recorders repeat the rule), and
+// reads apply it again.
+const USAGE_REDACTED_SEGMENT = "[redacted]";
+const USAGE_RECORDED_PATH_CHARS = 256;
+const UUID_OR_HEX_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{20,})$/iu;
+const TOKEN_SEGMENT = /^(?=[A-Za-z_-]*[0-9])(?=[0-9_-]*[A-Za-z])[A-Za-z0-9_-]{20,}$/u;
+
+function recordedRequestPath(requestPath = "") {
+  return String(requestPath || "/").split(/[?#]/u)[0].split("/")
+    .map((segment) => (UUID_OR_HEX_SEGMENT.test(segment) || TOKEN_SEGMENT.test(segment) ? USAGE_REDACTED_SEGMENT : segment))
+    .join("/").slice(0, USAGE_RECORDED_PATH_CHARS);
+}
+
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const TRACER_LINE_STATES = Object.freeze(["ready", "idle"]);
 
@@ -130,8 +149,10 @@ export {
   USAGE_RECORDING_REQUEST_HEADER,
   USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
+  USAGE_REDACTED_SEGMENT,
   USAGE_REQUEST_ID_PATTERN,
   USAGE_TRACE_SCHEMA,
+  recordedRequestPath,
   usageScopeKind,
   usageTraceLineProblem,
   __testables

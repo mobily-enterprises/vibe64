@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // the module loads only there, never through a global PHP setting.
 const PHP_RUNTIME_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const PHP_EXTENSION_DIRECTORY = path.join(PHP_RUNTIME_DIRECTORY, "ext");
-const PHP_EXTENSION_SOURCES = Object.freeze(["config.m4", "vibe64_usage.c"]);
+const PHP_EXTENSION_SOURCES = Object.freeze(["config.m4", "vibe64_path.h", "vibe64_usage.c"]);
 const PHP_USAGE_BUILD_SCRIPT = path.join(PHP_RUNTIME_DIRECTORY, "build.mjs");
 const PHP_USAGE_INI_NAME = "vibe64-usage.ini";
 const PHP_USAGE_MODULE_NAME = "vibe64_usage.so";

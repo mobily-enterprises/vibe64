@@ -24,12 +24,14 @@ import {
   USAGE_RECORDING_ID_PATTERN,
   USAGE_RECORDING_LIMITS,
   USAGE_REQUEST_ID_PATTERN,
+  recordedRequestPath,
   usageScopeKind,
   usageTraceLineProblem
 } from "@local/vibe64-usage-recording/shared/contract";
 import { readPreviewLocatorSource } from "../../packages/vibe64-terminals/src/server/previewLocator.js";
 import process from "node:process";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { RECORDED_PATH_CASES } from "./usageRecordedPathCases.js";
 
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });
@@ -139,6 +141,13 @@ test("recording identifiers and limits follow the recording contract", () => {
   assert.equal(USAGE_RECORDING_LIMITS.hitsBytesPerProcess, 16 * 1024 * 1024);
   assert.equal(USAGE_RECORDING_LIMITS.hitsBytesPerRecording, 32 * 1024 * 1024);
   assert.equal(USAGE_RECORDING_LIMITS.traceLineBytes, 64 * 1024);
+});
+
+test("a recorded request path keeps no query and redacts each opaque segment before it is cut", () => {
+  for (const [requestPath, recorded] of RECORDED_PATH_CASES) {
+    assert.equal(recordedRequestPath(`${requestPath}?token=abc#part`), recorded, requestPath);
+    assert.equal(recordedRequestPath(recorded), recorded, "a recorded path stays as it is");
+  }
 });
 
 test("usage trace lines are accepted only in their documented shapes", () => {

@@ -25,7 +25,6 @@ import {
   pageOf,
   readInteractions,
   readJsonFile,
-  recordedRequestPath,
   recordingRequestRows,
   writeJsonFile
 } from "./traceStore.js";
@@ -41,6 +40,7 @@ import {
   USAGE_RECORDING_LIMITS,
   USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
+  recordedRequestPath,
   usageScopeKind
 } from "../shared/contract.js";
 

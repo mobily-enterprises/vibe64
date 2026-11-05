@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { mergePrependEnvironment, usageRecordingEnvironment, usageTracersForRuntimes } from "@local/vibe64-usage-recording/server/tracers";
 import { usageTraceLineProblem } from "@local/vibe64-usage-recording/shared/contract";
+import { RECORDED_PATH_CASES, SECRET_SEGMENTS } from "./usageRecordedPathCases.js";
 
 const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const RUNTIME = path.join(REPOSITORY, "packages/vibe64-usage-recording/runtime/python");
@@ -341,6 +342,20 @@ test("a recording holds no header, cookie, query, body or argument value", { ski
   for (const name of await readdir(directory)) {
     const text = await readFile(path.join(directory, name), "utf8");
     for (const secret of secrets) assert.equal(text.includes(secret), false, `${secret} in ${name}`);
+  }
+});
+
+test("a local request's label is written with its opaque segments redacted", { skip }, async (t) => {
+  const directory = await recordingDirectory(t);
+  const { port } = await startServer(t, pythonEnvironment({ directory, sourceRoot: HTTP_ROOT, targetKind: "web" }));
+  for (const [requestPath] of RECORDED_PATH_CASES) await request(port, requestPath);
+  await stopRecording(directory);
+  const locals = [...readRecording(directory).scopes.values()].filter((scope) => scope.kind === "local-request")
+    .sort((left, right) => Number(left.scope.split("_")[2]) - Number(right.scope.split("_")[2]));
+  assert.deepEqual(locals.map((scope) => scope.label), RECORDED_PATH_CASES.map(([, recorded]) => `GET ${recorded}`));
+  for (const name of await readdir(directory)) {
+    const text = await readFile(path.join(directory, name), "utf8");
+    for (const secret of SECRET_SEGMENTS) assert.equal(text.includes(secret), false, `${secret} in ${name}`);
   }
 });
 

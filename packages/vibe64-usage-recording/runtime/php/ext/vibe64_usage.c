@@ -15,7 +15,8 @@
  * hits-php-<pid>.ndjson. A file's top-level code counts once each time it
  * runs as a script and each time it is included. A request's scope is the
  * Preview proxy's x-vibe64-recording-request id, else a local request scope
- * labelled with the method and path (never the query). A process without an
+ * labelled with the method and path (never the query, and each opaque segment
+ * such as a token written as [redacted]; vibe64_path.h). A process without an
  * HTTP request is run_<pid> for a terminal target and bg_<pid> for a web
  * target.
  *
@@ -34,6 +35,8 @@
 #include "ext/standard/info.h"
 #include "zend_observer.h"
 #include "zend_smart_str.h"
+
+#include "vibe64_path.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -622,14 +625,9 @@ static void v64_scope_begin(void)
 	v64.kind = "local-request";
 	zval *uri = v64_server_string(ZEND_STRL("REQUEST_URI"));
 	const char *path = uri ? Z_STRVAL_P(uri) : SG(request_info).request_uri ? SG(request_info).request_uri : "";
-	size_t path_len = strcspn(path, "?#");
-	if (path_len > V64_LABEL_PATH) {
-		path_len = V64_LABEL_PATH;
-		while (path_len && ((unsigned char) path[path_len] & 0xC0) == 0x80) {
-			path_len--;
-		}
-	}
-	snprintf(v64.label, sizeof(v64.label), "%.16s %.*s", method, (int) path_len, path);
+	char recorded[V64_LABEL_PATH + 1];
+	v64_recorded_path(path, strcspn(path, "?#"), recorded, V64_LABEL_PATH);
+	snprintf(v64.label, sizeof(v64.label), "%.16s %s", method, recorded);
 }
 
 static bool v64_directory(const char *path, bool follow)

@@ -99,7 +99,8 @@ Recordings stay outside the source and are not part of session archives. A
 session keeps at most 10 recordings, 64 MiB and 7 days of them; older ones are
 deleted when a recording starts or the session's current recording is read.
 Files hold function positions, counts, request methods, paths without query
-(each UUID and each long hex or base64url token segment saved as `[redacted]`),
+(each UUID and each long hex or base64url token segment saved as `[redacted]`
+by the proxy and by every tracer, before a long path is cut),
 status codes, times and interaction labels: never headers, cookies, bodies,
 query strings, arguments or values. Tracers open no port or socket; they write
 only files in the recording directory.

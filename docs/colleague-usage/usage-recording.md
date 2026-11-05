@@ -9,7 +9,8 @@ The results open in **Architecture** › **Usage** › **Recording**; see
 Vibe64 saves which functions ran (their file, name and lines) and how often,
 and for each request its method, path, status and time. A path is saved
 without the part after `?`, and each long id or token in it, such as a UUID or
-the code in a reset link, is saved as `[redacted]`; shorter ids are kept. For
+the code in a reset link, is saved as `[redacted]`, also for requests the app
+served without going through Preview; shorter ids are kept. For
 each click, form submit or Enter in Preview it saves the element's role, up to
 40 characters of the text the page shows for it (its visible text or label)
 and the component file it belongs to; a password field is saved only as
