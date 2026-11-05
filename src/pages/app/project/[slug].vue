@@ -44,6 +44,9 @@ const {
   mobileProjectActionVisible,
   openProject,
   pageError,
+  projectClosedNotice,
+  projectReopening,
+  reopenProject,
   previewToolbarHostId,
   previewToolbarHostVisible,
   previewToolbarTeleportTarget,
@@ -165,6 +168,19 @@ const {
         class="studio-screen__alert"
       >
         {{ pageError }}
+      </v-alert>
+      <v-alert
+        v-if="projectClosedNotice"
+        type="info"
+        variant="tonal"
+        border="start"
+        class="studio-screen__alert"
+        data-testid="vibe64-project-closed-notice"
+      >
+        {{ projectClosedNotice }}
+        <template #append>
+          <v-btn variant="text" :loading="projectReopening" @click="reopenProject">Reopen</v-btn>
+        </template>
       </v-alert>
 
       <!-- The current lesson's steps, in Learn mode. -->

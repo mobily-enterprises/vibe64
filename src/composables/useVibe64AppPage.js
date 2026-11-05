@@ -1,4 +1,4 @@
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import {
   mdiApplicationOutline,
@@ -12,7 +12,7 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { followMediaQuery } from "@/lib/browser.js";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_UNSENT_CHATS_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries, invalidateGithubProjectQueries } from "@/lib/vibe64GithubProject.js";
 import { normalizeRoutePath, routePathContainsSection } from "@/lib/routeActiveState.js";
 import { vibe64SessionToolIdFromDashboardPath } from "@/lib/vibe64SessionToolDefinitions.js";
@@ -90,6 +90,11 @@ function useVibe64AppPage() {
   const route = useRoute();
   const router = useRouter();
   const pageError = ref("");
+  // Idle cleanup closed the project while one of its chats held words not yet
+  // delivered, so the page stayed.
+  const projectClosedNotice = ref("");
+  const unsentChats = new Set();
+  provide(VIBE64_UNSENT_CHATS_KEY, unsentChats);
   const chatCollapsed = ref(false);
   const mobilePaneLayout = ref(false);
   const phoneBar = ref(false);
@@ -233,6 +238,14 @@ function useVibe64AppPage() {
     }
   });
 
+  // A chat message, Reopen or another tab opened the project again.
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(projectClosedNotice.value)),
+    event: VIBE64_PROJECT_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.action === "runtime-opened",
+    onEvent: () => { projectClosedNotice.value = ""; }
+  });
+
   useRealtimeEvent({
     event: VIBE64_PROJECT_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.githubRefresh === true,
@@ -260,7 +273,10 @@ function useVibe64AppPage() {
     }
   });
 
-  watch(projectSlug, retryProjectRuntime, { flush: "sync" });
+  watch(projectSlug, () => {
+    projectClosedNotice.value = "";
+    retryProjectRuntime();
+  }, { flush: "sync" });
   // A phone shows one surface: showing the lesson (a started lesson,
   // Colleague) shows the project side.
   watch(lessonShown, shown => {
@@ -334,6 +350,9 @@ function useVibe64AppPage() {
     mobileProjectActionVisible,
     openProject,
     pageError,
+    projectClosedNotice,
+    projectReopening: computed(() => openProjectRuntimeCommand.isRunning),
+    reopenProject,
     previewToolbarHostId: PREVIEW_TOOLBAR_HOST_ID,
     previewToolbarHostVisible,
     previewToolbarTeleportTarget,
@@ -439,7 +458,19 @@ function useVibe64AppPage() {
     projectOpenRevision.value += 1;
   }
 
+  async function reopenProject() {
+    if (await openProjectRuntimeForSlug(projectSlug.value)) projectClosedNotice.value = "";
+  }
+
   function handleProjectRuntimeClosed(payload = {}) {
+    // Idle cleanup leaves a chat holding words not yet delivered where it is;
+    // its next message, or Reopen, opens the project again. Later reads of the
+    // closed project close it again and keep the page too.
+    if (projectClosedNotice.value ||
+        (payload.runtimeDormantClose === true && [...unsentChats].some(unsent => unsent()))) {
+      projectClosedNotice.value = "Idle cleanup closed this project. Your chat is kept: sending your message, or Reopen, opens the project again.";
+      return;
+    }
     const closedSlug = String(payload.projectSlug || projectSlug.value || "").trim();
     pageError.value = String(payload.message || "Project is closed.");
     // The host's project list says which project closed; without one, /app

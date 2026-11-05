@@ -1,4 +1,4 @@
-import { computed, inject, proxyRefs, toValue } from "vue";
+import { computed, inject, onScopeDispose, proxyRefs, toValue } from "vue";
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { mainConversationId, mainConversationTarget } from "@local/vibe64-sessions/shared/conversation";
@@ -9,7 +9,7 @@ import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
-import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { LOCAL_ASSISTANT_VIEWER, NO_UNSENT_CHATS, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_UNSENT_CHATS_KEY } from "@/lib/vibe64AssistantHost.js";
 import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
@@ -179,7 +179,17 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
         identity: Object.freeze({ ...identity.value, ...target, actorKey: conversation.identity.actorKey }) });
     }
   });
-  return computed(() => binding.runtime.value?.application || null);
+  const runtime = computed(() => binding.runtime.value?.application || null);
+  /** @type {import("@/lib/vibe64AssistantHost.js").UnsentChats} */
+  const unsentChats = inject(VIBE64_UNSENT_CHATS_KEY, NO_UNSENT_CHATS);
+  const unsent = () => {
+    const chat = runtime.value;
+    return Boolean(chat && (chat.draft.value.trim() || chat.draftAttachments.value.length ||
+      chat.delivery.state.messages.some(message => message.status !== "accepted")));
+  };
+  unsentChats.add(unsent);
+  onScopeDispose(() => unsentChats.delete(unsent));
+  return runtime;
 }
 
 export { useVibe64ConversationRuntime };

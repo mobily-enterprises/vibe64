@@ -452,11 +452,21 @@ is gone** with **Open Courses** instead of the error.
 The delete's own `runtime-closed` event (reason `project-delete`) does not move
 an open practice page (`useVibe64AppPage`). Ordinary projects leave on it: to
 the host's project list from `projectListPath()` with `projectClosed`, or to
-`/app` where the host names none (local Vibe64).
+`/app` where the host names none (local Vibe64). An idle close
+(`runtimeDormantClose`) keeps the page instead while a mounted chat holds words
+not yet delivered: the page provides `VIBE64_UNSENT_CHATS_KEY`, a set of checks
+each `useVibe64ConversationRuntime` adds while mounted (true for a draft, draft
+attachments, or a delivery that is not `accepted`). The page then shows
+`projectClosedNotice` with **Reopen** (`reopenProject`, the ordinary open
+request), keeps the gate and chat mounted, and ignores further `runtime-closed`
+events (the page's own reads of the closed project) until the notice clears: on
+a successful Reopen, on that project's `runtime-opened` event (a sent message
+reopens it on the server), or on a project change.
 Evidence: `tests/server/studioProjectContext.unit.test.js`,
 `tests/server/vibe64FeatureRoutes.unit.test.js`,
-`tests/client/vibe64PracticeProjectDeleted.vitest.js` and
-`tests/client/vibe64ProjectOpening.vitest.js`.
+`tests/client/vibe64PracticeProjectDeleted.vitest.js`,
+`tests/client/vibe64ProjectOpening.vitest.js` and
+`tests/client/useVibe64ConversationRuntime.vitest.js`.
 
 Project metadata accepts only its current fields (deletion, development
 database name and scope, `allowSharedDatabaseSessions`, repository and

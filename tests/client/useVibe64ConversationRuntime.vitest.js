@@ -1,7 +1,7 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { computed, createRenderer, h, onScopeDispose, reactive, ref, nextTick, ssrContextKey } from "vue";
+import { computed, createRenderer, h, onScopeDispose, provide, reactive, ref, nextTick, ssrContextKey } from "vue";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_UNSENT_CHATS_KEY } from "../../src/lib/vibe64AssistantHost.js";
 const mocks = vi.hoisted(() => ({ mounted: vi.fn(), log: vi.fn(), access: vi.fn(), request: vi.fn(), read: vi.fn() }));
 vi.mock("../../src/composables/useVibe64MountedSessionData.js", () => ({ useVibe64MountedSessionData: mocks.mounted }));
 vi.mock("../../src/composables/useVibe64ConversationLog.js", () => ({ useVibe64ConversationLog: mocks.log }));
@@ -85,6 +85,25 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
 }
 
 describe("retained project conversation ownership", () => {
+  it("tells the project page while its chat holds words not yet delivered", async () => {
+    const unsentChats = new Set();
+    const f = fixture({ provideShell: () => provide(VIBE64_UNSENT_CHATS_KEY, unsentChats) });
+    const runtime = f.runtime.value;
+    const unsent = () => [...unsentChats].some(check => check());
+    expect(unsentChats.size).toBe(1);
+    expect(unsent()).toBe(false);
+    runtime.draft.value = "Make the header blue";
+    expect(unsent()).toBe(true);
+    runtime.draft.value = "";
+    for (const status of ["pending", "failed", "uncertain"]) {
+      runtime.delivery.state.messages = [{ id: "m1", status, payload: { message: "Make it blue" } }];
+      expect(unsent()).toBe(true);
+    }
+    runtime.delivery.state.messages = [{ id: "m1", status: "accepted", payload: { message: "Make it blue" } }];
+    expect(unsent()).toBe(false);
+    await f.remountReader();
+    expect(unsentChats.size).toBe(1);
+  });
   it("continues accepted and uncertain workflows through the authorized session action", async () => {
     const f = fixture(); const runtime = f.runtime.value;
     const request = { messageId: "original-request", input: { message: "Review this work" } };

@@ -60,6 +60,7 @@ import { useVibe64Issues } from "../../src/composables/useVibe64Issues.js";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
 import { idleLearning } from "./helpers/learningHostParts.js";
 import { provideShellContext } from "./helpers/shellContext.js";
+import { VIBE64_UNSENT_CHATS_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const filename = new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url).pathname;
 const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
@@ -76,7 +77,8 @@ afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; v
 const success = { ok: true, runtime: { open: true } };
 async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
-async function mountPage(path = "/app/project/dogandgroom") {
+// unsent: whether the mounted chat holds words not yet delivered.
+async function mountPage(path = "/app/project/dogandgroom", { unsent = Vue.ref(false) } = {}) {
   mocks.requests = [];
   mocks.realtime = [];
   const router = createRouter({ history: createMemoryHistory(), routes: [
@@ -112,7 +114,11 @@ async function mountPage(path = "/app/project/dogandgroom") {
   let page;
   let issues;
   const sessionMounted = vi.fn();
-  const Session = Vue.defineComponent({ setup() { sessionMounted(); return () => Vue.h("article", "Assistant ready"); } });
+  const Session = Vue.defineComponent({ setup() {
+    sessionMounted();
+    Vue.inject(VIBE64_UNSENT_CHATS_KEY, null)?.add(() => unsent.value);
+    return () => Vue.h("article", "Assistant ready");
+  } });
   const app = renderer.createApp({ setup() {
     page = useVibe64AppPage();
     issues = useVibe64Issues(Vue.ref({ active: false }));
@@ -198,6 +204,66 @@ describe("opening a routed project", () => {
     await push.mock.results[0].value;
     expect(view.router.currentRoute.value.path).toBe("/projects");
     expect(view.router.currentRoute.value.query).toEqual({ projectClosed: "dogandgroom" });
+  });
+
+  // 2026-11-05: idle cleanup closed a project as its owner sent a message, and
+  // the page left the project with the message.
+  it("stays on a project idle cleanup closed while its chat holds unsent words, until a reopen", async () => {
+    const unsent = Vue.ref(true);
+    const view = await mountPage(undefined, { unsent });
+    mocks.requests[0].resolve(success);
+    await flush();
+    const closed = (fields) => ({ payload: { projectSlug: "dogandgroom", action: "runtime-closed", runtime: { open: false }, ...fields } });
+    const push = vi.spyOn(view.router, "push");
+    const idle = closed({ runtimeDormantClose: true, runtimeCloseReason: "idle-timeout" });
+    mocks.realtime.find((entry) => entry.matches(idle)).onEvent(idle);
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    expect(view.router.currentRoute.value.path).toBe("/app/project/dogandgroom");
+    expect(view.page.projectClosedNotice.value).toMatch(/^Idle cleanup closed this project\. Your chat is kept/u);
+    expect(view.page.projectRuntimeReady.value).toBe(true);
+    expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+    // The page's later reads of the closed project close it again; the page stays.
+    unsent.value = false;
+    const reread = closed({ runtimeCloseReason: "project-runtime-marker-missing" });
+    mocks.realtime.find((entry) => entry.matches(reread)).onEvent(reread);
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    const reopening = view.page.reopenProject();
+    await flush();
+    expect(mocks.requests).toHaveLength(2);
+    expect(mocks.requests[1].options.path).toBe("/api/app/dogandgroom/vibe64/project-runtime/open");
+    mocks.requests[1].resolve(success);
+    await reopening;
+    expect(view.page.projectClosedNotice.value).toBe("");
+    expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the closed notice when a sent message opens the project again", async () => {
+    const view = await mountPage(undefined, { unsent: Vue.ref(true) });
+    mocks.requests[0].resolve(success);
+    await flush();
+    const idle = { payload: { projectSlug: "dogandgroom", action: "runtime-closed", runtime: { open: false }, runtimeDormantClose: true } };
+    mocks.realtime.find((entry) => entry.matches(idle)).onEvent(idle);
+    expect(view.page.projectClosedNotice.value).not.toBe("");
+    const opened = { payload: { projectSlug: "dogandgroom", action: "runtime-opened", runtime: { open: true } } };
+    const listener = mocks.realtime.find((entry) => entry.matches(opened));
+    expect(listener.matches({ payload: { ...opened.payload, projectSlug: "other" } })).toBe(false);
+    listener.onEvent(opened);
+    expect(view.page.projectClosedNotice.value).toBe("");
+    expect(mocks.requests).toHaveLength(1);
+  });
+
+  it("leaves a project idle cleanup closed when its chats hold nothing unsent", async () => {
+    const view = await mountPage();
+    mocks.requests[0].resolve(success);
+    await flush();
+    const idle = { payload: { projectSlug: "dogandgroom", action: "runtime-closed", runtime: { open: false }, runtimeDormantClose: true } };
+    const push = vi.spyOn(view.router, "push");
+    mocks.realtime.find((entry) => entry.matches(idle)).onEvent(idle);
+    await push.mock.results[0].value;
+    expect(view.router.currentRoute.value.fullPath).toBe("/app");
+    expect(view.page.projectClosedNotice.value).toBe("");
   });
 
   it("keeps project pane navigation scoped to the selected project", async () => {

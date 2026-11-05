@@ -24,6 +24,17 @@ export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 // The viewer of a standalone editor, which has no host identity.
 export const LOCAL_ASSISTANT_VIEWER = Object.freeze({ actorKey: "local" });
 
+/**
+ * The checks the project page's mounted chats add, each true while its chat
+ * holds a draft or a message sending, failed or unconfirmed. Idle cleanup
+ * leaves the page in place while one is true.
+ * @typedef {Set<() => boolean>} UnsentChats
+ */
+// The project page provides its UnsentChats here.
+export const VIBE64_UNSENT_CHATS_KEY = Symbol("vibe64.unsent.chats");
+/** A chat outside the project page adds its check here, where nothing reads it. @type {UnsentChats} */
+export const NO_UNSENT_CHATS = new Set();
+
 /** @typedef {{ actorKey: string }} AssistantViewer */
 /** What a host provides as its viewer: the viewer itself, or a ref that is null while nobody is signed in. */
 /** @typedef {import("vue").MaybeRef<AssistantViewer | null>} AssistantViewerSource */
