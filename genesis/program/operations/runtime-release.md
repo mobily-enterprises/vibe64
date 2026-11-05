@@ -10,7 +10,10 @@ so the same command works without a source checkout in the relocated runtime.
 
 - `index.html`
 - `src/main.js`
+- `src/lib/vibe64Theme.js`
+- `src/styles/vibe64-m3.css`
 - `src/styles/vibe64-font.css`
+- `tests/client/vibe64ThemeColours.vitest.js`
 - `src/App.vue`
 - `config/public.js`
 - `tooling/release/server-build.mjs`
@@ -223,7 +226,8 @@ runtime, including installed external dependencies, without needing npm on the
 activation host. The builder accepts only an empty separate destination and
 never prunes the development node_modules directory.
 
-The application theme in `src/main.js` supplies paired `surface-variant` and
+The application theme in `src/lib/vibe64Theme.js`, which `src/main.js` gives
+Vuetify, supplies paired `surface-variant` and
 `on-surface-variant` colours: pale blue/dark text in light mode, blue/light text
 in dark mode. Status sheets, session information, renewal messages and future
 notices using that semantic surface inherit the pair rather than choosing a
@@ -231,6 +235,13 @@ background independently. `src/App.vue` keeps disabled actions on these surfaces
 legible through the shared semantic surface and status/alert roles. Connection recovery uses its primary tint and the same on-surface
 foreground. New notices use the theme surface/foreground pair, or a semantic
 warning/error alert; components do not introduce grey background constants.
+Borders, dividers and container tints use the Material 3 roles in
+`src/styles/vibe64-m3.css` (`--v64-outline`, `--v64-outline-variant`, the
+`--v64-surface-container-*` tiers), which derive from the theme. A component
+names only `--v-theme-*` colours Vuetify declares for this theme, because the
+browser ignores a declaration that names an undefined one;
+`tests/client/vibe64ThemeColours.vitest.js` derives that set from Vuetify and
+the theme, and fails on any other name in `src/` or a package's `src/`.
 The app font, Roboto, ships inside the build: `src/styles/vibe64-font.css`
 self-hosts the variable latin subset from `@fontsource-variable/roboto` under
 the family name Vuetify and the `--v64-font-family` token already use, so every
