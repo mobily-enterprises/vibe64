@@ -74,6 +74,6 @@ const emit = defineEmits(["close", "use-sql"]);
 .database-workspace__copilot > header strong, .database-workspace__copilot > header small { display: block; }
 .database-workspace__copilot > header small { color: rgba(var(--v-theme-on-surface), 0.54); font-size: 0.63rem; }
 .database-workspace__copilot-body { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
-.database-workspace__assistant-note { margin: 0.65rem; padding: 0.6rem; border-radius: 10px; background: rgba(var(--v-theme-tertiary), 0.09); color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.67rem; }
+.database-workspace__assistant-note { margin: 0.65rem; padding: 0.6rem; border-radius: 10px; background: var(--v64-surface-container-high); color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.67rem; }
 .database-workspace__assistant-skeleton { margin: 0.5rem 0; }
 </style>
