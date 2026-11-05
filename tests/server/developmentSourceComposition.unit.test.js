@@ -293,3 +293,17 @@ process.exitCode = await runSourceDevelopment({
   await running;
   assert.equal(await readFile(events, "utf8"), "start:first\nstopped:first\nstart:second\n");
 });
+
+test("the connected-source reader loads in a checkout that has installed nothing yet", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-roots-bare-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repository = fileURLToPath(new URL("../..", import.meta.url));
+  await manifest(root, { name: "vibe64" });
+  for (const name of ["tooling/development/source-roots.mjs", "packages/vibe64-genesis/src/shared/connectedPackageTypes.js"]) {
+    await file(root, name, await readFile(path.join(repository, name), "utf8"));
+  }
+  const { stdout } = await exec(process.execPath, ["--input-type=module", "-e",
+    `const tools = await import(${JSON.stringify(path.join(root, "tooling/development/source-roots.mjs"))}); ` +
+    "console.log(typeof tools.readConnectedDevelopmentSources);"], { cwd: root });
+  assert.equal(stdout.trim(), "function");
+});

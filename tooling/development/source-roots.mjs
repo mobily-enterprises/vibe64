@@ -2,7 +2,9 @@ import { execFile } from "node:child_process";
 import { access, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { connectedPackageTypeListText, isConnectedPackageType } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+// A composing project loads this file to prepare its connected sources before this checkout has
+// installed anything, so it imports only Node built-ins and relative files.
+import { connectedPackageTypeListText, isConnectedPackageType } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 
 const exec = promisify(execFile);
 
