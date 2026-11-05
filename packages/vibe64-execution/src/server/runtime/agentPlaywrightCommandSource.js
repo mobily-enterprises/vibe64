@@ -11,7 +11,7 @@ function agentPlaywrightCommandSource({
 } = {}) {
   return `#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -206,7 +206,30 @@ function managedPreview(applicationRoot = "", {
   }
 }
 
-function managedPlaywrightStorageState(applicationRoot = "", identity = "default") {
+// The identity exchange runs through the Preview proxy, so the login state comes back stamped for
+// the proxy's host, while the suite visits the direct application endpoint. A browser sends a
+// cookie only to its own host, so the application's cookies and storage move to the tested origin;
+// the proxy's own __Host- cookie means nothing there and stays behind.
+function moveStorageStateToBaseUrl(storageState = {}, baseUrl = "") {
+  const target = new URL(baseUrl);
+  const secure = target.protocol === "https:";
+  return {
+    ...storageState,
+    cookies: (Array.isArray(storageState.cookies) ? storageState.cookies : [])
+      .filter((cookie) => !String(cookie?.name || "").startsWith("__Host-"))
+      .map((cookie) => ({
+        ...cookie,
+        domain: target.hostname,
+        secure,
+        // A cookie sent to every site must be secure, so over plain HTTP it stays with the tested site.
+        ...(!secure && cookie.sameSite === "None" ? { sameSite: "Lax" } : {})
+      })),
+    origins: (Array.isArray(storageState.origins) ? storageState.origins : [])
+      .map((entry) => ({ ...entry, origin: target.origin }))
+  };
+}
+
+function managedPlaywrightStorageState(applicationRoot = "", identity = "default", baseUrl = "") {
   const directory = mkdtempSync(path.join(
     path.resolve(process.env.TMPDIR || "/tmp"),
     "vibe64-playwright-auth-"
@@ -230,7 +253,8 @@ function managedPlaywrightStorageState(applicationRoot = "", identity = "default
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join("\\n");
-  if (result.error || result.status !== 0 || !existsSync(storageStatePath)) {
+  const storageState = result.error || result.status !== 0 ? null : readJson(storageStatePath);
+  if (!storageState) {
     rmSync(directory, {
       force: true,
       recursive: true
@@ -241,6 +265,9 @@ function managedPlaywrightStorageState(applicationRoot = "", identity = "default
       (diagnostics ? "\\n" + diagnostics : "")
     );
   }
+  writeFileSync(storageStatePath, JSON.stringify(moveStorageStateToBaseUrl(storageState, baseUrl)) + "\\n", {
+    mode: 0o600
+  });
   return {
     directory,
     storageStatePath
@@ -329,7 +356,7 @@ function managedExecution(runtime = {}, applicationRoot = "", {
     );
   }
   const authentication = preview.managed && preview.identityRequired
-    ? managedPlaywrightStorageState(applicationRoot, identity)
+    ? managedPlaywrightStorageState(applicationRoot, identity, preview.baseUrl)
     : null;
   return {
     cleanupRoot: authentication?.directory || "",

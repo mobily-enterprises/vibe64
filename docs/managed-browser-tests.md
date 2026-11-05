@@ -37,6 +37,9 @@ and socket placement are independent.
 The target id is project-defined; `test-app` is an example, not a reserved name.
 Vibe64 waits for that target, creates browser login state using its declared
 Preview identity command, and supplies `PLAYWRIGHT_BASE_URL` to the suite.
+The login state is created through Preview and then moved to the address the
+suite tests, so its cookies reach the application; Preview's own cookie stays
+behind.
 It restores the previously running target after success, failure, timeout or
 assistant cancellation. If Preview was stopped, it stops the test target again.
 Cancellation waits for the managed command and its child processes to stop before

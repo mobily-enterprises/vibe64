@@ -79,6 +79,47 @@ async function createProject(projectRoot, version) {
   ].join("\n") + "\n", "utf8");
 }
 
+// What the Preview identity exchange writes: the login state stamped for the proxy's host, with the
+// proxy's own cookie beside the application's.
+function proxyStorageState(identity = "default") {
+  const proxyHost = "v64preview-0123456789ab.example.test";
+  return {
+    cookies: [{
+      domain: proxyHost,
+      expires: -1,
+      httpOnly: true,
+      name: "__Host-vibe64_preview",
+      path: "/",
+      sameSite: "Lax",
+      secure: true,
+      value: "proxy"
+    }, {
+      domain: proxyHost,
+      expires: -1,
+      httpOnly: true,
+      name: "app_session",
+      path: "/",
+      sameSite: "Lax",
+      secure: true,
+      value: identity
+    }, {
+      domain: proxyHost,
+      expires: -1,
+      httpOnly: false,
+      name: "app_csrf",
+      path: "/",
+      sameSite: "None",
+      secure: true,
+      value: identity + "-csrf"
+    }],
+    origins: [{
+      localStorage: [{ name: "app_identity", value: identity }],
+      origin: "https://" + proxyHost
+    }]
+  };
+}
+
+// What the suite receives for the direct application endpoint http://127.0.0.1:4104.
 function authenticatedStorageState(identity = "default") {
   return {
     cookies: [{
@@ -90,8 +131,20 @@ function authenticatedStorageState(identity = "default") {
       sameSite: "Lax",
       secure: false,
       value: identity
+    }, {
+      domain: "127.0.0.1",
+      expires: -1,
+      httpOnly: false,
+      name: "app_csrf",
+      path: "/",
+      sameSite: "Lax",
+      secure: false,
+      value: identity + "-csrf"
     }],
-    origins: []
+    origins: [{
+      localStorage: [{ name: "app_identity", value: identity }],
+      origin: "http://127.0.0.1:4104"
+    }]
   };
 }
 
@@ -118,7 +171,7 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
     "}",
     "if (args[0] === \"browser\" && args[1] === \"storage-state\" && args[2]) {",
     "  const identity = args[2];",
-    `  const storageState = ${authenticatedStorageState.toString()}(identity);`,
+    `  const storageState = ${proxyStorageState.toString()}(identity);`,
     "  const outputIndex = args.indexOf(\"--output\");",
     "  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : \"\";",
     "  if (!outputPath) process.exit(64);",
