@@ -165,7 +165,9 @@ watch(() => props.active, (active, previousActive) => {
 </script>
 
 <style scoped>
-:global(.vibe64-temporary-action-terminal--error) {
+/* The surface's own scoped border (a class and its scope attribute) outranks
+   one global class, so the failure accent names three. */
+:global(.vibe64-terminal-surface.vibe64-temporary-action-terminal.vibe64-temporary-action-terminal--error) {
   border-inline-start: 0.25rem solid rgb(var(--v-theme-error));
 }
 
