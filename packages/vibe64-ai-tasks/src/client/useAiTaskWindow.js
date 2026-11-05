@@ -27,14 +27,17 @@ function useAiTaskWindow({ task, loaded, active, opensOn, route, router }) {
     return { path: route.path, query, hash: route.hash };
   }
 
-  /** @param {HTMLElement | null} [element] what focus returns to */
-  function show(element = null) {
+  /**
+   * @param {HTMLElement | null} [element] what focus returns to
+   * @returns {Promise<void>} settles once the address has the window open, or has refused it
+   */
+  async function show(element = null) {
     const current = toValue(task);
     if (!current) return;
     opener = element;
     if (open.value) return;
     pushedStep = true;
-    void router.push({ path: route.path, query: { ...route.query, [WINDOW_QUERY]: current.id }, hash: route.hash });
+    await router.push({ path: route.path, query: { ...route.query, [WINDOW_QUERY]: current.id }, hash: route.hash });
   }
 
   function hide() {

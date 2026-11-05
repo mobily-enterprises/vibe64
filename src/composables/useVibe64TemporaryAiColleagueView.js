@@ -49,7 +49,8 @@ function useVibe64TemporaryAiColleagueView({ props, emit, temporary, selectionRe
         return;
       }
       if (aiTasks.task?.id === conversationId) {
-        aiTasks.show(null);
+        // Opened once its window's address is in place, so nothing reads the selection before then.
+        await aiTasks.show(null);
         return;
       }
       const projectSlug = props.projectSlug;

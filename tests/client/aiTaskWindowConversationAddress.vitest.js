@@ -117,6 +117,14 @@ describe("an AI task window in a host that keeps the conversation in the URL", (
     expect(route.value.query).toEqual({ session: "s1", chat: "main" });
   });
 
+  it("a navigation to the task's conversation, as Colleague's, opens its window", async () => {
+    const { host, route, router } = await mountSession();
+    await router.push({ path: "/app/project/demo", query: { session: "s1", conversation: "task-1" } });
+    await settle();
+    expect(host.open).toBe(true);
+    expect(route.value.query).toEqual({ session: "s1", conversation: "task-1", aiTask: "task-1" });
+  });
+
   it("a reload at the window's address keeps it open", async () => {
     const { host, route } = await mountSession("/app/project/demo?session=s1&conversation=task-1&aiTask=task-1");
     expect(host.open).toBe(true);

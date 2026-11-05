@@ -214,8 +214,10 @@ Colleague's selected-view interface lives with the temporary workspace
 readiness and the selected conversation: the task's id while the window is open,
 otherwise the selected temporary chat's, or none for Main. Opening or closing the
 window is a new selection. "Open this conversation" with no id hides an open window
-and shows Main chat; with the session's task id it opens the window; with a
-temporary chat's id it selects that tab. Removing the view withdraws the interface
+and shows Main chat; with the session's task id it opens the window and settles once
+the window's address is in place, so a host that writes the selection back to the URL
+reads the window, not the selection it had before; with a temporary chat's id it
+selects that tab. Removing the view withdraws the interface
 and invalidates an open still in progress.
 
 ## The task's conversation
