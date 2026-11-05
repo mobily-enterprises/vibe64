@@ -530,6 +530,12 @@ and another session's proxy has its own token. Ending the session's terminals
 tokens only in memory, so a server restart issues new ones; an older tab then
 gets the 403 `Launch preview token is missing or invalid.` until Preview is
 opened again from the editor. Tokens are never logged.
+The open-in-new-tab button uses the project's one named tab. An editor that is
+not on loopback never opens the app's server-only loopback address: when the
+action it opens has no proxied address yet, the tab shows **Starting app…** and
+moves to the Preview's proxied address once output status names it. A tab the
+person closes meanwhile stays closed, and switching session abandons the wait.
+A loopback editor, as in the local install, opens the loopback address at once.
 Each Preview proxy remembers the editor origins that were handed its address:
 the `editorOrigin` the editor's browser sends with its output-status request
 (its own `window.location.origin`, since routing headers such as a dev

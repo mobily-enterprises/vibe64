@@ -1,6 +1,8 @@
 // The one named browser tab a project's launched outputs open in, and the
 // editor state remembered under that tab's name. No window features are passed,
 // so the browser opens a normal tab with an editable address bar, not a popup.
+// A tab opened before the editor can reach the app shows "Starting app…" and
+// moves to the app's address once the Preview names it.
 import { stableLocalStorageKeyPart } from "@/lib/browserLocalStorage.js";
 import {
   currentProjectSlugFromLocation,
@@ -54,6 +56,9 @@ function openLaunchBrowserTarget(
   }
 
   const href = launchBrowserTargetHref(target, activeWindow);
+  if (!href) {
+    return null;
+  }
   const openedWindow = activeWindow.open(href, launchBrowserTargetName(session, projectSlug));
   if (!openedWindow) {
     return null;
@@ -93,7 +98,10 @@ function openPendingLaunchBrowserWindow(
 
   try {
     openedWindow.opener = null;
-    openedWindow.document?.write?.("<!doctype html><title>Starting app</title><body>Starting app...</body>");
+    openedWindow.document?.write?.(
+      "<!doctype html><title>Starting app…</title>" +
+      "<body style=\"font-family: system-ui, sans-serif; margin: 2rem\">Starting app…</body>"
+    );
     openedWindow.document?.close?.();
   } catch {
     // A reused named browser window can already be cross-origin.
@@ -104,30 +112,84 @@ function openPendingLaunchBrowserWindow(
   return openedWindow;
 }
 
+/**
+ * Moves the tab opened while the app was starting to the target's address.
+ * A tab the person closed meanwhile stays closed.
+ */
 function openReadyLaunchBrowserTarget(
   target = {},
-  session = {},
   pendingWindow = null,
-  projectSlug = currentProjectSlugFromLocation()
+  browserWindow = null
 ) {
-  if (!browserCanOpenTarget(target)) {
+  if (!browserCanOpenTarget(target) || !pendingWindow || pendingWindow.closed === true) {
     return null;
   }
-  if (pendingWindow && pendingWindow.closed !== true) {
-    try {
-      pendingWindow.location.href = launchBrowserTargetHref(target);
-      if (typeof pendingWindow.focus === "function") {
-        pendingWindow.focus();
-      }
-      return pendingWindow;
-    } catch {
-      // Fall back to opening the named target below.
-    }
+  const href = launchBrowserTargetHref(target, browserWindow);
+  if (!href) {
+    return null;
   }
-  return openLaunchBrowserTarget(target, session, null, projectSlug);
+  try {
+    pendingWindow.location.href = href;
+  } catch {
+    return null;
+  }
+  if (typeof pendingWindow.focus === "function") {
+    pendingWindow.focus();
+  }
+  return pendingWindow;
+}
+
+/**
+ * Opens launched outputs in the project's named tab from one editor. When the
+ * editor can't reach a target's address yet, as a hosted editor while Preview
+ * starts, the tab shows "Starting app…" until `showReady` gets the Preview's
+ * proxied address. A loopback editor opens the loopback address at once.
+ * @param {Window | null} [browserWindow] the editor's window
+ */
+function createLaunchBrowserOpener(browserWindow = null) {
+  let pendingWindow = null;
+
+  function editorWindow() {
+    return browserWindow || (typeof window !== "undefined" ? window : null);
+  }
+
+  function open(target = {}, session = {}, projectSlug = currentProjectSlugFromLocation()) {
+    pendingWindow = null;
+    if (!browserCanOpenTarget(target)) {
+      return null;
+    }
+    const activeWindow = editorWindow();
+    if (launchBrowserTargetHref(target, activeWindow)) {
+      return openLaunchBrowserTarget(target, session, activeWindow, projectSlug);
+    }
+    pendingWindow = openPendingLaunchBrowserWindow(session, activeWindow, projectSlug);
+    return pendingWindow;
+  }
+
+  /** Moves a waiting tab to the ready Preview's address; null while there is none. */
+  function showReady(previewTarget = null) {
+    if (!pendingWindow || !previewTarget || !launchBrowserTargetHref(previewTarget, editorWindow())) {
+      return null;
+    }
+    const waitingWindow = pendingWindow;
+    pendingWindow = null;
+    return openReadyLaunchBrowserTarget(previewTarget, waitingWindow, editorWindow());
+  }
+
+  /** The editor moved to another session: its waiting tab no longer follows this Preview. */
+  function abandon() {
+    pendingWindow = null;
+  }
+
+  return Object.freeze({
+    abandon,
+    open,
+    showReady
+  });
 }
 
 export {
+  createLaunchBrowserOpener,
   launchBrowserTargetHref,
   launchBrowserTargetName,
   launchPreviewLocationStorageKey,

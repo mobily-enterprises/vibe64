@@ -39,6 +39,16 @@ group sits on its own row under the address.
 The open-in-new-tab button (titled **Preview**, or with the output's own name)
 opens the app in an ordinary browser tab, not a popup window, so you can edit
 its address. Choosing it again reuses that same tab for the project.
+The button appears once Preview is ready, or earlier if the app prints its own
+address while starting.
+
+When the editor itself is open on `localhost` or `127.0.0.1`, as in the local
+editor, the button opens the app's local address at once. Any other editor
+address, for example on a managed host, opens the session's Preview address
+instead and never the app's server-only `127.0.0.1` address. If you choose the
+button there before Preview is ready, the tab shows **Starting app…** and moves
+to the Preview address by itself once Preview is ready. If you close that tab
+first, it stays closed; choose the button again once Preview is ready.
 
 A tab on the session's Preview address keeps working when the app restarts in
 the same session, whether through **Restart preview**, **Stop preview** and

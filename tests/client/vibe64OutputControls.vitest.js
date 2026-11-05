@@ -9,6 +9,7 @@ import {
   shouldScheduleLaunchAutoStart
 } from "../../src/lib/vibe64LaunchAutoStart.js";
 import {
+  createLaunchBrowserOpener,
   launchBrowserTargetHref,
   launchBrowserTargetName,
   launchPreviewLocationStorageKey,
@@ -147,15 +148,87 @@ describe("Vibe64 launch controls", () => {
     };
 
     const pendingWindow = openPendingLaunchBrowserWindow(session, browserWindow);
-    const readyWindow = openReadyLaunchBrowserTarget(target, session, pendingWindow);
+    const readyWindow = openReadyLaunchBrowserTarget(target, pendingWindow, browserWindow);
 
     expect(browserWindow.open).toHaveBeenCalledWith(
       "about:blank",
       launchBrowserTargetName(session)
     );
+    expect(pendingWindow.document.write).toHaveBeenCalledWith(expect.stringContaining("Starting app…"));
     expect(readyWindow).toBe(pendingWindow);
     expect(pendingWindow.location.href).toBe(target.href);
     expect(pendingWindow.focus).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens a starting Preview from a hosted editor as Starting app…, then moves the tab to the proxied address", () => {
+    const browserWindow = fakeBrowserWindow({
+      href: "https://person.users.example.test/projects/customer-app"
+    });
+    const session = {
+      sessionId: "session-1"
+    };
+    const starting = {
+      href: "http://127.0.0.1:4100/home",
+      kind: "url"
+    };
+    const ready = {
+      ...starting,
+      previewHref: "https://v64preview-abc123def456.person.users.example.test/home?vibe64_preview_token=token"
+    };
+    const opener = createLaunchBrowserOpener(browserWindow);
+
+    expect(launchBrowserTargetHref(starting, browserWindow)).toBe("");
+    const pendingWindow = opener.open(starting, session, "customer-app");
+
+    expect(browserWindow.open).toHaveBeenCalledTimes(1);
+    expect(browserWindow.open).toHaveBeenCalledWith("about:blank", launchBrowserTargetName(session, "customer-app"));
+    expect(pendingWindow.document.write).toHaveBeenCalledWith(expect.stringContaining("Starting app…"));
+    expect(opener.showReady(null)).toBeNull();
+    expect(pendingWindow.location.href).toBe("");
+
+    expect(opener.showReady(ready)).toBe(pendingWindow);
+    expect(pendingWindow.location.href).toBe(ready.previewHref);
+    expect(browserWindow.open).toHaveBeenCalledTimes(1);
+    expect(opener.showReady(ready)).toBeNull();
+  });
+
+  it("opens the loopback address at once from a local editor, and leaves a waiting tab the person closed", () => {
+    const localWindow = fakeBrowserWindow();
+    const target = {
+      href: "http://127.0.0.1:4100/home",
+      kind: "url"
+    };
+    const localOpener = createLaunchBrowserOpener(localWindow);
+    localOpener.open(target, {}, "customer-app");
+    expect(localWindow.open).toHaveBeenCalledWith(target.href, launchBrowserTargetName({}, "customer-app"));
+
+    const hostedWindow = fakeBrowserWindow({
+      href: "https://person.users.example.test/projects/customer-app"
+    });
+    const hostedOpener = createLaunchBrowserOpener(hostedWindow);
+    const pendingWindow = hostedOpener.open(target, {}, "customer-app");
+    pendingWindow.closed = true;
+    expect(hostedOpener.showReady({
+      ...target,
+      previewHref: "https://v64preview-abc123def456.person.users.example.test/home?vibe64_preview_token=token"
+    })).toBeNull();
+    expect(pendingWindow.location.href).toBe("");
+    expect(hostedWindow.open).toHaveBeenCalledTimes(1);
+  });
+
+  it("abandons a waiting tab when the editor moves to another session", () => {
+    const browserWindow = fakeBrowserWindow({
+      href: "https://person.users.example.test/projects/customer-app"
+    });
+    const opener = createLaunchBrowserOpener(browserWindow);
+    const pendingWindow = opener.open({ href: "http://127.0.0.1:4100/home", kind: "url" }, {}, "customer-app");
+    opener.abandon();
+    expect(opener.showReady({
+      href: "http://127.0.0.1:4200/home",
+      kind: "url",
+      previewHref: "https://v64preview-fedcba654321.person.users.example.test/home?vibe64_preview_token=other"
+    })).toBeNull();
+    expect(pendingWindow.location.href).toBe("");
   });
 
   it("rejects non-url launch targets", () => {
@@ -407,6 +480,7 @@ describe("Vibe64 launch controls", () => {
     expect(resolveLaunchPreviewDestination(actions, {
       studioHref: "https://person.example.test/app/project/beepollen"
     })).toMatchObject({
+      displayHref: "",
       embedHref: "",
       unavailableReason: expect.stringMatching(/only reachable from the server/u)
     });
@@ -1105,4 +1179,58 @@ it("a refresh captured for an earlier project or session does not refetch the cu
     await controls.refresh();
     expect(reads).toHaveLength(before + 2);
   } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
+});
+
+it("a Preview tab opened from a hosted editor while the app starts moves to the proxied address once the status names it", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { useVibe64OutputPreview } = await import("../../src/composables/useVibe64OutputPreview.js");
+  const editor = fakeBrowserWindow({ href: "https://person.users.example.test/app/project/customer-app" });
+  vi.stubGlobal("window", { ...editor, localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  const targetHref = "http://127.0.0.1:4100/home";
+  const previewHref = Vue.ref("");
+  const outputs = {
+    previewHref,
+    previewMessage: Vue.ref("Preparing preview."),
+    previewRecovery: Vue.ref(null),
+    previewState: Vue.ref("starting"),
+    previewTarget: Vue.ref(null),
+    previewTargetHref: Vue.ref(targetHref),
+    selectedSession: Vue.ref({ sessionId: "session-1" }),
+    sessionId: Vue.ref("session-1"),
+    sessionsApiPath: Vue.ref("/api/vibe64/sessions"),
+    status: Vue.ref({})
+  };
+  const outputTerminal = {
+    activeOutputTarget: Vue.ref(null),
+    activeTerminal: Vue.ref(null),
+    // An app that prints its address offers it before the Preview is ready.
+    terminal: { terminalMetadata: Vue.ref({ actions: [{ href: targetHref, kind: "url", label: "127.0.0.1:4100" }] }) },
+    terminalIsRunning: Vue.ref(true),
+    terminalLaunchReady: Vue.ref(false)
+  };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let preview;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    preview = useVibe64OutputPreview({ outputs, outputTerminal, projectSlug: Vue.ref("customer-app") });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    const tab = preview.openAction(preview.launchActions.value[0]);
+    expect(editor.open).toHaveBeenCalledWith("about:blank", launchBrowserTargetName({}, "customer-app"));
+    expect(tab.document.write).toHaveBeenCalledWith(expect.stringContaining("Starting app…"));
+
+    previewHref.value = "https://v64preview-abc123def456.person.users.example.test/home?vibe64_preview_token=token";
+    outputs.previewState.value = "ready";
+    await Vue.nextTick();
+
+    expect(tab.location.href).toBe(previewHref.value);
+    expect(editor.open).toHaveBeenCalledTimes(1);
+  } finally { app.unmount(); queryClient.clear(); vi.unstubAllGlobals(); }
 });

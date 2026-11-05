@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -17,7 +17,7 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import { browserCanOpenTarget } from "@/lib/vibe64LaunchPreviewDestination.js";
-import { openLaunchBrowserTarget } from "@/lib/vibe64LaunchBrowserWindow.js";
+import { createLaunchBrowserOpener } from "@/lib/vibe64LaunchBrowserWindow.js";
 import {
   launchPreviewRequiresProxy,
   launchPreviewTestNotice
@@ -89,34 +89,42 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
         };
   });
   const previewTestNotice = computed(() => launchPreviewTestNotice(status.value, activeOutputTarget.value));
-  const launchActions = computed(() => {
-    const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
+  // The ready Preview's own action: the app's address and the proxied one.
+  const readyPreviewAction = computed(() => {
     const targetHref = previewTargetHref.value || String(previewTarget.value?.targetHref || "").trim();
     const iframeHref = previewHref.value || String(previewTarget.value?.href || "").trim();
-    const browserActions = Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
-    if (browserActions.length < 1 && iframeHref && targetHref) {
-      return [
-        {
+    return iframeHref && targetHref
+      ? {
           href: targetHref,
           kind: previewTarget.value?.kind || "url",
           label: previewTarget.value?.label || "Preview",
           previewHref: iframeHref
         }
-      ];
-    }
-    if (!iframeHref || !targetHref) {
+      : null;
+  });
+  const launchActions = computed(() => {
+    const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
+    const preview = readyPreviewAction.value;
+    const browserActions = Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
+    if (!preview) {
       return browserActions;
     }
+    if (browserActions.length < 1) {
+      return [preview];
+    }
     return browserActions.map((action) => {
-      if (String(action.href || "") !== targetHref) {
+      if (String(action.href || "") !== preview.href) {
         return action;
       }
       return {
         ...action,
-        previewHref: iframeHref
+        previewHref: preview.previewHref
       };
     });
   });
+  const launchBrowser = createLaunchBrowserOpener();
+  watch(readyPreviewAction, (action) => launchBrowser.showReady(action));
+  watch(sessionId, () => launchBrowser.abandon());
   const terminalPreviewRequiresProxy = computed(() => launchPreviewRequiresProxy({
     ...(activeTerminal.value?.metadata || {}),
     ...(terminalMetadata.value || {})
@@ -193,7 +201,10 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
   }
 
   function openAction(action = {}) {
-    return openLaunchBrowserTarget(action, selectedSession.value, null, projectSlug.value);
+    const opened = launchBrowser.open(action, selectedSession.value, projectSlug.value);
+    // An action this editor can't reach while the Preview is already ready
+    // goes straight on to the Preview's own address.
+    return launchBrowser.showReady(readyPreviewAction.value) || opened;
   }
 
   return {

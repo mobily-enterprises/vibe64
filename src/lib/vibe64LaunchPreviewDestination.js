@@ -21,8 +21,10 @@ function resolveLaunchPreviewDestination(actions = [], {
     : null;
   const targetHref = String(action?.href || "").trim();
   const previewHref = String(action?.previewHref || "").trim();
-  const displayHref = previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)
-    ? sameSiteLoopbackPreviewUrl(previewHref, studioHref)
+  // An editor that isn't on loopback can't reach the app's own address: it
+  // shows the proxied one, and nothing until the Preview names it.
+  const displayHref = remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)
+    ? previewHref
     : sameSiteLoopbackPreviewUrl(targetHref, studioHref);
   const embedCandidate = previewHref || (requirePreviewProxy ? "" : targetHref);
 
