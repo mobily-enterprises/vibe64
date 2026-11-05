@@ -1663,8 +1663,11 @@ one filled repair field: a non-empty `completionMessage`, `dedupeKey`,
 `recoveryOutcomeMessage`, `recoveryRequestId` or `runConflictId`, a non-empty
 `recoveryRetryKeys`, or `recoveryAutoPaused: true`. Only the repair flows wrote
 these fields (top level since 16 September 2026); a person's own chat saved them
-empty or not at all, and Colleague's create action never accepted them. Every
-Fix it with AI chat since 26 September also saved its `recoveryContext`. Records
+empty or not at all, and Colleague's create tool never described them, though its
+free-form `presentation` would have passed them through. Every Fix it with AI chat
+since 26 September also saved its `recoveryContext`. The automatic Update retry
+that fills `recoveryRetryKeys` and `recoveryAutoPaused` ran only for a chat whose
+`recoveryOperation` was `update`. Records
 with `task` are AI tasks and stay.
 
 The owner is Terminals' `temporaryRepairChatsUpgrade.js`, supplied by the
