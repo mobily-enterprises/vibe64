@@ -326,8 +326,16 @@ The scoped runner reads the target's ready status rather than repeating startup
 after the target owner has already awaited readiness. Playwright authentication
 uses an isolated request context: it obtains the host's Preview cookie and runs
 the declared identity exchange without rendering extra application pages or
-launching another Chromium process. The test runner receives the same temporary
-cookie state; interactive browser identities remain separate.
+launching another Chromium process. The test runner receives that temporary
+cookie state moved to the tested address; interactive browser identities remain
+separate. The state belongs to the host, and the project's Playwright config hands
+it to `use.storageState` unchanged. Before preparing it, the runner refuses the
+suite when a root `playwright*.config.*` file names `PLAYWRIGHT_STORAGE_STATE`
+and, ignoring comments, mentions `cookies` or `origins` or passes the variable (or
+one assigned from it) to a file read. Its message names the file and reason, says
+the state belongs to the host, and tells the agent to report signed-out tests with
+the unchanged state as a host defect instead of patching around it; the shared
+agent instructions carry the same rule.
 The scoped result retains structured provider refusal details even after
 restoring the normal Preview, including when restoration also fails. An
 explicit retry uses the original test launcher and its isolation/restoration

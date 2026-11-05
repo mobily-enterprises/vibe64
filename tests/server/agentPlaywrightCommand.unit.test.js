@@ -148,7 +148,9 @@ function authenticatedStorageState(identity = "default") {
   };
 }
 
-async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managedNpmPath) {
+async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managedNpmPath, {
+  identityTypes = ["email"]
+} = {}) {
   await writeExecutable(wrapperPath, [
     "#!/usr/bin/env node",
     "const { spawnSync } = require(\"node:child_process\");",
@@ -164,7 +166,7 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
     "if ([\"ensure\", \"status\"].includes(args[0])) {",
     "  process.stdout.write(JSON.stringify({",
     "    diagnostics: { directApplicationEndpoint: { url: previewUrl } },",
-    "    identityTypes: [\"email\"],",
+    `    identityTypes: ${JSON.stringify(identityTypes)},`,
     "    ready: true",
     "  }));",
     "  process.exit(0);",
@@ -854,6 +856,95 @@ test("managed Playwright warns when the project's config never reads the supplie
     const ignoring = await run();
     assert.match(ignoring.stderr, /playwright\.config\.mjs never reads it, so these tests run signed out/u);
     assert.equal(JSON.parse(ignoring.stdout).storageStateExists, true, "The tests still run with the login supplied");
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+// The patch a project made while the host's login was scoped to the Preview proxy: the config reads the supplied
+// file, drops the proxy cookie and moves the others to the tested host itself.
+const COOKIE_PATCH_CONFIG = [
+  "import { readFileSync } from \"node:fs\";",
+  "import { defineConfig } from \"@playwright/test\";",
+  "const storageStatePath = String(process.env.PLAYWRIGHT_STORAGE_STATE || \"\").trim();",
+  "function storageStateForBaseUrl(path) {",
+  "  const state = JSON.parse(readFileSync(path, \"utf8\"));",
+  "  return { ...state, cookies: state.cookies.filter((cookie) => !cookie.name.startsWith(\"__Host-\")) };",
+  "}",
+  "const storageState = storageStatePath ? storageStateForBaseUrl(storageStatePath) : null;",
+  "export default defineConfig({ use: { ...(storageState ? { storageState } : {}) } });"
+].join("\n") + "\n";
+
+// A config that only reads the supplied file, through a variable holding its path.
+const STATE_READING_CONFIG = [
+  "import fs from \"node:fs\";",
+  "const statePath = process.env.PLAYWRIGHT_STORAGE_STATE;",
+  "export default { use: { storageState: statePath ? JSON.parse(fs.readFileSync(statePath, \"utf8\")) : undefined } };"
+].join("\n") + "\n";
+
+// The starters' pass-through; its comment about cookies is prose, not code.
+const PASS_THROUGH_CONFIG = [
+  "import { defineConfig } from \"@playwright/test\";",
+  "// The host fits the login's cookies to the tested site; this config only hands the file on.",
+  "const storageState = String(process.env.PLAYWRIGHT_STORAGE_STATE || \"\").trim();",
+  "export default defineConfig({ use: { ...(storageState ? { storageState } : {}) } });"
+].join("\n") + "\n";
+
+test("managed Playwright refuses a config that reads or edits the supplied login before any test starts", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-login-tamper-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.61.1");
+    const wrapper = (identityTypes) => writeAuthenticatedPreviewWrapper(
+      fixture.prepared.hostWrapperPath,
+      "http://127.0.0.1:4104/home",
+      path.join(fixture.runtimeRoot, "node26", "bin", "npm"),
+      { identityTypes }
+    );
+    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+      cwd: fixture.projectRoot,
+      env: {
+        ...process.env,
+        ...fixture.prepared.env,
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+      }
+    });
+    const refusal = (configName, reason) => (error) => {
+      assert.equal(error.code, 1);
+      assert.equal(error.stdout, "", "Playwright never starts");
+      assert.match(error.stderr, new RegExp(`refused to run these browser tests: ${configName.replaceAll(".", "\\.")} reads or changes`, "u"));
+      assert.match(error.stderr, reason);
+      assert.match(error.stderr, /The login state belongs to the host\./u);
+      assert.match(error.stderr, /Pass process\.env\.PLAYWRIGHT_STORAGE_STATE unchanged to use\.storageState\./u);
+      assert.match(error.stderr, /If tests run signed out with it, that is a host defect: report it with the evidence; do not work around it\./u);
+      return true;
+    };
+    await wrapper(["email"]);
+
+    await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"), COOKIE_PATCH_CONFIG);
+    await assert.rejects(run(), refusal("playwright.config.mjs", /works on the state's cookies or origins/u));
+
+    // Every root config is checked, so a second config selected by a script cannot carry the patch either.
+    await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"), PASS_THROUGH_CONFIG);
+    await writeFile(path.join(fixture.projectRoot, "playwright.local.config.mjs"), STATE_READING_CONFIG);
+    await assert.rejects(run(), refusal("playwright.local.config.mjs", /it reads the state file/u));
+
+    // Negative control: the same fixture runs a pass-through config with the login supplied.
+    await rm(path.join(fixture.projectRoot, "playwright.local.config.mjs"));
+    const passing = await run();
+    assert.doesNotMatch(passing.stderr, /refused/u);
+    assert.equal(JSON.parse(passing.stdout).storageStateExists, true);
+
+    // Without a login there is nothing to tamper with, so even the patched config runs.
+    await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"), COOKIE_PATCH_CONFIG);
+    await wrapper([]);
+    const signedOut = await run();
+    assert.doesNotMatch(signedOut.stderr, /refused/u);
+    assert.equal(JSON.parse(signedOut.stdout).storageStatePath, "");
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {

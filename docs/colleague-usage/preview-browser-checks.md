@@ -67,6 +67,17 @@ than adding it to a non-Node.js project. If that browser is missing, the agent r
 it and asks you before running `npx playwright install chromium`; installing it
 is your decision.
 
+When the application has sign-in, Vibe64 signs the suite in and hands the
+login to the project's Playwright tests, which pass it on unchanged. If the
+project's Playwright configuration reads or edits that login (for example to
+change its cookies), the agent's test command stops with **Vibe64 refused to run
+these browser tests**, naming the configuration file, and no test runs. Ask the
+coding agent to restore the plain pass-through the message describes. If tests
+then run signed out, that is a Vibe64 problem: ask the coding agent to report it
+with the evidence rather than change the project to work around it. Colleague can
+explain this and offer coding-agent help; it cannot change how Vibe64 prepares
+the login.
+
 Before a suite, the coding agent can run `vibe64-helper playwright readiness`.
 It distinguishes absent tests, uninstalled dependencies, an unsupported exact
 runtime and a supported installed dependency without starting Preview or a

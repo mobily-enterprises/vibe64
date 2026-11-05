@@ -153,6 +153,23 @@ When Vibe64 supplies a login and the configuration never reads
 Do not overwrite `DB_NAME` in the test runner just to satisfy a safety check:
 that cannot prove which database the independently running server uses.
 
+The login state belongs to the host, which already fits it to the address the
+suite tests: pass `process.env.PLAYWRIGHT_STORAGE_STATE` unchanged to
+`use.storageState`. When Vibe64 supplies a login, it refuses to start the suite
+if any `playwright*.config.*` file at the application root tampers with that
+state, and says which file and why. Ignoring comments, a configuration that
+names `PLAYWRIGHT_STORAGE_STATE` tampers when it:
+
+- mentions `cookies` or `origins`, the contents of the state file; or
+- passes the variable, or a variable assigned from it, to a file read:
+  `readFileSync`, `readFile`, `createReadStream`, `open`, `openSync`,
+  `copyFile`, `copyFileSync`, `require` or `import`.
+
+If tests run signed out with the unchanged state, that is a host defect: report
+it with the evidence (the command, its output and the signed-out page) and do
+not work around it in the project. JSKIT's `jskit/playwright-login-unchanged`
+lint rule reports such configurations before a run.
+
 When test resources, an isolated identity flow, or external-effect controls are
 missing, report the specific missing prerequisite. Vibe64 manages the declared
 processes; it cannot invent a safe testing contract for an arbitrary application.

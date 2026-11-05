@@ -3,6 +3,115 @@
 const LOCAL_PLAYWRIGHT_MESSAGE =
   "This computer has no managed browser runtime for vibe64-playwright. Run the project's own Playwright instead: " +
   "npx playwright test. If its browser is missing, report that and ask the person before running npx playwright install chromium.";
+// Shown when a project's Playwright config reads or edits the login state the runner supplies; JSKIT's
+// playwright-login-unchanged lint rule gives the same three sentences.
+const LOGIN_STATE_OWNERSHIP_MESSAGE =
+  "The login state belongs to the host. Pass process.env.PLAYWRIGHT_STORAGE_STATE unchanged to use.storageState. " +
+  "If tests run signed out with it, that is a host defect: report it with the evidence; do not work around it.";
+
+// The runner's check that a project's Playwright config passes the supplied login on unchanged, as script source for
+// agentPlaywrightCommandSource (its escapes are the script's own).
+const LOGIN_TAMPERING_SOURCE = `// A config's code without its comments and prose: string text stays only when it is one word, which can name a
+// variable or a property (process.env["PLAYWRIGHT_STORAGE_STATE"], state["cookies"]).
+function configCode(source = "") {
+  let code = "";
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1] || "";
+    if (char === "/" && next === "/") {
+      const end = source.indexOf("\\n", index);
+      index = end < 0 ? source.length : end;
+    } else if (char === "/" && next === "*") {
+      const end = source.indexOf("*/", index + 2);
+      index = end < 0 ? source.length : end + 2;
+    } else if (char === "\\"" || char === "'" || char === "\\u0060") {
+      let end = index + 1;
+      while (end < source.length && source[end] !== char) {
+        end += source[end] === "\\\\" ? 2 : 1;
+      }
+      const text = source.slice(index + 1, end);
+      code += /^[A-Za-z_$][\\w$]*$/u.test(text) ? " " + text + " " : " \\"\\" ";
+      index = end + 1;
+    } else {
+      const length = char === "\\\\" ? 2 : 1;
+      code += source.slice(index, index + length);
+      index += length;
+    }
+  }
+  return code;
+}
+
+// The text of one call's arguments, from just after its opening parenthesis.
+function callArguments(code = "", start = 0) {
+  let depth = 1;
+  let end = start;
+  while (end < code.length && depth > 0) {
+    depth += code[end] === "(" ? 1 : code[end] === ")" ? -1 : 0;
+    end += 1;
+  }
+  return code.slice(start, end - 1);
+}
+
+// Why a config tampers with the supplied login, or "" when it does not. Ignoring comments, a config that names
+// PLAYWRIGHT_STORAGE_STATE tampers when it mentions cookies or origins (the state's contents) or passes the variable,
+// or a variable assigned from it, to a file read: readFileSync, readFile, createReadStream, open, openSync, copyFile,
+// copyFileSync, require or import.
+function loginTampering(source = "") {
+  const code = configCode(source);
+  const words = (text = "") => text.match(/[A-Za-z_$][\\w$]*/gu) || [];
+  if (!words(code).includes("PLAYWRIGHT_STORAGE_STATE")) {
+    return "";
+  }
+  if (words(code).some((word) => word === "cookies" || word === "origins")) {
+    return "it works on the state's cookies or origins";
+  }
+  const names = new Set(["PLAYWRIGHT_STORAGE_STATE"]);
+  for (const [, renamed] of code.matchAll(/(?<![\\w$.])PLAYWRIGHT_STORAGE_STATE\\s*:\\s*([A-Za-z_$][\\w$]*)/gu)) {
+    names.add(renamed);
+  }
+  const mentionsLogin = (text = "") => words(text).some((word) => names.has(word));
+  const declarations = [...code.matchAll(
+    /\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=([^;]*?)(?=;|\\n\\s*(?:const|let|var|function|export|import|async|class|if|for|while|return)\\b|$)/gu
+  )];
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [, name, value] of declarations) {
+      if (!names.has(name) && mentionsLogin(value)) {
+        names.add(name);
+        grew = true;
+      }
+    }
+  }
+  for (const call of code.matchAll(/(?<![\\w$])(?:readFileSync|readFile|createReadStream|openSync|open|copyFileSync|copyFile|require|import)\\s*\\(/gu)) {
+    if (mentionsLogin(callArguments(code, call.index + call[0].length))) {
+      return "it reads the state file";
+    }
+  }
+  return "";
+}
+
+// The login state belongs to the host, which already fits it to the tested site. A config that reads or edits it
+// copies that host logic and hides a host defect behind its own patch, so the suite is refused before it starts.
+// Every playwright*.config.* file at the application root is checked, since a script can select any of them.
+function refuseConfigTamperingWithLogin(applicationRoot = "") {
+  const configNames = readdirSync(applicationRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^playwright(?:\\.[\\w-]+)?\\.config\\.[cm]?[jt]s$/u.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  for (const configName of configNames) {
+    const reason = loginTampering(readFileSync(path.join(applicationRoot, configName), "utf8"));
+    if (reason) {
+      fail(
+        "Vibe64 refused to run these browser tests: " + configName +
+        " reads or changes the signed-in browser state in PLAYWRIGHT_STORAGE_STATE (" + reason + "). " +
+        LOGIN_STATE_OWNERSHIP_MESSAGE + " Project tests were not started."
+      );
+    }
+  }
+}
+`;
 
 function agentPlaywrightCommandSource({
   managedNodePath = "",
@@ -11,7 +120,7 @@ function agentPlaywrightCommandSource({
 } = {}) {
   return `#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -20,6 +129,7 @@ const managedPreviewPath = ${JSON.stringify(String(managedPreviewPath || ""))};
 const runtimeRoot = ${JSON.stringify(String(runtimeRoot || ""))};
 // Without managed browser runtimes the project runs its own Playwright.
 const LOCAL_PLAYWRIGHT_MESSAGE = ${JSON.stringify(LOCAL_PLAYWRIGHT_MESSAGE)};
+const LOGIN_STATE_OWNERSHIP_MESSAGE = ${JSON.stringify(LOGIN_STATE_OWNERSHIP_MESSAGE)};
 
 function fail(message, code = 1) {
   process.stderr.write(String(message || "Vibe64 managed Playwright test command failed.") + "\\n");
@@ -287,6 +397,7 @@ function warnWhenConfigIgnoresLogin(applicationRoot = "") {
   }
 }
 
+${LOGIN_TAMPERING_SOURCE}
 function childEnv(runtime = {}, preview = {}, authentication = null) {
   return {
     ...process.env,
@@ -368,7 +479,11 @@ function managedExecution(runtime = {}, applicationRoot = "", {
       "Project tests were not started."
     );
   }
-  const authentication = preview.managed && preview.identityRequired
+  const suppliesLogin = preview.managed && preview.identityRequired;
+  if (suppliesLogin) {
+    refuseConfigTamperingWithLogin(applicationRoot);
+  }
+  const authentication = suppliesLogin
     ? managedPlaywrightStorageState(applicationRoot, identity, preview.baseUrl)
     : null;
   if (authentication) {
@@ -439,6 +554,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "  vibe64-helper playwright cancel <run-id>",
     "",
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
+    "The signed-in state arrives in PLAYWRIGHT_STORAGE_STATE. " + LOGIN_STATE_OWNERSHIP_MESSAGE + " A playwright config that reads that file or works on its cookies or origins is refused.",
     "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json.",
     "Do not overlap a suite with live preview browser actions or Preview ensure/restart/target changes. Wait on the original command through cleanup and restoration, then confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
     "For a background command, use its existing execution/session wait with about a 30-second window where supported: set yield_time_ms: 30000 for an empty command poll. Reserve shorter waits for interactive input or a specific immediate check. Do not repeatedly reread empty or unchanged logs between brief waits; inspect new output, changed state or a specific blocker."
