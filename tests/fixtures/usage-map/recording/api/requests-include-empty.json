@@ -62,7 +62,8 @@
       "id": "i_0001",
       "label": "button \"Add\"",
       "kind": "click",
-      "componentFile": "src/components/SessionList.vue"
+      "componentFile": "src/components/SessionList.vue",
+      "requestCount": 2
     }
   ],
   "nextCursor": null,

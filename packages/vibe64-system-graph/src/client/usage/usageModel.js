@@ -28,7 +28,7 @@ const USAGE_MODES = Object.freeze([
   Object.freeze({ value: "calls", title: "Calls" }),
   Object.freeze({ value: "recording", title: "Recording" })
 ]);
-const USAGE_QUERY_KEYS = Object.freeze(["view", "entry", "mode", "subsystem", "recording", "request"]);
+const USAGE_QUERY_KEYS = Object.freeze(["view", "entry", "mode", "subsystem", "recording", "request", "interaction"]);
 const MAX_NODES = 300;
 const MORE_NODES = 1000;
 // A search box reads once typing pauses this long.
@@ -41,21 +41,25 @@ function entryKind(kind) {
 const text = (value) => (typeof value === "string" ? value.trim() : Array.isArray(value) ? text(value[0]) : "");
 
 /**
- * Usage's address state: the view, and in Usage its mode, entry, zoomed subsystem, recording and request.
+ * Usage's address state: the view, and in Usage its mode, entry, zoomed subsystem, recording, and the
+ * recording's chosen request or interaction.
  * @typedef {ReturnType<typeof usageStateFromQuery>} UsageState
  */
 
 // The address keeps the usage state; Map is the default and writes nothing.
+// A chosen interaction (everything a click ran) replaces a chosen request.
 function usageStateFromQuery(query = {}) {
   const view = text(query.view) === "usage" ? "usage" : "map";
   const mode = USAGE_MODES.some((item) => item.value === text(query.mode)) ? text(query.mode) : "calls";
+  const interaction = view === "usage" ? text(query.interaction) : "";
   return {
     view,
     entry: view === "usage" ? text(query.entry) : "",
     mode: view === "usage" ? mode : "calls",
     subsystem: view === "usage" ? text(query.subsystem) : "",
     recording: view === "usage" ? text(query.recording) : "",
-    request: view === "usage" ? text(query.request) : ""
+    request: view === "usage" && !interaction ? text(query.request) : "",
+    interaction
   };
 }
 
@@ -65,7 +69,7 @@ function usageQueryFor(query = {}, state = {}) {
   if (normalized.view !== "usage") return next;
   next.view = "usage";
   next.mode = normalized.mode;
-  for (const key of ["entry", "subsystem", "recording", "request"]) if (normalized[key]) next[key] = normalized[key];
+  for (const key of ["entry", "subsystem", "recording", "request", "interaction"]) if (normalized[key]) next[key] = normalized[key];
   return next;
 }
 
@@ -342,15 +346,22 @@ function requestTitle(request = {}, routes = [], requests = [request]) {
   return routeTemplateFor(request.method, request.path, routes) || request.path || "Request not in the request log";
 }
 
-// Requests under the click that caused them, in recorded order.
+// Requests under the click that caused them, in recorded order. Other
+// requests can split one click's requests into several groups; only its first
+// group offers everything the click ran.
 function requestGroups(requests = [], interactions = []) {
   const byId = new Map(interactions.map((interaction) => [interaction.id, interaction]));
+  const offered = new Set();
   const groups = [];
   for (const request of requests) {
     const interaction = byId.get(request.interaction) || null;
     const last = groups.at(-1);
-    if (last && last.interaction?.id === interaction?.id) last.requests.push(request);
-    else groups.push({ key: `${interaction?.id || "none"}:${request.id}`, interaction, requests: [request] });
+    if (last && last.interaction?.id === interaction?.id) {
+      last.requests.push(request);
+      continue;
+    }
+    groups.push({ key: `${interaction?.id || "none"}:${request.id}`, interaction, requests: [request], offersInteraction: Boolean(interaction) && !offered.has(interaction.id) });
+    if (interaction) offered.add(interaction.id);
   }
   return groups;
 }
@@ -368,6 +379,13 @@ function interactionParts(interaction) {
 function interactionTitle(interaction) {
   const { text, file } = interactionParts(interaction);
   return [text, file].filter(Boolean).join(" ");
+}
+
+const INTERACTION_NOUNS = Object.freeze({ click: "click", enter: "Enter", submit: "submit" });
+
+// The choice that shows what all of one interaction's requests ran together.
+function interactionRunTitle(interaction) {
+  return `Everything this ${INTERACTION_NOUNS[interaction.kind] || INTERACTION_NOUNS.click} ran`;
 }
 
 // What ran in one request, joined to the call web and grouped by subsystem.
@@ -465,6 +483,7 @@ export {
   entryKind,
   functionLabel,
   interactionParts,
+  interactionRunTitle,
   interactionTitle,
   isBackgroundRequest,
   isReadinessRequest,

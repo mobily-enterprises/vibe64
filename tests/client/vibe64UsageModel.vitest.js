@@ -25,6 +25,7 @@ import {
   crossingText,
   functionLabel,
   interactionParts,
+  interactionRunTitle,
   interactionTitle,
   locationParts,
   onlyBackground,
@@ -71,6 +72,16 @@ describe("address state", () => {
     expect(usageStateFromQuery({ entry: "a" })).toMatchObject({ view: "map", entry: "" });
     expect(sameQuery({ a: "1", b: undefined }, { a: 1 })).toBe(true);
     expect(sameQuery({ a: "1" }, { a: "1", b: "2" })).toBe(false);
+  });
+
+  it("keeps a chosen click in the address, in place of a chosen request", () => {
+    const click = usageStateFromQuery({ view: "usage", mode: "recording", recording: "rec_x", request: "r_000004", interaction: "i_0001" });
+    expect([click.interaction, click.request]).toEqual(["i_0001", ""]);
+    const query = usageQueryFor({ tab: "x", request: "r_000004" }, click);
+    expect(query).toEqual({ tab: "x", view: "usage", mode: "recording", recording: "rec_x", interaction: "i_0001" });
+    expect(sameUsageState(usageStateFromQuery(query), click)).toBe(true);
+    expect(sameUsageState(click, { ...click, interaction: "i_0002" })).toBe(false);
+    expect(usageStateFromQuery({ interaction: "i_0001" }).interaction).toBe("");
   });
 });
 
@@ -134,9 +145,12 @@ describe("recordings", () => {
     expect(routeTemplateFor("get", "/api/sessions/42", routes)).toBe("/api/sessions/:id");
     expect(routeTemplateFor("POST", "/api/sessions/42", routes)).toBe("");
     const groups = requestGroups(requests.requests, requests.interactions);
-    expect(groups.map((group) => [group.interaction?.id || null, group.requests.map((request) => request.id)])).toEqual([
-      [null, ["bg_4242", "r_000002"]], ["i_0001", ["r_000003", "r_000004"]]
+    expect(groups.map((group) => [group.interaction?.id || null, group.requests.map((request) => request.id), group.offersInteraction])).toEqual([
+      [null, ["bg_4242", "r_000002"], false], ["i_0001", ["r_000003", "r_000004"], true]
     ]);
+    const [, , third, fourth] = requests.requests;
+    const split = requestGroups([third, { ...fourth, id: "r_000009", interaction: null }, fourth], requests.interactions);
+    expect(split.map((group) => [group.interaction?.id || null, group.offersInteraction])).toEqual([["i_0001", true], [null, false], ["i_0001", false]]);
     // Start-up work beside per-request rows is not the shared-process case.
     expect(requestTitle(requests.requests[0], routes, requests.requests)).toBe("Start-up and work outside requests");
     expect(requestTitle(requests.requests[0], routes, [requests.requests[0]])).toBe("Not separated per request for this server");
@@ -148,6 +162,8 @@ describe("recordings", () => {
     expect(requestCount([...requests.requests, { id: "r_000000", kind: "readiness" }])).toBe(3);
     expect(interactionTitle({ ...groups[1].interaction, kind: "enter", label: "textbox \"Title\"" })).toBe("Enter: textbox \"Title\" (SessionList.vue)");
     expect(interactionTitle({ ...groups[1].interaction, kind: "submit", label: "form \"New\"" })).toBe("Submit: form \"New\" (SessionList.vue)");
+    expect(["click", "enter", "submit"].map((kind) => interactionRunTitle({ kind })))
+      .toEqual(["Everything this click ran", "Everything this Enter ran", "Everything this submit ran"]);
   });
 
   it("joins what ran to the call web and lights only the subsystems that ran", () => {

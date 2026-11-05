@@ -11,6 +11,7 @@ import {
   ACTION_USAGE_RECORDING_CURRENT_READ,
   ACTION_USAGE_RECORDING_DELETE,
   ACTION_USAGE_RECORDING_DISMISS,
+  ACTION_USAGE_RECORDING_INTERACTION_FUNCTIONS_READ,
   ACTION_USAGE_RECORDING_INTERACTION_RECORD,
   ACTION_USAGE_RECORDING_LIST,
   ACTION_USAGE_RECORDING_REQUESTS_READ,
@@ -63,6 +64,14 @@ function requestFunctionsInput(request) {
   return {
     ...recordingInput(request),
     requestId: request.params.requestId,
+    ...pageQuery(requestQuery(request))
+  };
+}
+
+function interactionFunctionsInput(request) {
+  return {
+    ...recordingInput(request),
+    interactionId: request.params.interactionId,
     ...pageQuery(requestQuery(request))
   };
 }
@@ -152,6 +161,12 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     actionId: ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ,
     buildInput: requestFunctionsInput,
     summary: "List the project functions one request ran."
+  });
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId/:recordingId/interactions/:interactionId/functions", {
+    actionId: ACTION_USAGE_RECORDING_INTERACTION_FUNCTIONS_READ,
+    buildInput: interactionFunctionsInput,
+    summary: "List the project functions an interaction's requests ran, merged into one list."
   });
 
   routes.actionRoute("POST", "/usage-recordings/sessions/:sessionId/:recordingId/interactions", {

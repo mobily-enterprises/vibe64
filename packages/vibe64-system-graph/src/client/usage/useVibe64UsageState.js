@@ -30,7 +30,7 @@ import { sameQuery, sameUsageState, usageQueryFor, usageStateFromQuery } from ".
 
 /**
  * The Architecture view's Map | Usage state. The system dashboard route's query keeps Usage's state,
- * so a reload reopens the same entry, mode, subsystem, recording and request; requests to open or
+ * so a reload reopens the same entry, mode, subsystem, recording and request or click; requests to open or
  * restore Usage from elsewhere replace it, and switching to Map remembers Usage for the way back.
  * @param {object} options
  * @param {{ active: boolean, usageOpenRequest: UsageOpenRequest | null, restoreRequest: ArchitectureRestoreRequest | null }} options.props the view's props

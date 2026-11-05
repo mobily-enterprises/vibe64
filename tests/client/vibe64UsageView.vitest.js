@@ -34,6 +34,7 @@ import Vibe64UsageEntryRail from "../../packages/vibe64-system-graph/src/client/
 import Vibe64UsageRecordingResults from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue";
 import Vibe64UiStoryboardView from "../../packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue";
 import { webNodes } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
+import { unionFunctions } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
 
 const json = async (name) => JSON.parse(await readFile(new URL(`../fixtures/usage-map/${name}`, import.meta.url), "utf8"));
 const machine = await json("machine-city.json");
@@ -42,6 +43,8 @@ const recordingList = await json("recording/api/list.json");
 const requests = await json("recording/api/requests.json");
 const targets = await json("recording/api/targets.json");
 const ran = await json("recording/api/request-functions/r_000004.json");
+// What the click i_0001 ran: its two requests merged, as the server answers it.
+const clickRan = unionFunctions(await Promise.all(["r_000003", "r_000004"].map(async (id) => (await json(`recording/api/request-functions/${id}.json`)).functions)));
 const LAYOUT = { groups: [
   { id: "entry", title: "Entry points", kind: "layer", subsystems: [{ root: "bin" }, { root: "server" }] },
   { id: "features", title: "Features", kind: "layer", subsystems: [{ root: "src" }, { root: "packages/sessions" }, { root: "packages/reports" }] },
@@ -80,7 +83,7 @@ async function render(component, props) {
   app.use(VueQueryPlugin, { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }) });
   return (await renderToString(app)).replace(/<!--[\s\S]*?-->/gu, "").replace(/ data-v-[0-9a-f]+/gu, "");
 }
-const usageState = (state) => ({ view: "usage", entry: "", mode: "calls", subsystem: "", recording: "", request: "", ...state });
+const usageState = (state) => ({ view: "usage", entry: "", mode: "calls", subsystem: "", recording: "", request: "", interaction: "", ...state });
 const view = (state, reads) => {
   fake.usage = usageReads(reads);
   return render(Vibe64UsageView, { sessionId: "s1", state: usageState(state) });
@@ -161,7 +164,12 @@ describe("Imports and Calls states", () => {
 
 describe("Recording states", () => {
   const recordings = read(recordingList);
-  const joined = { recordingId, requestId: "r_000004", functions: ran.functions, total: ran.total, truncated: false, join: joinFunctions(index, calls, { functions: ran.functions }) };
+  const joined = { recordingId, requestId: "r_000004", interactionId: "", functions: ran.functions, total: ran.total, truncated: false, join: joinFunctions(index, calls, { functions: ran.functions }) };
+  const { requestCount, ...click } = requests.interactions[0];
+  const clickJoined = {
+    recordingId, requestId: "", interactionId: click.id, functions: clickRan, total: clickRan.length, truncated: false,
+    join: joinFunctions(index, calls, { functions: clickRan }), request: null, interactions: [click], requestIds: ["r_000003", "r_000004"]
+  };
 
   it("says when nothing can be recorded, and when nothing was recorded yet", async () => {
     const unavailable = { targets: targets.targets.filter((target) => !target.available) };
@@ -285,6 +293,63 @@ describe("Recording states", () => {
     expect(unchosen).toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose a request/u);
     expect(unchosen).toMatch(/<p class="usage-view__click text-body-medium"[^>]*><\/p>/u);
     expect(await view({})).toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose an entry/u);
+  });
+
+  it("offers each click's requests together under its heading, chosen when the address names the click", async () => {
+    expect(requestCount).toBe(2);
+    const list = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: requests.requests, interactions: requests.interactions, interactionId: click.id });
+    const rows = list.split("<div class=\"v-list-item ").slice(1);
+    const clickRow = rows.find((row) => row.includes("Everything this click ran"));
+    expect(clickRow).toContain("v-list-item--active");
+    expect(clickRow).toContain('role="option"');
+    expect(clickRow).toContain('aria-selected="true"');
+    expect(clickRow).toContain("2 requests");
+    expect(rows.filter((row) => row.includes("v-list-item--active"))).toHaveLength(1);
+    expect(list).toMatch(/Click: button &quot;Add&quot; \(SessionList\.vue\)[\s\S]*Everything this click ran[\s\S]*16 functions/u);
+    // A click whose requests another request splits offers its row once, and no row stands for requests no click caused.
+    const between = { ...requests.requests.at(-1), id: "r_000009", interaction: null };
+    const split = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [...requests.requests.slice(0, 3), between, requests.requests.at(-1)], interactions: requests.interactions });
+    expect(split.match(/Click: button &quot;Add&quot; \(SessionList\.vue\)/gu)).toHaveLength(2);
+    expect(split.match(/Everything this click ran/gu)).toHaveLength(1);
+  });
+
+  it("choosing a click puts it in the address in place of the request, and reads everything it ran", async () => {
+    fake.usage = usageReads({ recordings, requests: read(requests), result: read(joined) });
+    const node = () => ({});
+    const renderer = createRenderer({ createComment: node, createElement: node, createText: node, setText() {}, setElementText() {},
+      patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const states = [];
+    const app = renderer.createApp({ ...Vibe64UsageView, render: () => null }, {
+      sessionId: "s1", state: usageState({ mode: "recording", recording: recordingId, request: "r_000004", subsystem: "directory:packages/core" }),
+      "onUpdate:state": (state) => states.push(state)
+    });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    const handlers = app._instance.setupState.recordingHandlers;
+    handlers["update:interactionId"](click.id);
+    expect(states.at(-1)).toMatchObject({ mode: "recording", recording: recordingId, interaction: click.id, request: "", subsystem: "" });
+    handlers["update:requestId"]("r_000003");
+    expect(states.at(-1)).toMatchObject({ interaction: "", request: "r_000003" });
+    app.unmount();
+
+    fake.usage = usageReads({ recordings, requests: read(requests), result: read(clickJoined) });
+    const chosen = renderer.createApp({ ...Vibe64UsageView, render: () => null }, { sessionId: "s1", state: usageState({ mode: "recording", recording: recordingId, interaction: click.id }) });
+    chosen.provide(ssrContextKey, { modules: new Set() });
+    chosen.mount({});
+    expect(fake.usage.result.run).toHaveBeenCalledWith({ recordingId, interactionId: click.id });
+    chosen.unmount();
+  });
+
+  it("lights up everything the chosen click ran and says how many requests it probably started", async () => {
+    const html = await view({ mode: "recording", recording: recordingId, interaction: click.id }, { recordings, requests: read(requests), result: read(clickJoined) });
+    expect(html).toMatch(/class="usage-view__entry[^"]*"[^>]*>Everything this click ran<wbr><\/h3>/u);
+    expect(html).toMatch(/class="usage-view__click[^"]*"[^>]*title="Click: button &quot;Add&quot; \(SessionList\.vue\) · probably started 2 requests"[^>]*><span class="usage-view__click-text">Click: button &quot;Add&quot;<\/span><span class="usage-view__click-file"> \(SessionList\.vue\)<\/span><span class="usage-view__click-count"> · probably started 2 requests<\/span><\/p>/u);
+    // Both requests' sessions functions: the POST's seven and the GET's eight, two of them shared.
+    expect(html).toContain("13 functions ran");
+    expect(html).not.toContain("Pick a request");
+    // Named from its own read when the pages read do not hold it.
+    const beyond = await view({ mode: "recording", recording: recordingId, interaction: click.id }, { recordings, requests: read({ ...requests, requests: requests.requests.slice(0, 1), interactions: [] }), result: read(clickJoined) });
+    expect(beyond).toContain("probably started 2 requests");
   });
 
   it("marks, in a recorded function's calls, the ones that ran in the request", async () => {

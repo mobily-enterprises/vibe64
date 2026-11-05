@@ -3,7 +3,8 @@
 People start from one entry point (a page, component, route, action, library
 export, command, job, Program operation or test file) and see only what it
 reaches: the files it imports, the functions its exact and probable calls
-reach, or the functions one recorded request actually ran. Architecture shows it as Usage beside Map.
+reach, or the functions one recorded request, or all the requests one click
+probably started, actually ran. Architecture shows it as Usage beside Map.
 
 ## Sources
 
@@ -78,8 +79,8 @@ within three lines when unique; a changed file is `stale`, anything else
 1:1; the recorded name picks the function, any other name the top level.
 
 The system dashboard's address keeps Usage's state (`view`, `entry`, `mode`,
-`subsystem`, `recording`, `request`), so reloads and the source viewer's way
-back restore it. Map's pages and zoomed views offer Show usage. A recorded web
+`subsystem`, `recording`, and `request` or `interaction`, which replaces it
+when set), so reloads and the source viewer's way back restore it. Map's pages and zoomed views offer Show usage. A recorded web
 server that runs every request in one process is labelled "Not separated per
 request for this server" and shows everything that ran.
 
@@ -90,7 +91,13 @@ not counted. A recording opened while it runs reads newest first and
 merges each refreshed first page in front of the rows already shown, so new
 requests appear on top without losing the pages read; a gap of more than one
 page starts the list again. The chosen request's result read carries its own
-row, so the heading names it even when the pages read do not hold it. Beside
+row, so the heading names it even when the pages read do not hold it. Each
+click heading (Enter and submit alike) has its own row, "Everything this click
+ran" with the number of requests the recording tagged with it, whatever the
+pages, order and search hold. Choosing it reads the click's functions in one
+server read, already merged and bounded, and joins and draws them exactly as
+one request's; the header names the click and says how many requests it
+probably started. Beside
 the heading, or on a line of its own kept even while empty where the header is
 narrow, the click that caused it takes one line, shortened before its component
 file, so choosing a request never changes the header's height. Rows

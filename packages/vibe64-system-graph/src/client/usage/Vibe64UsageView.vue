@@ -17,11 +17,12 @@
         </div>
         <div v-if="!compact" class="usage-view__title">
           <h3 class="usage-view__entry text-title-medium" :class="{ 'usage-view__entry--none': !chosen }"><template v-for="(part, position) in pathParts(pickerLabel)" :key="position">{{ part }}<wbr></template></h3>
-          <!-- In Recording the click's place is kept, so choosing a request never moves the header. -->
-          <p v-if="mode === 'recording'" class="usage-view__click text-body-medium" :title="clickTitle || undefined">
+          <!-- In Recording the click's place is kept, so choosing a request or a click never moves the header. -->
+          <p v-if="mode === 'recording'" class="usage-view__click text-body-medium" :title="clickTooltip || undefined">
             <template v-if="clickTitle">
               <span class="usage-view__click-text">{{ clickParts.text }}</span>
               <span v-if="clickParts.file" class="usage-view__click-file">{{ " " + clickParts.file }}</span>
+              <span v-if="clickStarted" class="usage-view__click-count">{{ " · " + clickStarted }}</span>
             </template>
           </p>
         </div>
@@ -121,9 +122,9 @@
               <p class="text-body-medium">Record what runs, use the app or command, then pick a request to see only the code it ran.</p>
             </template>
           </div>
-          <div v-else-if="!state.request" class="usage-view__state" role="status">
+          <div v-else-if="!state.request && !state.interaction" class="usage-view__state" role="status">
             <h3 class="text-title-medium">Pick a request</h3>
-            <p class="text-body-medium">Each request shows the subsystems and functions that ran for it.</p>
+            <p class="text-body-medium">Each request shows the subsystems and functions that ran for it; Everything this click ran shows all of a click's requests together.</p>
           </div>
           <div v-else-if="notScanned" class="usage-view__state" role="status">
             <h3 class="text-title-medium">Not scanned yet</h3>
@@ -196,6 +197,7 @@ import {
   countLabel,
   functionLabel,
   interactionParts,
+  interactionRunTitle,
   interactionTitle,
   isBackgroundRequest,
   pathParts,
@@ -213,7 +215,7 @@ const WIDE_WIDTH = 1040;
 const GRAPH_WIDTH = 888;
 
 // The Usage half of Architecture. Its address state (entry, mode, zoomed
-// subsystem, recording, request) belongs to the parent, which keeps it in the
+// subsystem, recording, request or interaction) belongs to the parent, which keeps it in the
 // route; filters, selection and dialogs are local.
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -295,7 +297,7 @@ const railHandlers = {
 
 const {
   recordings, unavailable, loadRecordings, loadResult, resultFresh, recorded, changedSinceRecording,
-  requestRows, selectedRequest, selectedInteraction, recordingBindings, recordingHandlers, recordingStarted
+  requestRows, selectedRequest, selectedInteraction, interactionRequestCount, recordingBindings, recordingHandlers, recordingStarted
 } = useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, closePanel });
 
 // ---------------------------------------------------------------- the web
@@ -370,13 +372,23 @@ const panelHandlers = {
 
 // ---------------------------------------------------------------- layout
 
-const chosen = computed(() => Boolean(mode.value === "recording" ? selectedRequest.value : props.state.entry));
-// The click behind the chosen request, for the desktop header.
+// In Recording, a chosen request or a chosen click (everything its requests ran).
+const chosenClick = computed(() => (props.state.interaction ? selectedInteraction.value : null));
+const chosen = computed(() => Boolean(mode.value === "recording" ? selectedRequest.value || chosenClick.value : props.state.entry));
+// The chosen click, or the click behind the chosen request, for the desktop header.
 const clickInteraction = computed(() => (chosen.value ? selectedInteraction.value : null));
 const clickParts = computed(() => interactionParts(clickInteraction.value));
 const clickTitle = computed(() => interactionTitle(clickInteraction.value));
+const clickStarted = computed(() => (chosenClick.value && interactionRequestCount.value !== null
+  ? `probably started ${countLabel(interactionRequestCount.value, "request")}` : ""));
+const clickTooltip = computed(() => [clickTitle.value, clickStarted.value].filter(Boolean).join(" · "));
 const pickerLabel = computed(() => {
   if (mode.value === "recording") {
+    // Phones show no click line, so their picker names the click and its requests.
+    if (chosenClick.value) {
+      return compact.value ? [clickTitle.value, interactionRequestCount.value !== null && countLabel(interactionRequestCount.value, "request")].filter(Boolean).join(" · ")
+        : interactionRunTitle(chosenClick.value);
+    }
     const request = selectedRequest.value;
     if (!request) return "Choose a request";
     return isBackgroundRequest(request) ? `Request: ${requestTitle(request, [], requestRows.value)}` : `Request: ${[request.method, requestTitle(request, usage.routes.value)].filter(Boolean).join(" ")}`;
@@ -417,11 +429,12 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__entry { margin: 0; min-width: 0; overflow-wrap: break-word; }
 .usage-view__entry--none { color: var(--v64-on-surface-variant); }
 /* The click is one line beside the heading, shortened to fit while keeping its
-   component file. Where that is too narrow it has a line of its own, kept even
-   while empty, so choosing a request never changes the header's height. */
+   component file and, for a chosen click, how many requests it probably
+   started. Where that is too narrow it has a line of its own, kept even while
+   empty, so choosing a request or a click never changes the header's height. */
 .usage-view__click { display: flex; flex: 1 1 0; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; color: var(--v64-on-surface-variant); }
 .usage-view__click-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.usage-view__click-file { flex: none; white-space: pre; }
+.usage-view__click-file, .usage-view__click-count { flex: none; white-space: pre; }
 @container (max-width: 720px) {
   .usage-view__click { flex-basis: 100%; min-height: 1lh; }
 }

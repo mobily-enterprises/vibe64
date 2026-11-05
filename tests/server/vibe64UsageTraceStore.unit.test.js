@@ -18,6 +18,7 @@ import {
   readInteractions,
   readJsonFile,
   recordingRequestRows,
+  unionFunctions,
   writeJsonFile
 } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
 
@@ -90,6 +91,74 @@ test("the recording API answers the shared fixture exactly", async (t) => {
   assert.deepEqual([startUp.functions.length, startUp.functions[0].name, startUp.truncated], [7, "createLogger", false]);
   await assert.rejects(call("readRequestFunctions", { recordingId: RECORDING_ID, requestId: "x_1" }), { statusCode: 404 });
   await assert.rejects(call("readRequests", { recordingId: "rec_aaaaaaaaaaaaaaaaaaaa" }), { statusCode: 404 });
+  // The click's own read: its two requests as one list, as the usage-map spec serves it.
+  const click = await call("readInteractionFunctions", { recordingId: RECORDING_ID, interactionId: "i_0001" });
+  const tagged = await Promise.all(["r_000003", "r_000004"].map((requestId) => fixtureJson(`request-functions/${requestId}.json`)));
+  const { requestCount, ...interaction } = (await fixtureJson("requests.json")).interactions[0];
+  assert.equal(requestCount, 2);
+  assert.deepEqual(click, { functions: unionFunctions(tagged.map((answer) => answer.functions)), total: 21, truncated: false, requests: ["r_000003", "r_000004"], interaction });
+});
+
+test("a click's requests are read as one list: only its own, counts added up, cut once at the limit", async (t) => {
+  const sessionRoot = await temporary(t);
+  const recordingId = "rec_clickclickclickclick";
+  const directory = path.join(sessionRoot, "usage-recordings", recordingId);
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, "recording.json"), JSON.stringify({
+    schema: "vibe64.usage-recording.v1", id: recordingId, sessionId: "session-fixture", state: "stopped", target: { id: "preview", kind: "web", label: "Preview" },
+    runtimes: ["nodejs"], tracers: [], startedAt: at, stoppedAt: "2026-10-30T10:01:00.000Z", stopReason: "person",
+    counts: { requests: 3, functions: 1602 }, truncated: false, dismissedAt: null, sourceIdentity: null
+  }));
+  const request = (number, interaction) => ({ id: `r_00000${number}`, seq: number, method: "GET", path: "/api/items", status: 200,
+    startedAt: `2026-10-30T10:00:0${number}.000Z`, durationMs: 1, interaction });
+  // Two requests the click started, and one between them that it did not.
+  await writeFile(path.join(directory, "requests.ndjson"), ndjson([request(1, "i_0001"), request(2, null), request(3, "i_0001")]));
+  await writeFile(path.join(directory, "interactions.ndjson"), ndjson([
+    { id: "i_0001", at, label: "button \"Save\"", kind: "click", componentFile: "src/Save.vue" },
+    { id: "i_0002", at, label: "link \"Home\"", kind: "click", componentFile: null }
+  ]));
+  // Functions 0-1,599 sit at lines 1-1,600 of one file. The first request runs
+  // 0-999 once each, the third 500-1,599 twice each: 1,600 different functions,
+  // though neither request alone reaches the 1,500 limit. Function 1,600 runs in
+  // all three, so it is plumbing; 1,601 runs only in the untagged request.
+  const ran = (from, to, count) => Array.from({ length: to - from + 1 }, (_, offset) => [from + offset, count]);
+  await writeFile(path.join(directory, "hits-nodejs-10.ndjson"), ndjson([
+    header(10),
+    { type: "tracer", state: "idle" },
+    { type: "file", fileIndex: 0, path: "lib/items.js", hash: HASH },
+    ...Array.from({ length: 1602 }, (_, index) => ({ type: "function", functionIndex: index, fileIndex: 0, name: `f${index}`,
+      start: { line: index + 1, column: 1 }, end: { line: index + 1, column: 9 } })),
+    ...[1, 2, 3].map((number) => ({ type: "scope", scope: `r_00000${number}`, kind: "request", startedAt: `2026-10-30T10:00:0${number}.000Z` })),
+    { type: "hits", scope: "r_000001", counts: [...ran(0, 999, 1), [1600, 1]] },
+    { type: "hits", scope: "r_000002", counts: [[1600, 1], [1601, 1]] },
+    { type: "hits", scope: "r_000003", counts: [...ran(500, 1599, 2), [1600, 1]] }
+  ]));
+  const call = fixtureService(sessionRoot, "2026-10-30T10:02:00.000Z");
+  const read = (interactionId, extra = {}) => call("readInteractionFunctions", { recordingId, interactionId, ...extra });
+
+  const first = await read("i_0001");
+  assert.deepEqual([first.functions.length, first.total, first.truncated, first.requests], [1500, 1601, true, ["r_000001", "r_000003"]]);
+  assert.deepEqual(first.interaction, { id: "i_0001", label: "button \"Save\"", kind: "click", componentFile: "src/Save.vue" });
+  const byName = (functions) => new Map(functions.map((fn) => [fn.name, fn]));
+  const counted = byName(first.functions);
+  assert.deepEqual(["f0", "f499", "f500", "f999", "f1000"].map((name) => counted.get(name).count), [1, 1, 3, 3, 2]);
+  assert.deepEqual(first.functions.slice(0, 2).map((fn) => fn.start.line), [1, 2], "in file and line order");
+  const rest = await read("i_0001", { cursor: "1500" });
+  assert.deepEqual([rest.functions.length, rest.total, rest.truncated], [101, 1601, false]);
+  const later = byName(rest.functions);
+  assert.deepEqual([later.get("f1599").count, later.get("f1600").count, later.get("f1600").plumbing, later.get("f1599").plumbing], [2, 2, true, false]);
+  assert.equal(later.has("f1601"), false, "the untagged request's own function is not the click's");
+  // The request list says how many requests each click started, whatever page it reads.
+  const listed = await call("readRequests", { recordingId, limit: 1 });
+  assert.deepEqual(listed.interactions.map(({ id, requestCount }) => [id, requestCount]), [["i_0001", 2]]);
+
+  // A click that started no request has nothing to show; one the recording does not hold is not found.
+  assert.deepEqual(await read("i_0002"), {
+    functions: [], total: 0, truncated: false, requests: [], interaction: { id: "i_0002", label: "link \"Home\"", kind: "click", componentFile: null }
+  });
+  for (const unknown of ["i_0009", "i_1;drop", "r_000001", ""]) {
+    await assert.rejects(read(unknown), { statusCode: 404, code: "vibe64_usage_recording_interaction_not_found" }, unknown);
+  }
 });
 
 test("trace lines are validated, merged per scope and kept per process", async (t) => {

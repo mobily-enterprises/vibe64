@@ -14,6 +14,7 @@ const ACTION_USAGE_RECORDING_DISMISS = "vibe64.usage-recording.dismiss";
 const ACTION_USAGE_RECORDING_LIST = "vibe64.usage-recording.list";
 const ACTION_USAGE_RECORDING_REQUESTS_READ = "vibe64.usage-recording.requests.read";
 const ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ = "vibe64.usage-recording.request-functions.read";
+const ACTION_USAGE_RECORDING_INTERACTION_FUNCTIONS_READ = "vibe64.usage-recording.interaction-functions.read";
 const ACTION_USAGE_RECORDING_INTERACTION_RECORD = "vibe64.usage-recording.interaction.record";
 const ACTION_USAGE_RECORDING_DELETE = "vibe64.usage-recording.delete";
 
@@ -114,6 +115,21 @@ function createUsageRecordingActions({ usageRecording }) {
       execute: (input) => usageRecording.readRequestFunctions(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_USAGE_RECORDING_INTERACTION_FUNCTIONS_READ,
+      input: {
+        schema: createSchema({
+          sessionId,
+          recordingId,
+          interactionId: text(64),
+          ...page
+        }),
+        mode: "create"
+      },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => usageRecording.readInteractionFunctions(input)
+    }),
+    Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_USAGE_RECORDING_INTERACTION_RECORD,
       input: {
@@ -145,6 +161,7 @@ export {
   ACTION_USAGE_RECORDING_CURRENT_READ,
   ACTION_USAGE_RECORDING_DELETE,
   ACTION_USAGE_RECORDING_DISMISS,
+  ACTION_USAGE_RECORDING_INTERACTION_FUNCTIONS_READ,
   ACTION_USAGE_RECORDING_INTERACTION_RECORD,
   ACTION_USAGE_RECORDING_LIST,
   ACTION_USAGE_RECORDING_REQUESTS_READ,

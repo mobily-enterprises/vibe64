@@ -163,15 +163,20 @@ function useVibe64UsageWeb({ sessionId }) {
     { q, includeEmpty: includeEmpty ? "true" : "", order: newestFirst ? "newest" : "", cursor, limit: REQUEST_PAGE },
     signal
   ));
-  // What ran in one request, then the same functions joined to the call web.
-  // The request's own row comes along: it names the request when the pages
-  // read so far do not hold it (an address reloaded after Show more).
-  const result = latestRead(async (signal, { recordingId, requestId }) => {
-    const requestsPath = `${recordingPath.value}/${segment(recordingId)}/requests`;
-    const [ran, named] = await Promise.all([
-      get(`${requestsPath}/${segment(requestId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal),
-      get(requestsPath, { requestId, limit: 1 }, signal).catch(() => null)
-    ]);
+  // What ran in one request, or in all the requests of one interaction (one
+  // server read that merges them), then the same functions joined to the call
+  // web. A request's own row comes along: it names the request when the pages
+  // read so far do not hold it (an address reloaded after Show more); an
+  // interaction's read names it and lists its requests itself.
+  const result = latestRead(async (signal, { recordingId, requestId = "", interactionId = "" }) => {
+    const recordingBase = `${recordingPath.value}/${segment(recordingId)}`;
+    const requestsPath = `${recordingBase}/requests`;
+    const [ran, named] = await Promise.all(interactionId
+      ? [get(`${recordingBase}/interactions/${segment(interactionId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal), null]
+      : [
+        get(`${requestsPath}/${segment(requestId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal),
+        get(requestsPath, { requestId, limit: 1 }, signal).catch(() => null)
+      ]);
     const functions = ran.functions || [];
     const join = await client.request(`${usagePath.value}/join`, {
       method: "POST",
@@ -179,8 +184,10 @@ function useVibe64UsageWeb({ sessionId }) {
       signal
     });
     return {
-      recordingId, requestId, functions, total: ran.total ?? functions.length, truncated: ran.truncated === true, join,
-      request: named?.requests?.find((row) => row.id === requestId) || null, interactions: named?.interactions || []
+      recordingId, requestId, interactionId, functions, total: ran.total ?? functions.length, truncated: ran.truncated === true, join,
+      request: named?.requests?.find((row) => row.id === requestId) || null,
+      interactions: interactionId ? [ran.interaction].filter(Boolean) : named?.interactions || [],
+      requestIds: interactionId ? ran.requests || [] : null
     };
   });
 

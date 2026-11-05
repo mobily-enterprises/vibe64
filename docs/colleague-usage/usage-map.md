@@ -54,7 +54,8 @@ The mode switch has three choices:
   example by method name) or **unresolved** (the target could not be worked
   out). A probable call can list several possible targets. Turn on **Exact
   only** to follow only proven calls.
-- **Recording**: what actually ran for one request or run you recorded. See
+- **Recording**: what actually ran for one request or run you recorded, or
+  for all the requests of one click. See
   [Record what runs](usage-recording.md) for making a recording.
 
 A page or component starts from every function in its file, including the
@@ -131,8 +132,13 @@ phone) shows:
 - **Show requests that ran no project code**, off by default;
 - the requests, grouped under the click, Enter or form submit that caused
   them, such as **Click: button "Add" (SessionList.vue)**, **Enter: textbox
-  "Title"** or **Submit: form "New note"**. Each shows its method, route,
-  status and how many files and functions ran. Later requests that no click,
+  "Title"** or **Submit: form "New note"**. The first row under each click is
+  **Everything this click ran** (**Everything this Enter ran**, **Everything
+  this submit ran**) with how many requests it probably started, such as **3
+  requests**; that count covers the whole recording, including requests on
+  pages not shown yet or hidden by the search or the switch. Each request
+  below it shows its method, route, status and how many files and functions
+  ran. Later requests that no click,
   Enter or submit caused are listed under **Other requests**. A process's
   start-up work is **Start-up and work outside requests**, listed first (last
   when newest first), with a cog labelled **Start-up** where other rows show
@@ -153,12 +159,27 @@ Pick a request to light up only the subsystems that ran. On a computer the
 heading names it, such as **Request: POST /api/sessions**, with the click that
 caused it beside it, or on the line below where the view is narrow. A long
 click is shortened to one line, keeping its component file; its tooltip gives
-it whole. Functions that ran in most requests of the recording,
+it whole.
+
+A single click often starts several requests, such as a save followed by a
+list refresh. Pick **Everything this click ran** to see them together: each
+function that ran in any of the click's requests appears once, with its runs
+added up. On a computer the heading says **Everything this click ran**, and the
+line beside it names the click and how many requests it probably started, such
+as **Click: button "Add" (SessionList.vue) · probably started 3 requests**. On
+a phone the picker button says **Click: button "Add" (SessionList.vue) · 3
+requests**. "Probably" because Preview links a request to a click when the page
+started it within a second of the click and before the next one, so a request
+a timer started at that moment is counted too. It works however the list is
+sorted, searched or paged, and like a single request it shows at most the
+first 1,500 functions.
+
+Functions that ran in most requests of the recording,
 such as logging or request setup, are counted as **Shared plumbing** on each
 card; inside a subsystem they are hidden until you turn on **Show shared
 plumbing**. Each function shows how many times it ran. Arrows between them
 come from the static calls. In a function's details, calls to functions that
-also ran in this request say **ran** and how many times.
+also ran in this request (or click) say **ran** and how many times.
 
 A function marked **changed** (**Changed since the last scan** in its
 tooltip and list row) ran from a file that has changed since Architecture was
@@ -204,16 +225,17 @@ and names them; Imports and Calls still work.
   holding the scan. The next answer then takes a second or two longer while it
   loads the scan again; nothing is lost.
 
-The address keeps the chosen entry, mode, subsystem, recording and request, so
-reloading the page or sharing the address with someone on the same project
-reopens the same view.
+The address keeps the chosen entry, mode, subsystem, recording and request or
+click, so reloading the page or sharing the address with someone on the same
+project reopens the same view.
 
 ## What the evidence means
 
 Imports and Calls are read from the code without running it. A probable call
 might not happen, and an absent arrow does not prove that nothing calls a
 function: dynamic calls stay unresolved. A recording shows what ran in that
-one recording only. Calls shows exact and probable calls in the code;
+one recording only, and a click's requests are the ones that probably came
+from it. Calls shows exact and probable calls in the code;
 Recording shows what ran.
 
 Colleague can explain these views and walk you through them. It cannot read

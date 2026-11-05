@@ -17,15 +17,13 @@ import { registerActiveUsageRecording, activeUsageRecording } from "./activeReco
 import { recordingError } from "./recordingError.js";
 import { usageRecordingPath, usageRecordingsPath } from "./recordingFiles.js";
 import { createRecordingRecords, isoTime, publicRecording } from "./recordingRecords.js";
+import { createRecordingResults } from "./recordingResults.js";
 import { createRecordingTargets } from "./recordingTargets.js";
 import { readSourceIdentity } from "./sourceIdentity.js";
 import {
   appendJsonLine,
   createTraceReader,
-  pageOf,
-  readInteractions,
   readJsonFile,
-  recordingRequestRows,
   writeJsonFile
 } from "./traceStore.js";
 import {
@@ -40,8 +38,7 @@ import {
   USAGE_RECORDING_LIMITS,
   USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
-  recordedRequestPath,
-  usageScopeKind
+  recordedRequestPath
 } from "../shared/contract.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -123,6 +120,7 @@ function createService({
     now
   });
   const recordingTargets = createRecordingTargets({ terminals });
+  const results = createRecordingResults({ readerFor });
   // Recordings this process is running or finishing, by id.
   const live = new Map();
   // Sessions whose start is between its checks and its registration.
@@ -607,40 +605,8 @@ function createService({
     return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
   }
 
-  /**
-   * Oldest first unless order is "newest"; total counts the matching requests
-   * and runs, as the recording's count does: start-up work and the readiness
-   * check are rows, not requests. A requestId reads that one row, whatever the
-   * other filters say.
-   */
-  async function readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
-    const context = await sessionContext(sessionId);
-    const { directory, entry, record } = await recordingFor(context, recordingId);
-    const index = entry ? null : await readJsonFile(path.join(directory, "index.json"), USAGE_RECORDING_LIMITS.indexBytes);
-    const rows = Array.isArray(index?.requests)
-      ? index.requests
-      : await recordingRequestRows(directory, await readerFor(directory), { runLabel: record.target.label });
-    const query = String(q || "").trim().toLowerCase();
-    const matching = rows.filter((row) => (requestId ? row.id === requestId : (includeEmpty === true || row.functionCount > 0) &&
-      (!query || `${row.method || ""} ${row.path || ""}`.toLowerCase().includes(query))));
-    const page = pageOf(order === "newest" ? matching.reverse() : matching, { cursor, limit, maxLimit: 200 });
-    const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
-    const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
-      .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
-    const total = matching.filter((row) => row.kind !== "background" && row.kind !== "readiness").length;
-    return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total };
-  }
-
-  async function readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit }) {
-    const context = await sessionContext(sessionId);
-    const { directory } = await recordingFor(context, recordingId);
-    if (!usageScopeKind(requestId)) {
-      throw recordingError(404, "This request is not part of the recording.", "vibe64_usage_recording_request_not_found");
-    }
-    const functions = (await readerFor(directory)).scopeFunctions(String(requestId));
-    const page = pageOf(functions, { cursor, limit: limit ?? 1500, maxLimit: 1500 });
-    return { functions: page.items, total: functions.length, truncated: page.more };
-  }
+  /** A results read, handed the recording the session names; an unknown recording is not found before the read checks anything. */
+  const resultsRead = (read) => async (input) => read(await recordingFor(await sessionContext(input.sessionId), input.recordingId), input);
 
   // readable-check: allow dependency-default - data: an interaction the page could not tie to a component file records none
   async function recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null }) {
@@ -693,8 +659,9 @@ function createService({
     stop,
     dismiss,
     list,
-    readRequests,
-    readRequestFunctions,
+    readRequests: resultsRead(results.readRequests),
+    readRequestFunctions: resultsRead(results.readRequestFunctions),
+    readInteractionFunctions: resultsRead(results.readInteractionFunctions),
     recordInteraction,
     delete: deleteRecording,
     close

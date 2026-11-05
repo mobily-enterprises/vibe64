@@ -31,6 +31,7 @@ function createUsageRecording({
     list,
     readRequests,
     readRequestFunctions,
+    readInteractionFunctions,
     recordInteraction,
     delete: deleteRecording,
     close
@@ -51,6 +52,7 @@ function createUsageRecording({
     list,
     readRequests,
     readRequestFunctions,
+    readInteractionFunctions,
     recordInteraction,
     delete: deleteRecording,
     close

@@ -9,6 +9,7 @@ follows it on every pane.
 ## Sources
 
 - Main: `packages/vibe64-usage-recording/src/server/service.js`
+- `packages/vibe64-usage-recording/src/server/recordingResults.js`
 - `packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingFeature.js`
 - `packages/vibe64-usage-recording/src/server/usageRecordingRuntime.js`
 - `packages/vibe64-usage-recording/src/server/sourceIdentity.js`
@@ -60,9 +61,10 @@ follows it on every pane.
 The `vibe64.usage-recording.*` actions sit under one session's
 `/usage-recordings` routes: list the recordable Output targets, start, read the
 current recording, list recent ones, stop, dismiss, delete, page a recording's
-requests (oldest or newest first, with the matching total, or one by its id)
-and one request's functions, and record a Preview interaction (a click, Enter
-or submit, with an optional component file). Editor clients send
+requests (oldest or newest first, with the matching total, or one by its id,
+and each listed interaction with how many requests it tagged), one request's
+functions and one interaction's functions, and record a Preview interaction (a
+click, Enter or submit, with an optional component file). Editor clients send
 interactions from the Preview page bridge while the recording runs. Each
 interaction number is accepted once: a repeat is refused with the next free
 number, and a recording names its highest accepted number so a page opened
@@ -107,7 +109,12 @@ launch readiness check of a recorded launch carries the reserved id `r_000000`
 and becomes its own readiness row. Neither kind counts as a request or towards
 plumbing. A row's
 functions carry their source position, count, and whether they are plumbing:
-code that ran in most recorded requests. A file's top-level code is its
+code that ran in most recorded requests. An interaction's functions are those of
+every row the proxy tagged with it, taken from the index or the live logs as
+the request list takes them: each function once, its counts added up, plumbing
+when it is plumbing in any of them, cut once at 1,500. The answer lists those
+requests and names the interaction; an id the recording did not record is not
+found. A file's top-level code is its
 function named `""` at 1:1, counted each time the file is loaded; in PHP
 that is each include. Malformed trace lines, files over their limits and
 unknown positions are skipped and counted, never trusted.

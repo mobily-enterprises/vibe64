@@ -87,6 +87,23 @@ describe("recording requests", () => {
     expect(reads).toContainEqual(["requests", { requestId: "r_000450", limit: 1 }]);
   });
 
+  it("reads everything one click ran in one server read, which names the click and lists its requests", async () => {
+    const reads = [];
+    const click = { id: "i_0001", label: "button \"Add\"", kind: "click", componentFile: null };
+    configureHttpWebClient({
+      async request(path, { query = {} } = {}) {
+        reads.push([path.replace(/^.*\/sessions\/s1\//u, ""), query]);
+        if (path.endsWith("/functions")) return { functions: [], total: 0, truncated: false, requests: ["r_000003", "r_000004"], interaction: click };
+        return { joined: [], edges: [], subsystems: [] };
+      }
+    });
+    const { result } = useVibe64UsageWeb({ sessionId: "s1" });
+    await result.run({ recordingId: "rec_aaaaaaaaaaaaaaaaaaaa", interactionId: "i_0001" });
+    expect(reads.map(([path]) => path)).toEqual(["rec_aaaaaaaaaaaaaaaaaaaa/interactions/i_0001/functions", "usage/join"]);
+    expect(reads[0][1]).toEqual({ limit: 1500 });
+    expect(result.data.value).toMatchObject({ requestId: "", interactionId: "i_0001", request: null, interactions: [click], requestIds: ["r_000003", "r_000004"] });
+  });
+
   it("reads again from the start when the search or filter changed", async () => {
     serve(requestRows(450));
     const { requests } = useVibe64UsageWeb({ sessionId: "s1" });

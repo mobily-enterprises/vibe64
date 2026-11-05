@@ -37,8 +37,9 @@ After Preview starts recording, **Recording — use Preview now** appears with
 **Go to Preview**, which shows the Preview pane. Use the app normally: each
 page load, button or form that reaches the server becomes a request in the
 results. Reloading the page, or using Preview in a second browser tab, keeps
-each click's requests grouped under that click. A command starts running at
-once and the recording follows that run.
+each click's requests grouped under that click, where **Everything this click
+ran** shows what all of them ran together. A command starts running at once
+and the recording follows that run.
 
 The scripts, styles, images and fonts a page loads, including a development
 server's modules, are counted instead of listed: with **Show requests that ran

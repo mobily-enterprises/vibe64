@@ -70,8 +70,8 @@ test("the application installs the usage recording package", async () => {
 test("the provider registers its routes and actions and admits by default or through a host decision", async () => {
   const { registered, http } = recordingHttp();
   const { actions, usageRecording } = await setupProvider({ http });
-  assert.equal(registered.length, 10);
-  assert.equal(actions.length, 10);
+  assert.equal(registered.length, 11);
+  assert.equal(actions.length, 11);
   assert.ok(actions.every((action) => action.id.startsWith("vibe64.usage-recording.") && action.extensions.assistant.exclude === true));
   assert.equal(usageRecording.admit, admitUsageRecording);
   assert.deepEqual(await usageRecording.admit({ sessionId: "s", projectSlug: "p", targetKind: "web", runtimes: ["nodejs"] }), { admitted: true });

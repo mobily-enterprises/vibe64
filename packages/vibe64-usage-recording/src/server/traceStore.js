@@ -125,6 +125,20 @@ const compareFunctions = (left, right) => left.path.localeCompare(right.path) ||
   left.start.line - right.start.line || left.start.column - right.start.column;
 
 /**
+ * Several scopes' functions as one list: each function once, its counts added
+ * up, and plumbing when it is plumbing in any of them.
+ */
+function unionFunctions(lists) {
+  const merged = new Map();
+  for (const fn of lists.flat()) {
+    const key = functionKey(fn, fn.start);
+    const known = merged.get(key);
+    merged.set(key, known ? { ...known, count: mergeCount(known.count, fn.count), plumbing: known.plumbing || fn.plumbing } : fn);
+  }
+  return [...merged.values()].sort(compareFunctions);
+}
+
+/**
  * An incremental reader of a recording's hits files. poll() reads only bytes
  * added since the last poll, so a live recording is followed cheaply.
  */
@@ -460,5 +474,6 @@ export {
   readInteractions,
   readJsonFile,
   recordingRequestRows,
+  unionFunctions,
   writeJsonFile
 };

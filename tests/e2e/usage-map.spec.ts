@@ -9,6 +9,7 @@ import {
   readFunction,
   readImportsWeb
 } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
+import { unionFunctions } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
 import {
   DEVELOPMENT_PATH,
   directChatSessionId,
@@ -22,9 +23,9 @@ import {
 } from "./support/base-shell/http";
 
 // Usage in Architecture over the shared usage-map fixtures: entry, Calls and
-// Imports at each level, Recording requests, the address surviving a reload,
-// and no sideways scrolling on desktop or phone. USAGE_MAP_SCREENSHOTS names a
-// folder for one screenshot per level and width.
+// Imports at each level, Recording requests and everything one click ran, the
+// address surviving a reload, and no sideways scrolling on desktop or phone.
+// USAGE_MAP_SCREENSHOTS names a folder for one screenshot per level and width.
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/usage-map/${name}`, import.meta.url), "utf8"));
 const machine = fixture("machine-city.json");
 const callWeb = fixture("call-web.json");
@@ -57,11 +58,23 @@ function usageAnswer(kind: string, query: Record<string, string>, body: unknown)
   return query.mode === "imports" ? readImportsWeb(index, entry, query) : readCallsWeb(index, calls, entry, query);
 }
 
+// Everything one click ran, as the server answers it: its requests' functions
+// merged by the server's own merge (the trace store test checks this answer).
+function clickAnswer(interactionId: string) {
+  const logged = readFileSync(new URL("../fixtures/usage-map/recording/requests.ndjson", import.meta.url), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  const requests = logged.filter((row) => row.interaction === interactionId).map((row) => row.id);
+  const functions = unionFunctions(requests.map((id) => fixture(`recording/api/request-functions/${id}.json`).functions));
+  const { id, label, kind, componentFile } = fixture("recording/api/requests.json").interactions.find((row) => row.id === interactionId);
+  return { functions, total: functions.length, truncated: false, requests, interaction: { id, label, kind, componentFile } };
+}
+
 function recordingAnswer(path: string, query: URLSearchParams) {
   if (!path) return fixture("recording/api/list.json");
   if (path === "/targets" || path === "/current") return fixture(`recording/api${path}.json`);
   const functions = path.match(/\/requests\/(r_\d+)\/functions$/u);
   if (functions) return fixture(`recording/api/request-functions/${functions[1]}.json`);
+  const click = path.match(/\/interactions\/(i_\d+)\/functions$/u);
+  if (click) return clickAnswer(click[1]);
   if (path.endsWith("/requests")) return fixture(query.get("includeEmpty") === "true" ? "recording/api/requests-include-empty.json" : "recording/api/requests.json");
   return { ok: true };
 }
@@ -230,6 +243,32 @@ for (const viewport of [
     await core.click();
     await expect(usage.getByRole("switch", { name: "Show shared plumbing (5)" })).toBeVisible();
     await shot("7-recorded-functions");
+
+    // Everything the click ran: both of its requests in one view.
+    if (phone) await usage.getByRole("button", { name: "Request: GET /api/sessions" }).click();
+    await requests.getByRole("option", { name: /Everything this click ran/u }).click();
+    await expect(page).toHaveURL(/interaction=i_0001/u);
+    expect(page.url()).not.toMatch(/[?&]request=/u);
+    if (phone) {
+      await expect(page.getByRole("dialog")).toBeHidden();
+      await expect(usage.getByRole("button", { name: "Click: button \"Add\" (SessionList.vue) · 2 requests" })).toBeVisible();
+    } else {
+      await expect(usage.locator(".usage-view__entry")).toHaveText("Everything this click ran");
+      await expect(usage.locator(".usage-view__click")).toHaveText("Click: button \"Add\" (SessionList.vue) · probably started 2 requests");
+      expect((await header.boundingBox())!.height).toBe(headerHeight);
+    }
+    // The POST's seven Sessions functions and the GET's eight, two of them shared.
+    // Cards are found by their own label: another card's crossings can name them.
+    const card = (title: string) => usage.locator(`.usage-web__card[aria-label^="${title}: "]`);
+    const sessions = card("Sessions");
+    await expect(sessions).toHaveAttribute("aria-label", "Sessions: 13 functions ran");
+    await expect(card("Core")).toHaveAttribute("aria-label", "Core: 6 functions ran");
+    await shot("8-click");
+    await sessions.click();
+    for (const name of ["createSession", "listSessions"]) {
+      await expect(rows ? usage.locator(".usage-web__rows .v-list-item").filter({ hasText: name }) : usage.getByRole("button", { name: new RegExp(`^${name},`, "u") })).toBeVisible();
+    }
+    await shot("9-click-functions");
 
     if (!phone) {
       // Map's Show usage opens the one entry under a zoomed subsystem.

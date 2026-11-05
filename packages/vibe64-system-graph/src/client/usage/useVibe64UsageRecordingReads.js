@@ -7,7 +7,8 @@ const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
 
 /**
  * Recording in Usage: the project's recordings, the chosen recording's requests (followed while it runs) and what
- * the chosen request ran, joined to the last scan, with the bindings of the list that picks them.
+ * the chosen request, or all the requests of the chosen interaction, ran, joined to the last scan, with the
+ * bindings of the list that picks them.
  * @param {object} options
  * @param {{ active: boolean, sessionId: string, snapshotKey: string, state: import("./usageModel.js").UsageState }} options.props the view's props
  * @param {import("./useVibe64UsageWeb.js").Vibe64UsageWeb} options.usage the view's usage reads
@@ -35,7 +36,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
   }, { immediate: true });
   watch(recordings, (list) => {
     if (mode.value === "recording" && list.length && !list.some((recording) => recording.id === props.state.recording)) {
-      update({ recording: list[0].id, request: "", subsystem: "" });
+      update({ recording: list[0].id, request: "", interaction: "", subsystem: "" });
     }
   });
 
@@ -56,14 +57,14 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
 
   let resultKey = "";
   function loadResult(force = false) {
-    const { recording, request } = props.state;
-    const key = JSON.stringify([recording, request, props.sessionId, props.snapshotKey]);
-    if (!recordingActive.value || !recording || !request || (!force && key === resultKey)) return;
+    const { recording, request, interaction } = props.state;
+    const key = JSON.stringify([recording, request, interaction, props.sessionId, props.snapshotKey]);
+    if (!recordingActive.value || !recording || (!request && !interaction) || (!force && key === resultKey)) return;
     resultKey = key;
-    void usage.result.run({ recordingId: recording, requestId: request });
+    void usage.result.run(interaction ? { recordingId: recording, interactionId: interaction } : { recordingId: recording, requestId: request });
   }
-  watch([recordingActive, () => props.state.recording, () => props.state.request, () => props.snapshotKey], () => loadResult(), { immediate: true });
-  watch(() => props.state.request, () => closePanel());
+  watch([recordingActive, () => props.state.recording, () => props.state.request, () => props.state.interaction, () => props.snapshotKey], () => loadResult(), { immediate: true });
+  watch([() => props.state.request, () => props.state.interaction], () => closePanel());
 
   // While a recording runs, its requests list follows it, and reads once more
   // when it stops so its last requests are listed too.
@@ -78,7 +79,8 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
 
   const resultFresh = computed(() => {
     const data = usage.result.data.value;
-    return Boolean(data && data.recordingId === props.state.recording && data.requestId === props.state.request);
+    return Boolean(data && data.recordingId === props.state.recording && data.requestId === props.state.request &&
+      data.interactionId === props.state.interaction);
   });
   const recorded = computed(() => (resultFresh.value ? recordingWeb(usage.result.data.value.functions, usage.result.data.value.join) : null));
   // The scan the recording ran against is no longer the one its functions were joined to.
@@ -93,10 +95,13 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
   const resultRead = computed(() => (resultFresh.value ? usage.result.data.value : null));
   const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request)
     || (resultRead.value?.request?.id === props.state.request ? resultRead.value.request : null));
+  // The chosen interaction, or the one behind the chosen request.
   const selectedInteraction = computed(() => {
-    const id = selectedRequest.value?.interaction;
+    const id = props.state.interaction || selectedRequest.value?.interaction;
     return id ? [...(usage.requests.data.value?.interactions || []), ...(resultRead.value?.interactions || [])].find((item) => item.id === id) || null : null;
   });
+  // How many requests the chosen interaction probably started, once its result is read.
+  const interactionRequestCount = computed(() => (props.state.interaction ? resultRead.value?.requestIds?.length ?? null : null));
 
   const recordingBindings = computed(() => ({
     sessionId: props.sessionId,
@@ -108,6 +113,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
     hasMore: Boolean(usage.requests.data.value?.nextCursor) && (requestTotal.value == null || requestCount(requestRows.value) < requestTotal.value),
     newestFirst: newestFirst.value,
     requestId: props.state.request,
+    interactionId: props.state.interaction,
     search: requestSearch.value,
     includeEmpty: includeEmpty.value,
     routes: usage.routes.value,
@@ -118,11 +124,12 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
   }));
   const recordingHandlers = {
     deleted: () => {
-      update({ recording: "", request: "", subsystem: "" });
+      update({ recording: "", request: "", interaction: "", subsystem: "" });
       void loadRecordings();
     },
-    "update:recordingId": (id) => update({ recording: id, request: "", subsystem: "" }),
-    "update:requestId": (id) => { pickerOpen.value = false; update({ request: id, subsystem: "" }); },
+    "update:recordingId": (id) => update({ recording: id, request: "", interaction: "", subsystem: "" }),
+    "update:requestId": (id) => { pickerOpen.value = false; update({ request: id, interaction: "", subsystem: "" }); },
+    "update:interactionId": (id) => { pickerOpen.value = false; update({ interaction: id, request: "", subsystem: "" }); },
     "update:search": (value) => { requestSearch.value = value; },
     "update:includeEmpty": (value) => { includeEmpty.value = value; },
     more: () => usage.requests.more(),
@@ -131,7 +138,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
 
   function recordingStarted(event = {}) {
     const id = event.recording?.id;
-    if (id) update({ mode: "recording", recording: id, request: "", subsystem: "" });
+    if (id) update({ mode: "recording", recording: id, request: "", interaction: "", subsystem: "" });
     recordingsKey = "";
     void loadRecordings();
   }
@@ -149,6 +156,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
     requestRows,
     selectedRequest,
     selectedInteraction,
+    interactionRequestCount,
     recordingBindings,
     recordingHandlers,
     recordingStarted

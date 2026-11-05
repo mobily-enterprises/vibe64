@@ -75,7 +75,9 @@ function recordingServer() {
     const referenced = new Set(page.items.map((row) => row.interaction));
     // As the server counts: the start-up row is listed but is not a request.
     const total = matching.filter((row) => row.kind !== "background").length;
-    return { requests: page.items, interactions: [CLICK].filter((item) => referenced.has(item.id)), nextCursor: page.more ? page.next : null, total };
+    // Like the server, a click says how many requests it tagged in the whole recording.
+    const clicked = rows.filter((row) => row.interaction === CLICK.id).length;
+    return { requests: page.items, interactions: [{ ...CLICK, requestCount: clicked }].filter((item) => referenced.has(item.id)), nextCursor: page.more ? page.next : null, total };
   }
   function answer(path: string, query: URLSearchParams) {
     if (!path) return { recordings: [recording] };
@@ -163,7 +165,9 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       await expect(rail.getByText("Showing 399 of 450 requests")).toBeVisible();
       await rail.getByRole("button", { name: "Show more" }).click();
       await expect(rail.getByText(/^Showing /u)).toHaveCount(0);
-      await expect(rail.getByRole("option")).toHaveCount(451);
+      // Every request, the start-up row, and the click's own row once, under its first heading.
+      await expect(rail.getByRole("option")).toHaveCount(452);
+      await expect(rail.getByRole("option", { name: /Everything this click ran/u })).toContainText("150 requests");
       await list.hover();
       await page.mouse.wheel(0, 100_000);
       await expect(rail.getByRole("option").last()).toBeInViewport();
@@ -208,7 +212,9 @@ test("a live recording lists its newest requests first and adds new ones on top,
     const rail = usage.getByRole("region", { name: "Recordings" });
     await expect(rail.getByText("Recording now. New requests appear as they finish.")).toBeVisible({ timeout: 20_000 });
     await expect(rail.getByText("Showing 200 of 450 requests, newest first")).toBeVisible();
-    await expect(rail.getByRole("option").first()).toContainText("/api/sessions");
+    // The newest request is under the click, whose own row comes first.
+    await expect(rail.getByRole("option").first()).toContainText("Everything this click ran");
+    await expect(rail.getByRole("option").nth(1)).toContainText("/api/sessions");
     await expect(page).toHaveURL(/view=usage/u);
     server.rows.push(requestRow(REQUESTS + 1), requestRow(REQUESTS + 2));
     await expect(rail.getByRole("option").first()).toContainText("/api/app/demo/vibe64/accounts/452/settings", { timeout: 15_000 });

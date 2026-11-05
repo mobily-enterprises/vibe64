@@ -63,6 +63,24 @@
       <v-list v-else class="usage-recordings__list" density="comfortable" aria-label="Requests" role="listbox">
         <template v-for="(group, position) in groups" :key="group.key">
           <v-list-subheader v-if="group.interaction || position > 0" class="usage-recordings__interaction">{{ group.interaction ? interactionTitle(group.interaction) : 'Other requests' }}</v-list-subheader>
+          <!-- A click's own row: everything its requests ran, read together. -->
+          <v-list-item
+            v-if="group.offersInteraction"
+            :active="group.interaction.id === interactionId"
+            role="option"
+            :aria-selected="group.interaction.id === interactionId"
+            color="primary"
+            rounded="xl"
+            lines="two"
+            class="usage-recordings__request"
+            @click="emit('update:interactionId', group.interaction.id)"
+          >
+            <template #prepend>
+              <v-chip size="small" variant="tonal" label class="usage-recordings__method"><v-icon :icon="mdiCursorDefaultClickOutline" size="small" /></v-chip>
+            </template>
+            <v-list-item-title class="text-body-medium">{{ interactionRunTitle(group.interaction) }}</v-list-item-title>
+            <v-list-item-subtitle v-if="group.interaction.requestCount">{{ countLabel(group.interaction.requestCount, 'request') }}</v-list-item-subtitle>
+          </v-list-item>
           <v-list-item
             v-for="request in group.requests"
             :key="request.id"
@@ -99,9 +117,9 @@
 <script setup>
 import { Vibe64UsageRecordingSummary } from "@local/vibe64-usage-recording/client";
 import { computed } from "vue";
-import { mdiCogOutline, mdiConsoleLine, mdiHeartPulse, mdiMagnify } from "@mdi/js";
+import { mdiCogOutline, mdiConsoleLine, mdiCursorDefaultClickOutline, mdiHeartPulse, mdiMagnify } from "@mdi/js";
 
-import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestCount, requestGroups, requestTitle } from "./usageModel.js";
+import { BACKGROUND_TEXT, countLabel, interactionRunTitle, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestCount, requestGroups, requestTitle } from "./usageModel.js";
 
 const props = defineProps({
   recordings: { type: Array, default: () => [] },
@@ -114,6 +132,8 @@ const props = defineProps({
   hasMore: { type: Boolean, default: false },
   newestFirst: { type: Boolean, default: false },
   requestId: { type: String, default: "" },
+  // The chosen interaction, whose own row stands for all its requests.
+  interactionId: { type: String, default: "" },
   search: { type: String, default: "" },
   includeEmpty: { type: Boolean, default: false },
   routes: { type: Array, default: () => [] },
@@ -123,7 +143,7 @@ const props = defineProps({
   error: { type: String, default: "" },
   sessionId: { type: String, default: "" }
 });
-const emit = defineEmits(["update:recordingId", "update:requestId", "update:search", "update:includeEmpty", "more", "retry", "deleted"]);
+const emit = defineEmits(["update:recordingId", "update:requestId", "update:interactionId", "update:search", "update:includeEmpty", "more", "retry", "deleted"]);
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const recordingItems = computed(() => props.recordings.map((recording) => ({

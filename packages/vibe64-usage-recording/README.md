@@ -60,8 +60,9 @@ access. All are excluded from assistant tools.
 | `GET /` | `list` | `{ recordings }`, newest first, at most 10 |
 | `POST /:recordingId/stop` | `stop` | `{ recording }`, idempotent |
 | `POST /:recordingId/dismiss` | `dismiss` | `{ recording }` |
-| `GET /:recordingId/requests?cursor&limit&q&includeEmpty&order&requestId` | `requests.read` | `{ requests, interactions, nextCursor, total }`: oldest first, or newest first with `order=newest`; `total` counts every matching row; `requestId` reads that one row |
+| `GET /:recordingId/requests?cursor&limit&q&includeEmpty&order&requestId` | `requests.read` | `{ requests, interactions, nextCursor, total }`: oldest first, or newest first with `order=newest`; `total` counts every matching row; `requestId` reads that one row; each interaction is `{ id, label, kind, componentFile, requestCount }`, counting every row of the recording it tagged |
 | `GET /:recordingId/requests/:requestId/functions?cursor&limit` | `request-functions.read` | `{ functions, total, truncated }` |
+| `GET /:recordingId/interactions/:interactionId/functions?cursor&limit` | `interaction-functions.read` | `{ functions, total, truncated, requests, interaction }`: the functions of every request tagged with the interaction, each once with its counts added up and plumbing if it is plumbing in any, cut once at 1,500; `requests` lists those request ids in recorded order; 404 `vibe64_usage_recording_interaction_not_found` for an id the recording did not record |
 | `POST /:recordingId/interactions` | `interaction.record` | `{ ok }` |
 | `DELETE /:recordingId` | `delete` | `{ ok }` |
 

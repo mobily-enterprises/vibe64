@@ -133,6 +133,7 @@ GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/entries public 
 GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/function public app - vibe64.system-graph.usage.function.read
 GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/web public app - vibe64.system-graph.usage.web.read
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId public app - vibe64.usage-recording.list
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/interactions/:interactionId/functions public app - vibe64.usage-recording.interaction-functions.read
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/requests public app - vibe64.usage-recording.requests.read
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/requests/:requestId/functions public app - vibe64.usage-recording.request-functions.read
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/current public app - vibe64.usage-recording.current.read
