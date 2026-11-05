@@ -110,18 +110,18 @@ the unknown session. Switching projects always starts the next project from its
 own sessions, never the previous project's.
 
 The session header gives its room to session names first, then **Save**, which
-never leaves the header. The other actions follow in priority order: **New AI
-task**, **Renew session**, **Pin session**, **Pull request** and **Prepare
+never leaves the header. The other actions follow in priority order: **Temporary
+AI**, **Renew session**, **Pin session**, **Pull request** and **Prepare
 workspace**. When the pane is too narrow, the lowest-priority action moves into
 **Session actions** (three dots) first, so Prepare workspace goes first and
-New AI task last; widening the pane brings them back. All header actions use
+Temporary AI last; widening the pane brings them back. All header actions use
 small, light outline icons. Update uses a vertical line through a circle,
 distinct from the branching pull-request icon. Hover or focus a control to read
 its action label.
 
-During a session **Save** or **Update**, you can still open an AI task,
-read its Chat and keep a plain text draft. The draft's save
-state appears in that Chat. Sending or changing assistant work waits for the
+During a session **Save** or **Update**, you can still open existing temporary
+chats or an open AI task, read their saved history and keep a plain text draft.
+The draft's save state appears in that chat. Sending or changing assistant work waits for the
 repository operation to finish. If an Update response is lost, use the saved
 Update status and recovery controls before requesting another Update; a reload
 does not establish that the first one failed.
@@ -168,7 +168,7 @@ so it does not contain an archived session's unsaved work.
 An OpenCode session can be archived before its main chat has started; an idle
 assistant with no native conversation does not need a main-turn Stop request.
 Its helper conversations and terminals still go through normal cleanup.
-Archiving also cancels pending Main and AI task routing, waits for its
+Archiving also cancels pending Main, temporary-chat and AI task routing, waits for its
 owned helpers to stop, then closes native work through the normal cleanup path.
 You do not need to send the pending request or change AI accounts to close it.
 If routing cleanup takes longer than 30 seconds, the session stays available
@@ -202,7 +202,9 @@ The error then names each part that could not stop, such as
 `Database copilot: The database copilot helper could not be closed: <reason>.
 Retry before asking again.`, and a source explanation or copilot that could not
 close is kept so the retry closes it. Resolve the named reason, often an AI
-account to reconnect, then retry **Archive session**. If a [Fix it with AI task](ai-tasks.md) is running, the dialog
+account to reconnect, then retry **Archive session**. Archiving also closes the
+session's open temporary chats in the browser; their saved history stays with
+the archived session. If a [Fix it with AI task](ai-tasks.md) is running, the dialog
 says **An AI task is still running. Archiving cancels it.** and archiving ends that
 fix as **Not done**.
 If the last open session cannot be archived, its chat is selected again so you
@@ -297,8 +299,8 @@ With Claude, **Reply ready · background task still running…** (Main) means
 Claude has posted its answer, but a command it started in the background is
 still running. The answer above is complete and readable. The turn stays active
 until that command finishes or times out, and Claude may then add a short
-follow-up reply after the answer; earlier replies stay visible. An AI task's chat
-shows the same text. Press **Stop** if you do not need the background command.
+follow-up reply after the answer; earlier replies stay visible. Temporary chats
+and an AI task's Chat show the same text. Press **Stop** if you do not need the background command.
 
 Colleague can explain these states. It should verify current session activity
 through its available read operations before claiming that work has stopped.

@@ -2,7 +2,7 @@
 
 Open the destination project and select the session that should receive requests.
 Its Main chat must have an available assistant. This is the same project/session
-selection on desktop and mobile; an AI task is never the recipient.
+selection on desktop and mobile; a temporary chat or an AI task is never the recipient.
 
 Ask your coding assistant to send the request. For example: “Tell jskit-ai to
 review the changes, publish if already authorized, and ping this project with
@@ -74,7 +74,7 @@ beneath the assistant's name. Messages between projects instead use neutral,
 outlined bubbles with explicit **To**/**From** project links, so the recipient
 remains clear.
 The sender's Main chat retains the message body, destination session and delivery
-status, including when the command came from an AI task. Sending is
+status, including when the command came from a temporary conversation or an AI task. Sending is
 **fire-and-forget**: after checking access, the open project and its addressed
 assistant, the command returns an acceptance receipt identifying that session
 and message. It does not wait for native delivery, an acknowledgement or task
@@ -124,7 +124,8 @@ Colleague can explain how to select the destination and offer its existing
 project/session controls. This command is available to coding assistants;
 Colleague has no shell access and cannot claim it sent a message itself.
 
-Message commands are included in Main and AI task coding-agent instructions.
+Message commands are included in Main and temporary (including AI task)
+coding-agent instructions.
 Host-specific guidance shares the same bounded instruction budget; adding it must
 not prevent either conversation from starting.
 

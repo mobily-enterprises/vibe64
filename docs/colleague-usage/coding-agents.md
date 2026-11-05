@@ -1,13 +1,14 @@
 # Direct coding agents and follow assignments
 
-Use Main chat for ongoing work in a session. [AI tasks](ai-tasks.md) give another
-conversation access to that same session's source; a different session has its
+Use Main chat for ongoing work in a session. [Temporary chats](temporary-chats.md)
+and [AI tasks](ai-tasks.md) give another conversation access to that same session's
+source; a different session has its
 own worktree and does not see unsaved edits automatically.
 Main chat remains available for Codex, Claude and OpenCode when Colleague is not
 enabled. Open the intended project and session directly; Colleague is not a
 prerequisite for **Send**, **Steer** or **Stop**.
 
-Main chat and AI tasks use your Studio login. If it expires, sign in and
+Main chat, temporary chats and AI tasks use your Studio login. If it expires, sign in and
 reopen the intended chat or task. Check uncertain delivery before retrying; signing in
 or reloading reconnects history and updates without resending. Main also refreshes
 the same conversation after a reported finish if its completion update was missed.
@@ -94,8 +95,8 @@ application files; it does not replace the separate guidance checks.
 
 When an assistant cannot start, stops by itself or reports a failure, see [When a coding agent fails or stops](coding-agent-failures.md).
 
-1. Select the intended project and session, then Main or the open AI task's
-   **Chat**. Type the request and select **Send**.
+1. Select the intended project and session, then Main, the intended temporary
+   conversation or the open AI task's **Chat**. Type the request and select **Send**.
 2. While it works, add instructions through **Steer**. This targets the active
    conversation; selecting another project does not move an earlier request.
    Steering never stops running work: Claude moves a running command (such as
@@ -157,8 +158,8 @@ need to send it again. This applies to Codex and Claude on desktop and mobile.
 Stopped, cancelled, failed or unverified turns do not authorize this recovery.
 Other rejected **Steer** messages return to the composer; **Retry** retains the
 request ID and any newer draft text. Use **Cancel** or **Edit** before changing
-the request. **Edit** puts the words before your draft, once: in Main chat and in
-an AI task's Chat, a draft that already starts with them is left as it is. Colleague can explain the status; browser recovery controls require
+the request. **Edit** puts the words before your draft, once: in Main chat, in
+temporary chats and in an AI task's Chat, a draft that already starts with them is left as it is. Colleague can explain the status; browser recovery controls require
 your interaction.
 After changing the signed-in person or AI connection, resolve that change before
 checking the original request; a different account cannot confirm it was not sent.
@@ -197,6 +198,12 @@ the **Chat** view of its [AI task window](ai-tasks.md), then **Choose model**. I
 **Custom AI**, choose a **Model** and select **Apply**. The repair keeps **Fix it with
 AI**, its history and its current turn. The next turn uses the selected model; Main
 chat's model is unchanged. The controls are the same at every screen size.
+
+Returning to Main chat or reloading the page keeps a saved temporary conversation.
+To remove it, use the **Close** control on that chat's tab. If stopping or cleanup
+fails, the chat stays available; resolve the reported error and try **Close** again.
+Closing removes that conversation's history and attachments after cleanup succeeds;
+source edits remain. The same controls apply on desktop and compact screens.
 
 Hiding the window or reloading the page keeps an AI task. Once it is **Done** or
 **Not done**, **Close** removes it. If cleanup fails, the task stays available;

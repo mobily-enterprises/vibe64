@@ -4,10 +4,15 @@ When Vibe64 offers **Fix it with AI** on an Update, Save, workspace preparation,
 preview sign-in, incoming merge or project setup problem, the whole fix happens in
 one window: the problem, the conversation with the AI, what Vibe64 is doing, and the
 result. Starting, adopting or inspecting a project from its setup screen, and
-creating or reviewing the Database's Data overview, use the same window, and so does
-**New AI task** for anything else you want the AI to do on its own. Colleague's own
-requests to the AI and its reviews open there too. You close it once the task is
+creating or reviewing the Database's Data overview, use the same window. So do the
+tasks Colleague runs for you and its reviews. You close it once the task is
 **Done** or **Not done**. It can't end any other way.
+
+The window holds only tasks that Vibe64 or Colleague start. A conversation of your
+own with the AI is a temporary chat: open **Temporary AI** in the session header (or
+in **Session actions** when the header is narrow). See
+[Work in a temporary chat](temporary-chats.md). An AI task never appears among the
+temporary chat tabs.
 
 ## Open it
 
@@ -17,14 +22,6 @@ incoming merge's conflicts, or on **Project setup needs attention**. On the setu
 screen, **Start through conversation**, **Set up project** and **Inspect it for me**
 open it too, and so do **Create with AI**, **Review with AI** and **Review N ungrouped
 tables** in the Database's Overview ([Browse a project's Database](database.md)).
-
-For a request of your own, choose **New AI task** in the session header (or in
-**Session actions** when the header is narrow). Say what the AI should do and choose
-**Start**. When Main chat has messages, **Include recent chat context** gives the task
-a copy of up to 40 recent visible Main messages, text only; later messages stay
-separate. The task uses the chat mode you would get in Main chat (Senior instead of
-Auto), and a team member's task uses **Fix it with AI**. If another task is still
-open, the form stays open with what you typed and a message says which task to finish first.
 The button says **Opening…** while it starts, **Being fixed… →** while
 a fix is running, and **See result →** when a fix has ended and waits for you. In
 those last two states it opens the same window again; it never starts a second fix.
@@ -51,7 +48,7 @@ Two views sit under the problem, and only one shows at a time:
   | Incoming merge | **The AI repairs the conflicting files** | **Vibe64 builds the repaired merge** |
   | Project setup | **The AI sets up the project** | **Vibe64 inspects the project** |
   | Data overview | **The AI groups the tables** | **Vibe64 reads the overview back** |
-  | New AI task, Colleague's tasks | **The AI works on the request** | **You finish the task** |
+  | Colleague's tasks and reviews | **The AI works on the request** | **You finish the task** |
 
   Choose **Update output**, **Save output** or **Preparation output** to read what
   the run printed.
@@ -163,7 +160,7 @@ can be done next.
 | The window says | What to do |
 | --- | --- |
 | The AI needs your answer | **Answer** in Chat. |
-| Your turn (New AI task or Colleague's task) | Write more in Chat, or **Finish** when it's done. |
+| Your turn (Colleague's task) | Write more in Chat, or **Finish** when it's done. |
 | The AI could not finish this | **Open chat** to help it, or **End as not done**. |
 | The AI stopped without saying it finished | **Check now**, or **Open chat**. |
 | Stopped. Tell the AI what to do next. | **Continue**, or **Open chat**. |
@@ -201,9 +198,9 @@ still fails, the fix goes back to the same conversation with what failed, up to 
 attempts. Work you saved yourself meanwhile counts: when nothing is left to save,
 the Save fix is Done.
 
-Nothing in Vibe64 can prove a request of your own is done, so a **New AI task** waits for
-you after each of the AI's turns: write more, or choose **Finish** to end it **Done**.
-Colleague's tasks end the same way, by Colleague or by you.
+Nothing in Vibe64 can prove that Colleague's request is done, so a Colleague task waits
+after each of the AI's turns: write more, or choose **Finish** to end it **Done**.
+Colleague or you can finish it.
 
 **Not done** is decided by a person: you choose **Cancel** or **End as not done**, or
 the session is archived while the fix is open. Vibe64 never gives up on its own.
@@ -213,27 +210,6 @@ and, on **Not done**, what's next. **See the conversation** reads the whole chat
 **Back to the result** returns. **Close** is the only way out, and closing changes
 nothing in the session. An ended fix does not get in the way: starting a new task
 closes it.
-
-## Rename a task
-
-A **New AI task** has a pencil beside its name in the window's header (**Rename**
-and the task's name, for a screen reader). Choose it, type the new name in **Task
-name**, and choose **Rename** or press **Enter**. **Cancel** or **Esc** keeps the
-name it has.
-
-- A name is one line of at most 80 characters. Line breaks and repeated spaces
-  become single spaces.
-- An empty name gives the task back its usual name, **AI task**.
-- You can rename it whenever you like until you close it: while the AI works, while
-  it waits for you, and after it ends. Renaming never sends anything to the AI and
-  doesn't change the conversation.
-- The name is saved at once. It stays after a reload, shows in your other tabs and
-  for other members watching the session, and Vibe64's messages about the task use it.
-
-Fixes and Colleague's tasks keep the names they were given, so they have no pencil.
-
-When you ask, Colleague can rename a New AI task for you
-(`vibe64.ai-tasks.rename`), with the same rules. It can't rename any other task.
 
 ## Leave and come back
 
@@ -259,7 +235,8 @@ during one says so and the task ends as soon as that run finishes.
 
 ## One at a time
 
-A session has one AI task at a time, whoever started it. Members see the same window
+A session has one AI task at a time, whoever started it. Your temporary chats
+don't count toward it. Members see the same window
 live, and any of them can answer, Cancel or Close. While a fix is running, Vibe64
 refuses Save, Update, **Prepare workspace** and an incoming Merge or Discard with a
 message; try them again when it ends. While Update is failed, workspace preparation's fix waits for Update's: Update
@@ -280,7 +257,9 @@ starts that as the session's **Project setup** task, and Vibe64 inspects the pro
 when the AI finishes, exactly as when you start it yourself. A Colleague assignment's
 review is the session's AI task while the assignment runs; it ends when the work is
 ready or cancelled. Because a session has one AI task at a time, Colleague gets the same
-refusal you would and tells you which task to finish first.
+refusal you would and tells you which task to finish first. When you ask for a chat of
+your own, Colleague creates a temporary chat instead of a task
+([Work in a temporary chat](temporary-chats.md#what-colleague-can-do)).
 
 ## Recover a lost delivery confirmation
 

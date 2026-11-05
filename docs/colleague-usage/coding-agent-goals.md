@@ -80,7 +80,7 @@ save the selection again, then choose **Resume goal**. An operator can inspect
 the settings failure log if the problem continues; Colleague can explain these
 recovery steps.
 
-An AI task's Chat settings also remain editable while work is running or a goal is
+Temporary-chat and AI task Chat settings also remain editable while work is running or a goal is
 paused. If goal status is temporarily unavailable, saving preferences does not
 change that unobserved goal. Reconnect before resuming it.
 
@@ -173,7 +173,7 @@ explicit confirmation. Each goal that stays stopped after a restart shows its
 error on the goal control, and the operational log names its project and the
 person who set it, so an administrator can tell whose goal needs attention.
 A copied development workspace never inherits permission to run its parent's
-goals. Restart continuation applies to supported Main native goals; AI task,
+goals. Restart continuation applies to supported Main native goals; temporary, AI task,
 logical and scoped conversations do not expose native goal controls or receipts.
 Colleague can read a session's current goal (its objective and whether it is
 active, paused, blocked or complete) and explain these controls. It cannot set,

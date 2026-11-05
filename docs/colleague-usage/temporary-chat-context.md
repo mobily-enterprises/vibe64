@@ -1,25 +1,32 @@
-# Start an AI task with recent context
+# Start a temporary chat with recent context
 
-Choose **New AI task** in the session header (or in **Session actions** when the
-header is narrow). When Main chat has messages, the form offers **Include recent
-chat context**. Leave it unchecked for a task that starts empty, or check it to give
-the task a copy of recent context from Main in this session. When Main has no
-messages yet there is nothing to copy, so the form doesn't offer it. Say what the AI
-should do and choose **Start**; the AI task window opens on the task. The controls
-work the same way on desktop and compact screens.
+Open **Temporary AI** to create the first chat, or select **New temporary AI task**
+(the plus beside existing temporary chat tabs). When the session already has
+temporary chats, **Temporary AI** opens them instead and offers no new chat. Leave
+**Include recent chat context** unchecked for an empty conversation, or check it
+and select **Create chat** to copy recent context from Main in this session.
+When Main has no messages yet there is nothing to copy, so the chat opens
+directly without this choice; the dialog appears only if creation fails, with
+its error and **Create chat** to retry. Creating the chat sends no AI request. Enter your question and send it normally.
+The controls work the same way on desktop and compact screens.
 
 The copy contains up to forty visible user, assistant and progress messages at
-the time the server creates the task. It includes text only, not attachment
+the time the server creates the chat. It includes text only, not attachment
 contents, hidden reasoning or internal role instructions. A 64 KiB text limit
-keeps the newest messages first. Main continues independently. Later messages and
-edits in either conversation do not update the other. Both still work in the same
-session source, so edits made by either coding agent affect that shared working tree.
+keeps the newest messages first. Until the first message is sent, the temporary
+chat notes how many messages were copied and whether any text was omitted.
+Drafts save automatically; a note appears only if a draft could not be saved. Main continues independently. Later messages and edits in either
+conversation do not update the other. Both still work in the same session source,
+so edits made by either coding agent affect that shared working tree.
 
-If the task can't start, for example because another task is still open, the form
-stays open with what you typed. Changing the model uses the ordinary conversation
-history handover; it does not capture Main again.
+A failed creation keeps its error and the same chat identity for retry. Retrying
+a creation that already succeeded retains its original copy. Changing the model
+uses the ordinary conversation history handover; it does not capture Main again.
+Existing temporary chats are unchanged, and opening or reloading them does not
+import context. Close a temporary chat through its tab's existing **Close** control.
 
-Colleague can explain the option and start a Colleague task with copied context
-when explicitly asked, using the AI task start action with
-`includeRecentChatContext`. It must not enable context copying merely because the
-person asked how the option works.
+Colleague can explain the option and create a temporary chat with copied context
+when explicitly asked, using the existing create-conversation action. A Colleague
+task it starts for you in the [AI task window](ai-tasks.md) can receive the same
+copy (`includeRecentChatContext` on the AI task start action). It must not enable
+context copying merely because the person asked how the option works.

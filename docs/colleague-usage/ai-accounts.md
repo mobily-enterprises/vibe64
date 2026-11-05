@@ -208,7 +208,7 @@ isn't connected**; sign in to Codex here, then send your message again or choose
 **Goal** → **Resume goal**.
 Sign-ins and key checks show a spinner and what is happening while they wait,
 as described in [AI onboarding](ai-onboarding.md#while-it-works).
-Main chat and AI tasks keep their history and resume with the newly connected account; they
+Main chat, temporary chats and AI tasks keep their history and resume with the newly connected account; they
 do not require access to the previous account. Model selection in **Chat mode**
 also uses the current workspace connection. Replacing a saved, authorized
 external-provider API key does not require a new Claude conversation. Its next

@@ -5,7 +5,7 @@ authorize more coding work. For chat controls and assignments, see
 [Talk with Colleague](colleague.md).
 
 Ask “Tell me when that agent replies, even while it keeps working” to request a
-response watch. Colleague can watch the exact Main chat or AI task conversation and
+response watch. Colleague can watch the exact Main chat, temporary chat or AI task conversation and
 report its next completed message, including a progress reply during an active
 goal. Partial words, thinking and tool output do not trigger it. A reply does not
 mean the task is done: Colleague reports what the agent actually said and whether

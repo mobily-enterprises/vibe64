@@ -1,7 +1,7 @@
 # View a plan and its history
 
 Plans belong to a session's Main chat. Open the project and session whose plan
-you want to inspect. AI tasks do not have Auto plans.
+you want to inspect. Temporary chats and AI tasks do not have Auto plans.
 
 ## Create or update a plan
 
