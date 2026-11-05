@@ -95,7 +95,7 @@ build, and output commands before accepting materialized component proposals.
 A selected component describes its current foundation; it does not silently
 port older source. When the existing commands differ, keep the implementation
 unchanged and replace the complete project-owned consumer operation (for
-Vibe64, `## Workspace setup` or `## Outputs`). Genesis treats those sections as
+example, a host's `## Workspace setup` or `## Outputs`). Genesis treats those sections as
 opaque text; the named consumer alone owns their meaning and execution. Do not
 claim a proposed recipe is usable until it matches the source.
 
@@ -105,8 +105,8 @@ tests, and runtime behavior.
 
 `.genesis/machine-city.json` is a derived detailed file/function map.
 `.genesis/program-city.json` is a derived simpler subsystem/operation map.
-Neither is authority or proof; both may be regenerated with the Genesis
-`index` operation.
+Neither is authority or proof; both are git-ignored and may be regenerated
+with the Genesis `index` operation.
 
 ## Implement ordinary local work
 
@@ -126,7 +126,7 @@ Neither is authority or proof; both may be regenerated with the Genesis
   when implementation intentionally changes observable product behavior.
   Private restructuring may require only corrected Sources or an informational
   Implementation map, and may require no explanatory edit. Keep exact
-  consumer-owned operation declarations, such as Vibe64 `## Outputs`, aligned
+  consumer-owned operation declarations, such as a host's `## Outputs`, aligned
   when implementation intentionally changes the corresponding commands or
   capabilities. Record only capability metadata and environment-variable names
   there, never values or secrets; do not infer or execute the section as
@@ -151,13 +151,26 @@ technology's workspace substrate exists. Finishing an item or resuming a
 session does not itself require a broad verification run. Keep full output in
 local artifacts, preserve exit status, and read summaries and relevant failure
 excerpts before expanding logs. Do not weaken assertions or omit required
-coverage to save time or tokens. An unconfigured result
-means the declared workspace or checks do not exist yet; it is not a failing
-check. Before reporting completion, compare the requested observable behavior,
-required inputs and resources, declared project operations, and focused evidence
-with what actually exists. Report files changed, checks actually run,
-anything not proven, and anything still requiring attention. Never claim that
-an unrun check passed or that passing checks prove the whole product.
+coverage to save time or tokens.
+
+A change to user-visible behavior ships with the browser specs that cover it
+updated and run in the same change, before pushing. When an existing spec
+fails, first classify it as outdated (the behavior changed on purpose) or as a
+regression. Fix regressions in the product, and change a spec only for an
+intended change, naming the change that made it outdated. Test resources a
+managed host supplies, such as a login state, base URL, browser, or ports, are
+the host's contract. If they do not work (for example, tests run signed out
+despite a supplied login), report the host defect with evidence and stop; never
+compensate in the project by rewriting cookies or adding its own login or
+browser.
+
+An unconfigured result means the declared workspace or checks do not exist
+yet; it is not a failing check. Before reporting completion, compare the
+requested observable behavior, required inputs and resources, declared project
+operations, and focused evidence with what actually exists. Report files
+changed, checks actually run, anything not proven, and anything still requiring
+attention. Never claim that an unrun check passed or that passing checks prove
+the whole product.
 
 ## Subsystem maintenance
 
