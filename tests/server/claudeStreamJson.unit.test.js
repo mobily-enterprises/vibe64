@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
+import { rmSync } from "node:fs";
 import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -208,8 +209,16 @@ function scopedProvider(options) {
   return provider;
 }
 
+// A hook a test registers after its fixture can still take a session lock in a
+// removed root; the finished process removes every fixture root once more.
+const fixtureRoots = new Set();
+process.once("exit", () => {
+  for (const root of fixtureRoots) rmSync(root, { recursive: true, force: true });
+});
+
 async function fixture(t, { scopedConversations = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-provider-test-"));
+  fixtureRoots.add(root);
   const owners = [];
   t.after(async () => {
     const failures = [];

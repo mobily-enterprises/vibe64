@@ -1190,8 +1190,9 @@ test("execution gateway ignores caller-provided Git identity policy env", async 
   });
 });
 
-test("execution gateway fallback git identity allows local commits without git config", async () => {
+test("execution gateway fallback git identity allows local commits without git config", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-git-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   await git(root, ["init", "-b", "main"]);
   await writeFile(path.join(root, "README.md"), "hello\n", "utf8");
 
@@ -1324,8 +1325,9 @@ test("execution gateway prefers GitHub identity before fallback identity", async
   });
 });
 
-test("execution gateway lets GitHub projects make local commits with fallback identity even without auth", async () => {
+test("execution gateway lets GitHub projects make local commits with fallback identity even without auth", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-github-local-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   await git(root, ["init", "-b", "main"]);
   await writeFile(path.join(root, "README.md"), "hello\n", "utf8");
 
@@ -1656,8 +1658,9 @@ test("execution gateway rejects token-backed GitHub git transport without a toke
   assert.match(result.output, /Token-backed GitHub transport requires a gitAuthToken/u);
 });
 
-test("execution gateway resolves GitHub credential HOME and transport env together", async () => {
+test("execution gateway resolves GitHub credential HOME and transport env together", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-github-credential-home-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const result = await runVibe64Command({
     actor: "app",
     command: process.execPath,
@@ -1692,8 +1695,9 @@ test("execution gateway resolves GitHub credential HOME and transport env togeth
   });
 });
 
-test("execution gateway allows declared non-home credential homes for app actors", async () => {
+test("execution gateway allows declared non-home credential homes for app actors", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-credential-home-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const result = await runVibe64Command({
     actor: "app",
     command: process.execPath,
@@ -1752,8 +1756,9 @@ test("execution gateway allows app credential homes inside the current actor hom
   });
 });
 
-test("execution gateway detached mode starts a long-running process and returns its pid", async () => {
+test("execution gateway detached mode starts a long-running process and returns its pid", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-detached-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const markerPath = path.join(root, "marker.txt");
   const logPath = path.join(root, "detached.log");
   const result = await runVibe64Command({

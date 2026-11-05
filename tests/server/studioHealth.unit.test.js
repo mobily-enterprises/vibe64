@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -55,6 +55,7 @@ function withRuntimePacks(t, root) {
 
 test("Studio Health reports explicit platform checks without repairs", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const commandCalls = [];
@@ -119,6 +120,7 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
 
 test("Studio Health reports unavailable checks without inventing readiness", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-fail-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const service = createService({
@@ -164,8 +166,9 @@ function isProbe(command, args = []) {
   return command === "sh" && args[2] === "probe";
 }
 
-test("without runtime packs Health counts only what is needed; one AI tool is enough", async () => {
+test("without runtime packs Health counts only what is needed; one AI tool is enough", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-own-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const versions = { node: "v26.12.1", git: "git version 2.53.0", codex: "codex-cli 0.163.0" };
   const service = createService({
@@ -213,8 +216,9 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   assert.equal(after["ai-tool"].observed, "No AI tool is installed on this computer yet.");
 });
 
-test("without runtime packs a tool that is there but fails is not counted as installed", async () => {
+test("without runtime packs a tool that is there but fails is not counted as installed", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-plain-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const service = createService({
     env: process.env,
@@ -256,6 +260,7 @@ test("the browser health probe launches pinned headless Chromium within the heal
 
 test("Health prioritizes a failed execution's reason ahead of incidental browser stderr", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-browser-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const service = createService({
@@ -291,8 +296,9 @@ test("assistants read a bounded Health summary through the same action", async (
   assert.deepEqual(assistant.transformResult({ ok: false, error: "Down" }), { ok: false, error: "Down" });
 });
 
-test("without runtime packs Health shows the name commits get and how to set your own", async () => {
+test("without runtime packs Health shows the name commits get and how to set your own", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-identity-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const inspect = async (ident) => {
     const service = createService({

@@ -495,8 +495,9 @@ test("isolated managed commands exclude the daemon environment and own their XDG
   assert.equal(observed.env.XDG_STATE_HOME, "/tmp/v64-isolated/state");
 });
 
-test("standalone detached execution stops and drains its exact process group", async () => {
+test("standalone detached execution stops and drains its exact process group", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-owned-detached-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const markerPath = path.join(root, "started.txt");
   const result = await runVibe64Command({
     args: [
@@ -539,8 +540,9 @@ test("standalone detached execution stops and drains its exact process group", a
   );
 });
 
-test("standalone finite execution drains descendants before reporting completion", async () => {
+test("standalone finite execution drains descendants before reporting completion", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-owned-capture-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const childPidPath = path.join(root, "child.pid");
   const result = await runVibe64Command({
     args: [

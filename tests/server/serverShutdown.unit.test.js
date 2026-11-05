@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -224,6 +225,9 @@ test("signal shutdown settles capability runtime before Fastify while terminal c
 
 test("signal shutdown closes a real upgraded Socket.IO connection through capability shutdown", async () => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-signal-socket-"));
+  // Work the closed server left running can recreate its state folder after the
+  // removal below; the finished process removes the root once more.
+  process.once("exit", () => rmSync(temporaryRoot, { force: true, recursive: true }));
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = `signal-socket-${process.pid}`;
   let app = null;

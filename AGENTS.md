@@ -211,6 +211,9 @@ overlap a test run already active for this checkout.
   not bypass this guard with a direct broad `node --test` command.
 - Every repository-owned Node test command fixes test-file concurrency at one.
   Do not raise or bypass this limit.
+- A test removes every temporary folder it creates by the time it ends, so a
+  passing run leaves nothing in the temp directory. It keeps an evidence folder
+  (screenshots, traces, logs) only when it fails, and prints where it is.
 - `npm run test:full` and `npm run verify` are broad verification commands.
   Run them only after the human has confirmed that the feature works and has
   explicitly approved full verification.
