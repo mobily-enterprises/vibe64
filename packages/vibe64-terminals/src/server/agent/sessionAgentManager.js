@@ -151,6 +151,7 @@ function createSessionAgentManager({
     requireAssistantAccessForEngine: accessChecks.requireAssistantAccessForEngine,
     requireAssistantAccessForSelection: accessChecks.requireAssistantAccessForSelection,
     binding: sessionBindings.binding,
+    beginShutdown: lifecycle.beginShutdown,
     closeProject: lifecycle.closeProject,
     closeSession: lifecycle.closeSession,
     closeTerminal: providerCalls.closeTerminal,

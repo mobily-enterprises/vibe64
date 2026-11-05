@@ -12,8 +12,9 @@ function normalizeAgentProviderId(value = "") {
 }
 
 /**
- * Stopping the service: one stop of every AI runtime, shared by each feature that needs AI stopped
- * first, and the server's close after the work in flight.
+ * Stopping the service: its beginning, which tells every AI engine shutdown has begun before
+ * anything stops, one stop of every AI runtime, shared by each feature that needs AI stopped first,
+ * and the server's close after the work in flight.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  * @param {AssistantRouting} dependencies.assistantRouting
@@ -35,8 +36,22 @@ function createServiceShutdown({
   sessionNaming
 }) {
   let shutdownStop = null;
+  let shutdownBegun = null;
+
+  /**
+   * The server's shutdown begins before anything stops: each AI engine sets its closing fence and
+   * leaves the end of each turn still running, and its checkpoint, to the next server. A turn that
+   * ends while other work stops then makes no checkpoint that work could refuse. A host that
+   * refuses new work as its shutdown begins calls this first; the stop calls it too. It stops
+   * nothing, and an engine that cannot begin is reported by the stop.
+   */
+  function beginShutdown() {
+    shutdownBegun ||= sessionAgent.beginShutdown();
+    return shutdownBegun;
+  }
 
   async function close() {
+    beginShutdown();
     state.lifecycle.closing = true;
     await Promise.allSettled(state.turnCompletions);
     const [agentClose, outputTargetClose] = await Promise.allSettled([
@@ -77,6 +92,7 @@ function createServiceShutdown({
 
   async function invalidateAgentRuntimes(input = {}) {
     if (input.reason === "server-shutdown") {
+      const begun = beginShutdown();
       shutdownStop ||= (async () => {
         state.lifecycle.closing = true;
         state.shutdownSignal.abort(Object.assign(new Error("Vibe64 is stopping."), { code: "vibe64_server_stopping" }));
@@ -86,6 +102,12 @@ function createServiceShutdown({
           providerId: normalizeAgentProviderId(input.provider)
         })]);
         const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
+        if (begun.ok === false) {
+          failures.unshift(Object.assign(new Error("Assistant runtime shutdown could not begin."), {
+            code: "vibe64_agent_runtime_shutdown_begin_failed",
+            details: begun
+          }));
+        }
         if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
         await mainConversations.close();
         return native.value;
@@ -98,6 +120,7 @@ function createServiceShutdown({
   }
 
   return Object.freeze({
+    beginShutdown,
     close,
     invalidateAgentRuntimes
   });

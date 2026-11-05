@@ -100,7 +100,8 @@ function createServiceMainConversationHost({
     if (operation === "closeProject") {
       return prepareProjectConversationCleanup(sessionAgent.conversationProvider(context.providerId), context, input);
     }
-    if (operation === "invalidateRuntimes") {
+    // Beginning shutdown reaches the same native owner as the stop that follows it.
+    if (operation === "invalidateRuntimes" || operation === "beginShutdown") {
       return prepareConversationRuntimeInvalidation(sessionAgent.conversationProvider(context.providerId), context, input);
     }
     if (operation === "reconcileSessions") {

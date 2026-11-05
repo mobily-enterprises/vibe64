@@ -178,6 +178,33 @@ function createSessionAgentLifecycle({
     return result;
   }
 
+  /**
+   * The server's shutdown begins before anything stops: each engine sets its
+   * closing fence before this returns, and leaves the end of each turn still
+   * running, and its checkpoint, to the next server. Each engine begins on its
+   * own; one that fails is reported by name. The server-shutdown invalidation
+   * that follows stops the runtimes.
+   */
+  function beginShutdown() {
+    const failed = [];
+    for (const provider of state.providerById.values()) {
+      try {
+        conversationOperations.providerOperation(provider, "beginShutdown")
+          .call(provider, { providerId: provider.id, transportId: provider.transportId }, { reason: "server-shutdown" });
+      } catch (error) {
+        failed.push(agentOperationResult(provider, "", {
+          code: toText(error?.code),
+          error: toText(error?.message || error) || `Assistant provider ${provider.id} could not begin its shutdown.`,
+          ok: false
+        }));
+      }
+    }
+    return Object.freeze({
+      failed,
+      ok: failed.length === 0
+    });
+  }
+
   async function invalidateRuntimes(input = {}, options = {}) {
     const engineId = input.provider;
     // readable-check: allow method-probe - input validation: a credential change's optional publication of the reconnected sessions
@@ -234,6 +261,7 @@ function createSessionAgentLifecycle({
   }
 
   return Object.freeze({
+    beginShutdown,
     closeProject,
     closeSession,
     deleteConversation,

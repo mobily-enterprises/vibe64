@@ -24,6 +24,10 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
     project: true,
     run: (runtime, context, input) => runtime.closeNativeProject({ context, input })
   },
+  // Synchronous, and unprojected: the engine's closing fence is set before the call returns.
+  beginShutdown: {
+    run: (runtime, context, input) => runtime.beginNativeShutdown({ context, input })
+  },
   invalidateRuntimes: {
     project: true,
     run: (runtime, context, input) => runtime.invalidateNativeRuntimes({ context, input })

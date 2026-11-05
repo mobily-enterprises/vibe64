@@ -20,6 +20,10 @@ and its recovery snapshot is saved. In Main chat, Codex then reads **Codex was
 interrupted by a Vibe64 restart before it could finish**. An AI task then reads **Vibe64 restarted while the AI was working**; use
 **Continue**. In Main chat or a temporary chat, send a message when ready to
 continue.
+A turn that finishes while Vibe64 is stopping keeps its reply, and its recovery
+snapshot is likewise saved once Vibe64 runs again. A Claude or OpenCode turn
+that finished then reads as interrupted by the restart; a Claude turn shows
+**Claude was interrupted when Vibe64 disconnected.**
 When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
 request. Reply text by itself does not prove that the turn completed successfully.

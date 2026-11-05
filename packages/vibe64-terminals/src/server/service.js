@@ -502,6 +502,7 @@ function createService({
     workspaceSetupIsRunning: workspacePreparation.workspaceSetupIsRunning,
     workspaceSetupIsPrepared: workspacePreparation.workspaceSetupIsPrepared,
     waitForWorkspaceSetup: workspacePreparation.waitForWorkspaceSetup,
+    beginShutdown: shutdown.beginShutdown,
     close: shutdown.close,
     openProjectRuntime: projectRuntime.openProjectRuntime,
     noteProjectRuntimeActivity: projectRuntime.noteProjectRuntimeActivity,

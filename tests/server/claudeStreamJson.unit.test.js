@@ -112,7 +112,7 @@ function createClaudeSessionAgentProvider(options) {
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
       ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
       ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
-      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes" || operation === "beginShutdown"
       ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
       ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
       ? prepareSessionConversationReadiness(provider, id, context) : operation === "updateSettings"
@@ -197,7 +197,7 @@ function scopedProvider(options) {
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
       ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
       ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
-      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes" || operation === "beginShutdown"
       ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
       ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
       ? prepareSessionConversationReadiness(provider, id, context) : operation === "updateSettings"
@@ -1037,6 +1037,38 @@ test("Claude shutdown retains its resolved selection after main chat moves to Co
   assert.equal(f.context.session.metadata.agent_identity_conversation_id, "retained-codex-thread");
   assert.deepEqual(f.written, messages);
   assert.equal(f.processes.length, 1, "Shutdown does not start another provider process");
+});
+
+test("a Claude Main turn that ends once the server's shutdown has begun makes no checkpoint, and the next server makes exactly one", async (t) => {
+  const f = await fixture(t);
+  const turnCheckpoints = () => f.checkpoints.filter(({ checkpointTurnId }) => checkpointTurnId);
+  await f.provider.sendMessage(f.context, { message: "Work", messageId: "work" });
+  const begun = f.provider.manager.beginShutdown();
+  assert.equal(begun.ok, true, JSON.stringify(begun));
+  assert.equal(f.processes[0].stopped, false, "beginning the shutdown stopped nothing");
+  // The turn ends on its own while the rest of the server stops.
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done.", uuid: "done" });
+  await (await f.open()).wait();
+  assert.deepEqual(turnCheckpoints(), [], "the turn's end made no checkpoint");
+  const claudeId = f.context.session.metadata.claude_conversation_id;
+  const custody = () => {
+    const { executionId, state } = JSON.parse(f.context.session.metadata[`claude_conversation_${claudeId}`]);
+    return { executionId, state };
+  };
+  assert.deepEqual(custody(), { executionId: "test-0", state: "active" }, "the turn's end is left to the next server");
+  assert.equal((await f.provider.invalidateRuntimes({}, { reason: "server-shutdown" })).ok, true);
+  assert.equal(f.processes[0].stopped, true);
+  assert.deepEqual(turnCheckpoints(), []);
+
+  const recovered = [];
+  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    stopExecution: async (id) => { recovered.push(id); return { scopeEmpty: true }; } });
+  assert.equal((await restarted.closeSession(f.context)).ok, true);
+  assert.equal((await restarted.closeSession(f.context)).ok, true);
+  assert.deepEqual(recovered, ["test-0"]);
+  assert.deepEqual(turnCheckpoints().map(({ checkpointOutcome, status }) => ({ checkpointOutcome, status })),
+    [{ checkpointOutcome: "interrupted", status: "ready" }], "the next server made the checkpoint once");
+  assert.deepEqual(custody(), { executionId: "", state: "interrupted" });
 });
 
 test("Claude recovery discovers saved processes created after its supplied snapshot", async (t) => {
@@ -1938,7 +1970,7 @@ async function boundMainFixture(t, { configureProcess, runtimeFactory, actions, 
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
       ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
       ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
-      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes" || operation === "beginShutdown"
       ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
       ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
       ? prepareSessionConversationReadiness(provider, id, context) : operation === "updateSettings"

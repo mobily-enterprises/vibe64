@@ -566,6 +566,7 @@ function createClaudeConversationHost({
       "deleteConversation",
       "closeSession",
       "closeProject",
+      "beginShutdown",
       "invalidateRuntimes",
       "reconcileSessions",
       "generateSessionRenewalHandover",

@@ -853,6 +853,16 @@ makes that checkpoint once
 A Codex turn that ends on its own once its owner is closing is left to the next
 server the same way, with its own outcome. Both engines share
 `shutdownStoppedRun`, the read side of that record.
+Each owner closes before anything stops: `terminals.beginShutdown()`, called at
+the start of that stop and first by a host that refuses new managed work as its
+shutdown begins, reaches every provider's `beginShutdown` operation and JSKIT's
+`beginNativeShutdown`, which sets each engine's closing fence and stops nothing
+([serviceShutdown.js](../../../packages/vibe64-terminals/src/server/serviceShutdown.js),
+[sessionAgentLifecycle.js](../../../packages/vibe64-terminals/src/server/agent/sessionAgentLifecycle.js)).
+A turn that then ends on its own, while the host's other work stops, therefore
+starts no checkpoint the host would refuse. Claude and OpenCode leave it to the
+next server as a turn the shutdown stopped: Claude's saved record keeps the
+active turn, and the next server's recovery interrupts it with its checkpoint.
 A Git snapshot therefore never holds up shutdown, and a restart is never
 reported as the turn's failure.
 The development example also awaits backend shutdown inside Vite's native

@@ -689,6 +689,7 @@ function createCodexSessionAgentProvider({
       "deleteConversation",
       "closeSession",
       "closeProject",
+      "beginShutdown",
       "invalidateRuntimes",
       "reconcileSessions",
       "generateSessionRenewalHandover",

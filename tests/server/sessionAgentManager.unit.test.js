@@ -2579,6 +2579,23 @@ test("connection changes ignore native PTYs that exited or closed outside the ma
   }
 });
 
+test("beginning the server's shutdown reaches every engine before it returns and names the one that cannot begin", () => {
+  const calls = [];
+  const begin = (context, input) => { calls.push([context.providerId, input.reason]); };
+  const providers = [
+    { id: "claude", transportId: "claude_test",
+      beginShutdown() { throw Object.assign(new Error("Claude could not begin."), { code: "fixture_claude_begin" }); } },
+    { id: "codex", transportId: "codex_test", beginShutdown: begin },
+    { id: "opencode", transportId: "opencode_test", beginShutdown: begin }
+  ];
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers });
+  const result = manager.beginShutdown();
+  assert.deepEqual(calls, [["codex", "server-shutdown"], ["opencode", "server-shutdown"]]);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.failed.map(({ providerId, code, error, ok }) => ({ providerId, code, error, ok })),
+    [{ providerId: "claude", code: "fixture_claude_begin", error: "Claude could not begin.", ok: false }]);
+});
+
 test("all-provider operations keep every provider's outcome and name the provider that threw", async () => {
   let opencodeFinished = false;
   const providers = [

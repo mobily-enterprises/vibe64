@@ -414,6 +414,7 @@ function createOpenCodeSessionAgentProvider({
       "deleteConversation",
       "closeSession",
       "closeProject",
+      "beginShutdown",
       "invalidateRuntimes",
       "reconcileSessions",
       "generateSessionRenewalHandover",
