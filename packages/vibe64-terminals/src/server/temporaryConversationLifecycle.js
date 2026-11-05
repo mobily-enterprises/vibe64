@@ -7,6 +7,7 @@ import {
   isAssistantRoutingOwner
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   teamTemporaryModesRefusal,
   temporaryAutoModeRefusal,
@@ -24,10 +25,12 @@ import {
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * A temporary chat from creation to Close: creating, listing and reading chats, stopping a turn,
- * closing and retiring chats, and saving an idle turn before its review.
+ * closing and retiring chats, finishing an interrupted Close after its engine's next turn, and saving
+ * an idle turn before its review.
  * @param {object} dependencies
  * @param {TemporaryConversationRecords} dependencies.chatRecords
  * @param {TemporaryConversationTurns} dependencies.chatTurns
@@ -38,6 +41,7 @@ import {
  * @param {number} dependencies.temporaryCompletionRetryMs
  * @param {AssistantRouting} dependencies.routing
  * @param {ConversationTurnPublishers} dependencies.conversationTurns
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createTemporaryConversationLifecycle({
   chatRecords,
@@ -48,7 +52,8 @@ function createTemporaryConversationLifecycle({
   temporaryCompletionAttempts,
   temporaryCompletionRetryMs,
   routing,
-  conversationTurns
+  conversationTurns,
+  logger
 }) {
   /**
    * `options.aiTask`, from the AI tasks feature only, makes this chat that task's conversation: it receives
@@ -262,6 +267,43 @@ function createTemporaryConversationLifecycle({
   }
 
   /**
+   * After a turn of `engineId` settles in a session, Close finishes there each interrupted Close whose
+   * remaining native conversations all belong to that engine, which is then already at work, so no
+   * engine starts only for it. Such a Close is the person's own, retried, or an old repair chat the
+   * 20261104 state upgrade handed to Close. A Close that still cannot finish keeps its closing record
+   * for the engine's next turn or the person's own Close; this never throws.
+   * @param {string} sessionId
+   * @param {string} engineId
+   * @param {object} [options]
+   */
+  async function finishInterruptedCloses(sessionId, engineId, options = {}) {
+    const unfinished = error => logOperationalEvent(logger, "warn", {
+      component: "vibe64.temporary_conversation",
+      event: "vibe64.temporary_conversation.close_unfinished",
+      sessionId,
+      code: error?.code
+    }, "An interrupted Close could not finish; the engine's next turn tries again.");
+    if (!engineId) return;
+    let records;
+    try {
+      records = await (await readSessionContext(sessionId, options)).runtime.store.listSessionConversations(sessionId);
+    } catch (error) {
+      unfinished(error);
+      return;
+    }
+    for (const record of records) {
+      const engines = Object.values(record.nativeBindings || {}).map(binding => binding?.assistantSelection?.engineId);
+      if (record.state !== "closing" || engines.some(engine => engine !== engineId)) continue;
+      try {
+        // A busy session answers at once and keeps the record for the engine's next turn.
+        await deleteTemporaryConversation(sessionId, { conversationId: record.conversationId }, { ...options, lockWaitMs: 0 });
+      } catch (error) {
+        unfinished(error);
+      }
+    }
+  }
+
+  /**
    * Archive: once its source is gone a session's temporary chats cannot
    * reopen, so their open runtime entries leave memory with it.
    */
@@ -295,6 +337,7 @@ function createTemporaryConversationLifecycle({
             conversationId: record.conversationId
           });
           await conversationTurns.settled(sessionId, record.conversationId);
+          await finishInterruptedCloses(sessionId, record.assistantSelection?.engineId, options);
         }
         return;
       } catch (error) {
@@ -312,6 +355,7 @@ function createTemporaryConversationLifecycle({
     readConversationTurn,
     deleteTemporaryConversation,
     retireTemporaryConversations,
+    finishInterruptedCloses,
     afterTemporaryTurn
   });
 }

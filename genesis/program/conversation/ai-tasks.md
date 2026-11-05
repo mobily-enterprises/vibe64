@@ -9,9 +9,12 @@ with AI on Update, Save, workspace preparation, preview sign-in, incoming merge 
 project setup, the setup screen's create, inspect and adopt requests, the Data
 overview, and Colleague's own requests and reviews. A person's own request is a
 temporary chat, never an AI task ([temporary assistance](temporary-assistance.md)).
-The `20261104-temporary-repair-chats-removed` state upgrade deleted the repair chats
+The `20261104-temporary-repair-chats-removed` state upgrade deletes the repair chats
 that the repair flows opened as temporary chats before AI tasks, as Close deletes
-one, and kept every person's and Colleague's temporary chat (`docs/state-upgrades.md`).
+one, and keeps every person's and Colleague's temporary chat (`docs/state-upgrades.md`).
+A live repair chat with a Codex or OpenCode conversation is handed to Close as a
+closing record, which Close finishes after that engine's next turn in the session
+([temporary assistance](temporary-assistance.md)).
 
 ## Sources
 

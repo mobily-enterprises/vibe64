@@ -289,7 +289,8 @@ removes it at once, and **Edit** returns its text to the message box.
 **Close** removes the task only after its AI work and attachments are cleaned up. If you
 used more than one AI in the task, Close cleans up each one's conversation. A failed Close
 can be retried; the retry continues the unfinished cleanup without repeating what was
-already removed.
+already removed. Vibe64 also retries it by itself after that AI's next turn in the same
+session.
 
 During an Update repair, **Checking Update…** means the repository operation is not yet
 confirmed. After a disconnect or reload an uncertain result shows as unconfirmed, not as

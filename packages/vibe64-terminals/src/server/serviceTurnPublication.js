@@ -13,17 +13,20 @@ import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 /** @typedef {import("./types.js").ConversationTurnPublishers} ConversationTurnPublishers */
 
-const MAIN_TURN_IDLE_REASONS = Object.freeze([
-  "claude-stream-turn-idle",
-  "codex-app-server-turn-idle",
-  "opencode-server-turn-idle"
+// The engine whose Main turn each idle reason ends.
+const MAIN_TURN_IDLE_ENGINES = new Map([
+  ["claude-stream-turn-idle", "claude"],
+  ["codex-app-server-turn-idle", "codex"],
+  ["opencode-server-turn-idle", "opencode"]
 ]);
 
 /**
  * An agent session's change publication and the work that follows a turn: the plan usage it reports, a temporary
- * chat's review, and after a Main turn the routing review, the goal's main AI check and the workspace setup.
+ * chat's review, and after a Main turn the routing review, the goal's main AI check, the workspace setup and the
+ * interrupted Closes its engine can now finish.
  * @param {object} dependencies
  * @param {SessionConversations["afterTemporaryTurn"]} dependencies.afterTemporaryTurn
+ * @param {SessionConversations["finishInterruptedCloses"]} dependencies.finishInterruptedCloses
  * @param {AssistantRouting["afterTurn"]} dependencies.afterRoutedTurn
  * @param {ServiceGoals["cancelGoalIfMainAiChanged"]} dependencies.cancelGoalIfMainAiChanged
  * @param {RuntimeLogger} dependencies.logger
@@ -35,6 +38,7 @@ const MAIN_TURN_IDLE_REASONS = Object.freeze([
  */
 function createServiceTurnPublication({
   afterTemporaryTurn,
+  finishInterruptedCloses,
   afterRoutedTurn,
   cancelGoalIfMainAiChanged,
   logger,
@@ -113,7 +117,8 @@ function createServiceTurnPublication({
       }));
       return;
     }
-    if (!MAIN_TURN_IDLE_REASONS.includes(String(payload.reason || "").trim())) {
+    const engineId = MAIN_TURN_IDLE_ENGINES.get(String(payload.reason || "").trim());
+    if (!engineId) {
       return;
     }
     trackCompletion(followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
@@ -123,7 +128,7 @@ function createServiceTurnPublication({
         sessionId,
         code: error.code
       }, "A finished Main turn could not be announced.");
-    }));
+    }).then(() => state.lifecycle.closing ? null : finishInterruptedCloses(sessionId, engineId)));
   }
 
   return Object.freeze({

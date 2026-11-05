@@ -52,7 +52,7 @@ async function exists(filePath) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, { preparedCodex = false } = {}) {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversations-")));
   t.after(() => rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "state"), configRoot = path.join(root, "claude"), workdir = path.join(root, "source");
@@ -117,11 +117,13 @@ async function fixture(t) {
   await mkdir(path.dirname(closingRoot), { recursive: true });
   await rename(store.paths("closing").sessionRoot, closingRoot);
 
-  // A renewal's prepared archive and an ordinary archive.
+  // A renewal's prepared archive (whose repair chat may also hold a Codex thread) and an ordinary archive.
   for (const sessionId of ["renewed", "archived"]) {
     await createSession(sessionId);
     await savedClaude(sessionId, ids[sessionId === "renewed" ? "prepared" : "archived"]);
-    await writeChat(sessionId, "repair", { ...updateRepair, ...claudeChat(ids[sessionId === "renewed" ? "prepared" : "archived"]) });
+    const codex = sessionId === "renewed" && preparedCodex
+      ? { nativeBindings: { codex: { conversationId: "019a7c55-prepared-thread", assistantSelection: selection("codex") } } } : {};
+    await writeChat(sessionId, "repair", { ...updateRepair, ...claudeChat(ids[sessionId === "renewed" ? "prepared" : "archived"]), ...codex });
     await writeChat(sessionId, "task", { ...claudeChat(claudeId(sessionId === "renewed" ? 7 : 8)), task: { kind: "save" } }, false);
     await writeClaudeHistory(workdir, ids[sessionId === "renewed" ? "prepared" : "archived"]);
     await store.writeStatus(sessionId, "archived");
@@ -160,15 +162,20 @@ async function archiveMembers(archive) {
   return (await exec("tar", ["-tzf", archive])).stdout.split("\n").filter(Boolean);
 }
 
-async function assertClosed(f, { ordinaryArchive, claudeBytes, kept }) {
+async function assertClosed(f, { ordinaryArchive, claudeBytes, kept, handed }) {
   const live = f.livePaths;
-  for (const chat of ["repair", "retried"]) assert.equal(await exists(path.join(live.conversationsRoot, chat)), false);
+  // Live repair chats with Codex or OpenCode conversations wait for Close as interrupted Closes, with what they own.
+  for (const chat of ["repair", "retried"]) {
+    assert.deepEqual(JSON.parse(await readFile(path.join(live.conversationsRoot, chat, "conversation.json"), "utf8")), handed[chat]);
+    assert.equal(await exists(path.join(live.conversationsRoot, chat, "conversation-log/transcript.json")), true);
+  }
   // The person's chat and Colleague's are read back exactly as they were saved.
   for (const chat of ["mine", "review-1", "task"]) {
     assert.deepEqual(await readFile(path.join(live.conversationsRoot, chat, "conversation.json")), kept[chat]);
   }
-  assert.deepEqual((await f.store.listSessionConversations("live")).map(record => record.conversationId).sort(), ["mine", "review-1", "task"]);
-  assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.live)), false);
+  assert.deepEqual((await f.store.listSessionConversations("live")).map(record => record.conversationId).sort(),
+    ["mine", "repair", "retried", "review-1", "task"]);
+  assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.live, "file")), true);
   assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.task, "file")), true);
   assert.equal(await exists(path.join(live.artifactsRoot, "attachments", attachments.mine, "file")), true);
   assert.equal(await exists(path.join(live.metadataRoot, `claude_conversation_${ids.live}`)), false);
@@ -195,26 +202,41 @@ async function originals(f) {
   for (const [id, filePath] of Object.entries(f.claudeHistory)) claudeBytes[id] = await readFile(filePath);
   const kept = {};
   for (const chat of ["mine", "review-1", "task"]) kept[chat] = await readFile(path.join(f.livePaths.conversationsRoot, chat, "conversation.json"));
+  const record = async chat => JSON.parse(await readFile(path.join(f.livePaths.conversationsRoot, chat, "conversation.json"), "utf8"));
+  const repair = await record("repair"), retried = await record("retried");
+  const waiting = engine => `Vibe64 deletes this old repair chat and its ${engine} conversation after ${engine} next works in this session. ` +
+    "Close deletes them now.";
+  // The Claude conversation goes with the upgrade; the Codex one and OpenCode's current one stay bound for Close.
+  const handed = {
+    repair: { ...repair, state: "closing", error: waiting("Codex"), providerConversationId: "" },
+    retried: { ...retried, state: "closing", error: waiting("OpenCode"), providerConversationId: "ses_retried", nativeBindings: {
+      opencode: { conversationId: "ses_retried", assistantSelection: selection("opencode"), agentSettings: {}, runId: "", messageId: "" }
+    } }
+  };
   return {
     ordinaryArchive: await readFile(f.ordinaryArchive),
     claudeBytes,
     kept,
+    handed,
     repairRecord: await readFile(path.join(f.livePaths.conversationsRoot, "repair/conversation.json"))
   };
 }
 
-test("old repair chats are found read-only, then deleted with their attachments and Claude history, and the person's chats stay", async (t) => {
+test("old repair chats are found read-only, then deleted with their attachments and Claude history or handed to Close, " +
+  "and the person's chats stay", async (t) => {
   const f = await fixture(t);
   const before = await originals(f);
   const tree = await snapshot(f.root);
   await f.run(false);
   assert.deepEqual(await snapshot(f.root), tree);
   assert.deepEqual(f.reports, [
-    "info: example: 4 old repair chat(s) to delete (3 in live sessions, 1 in prepared renewal archives) with " +
-      "1 attachment(s); 2 temporary chat(s) and 2 AI task conversation(s) kept.",
-    "info: Native conversations of these repair chats: 3 Claude to delete from Claude's own storage; 0 Claude, 1 Codex and 1 OpenCode " +
-      "left in their engine's own storage, which only the running engine can delete.",
-    "info: 10 state file(s) to change."
+    "info: example: 2 old repair chat(s) to delete (1 in live sessions, 1 in prepared renewal archives) with 0 attachment(s), " +
+      "and 2 to hand to Close, which deletes each with its Codex or OpenCode conversation; 2 temporary chat(s) and 2 AI task " +
+      "conversation(s) kept.",
+    "info: Native conversations of these repair chats: 3 Claude to delete from Claude's own storage; 1 Codex and 1 OpenCode handed " +
+      "to Close, which deletes each through its engine after that engine's next turn in its session; left in their engine's own " +
+      "storage: 0 Claude without a saved folder, and 0 Codex and 0 OpenCode of prepared renewal archives, which no Close reaches.",
+    "info: 6 state file(s) to change."
   ]);
 
   f.reports.length = 0;
@@ -225,7 +247,7 @@ test("old repair chats are found read-only, then deleted with their attachments 
     before.repairRecord
   );
   assert.ok(f.reports.includes("info: Deleted 3 Claude native conversation(s); their files are kept in this upgrade's claude/ backup."));
-  assert.ok(f.reports.includes("info: Removed 4 emptied conversation and attachment folder(s)."));
+  assert.ok(f.reports.includes("info: Removed 1 emptied conversation and attachment folder(s)."));
   assert.ok(!f.reports.some((message) => message.startsWith("warning:")));
 
   const closed = await snapshot(f.root);
@@ -259,6 +281,12 @@ for (const [label, change, expected] of [
     /also the main chat's, an AI task's or a kept chat's/],
   ["shares the person's own chat's Claude conversation", (f) => f.store.writeSessionConversation("live", "repair", claudeChat(ids.mine)),
     /also the main chat's, an AI task's or a kept chat's/],
+  ["shares the main chat's Codex conversation", (f) => f.store.writeMetadataValue("live", "codex_conversation_id", "019a7c55-codex-thread"),
+    /its Codex conversation is also the main chat's, an AI task's or a kept chat's/],
+  ["shares an AI task's OpenCode conversation", (f) => f.store.writeSessionConversation("live", "task", {
+    providerConversationId: "ses_retried", assistantSelection: selection("opencode") }), /its OpenCode conversation is also/],
+  ["shares Colleague's chat's OpenCode conversation", (f) => f.store.writeSessionConversation("live", "review-1", {
+    providerConversationId: "ses_retried" }), /its OpenCode conversation is also/],
   ["has unreadable native bindings", (f) => f.store.writeSessionConversation("live", "repair", { nativeBindings: "lost" }),
     /native bindings are unreadable/],
   ["names an unknown engine", (f) => f.store.writeSessionConversation("live", "repair", { assistantSelection: selection("other") }),
@@ -274,6 +302,27 @@ for (const [label, change, expected] of [
     assert.deepEqual(await snapshot(f.root), tree);
   });
 }
+
+test("a live repair chat with Codex and OpenCode waits for the person's Close, and a prepared archive's Codex thread is " +
+  "reported left", async (t) => {
+  const f = await fixture(t, { preparedCodex: true });
+  await f.store.writeSessionConversation("live", "retried", {
+    nativeBindings: { codex: { conversationId: "019a7c55-retried-thread", assistantSelection: selection("codex") } }
+  });
+  await f.run(false);
+  assert.ok(f.reports.includes(
+    "warning: example/live/retried: it holds Codex and OpenCode conversations, so it is deleted when the person closes it."));
+  assert.ok(f.reports.includes("info: Native conversations of these repair chats: 3 Claude to delete from Claude's own storage; " +
+    "2 Codex and 1 OpenCode handed to Close, which deletes each through its engine after that engine's next turn in its session; " +
+    "left in their engine's own storage: 0 Claude without a saved folder, and 1 Codex and 0 OpenCode of prepared renewal " +
+    "archives, which no Close reaches."));
+  await f.run(true);
+  const retried = JSON.parse(await readFile(path.join(f.livePaths.conversationsRoot, "retried/conversation.json"), "utf8"));
+  assert.equal(retried.state, "closing");
+  assert.equal(retried.error, "This old repair chat holds Codex and OpenCode conversations. Close deletes it with them.");
+  assert.deepEqual(Object.keys(retried.nativeBindings).sort(), ["codex", "opencode"]);
+  assert.ok(!(await archiveMembers(f.preparedArchive)).some((name) => name.includes("/conversations/repair")));
+});
 
 test("the numbered upgrade requires its Terminals owner and passes the runner's context through", async () => {
   await assert.rejects(upgrade.run({ systemRoot: "/state" }), /candidate upgrade-state command/);

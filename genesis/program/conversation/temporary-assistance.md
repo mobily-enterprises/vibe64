@@ -10,9 +10,11 @@ reviews) is an [AI task](ai-tasks.md) and never appears as a temporary chat.
 Both live in one session conversation store. A record with a `task` field belongs
 to the AI task window; a record without one is a temporary chat. The list behind
 the tabs and Colleague's list tool (`listTemporaryConversations`) leaves out records
-that carry a task, so a tab never shows a task, even after a reload. Only startup's
-reconcile (`serviceAgentReconcile.js`) passes `includeAiTasks: true`, so it finishes
-an interrupted Close for both. The AI task window binds its own conversation by
+that carry a task, so a tab never shows a task, even after a reload. Only the
+reconcile route (`serviceAgentReconcile.js`, `POST /agent-sessions/reconcile`)
+passes `includeAiTasks: true`; nothing in the app calls it. An interrupted Close
+of either kind finishes after its engine's next turn in the session
+(`finishInterruptedCloses`, below). The AI task window binds its own conversation by
 reading it by id (`GET /sessions/:sessionId/temporary-conversations/:taskId`); it
 never reads the list. The conversation machinery below (records, turns, routing,
 delivery, attachments, native engines and Close) serves both; a task's own
@@ -220,6 +222,8 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationLifecycle.js`
+- `packages/vibe64-terminals/src/server/serviceTurnPublication.js`
+- `packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
@@ -513,8 +517,8 @@ messages and reasoning-only updates do not create unread replies. The compact
 trigger preserves independent renewal attention after unread replies clear.
 Restored history starts as a baseline rather than announcing old replies.
 Reloading or removing the project view stops only its local readers. It sends no
-Stop or Delete request. Late responses cannot restart a retired reader. Server startup restores discovery and finishes recorded
-Close attempts. Work discovered without its original backend observer is stopped;
+Stop or Delete request. Late responses cannot restart a retired reader. Server startup restores discovery; a recorded
+Close attempt finishes after its engine's next turn, as below. Work discovered without its original backend observer is stopped;
 restoration does not send or resume a turn. Active temporary work and Codex goals
 also prevent dormant-project cleanup, just like main chat. Claude counts only a
 temporary turn its server is running; one saved as active before a restart ended
@@ -523,6 +527,18 @@ Explicit Close is one server operation: retain the closing record, pause any goa
 confirm native work stopped, delete the native conversation, remove its owned
 attachments, then delete the record and transcript. A failure retains the record
 and offers the same Close again, including after reload. File edits remain.
+Close also runs again by itself: after a turn of an engine settles in a session
+(a Main chat turn, through `serviceTurnPublication.js`, or a temporary chat's or
+AI task's, through `afterTemporaryTurn`), `finishInterruptedCloses` retries the
+Close of each closing record there whose remaining native conversations all
+belong to that engine, or that has none left. That engine is then already at
+work, so no engine starts only for this. A busy session is not waited for, and
+a Close that still fails keeps its record and its error for the next turn or the
+person's Close; the failure is logged as `close_unfinished`. The
+`20261104-temporary-repair-chats-removed` state upgrade hands its old repair
+chats with Codex or OpenCode conversations to this path as closing records whose
+error says so (`docs/state-upgrades.md`); a chat holding both waits for the
+person's Close.
 After the cleared stream is published, Close retires that chat's open entry in
 the shared conversation runtime (`retireOpenConversation`), so its old handles
 close. Archive retires every temporary chat entry of the session the same way,

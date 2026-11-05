@@ -1688,17 +1688,32 @@ neither is reported as a warning and left. A prepared archive is repacked
 without the deleted folders.
 
 Codex threads and OpenCode sessions can be deleted only by their running
-engine, and no offline owner exists, so their native conversations stay in the
-engine's own storage. The report counts how many Claude, Codex and OpenCode
-native conversations of repair chats it leaves. The engine upload copies of the
-attachments are not visited: offline their folder cannot be named, and the
-server's startup sweep expires every copy after 30 minutes.
+engine, so the upgrade hands a live repair chat that has one to Close instead of
+deleting it. It rewrites only that chat's record into the record Close keeps
+when it could not finish: `state: "closing"`, its Codex and OpenCode
+conversations in `nativeBindings` (the current one included, so
+`providerConversationId` names it until Close releases it) and an `error` that
+says what will happen. Its Claude conversation, if any, still goes with the
+upgrade, as above; its transcript and attachments stay for Close. Close then
+deletes each conversation through its engine (stop, then delete), then the
+chat's attachments, transcript and record, exactly as it does for a Close the
+person retries. It runs by itself after a turn of that engine settles in the
+same session (a Main chat turn, a temporary chat's or an AI task's), so no engine
+starts only for it; locally and hosted alike. Until then the chat shows as
+closing with that notice, and the person's own Close finishes it at once. A
+chat holding both Codex and OpenCode conversations is reported as a warning and
+waits for the person's Close, since no single engine's turn covers it. In a
+prepared renewal archive no Close reaches the chat, so its Codex and OpenCode
+conversations stay in the engine's own storage and the report counts them. The
+engine upload copies of the attachments are not visited: offline their folder
+cannot be named, and the server's startup sweep expires every copy after 30
+minutes.
 
 A record that cannot be read or whose identity does not match its folder, an
 unreadable `task` or native binding of a repair chat, an unknown engine, a
-Claude id that is not a UUID, or a repair chat's Claude conversation shared with
-the session's main chat (current or retired), an AI task or a kept chat stops
-the upgrade before anything changes.
+Claude id that is not a UUID, or a repair chat's Claude, Codex or OpenCode
+conversation shared with the session's main chat (current or retired), an AI
+task or a kept chat stops the upgrade before anything changes.
 
 Backups go under `upgrades/backups/20261104-temporary-repair-chats-removed/`.
 `sessions/` is the publisher's manifest, with the before copy of every deleted
@@ -1708,14 +1723,24 @@ holds every deleted Claude file at its path inside Claude's storage, copied
 privately and verified before deletion.
 
 Check is read-only: per project it reports how many repair chats would be
-deleted (in live sessions and prepared archives) with their attachments, and how
-many temporary chats and AI task conversations it keeps, then the native counts
-and the number of state files to change. Apply deletes Claude's history first,
+deleted (in live sessions and prepared archives) with their attachments, how
+many would be handed to Close, and how many temporary chats and AI task
+conversations it keeps; then how many Claude conversations it deletes, how many
+Codex and OpenCode conversations it hands to Close, and how many it leaves in
+the engine's storage; then the number of state files to change. Apply deletes Claude's history first,
 then publishes the record deletions, then removes the conversation and
 attachment folders they emptied. A rerun before publication starts inventories
 again, finding deleted Claude history absent; a rerun after it starts finishes
 publication; a later run changes nothing. A Claude history that cannot be
 deleted is reported as a warning and stays. Run it as the OS user that owns the
 session state and Claude's storage (`CLAUDE_CONFIG_DIR` or `~/.claude`), with
-Vibe64 and every session process stopped. Focused evidence:
-`temporaryRepairChatsUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+Vibe64 and every session process stopped. A rerun finds a handed-over record
+already in its closing form and leaves it unchanged. Focused evidence:
+`temporaryRepairChatsUpgrade.unit.test.js`, the hand-over case in
+`vibe64TemporaryConversations.unit.test.js` (the upgrade's record, then Close
+after the engine's next turn) and `stateUpgrades.unit.test.js`.
+
+This upgrade reached `main` on 5 November 2026 leaving Codex and OpenCode
+conversations in the engine's storage. Before any release or deployment ran it
+(the last release, 0.1.53, is from 3 November), it was amended under the same id
+to hand them to Close.

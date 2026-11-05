@@ -201,13 +201,15 @@ chat's model is unchanged. The controls are the same at every screen size.
 
 Returning to Main chat or reloading the page keeps a saved temporary conversation.
 To remove it, use the **Close** control on that chat's tab. If stopping or cleanup
-fails, the chat stays available; resolve the reported error and try **Close** again.
+fails, the chat stays available; resolve the reported error and try **Close** again,
+or let Vibe64 retry it after that AI's next turn in the session.
 Closing removes that conversation's history and attachments after cleanup succeeds;
 source edits remain. The same controls apply on desktop and compact screens.
 
 Hiding the window or reloading the page keeps an AI task. Once it is **Done** or
 **Not done**, **Close** removes it. If cleanup fails, the task stays available;
-resolve the reported error and try **Close** again. Closing removes that task's
+resolve the reported error and try **Close** again, or let Vibe64 retry it after
+that AI's next turn in the session. Closing removes that task's
 conversation and attachments after cleanup succeeds; source edits remain. The same
 controls apply on desktop and compact screens.
 

@@ -80,7 +80,9 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, pr
    * and closing) sessions and prepared renewal archives are visited; other archived sessions never are.
    * `select({ sessionId, metadata, archived, conversations })` sees every record with the attachment
    * ids it owns and returns `{ conversationId, metadataNames }` for each one to remove. Its record
-   * file is removed last, after everything it owns.
+   * file is removed last, after everything it owns. A choice that also carries `record` leaves its
+   * conversation to Close instead: only the record file is rewritten, as that record, and the
+   * transcript and attachments stay for Close to remove; the metadata it names still goes.
    * @param {object} options
    * @param {string} options.temporaryRoot
    * @param {Function} options.select
@@ -141,6 +143,13 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, pr
           for (const name of choice.metadataNames) {
             const filePath = metadataFilePath(sessionPaths, name);
             if (await checkedPath(filePath)) changes.push({ filePath, original: await readRegularText(filePath), contents: null });
+          }
+          if (Object.hasOwn(choice, "record")) {
+            if (!isPlainObject(choice.record) || choice.record.conversationId !== target.conversation.conversationId) {
+              throw new Error("A temporary conversation left to Close must keep its own record identity.");
+            }
+            changes.push({ filePath: target.filePath, original: target.original, contents: `${JSON.stringify(choice.record, null, 2)}\n` });
+            continue;
           }
           // Attachment files are bytes, so the publisher's own digests stand for their originals.
           for (const id of target.attachmentIds) {

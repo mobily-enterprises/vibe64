@@ -17,8 +17,9 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
 
 /**
  * A session's temporary chats. Session storage owns discovery and the
- * transcript, existing provider adapters own native turns, and only an
- * explicit Close removes a user-facing temporary chat. The parts are built
+ * transcript, existing provider adapters own native turns, and only Close
+ * removes a user-facing temporary chat; an interrupted Close finishes after
+ * its engine's next turn in the session. The parts are built
  * once, in dependency order, and the result names each of their functions.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
@@ -84,7 +85,8 @@ function createSessionConversations({
     temporaryCompletionAttempts,
     temporaryCompletionRetryMs,
     routing: chatTurns.routing,
-    conversationTurns
+    conversationTurns,
+    logger
   });
   const chatInteraction = createTemporaryConversationInteraction({
     chatRecords,
@@ -117,6 +119,7 @@ function createSessionConversations({
     readConversationTurn: chatLifecycle.readConversationTurn,
     deleteTemporaryConversation: chatLifecycle.deleteTemporaryConversation,
     retireTemporaryConversations: chatLifecycle.retireTemporaryConversations,
+    finishInterruptedCloses: chatLifecycle.finishInterruptedCloses,
     afterTemporaryTurn: chatLifecycle.afterTemporaryTurn
   });
 }

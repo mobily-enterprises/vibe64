@@ -159,6 +159,7 @@ function createService({
   });
   const { publishAgentSessionChanged } = createServiceTurnPublication({
     afterTemporaryTurn: (sessionId, payload) => sessionConversations.afterTemporaryTurn(sessionId, payload),
+    finishInterruptedCloses: (sessionId, engineId) => sessionConversations.finishInterruptedCloses(sessionId, engineId),
     afterRoutedTurn: (sessionId, payload, options) => assistantRouting.afterTurn(sessionId, payload, options),
     cancelGoalIfMainAiChanged: (sessionId, vibe64User, options) => goals.cancelGoalIfMainAiChanged(sessionId, vibe64User, options),
     logger,

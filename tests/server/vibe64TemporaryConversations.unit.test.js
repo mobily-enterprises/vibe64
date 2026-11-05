@@ -11,6 +11,7 @@ import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agent
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { prepareCodexModelRouting } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
+import { removeTemporaryRepairChats } from "../../packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -1022,6 +1023,54 @@ test("Close retains a retryable record until stop, native deletion and attachmen
     await assert.rejects(access(filePath), { code: "ENOENT" });
     assert.equal(await readFile(edit, "utf8"), "preserve me");
     assert.deepEqual(await store.readConversationLog("one"), []);
+  });
+});
+
+test("an old repair chat the state upgrade hands to Close goes with its Codex thread after Codex's next turn in the session", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const service = f.restart();
+    // An Update repair chat from before AI tasks, with its Codex thread and an attachment.
+    const upload = await f.attachments.uploadAttachment({ sessionId: "one" }, { fileName: "notes.txt", stream: Readable.from(["notes"]) });
+    await service.createTemporaryConversation("one", { conversationId: "repair" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "repair", messageId: "input", message: "Resolve it",
+      attachmentIds: [upload.attachmentId] });
+    await f.store.writeSessionConversation("one", "repair", { recoveryOperation: "update", recoveryContext: "Merge both sides." });
+    const saved = await f.attachments.readAttachment({ sessionId: "one" }, upload.attachmentId);
+    const filePath = saved.attachment.path;
+    await saved.fileHandle.close();
+
+    // The upgrade runs with the server stopped, over this project's own state below the test's home.
+    const systemRoot = path.dirname(path.dirname(projectRuntimeRoot(root)));
+    assert.equal(path.relative(path.dirname(root), systemRoot).startsWith(".."), false);
+    const reports = [];
+    await removeTemporaryRepairChats({
+      systemRoot, apply: true, report: (level, message) => reports.push(`${level}: ${message}`),
+      backupRoot: path.join(systemRoot, "upgrades/backups/20261104-temporary-repair-chats-removed"),
+      env: { CLAUDE_CONFIG_DIR: path.join(root, "claude") }
+    });
+    assert.ok(reports.some(message => message.includes(", and 1 to hand to Close")), reports.join("\n"));
+
+    const restarted = f.restart();
+    const [listed] = (await restarted.listTemporaryConversations("one")).conversations;
+    assert.equal(listed.status, "closing");
+    assert.equal(listed.error,
+      "Vibe64 deletes this old repair chat and its Codex conversation after Codex next works in this session. Close deletes them now.");
+    await restarted.finishInterruptedCloses("one", "opencode");
+    assert.equal(f.native.deletes, 0, "another engine's turn leaves it waiting");
+    assert.ok(await f.store.readSessionConversation("one", "repair"));
+    await access(filePath);
+
+    // The person's next Codex chat finishes a turn, and Close then finishes the old chat in its wake.
+    await restarted.createTemporaryConversation("one", { conversationId: "next" });
+    await restarted.startTemporaryConversationTurn("one", { conversationId: "next", messageId: "question", message: "Explain this" });
+    f.native.status = "completed";
+    await restarted.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-2" } });
+    assert.equal(f.native.deletes, 1);
+    assert.equal(await f.store.readSessionConversation("one", "repair"), null);
+    await assert.rejects(access(filePath), { code: "ENOENT" });
+    assert.ok(f.events.some(([, event]) => event.reason === "temporary-conversation-closed" && event.payload.conversationId === "repair"));
+    assert.deepEqual((await restarted.listTemporaryConversations("one")).conversations.map(chat => chat.conversationId), ["next"]);
   });
 });
 

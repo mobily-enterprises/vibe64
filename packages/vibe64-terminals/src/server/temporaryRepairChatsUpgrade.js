@@ -11,7 +11,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 
-const ENGINES = Object.freeze(["claude", "codex", "opencode"]);
+const ENGINE_NAMES = new Map([["claude", "Claude"], ["codex", "Codex"], ["opencode", "OpenCode"]]);
 // What the repair flows stored on their chats (since 16 September 2026, beside the title and draft).
 // A person's own chat saved them empty or not at all, so one filled field marks a repair chat.
 const REPAIR_FIELDS = Object.freeze([
@@ -87,7 +87,7 @@ function nativeConversations(record, label) {
     const { conversationId } = binding;
     if (conversationId === undefined || conversationId === "") continue;
     const engineId = binding.assistantSelection?.engineId;
-    if (typeof conversationId !== "string" || !ENGINES.includes(engineId)) {
+    if (typeof conversationId !== "string" || !ENGINE_NAMES.has(engineId)) {
       throw new Error(`${label}: it names a native conversation Vibe64 does not know. Inspect it before upgrading.`);
     }
     found.set(`${engineId}:${conversationId}`, { engineId, conversationId });
@@ -114,15 +114,15 @@ function isRepairChat(record) {
   });
 }
 
-/** The Claude conversations a session keeps: its main chat's, its retired ones, its AI tasks' and its kept chats'. */
-function keptClaudeConversations(metadata, conversations, label) {
+/** The native conversations a session keeps: its main chat's, its retired ones, its AI tasks' and its kept chats'. */
+function keptNativeConversations(metadata, conversations, label) {
   let bindings;
   try {
     bindings = nativeConversationBindings({ metadata });
   } catch {
     throw new Error(`${label}: its main chat's native bindings are unreadable. Inspect them before upgrading.`);
   }
-  const kept = new Set(bindings.filter(binding => binding.engineId === "claude").map(binding => binding.conversationId));
+  const kept = new Set(bindings.map(binding => binding.conversationId));
   for (const { conversation } of conversations) {
     if (!Object.hasOwn(conversation, "task") && isRepairChat(conversation)) continue;
     const bindings = Object.values(isRecord(conversation.nativeBindings) ? conversation.nativeBindings : {});
@@ -134,14 +134,54 @@ function keptClaudeConversations(metadata, conversations, label) {
 }
 
 /**
+ * A live repair chat with Codex or OpenCode conversations, as an interrupted Close of them: the record
+ * Close itself keeps while it cannot reach an engine. Close deletes those conversations through their
+ * engine, then the chat's attachments, transcript and record, when that engine next works in the
+ * session or when the person closes the chat. Its Claude bindings leave with the Claude history this
+ * upgrade deletes itself; the current conversation joins the retained ones Close releases.
+ * @param {object} record a repair chat whose native bindings `nativeConversations` has read
+ * @param {string[]} engineIds the engines of its Codex and OpenCode conversations
+ */
+function closingRecord(record, engineIds) {
+  const nativeBindings = {};
+  for (const [key, binding] of Object.entries(record.nativeBindings || {})) {
+    if (binding.conversationId && binding.assistantSelection.engineId !== "claude") nativeBindings[key] = binding;
+  }
+  const engineId = record.assistantSelection?.engineId;
+  const current = Boolean(record.providerConversationId) && engineId !== "claude";
+  if (current && !Object.values(nativeBindings).some(binding => binding.conversationId === record.providerConversationId)) {
+    nativeBindings[Object.hasOwn(nativeBindings, engineId) ? `${engineId}-current` : engineId] = {
+      conversationId: record.providerConversationId,
+      assistantSelection: record.assistantSelection,
+      agentSettings: record.agentSettings || {},
+      runId: record.runId || "",
+      messageId: record.messageId || ""
+    };
+  }
+  const names = engineIds.map(id => ENGINE_NAMES.get(id));
+  return {
+    ...record,
+    state: "closing",
+    error: names.length > 1
+      ? `This old repair chat holds ${names.join(" and ")} conversations. Close deletes it with them.`
+      : `Vibe64 deletes this old repair chat and its ${names[0]} conversation after ${names[0]} next works in this ` +
+        "session. Close deletes them now.",
+    nativeBindings,
+    providerConversationId: current ? record.providerConversationId : ""
+  };
+}
+
+/**
  * 20261104: every repair chat from before AI tasks (the temporary chats that Fix it with AI, Update,
  * Save, workspace setup and the other repair flows opened) is deleted as Close deletes one, in live
  * sessions and prepared renewal archives: its record and stored transcript, its session attachments
  * and Claude's native history. A repair chat is a record without `task` that has a filled repair
  * field. The person's own temporary chats and Colleague's stay untouched, with their attachments and
  * native history, and so do AI tasks (records with `task`); other archived sessions are not visited.
- * Codex threads and OpenCode sessions can only be deleted by their running engine, so their native
- * conversations stay in the engine's own storage; the report counts them. Upload copies of the
+ * Codex threads and OpenCode sessions can only be deleted by their running engine, so a live repair
+ * chat that has them is handed to Close instead, as an interrupted Close (`closingRecord`); Close
+ * finishes it after that engine's next turn in the session. In a prepared renewal archive, which no
+ * Close reaches, they stay in the engine's own storage; the report counts them. Upload copies of the
  * attachments are temporary host files the server's startup sweep expires; offline their folder
  * cannot be named (that needs the server's project context), so they are left to it.
  * @param {object} context the runner's upgrade context, with the command's `env`
@@ -159,10 +199,11 @@ async function removeTemporaryRepairChats(context) {
     backupRoot: path.join(backupRoot, "sessions"),
     async prepareUpdates(temporaryRoot) {
       const updates = [];
-      const native = new Map();
+      const handed = new Map();
+      const left = new Map();
       const claude = new Map();
       for (const { project, store } of stores) {
-        const counts = { live: 0, prepared: 0, attachments: 0, chats: 0, tasks: 0 };
+        const counts = { live: 0, prepared: 0, attachments: 0, handed: 0, chats: 0, tasks: 0 };
         updates.push(...await store.prepareTemporaryConversationRemoval({
           temporaryRoot,
           select({ sessionId, metadata, archived, conversations }) {
@@ -182,21 +223,35 @@ async function removeTemporaryRepairChats(context) {
                 continue;
               }
               const metadataNames = [];
+              const closeEngines = new Set();
               for (const binding of nativeConversations(conversation, label)) {
-                native.set(`${binding.engineId}:${binding.conversationId}`, binding.engineId);
-                if (binding.engineId !== "claude") continue;
-                if (!CLAUDE_CONVERSATION_ID.test(binding.conversationId)) {
+                const isClaude = binding.engineId === "claude";
+                if (isClaude && !CLAUDE_CONVERSATION_ID.test(binding.conversationId)) {
                   throw new Error(`${label}: it names a Claude conversation id Claude does not use. Inspect it before upgrading.`);
                 }
-                kept ||= keptClaudeConversations(metadata, conversations, session);
-                const state = savedClaudeState(metadata, binding.conversationId, label);
+                kept ||= keptNativeConversations(metadata, conversations, session);
+                const state = isClaude ? savedClaudeState(metadata, binding.conversationId, label) : null;
                 if (kept.has(binding.conversationId) || state?.main === true) {
-                  throw new Error(`${label}: its Claude conversation is also the main chat's, an AI task's or a kept chat's. ` +
-                    "Inspect it before upgrading.");
+                  throw new Error(`${label}: its ${ENGINE_NAMES.get(binding.engineId)} conversation is also the main chat's, ` +
+                    "an AI task's or a kept chat's. Inspect it before upgrading.");
+                }
+                if (!isClaude) {
+                  (archived ? left : handed).set(`${binding.engineId}:${binding.conversationId}`, binding.engineId);
+                  if (!archived) closeEngines.add(binding.engineId);
+                  continue;
                 }
                 if (state) metadataNames.push(`claude_conversation_${binding.conversationId}`);
                 const workdir = typeof state?.nativeWorkdir === "string" && state.nativeWorkdir ? state.nativeWorkdir : executionRoot;
                 claude.set(`${workdir}\0${binding.conversationId}`, { label, workdir, conversationId: binding.conversationId });
+              }
+              if (closeEngines.size) {
+                if (closeEngines.size > 1) {
+                  report("warning", `${label}: it holds Codex and OpenCode conversations, so it is deleted when the person closes it.`);
+                }
+                counts.handed += 1;
+                const record = closingRecord(conversation, [...closeEngines]);
+                chosen.push({ conversationId: conversation.conversationId, metadataNames, record });
+                continue;
               }
               counts[archived ? "prepared" : "live"] += 1;
               counts.attachments += attachmentIds.length;
@@ -207,19 +262,21 @@ async function removeTemporaryRepairChats(context) {
         }));
         report("info", `${project}: ${counts.live + counts.prepared} old repair chat(s) to delete ` +
           `(${counts.live} in live sessions, ${counts.prepared} in prepared renewal archives) with ` +
-          `${counts.attachments} attachment(s); ${counts.chats} temporary chat(s) and ${counts.tasks} AI task ` +
+          `${counts.attachments} attachment(s), and ${counts.handed} to hand to Close, which deletes each with its ` +
+          `Codex or OpenCode conversation; ${counts.chats} temporary chat(s) and ${counts.tasks} AI task ` +
           "conversation(s) kept.");
       }
-      const engines = [...native.values()];
-      const count = engineId => engines.filter(value => value === engineId).length;
+      const count = (found, engineId) => [...found.values()].filter(value => value === engineId).length;
       const located = [...claude.values()].filter(({ label, workdir }) => {
         if (path.isAbsolute(workdir || "")) return true;
         report("warning", `${label}: its Claude history has no saved folder, so it is left in Claude's own storage.`);
         return false;
       });
       report("info", `Native conversations of these repair chats: ${located.length} Claude to delete from Claude's own storage; ` +
-        `${claude.size - located.length} Claude, ${count("codex")} Codex and ${count("opencode")} OpenCode left in ` +
-        "their engine's own storage, which only the running engine can delete.");
+        `${count(handed, "codex")} Codex and ${count(handed, "opencode")} OpenCode handed to Close, which deletes each through ` +
+        `its engine after that engine's next turn in its session; left in their engine's own storage: ` +
+        `${claude.size - located.length} Claude without a saved folder, and ${count(left, "codex")} Codex and ` +
+        `${count(left, "opencode")} OpenCode of prepared renewal archives, which no Close reaches.`);
       if (!apply) return updates;
       // Native history goes first, as Close does; the records that name it go last.
       let retired = 0;
