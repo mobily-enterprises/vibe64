@@ -184,7 +184,7 @@ function fileStatusLabel(value = "") {
 <style scoped>
 .vibe64-repository-file-browser {
   align-items: start;
-  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border: 1px solid var(--v64-outline-variant);
   border-radius: 0.75rem;
   display: grid;
   grid-template-columns: var(--repository-file-list-width, 21rem) 12px minmax(0, 1fr);
@@ -215,7 +215,7 @@ function fileStatusLabel(value = "") {
 }
 
 .vibe64-repository-file-browser__separator::before {
-  background: rgba(var(--v-theme-outline), 0.18);
+  background: var(--v64-outline-variant);
   content: "";
   inset: 0 5px;
   position: absolute;
@@ -239,7 +239,7 @@ function fileStatusLabel(value = "") {
 }
 
 .vibe64-repository-file-browser__list header {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.14);
+  border-bottom: 1px solid var(--v64-outline-variant);
   display: grid;
   gap: 0.18rem;
   padding: 0.75rem;
@@ -253,7 +253,7 @@ function fileStatusLabel(value = "") {
 .vibe64-repository-file-browser__file {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1);
+  border-bottom: 1px solid var(--v64-outline-variant);
   color: inherit;
   cursor: pointer;
   display: grid;
@@ -340,7 +340,7 @@ function fileStatusLabel(value = "") {
 
   .vibe64-repository-file-browser__list,
   .vibe64-repository-file-browser--embedded .vibe64-repository-file-browser__list {
-    border-bottom: 1px solid rgba(var(--v-theme-outline), 0.16);
+    border-bottom: 1px solid var(--v64-outline-variant);
     border-inline-end: 0;
     max-height: 16rem;
   }
@@ -360,7 +360,7 @@ function fileStatusLabel(value = "") {
 }
 
 .vibe64-repository-file-browser--stacked > .vibe64-repository-file-browser__list {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.16);
+  border-bottom: 1px solid var(--v64-outline-variant);
   max-height: 16rem;
 }
 

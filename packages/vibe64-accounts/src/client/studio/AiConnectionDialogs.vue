@@ -570,7 +570,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-provider-picker__list {
-  border-color: rgba(var(--v-theme-outline), var(--v-border-opacity));
+  border-color: var(--v64-outline-variant);
   overflow: hidden;
 }
 
@@ -579,7 +579,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-provider-picker__item + .vibe64-provider-picker__item {
-  border-top: 1px solid rgba(var(--v-theme-outline), var(--v-border-opacity));
+  border-top: 1px solid var(--v64-outline-variant);
 }
 
 .vibe64-provider-picker__empty {

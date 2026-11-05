@@ -105,7 +105,7 @@ function columnKeyIcon(column = {}) {
 .database-workspace__table-button strong { font-size: 0.75rem; }
 .database-workspace__table-button small { color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.62rem; }
 .database-workspace__empty-copy { padding: 1rem; color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.74rem; text-align: center; }
-.database-workspace__table-detail { max-height: 16rem; overflow: auto; margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px solid rgba(var(--v-theme-outline), 0.16); }
+.database-workspace__table-detail { max-height: 16rem; overflow: auto; margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px solid var(--v64-outline-variant); }
 .database-workspace__table-detail header { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: space-between; }
 .database-workspace__table-detail header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .database-workspace__table-detail p { color: rgba(var(--v-theme-on-surface), 0.65); font-size: 0.68rem; }

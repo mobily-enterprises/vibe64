@@ -87,7 +87,7 @@ const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttem
 }
 
 .studio-screen__lesson-layout {
-  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  border: 1px solid var(--v64-outline-variant);
   border-radius: 14px;
   height: 100%;
   min-height: 0;

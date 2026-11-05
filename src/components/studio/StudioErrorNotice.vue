@@ -323,7 +323,7 @@ async function copyRepairCommand() {
 
 .studio-error-notice__details pre {
   background: rgba(var(--v-theme-surface-variant), 0.42);
-  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border: 1px solid var(--v64-outline-variant);
   border-radius: 6px;
   color: rgb(var(--v-theme-on-surface));
   font-size: 0.76rem;

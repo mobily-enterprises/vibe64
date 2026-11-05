@@ -401,7 +401,7 @@ watch(() => [
 <style scoped>
 .studio-autopilot__session-header {
   align-items: center;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
+  border-bottom: 1px solid var(--v64-outline-variant);
   box-sizing: border-box;
   display: flex;
   gap: 0;

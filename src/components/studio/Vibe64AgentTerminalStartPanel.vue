@@ -40,7 +40,7 @@ defineEmits(["start"]);
 <style scoped>
 .vibe64-agent-terminal-start-panel {
   align-items: center;
-  background: rgba(var(--v-theme-scrim), 0.8);
+  background: rgb(0 0 0 / 0.8);
   display: flex;
   inset: 0;
   justify-content: center;

@@ -62,7 +62,7 @@ const open = defineModel({ type: Boolean, default: false });
 .vibe64-colleague__watch-details section + section { margin-top: 12px; }
 .vibe64-colleague__watch-details ul { list-style: none; padding: 0; margin: 0; }
 .vibe64-colleague__watch-details li { padding-block: 12px; }
-.vibe64-colleague__watch-details li + li { border-top: 1px solid var(--v64-outline-variant, rgb(var(--v-theme-outline-variant))); }
+.vibe64-colleague__watch-details li + li { border-top: 1px solid var(--v64-outline-variant); }
 .vibe64-colleague__watch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--v64-shape-sm, 8px); background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), .08)); font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif); text-transform: capitalize; }
 .vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v64-on-surface-variant, currentColor); }
 .vibe64-colleague__watch-chip[data-status="active"] { background: var(--v64-success-container); }

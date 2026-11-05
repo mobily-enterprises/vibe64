@@ -352,7 +352,7 @@ async function save() {
 }
 
 .preview-identity-settings__section {
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-top: 1px solid var(--v64-outline-variant);
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(14rem, 0.7fr) minmax(0, 1.3fr);
@@ -373,7 +373,7 @@ async function save() {
 }
 
 .preview-identity-settings__identity {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.16);
+  border-bottom: 1px solid var(--v64-outline-variant);
   padding-bottom: 0.65rem;
 }
 
