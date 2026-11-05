@@ -718,6 +718,9 @@ existing original-folder binding instead of using this catalogue override.
 Codex, Claude and OpenCode observed writable session turns create private Git
 recovery checkpoints on completion, interruption or failure. Temporary chats and
 AI task conversations participate; scoped read-only helpers and naming profiles do not.
+A Claude turn still running at server shutdown is checkpointed by the next
+server's recovery, which interrupts it, not during shutdown, where the
+checkpoint's managed job could outlast the shutdown deadline.
 Checkpoints preserve the saveable files without advancing the project branch or
 changing the index. A turn's ref and the latest pointer are published in one Git
 transaction. If another writer advances latest, publication retries up to twice

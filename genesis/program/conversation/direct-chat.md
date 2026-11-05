@@ -2249,7 +2249,12 @@ Temporary-work checks, shutdown and project close act on the entries Claude's
 owner retains and reopen no saved conversation: a Claude
 process cannot outlive the server that started it. A session's close reopens only
 saved custody an earlier server left (an unproven execution or a turn saved as
-active) so a verified stop can retire it. Neither these nor restart restoration
+active) so a verified stop can retire it. Shutdown leaves a turn still running in
+that saved state: it stops the Claude process but writes nothing, so the record
+keeps the execution and the active turn, as after a crash. The next server's
+recovery of that conversation proves the exit, interrupts the turn and runs its
+interrupted checkpoint, so a slow Git checkpoint never holds up shutdown.
+Neither these nor restart restoration
 selects Claude as the main chat. A main-chat operation binds the selected
 Claude identity even when its entry was already restored in memory.
 The launcher identifies Claude's own PID for startup Git probes that leave stdin
