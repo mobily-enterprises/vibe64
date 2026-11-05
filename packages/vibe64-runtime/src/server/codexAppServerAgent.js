@@ -88,7 +88,8 @@ async function readCodexSelectedAccountAccess(options = {}) {
   if (!toolHomeSource || !path.isAbsolute(toolHomeSource)) {
     throw codexAppServerHelperAuthError(
       "vibe64_codex_helper_auth_unavailable",
-      "The selected Codex account is unavailable. Reconnect Codex and retry."
+      "The selected Codex account is unavailable. Reconnect Codex and retry.",
+      { messageCode: "assistant.codex.accountUnavailable" }
     );
   }
   const auth = await readBoundedCodexAuthJson(path.join(toolHomeSource, ".codex", "auth.json"));
@@ -96,7 +97,8 @@ async function readCodexSelectedAccountAccess(options = {}) {
   if (!["chatgpt", "apikey", "api_key"].includes(authMode)) {
     throw codexAppServerHelperAuthError(
       "vibe64_codex_helper_auth_invalid",
-      "The selected Codex authentication mode is unsupported. Reconnect Codex and retry."
+      "The selected Codex authentication mode is unsupported. Reconnect Codex and retry.",
+      { messageCode: "assistant.codex.authModeUnsupported" }
     );
   }
   const ownerOnly = authMode === "chatgpt";
