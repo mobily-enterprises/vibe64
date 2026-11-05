@@ -13,6 +13,13 @@ import {
  * Temporary AI's task records and their saving: each change updates a task
  * and queues a save of its presentation, settings and attachments, creating
  * the task's conversation first when it has none.
+ * @param {object} options
+ * @param {import("vue").Ref<object[]>} options.tasks the session's temporary chats, in tab order
+ * @param {import("vue").Ref<string>} options.activeTaskId
+ * @param {import("vue").Ref<boolean>} options.open whether the workspace is shown
+ * @param {Set<string>} options.closingTaskIds chats whose Close is in progress
+ * @param {Set<string>} options.closedConversationIds conversations closed here, which a restore leaves out
+ * @param {() => boolean} options.isDisposed whether the view has been removed
  */
 function useVibe64TemporaryAiTaskRecords({
   tasks,

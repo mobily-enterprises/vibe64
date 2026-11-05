@@ -1,7 +1,9 @@
 import { nextTick } from "vue";
+import { hasWindowFunction } from "@/lib/browser.js";
 
+/** Resolves after the browser paints the next frame; outside a browser, at once. */
 function afterBrowserPaint() {
-  if (typeof globalThis.requestAnimationFrame !== "function") {
+  if (!hasWindowFunction("requestAnimationFrame")) {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
@@ -25,6 +27,9 @@ function rememberTaskElement(elements, taskId = "", element = null) {
 /**
  * The temporary AI workspace's per-task elements (tab button, prompt and send
  * button), and the reveal and focus moves made with them.
+ * @param {object} options
+ * @param {import("vue").Ref<HTMLElement | null>} options.workspace the workspace's own element, focused when a tab is not
+ * @param {import("vue").Ref<{ id: string } | null>} options.activeTask
  */
 function useVibe64TemporaryAiTaskElements({ workspace, activeTask }) {
   const taskTabButtons = new Map();
@@ -43,20 +48,20 @@ function useVibe64TemporaryAiTaskElements({ workspace, activeTask }) {
     await nextTick();
     await afterBrowserPaint();
     const button = taskTabButtons.get(normalizedTaskId);
-    button?.scrollIntoView?.({
+    button?.scrollIntoView({
       block: "nearest",
       inline: "nearest"
     });
     if (focus) {
       const target = button || workspace.value;
-      target?.focus?.({ preventScroll: true });
+      target?.focus({ preventScroll: true });
     }
     return Boolean(button);
   }
 
   function focusSendButton() {
     const sendButton = taskSendButtons.get(activeTask.value?.id);
-    sendButton?.focus?.();
+    sendButton?.focus();
   }
 
   return {

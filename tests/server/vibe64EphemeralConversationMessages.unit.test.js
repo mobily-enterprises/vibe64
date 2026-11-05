@@ -23,9 +23,11 @@ test("temporary conversations use the same element and retain app-owned attachme
   const source = await readFile(new URL(
     "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue", import.meta.url
   ), "utf8");
+  const transcript = await readFile(new URL("../../src/lib/vibe64TemporaryAiTasks.js", import.meta.url), "utf8");
   assert.match(source, /<AssistantConversationElement :adapter="displayAdapter">/u);
-  assert.match(source, /const supplied = props\.adapter;/u);
-  assert.match(source, /supplied\.conversation\.turns/u);
+  assert.match(source, /temporaryAiTranscript\(props\.adapter,/u);
+  assert.match(transcript, /supplied\.conversation\.turns/u);
+  assert.doesNotMatch(transcript, /conversationTurnsFromMessages/u);
   assert.doesNotMatch(source, /conversationTurnsFromMessages/u);
   assert.match(source, /#system-message/u);
   assert.match(source, /#attachments/u);

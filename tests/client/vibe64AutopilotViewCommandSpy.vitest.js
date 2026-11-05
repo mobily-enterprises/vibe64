@@ -39,6 +39,7 @@ const temporaryAiViewPaths = [
   "src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue",
   "src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue",
   "src/composables/useVibe64TemporaryAiColleagueView.js",
+  "src/composables/useVibe64TemporaryAiComposer.js",
   "src/composables/useVibe64TemporaryAiNewTask.js",
   "src/composables/useVibe64TemporaryAiRename.js",
   "src/composables/useVibe64TemporaryAiStopAndClose.js",
@@ -965,7 +966,7 @@ describe("Vibe64 direct session view", () => {
       temporaryAiWorkspace.indexOf("<Vibe64EphemeralConversationMessages")
     );
     // The header's Temporary AI opens the workspace; Fix it with AI runs in the AI task window instead.
-    expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
+    expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace()");
     expect(component).toContain('data-vibe64-header-action="temporary-ai"');
     expect(component).not.toContain("<Vibe64NewAiTaskDialog");
     for (const removed of ["startTask", "recoveryOperation", "recoveryContext", "updateRepairTask", "task-finished",
@@ -975,8 +976,8 @@ describe("Vibe64 direct session view", () => {
     // Switching sessions retains the temporary workspace; Main chat closes it.
     expect(component).not.toContain("activateRealSession");
     expect(component).toContain("@select-main-chat=\"showMainChat\"");
-    expect(component).toContain("temporaryAiWorkspace.value?.closeWorkspace?.()");
-    expect(component).toContain("mainChat.value?.focus?.({ preventScroll: true })");
+    expect(component).toContain("temporaryAiWorkspace.value?.closeWorkspace()");
+    expect(component).toContain("mainChat.value?.focus({ preventScroll: true })");
     expect(temporaryAi).toContain("Main chat");
     expect(temporaryAi).toContain("data-temporary-ai-main-chat");
     expect(temporaryAi).toContain("Main and temporary conversations");
@@ -993,8 +994,8 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("finished. Review the result before continuing.");
     expect(temporaryAi).toContain('aria-label="Attach preview screenshot"');
     expect(temporaryAi).toContain('aria-label="Attach console and network diagnostics"');
-    expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
-    expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
+    expect(temporaryAi).toContain("previewAttachmentState.capture()");
+    expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics()");
     expect(temporaryAiComposable).not.toContain("beforeunload");
     expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)]");
     expect(temporaryAiComposable).toContain("() => void restoreTasks(), { immediate: true });");

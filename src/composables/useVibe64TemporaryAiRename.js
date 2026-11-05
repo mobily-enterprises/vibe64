@@ -1,6 +1,9 @@
 import { computed, ref } from "vue";
 
-/** The Rename chat dialog's state: the chat being renamed, its new name, and the save. */
+/**
+ * The Rename chat dialog's state: the chat being renamed, its new name, and the save.
+ * @param {import("@/types.js").Vibe64TemporaryAi} temporary
+ */
 function useVibe64TemporaryAiRename(temporary) {
   const renamingTaskId = ref("");
   const renameValue = ref("");

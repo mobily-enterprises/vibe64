@@ -1,4 +1,4 @@
-import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import {
@@ -23,21 +23,45 @@ import { useVibe64TemporaryAiMessages } from "@/composables/useVibe64TemporaryAi
 import { useVibe64TemporaryAiRestore } from "@/composables/useVibe64TemporaryAiRestore.js";
 import { useVibe64TemporaryAiTaskRecords } from "@/composables/useVibe64TemporaryAiTaskRecords.js";
 
+/**
+ * @typedef {object} TemporaryAiFinishedTask What a finished temporary chat reports to its view.
+ * @property {string} error
+ * @property {string} id
+ * @property {string} outcomeKind
+ * @property {string} runId
+ * @property {string} sessionId
+ * @property {string} status
+ * @property {string} title
+ */
+
+/**
+ * The person's temporary chats in one session: their tabs, drafts, settings and attachments, sending, Stop and
+ * Close, restored from the saved list for the session and viewer.
+ * @param {object} options
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.active] whether the workspace's view is the selected one
+ * @param {import("vue").MaybeRefOrGetter<object>} [options.agentSettings] the agent settings a new chat starts with
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.assistantReady] whether the session's conversations can open
+ * @param {(task: TemporaryAiFinishedTask) => void} options.onTaskFinished called once a busy chat's turn ends
+ * @param {import("vue").MaybeRefOrGetter<boolean>} [options.operationBusy] whether repository work holds the session
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionId
+ * @param {import("vue").MaybeRefOrGetter<string>} options.sessionsApiPath
+ */
 function useVibe64TemporaryAi({
   active = () => true,
   agentSettings = () => defaultVibe64AgentSettings(),
   assistantReady = () => false,
-  onTaskFinished = null,
+  onTaskFinished,
   operationBusy = () => false,
   sessionId,
   sessionsApiPath
-} = {}) {
+}) {
   const tasks = ref([]);
   const activeTaskId = ref("");
   const open = ref(false);
   const closedConversationIds = new Set();
   const projectSlug = useVibe64ProjectSlug();
-  const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER) : LOCAL_ASSISTANT_VIEWER;
+  /** @type {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
+  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, LOCAL_ASSISTANT_VIEWER);
   const actorKey = computed(() => readRefOrGetterValue(viewer)?.actorKey || "");
   const acquireConversation = useAssistantConversationFactory({
     ...vibe64AssistantConversationOptions(),
@@ -149,9 +173,6 @@ function useVibe64TemporaryAi({
   }
 
   function reportTaskFinished(taskId = "") {
-    if (typeof onTaskFinished !== "function") {
-      return;
-    }
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (!task) {
       return;

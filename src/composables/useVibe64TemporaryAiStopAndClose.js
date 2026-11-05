@@ -2,6 +2,9 @@ import { ref } from "vue";
 
 /**
  * Stopping and closing temporary chats; each failure stays beside its chat.
+ * @param {object} options
+ * @param {import("@/types.js").Vibe64TemporaryAi} options.temporary
+ * @param {import("vue").Ref<number>} options.selectionRevision the workspace's selection count, which a Close moves on
  */
 function useVibe64TemporaryAiStopAndClose({ temporary, selectionRevision }) {
   const closingTask = ref(false);

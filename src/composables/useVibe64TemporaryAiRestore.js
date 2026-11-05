@@ -11,14 +11,23 @@ import {
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { temporaryAiRequest, temporaryAiTurnIsActive } from "@/lib/vibe64TemporaryAiTasks.js";
 
-/** @typedef {ReturnType<typeof import("./useVibe64TemporaryAiTaskRecords.js").useVibe64TemporaryAiTaskRecords>} TemporaryAiTaskRecords */
-
 /**
  * Temporary AI's saved task list: restores it for the current session and
  * viewer, follows other views' changes to it, and releases it when the session
  * or viewer changes.
  * @param {object} options
- * @param {TemporaryAiTaskRecords} options.records the task records this composable updates
+ * @param {import("vue").Ref<object[]>} options.tasks the session's temporary chats, in tab order
+ * @param {import("vue").Ref<string>} options.activeTaskId
+ * @param {import("vue").Ref<boolean>} options.open whether the workspace is shown
+ * @param {Set<string>} options.closedConversationIds conversations closed here, which a restore leaves out
+ * @param {import("vue").Ref<string>} options.projectSlug
+ * @param {import("vue").Ref<string>} options.actorKey the viewer whose chats are restored
+ * @param {import("vue").MaybeRefOrGetter<boolean>} options.assistantReady whether the session's conversations can open
+ * @param {() => string} options.currentSessionId
+ * @param {() => string} options.currentSessionsApiPath
+ * @param {() => boolean} options.isDisposed whether the view has been removed
+ * @param {(value: object) => object} options.bindTask binds a saved chat's record to its conversation
+ * @param {import("@/types.js").Vibe64TemporaryAiTaskRecords} options.records the task records this composable updates
  */
 function useVibe64TemporaryAiRestore({
   tasks,
@@ -122,10 +131,10 @@ function useVibe64TemporaryAiRestore({
   }
   // Chats created or closed while this view was disconnected sent their notice
   // to nobody; the saved list is the authority once the connection returns.
-  const realtimeSocket = useRealtimeSocket({ required: false });
+  const realtimeSocket = useRealtimeSocket();
   const restoreAfterReconnect = () => void restoreTasks();
-  realtimeSocket?.on?.("connect", restoreAfterReconnect);
-  onBeforeUnmount(() => realtimeSocket?.off?.("connect", restoreAfterReconnect));
+  realtimeSocket.on("connect", restoreAfterReconnect);
+  onBeforeUnmount(() => realtimeSocket.off("connect", restoreAfterReconnect));
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} }) => (

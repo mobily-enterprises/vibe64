@@ -27,6 +27,8 @@
 /** @typedef {ReturnType<typeof import("./composables/useVibe64SourceEditorFile.js").useVibe64SourceEditorFile>} Vibe64SourceEditorFile */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64SourceEditorTree.js").useVibe64SourceEditorTree>} Vibe64SourceEditorTree */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64StarredFiles.js").useVibe64StarredFiles>} Vibe64StarredFiles */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64TemporaryAi.js").useVibe64TemporaryAi>} Vibe64TemporaryAi */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64TemporaryAiTaskRecords.js").useVibe64TemporaryAiTaskRecords>} Vibe64TemporaryAiTaskRecords */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64Terminal.js").useVibe64Terminal>} Vibe64Terminal */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64TerminalConnection.js").useVibe64TerminalConnection>} Vibe64TerminalConnection */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64TerminalDisplay.js").useVibe64TerminalDisplay>} Vibe64TerminalDisplay */

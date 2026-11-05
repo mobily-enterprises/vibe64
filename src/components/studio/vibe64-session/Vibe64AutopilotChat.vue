@@ -463,7 +463,7 @@ function applyPromptHint(text = "") {
 }
 
 async function showMainChat() {
-  temporaryAiWorkspace.value?.closeWorkspace?.();
+  temporaryAiWorkspace.value?.closeWorkspace();
   await nextTick();
   mainChat.value?.focus({ preventScroll: true });
 }

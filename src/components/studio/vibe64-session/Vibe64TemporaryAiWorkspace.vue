@@ -126,7 +126,7 @@
                   title="Attach files"
                   type="button"
                   variant="text"
-                  @click="taskPrompt(task.id)?.openFilePicker?.()"
+                  @click="taskPrompt(task.id)?.openFilePicker()"
                 />
                 <v-btn
                   v-if="previewAttachmentState.captureAvailable"
@@ -137,7 +137,7 @@
                   size="small"
                   title="Attach preview screenshot"
                   variant="text"
-                  @click="previewAttachmentState.capture?.()"
+                  @click="previewAttachmentState.capture()"
                 />
                 <v-btn
                   v-if="previewAttachmentState.diagnosticsAvailable"
@@ -148,7 +148,7 @@
                   size="small"
                   title="Attach console and network diagnostics"
                   variant="text"
-                  @click="previewAttachmentState.attachDiagnostics?.()"
+                  @click="previewAttachmentState.attachDiagnostics()"
                 />
                 <Vibe64AgentSettingsMenu
                   v-if="!task.routingMetadata?.assistant_routing"
@@ -238,27 +238,37 @@ import {
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";
 import { useVibe64TemporaryAiColleagueView } from "@/composables/useVibe64TemporaryAiColleagueView.js";
+import { useVibe64TemporaryAiComposer } from "@/composables/useVibe64TemporaryAiComposer.js";
 import { useVibe64TemporaryAiNewTask } from "@/composables/useVibe64TemporaryAiNewTask.js";
 import { useVibe64TemporaryAiRename } from "@/composables/useVibe64TemporaryAiRename.js";
 import { useVibe64TemporaryAiStopAndClose } from "@/composables/useVibe64TemporaryAiStopAndClose.js";
 import { useVibe64TemporaryAiTaskElements } from "@/composables/useVibe64TemporaryAiTaskElements.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
-import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 
 const emit = defineEmits(["select-main-chat"]);
 const props = defineProps({
   // Opens one project file in this session's Dashboard → Files editor (a
   // Colleague "show me" guide); returns true only when that file opened.
-  openFile: { type: Function, default: null },
-  sendLessonMessage: { type: Function, default: null },
+  openFile: { type: /** @type {import("vue").PropType<(path: string) => boolean>} */ (Function), required: true },
+  // Sends a lesson beat's prompt to this session's Main chat; true once it is sent.
+  sendLessonMessage: { type: /** @type {import("vue").PropType<(text: string) => Promise<boolean>>} */ (Function), required: true },
   active: Boolean,
   sessionSelected: Boolean,
   assistantReady: Boolean,
   canConfigureRouting: Boolean,
   connectionUnavailable: Boolean,
   projectSlug: { type: String, default: "" },
-  previewAttachmentState: { type: Object, default: () => ({}) },
+  previewAttachmentState: {
+    required: true,
+    type: /** @type {import("vue").PropType<{
+      attachDiagnostics: () => void,
+      capture: () => void,
+      captureAvailable: boolean,
+      captureBusy: boolean,
+      diagnosticsAvailable: boolean,
+      diagnosticsBusy: boolean
+    }>} */ (Object)
+  },
   repositoryBusy: Boolean,
   assistantSelection: {
     default: () => ({}),
@@ -352,22 +362,6 @@ const {
   setTaskTabButton,
   taskPrompt
 } = useVibe64TemporaryAiTaskElements({ workspace, activeTask });
-const routingRequest = computed(() => assistantRoutingRequestForDisplay(activeTask.value?.routingMetadata));
-const modeSession = computed(() => ({ sessionId: props.sessionId,
-  assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
-  agentSession: { goal: activeTask.value?.goal || null },
-  metadata: activeTask.value?.routingMetadata || {} }));
-const activeTaskError = computed(() => {
-  if (["failed", "uncertain"].includes(routingRequest.value?.status) &&
-      routingRequest.value.error === activeTask.value?.error) return "";
-  if (activeTask.value?.delivery.state.messages.some((message) => (
-    message.status === "failed" && message.error === activeTask.value.error
-  ))) return "";
-  if (props.connectionUnavailable && activeTask.value?.errorCode === "vibe64_agent_write_mode_busy") {
-    return "";
-  }
-  return activeTask.value?.error || taskAccessReason(activeTask.value);
-});
 const {
   actionErrors,
   closeTask,
@@ -375,44 +369,16 @@ const {
   stopTask,
   stoppingTaskId
 } = useVibe64TemporaryAiStopAndClose({ temporary, selectionRevision });
-const typingPresence = useVibe64SessionTypingPresence({
-  active: computed(() => props.active && temporary.open.value && Boolean(activeTask.value?.conversationId) &&
-    !taskInputDisabled(activeTask.value) && !closingTask.value),
-  conversationId: computed(() => activeTask.value?.conversationId || ""),
-  projectSlug: computed(() => props.projectSlug),
-  sessionId: computed(() => props.sessionId),
-  sessionsApiPath: resolvedSessionsApiPath
-});
-const activityLabel = computed(() => {
-  if (activeTask.value?.delivery.state.sending) return "Sending to assistant…";
-  if (activeTask.value?.busy && activeTask.value.phase === "background") return "Reply ready · background task still running…";
-  if (activeTask.value?.busy) return "AI is working…";
-  return typingPresence.typingLabel.value;
-});
-
-function taskAccessReason(task) {
-  if (!task) return "";
-  if (task.busy) return task.canSteer === false
-    ? "You cannot steer this turn's AI connection. You can send a new request when it finishes." : "";
-  const mode = assistantRoutingFromMetadata(task.routingMetadata || {})?.mode;
-  const decision = task.purposes?.[mode];
-  return decision?.available === false ? decision.message || "This mode is unavailable. Choose another chat mode." : "";
-}
-
-function taskInputDisabled(task) {
-  return props.repositoryBusy || task.state === "closing" || task.status === "closing" || Boolean(taskAccessReason(task));
-}
-
-async function sendTask(taskId = "", options = {}) {
-  const currentPrompt = taskPrompt(taskId);
-  if (props.connectionUnavailable || !taskId || currentPrompt?.attachmentsCanSubmit?.() === false) {
-    return;
-  }
-  const task = temporary.tasks.value.find((task) => task.id === taskId);
-  if (!task || taskInputDisabled(task)) return;
-  typingPresence.submit();
-  return temporary.send(taskId, { ...options, attachmentOwner: currentPrompt });
-}
+const {
+  activeTaskError,
+  activityLabel,
+  modeSession,
+  routingRequest,
+  sendTask,
+  taskAccessReason,
+  taskInputDisabled,
+  typingPresence
+} = useVibe64TemporaryAiComposer({ props, temporary, closingTask, taskPrompt, sessionsApiPath: resolvedSessionsApiPath });
 
 function showWorkspace() {
   const revision = ++selectionRevision.value;

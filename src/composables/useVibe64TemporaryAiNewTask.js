@@ -4,6 +4,11 @@ import { nextTick, ref, watch } from "vue";
  * The New temporary chat flow. When Main has messages it offers to copy them
  * first; otherwise it creates the chat directly and shows the dialog only for a
  * failure. Cancelling a first chat returns to Main chat.
+ * @param {object} options
+ * @param {{ projectSlug: string, sessionId: string, mainHasMessages: boolean }} options.props the workspace's props
+ * @param {import("@/types.js").Vibe64TemporaryAi} options.temporary
+ * @param {import("vue").Ref<number>} options.selectionRevision the workspace's selection count, which a creation checks
+ * @param {() => void} options.selectMainChat returns the person to Main chat
  */
 function useVibe64TemporaryAiNewTask({ props, temporary, selectionRevision, selectMainChat }) {
   const newTaskOpen = ref(false);

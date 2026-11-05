@@ -22,10 +22,8 @@
 import { computed } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
-import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
-import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
-import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
+import { temporaryAiTranscript } from "@/lib/vibe64TemporaryAiTasks.js";
 const props = defineProps({
   adapter: { type: Object, required: true },
   routingRequest: { type: Object, default: null },
@@ -37,40 +35,12 @@ const props = defineProps({
   userLabel: { type: String, default: "You" }
 });
 const emit = defineEmits(["resend", "cancel", "edit"]);
-const displayAdapter = computed(() => {
-  const supplied = props.adapter;
-  const turns = (supplied.conversation.turns || []).map(turn => {
-    const selection = turn.metadata?.assistantSelection;
-    const present = message => {
-      if (!message) return message;
-      const recordedSelection = message.assistantSelection || message.metadata?.assistantSelection || selection;
-      const displayed = thinkingMessagePresentation(message, recordedSelection);
-      return displayed && { ...displayed,
-        ...conversationAttribution(recordedSelection, message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting) };
-    };
-    return { ...turn,
-      ...conversationAttribution(selection, turn.metadata?.assistantRouting),
-      assistant: present(turn.assistant),
-      thinking: turn.thinking?.map(present).filter(Boolean),
-      commentary: turn.commentary?.map(present).filter(Boolean),
-      messages: turn.messages?.map(present).filter(Boolean)
-    };
-  });
-  const routedTurns = chatTurnsWithRouting(supplied.delivery ? supplied.delivery.turns(turns) : turns,
-    props.routingRequest, supplied.delivery?.state.sending === true);
-  return { ...supplied,
-    // Apply the existing receipt projection once, before product Router status.
-    delivery: null,
-    conversation: { ...supplied.conversation, cancellableDelivery: true,
-      working: props.working ?? supplied.conversation.working, turns: routedTurns,
-      assistantLabel: props.assistantLabel, scrollKey: props.scrollKey, variant: "task", visible: true,
-      userMessageFormat: "plain", progressPreviewLimit: usesCommentaryForThinking(routedTurns.at(-1)?.metadata?.assistantSelection) ? 1 : 0,
-      systemLabel: "System", welcomeMessage: routedTurns.length ? "" : props.emptyMessage
-    },
-    actions: { ...supplied.actions,
-      resend: id => emit("resend", id), checkDelivery: id => emit("resend", id),
-      cancel: id => emit("cancel", id), edit: id => emit("edit", id)
-    }
-  };
-});
+const displayAdapter = computed(() => temporaryAiTranscript(props.adapter, {
+  routingRequest: props.routingRequest,
+  working: props.working,
+  scrollKey: props.scrollKey,
+  assistantLabel: props.assistantLabel,
+  emptyMessage: props.emptyMessage,
+  actions: { resend: id => emit("resend", id), cancel: id => emit("cancel", id), edit: id => emit("edit", id) }
+}));
 </script>

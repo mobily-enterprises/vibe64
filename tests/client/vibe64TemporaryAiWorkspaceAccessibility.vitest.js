@@ -94,8 +94,12 @@ vi.mock("@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", () 
 vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", () => ({
   default: defineComponent({
     inheritAttrs: false,
-    setup(_props, { attrs, slots }) { return () => h("div", [h("textarea", attrs),
-      ...(slots.footer?.({ attachmentState: { canSubmit: true, canAddFiles: true } }) || [])]); }
+    setup(_props, { attrs, expose, slots }) {
+      // What the workspace calls on the prompt it renders: its attachments' readiness and its file picker.
+      expose({ attachmentsCanSubmit: () => true, openFilePicker() {} });
+      return () => h("div", [h("textarea", attrs),
+        ...(slots.footer?.({ attachmentState: { canSubmit: true, canAddFiles: true } }) || [])]);
+    }
   })
 }));
 
@@ -111,7 +115,8 @@ import Vibe64EphemeralConversationMessages from "../../src/components/studio/vib
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_COLLEAGUE_VIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
+import { provideShellContext } from "./helpers/shellContext.js";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
@@ -231,10 +236,21 @@ function testRenderer() {
   });
 }
 
+// The session view's preview attachments with no preview mounted.
+const NO_PREVIEW_ATTACHMENTS = {
+  attachDiagnostics() {}, capture() {}, captureAvailable: false, captureBusy: false,
+  diagnosticsAvailable: false, diagnosticsBusy: false
+};
+
 function mountWorkspace(container, props, colleagueView = null) {
-  // The context-copy dialog is offered only when Main has messages to copy.
-  const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, { mainHasMessages: true, ...props });
-  if (colleagueView) app.provide(VIBE64_COLLEAGUE_VIEW_KEY, colleagueView);
+  // The context-copy dialog is offered only when Main has messages to copy. The session view always passes its file
+  // opener, lesson sender and preview attachments, and the session's AI task host has no task open.
+  const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, {
+    mainHasMessages: true, openFile: () => false, sendLessonMessage: async () => false,
+    previewAttachmentState: NO_PREVIEW_ATTACHMENTS, ...props
+  });
+  provideShellContext(app, colleagueView ? { colleagueView } : {});
+  app.provide(VIBE64_AI_TASKS_KEY, { open: false, task: null, show() {}, hide() {} });
   app.component("VAlert", defineComponent({
     inheritAttrs: false,
     props: {
@@ -515,10 +531,6 @@ describe("Temporary AI workspace accessibility", () => {
       expect(view.value.openFile("missing.js")).toBe(false);
       expect(openFile).toHaveBeenCalledWith("src/app.js");
     } finally { app.unmount(); }
-    const { app: without } = mountWorkspace({ children: [] }, {
-      active: true, sessionSelected: true, assistantReady: true, projectSlug: "alpha", sessionId: "one"
-    }, view);
-    try { expect(view.value.openFile("src/app.js")).toBe(false); } finally { without.unmount(); }
   });
 
   it("retains the selected conversation owner while chat is hidden and withdraws it on deselection", async () => {

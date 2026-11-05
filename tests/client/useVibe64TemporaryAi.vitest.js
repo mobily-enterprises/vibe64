@@ -27,7 +27,8 @@ async function mountTemporaryAi(options = {}) {
   const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
   let temporary;
   const app = renderer.createApp({ setup() {
-    temporary = useVibe64TemporaryAi({ sessionId: () => "session-1",
+    // The workspace always hears when a chat's turn ends.
+    temporary = useVibe64TemporaryAi({ onTaskFinished() {}, sessionId: () => "session-1",
       sessionsApiPath: () => "/api/vibe64/sessions", ...options });
     return () => null;
   } });

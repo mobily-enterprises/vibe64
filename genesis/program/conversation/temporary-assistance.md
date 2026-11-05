@@ -258,6 +258,7 @@ Changing the composer selection never rewrites historical attribution.
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiTabs.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiRecoveryRow.vue`
 - `src/composables/useVibe64TemporaryAiColleagueView.js`
+- `src/composables/useVibe64TemporaryAiComposer.js`
 - `src/composables/useVibe64TemporaryAiNewTask.js`
 - `src/composables/useVibe64TemporaryAiRename.js`
 - `src/composables/useVibe64TemporaryAiStopAndClose.js`

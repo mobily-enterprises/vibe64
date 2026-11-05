@@ -10,13 +10,18 @@ import {
   temporaryAiTaskPresentation
 } from "@/lib/vibe64TemporaryAiTasks.js";
 
-/** @typedef {ReturnType<typeof import("./useVibe64TemporaryAiTaskRecords.js").useVibe64TemporaryAiTaskRecords>} TemporaryAiTaskRecords */
-
 /**
  * Temporary AI's messages: sending a task's draft, cancelling or editing a
  * message not yet answered, and stopping a task's turn.
  * @param {object} options
- * @param {TemporaryAiTaskRecords} options.records the task records this composable updates
+ * @param {import("vue").Ref<object[]>} options.tasks the session's temporary chats, in tab order
+ * @param {Set<string>} options.closingTaskIds chats whose Close is in progress
+ * @param {Set<string>} options.stoppingTaskIds chats whose Stop is in progress
+ * @param {() => boolean} options.isDisposed whether the view has been removed
+ * @param {import("vue").MaybeRefOrGetter<boolean>} options.operationBusy whether repository work holds the session
+ * @param {import("@/types.js").Vibe64TemporaryAiTaskRecords} options.records the task records this composable updates
+ * @param {(taskId: string) => void} options.reportTaskFinished tells the view a busy chat's turn ended
+ * @param {(taskId: string, draft: string) => void} options.updateDraft
  */
 function useVibe64TemporaryAiMessages({
   tasks,

@@ -92,7 +92,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] },
   activeTaskId: { type: String, default: "" },
   // Remembers each task's tab button, so the workspace can reveal and focus it.
-  setTabButton: { type: Function, required: true },
+  setTabButton: { type: /** @type {import("vue").PropType<(taskId: string, element: HTMLElement | null) => void>} */ (Function), required: true },
   sessionId: { type: String, default: "" },
   repositoryBusy: Boolean,
   closingTask: Boolean,

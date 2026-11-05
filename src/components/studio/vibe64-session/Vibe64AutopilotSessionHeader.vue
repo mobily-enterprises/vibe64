@@ -346,7 +346,7 @@ function openTemporaryAi() {
   if (!sessionId.value || props.sessionSelectionArchived) {
     return false;
   }
-  temporaryAiWorkspace.value?.showWorkspace?.();
+  temporaryAiWorkspace.value?.showWorkspace();
   return true;
 }
 
