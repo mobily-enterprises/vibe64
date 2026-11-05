@@ -1019,7 +1019,10 @@ test("Claude shutdown retains its resolved selection after main chat moves to Co
 
   assert.equal((await f.provider.invalidateRuntimes({}, { reason: "server-shutdown" })).ok, true);
   assert.equal(f.processes[0].stopped, true);
-  assert.equal(JSON.parse(f.context.session.metadata[`claude_conversation_${claudeId}`]).executionId, "");
+  // Shutdown leaves the running turn's end, and its checkpoint, to the next
+  // server's recovery: the saved record keeps its execution, as after a crash.
+  const { executionId, state } = JSON.parse(f.context.session.metadata[`claude_conversation_${claudeId}`]);
+  assert.deepEqual({ executionId, state }, { executionId: "test-0", state: "active" });
   assert.equal(f.context.session.metadata.assistant_selection, selection);
   assert.equal(f.context.session.metadata.agent_identity_provider, "codex");
   assert.equal(f.context.session.metadata.agent_identity_conversation_id, "retained-codex-thread");
