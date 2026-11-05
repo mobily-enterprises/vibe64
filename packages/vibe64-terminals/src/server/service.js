@@ -511,6 +511,7 @@ function createService({
     waitForWorkspaceSetup: workspacePreparation.waitForWorkspaceSetup,
     close: shutdown.close,
     openProjectRuntime: projectRuntime.openProjectRuntime,
+    noteProjectRuntimeActivity: projectRuntime.noteProjectRuntimeActivity,
     closeDormantProjectRuntime: projectRuntime.closeDormantProjectRuntime,
     closeDormantProjectRuntimes: projectRuntime.closeDormantProjectRuntimes,
     closeSessionTerminals: terminals.closeSessionTerminals,

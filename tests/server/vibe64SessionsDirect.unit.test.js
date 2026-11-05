@@ -348,8 +348,9 @@ test("Colleague confirms unsaved work before archiving a session", () => {
   assert.match(description, /only after the user confirms archiving without saving/u);
 });
 
-test("typing presence trusts the authenticated request user and never accepts a draft", async () => {
+test("typing presence trusts the authenticated request user, never accepts a draft and keeps the project open", async () => {
   const updates = [];
+  let activityNotes = 0;
   const sessionPresence = {
     close() {},
     async update(input) {
@@ -369,7 +370,12 @@ test("typing presence trusts the authenticated request user and never accepts a 
       createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     sessionPresence,
-    terminals: {}
+    terminals: {
+      async noteProjectRuntimeActivity() {
+        activityNotes += 1;
+        return { ok: true };
+      }
+    }
   });
   const action = createSessionActions({ sessions: service }).map(underActionPolicy)
     .find((candidate) => candidate.id === ACTION_UPDATE_SESSION_PRESENCE);
@@ -387,6 +393,7 @@ test("typing presence trusts the authenticated request user and never accepts a 
   }));
   assert.deepEqual(unavailable, { ok: true, status: "unavailable" });
   assert.equal(updates.length, 0);
+  assert.equal(activityNotes, 0);
 
   const result = await runWithProjectRequestContext({ slug: "beepollen" }, () => (
     action.execute(validated.validatedObject, {
@@ -410,11 +417,21 @@ test("typing presence trusts the authenticated request user and never accepts a 
     sessionId: "session-1",
     typing: true
   }]);
+  // Typing is project activity, so idle cleanup leaves the project open.
+  assert.equal(activityNotes, 1);
+
+  const stopped = action.input.schema.create({ originId: "tab:member-1", sequence: 8, sessionId: "session-1", typing: false });
+  await runWithProjectRequestContext({ slug: "beepollen" }, () => action.execute(stopped.validatedObject, {
+    requestMeta: { request: { vibe64User: { preferredName: "John", username: "member-1" } } }
+  }));
+  assert.equal(updates.length, 2);
+  assert.equal(activityNotes, 1);
 });
 
 test("temporary typing presence requires a saved chat in the requested session", async () => {
   const updates = [];
   const lookups = [];
+  let activityNotes = 0;
   const service = createService({
     project: {
       async createRuntime() {
@@ -439,7 +456,12 @@ test("temporary typing presence requires a saved chat in the requested session",
         return { ok: true, status: "typing" };
       }
     },
-    terminals: {}
+    terminals: {
+      async noteProjectRuntimeActivity() {
+        activityNotes += 1;
+        return { ok: true };
+      }
+    }
   });
   const action = createSessionActions({ sessions: service }).map(underActionPolicy)
     .find((candidate) => candidate.id === ACTION_UPDATE_SESSION_PRESENCE);
@@ -456,6 +478,7 @@ test("temporary typing presence requires a saved chat in the requested session",
   }
   assert.equal(lookups.length, 3);
   assert.equal(updates.length, 1);
+  assert.equal(activityNotes, 1);
   assert.equal(updates[0].conversationId, "saved-chat");
   assert.equal(updates[0].actorId, "member");
 });

@@ -3,6 +3,7 @@ import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequest
 import {
   clearProjectRuntimeOpenState,
   readProjectRuntimeOpenState,
+  touchProjectRuntimeOpenState,
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import {
@@ -124,7 +125,19 @@ function createServiceProjectRuntime({
     };
   }
 
+  /**
+   * Idle cleanup decides and closes in the project's open queue, so an open or
+   * recorded activity lands either before the decision, keeping the project
+   * open, or after the Close, when an open opens the project again.
+   */
   async function closeDormantCurrentProjectRuntime(input = {}) {
+    return projectRuntimeOpens.run(
+      sessionAccess.projectRuntimeContext().projectRuntimeRoot,
+      () => closeCurrentProjectRuntimeIfDormant(input)
+    );
+  }
+
+  async function closeCurrentProjectRuntimeIfDormant(input = {}) {
     const { context, runtime } = await sessionAccess.currentProjectRuntimeOpenState();
     if (runtime.open !== true) {
       return {
@@ -265,11 +278,12 @@ function createServiceProjectRuntime({
   async function openProjectRuntime(input) {
     const context = sessionAccess.projectRuntimeContext();
     const reason = String(input?.reason || "project-open").trim() || "project-open";
-    projectServices.opened(context);
     const key = context.projectRuntimeRoot;
     // Tabs share a runtime. Serialize opens so they observe one transition,
-    // while every visit still refreshes the dormant-runtime grace period.
+    // while every visit still refreshes the dormant-runtime grace period. An
+    // open that arrives during idle cleanup waits for its Close, then reopens.
     return projectRuntimeOpens.run(key, async () => {
+      projectServices.opened(context);
       const previousRuntime = await readProjectRuntimeOpenState({ projectRuntimeRoot: key });
       const runtime = await writeProjectRuntimeOpenState({
         projectRuntimeRoot: key,
@@ -288,6 +302,19 @@ function createServiceProjectRuntime({
       }
       return result;
     });
+  }
+
+  /**
+   * Records activity, such as typing, in the current project's open runtime so
+   * idle cleanup leaves it open. A closed project stays closed.
+   */
+  async function noteProjectRuntimeActivity() {
+    const key = sessionAccess.projectRuntimeContext().projectRuntimeRoot;
+    const runtime = await projectRuntimeOpens.run(
+      key,
+      () => touchProjectRuntimeOpenState({ projectRuntimeRoot: key })
+    );
+    return { ok: true, runtime };
   }
 
   function closeDormantProjectRuntime(input = {}) {
@@ -557,6 +584,7 @@ function createServiceProjectRuntime({
     closeDormantProjectRuntime,
     closeDormantProjectRuntimes,
     closeProjectRuntime,
+    noteProjectRuntimeActivity,
     openProjectRuntime,
     outputTargetStatus,
     reconcileOpenAgentSessions

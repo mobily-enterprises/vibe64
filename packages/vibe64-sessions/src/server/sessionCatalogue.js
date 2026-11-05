@@ -237,7 +237,7 @@ function createSessionCatalogue({
         const conversation = await runtime.store.readSessionConversation(sessionId, conversationId);
         if (!conversation) return { ok: true, status: "unavailable" };
       }
-      return sessionPresence.update({
+      const result = await sessionPresence.update({
         ...actor,
         ...(conversationId ? { conversationId } : {}),
         originId: input.originId,
@@ -246,6 +246,9 @@ function createSessionCatalogue({
         sessionId,
         typing: input.typing
       });
+      // Someone typing is using the project, so idle cleanup must not close it.
+      if (input.typing === true) await terminals.noteProjectRuntimeActivity();
+      return result;
     }, "Vibe64 could not update typing presence.");
   }
 

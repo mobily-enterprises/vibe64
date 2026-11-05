@@ -339,8 +339,9 @@ The pinned session cannot be archived or renewed, and the project cannot close
 or be closed by idle cleanup. Closing your browser does not remove the pin.
 Idle cleanup otherwise closes an open project, with its Preview, terminals and
 assistant processes, 30 to 35 minutes after its last recorded activity (opening
-it, session changes and assistant work). Leaving the project or closing the
-browser does not close it sooner; close the project yourself to free its
+it, typing in one of its chats, session changes and assistant work). Opening the
+project while idle cleanup is closing it waits for that Close, then opens the
+project again. Leaving the project or closing the browser does not close it sooner; close the project yourself to free its
 memory at once, or ask Colleague to close it: it uses the same Close, which also
 stops other sessions' running work, and reports a failed Close as incomplete
 cleanup. A running assistant turn or active goal keeps it open. If one of the

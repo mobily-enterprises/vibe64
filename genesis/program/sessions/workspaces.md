@@ -903,6 +903,11 @@ projects. Idle cleanup reads every open session's goal and temporary-chat state
 before closing; a session whose state cannot be read keeps the project open, is
 named in the result, and is logged as the operational warning
 `vibe64.project_runtime.dormant_close_failed` with the project and session IDs.
+Idle cleanup decides and closes inside the project's open queue, so an open
+requested meanwhile waits for that Close and then reopens the project instead
+of being refused or undone. Typing presence records project activity through the
+same queue by refreshing the open marker's `updatedAt`; it never reopens a closed
+project. The open marker is replaced atomically, so no reader sees a partial one.
 A session whose source was never created ran no assistant, so idle cleanup,
 project Close and archive skip its assistant checks and shutdown. Daemon shutdown retains its original teardown path. Unpinning is
 explicit and never saves or publishes work. Cross-project messages without `--session` still target

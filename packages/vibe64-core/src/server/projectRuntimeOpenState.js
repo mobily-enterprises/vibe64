@@ -1,6 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
+import { writeJsonFileAtomic } from "./atomicFile.js";
 import { isMissingPathError, isPlainObject } from "./core.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -54,14 +55,25 @@ async function writeProjectRuntimeOpenState({
     reason: toText(reason) || "project-open",
     updatedAt: now
   };
-  await mkdir(path.dirname(filePath), {
-    recursive: true
-  });
-  await writeFile(filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  return publicProjectRuntimeOpenState({
-    ...state,
-    filePath
-  });
+  // Readers never see a partial file, which they would read as a closed project.
+  await writeJsonFileAtomic(filePath, state);
+  return publicProjectRuntimeOpenState(state);
+}
+
+/**
+ * Records activity in an open project runtime: only its updatedAt changes.
+ * A closed runtime stays closed.
+ */
+async function touchProjectRuntimeOpenState({
+  projectRuntimeRoot = ""
+} = {}) {
+  const current = await readProjectRuntimeOpenState({ projectRuntimeRoot });
+  if (current.open !== true) {
+    return publicProjectRuntimeOpenState(current);
+  }
+  const state = { ...current, updatedAt: new Date().toISOString() };
+  await writeJsonFileAtomic(projectRuntimeOpenStatePath(projectRuntimeRoot), state);
+  return state;
 }
 
 async function clearProjectRuntimeOpenState({
@@ -100,6 +112,7 @@ export {
   clearProjectRuntimeOpenState,
   publicProjectRuntimeOpenState,
   readProjectRuntimeOpenState,
+  touchProjectRuntimeOpenState,
   writeProjectRuntimeOpenState,
   __testables
 };
