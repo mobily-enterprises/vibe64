@@ -50,7 +50,9 @@ function createOutputTargetTerminalSessions({
     if (testRun) testRun.closing = true;
     await stopActiveUsageRecording(currentProjectScopeKey(), sessionId, "session-ended");
     return launchCoordination.withLaunchStartLock(sessionId, async () => {
-      await state.launchPreviewProxies.close({
+      // The session ends, so its Preview access token ends with it. A restart,
+      // Stop or closed terminal keeps it, so open Preview tabs come back.
+      await state.launchPreviewProxies.retire({
         sessionId
       });
       return closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));

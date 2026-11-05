@@ -589,10 +589,8 @@ test("launch preview proxy republishes a public socket removed outside its regis
       ]);
 
       assert.equal(second.href, concurrent.href);
-      assert.notEqual(
-        new URL(second.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM),
-        new URL(first.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
-      );
+      // The republished proxy is the same session's Preview, so tabs keep their token.
+      assert.equal(second.href, first.href);
       assert.equal((await lstat(socketPath)).isSocket(), true);
       const response = await requestUnixSocket({
         headers: {
@@ -837,58 +835,139 @@ test("launch preview proxy reuses an in-flight public Unix socket start", async 
   });
 });
 
-test("launch preview restarts keep their origin and rotate their bearer token", async () => {
+test("an app restart keeps its Preview's origin and the token that open tabs carry", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-restart-"));
-  await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-123456abcdef.workspace.users.example.test";
-    const env = {
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
-    };
-    const registry = createLaunchPreviewProxyRegistry({ env });
-    try {
-      const first = await registry.ensure({
-        previewPublicOrigin: publicOrigin,
-        sessionId: "session-restart",
-        targetHref: `${target.origin}/home`,
-        terminalSessionId: "terminal-one"
-      });
-      const second = await registry.ensure({
-        previewPublicOrigin: publicOrigin,
-        sessionId: "session-restart",
-        targetHref: `${target.origin}/home`,
-        terminalSessionId: "terminal-two"
-      });
-
-      assert.equal(new URL(first.href).origin, new URL(second.href).origin);
-      assert.notEqual(
-        new URL(first.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM),
-        new URL(second.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
-      );
-
+  await withTargetServer(async (firstRun) => {
+    await withTargetServer(async (secondRun) => {
+      const publicOrigin = "https://v64preview-123456abcdef.workspace.users.example.test";
+      const env = {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      };
+      const host = new URL(publicOrigin).host;
       const socketPath = previewPublicSocketPath(publicOrigin, env);
-      const staleTokenResponse = await requestUnixSocket({
-        headers: {
-          Host: new URL(publicOrigin).host
-        },
-        path: `${new URL(first.href).pathname}${new URL(first.href).search}`,
-        socketPath
+      const registry = createLaunchPreviewProxyRegistry({ env });
+      const run = (target, terminalSessionId) => registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-restart",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId
       });
-      const currentTokenResponse = await requestUnixSocket({
-        headers: {
-          Host: new URL(publicOrigin).host
-        },
-        path: `${new URL(second.href).pathname}${new URL(second.href).search}`,
-        socketPath
+      try {
+        const first = await run(firstRun, "terminal-one");
+        // The tab opened before the restart holds the token in its cookie.
+        const bootstrap = await requestUnixSocket({
+          headers: {
+            Accept: "text/html",
+            Host: host
+          },
+          path: `${new URL(first.href).pathname}${new URL(first.href).search}`,
+          socketPath
+        });
+        assert.equal(bootstrap.statusCode, 302);
+        const tabCookie = previewCookiePair(
+          String(bootstrap.headers["set-cookie"]),
+          previewTokenCookieName(publicOrigin)
+        );
+
+        // The restarted app listens on a new loopback port behind a new proxy.
+        const second = await run(secondRun, "terminal-two");
+        assert.equal(second.href, first.href);
+        const reloaded = await requestUnixSocket({
+          headers: {
+            Accept: "text/html",
+            Cookie: tabCookie,
+            Host: host
+          },
+          path: "/home",
+          socketPath
+        });
+        assert.equal(reloaded.statusCode, 200);
+        assert.match(reloaded.body, /Target home/u);
+        assert.equal(secondRun.requests.length, 1);
+
+        // When the session ends its token is retired: a later Preview gets a new one.
+        await registry.retire({ sessionId: "session-restart" });
+        const nextSessionRun = await run(secondRun, "terminal-three");
+        assert.notEqual(previewToken(nextSessionRun.href), previewToken(first.href));
+        const retired = await requestUnixSocket({
+          headers: {
+            Cookie: tabCookie,
+            Host: host
+          },
+          path: "/home",
+          socketPath
+        });
+        assert.equal(retired.statusCode, 403);
+      } finally {
+        await registry.closeAll();
+        await rm(socketDir, {
+          force: true,
+          recursive: true
+        });
+      }
+    });
+  });
+});
+
+test("a restarted app's live reload reconnects with the open tab's token, which another session's Preview refuses", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-reload-"));
+  await withWebSocketTargetServer(async (firstRun) => {
+    await withWebSocketTargetServer(async (secondRun) => {
+      const env = {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      };
+      const sessionOrigin = "https://v64preview-aaaaaaaaaaaa.workspace.users.example.test";
+      const otherSessionOrigin = "https://v64preview-bbbbbbbbbbbb.workspace.users.example.test";
+      const registry = createLaunchPreviewProxyRegistry({ env });
+      const preview = (sessionId, publicOrigin, target, terminalSessionId) => registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId,
+        targetHref: `${target.origin}/hmr`,
+        terminalSessionId
       });
-      assert.equal(staleTokenResponse.statusCode, 403);
-      assert.equal(currentTokenResponse.statusCode, 200);
-    } finally {
-      await registry.closeAll();
-      await rm(socketDir, {
-        force: true,
-        recursive: true
-      });
-    }
+      const liveReload = (publicOrigin, token) => connectWebSocket(
+        `ws+unix:${previewPublicSocketPath(publicOrigin, env)}:/hmr`,
+        {
+          headers: {
+            Cookie: `${previewTokenCookieName(publicOrigin)}=${token}`,
+            Host: new URL(publicOrigin).host
+          }
+        }
+      );
+      try {
+        const tabToken = previewToken((await preview("session-reload", sessionOrigin, firstRun, "terminal-one")).href);
+        const otherSession = await preview("session-other", otherSessionOrigin, firstRun, "terminal-other");
+        await preview("session-reload", sessionOrigin, secondRun, "terminal-two");
+
+        const reconnected = await liveReload(sessionOrigin, tabToken);
+        assert.equal(reconnected.ok, true);
+        assert.equal(await sendWebSocketMessage(reconnected.socket, "ping"), "echo:ping");
+        reconnected.socket.close();
+        assert.equal(firstRun.upgradeRequests.length, 0);
+        assert.equal(secondRun.upgradeRequests.length, 1);
+        assert.equal(secondRun.upgradeRequests[0].cookie, "", "the app never sees the Preview's token cookie");
+
+        assert.notEqual(previewToken(otherSession.href), tabToken);
+        const refused = await liveReload(otherSessionOrigin, tabToken);
+        assert.equal(refused.ok, false);
+        assert.equal(refused.statusCode, 403);
+        const refusedPage = await requestUnixSocket({
+          headers: {
+            Host: new URL(otherSessionOrigin).host
+          },
+          path: `/hmr?${PREVIEW_PROXY_TOKEN_QUERY_PARAM}=${tabToken}`,
+          socketPath: previewPublicSocketPath(otherSessionOrigin, env)
+        });
+        assert.equal(refusedPage.statusCode, 403);
+        assert.equal(firstRun.upgradeRequests.length, 0);
+      } finally {
+        await registry.closeAll();
+        await rm(socketDir, {
+          force: true,
+          recursive: true
+        });
+      }
+    });
   });
 });
 
@@ -1006,7 +1085,7 @@ test("launch preview proxy keeps public tokens valid after local status ensures"
   });
 });
 
-test("launch preview proxy scopes tokens by project, session, and terminal", async () => {
+test("launch preview proxy refuses another project's token for the same session id", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry({ env: process.env });
     try {
@@ -2249,6 +2328,10 @@ function previewPath(previewHref = "", pathname = "/") {
     previewUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
   );
   return nextUrl;
+}
+
+function previewToken(previewHref = "") {
+  return new URL(previewHref).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
 }
 
 function previewWebSocketHref(previewHref = "", {

@@ -40,6 +40,16 @@ The open-in-new-tab button (titled **Preview**, or with the output's own name)
 opens the app in an ordinary browser tab, not a popup window, so you can edit
 its address. Choosing it again reuses that same tab for the project.
 
+A tab on the session's Preview address keeps working when the app restarts in
+the same session, whether through **Restart preview**, **Stop preview** and
+**Start preview**, automatic recovery or an Env change. The address stays the
+same, and the page's live reload reconnects by itself once the app answers
+again. The tab's access ends with the session: when it is archived or renewed,
+when the project closes, or when Vibe64 itself restarts. An older tab then shows
+**Launch preview token is missing or invalid.**; open Preview again from the
+editor with the open-in-new-tab button. That access opens only this session's
+Preview.
+
 Use **Suspend preview**, beside **Reload preview**, to unload
 only this displayed page and reduce browser CPU use. Unsaved changes inside the
 page may be lost. The app server, coding agents and goals continue running;
@@ -77,9 +87,7 @@ and realtime connections from the Preview page reach the application on its
 local address, so its allowed hosts must include that local address as well as
 the Preview address.
 In the local editor, Preview keeps the editor's loopback hostname through login
-and page navigation, so opening the editor on `localhost` also works. If a tab
-shows an expired Preview access error after a restart, use **Reload preview**
-to obtain its current address.
+and page navigation, so opening the editor on `localhost` also works.
 
 Longer application requests keep the same Preview idle allowance when an HTTP
 connection is reused. If a save or archive still reports a connection error,
@@ -135,6 +143,8 @@ The pane then removes the old page instead of leaving it looking alive. It shows
 **Preview state was lost after a server restart** with **Restart preview**, or,
 once that has been seen, **Preview is not running** with a **Start preview**
 button in the middle of the pane. Starting it runs the session's current code.
+A Preview tab opened before the platform restart needs opening again from the
+editor; its old access no longer works.
 If Stop reports incomplete cleanup, retry Stop before starting. Browser tests
 may temporarily run an isolated target, then restore the prior stopped choice.
 Managed suites without `--target` also restore the previous running or stopped

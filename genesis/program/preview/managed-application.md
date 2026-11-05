@@ -519,6 +519,17 @@ The preview proxy's own bearer cookie uses `SameSite=Lax` (plus `Secure` and the
 editor, is same-site with the editor that frames it, so token bootstrap works;
 a foreign site that frames the Preview sends no cookie and gets no application
 page. Both cookies remain HTTP-only and scoped to the proxy host.
+The bearer token belongs to the session's Preview at its public origin, not to
+one app run: the proxy registry keeps one token per project, session and origin,
+and a proxy that replaces another, as every restart, Stop and Start or recovery
+does, accepts the same token. A tab opened earlier therefore keeps its cookie,
+and its live-reload WebSocket reconnects once the new run answers. The token
+opens only that session's Preview: its hash binds project, session and origin,
+and another session's proxy has its own token. Ending the session's terminals
+(archive, renewal or project close) retires the token, and the registry keeps
+tokens only in memory, so a server restart issues new ones; an older tab then
+gets the 403 `Launch preview token is missing or invalid.` until Preview is
+opened again from the editor. Tokens are never logged.
 Each Preview proxy remembers the editor origins that were handed its address:
 the `editorOrigin` the editor's browser sends with its output-status request
 (its own `window.location.origin`, since routing headers such as a dev

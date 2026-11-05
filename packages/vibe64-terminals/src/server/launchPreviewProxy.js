@@ -51,6 +51,10 @@ function normalizePreviewProxySocketIdleTimeoutMs(value, env) {
 
 /**
  * The Preview proxies of one controller, keyed by project, session and public origin.
+ * Each key keeps one access token while its proxy is replaced, as every app
+ * restart does, so a Preview tab already open keeps its cookie. The token is
+ * retired with the session (`retire`) or the controller (`closeAll`); it lives
+ * only in memory, so a server restart issues a new one.
  * @param {object} options
  * @param {RuntimeEnv} options.env the configured Preview env
  * @param {number} [options.socketIdleTimeoutMs]
@@ -61,8 +65,23 @@ function createLaunchPreviewProxyRegistry({
 }) {
   const proxies = new Map();
   const pendingStarts = new Map();
+  const sessionTokens = new Map();
   let publicSocketPreparation = null;
   const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, env);
+
+  function sessionToken(key, scope) {
+    const existing = sessionTokens.get(key);
+    if (existing) {
+      return existing.token;
+    }
+    const token = crypto.randomBytes(32).toString("base64url");
+    sessionTokens.set(key, {
+      projectScope: scope.projectScope,
+      sessionId: scope.sessionId,
+      token
+    });
+    return token;
+  }
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
@@ -178,6 +197,7 @@ function createLaunchPreviewProxyRegistry({
         targetHref: targetUrl.toString()
       }
     };
+    const token = sessionToken(key, scope);
     pendingStarts.set(key, pendingEntry);
     if (existing) {
       proxies.delete(key);
@@ -198,7 +218,8 @@ function createLaunchPreviewProxyRegistry({
         previewAuth,
         publicOrigin,
         recordFrameLoad: input.recordFrameLoad,
-        socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs
+        socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs,
+        token
       });
       if (pendingEntry.closeRequested) {
         await proxy.close();
@@ -286,14 +307,34 @@ function createLaunchPreviewProxyRegistry({
     });
   }
 
+  /**
+   * The session ended: its proxies close and its access tokens are retired,
+   * so a Preview it is given later gets a new token. Tokens go first, so a
+   * proxy starting meanwhile is either closed here or uses a new token.
+   */
+  async function retire(input = {}) {
+    const { projectScope, sessionId } = previewProxyScope(input);
+    for (const [key, entry] of sessionTokens) {
+      if (entry.projectScope === projectScope && entry.sessionId === sessionId) {
+        sessionTokens.delete(key);
+      }
+    }
+    await close({
+      projectScope,
+      sessionId
+    });
+  }
+
   async function closeAll() {
+    sessionTokens.clear();
     await closeMatching(() => true, "server.launchPreviewProxy.closeAll");
   }
 
   return Object.freeze({
     close,
     closeAll,
-    ensure
+    ensure,
+    retire
   });
 }
 
@@ -372,8 +413,13 @@ async function startLaunchPreviewProxy({
     previewAuth = null,
     publicOrigin = "",
     recordFrameLoad = () => {},
-    socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
+    socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS,
+    token
   } = options;
+  if (!token) {
+    // An empty token would match a request that carries none.
+    throw new Error("Launch preview proxy requires an access token.");
+  }
   const frameLoads = createPreviewFrameLoadRecorder(recordFrameLoad);
   const server = createServer();
   const tracker = createPreviewProxyConnectionTracker({
@@ -382,7 +428,6 @@ async function startLaunchPreviewProxy({
   trackPreviewServerSockets(server, {
     tracker
   });
-  const token = crypto.randomBytes(32).toString("base64url");
   const tokenScope = {
     ...scope,
     targetHref: targetUrl.toString()

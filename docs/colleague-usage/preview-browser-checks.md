@@ -18,8 +18,9 @@ the coding agent to inspect browser lifecycle errors; shortening waits is not a
 recovery for a stopped browser.
 If a check reports **Launch preview token is missing or invalid**, use the
 current Preview link and the session's managed browser, not a copied link from
-an earlier launch. Managed browser code can navigate to `preview.url` using
-its existing authenticated context; that URL does not expose the access token.
+another session or from before Vibe64 restarted. Managed browser code can
+navigate to `preview.url` using its existing authenticated context; that URL
+does not expose the access token.
 A persistent token error needs browser-access investigation, not a pool restart.
 
 The coding agent runs managed test suites and live Preview browser checks one

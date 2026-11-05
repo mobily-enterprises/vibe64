@@ -149,17 +149,20 @@ function parseCookies(header = "") {
   return cookies;
 }
 
+/**
+ * A token belongs to one session's Preview at one public origin. The app run
+ * behind it, its terminal and loopback port, changes on every restart and so
+ * is no part of the token's scope.
+ */
 function previewTokenScopeMaterial({
-  sessionId = "",
-  targetHref = "",
-  terminalSessionId = "",
-  projectScope = ""
+  projectScope = "",
+  publicOrigin = "",
+  sessionId = ""
 } = {}) {
   return JSON.stringify([
     String(projectScope || "").trim(),
     String(sessionId || "").trim(),
-    String(terminalSessionId || "").trim(),
-    String(targetHref || "").trim()
+    String(publicOrigin || "").trim()
   ]);
 }
 
