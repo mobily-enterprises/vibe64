@@ -82,6 +82,10 @@
 - Manifest: `package.json`
 - Package root: `node_modules`
 
+## City exclusions
+
+- Ignore `examples/connected-development/**`
+
 ## Architecture inspection
 
 ### Inspector `vue`: Vibe64 routes, UI calls and function calls

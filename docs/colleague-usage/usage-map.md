@@ -23,6 +23,12 @@ entry** (or **Entry: <name>**) to open the same list full screen. When Preview's
   address, such as **/app/project/:slug/dashboard/env**, because many page
   files share names like `index`.
 
+Files the scan leaves out are not entry points: the test files the project's
+Stack components ignore, and anything listed under `## City exclusions` in
+the project's `genesis/stack.md`, one ``- Ignore `examples/**` `` line per
+glob. Use it for example or fixture folders whose commands would crowd the
+list, then **Re-scan project**.
+
 If the list says **No entry points found yet. Refresh the architecture scan.**,
 choose **Refresh**. That runs the same scan as **Architecture options →
 Re-scan project**.
