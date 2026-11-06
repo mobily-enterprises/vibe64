@@ -191,6 +191,7 @@ function createService({
   const {
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,
@@ -337,6 +338,7 @@ function createService({
     assistantPreparation,
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codex,
@@ -499,6 +501,8 @@ function createService({
     setPlanCompleted: hostSlots.setPlanCompleted,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
+    // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals
+    setPagesProvider: hostSlots.setPagesProvider,
     prepareWorkspaceSetup: workspacePreparation.prepareWorkspaceSetup,
     prepareRenewalWorkspaceSetup: workspacePreparation.prepareRenewalWorkspaceSetup,
     workspaceSetupIsRunning: workspacePreparation.workspaceSetupIsRunning,

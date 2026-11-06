@@ -42,6 +42,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("../../types.js").CodexGitCommandService} CodexGitCommandService */
 /** @typedef {import("../../types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("../../types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("../../types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("../../types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("../../types.js").AgentPreviewCommandService} AgentPreviewCommandService */
@@ -71,6 +72,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  */
@@ -96,6 +98,7 @@ function createClaudeConversationHost({
   codexGitCommand,
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand
 }) {
@@ -140,6 +143,7 @@ function createClaudeConversationHost({
       codexGitCommand,
       agentDatabaseCommand,
       agentEnvCommand,
+      agentPagesCommand,
       agentPreviewCommand,
       agentSessionCommand
     });

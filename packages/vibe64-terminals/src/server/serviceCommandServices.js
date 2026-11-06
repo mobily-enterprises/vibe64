@@ -4,6 +4,7 @@ import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore
 import { listProjectSessions, readProjectPreview, sendProjectMessage } from "./projectMessage.js";
 import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
+import { createAgentPagesCommandService } from "./agentPagesCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
@@ -108,6 +109,11 @@ function createServiceCommandServices({
     project,
     readDatabaseTools: () => state.slots.databaseToolsProvider
   });
+  const agentPagesCommand = createAgentPagesCommandService({
+    logger,
+    project,
+    readPages: () => state.slots.pagesProvider
+  });
   const authorizeProjectMessage = (actor, slug) => state.assistantRuntime.authorizeProjectMessage(actor, slug);
   const assertProjectOpen = () => projectServices.assertOpen(sessionAccess.projectRuntimeContext());
 
@@ -182,6 +188,7 @@ function createServiceCommandServices({
   return Object.freeze({
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,

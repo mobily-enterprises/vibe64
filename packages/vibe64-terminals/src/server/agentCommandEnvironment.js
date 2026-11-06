@@ -11,6 +11,9 @@ import {
   prepareAgentEnvCommand
 } from "./agentEnvCommand.js";
 import {
+  prepareAgentPagesCommand
+} from "./agentPagesCommand.js";
+import {
   prepareAgentPreviewCommand
 } from "./agentPreviewCommand.js";
 import {
@@ -41,7 +44,8 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
     ["VIBE64_AGENT_SESSION_COMMAND", "agent-session-command"],
     ["VIBE64_AGENT_PREVIEW_COMMAND", "agent-preview-command"],
     ["VIBE64_AGENT_ENV_COMMAND", "agent-env-command"],
-    ["VIBE64_AGENT_DATABASE_COMMAND", "agent-database-command"]
+    ["VIBE64_AGENT_DATABASE_COMMAND", "agent-database-command"],
+    ["VIBE64_AGENT_PAGES_COMMAND", "agent-pages-command"]
   ].filter(([prefix]) => names.some((key) => key.startsWith(`${prefix}_`)));
   const results = await Promise.all(controls.map(async ([prefix, route]) => {
     const socketPath = toText(env[`${prefix}_SOCKET`]);
@@ -67,6 +71,7 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
 async function prepareOpenCodeSessionCommandEnvironment(context, {
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codexGitCommand,
@@ -90,6 +95,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
   const prepared = await prepareCommandEnvironment({
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     env,
@@ -142,6 +148,7 @@ async function closeAgentSessionCommandEnvironment(sessionId, operation) {
 async function prepareAgentSessionCommandEnvironmentUnlocked({
   agentDatabaseCommand = null,
   agentEnvCommand = null,
+  agentPagesCommand = null,
   agentPreviewCommand = null,
   agentSessionCommand = null,
   env,
@@ -151,6 +158,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   prepareEnvironmentCommand = prepareAgentEnvCommand,
   prepareGitCommand = prepareCodexGitCommand,
   prepareHelperCommand = prepareAgentHelperCommand,
+  preparePagesCommand = prepareAgentPagesCommand,
   preparePreviewCommand = prepareAgentPreviewCommand,
   prepareSessionCommand = prepareAgentSessionCommand,
   project = {},
@@ -211,6 +219,14 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
       wrapperHostDir: git.hostWrapperDir
     }).then((result) => ({
       name: "database",
+      result
+    })) : null,
+    agentPagesCommand ? preparePagesCommand({
+      commandService: agentPagesCommand,
+      sessionId: normalizedSessionId,
+      wrapperHostDir: git.hostWrapperDir
+    }).then((result) => ({
+      name: "pages",
       result
     })) : null
   ].filter(Boolean));

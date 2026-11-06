@@ -75,6 +75,7 @@ function createServiceAgentProviders({
   const {
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand
@@ -113,6 +114,7 @@ function createServiceAgentProviders({
     connectionStatus: (context) => state.assistantRuntime.codexConnectionStatus(context),
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexAppServerProviderOptions: codexProviderOptions,
@@ -134,6 +136,7 @@ function createServiceAgentProviders({
     ...opencodeTerminalController,
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,
@@ -159,6 +162,7 @@ function createServiceAgentProviders({
     codexGitCommand,
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     accountStatus: readClaudeAccountStatus,

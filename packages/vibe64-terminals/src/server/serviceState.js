@@ -35,7 +35,13 @@ function createServiceState({ readClaudeAccountStatus }) {
     assistantRuntime,
     lifecycle: Object.seal({ closing: false, goalRecovery: undefined }),
     shutdownSignal,
-    slots: Object.seal({ connectedPreparation: null, databaseToolsProvider: null, planCompleted: null, sourceEditorProvider: null }),
+    slots: Object.seal({
+      connectedPreparation: null,
+      databaseToolsProvider: null,
+      pagesProvider: null,
+      planCompleted: null,
+      sourceEditorProvider: null
+    }),
     turnCompletions
   });
 }

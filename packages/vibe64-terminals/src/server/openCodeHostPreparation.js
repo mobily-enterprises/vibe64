@@ -9,6 +9,7 @@ import { requireCompletedNativeConversationReplacement } from "./assistantChange
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
+import { sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -17,6 +18,7 @@ import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normali
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
@@ -73,6 +75,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
  * @param {object} dependencies
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexGitCommandService} dependencies.codexGitCommand
@@ -89,6 +92,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
 function createOpenCodeHostPreparation({
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codexGitCommand,
@@ -112,17 +116,11 @@ function createOpenCodeHostPreparation({
         stableContext: assistantScope.stableContext
       };
     }
-    return {
+    return sessionGuidanceInput({
       conversationKind,
-      scope: "session",
-      ...(env?.VIBE64_HOST_AGENT_GUIDANCE ? { hostGuidance: env.VIBE64_HOST_AGENT_GUIDANCE } : {}),
-      session: {
-        managedDatabaseRefresh: Boolean(agentDatabaseCommand),
-        managedEnvironment: Boolean(agentEnvCommand),
-        managedGit: Boolean(codexGitCommand),
-        managedPreview: Boolean(agentPreviewCommand)
-      }
-    };
+      env,
+      commands: { agentDatabaseCommand, agentEnvCommand, agentPagesCommand, agentPreviewCommand, codexGitCommand }
+    });
   }
 
   function storedUpstreamSessionId(context) {
@@ -279,6 +277,7 @@ function createOpenCodeHostPreparation({
         const commands = await prepareOpenCodeSessionCommandEnvironment(context, {
           agentDatabaseCommand,
           agentEnvCommand,
+          agentPagesCommand,
           agentPreviewCommand,
           agentSessionCommand,
           codexGitCommand,

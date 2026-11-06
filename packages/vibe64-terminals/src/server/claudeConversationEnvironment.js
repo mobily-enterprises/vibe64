@@ -11,6 +11,7 @@ import {
 } from "@local/vibe64-genesis/server";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
+import { sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { claudeConversationError, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
@@ -23,6 +24,7 @@ import {
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
@@ -75,6 +77,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  */
@@ -90,21 +93,16 @@ function createClaudeConversationEnvironment({
   codexGitCommand,
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand
 }) {
   function sessionGuidance(entry) {
-    return {
-      scope: "session",
+    return sessionGuidanceInput({
       conversationKind: entry.main ? "main" : "temporary",
-      ...(env?.VIBE64_HOST_AGENT_GUIDANCE ? { hostGuidance: env.VIBE64_HOST_AGENT_GUIDANCE } : {}),
-      session: {
-        managedGit: Boolean(codexGitCommand),
-        managedEnvironment: Boolean(agentEnvCommand),
-        managedDatabaseRefresh: Boolean(agentDatabaseCommand),
-        managedPreview: Boolean(agentPreviewCommand)
-      }
-    };
+      env,
+      commands: { agentDatabaseCommand, agentEnvCommand, agentPagesCommand, agentPreviewCommand, codexGitCommand }
+    });
   }
 
   async function sessionGuidanceEnvironment(entry) {
@@ -124,6 +122,7 @@ function createClaudeConversationEnvironment({
       gitCommand: codexGitCommand,
       agentDatabaseCommand,
       agentEnvCommand,
+      agentPagesCommand,
       agentPreviewCommand,
       agentSessionCommand,
       project: projectRecord,

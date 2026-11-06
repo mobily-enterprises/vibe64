@@ -80,6 +80,17 @@ function createServiceHostSlots({ state }) {
     state.slots.databaseToolsProvider = provider;
   }
 
+  /**
+   * Fills or, at its owner's shutdown, clears the pages service the agent's pages command publishes through.
+   * @param {object | null} provider
+   */
+  function setPagesProvider(provider) {
+    if (provider !== null && typeof provider !== "object") {
+      throw new TypeError("The pages provider must be an object or null.");
+    }
+    state.slots.pagesProvider = provider;
+  }
+
   return Object.freeze({
     // readable-check: allow setter-seam - cycle: vibe64.accounts requires vibe64.terminals, and a composing host's auth setup fills it too
     configureAssistantRuntime,
@@ -87,6 +98,8 @@ function createServiceHostSlots({ state }) {
     setConnectedPreparation,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider,
+    // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals
+    setPagesProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted,
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals

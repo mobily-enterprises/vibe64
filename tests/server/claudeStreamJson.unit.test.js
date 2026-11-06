@@ -21,6 +21,7 @@ import { __testables as claudeConversationAccountsTestables, createClaudeConvers
 import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/shared/assistantAccess.js";
 import { __testables as assistantSelectionTestables, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import { assertPagesGuidance } from "../fixtures/pagesGuidanceRules.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
@@ -361,6 +362,20 @@ test("Claude conversations run the Claude Code found when each process starts", 
   await provider.sendMessage(f.context, { message: "First", messageId: "late-install" });
   assert.equal(f.processes.length, 1);
   assert.equal(f.processes[0].options.command, "/installed-later/claude");
+});
+
+test("Claude main and temporary chats' composed system guidance tells them about pages and when to offer one", async (t) => {
+  const f = await fixture(t);
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions, agentPagesCommand: {} });
+  await provider.sendMessage(f.context, { message: "First", messageId: "main-pages" });
+  const temporary = await provider.createConversation(f.context);
+  await provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-pages"
+  });
+  assert.equal(f.processes.length, 2);
+  for (const [index, kind] of ["main", "temporary"].entries()) {
+    assertPagesGuidance(assert, f.processes[index].options.instructionArguments[1], `Claude ${kind}`);
+  }
 });
 
 test("Claude main and temporary chats install composed system guidance and yield their Genesis hooks", async (t) => {

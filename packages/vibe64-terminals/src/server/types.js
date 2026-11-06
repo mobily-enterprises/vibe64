@@ -13,6 +13,7 @@
 /** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
 /** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
 /** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentPagesCommand.js").createAgentPagesCommandService>} AgentPagesCommandService */
 /**
  * A host's production Env for the agent Env command (vibe64.terminals.production-environment).
  * @typedef {object} ProductionEnvironmentProvider

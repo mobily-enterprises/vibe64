@@ -1,0 +1,82 @@
+{
+  "name": "@local/vibe64-pages",
+  "version": "0.1.0",
+  "description": "AI-made HTML pages that everyone with access to a project can open: their storage in project state, the agent publish command's service, the Pages list, the sandboxed viewer, chat cards and the optional Vibe64 stylesheet.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./src/client/index.js",
+    "./server/actions": "./src/server/pagesActions.js",
+    "./server/service": "./src/server/service.js",
+    "./server/types": "./src/server/types.js",
+    "./shared": "./src/shared/index.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.pages"
+      ],
+      "requires": [
+        "runtime.actions",
+        "runtime.env",
+        "runtime.http",
+        "vibe64.terminals"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64PagesFeature.js",
+            "export": "Vibe64PagesFeature"
+          }
+        ],
+        "capabilities": [
+          "vibe64.pages"
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    },
+    "metadata": {
+      "apiSummary": {
+        "surfaces": [
+          {
+            "subpath": "./client",
+            "summary": "The Pages list, the page viewer beside the chat and the chat's page link cards."
+          },
+          {
+            "subpath": "./server/actions",
+            "summary": "Defines the named page actions project members use: list, read, open for viewing, archive, restore and delete an archived page."
+          },
+          {
+            "subpath": "./server/service",
+            "summary": "Stores a project's pages in its Vibe64 state with their last ten versions, publishes and updates them for a session's agent, and serves their files only through short-lived viewing links."
+          },
+          {
+            "subpath": "./shared",
+            "summary": "The page link format the agent command prints and the chat recognises."
+          }
+        ],
+        "capabilities": [
+          "vibe64.pages"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@fontsource-variable/roboto": "^5.3.0",
+    "@jskit-ai/http-web": "0.2.13",
+    "@jskit-ai/kernel": "0.2.7",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-execution": "0.1.0",
+    "@local/vibe64-terminals": "0.1.0",
+    "@mdi/js": "^7.4.47",
+    "json-rest-schema": "^1.0.16",
+    "vue": "^3.5.44",
+    "vue-router": "^5.3.1",
+    "vuetify": "^4.0.0"
+  }
+}

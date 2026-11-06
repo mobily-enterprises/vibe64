@@ -130,6 +130,7 @@ import {
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -156,6 +157,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {CodexProviderConnectionStore["list"]} dependencies.listConnections
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {typeof assertCodexAuthPreflightReady} [dependencies.codexAuthPreflight]
@@ -182,6 +184,7 @@ function createCodexSessionRegistration({
   listConnections,
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codexAuthPreflight = assertCodexAuthPreflightReady,
@@ -244,6 +247,7 @@ function createCodexSessionRegistration({
   const codexSessionEnvironment = createCodexSessionEnvironment({
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,

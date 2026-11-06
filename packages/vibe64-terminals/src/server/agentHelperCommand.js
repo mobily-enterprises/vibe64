@@ -54,6 +54,7 @@ Groups:
   deployment   Project deployment status: addresses, live release and Production Env names
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
+  pages        Publish, update and list pages everyone on the project can open
   session      Session status, setup retry, rename, and listing and messaging project sessions
   plan         Read and maintain the current plan and archived plans
   training     Validate, bundle and pin local teaching content
@@ -63,7 +64,7 @@ Use vibe64-helper <group> --help for that group.
 Commands use the current managed session and its access checks.'
     exit 0
     ;;
-  preview|playwright|env|deployment|database|github|session|plan|training|spec)
+  preview|playwright|env|deployment|database|github|pages|session|plan|training|spec)
     command_group=$1
     shift
     ;;

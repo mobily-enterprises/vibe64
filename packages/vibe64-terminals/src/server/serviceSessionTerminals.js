@@ -33,6 +33,7 @@ import {
 /** @typedef {import("./types.js").CodexSessionRegistration} CodexSessionRegistration */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
@@ -134,6 +135,7 @@ function sessionTerminalAdmissionFailure(sessionId = "", kind = "agent") {
  * @param {ServiceAssistantPreparation} dependencies.assistantPreparation
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexSessionRegistration} dependencies.codex
@@ -156,6 +158,7 @@ function createServiceSessionTerminals({
   assistantPreparation,
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codex,
@@ -244,6 +247,7 @@ function createServiceSessionTerminals({
         }] : []),
         { controller: agentDatabaseCommand, label: "agentDatabase" },
         { controller: agentEnvCommand, label: "agentEnv" },
+        { controller: agentPagesCommand, label: "agentPages" },
         { controller: agentPreviewCommand, label: "agentPreview" },
         { controller: agentSessionCommand, label: "agentSessionCommand" }
       ], {

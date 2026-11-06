@@ -9,6 +9,7 @@ import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-a
 import { registerRoutes as registerAiTaskRoutes } from "../../packages/vibe64-ai-tasks/src/server/registerRoutes.js";
 import { registerRoutes as registerColleagueRoutes } from "../../packages/vibe64-colleague/src/server/registerRoutes.js";
 import { registerRoutes as registerDatabaseRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
+import { registerRoutes as registerPagesRoutes } from "../../packages/vibe64-pages/src/server/registerRoutes.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { registerRoutes as registerPublishingRoutes } from "../../packages/vibe64-publishing/src/server/registerRoutes.js";
 import { registerRoutes as registerSessionRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
@@ -30,6 +31,7 @@ const EXPECTED_ROUTE_TABLE = `
 DELETE /api/app/:slug/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.cancel
 DELETE /api/app/:slug/vibe64/codex-terminal/:terminalSessionId public app - vibe64.terminals.global-terminal.close
 DELETE /api/app/:slug/vibe64/database/sessions/:sessionId/snippets/:snippetId public app 16384 vibe64.database.snippet.delete
+DELETE /api/app/:slug/vibe64/pages/:pageId public app 16384 vibe64.pages.delete
 DELETE /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.delete
 DELETE /api/app/:slug/vibe64/publishing/accounts/:accountId public app 65536 vibe64.publication.account.remove
 DELETE /api/app/:slug/vibe64/publishing/confirmation/request public app 65536 vibe64.publication.confirmation.dismiss
@@ -64,6 +66,8 @@ GET /api/app/:slug/vibe64/issue-mentions public app - vibe64.project.issues.ment
 GET /api/app/:slug/vibe64/issues public app - vibe64.project.issues.list
 GET /api/app/:slug/vibe64/issues/:number public app - vibe64.project.issues.read
 GET /api/app/:slug/vibe64/onboarding public app - vibe64.project.onboarding.read
+GET /api/app/:slug/vibe64/pages public app 16384 vibe64.pages.list
+GET /api/app/:slug/vibe64/pages/:pageId public app 16384 vibe64.pages.read
 GET /api/app/:slug/vibe64/preview-identities public app - vibe64.project.preview-identities.read
 GET /api/app/:slug/vibe64/project-files/:area/archive public app - -
 GET /api/app/:slug/vibe64/project-files/:area/download public app - -
@@ -150,6 +154,8 @@ GET /api/vibe64/colleague/conversations/history/page public app - vibe64.colleag
 GET /api/vibe64/colleague/models public app - vibe64.assistants.capabilities.list
 GET /api/vibe64/colleague/usage/guide public app - vibe64.colleague.usage.guide.read
 GET /api/vibe64/colleague/usage/topics public app - vibe64.colleague.usage.topics.read
+GET /api/vibe64/pages/files/:token/* public app - -
+GET /api/vibe64/pages/view/:token public app - -
 GET /api/vibe64/training/attempts/:attemptId/lesson public app - vibe64.training.lesson.read
 GET /api/vibe64/training/attempts/:attemptId/visuals/:visualId public app - -
 GET /api/vibe64/training/available public app - vibe64.training.available.list
@@ -198,6 +204,10 @@ POST /api/app/:slug/vibe64/incoming/:id public app - vibe64.repository.incoming.
 POST /api/app/:slug/vibe64/issue-labels public app - vibe64.project.issues.create-label
 POST /api/app/:slug/vibe64/issues public app 300000 vibe64.project.issues.create
 POST /api/app/:slug/vibe64/issues/:number/comments public app 300000 vibe64.project.issues.comment
+POST /api/app/:slug/vibe64/pages/:pageId/archive public app 16384 vibe64.pages.archive
+POST /api/app/:slug/vibe64/pages/:pageId/restore public app 16384 vibe64.pages.restore
+POST /api/app/:slug/vibe64/pages/:pageId/versions/:version/restore public app 16384 vibe64.pages.version.restore
+POST /api/app/:slug/vibe64/pages/:pageId/view public app 16384 vibe64.pages.view.open
 POST /api/app/:slug/vibe64/project-files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
 POST /api/app/:slug/vibe64/project-files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
 POST /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.create
@@ -361,6 +371,7 @@ function routeTable(projectContext) {
   registerAccountRoutes(http, { localhostCheckBypassed, projectContext });
   registerColleagueRoutes(http, { localhostCheckBypassed });
   registerDatabaseRoutes(http, { localhostCheckBypassed, projectContext });
+  registerPagesRoutes(http, { localhostCheckBypassed, projectContext, pages: {} });
   registerProjectRoutes(http, { localhostCheckBypassed, projectContext });
   registerPublishingRoutes(http, { localhostCheckBypassed, projectContext, publishing: {} });
   registerAiTaskRoutes(http, { localhostCheckBypassed, projectContext });

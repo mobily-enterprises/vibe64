@@ -11,11 +11,13 @@ import {
   codexSessionWorktreeWasRemoved
 } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
@@ -47,6 +49,7 @@ function codexSessionWorktreeIsUnavailable(session = {}) {
  * @param {object} dependencies
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexGitCommandService} dependencies.codexGitCommand
@@ -57,6 +60,7 @@ function codexSessionWorktreeIsUnavailable(session = {}) {
 function createCodexSessionEnvironment({
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codexGitCommand,
@@ -66,17 +70,11 @@ function createCodexSessionEnvironment({
 }) {
 
   function vibe64SessionContextInput(conversationKind = "main") {
-    return {
-      scope: "session",
+    return sessionGuidanceInput({
       conversationKind,
-      ...(env?.VIBE64_HOST_AGENT_GUIDANCE ? { hostGuidance: env.VIBE64_HOST_AGENT_GUIDANCE } : {}),
-      session: {
-        managedDatabaseRefresh: Boolean(agentDatabaseCommand),
-        managedEnvironment: Boolean(agentEnvCommand),
-        managedGit: Boolean(codexGitCommand),
-        managedPreview: Boolean(agentPreviewCommand)
-      }
-    };
+      env,
+      commands: { agentDatabaseCommand, agentEnvCommand, agentPagesCommand, agentPreviewCommand, codexGitCommand }
+    });
   }
 
   function codexAttachmentEnv() {
@@ -96,6 +94,7 @@ function createCodexSessionEnvironment({
     const prepared = await prepareAgentSessionCommandEnvironment({
       agentDatabaseCommand,
       agentEnvCommand,
+      agentPagesCommand,
       agentPreviewCommand,
       agentSessionCommand,
       env,

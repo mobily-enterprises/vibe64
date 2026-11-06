@@ -52,6 +52,7 @@ import {
 
 /** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentPagesCommandService} AgentPagesCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
@@ -68,6 +69,7 @@ import {
  * @param {object} dependencies
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPagesCommandService} dependencies.agentPagesCommand
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexGitCommandService} dependencies.codexGitCommand
@@ -91,6 +93,7 @@ import {
 function createOpenCodeSessionRegistration({
   agentDatabaseCommand,
   agentEnvCommand,
+  agentPagesCommand,
   agentPreviewCommand,
   agentSessionCommand,
   codexGitCommand,
@@ -131,6 +134,7 @@ function createOpenCodeSessionRegistration({
   const hostPreparation = createOpenCodeHostPreparation({
     agentDatabaseCommand,
     agentEnvCommand,
+    agentPagesCommand,
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,

@@ -13,6 +13,11 @@ const VIBE64_SESSION_CAPABILITIES = Object.freeze([
   "managedGit",
   "managedPreview"
 ]);
+// Capabilities added after guidance was first registered: absent means false,
+// so guidance a running engine registered earlier stays valid.
+const VIBE64_OPTIONAL_SESSION_CAPABILITIES = Object.freeze([
+  "managedPages"
+]);
 const VIBE64_EPHEMERAL_CONTEXT_MAX_CHARACTERS = 64 * 1024;
 const QUESTION_CONTRACT = Object.freeze([
   "When user input is necessary, ask no more than three concise, high-impact questions at once.",
@@ -36,6 +41,15 @@ const MANAGED_PREVIEW_INSTRUCTIONS = Object.freeze([
   "Keep test output small: run relevant files/cases, save stdout/stderr to local artifacts and keep exit status. Report counts, duration, failed cases, actionable errors and artifact paths, reading only needed failure excerpts. Retain startup, resource and Preview-restoration errors even if tests pass, and trailing wrapper diagnostics separately from JSON. Do not rerun for output or reread unchanged logs.",
   "Batch related browser tests in one managed suite (one Preview switch and restore). Suites and live Preview actions are sequential: no browser actions, ensure/restart or target changes during a suite or restoration. Wait on the original execution, including background runs, through cleanup/restoration (empty polls: yield_time_ms: 30000 where supported; shorter only for interactive input); read-only status/logs stay available. Before live inspection, confirm `vibe64-helper playwright status` shows no active run and `vibe64-helper preview status` is ready on the restored target. To stop, run `vibe64-helper playwright cancel <run-id>`, which waits for cleanup/restoration; retry if cleanup needs attention. Never kill test/Preview PIDs or change locks; launcher exit alone does not prove tests stopped. Recheck status before reporting a busy blocker.",
   "If a managed command reports kernel task denials or a resource incident, report the blocker with its diagnostic and incident ID and ask the platform operator to inspect that evidence before retrying; never raise test timeouts or weaken assertions to work around a process/thread limit. A generic browser timeout without resource evidence does not establish a platform cause."
+]);
+const MANAGED_PAGES_INSTRUCTIONS = Object.freeze([
+  "Pages: `vibe64-helper pages publish <file.html|folder> [--title \"Title\"]` publishes an HTML page (one file, or a folder with index.html and its own scripts, styles, data and images) that everyone with access to this project can open from Vibe64's Pages list; `vibe64-helper pages update <page-id> <file.html|folder>` gives a page a new version under the same link (it keeps ten; `vibe64-helper pages revert <page-id> <version>` brings one back); `vibe64-helper pages list` lists them. A page runs sandboxed and loads only its own files, never other addresses, CDNs or Vibe64 itself, so ship every script, style and data file inside it. Link `_vibe64/page.css` for Vibe64's colours, font and light and dark modes. Write page files outside the repository (for example in VIBE64_DROP_ZONE) unless they belong there. Give the printed link in the chat as a Markdown link; Vibe64 shows it as a card.",
+  "When a result would be clearer as a page than as chat text (reports, comparisons, status or progress overviews, dashboards, diagrams, plans or reviews meant for others), offer one in a single line, such as \"Want this as a page everyone on the project can open?\"",
+  "When the person says the result is for other people (a colleague, the team, a client, a manager, a meeting) or that they will come back to it, make the page without asking and give its link.",
+  "When a page's content will change over time (test results, progress, metrics), say the page can be kept up to date.",
+  "Before making a page, check `vibe64-helper pages list`: when a relevant page already exists, update it instead of making a new one.",
+  "Do not offer pages for quick answers, code changes, or documents that belong in the repository. Offer at most once per topic; do not nag.",
+  "Everyone with access to the project can open a page: never put secrets in one, or anything not every project member should see."
 ]);
 const MANAGED_ENVIRONMENT_INSTRUCTIONS = Object.freeze([
   "Each managed shell command receives current development Env from Vibe64, including declared resource bindings; use them in ordinary commands. Do not build environment injection or copy managed credentials into source. Resource provisioning and application migrations remain separate preparation steps.",
@@ -72,13 +86,19 @@ function normalizedSessionInput(input) {
     throw new TypeError("Vibe64 session context has an unknown conversationKind.");
   }
   const session = record(input.session, "Vibe64 session capabilities");
-  exactFields(session, VIBE64_SESSION_CAPABILITIES, "Vibe64 session capabilities");
+  exactFields(session, [...VIBE64_SESSION_CAPABILITIES, ...VIBE64_OPTIONAL_SESSION_CAPABILITIES], "Vibe64 session capabilities");
   const capabilities = Object.fromEntries(VIBE64_SESSION_CAPABILITIES.map((name) => {
     if (typeof session[name] !== "boolean") {
       throw new TypeError(`Vibe64 session capability ${name} must be boolean.`);
     }
     return [name, session[name]];
   }));
+  for (const name of VIBE64_OPTIONAL_SESSION_CAPABILITIES) {
+    if (session[name] !== undefined && typeof session[name] !== "boolean") {
+      throw new TypeError(`Vibe64 session capability ${name} must be boolean.`);
+    }
+    if (session[name] === true) capabilities[name] = true;
+  }
   return {
     conversationKind: input.conversationKind,
     scope: "session",
@@ -136,6 +156,7 @@ function sessionDriverOutput(input) {
     ] : []),
     ...(session.managedPreview ? MANAGED_PREVIEW_INSTRUCTIONS : []),
     ...(session.managedEnvironment ? MANAGED_ENVIRONMENT_INSTRUCTIONS : []),
+    ...(session.managedPages ? MANAGED_PAGES_INSTRUCTIONS : []),
     ...(session.managedDatabaseRefresh
       ? [
           "After a database migration or schema change, run `vibe64-helper database refresh` once so Vibe64's Database view reflects it.",
