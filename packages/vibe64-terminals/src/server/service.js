@@ -154,6 +154,8 @@ function createService({
     sessionAccess,
     project,
     publishSessionChanged,
+    // The Preview is built with the command services below, which prepare through this.
+    restartPreviewAfterSetup: (sessionId, setup) => commands.outputTarget.restartPreviewAfterWorkspaceSetup(sessionId, setup),
     workspaceSetup
   });
   const { publishAgentSessionChanged } = createServiceTurnPublication({

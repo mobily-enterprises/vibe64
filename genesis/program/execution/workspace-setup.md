@@ -163,6 +163,20 @@ assistant-write admission. If preparation is needed, it rereads the session unde
 that admission and holds it until the preparation command finishes. A busy
 admission result prevents the preview from continuing with an unprepared recipe.
 
+A run that succeeds while the session's managed Preview is running restarts that
+Preview, so it runs on what the run installed: a development server such as Vite
+keeps what it resolved while its dependencies were missing or being replaced, and
+only a new process serves the prepared workspace. `serviceWorkspacePreparation.js`
+follows each run it starts, so every path that runs setup again is covered: Update
+and its recovery, the end of a turn, Prepare workspace and Retry, an AI task's
+check, a Preview start, a starter and renewal. It calls the Preview's
+`restartPreviewAfterWorkspaceSetup` in `outputTargetLaunchStart.js`, which, in the
+Preview's launch queue, restarts it through the ordinary restart only when its
+process started before the run finished. A Preview started after the run, including
+one whose own start ran it, is therefore not restarted twice. A stopped Preview
+stays stopped, other outputs and a Preview that browser tests own are left alone,
+and a failed or cancelled run restarts nothing and keeps its diagnostic.
+
 If an explicit retry finds that Genesis recognizes the project as unversioned
 or outdated and prescribes migration, Vibe64 runs its bundled `genesis migrate`
 command through the same locked managed-source execution boundary. That command

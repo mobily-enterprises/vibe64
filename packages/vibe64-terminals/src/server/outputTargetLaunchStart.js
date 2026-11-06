@@ -78,6 +78,19 @@ function previewStoppedRefusal() {
 }
 
 /**
+ * Whether the session's managed Preview is running in a process started before `time`.
+ * @param {string} sessionId
+ * @param {string} time an ISO timestamp
+ */
+function previewStartedBefore(sessionId, time) {
+  const terminal = latestLaunchTerminal(sessionId);
+  return Boolean(terminal) &&
+    launchTerminalIsRunning(terminal) &&
+    terminal.metadata?.outputPresentationKind === "web" &&
+    String(terminal.createdAt || "") < String(time || "");
+}
+
+/**
  * Starts an output target's terminal, or reuses the running one, and the
  * managed Preview's ensure and restart requests built on it.
  * @param {object} dependencies
@@ -134,8 +147,26 @@ function createOutputTargetLaunchStart({
     });
   }
 
+  /**
+   * A managed Preview whose process started before the session's workspace
+   * setup finished restarts, so it runs on what that setup installed. One
+   * started after it, a stopped Preview and other outputs are left alone.
+   * @param {string} sessionId
+   * @param {{ finishedAt: string }} setup the setup that succeeded
+   */
+  function restartPreviewAfterWorkspaceSetup(sessionId, { finishedAt }) {
+    return startTerminal(sessionId, {
+      automatic: true,
+      restartIfStartedBefore: finishedAt,
+      restartPreview: true
+    });
+  }
+
   async function startTerminal(sessionId, input = {}) {
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, async () => {
+      if (input.restartIfStartedBefore !== undefined && !previewStartedBefore(sessionId, input.restartIfStartedBefore)) {
+        return { ok: true, restarted: false };
+      }
       const testRun = state.previewTestRuns.get(sessionId);
       if (testRun && input.previewTestRun !== testRun) {
         if (input.ensurePreview !== true || (input.outputTargetId && input.outputTargetId !== testRun.targetId)) {
@@ -620,6 +651,7 @@ function createOutputTargetLaunchStart({
   return Object.freeze({
     ensurePreview,
     restartPreview,
+    restartPreviewAfterWorkspaceSetup,
     startTerminal
   });
 }

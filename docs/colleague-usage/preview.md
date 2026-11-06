@@ -116,6 +116,12 @@ While **Preparing workspace** is running, Preview waits before reading or starti
 the app. Use **Expand** on the preparation card to inspect progress and logs.
 Preview checks the app automatically when setup finishes. If setup fails, its
 failure stays visible; fix the cause and use the preparation card's **Retry**.
+When preparation runs again while the app is already running, for example after
+**Update**, **Prepare workspace**, **Retry** or **Fix it with AI**, Vibe64
+restarts the Preview by itself once preparation succeeds, so the app runs on what
+preparation installed; you do not need **Restart preview**. As with **Restart
+preview**, unsaved page state is lost. A stopped Preview stays stopped, and a
+failed preparation leaves the running app as it is, with the failure shown.
 Errors that remain after setup finishes are still reported as Preview errors.
 
 If automatic Preview opening meets a busy exercise preparation or assistant write

@@ -65,13 +65,18 @@ fs.writeFileSync("setup-entered.txt", "yes");
 const check = () => {
   if (fs.existsSync("hold-setup")) return setTimeout(check, 20);
   if (fs.existsSync("fail-setup")) process.exit(1);
+  const runs = fs.readFileSync("setup-runs.txt", "utf8").split("\\n").filter(Boolean).length;
+  fs.writeFileSync("installed.txt", "install " + runs);
 };
 check();
 `);
+  // The server reads what setup installed once, as it starts, as a dev server resolves its dependencies.
   await writeFile(path.join(sourceRoot, "preview.cjs"), `
-require("node:http").createServer((_request, response) => {
+const fs = require("node:fs");
+const installed = fs.existsSync("installed.txt") ? fs.readFileSync("installed.txt", "utf8") : "nothing";
+require("node:http").createServer((request, response) => {
   response.setHeader("content-type", "text/html");
-  response.end("<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
+  response.end(request.url === "/installed" ? installed : "<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
 }).listen(Number(process.argv[3]), process.argv[2]);
 `);
   const project = createProjectService({ ...projectServiceCollaborators(), logger: console,

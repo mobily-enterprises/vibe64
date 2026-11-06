@@ -106,6 +106,7 @@ function createOutputTargetTerminalController({
     retryPreviewTestCleanup: previewTests.retryPreviewTestCleanup,
     previewTestRunAdmission: previewTests.previewTestRunAdmission,
     restartPreview: launchStart.restartPreview,
+    restartPreviewAfterWorkspaceSetup: launchStart.restartPreviewAfterWorkspaceSetup,
     usageRecordingTargets: outputStatus.usageRecordingTargets,
     openOutputTarget: outputStatus.openOutputTarget,
     readResult: terminalSessions.readResult,

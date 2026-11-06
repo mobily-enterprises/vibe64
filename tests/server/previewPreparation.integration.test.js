@@ -13,6 +13,7 @@ import {
   thawTerminalNamespaceAdmission
 } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import { outputTargetTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
+import { workspaceSetupState, writeWorkspaceSetupState } from "../../packages/vibe64-runtime/src/server/workspaceSetupState.js";
 
 process.env.VIBE64_RUNTIME_NAMESPACE = "preview-preparation-test";
 const execFileAsync = promisify(execFile);
@@ -23,9 +24,9 @@ async function fixture(t) {
   return value;
 }
 
-async function eventually(operation) {
+async function eventually(operation, attempts = 100) {
   let failure;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try { return await operation(); } catch (error) { failure = error; }
     await delay(30);
   }
@@ -40,6 +41,46 @@ async function assertServes(terminal, value = "initial") {
     assert.equal(await response.text(), `<h1>Preview works: ${value}</h1>`);
   });
 }
+
+function runningPreviewIds(sessionId) {
+  return listTerminalSessions({ namespace: outputTargetTerminalNamespace(sessionId) })
+    .filter(({ status }) => status === "running")
+    .map(({ id }) => id);
+}
+
+/** What setup had installed when the Preview's server started. */
+async function installedFor(terminal) {
+  const response = await fetch(new URL("/installed", terminal.metadata.targetUrl));
+  return response.text();
+}
+
+/**
+ * Lets work the setup's completion queued on the Preview finish: a status
+ * read waits behind every Preview start, restart and stop queued before it.
+ */
+async function settlePreview(f) {
+  const status = await f.terminals.outputTargetStatus(f.sessionId);
+  assert.equal(status.ok, true, JSON.stringify(status));
+}
+
+// The ways setup runs again in a session that is already prepared.
+const setupReruns = {
+  // Update marks preparation required before it changes the source, then starts it unasked.
+  async Update(f) {
+    const session = await f.runtime.getSessionWithoutSource(f.sessionId);
+    await writeWorkspaceSetupState(f.runtime.store, f.sessionId, {
+      ...workspaceSetupState(session.workspaceSetup),
+      recipeHash: "",
+      status: "required"
+    });
+    const setup = await f.terminals.prepareWorkspaceSetup(f.sessionId);
+    await setup.completion;
+  },
+  // Prepare workspace, Retry and an AI task's check.
+  async Retry(f) {
+    await f.terminals.prepareWorkspaceSetup(f.sessionId, { retry: true, waitForCompletion: true });
+  }
+};
 
 test("prepared previews launch while the assistant lock is occupied and concurrent starts leave one running process", { timeout: 15_000 }, async (t) => {
   const f = await fixture(t);
@@ -153,4 +194,64 @@ test("Git alternates repair remains locked while prepared launch inspection stay
   } finally { await release(); }
   await assertServes(await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" }));
   await assert.rejects(() => readFile(alternatesPath), { code: "ENOENT" });
+});
+
+for (const [rerun, runSetupAgain] of Object.entries(setupReruns)) {
+  test(`a running Preview restarts on what setup installed when ${rerun} runs setup again`, { timeout: 30_000 }, async (t) => {
+    const f = await fixture(t);
+    await f.prepare();
+    const first = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+    await assertServes(first);
+    assert.equal(await installedFor(first), "install 1");
+    await runSetupAgain(f);
+    assert.equal(await f.setupRuns(), 2);
+    const restartedId = await eventually(async () => {
+      const [runningId, ...others] = runningPreviewIds(f.sessionId);
+      assert.deepEqual(others, []);
+      assert.notEqual(runningId, first.id, "The Preview still runs the process started before setup ran again.");
+      return runningId;
+    }, 300);
+    const restarted = listTerminalSessions({ namespace: outputTargetTerminalNamespace(f.sessionId) })
+      .find(({ id }) => id === restartedId);
+    await assertServes(restarted);
+    assert.equal(await installedFor(restarted), "install 2");
+    await settlePreview(f);
+    assert.deepEqual(runningPreviewIds(f.sessionId), [restartedId]);
+  });
+}
+
+test("a Preview whose own start ran setup is not restarted again after it", { timeout: 15_000 }, async (t) => {
+  const f = await fixture(t);
+  const started = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+  await assertServes(started);
+  await settlePreview(f);
+  assert.deepEqual(runningPreviewIds(f.sessionId), [started.id]);
+  assert.equal(await installedFor(started), "install 1");
+  assert.equal(await f.setupRuns(), 1);
+});
+
+test("a stopped Preview stays stopped when setup runs again", { timeout: 15_000 }, async (t) => {
+  const f = await fixture(t);
+  await f.prepare();
+  const started = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+  await assertServes(started);
+  const stopped = await f.terminals.stopOutputTargetTerminal(f.sessionId, started.id);
+  assert.notEqual(stopped.ok, false, JSON.stringify(stopped));
+  await setupReruns.Retry(f);
+  assert.equal(await f.setupRuns(), 2);
+  await settlePreview(f);
+  assert.deepEqual(runningPreviewIds(f.sessionId), []);
+});
+
+test("a failed setup run leaves the running Preview as it is", { timeout: 15_000 }, async (t) => {
+  const f = await fixture(t);
+  await f.prepare();
+  const started = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+  await assertServes(started);
+  await writeFile(path.join(f.sourceRoot, "fail-setup"), "fail");
+  await setupReruns.Retry(f);
+  assert.equal((await f.runtime.getSessionWithoutSource(f.sessionId)).workspaceSetup.status, "failed");
+  await settlePreview(f);
+  assert.deepEqual(runningPreviewIds(f.sessionId), [started.id]);
+  assert.equal(await installedFor(started), "install 1");
 });

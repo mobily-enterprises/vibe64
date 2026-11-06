@@ -12,17 +12,20 @@ import { inProjectContext } from "./workspaceSetupRules.js";
 
 /**
  * A session's workspace setup as the service runs it: prepared inside the agent write, for renewal
- * too, invalidated when sources change, and observed while it runs.
+ * too, invalidated when sources change, and observed while it runs. Each run that succeeds
+ * restarts a Preview that was running while it ran, so the Preview runs on what it installed.
  * @param {object} dependencies
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ProjectService} dependencies.project
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
+ * @param {(sessionId: string, setup: { finishedAt: string }) => Promise<object>} dependencies.restartPreviewAfterSetup
  * @param {WorkspaceSetupRunner} dependencies.workspaceSetup
  */
 function createServiceWorkspacePreparation({
   sessionAccess,
   project,
   publishSessionChanged,
+  restartPreviewAfterSetup,
   workspaceSetup
 }) {
   async function invalidateWorkspaceSetup(context, diagnostic = "Run this session's declared setup steps after updating its source.") {
@@ -57,6 +60,32 @@ function createServiceWorkspacePreparation({
     return exclusive.value;
   }
 
+  /**
+   * Once a run succeeds, a Preview that was running while it ran restarts on what it installed.
+   * @param {string} sessionId
+   * @param {Promise<object>} completion the run's final setup state
+   * @param {object | null} requestContext the project the run belongs to
+   */
+  function restartPreviewAfterRun(sessionId, completion, requestContext) {
+    const restart = async (state) => {
+      if (state?.status !== "succeeded") return;
+      const restarted = await restartPreviewAfterSetup(sessionId, state);
+      if (restarted?.ok === false) {
+        vibe64SessionDebugLog("server.terminals.workspaceSetup.previewRestart.refused", {
+          code: restarted.code || "",
+          error: restarted.error || "",
+          sessionId
+        });
+      }
+    };
+    void completion.then((state) => inProjectContext(requestContext, () => restart(state))).catch((error) => {
+      vibe64SessionDebugLog("server.terminals.workspaceSetup.previewRestart.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+    });
+  }
+
   async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", options = {}) {
     const {
       agentRequested = false,
@@ -82,6 +111,10 @@ function createServiceWorkspacePreparation({
     });
     const setupChanged = String(setup.state?.updatedAt || "") !==
       String(session.workspaceSetup?.updatedAt || "");
+    // A changed state with a completion is the run this call started.
+    if (setupChanged && setup.completion) {
+      restartPreviewAfterRun(sessionId, setup.completion, requestContext);
+    }
     if (publish && setupChanged) {
       await publishSessionChanged.agentTerminal(sessionId, {
         reason: "workspace-setup-updated",

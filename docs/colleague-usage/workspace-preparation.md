@@ -9,6 +9,11 @@ Select **Prepare workspace**. The notice shows progress while those steps run.
 Use **Expand** to inspect output, or **Dismiss** to hide an inactive notice.
 Preparation does not save or push the project.
 
+When preparation succeeds while the session's Preview is running, after Update
+or any other run, Vibe64 restarts the Preview by itself so the app uses what the
+steps installed. A stopped Preview stays stopped, and a failed preparation does
+not restart it.
+
 To rerun preparation after success, select **Prepare workspace** (the wrench)
 in the session header. It is the first header action to move into **Session
 actions** (three dots) when the chat is narrow; select it there instead. This stays available after dismissing the

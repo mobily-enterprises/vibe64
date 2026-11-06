@@ -404,6 +404,13 @@ refreshes outputs through the existing source-operation resume path. Setup
 failures remain visible, and errors from the fresh output read are not treated
 as successful preparation or hidden by package-specific exception rules.
 
+When setup runs again under a running web Preview and succeeds, the Preview
+restarts by itself through the ordinary restart, as
+[workspace preparation](../execution/workspace-setup.md) describes. The restart
+waits in the launch queue and applies only to a process that started before setup
+finished, so a Preview that the same setup prepared is not restarted twice, and a
+stopped Preview stays stopped.
+
 Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the
 preview resource profile, finite targets use the bounded job profile, and
