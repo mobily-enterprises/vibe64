@@ -204,7 +204,11 @@ async function mockProject(page: Page, { recording = false } = {}) {
           functionCount: 3,
           fileCount: 2
         })),
-        interactions: seen.interactions.map(({ id, label, componentFile }) => ({ id, label, componentFile })),
+        // As the server answers: each click with how many requests it probably started.
+        interactions: seen.interactions.map(({ id, label, componentFile }) => ({
+          id, label, kind: "click", componentFile,
+          requestCount: proxied.filter((item) => item.interaction === id).length
+        })),
         nextCursor: null
       });
     }
@@ -338,7 +342,9 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       .map((row) => row.textContent?.replace(/\s+/gu, " ").trim() || "")
       .filter(Boolean));
     const heading = rows.findIndex((row) => row.startsWith("Click: button \"Add\""));
-    const grouped = rows.slice(heading + 1, heading + 3);
+    // The click's own row comes first, then the requests it started.
+    expect(rows[heading + 1]).toMatch(/^Everything this click ran\s*2 requests$/u);
+    const grouped = rows.slice(heading + 2, heading + 4);
     expect(grouped.map((row) => row.match(/^(GET|POST)/u)?.[0])).toEqual(["POST", "GET"]);
     expect(rows.filter((row) => row.includes("/api/sessions"))).toEqual(grouped);
     await capture(page, `${viewport.width}-recorded-results`);
