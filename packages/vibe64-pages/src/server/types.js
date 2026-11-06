@@ -76,7 +76,7 @@
 /**
  * How the pages scheduler runs a prompt refresh as an AI task; vibe64.ai-tasks supplies it.
  * @typedef {object} PageRefreshTasks
- * @property {(sessionId: string, input: object, person: PageAuthor) => Promise<PageRefreshTaskState>} start as the person who scheduled it
+ * @property {(sessionId: string, input: object) => Promise<PageRefreshTaskState>} start
  * @property {(sessionId: string, taskId: string) => Promise<PageRefreshTaskState | null>} read null once the task is closed
  * @property {(sessionId: string, taskId: string) => Promise<void>} cancel
  * @property {(sessionId: string, taskId: string) => Promise<void>} close

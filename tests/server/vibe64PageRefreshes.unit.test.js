@@ -144,10 +144,10 @@ function fakeTasks() {
       states.set(taskId, { ...states.get(taskId), ...change });
     },
     seam: {
-      async start(sessionId, input, person) {
+      async start(sessionId, input) {
         if (refusal) throw refusal;
         const id = `task-${calls.filter(([name]) => name === "start").length + 1}`;
-        calls.push(["start", sessionId, input, person]);
+        calls.push(["start", sessionId, input]);
         states.set(id, { id, ended: false, done: false, needsYou: false, unavailable: false, message: "", log: [{ at: "09:00", text: "Working" }] });
         return states.get(id);
       },
@@ -379,9 +379,8 @@ test("a prompt refresh is an AI task in the session it was set from, refreshed o
 
   await world.refreshNow(page.id);
   await until(runningTask, "the first task");
-  const [, sessionId, input, person] = tasks.calls[0];
+  const [, sessionId, input] = tasks.calls[0];
   assert.equal(sessionId, "session-1");
-  assert.deepEqual(person, alice, "the task runs as the person who scheduled the refresh");
   assert.deepEqual(
     { pageId: input.pageId, prompt: input.prompt, startVersion: input.startVersion, saved: input.saved, data: JSON.parse(input.data) },
     { pageId: page.id, prompt: "Count the open issues in the tracker", startVersion: 1, saved: { branch: "main", commit: world.commit }, data: { open: 4 } }
@@ -479,9 +478,9 @@ test("a page refresh task tells the AI what to find and the one command that wri
   };
   const project = { createRuntimeWithoutSource: async () => ({ listSessionSummaries: async () => [{ sessionId: "session-1" }] }) };
   const refreshTasks = createPageRefreshTasks({ aiTasks, project });
-  await assert.rejects(refreshTasks.start("session-2", {}, alice), { code: "vibe64_ai_task_session_closed" });
-  const state = await refreshTasks.start("session-1", { pageId: "open-issues-abc123" }, alice);
-  assert.deepEqual(started, [["session-1", "page-refresh", { username: "alice", displayName: "Alice" }]]);
+  await assert.rejects(refreshTasks.start("session-2", {}), { code: "vibe64_ai_task_session_closed" });
+  const state = await refreshTasks.start("session-1", { pageId: "open-issues-abc123" });
+  assert.deepEqual(started, [["session-1", "page-refresh", undefined]], "with no person: a stored name carries no role");
   assert.deepEqual(state, { id: "task-1", ended: false, done: false, needsYou: true, unavailable: true, cancelled: false, message: "Sign in", log: [] });
   assert.equal(await refreshTasks.read("session-1", "task-1"), null, "a closed task reads as gone");
 });

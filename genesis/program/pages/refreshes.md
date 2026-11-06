@@ -46,8 +46,7 @@ schedule, from the project as last saved. Nothing runs between refreshes.
   updates, by repository mode; a project with none fails the run. The new data
   must be JSON of at most 5 MiB. The clone is removed when the run ends.
 - A prompt refresh (`--prompt`, at most 4000 characters) starts a `page-refresh`
-  AI task in the session the refresh was set from, as the person who scheduled
-  it (the task's `vibe64User`, so its turns use that person's AI access), given the prompt, the saved
+  AI task in the session the refresh was set from, given the prompt, the saved
   commit and the current `data.json`, and told to write the new data with
   `vibe64-helper pages data` and never to ask. The task is Done once the page's
   version has gone past the one it started from. The scheduler reads the task
@@ -56,6 +55,13 @@ schedule, from the project as last saved. Nothing runs between refreshes.
   is cancelled, because nobody is there, and the run fails. Another AI task open
   in that session skips the turn. A session that is no longer open, or an AI
   account that isn't available, fails the run and pauses the schedule with why.
+- The task starts with no `vibe64User`, as a task the local person starts from
+  the browser does, so it routes with the installation's own AI access. The
+  stored scheduler is a name and id without a role, and routing a role-less
+  person would treat them as a team member. A host that signs people in starts
+  it as the scheduler, resolved at run time; where its assistant resolver
+  refuses a task with no person, the run fails and the schedule pauses, so no
+  one's access widens.
 - A refresh never piles up: a turn that falls due while one runs, or while the
   page is archived or paused, is skipped and the next time is kept. A run that
   fails keeps the page's version as it was; three failures in a row pause the

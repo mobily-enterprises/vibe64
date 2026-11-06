@@ -209,7 +209,7 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
         startVersion: page.version,
         saved: saved ? { branch: saved.branch, commit: saved.commit } : null,
         data: data.length > DATA_SHOWN_TO_AI ? `${data.slice(0, DATA_SHOWN_TO_AI)}\n…` : data
-      }, record.scheduledBy);
+      });
     } catch (error) {
       if (error?.code === "vibe64_ai_task_open") {
         return { outcome: "skipped", message: "Skipped: another AI task was open in the session that runs this refresh." };
