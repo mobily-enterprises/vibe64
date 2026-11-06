@@ -77,7 +77,9 @@ status chip reads **Not installed** or **Didn't start** instead of **Not connect
   program's own error output is under **Details**, collapsed.
 - A program that runs but isn't signed in, answers too slowly or reports a problem
   with its login files shows the usual sign-in button and its message, so you can
-  sign in again.
+  sign in again. Only a program that answers "signed out" counts as no AI: a check
+  that gave no answer does not open AI onboarding or show **Set up AI**; use
+  **Refresh** to check again.
 
 Vibe64 looks for a program again every time it starts one, so a program installed
 while Vibe64 is running is used as soon as you choose **Check again**; no restart is

@@ -56,6 +56,15 @@ function aiIsSetUp({ accounts, curated, openCode }) {
     openCode.some(({ connected }) => connected);
 }
 
+// "set-up", "not-set-up", or "unknown": nothing is connected, but a Claude or
+// Codex sign-in could not be checked ("error") or its program did not start
+// ("unavailable"), so it may well be signed in. Only "not-set-up" means no AI.
+function aiSetUpState(lists) {
+  if (aiIsSetUp(lists)) return "set-up";
+  return lists.accounts.some(({ id, status }) => ["claude", "codex"].includes(id) && ["error", "unavailable"].includes(status))
+    ? "unknown" : "not-set-up";
+}
+
 // True when a selection uses this card's provider, through any tool.
 function usesProvider(selection, { connect }) {
   return Boolean(selection) && selection.modelProviderId === connect.modelProviderId;
@@ -139,7 +148,9 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   const loadError = computed(() => accounts.loadError.value || curated.loadError.value || openCode.loadError.value || "");
   const loaded = computed(() => !loadError.value && unref(enabled) && Array.isArray(lists.value.accounts) &&
     Array.isArray(lists.value.curated) && !openCode.isInitialLoading.value);
-  const isSetUp = computed(() => loaded.value && aiIsSetUp(lists.value));
+  // Empty until every list is read.
+  const setUpState = computed(() => loaded.value ? aiSetUpState(lists.value) : "");
+  const isSetUp = computed(() => setUpState.value === "set-up");
   // The AI setup is read once something is connected, or when finishing asks for it.
   const routing = useModelRouting({ enabled: computed(() => Boolean(unref(enabled)) && (routingWanted.value || isSetUp.value)) });
   const card = (provider) => {
@@ -240,10 +251,10 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
 
   return { accounts, cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, fillTeamSetup, isSetUp,
     loadError, loaded, mainAi, refreshColleague, reload, revealColleague: colleague.reveal, routing, sayHello,
-    selectForColleague, verify };
+    selectForColleague, setUpState, verify };
 }
 
 /** @typedef {ReturnType<typeof useAiOnboarding>} AiOnboarding */
 
-export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingMainAi, aiOnboardingRows, aiOnboardingSnoozed, aiTeamSetupSnoozed,
+export { aiIsSetUp, aiSetUpState, usesProvider, aiOnboardingConnections, aiOnboardingMainAi, aiOnboardingRows, aiOnboardingSnoozed, aiTeamSetupSnoozed,
   connectedEngine, snoozeAiOnboarding, snoozeAiTeamSetup, teamSummary, useAiOnboarding };

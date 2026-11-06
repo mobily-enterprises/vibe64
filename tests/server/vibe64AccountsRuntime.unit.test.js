@@ -2400,6 +2400,40 @@ test("an account whose status read throws reports that read as its own row", asy
   });
 });
 
+test("a Claude check that gives no answer is a logged error row, never signed out", async () => {
+  await withTempDir(async (root) => {
+    let answer;
+    const warnings = [];
+    const service = createTestService({
+      logger: { ...silentLogger, warn: (fields) => warnings.push(fields) },
+      invalidateAgentRuntimes: async () => null,
+      publishAccountChanged: async () => null,
+      publishAuthSessionChanged: async () => null,
+      accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), systemRoot: path.join(root, "system") }),
+      readClaudeAccountStatus: async () => answer
+    });
+    const claudeRow = async () => (await service.getStatus({ accountIds: ["claude"] })).accounts[0];
+    const logged = () => warnings.splice(0).map(({ event, accountId, code, error }) => [event, accountId, code, error]);
+
+    answer = { loggedIn: false, error: "The command timed out after 30000 ms." };
+    let claude = await claudeRow();
+    assert.deepEqual([claude.connected, claude.status, claude.code, claude.message],
+      [false, "error", "vibe64_account_status_failed", "The command timed out after 30000 ms."]);
+    assert.deepEqual(logged(), [["vibe64.accounts.status_failed", "claude", "", "The command timed out after 30000 ms."]]);
+
+    answer = { loggedIn: false, error: "Claude Code didn't start.\nspawn EAGAIN" };
+    claude = await claudeRow();
+    assert.deepEqual([claude.connected, claude.status, claude.code], [false, "unavailable", "vibe64_cli_unavailable"]);
+    assert.deepEqual(logged(), [["vibe64.accounts.status_failed", "claude", "vibe64_cli_unavailable", "Claude Code didn't start.\nspawn EAGAIN"]]);
+
+    // Claude's own signed-out answer is the only "not connected", and is not a failure.
+    answer = { loggedIn: false };
+    claude = await claudeRow();
+    assert.deepEqual([claude.connected, claude.status, claude.message], [false, "not_connected", "Sign in to Claude Code with your Claude plan."]);
+    assert.deepEqual(logged(), []);
+  });
+});
+
 test("without runtime packs a missing Claude Code is reported with its installer, not as signed out", async () => {
   configureVibe64Host(null);
   try {

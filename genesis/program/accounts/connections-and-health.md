@@ -422,7 +422,15 @@ hosts mount it once with their own endpoint and owner check. It opens on
 `requestVibe64AiOnboarding`, and opens by itself at most once per page load
 only when the viewer can configure AI, account status, curated providers and
 OpenCode connections loaded without error, no AI is set up, no dialog is open, the route is not Learning, and Set up later is not
-active. Set up later is a 24-hour per-browser snooze,
+active. `useAiOnboarding`'s `setUpState` (`aiSetUpState`) is `set-up`,
+`not-set-up` or `unknown`: nothing connected while a Claude or Codex row is
+`error` (its check gave no answer) or `unavailable` (its program didn't start)
+is `unknown`, so neither the auto-open nor `aiOnboardingNeeded` (the Set up AI
+button and Colleague's note) treats it as no AI. The host's module-level
+decision is first-run guidance: once the page reads `set-up`, it never opens by
+itself on that page, so a Disconnect or account switch, which leaves every open
+tab briefly with no AI, does not raise it; the requested entries still do.
+Set up later is a 24-hour per-browser snooze,
 `vibe64.aiOnboarding.snoozedUntil:<actorKey>`; there is no server state or state
 upgrade. The mounted host sets `aiOnboardingAvailable`; the local account
 menu's **Redo onboarding** appears only then. AI Accounts, being the same
@@ -817,7 +825,14 @@ state still requires a new sign-in.
 Accounts reads each account row on its own. A provider whose status read throws
 becomes its own row with status `error`, the failure's code and message and its
 usual `required` flag, and the read logs `vibe64.accounts.status_failed` at warn;
-every other account still reports, and the read itself succeeds. When a Codex
+every other account still reports, and the read itself succeeds. Claude's row
+follows the same rule for a status read that returns no answer instead of
+throwing (`readClaudeStatus` in `accountStatusReads.js`): a read that timed out,
+was refused, printed unreadable output or had its credential context refused is
+an `error` row with code `vibe64_account_status_failed`, and one whose Claude
+Code did not start is the `unavailable` program row; both log
+`vibe64.accounts.status_failed`. Only Claude Code's own signed-out answer is
+`not_connected`. When a Codex
 read fails while a `reconnecting` transition is pending, the row keeps that
 local state and carries the failure's code and message, so the configured Codex
 connection stays visible until a later read finishes recovery.

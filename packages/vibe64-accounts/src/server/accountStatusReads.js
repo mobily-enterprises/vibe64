@@ -55,6 +55,26 @@ function createAccountStatusReads({
   personalProfile,
   readClaudeAccountStatus
 }) {
+  function logStatusFailed(accountId, error) {
+    logOperationalEvent(
+      logger,
+      "warn",
+      {
+        component: "vibe64-accounts",
+        event: "vibe64.accounts.status_failed",
+        accountId,
+        code: String(error?.code || ""),
+        error: String(error?.message || error || "")
+      },
+      "Vibe64 account status could not be read"
+    );
+  }
+
+  /**
+   * A Claude check that gave no answer (it timed out, was refused, or printed
+   * something unreadable) is an error row, not "not connected": the person may
+   * well be signed in. Both it and a program that did not start are logged.
+   */
   async function readClaudeStatus() {
     if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
     const credentialHome = accountRuntime.claudeContext();
@@ -62,7 +82,12 @@ function createAccountStatusReads({
       ? await readClaudeCodeAuthStatus({ env, credentialHome })
       : await readClaudeAccountStatus();
     if (claudeStatusStartFailed(status)) {
+      logStatusFailed("claude", { code: "vibe64_cli_unavailable", message: status.error });
       return operatorCliAccount("claude", { installed: true, observed: status.error });
+    }
+    if (!status.loggedIn && status.error) {
+      logStatusFailed("claude", { message: status.error });
+      return accountReadFailed("claude", { message: status.error });
     }
     return {
       ...ACCOUNT_DEFINITIONS.claude,
@@ -71,7 +96,7 @@ function createAccountStatusReads({
       authMethod: status.authMethod || "",
       subscriptionType: status.subscriptionType || "",
       status: status.loggedIn ? "connected" : "not_connected",
-      message: status.loggedIn ? "Connected through Claude Code." : status.error || "Sign in to Claude Code with your Claude plan."
+      message: status.loggedIn ? "Connected through Claude Code." : "Sign in to Claude Code with your Claude plan."
     };
   }
 
@@ -202,18 +227,7 @@ function createAccountStatusReads({
      * the reason it is still unfinished.
      */
     async function failedAccountRow(accountId, error) {
-      logOperationalEvent(
-        logger,
-        "warn",
-        {
-          component: "vibe64-accounts",
-          event: "vibe64.accounts.status_failed",
-          accountId,
-          code: String(error?.code || ""),
-          error: String(error?.message || error || "")
-        },
-        "Vibe64 account status could not be read"
-      );
+      logStatusFailed(accountId, error);
       const local = accountId === "codex"
         ? await readCodexLocalStatus({ codexContext: access.codexContextForInput(), systemRoot: access.systemRoot }).catch(() => null)
         : null;

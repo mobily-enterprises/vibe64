@@ -1,7 +1,10 @@
 <script>
-// Auto-open happens at most once per page load, across remounts.
-// readable-check: allow module-state - shared resource: the page opens onboarding by itself once, however often its host remounts
-let autoOpened = false;
+// Opening by itself is first-run guidance, decided once per page load across
+// remounts: it opens at most once, and never once this page has read a working
+// AI, so a later sign-out or account switch, here or in another tab, does not
+// bring it back.
+// readable-check: allow module-state - shared resource: the page decides first-run onboarding once, however often its host remounts
+let firstRunDecided = false;
 </script>
 
 <script setup>
@@ -30,7 +33,8 @@ let request = null;
 
 // Learning owns its own first-run guidance; checked by route, without Learning imports.
 const inLearning = computed(() => String(route?.path || "").startsWith("/app/learning") || route?.query?.mode === "learning");
-const needed = computed(() => props.canConfigure && onboarding.loaded.value && !onboarding.isSetUp.value);
+// A sign-in that could not be checked is not "no AI": nothing says so until a real answer.
+const needed = computed(() => props.canConfigure && onboarding.setUpState.value === "not-set-up");
 
 function show(screen, detail = null) {
   opener = document.activeElement;
@@ -42,10 +46,11 @@ function show(screen, detail = null) {
 
 watch(needed, (value) => { aiOnboardingNeeded.value = value; }, { immediate: true });
 watch(() => props.canConfigure, (value) => { aiOnboardingAvailable.value = value; }, { immediate: true });
-watch([needed, inLearning], () => {
-  if (autoOpened || open.value || !needed.value || inLearning.value || aiOnboardingSnoozed(props.actorKey) ||
+watch([onboarding.setUpState, inLearning], ([state]) => {
+  if (state === "set-up") firstRunDecided = true;
+  if (firstRunDecided || open.value || !needed.value || inLearning.value || aiOnboardingSnoozed(props.actorKey) ||
     document.querySelector(".v-dialog.v-overlay--active")) return;
-  autoOpened = true;
+  firstRunDecided = true;
   show("why");
 }, { immediate: true });
 

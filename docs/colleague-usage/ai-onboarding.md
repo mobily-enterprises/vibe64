@@ -15,6 +15,15 @@ do not run, and Colleague shows **Set up your AI**.
 - It opens by itself at most once per page load, and not when AI status could
   not load, another dialog is open, you are in Learning, or you chose
   **Set up later** in this browser within the last 24 hours.
+- Once a page has seen a working AI, it never opens by itself on that page: a
+  **Disconnect** or account switch, in this tab or another one, leaves a moment
+  with no AI but does not bring it back. The **Set up AI** button and
+  **Redo onboarding** still open it.
+- A Claude or Codex sign-in that could not be checked (the check gave no answer
+  or the program didn't start) is not "no AI": the flow does not open by itself
+  and **Set up AI** does not show until a check answers. AI Accounts shows that
+  sign-in's message; **Refresh** in its **Advanced** panel checks again (or
+  **Check again** when the program didn't start).
 - Only someone who may connect AI sees it.
 
 Open it again at any time from the account menu: select the account button at
@@ -22,7 +31,8 @@ the top right (**Account menu**), then **Redo onboarding**. The same menu holds
 **Account settings**, whose **AI Accounts** tab is this same screen without the
 **Why** step: the provider cards, **Manage** and **Advanced**, with its own
 **Back** and **Done** (Done returns to the overview). While no AI is connected
-(an expired sign-in or key that needs reconnecting does not count), AI Accounts
+(an expired sign-in or key that needs reconnecting does not count, and neither does
+a sign-in that could not be checked), AI Accounts
 shows **Pick the AI behind Vibe64**, Colleague shows a small crowned **Set up your AI** note, and the top bar shows a gold crowned
 **Set up AI** button beside the account button (smaller on a phone). While that
 button shows, the account button stays neutral.

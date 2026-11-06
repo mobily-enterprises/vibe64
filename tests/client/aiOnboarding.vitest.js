@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { computed, createApp, createRenderer, effectScope, ref, ssrContextKey } from "vue";
+import { computed, createApp, createRenderer, effectScope, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
@@ -26,7 +26,7 @@ import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
 import { aiOnboardingAvailable, aiOnboardingBlocked, aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
-import { aiIsSetUp, aiOnboardingConnections, aiOnboardingMainAi, aiOnboardingSnoozed, aiTeamSetupSnoozed, connectedEngine,
+import { aiIsSetUp, aiOnboardingConnections, aiSetUpState, aiOnboardingMainAi, aiOnboardingSnoozed, aiTeamSetupSnoozed, connectedEngine,
   snoozeAiOnboarding, snoozeAiTeamSetup, teamSummary, useAiOnboarding } from "../../packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js";
 import AiOnboarding from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue";
 import AiOnboardingHost from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue";
@@ -203,6 +203,18 @@ describe("set-up rule", () => {
     expect(aiIsSetUp({ ...empty, accounts: [{ id: "codex", connected: true }] })).toBe(true);
   });
 
+  it("counts a Claude or Codex sign-in that could not be checked as unknown, not as no AI", () => {
+    const signIn = (status, connected = false) => ({ ...empty, accounts: [{ id: "github", connected: true }, { id: "claude", connected, status }] });
+    expect(aiSetUpState(signIn("not_connected"))).toBe("not-set-up");
+    expect(aiSetUpState(signIn("not_installed"))).toBe("not-set-up");
+    expect(aiSetUpState(signIn("error"))).toBe("unknown");
+    expect(aiSetUpState(signIn("unavailable"))).toBe("unknown");
+    expect(aiSetUpState({ ...empty, accounts: [{ id: "codex", connected: false, status: "error" }] })).toBe("unknown");
+    expect(aiSetUpState({ ...empty, accounts: [{ id: "github", connected: false, status: "error" }] })).toBe("not-set-up");
+    expect(aiSetUpState({ ...signIn("error"), openCode: [FREE_GLM] })).toBe("set-up");
+    expect(aiSetUpState(signIn("connected", true))).toBe("set-up");
+  });
+
   it("marks a card connected through each orchestrator that serves it", () => {
     const lists = { accounts: [{ id: "claude", connected: true }], curated: [{ id: "deepseek", connected: true, claudeReady: true }],
       openCode: [FREE_GLM] };
@@ -245,14 +257,21 @@ describe("snooze and events", () => {
 
 describe("host auto-open", () => {
   // Auto-open is once per page load, so the closed cases run first.
-  it("stays closed on load errors, snooze, Learning routes, members and existing setups", () => {
+  // A working AI settles the page for good, so it is a page load of its own below.
+  it("stays closed on load errors, unchecked sign-ins, snooze, Learning routes and members", () => {
+    const signedOut = mocks.accounts.status.value.accounts;
+    const claudeRow = (status) => () => {
+      mocks.accounts.status.value = { accounts: [signedOut[0], { id: "claude", connected: false, status }, signedOut[2]] };
+    };
     const cases = [
       () => { mocks.curated.loadError.value = "Provider connections could not be loaded."; },
       () => { mocks.openCode.isInitialLoading.value = true; },
+      // A Claude check that gave no answer, and a Claude Code that did not start: either may be signed in.
+      claudeRow("error"),
+      claudeRow("unavailable"),
       () => { snoozeAiOnboarding("local"); },
       () => { mocks.route = { path: "/app/learning/lesson-0", query: {} }; },
-      () => { mocks.route = { path: "/app/projects", query: { mode: "learning" } }; },
-      () => { mocks.openCode.connections.value = [{ modelProviderId: "openrouter", connected: true }]; }
+      () => { mocks.route = { path: "/app/projects", query: { mode: "learning" } }; }
     ];
     for (const arrange of cases) {
       storage.clear();
@@ -263,7 +282,7 @@ describe("host auto-open", () => {
       app.unmount();
       mocks.curated.loadError.value = "";
       mocks.openCode.isInitialLoading.value = false;
-      mocks.openCode.connections.value = [];
+      mocks.accounts.status.value = { accounts: signedOut };
     }
     const member = mount(AiOnboardingHost, { canConfigure: false });
     expect(member.open).toBe(false);
@@ -917,5 +936,53 @@ describe("flow", () => {
     expect(setup).toMatch(/<AiProviderManage v-model="manageOpen" :card="managedCard"/u);
     expect(manage).toMatch(/<AiConnectionRow v-for="row in rows"/u);
     expect(row).toMatch(/@click="requestRemove\(account\)"[\s\S]*Remove/u);
+  });
+});
+
+describe("host first run on a new page load", () => {
+  // The host decides once per page load, so each case loads the page again; last in the
+  // file, so no other case sees the reloaded modules.
+  async function loadPage(props) {
+    // The modules load as the file's own imports did, before this test's page globals.
+    const page = { window: globalThis.window, document: globalThis.document };
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    const [{ default: Host }, bridge, events] = await Promise.all([
+      import("../../packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue"),
+      import("../../src/lib/vibe64ColleagueModelBridge.js"),
+      import("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js")
+    ]).finally(() => {
+      vi.stubGlobal("window", page.window);
+      vi.stubGlobal("document", page.document);
+    });
+    const models = bridge.createVibe64ColleagueModelBridge();
+    models.register(mocks.colleague);
+    return { state: mount(Host, props, [[bridge.VIBE64_COLLEAGUE_MODEL_KEY, models]]), events };
+  }
+  const claudeIs = (status) => {
+    const [github, , codex] = mocks.accounts.status.value.accounts;
+    mocks.accounts.status.value = { accounts: [github, { id: "claude", connected: status === "connected", status }, codex] };
+  };
+
+  it("never opens by itself after the page has read a working AI, even when it is signed out later", async () => {
+    claudeIs("connected");
+    const { state, events } = await loadPage({ canConfigure: true });
+    expect([state.open, events.aiOnboardingNeeded.value]).toEqual([false, false]);
+    // A Disconnect or account switch, here or in another tab, leaves a moment with no AI.
+    claudeIs("not_connected");
+    await nextTick();
+    expect(state.open).toBe(false);
+    expect(events.aiOnboardingNeeded.value).toBe(true);
+    events.requestVibe64AiOnboarding();
+    expect([state.open, state.start]).toEqual([true, "choose"]);
+  });
+
+  it("waits while a sign-in cannot be checked, then opens on a definite no AI", async () => {
+    claudeIs("error");
+    const { state, events } = await loadPage({ canConfigure: true });
+    expect([state.open, events.aiOnboardingNeeded.value]).toEqual([false, false]);
+    claudeIs("not_connected");
+    await nextTick();
+    expect([state.open, state.start, events.aiOnboardingNeeded.value]).toEqual([true, "why", true]);
   });
 });
