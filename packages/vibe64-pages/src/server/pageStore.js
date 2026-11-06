@@ -12,6 +12,7 @@ import path from "node:path";
 
 import { serializeByKey, writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { isPageId } from "../shared/pageLinks.js";
 import { PAGE_LIMITS } from "../shared/pageLimits.js";
@@ -39,6 +40,15 @@ function projectPagesRoot(projectRuntimeRoot) {
     throw vibe64Error("Pages need this project's Vibe64 state folder.", "vibe64_pages_state_unavailable", { status: 409 });
   }
   return path.join(root, PAGES_DIR);
+}
+
+/**
+ * The pages folder and slug of the project the current request runs in.
+ * @returns {{ pagesRoot: string, slug: string }}
+ */
+function currentProjectPages() {
+  const context = currentProjectRequestContext();
+  return { pagesRoot: projectPagesRoot(context?.projectRuntimeRoot), slug: String(context?.slug || "").trim() };
 }
 
 function pageFolder(pagesRoot, pageId) {
@@ -255,6 +265,26 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
   }
 
   /**
+   * A new version of a current page that keeps every file of the current one but its
+   * data.json, which `data` replaces: a refresh changes the numbers, never the layout.
+   * @param {string} pagesRoot
+   * @param {string} pageId
+   * @param {{ data: Buffer, by: PageAuthor, sessionId: string }} input
+   */
+  async function addDataVersion(pagesRoot, pageId, { data, by, sessionId }) {
+    const folder = pageFolder(pagesRoot, pageId);
+    return exclusive(folder, async () => {
+      const current = await read(pagesRoot, pageId);
+      const kept = await readVersionFiles(path.join(folder, VERSIONS_DIR, String(current.version)));
+      const files = [...kept.filter((file) => file.path !== "data.json"), { path: "data.json", content: data }];
+      if (files.reduce((total, file) => total + file.content.length, 0) > PAGE_LIMITS.maxTotalBytes) {
+        throw vibe64Error("A page holds at most 20 MiB.", "vibe64_pages_files_invalid", { status: 400, params: { pageId } });
+      }
+      return appendVersion(folder, current, { files, by, sessionId });
+    });
+  }
+
+  /**
    * Brings back an earlier kept version as the page's newest one, so nothing
    * it replaces is lost.
    * @param {string} pagesRoot
@@ -338,6 +368,7 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
   }
 
   return Object.freeze({
+    addDataVersion,
     addVersion,
     changeArchived,
     create,
@@ -349,4 +380,4 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
   });
 }
 
-export { createPageStore, projectPagesRoot };
+export { createPageStore, currentProjectPages, pageFolder, projectPagesRoot };

@@ -55,20 +55,46 @@ const deletePage = (projectSlug, pageId) => pagesRequest(projectSlug, pageSuffix
 const restorePageVersion = (projectSlug, pageId, version) =>
   pagesRequest(projectSlug, `${pageSuffix(pageId)}/versions/${version}/restore`, { method: "POST", body: {} });
 
+/** A page's last refreshes, newest first, with their logs. @param {string} projectSlug @param {string} pageId */
+const readRefreshRuns = (projectSlug, pageId) => pagesRequest(projectSlug, `${pageSuffix(pageId)}/refresh/runs`);
+
+/**
+ * Refresh now, cancel the running refresh, pause or resume the schedule.
+ * @param {"run" | "cancel" | "pause" | "resume"} step
+ */
+const changeRefresh = (step) => (projectSlug, pageId) =>
+  pagesRequest(projectSlug, `${pageSuffix(pageId)}/refresh/${step}`, { method: "POST", body: {} });
+
 /** @param {string} value an ISO time */
 function pageTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+/**
+ * How a page's refresh stands, in one short line, and whether it needs a look.
+ * @param {object | null} refresh
+ * @returns {{ text: string, alert: boolean }}
+ */
+function refreshState(refresh) {
+  if (!refresh) return { text: "", alert: false };
+  if (refresh.running) return { text: "Refreshing…", alert: false };
+  if (refresh.paused) return { text: `Paused: ${refresh.pausedReason}`, alert: true };
+  if (refresh.lastRun?.outcome === "failed") return { text: `Refresh failed ${pageTime(refresh.lastRun.endedAt)}`, alert: true };
+  return { text: `Next ${pageTime(refresh.nextAt)}`, alert: false };
+}
+
 export {
   archivePage,
+  changeRefresh,
   deletePage,
   listPages,
   listStarredPages,
   openPageView,
   pageTime,
   readPage,
+  readRefreshRuns,
+  refreshState,
   restorePage,
   restorePageVersion,
   setPageStar

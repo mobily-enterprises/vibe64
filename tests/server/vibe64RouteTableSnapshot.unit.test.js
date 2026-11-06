@@ -66,6 +66,7 @@ GET /api/app/:slug/vibe64/issues/:number public app - vibe64.project.issues.read
 GET /api/app/:slug/vibe64/onboarding public app - vibe64.project.onboarding.read
 GET /api/app/:slug/vibe64/pages public app 16384 vibe64.pages.list
 GET /api/app/:slug/vibe64/pages/:pageId public app 16384 vibe64.pages.read
+GET /api/app/:slug/vibe64/pages/:pageId/refresh/runs public app 16384 vibe64.pages.refresh.runs
 GET /api/app/:slug/vibe64/pages/stars public app 16384 vibe64.pages.stars.read
 GET /api/app/:slug/vibe64/preview-identities public app - vibe64.project.preview-identities.read
 GET /api/app/:slug/vibe64/project-files/:area/archive public app - -
@@ -201,6 +202,10 @@ POST /api/app/:slug/vibe64/issue-labels public app - vibe64.project.issues.creat
 POST /api/app/:slug/vibe64/issues public app 300000 vibe64.project.issues.create
 POST /api/app/:slug/vibe64/issues/:number/comments public app 300000 vibe64.project.issues.comment
 POST /api/app/:slug/vibe64/pages/:pageId/archive public app 16384 vibe64.pages.archive
+POST /api/app/:slug/vibe64/pages/:pageId/refresh/cancel public app 16384 vibe64.pages.refresh.cancel
+POST /api/app/:slug/vibe64/pages/:pageId/refresh/pause public app 16384 vibe64.pages.refresh.pause
+POST /api/app/:slug/vibe64/pages/:pageId/refresh/resume public app 16384 vibe64.pages.refresh.resume
+POST /api/app/:slug/vibe64/pages/:pageId/refresh/run public app 16384 vibe64.pages.refresh.run
 POST /api/app/:slug/vibe64/pages/:pageId/restore public app 16384 vibe64.pages.restore
 POST /api/app/:slug/vibe64/pages/:pageId/star public app 16384 vibe64.pages.star.set
 POST /api/app/:slug/vibe64/pages/:pageId/versions/:version/restore public app 16384 vibe64.pages.version.restore

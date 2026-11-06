@@ -6,7 +6,7 @@ window that presents the problem and its solution, or the lack of one, together.
 A task ends **Done** or **Not done**. Done is proved, never assumed; Not done is
 decided by a person. Every task Vibe64 or Colleague starts is an AI task: Fix it
 with AI on Update, Save, workspace preparation, preview sign-in and project setup, the setup screen's create, inspect and adopt requests, the Data
-overview, and Colleague's own requests and reviews. A person's own request is a
+overview, a page's AI refresh, and Colleague's own requests and reviews. A person's own request is a
 temporary chat, never an AI task ([temporary assistance](temporary-assistance.md)).
 The `20261104-temporary-repair-chats-removed` state upgrade deletes the repair chats
 that the repair flows opened as temporary chats before AI tasks, as Close deletes
@@ -33,6 +33,8 @@ closing record, which Close finishes after that engine's next turn in the sessio
 - `packages/vibe64-ai-tasks/src/server/kinds/previewIdentity.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/projectSetup.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/databaseOverview.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/pageRefresh.js`
+- `packages/vibe64-ai-tasks/src/server/pageRefreshTasks.js`
 - `packages/vibe64-ai-tasks/src/shared/aiTaskPhases.js`
 - `packages/vibe64-ai-tasks/src/client/useAiTaskHost.js`
 - `packages/vibe64-ai-tasks/src/client/useAiTasks.js`
@@ -93,7 +95,15 @@ inspection; one kind covers repair, adopt, inspect and create, so its problem na
 the task (`title`, `noun`, `opening`). The Data overview's check reads the overview
 back through the database service: present, valid against the refreshed schema and,
 for a whole or new-tables review, with no table unreviewed. A database that can't be
-read is not the AI's to repair. A request kind (`colleague` for Colleague's own
+read is not the AI's to repair. A page refresh (`page-refresh`) is started by the
+pages scheduler, not a person, in the session its refresh was set from: its brief
+gives the refresh's prompt, the saved commit, the page's current `data.json` and
+the one command that writes the new data, and tells the AI never to ask; its check
+reads the page back and passes once its version has gone past the one the task
+started from. It holds no repository (`repository: false`), so Save and Update
+carry on beside it; the scheduler starts it only in an open session
+(`vibe64_ai_task_session_closed` otherwise) and follows it to its end
+([page refreshes](../pages/refreshes.md)). A request kind (`colleague` for Colleague's own
 requests, `colleague-review` for an assignment's review) has nothing Vibe64 can
 prove, so it is checked by a person: its
 turns send no result schema, each ended turn stops at `needs_you(your_turn)`, and

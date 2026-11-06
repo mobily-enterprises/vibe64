@@ -15,7 +15,12 @@ const PAGES_ACTIONS = Object.freeze({
   ARCHIVE: "vibe64.pages.archive",
   RESTORE: "vibe64.pages.restore",
   VERSION_RESTORE: "vibe64.pages.version.restore",
-  DELETE: "vibe64.pages.delete"
+  DELETE: "vibe64.pages.delete",
+  REFRESH_RUNS: "vibe64.pages.refresh.runs",
+  REFRESH_RUN: "vibe64.pages.refresh.run",
+  REFRESH_CANCEL: "vibe64.pages.refresh.cancel",
+  REFRESH_PAUSE: "vibe64.pages.refresh.pause",
+  REFRESH_RESUME: "vibe64.pages.refresh.resume"
 });
 
 // Every page action is a project member's: the project access check admits it.
@@ -101,6 +106,41 @@ function createPagesActions({ pages }) {
       input: pageInput,
       extensions: PAGE_OPERATION,
       execute: (input) => pages.deletePage(input)
+    }),
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: PAGES_ACTIONS.REFRESH_RUNS,
+      input: pageInput,
+      extensions: PAGE_OPERATION,
+      execute: (input) => pages.refreshRuns(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: PAGES_ACTIONS.REFRESH_RUN,
+      input: pageInput,
+      extensions: PAGE_OPERATION,
+      execute: (input) => pages.runRefreshNow(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: PAGES_ACTIONS.REFRESH_CANCEL,
+      input: pageInput,
+      extensions: PAGE_OPERATION,
+      execute: (input) => pages.cancelRefresh(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: PAGES_ACTIONS.REFRESH_PAUSE,
+      input: pageInput,
+      extensions: PAGE_OPERATION,
+      execute: ({ pageId, vibe64User }) => pages.pauseRefresh({ pageId, by: memberAuthor(vibe64User) })
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: PAGES_ACTIONS.REFRESH_RESUME,
+      input: pageInput,
+      extensions: PAGE_OPERATION,
+      execute: ({ pageId, vibe64User }) => pages.resumeRefresh({ pageId, by: memberAuthor(vibe64User) })
     })
   ]);
 }

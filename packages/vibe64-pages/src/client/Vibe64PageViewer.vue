@@ -1,6 +1,7 @@
 <script setup>
 // One page beside the chat, as Preview shows an app: a sandboxed frame on a
 // short-lived viewing link, with its star, Open in new tab, its kept versions,
+// how its refresh stands (a failed one keeps the version shown, with its log),
 // and archive or restore. A page opened from the Starred menu shows at once:
 // its title from the starred list and the viewing link the menu asked for.
 import { computed, ref, watch } from "vue";
@@ -15,7 +16,8 @@ import {
 import { pageAppPath } from "../shared/pageLinks.js";
 import { pageLinkAnswers } from "./pageLinkAnswers.js";
 import { starredPageSummary, takePreparedPageView, usePageViewTheme } from "./pageStars.js";
-import { archivePage, openPageView, pageTime, restorePage, restorePageVersion } from "./pagesRequests.js";
+import { archivePage, openPageView, pageTime, refreshState, restorePage, restorePageVersion } from "./pagesRequests.js";
+import Vibe64PageRefreshLog from "./Vibe64PageRefreshLog.vue";
 import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
 
 // The page's frame may run its own scripts and forms, never as Vibe64.
@@ -33,8 +35,10 @@ const viewPath = ref("");
 const error = ref("");
 const busy = ref(false);
 const frameKey = ref(0);
+const logOpen = ref(false);
 
 const versions = computed(() => [...(page.value?.versions || [])].reverse());
+const refresh = computed(() => page.value?.archived ? null : page.value?.refresh || null);
 
 // What is already known of the page while its viewing link is on its way.
 function knownPage() {
@@ -115,6 +119,15 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
         <span v-if="page" class="vibe64-page-viewer__meta text-body-small">
           Version {{ page.version }} · updated {{ pageTime(page.updatedAt) }}<template v-if="page.updatedBy?.name"> by {{ page.updatedBy.name }}</template>
         </span>
+        <span
+          v-if="refresh"
+          class="vibe64-page-viewer__meta text-body-small"
+          :class="{ 'vibe64-page-viewer__refresh-alert': refreshState(refresh).alert }"
+          data-test="page-viewer-refresh"
+        >
+          {{ refresh.schedule }} · {{ refreshState(refresh).text }} ·
+          <button type="button" class="vibe64-page-viewer__log" @click="logOpen = true">Log</button>
+        </span>
       </div>
       <Vibe64PageStarButton v-if="page && !page.archived" :page="page" :project-slug="projectSlug" />
       <v-chip v-if="page?.archived" size="small" variant="tonal" data-test="page-viewer-archived">Archived</v-chip>
@@ -164,6 +177,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
       </div>
     </header>
     <v-alert v-if="error" density="compact" type="error" variant="tonal" role="alert">{{ error }}</v-alert>
+    <Vibe64PageRefreshLog :page="logOpen ? page : null" :project-slug="projectSlug" @close="logOpen = false" />
     <div class="vibe64-page-viewer__frame-box">
       <iframe
         v-if="viewPath"
@@ -213,6 +227,20 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
 
 .vibe64-page-viewer__meta {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.vibe64-page-viewer__refresh-alert {
+  color: rgb(var(--v-theme-error));
+}
+
+.vibe64-page-viewer__log {
+  background: none;
+  border: 0;
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
 }
 
 .vibe64-page-viewer__actions {

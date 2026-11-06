@@ -99,6 +99,20 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
     summary: "Star or unstar a page for this person.",
     bodyLimit: PAGES_BODY_LIMIT
   });
+  routes.actionRoute("GET", "/pages/:pageId/refresh/runs", {
+    actionId: PAGES_ACTIONS.REFRESH_RUNS,
+    buildInput: pageInput,
+    summary: "Read a page's last refreshes, with their logs.",
+    bodyLimit: PAGES_BODY_LIMIT
+  });
+  for (const [step, actionId, summary] of [
+    ["run", PAGES_ACTIONS.REFRESH_RUN, "Refresh a page now."],
+    ["cancel", PAGES_ACTIONS.REFRESH_CANCEL, "Cancel a page's running refresh."],
+    ["pause", PAGES_ACTIONS.REFRESH_PAUSE, "Pause a page's refreshes."],
+    ["resume", PAGES_ACTIONS.REFRESH_RESUME, "Resume a page's refreshes, run as this person."]
+  ]) {
+    routes.actionRoute("POST", `/pages/:pageId/refresh/${step}`, { actionId, buildInput: pageInput, summary, bodyLimit: PAGES_BODY_LIMIT });
+  }
   routes.actionRoute("POST", "/pages/:pageId/archive", {
     actionId: PAGES_ACTIONS.ARCHIVE,
     buildInput: pageInput,

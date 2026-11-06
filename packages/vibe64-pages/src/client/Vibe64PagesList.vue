@@ -1,14 +1,18 @@
 <script setup>
 // A project's pages, Current and Archived: open one beside the chat, star it
-// (your starred pages come first), archive or restore it, and delete it once
-// archived.
-import { computed, onMounted, ref, watch } from "vue";
+// (your starred pages come first), see and steer its refreshes, archive or
+// restore it, and delete it once archived.
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { mdiArchiveArrowDownOutline, mdiArchiveArrowUpOutline, mdiDeleteOutline, mdiOpenInApp, mdiRefresh } from "@mdi/js";
 import { pageAppPath } from "../shared/pageLinks.js";
 import { usePageStars } from "./pageStars.js";
-import { archivePage, deletePage, listPages, pageTime, restorePage } from "./pagesRequests.js";
+import { archivePage, changeRefresh, deletePage, listPages, pageTime, refreshState, restorePage } from "./pagesRequests.js";
+import Vibe64PageRefreshLog from "./Vibe64PageRefreshLog.vue";
 import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
+
+// While a refresh runs, the list looks again this often to show how it ended.
+const RUNNING_RELOAD_MS = 5000;
 
 const props = defineProps({
   projectSlug: { type: String, required: true }
@@ -22,7 +26,9 @@ const error = ref("");
 const tab = ref("current");
 const busyPageId = ref("");
 const deleting = ref(null);
+const logPage = ref(null);
 const stars = usePageStars(() => props.projectSlug);
+let reloadTimer = null;
 
 const current = computed(() => {
   const pagesNow = pages.value.filter((page) => !page.archived);
@@ -43,6 +49,8 @@ async function refresh() {
     error.value = cause?.message || "The pages could not load.";
   } finally {
     loading.value = false;
+    clearTimeout(reloadTimer);
+    if (pages.value.some((page) => page.refresh?.running)) reloadTimer = setTimeout(refresh, RUNNING_RELOAD_MS);
   }
 }
 
@@ -66,6 +74,7 @@ async function confirmDelete() {
 }
 
 onMounted(refresh);
+onBeforeUnmount(() => clearTimeout(reloadTimer));
 watch(() => props.projectSlug, refresh);
 </script>
 
@@ -107,8 +116,41 @@ watch(() => props.projectSlug, refresh);
               </div>
             </div>
           </td>
-          <td class="text-medium-emphasis" title="This page has no refresh schedule">—</td>
-          <td>
+          <td class="vibe64-pages-list__refresh" :class="{ 'vibe64-pages-list__refresh--none': !page.refresh }" data-test="page-refresh">
+            <template v-if="page.refresh">
+              <span class="vibe64-pages-list__refresh-schedule">
+                {{ page.refresh.schedule }}<template v-if="page.refresh.kind === 'prompt'"> · AI</template>
+              </span>
+              <span
+                class="vibe64-pages-list__meta text-body-small"
+                :class="{ 'vibe64-pages-list__refresh-alert': !page.archived && refreshState(page.refresh).alert }"
+                data-test="page-refresh-state"
+              >
+                {{ page.archived ? "Stopped while archived" : refreshState(page.refresh).text }}
+              </span>
+              <div class="vibe64-pages-list__refresh-actions">
+                <v-btn v-if="page.refresh.running" size="small" variant="text" @click="change(page, changeRefresh('cancel'))">
+                  Cancel
+                </v-btn>
+                <template v-else-if="!page.archived">
+                  <v-btn :disabled="Boolean(busyPageId)" size="small" variant="text" @click="change(page, changeRefresh('run'))">
+                    Refresh now
+                  </v-btn>
+                  <v-btn
+                    :disabled="Boolean(busyPageId)"
+                    size="small"
+                    variant="text"
+                    @click="change(page, changeRefresh(page.refresh.paused ? 'resume' : 'pause'))"
+                  >
+                    {{ page.refresh.paused ? "Resume" : "Pause" }}
+                  </v-btn>
+                </template>
+                <v-btn size="small" variant="text" @click="logPage = page">Log</v-btn>
+              </div>
+            </template>
+            <span v-else class="text-medium-emphasis" title="This page has no refresh schedule">—</span>
+          </td>
+          <td class="vibe64-pages-list__row-actions">
             <div class="vibe64-pages-list__actions">
               <v-btn :prepend-icon="mdiOpenInApp" size="small" variant="text" @click="router.push(pageAppPath(projectSlug, page.id))">
                 Open
@@ -151,6 +193,7 @@ watch(() => props.projectSlug, refresh);
         </tr>
       </tbody>
     </v-table>
+    <Vibe64PageRefreshLog :page="logPage" :project-slug="projectSlug" @close="logPage = null" />
     <v-dialog :model-value="Boolean(deleting)" max-width="440" @update:model-value="!$event && (deleting = null)">
       <v-card v-if="deleting" title="Delete this page?">
         <v-card-text>
@@ -168,6 +211,7 @@ watch(() => props.projectSlug, refresh);
 
 <style scoped>
 .vibe64-pages-list {
+  container-type: inline-size;
   display: grid;
   gap: 0.75rem;
   min-width: 0;
@@ -216,11 +260,69 @@ watch(() => props.projectSlug, refresh);
   display: block;
 }
 
+.vibe64-pages-list__refresh {
+  min-width: 9rem;
+  padding-block: 0.5rem;
+}
+
+.vibe64-pages-list__refresh-schedule {
+  display: block;
+}
+
+.vibe64-pages-list__refresh-alert {
+  color: rgb(var(--v-theme-error));
+}
+
+.vibe64-pages-list__refresh-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-inline-start: -0.5rem;
+}
+
 /* Beside the chat the pane is narrow: the actions wrap rather than push the table sideways. */
 .vibe64-pages-list__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   justify-content: flex-end;
+}
+
+/* On a phone, or in a narrow pane, a page's refresh takes its own line under its title and actions. */
+@container (max-width: 599px) {
+  .vibe64-pages-list__table thead {
+    display: none;
+  }
+
+  .vibe64-pages-list__table tbody tr {
+    border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+    display: grid;
+    grid-template-areas: "page actions" "refresh refresh";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .vibe64-pages-list__table tbody td {
+    border-bottom: 0 !important;
+    height: auto !important;
+  }
+
+  .vibe64-pages-list__page {
+    grid-area: page;
+    min-width: 0;
+  }
+
+  .vibe64-pages-list__refresh {
+    grid-area: refresh;
+    min-width: 0;
+    padding-block-start: 0;
+  }
+
+  .vibe64-pages-list__refresh--none {
+    display: none;
+  }
+
+  .vibe64-pages-list__row-actions {
+    align-self: center;
+    grid-area: actions;
+  }
 }
 </style>

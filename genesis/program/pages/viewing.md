@@ -45,7 +45,8 @@ always runs sandboxed: page content is untrusted.
   callouts, progress bars, a scroll wrapper for wide tables, number alignment
   and inline SVG charts (`pageStylesheet.js`).
 - Open shows the viewer in the Dashboard panel beside the chat, with the
-  Dashboard menu hidden, the page's star, version and last update, Reload, Versions
+  Dashboard menu hidden, the page's star, version and last update, a current
+  page's refresh (its schedule, how it stands as in the Pages list, and Log), Reload, Versions
   (bring back a kept version), Archive or Restore, and Open in new tab, which
   gets its own viewing link and leaves the new tab no way back to Vibe64.
 - Every page link in a main or temporary chat message, the AI's or a pasted

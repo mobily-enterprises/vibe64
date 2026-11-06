@@ -7,6 +7,7 @@ import {
   VIBE64_CONVERSATION_TURN_STARTING_EVENT
 } from "@local/vibe64-terminals/server/events";
 import { createAiTaskActions } from "./aiTaskActions.js";
+import { createPageRefreshTasks } from "./pageRefreshTasks.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createAiTasksService } from "./service.js";
 
@@ -16,6 +17,7 @@ import { createAiTasksService } from "./service.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-database-tools/server/types").DatabaseToolsService} DatabaseToolsService */
+/** @typedef {import("@local/vibe64-pages/server/types").PagesService} PagesService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -56,6 +58,7 @@ const Vibe64AiTasksFeature = defineFeature({
     events: "runtime.events",
     http: "runtime.http",
     logger: "runtime.logger",
+    pages: "vibe64.pages",
     project: "vibe64.project",
     sessions: "vibe64.sessions",
     terminals: "vibe64.terminals"
@@ -70,20 +73,24 @@ const Vibe64AiTasksFeature = defineFeature({
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
+   * @param {PagesService} capabilities.pages
    * @param {ProjectService} capabilities.project
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
    */
-  setup({ databaseTools, env, events, http, logger, project, sessions, terminals }) {
+  setup({ databaseTools, env, events, http, logger, pages, project, sessions, terminals }) {
     const aiTasks = createAiTasksService({
       databaseTools,
       logger,
+      pages,
       project,
       publishSessionChanged: createSessionChangedPublisher({ events }),
       sessions,
       terminals
     });
     followSessionEvents(events, aiTasks);
+    // readable-check: allow setter-seam - cycle: vibe64.ai-tasks requires vibe64.pages, and runs a prompt refresh as an AI task
+    pages.setRefreshTasks(createPageRefreshTasks({ aiTasks, project }));
     registerRoutes(http, {
       localhostCheckBypassed: isLocalhostCheckBypassEnabled({ env }),
       projectContext: getStudioProjectContext()
@@ -109,10 +116,12 @@ const Vibe64AiTasksFeature = defineFeature({
     void project.runInProjectContext(project.currentProjectSlug(), () => outputs.aiTasks.resumeInterruptedTasks());
   },
   /**
-   * @param {object} _capabilities
+   * @param {{ pages: PagesService }} capabilities
    * @param {{ outputs: { aiTasks: AiTasksService } }} context
    */
-  shutdown(_capabilities, { outputs }) {
+  shutdown({ pages }, { outputs }) {
+    // readable-check: allow setter-seam - cycle: vibe64.ai-tasks requires vibe64.pages, and runs a prompt refresh as an AI task
+    pages.setRefreshTasks(null);
     outputs.aiTasks.closeRunner();
   }
 });

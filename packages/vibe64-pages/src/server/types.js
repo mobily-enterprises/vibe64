@@ -55,6 +55,43 @@
  * @property {number} version
  * @property {{ number: number, title: string, createdAt: string, createdBy: PageAuthor, restoredFrom?: number }[]} versions the kept versions, oldest first
  * @property {string} link the in-app path that opens it beside the chat
+ * @property {PageRefreshSummary | null} refresh how it refreshes, if it does
+ */
+
+/**
+ * A page's refresh as everyone sees it.
+ * @typedef {object} PageRefreshSummary
+ * @property {"command" | "prompt"} kind a script with no AI, or an AI task in the session it was set from
+ * @property {string} schedule "Every hour", "Daily at 07:30 (Europe/Rome)"
+ * @property {PageAuthor} scheduledBy who it runs as
+ * @property {string} sessionId the session it was set from, where a prompt refresh runs
+ * @property {string} nextAt
+ * @property {boolean} paused
+ * @property {string} pausedReason
+ * @property {number} failures failed runs in a row; three pause it
+ * @property {{ startedAt: string, taskId?: string } | null} running
+ * @property {{ id: string, kind: string, startedAt: string, endedAt: string, outcome: "refreshed" | "failed" | "cancelled" | "skipped", message: string, version?: number, taskId?: string, sessionId?: string } | null} lastRun
+ */
+
+/**
+ * How the pages scheduler runs a prompt refresh as an AI task; vibe64.ai-tasks supplies it.
+ * @typedef {object} PageRefreshTasks
+ * @property {(sessionId: string, input: object, person: PageAuthor) => Promise<PageRefreshTaskState>} start as the person who scheduled it
+ * @property {(sessionId: string, taskId: string) => Promise<PageRefreshTaskState | null>} read null once the task is closed
+ * @property {(sessionId: string, taskId: string) => Promise<void>} cancel
+ * @property {(sessionId: string, taskId: string) => Promise<void>} close
+ */
+
+/**
+ * @typedef {object} PageRefreshTaskState
+ * @property {string} id
+ * @property {boolean} ended
+ * @property {boolean} done
+ * @property {boolean} needsYou whether it stopped for a person
+ * @property {boolean} unavailable whether the AI account was the reason
+ * @property {boolean} cancelled whether someone cancelled it
+ * @property {string} message
+ * @property {{ at: string, text: string }[]} log
  */
 
 export {};

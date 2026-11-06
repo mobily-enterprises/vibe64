@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -20,8 +20,6 @@ async function commandFixture(t) {
   const work = path.join(root, "work");
   const wrapperHostDir = path.join(root, "wrappers");
   await Promise.all([mkdir(projectRuntimeRoot, { recursive: true }), mkdir(work, { recursive: true }), mkdir(wrapperHostDir, { recursive: true })]);
-  const pages = createPagesService({ now: () => new Date().toISOString(), clock: Date.now });
-  let provider = pages;
   const project = {
     readCurrentProject: async () => ({ slug: SLUG, projectRoot: path.join(root, "project") }),
     runInProjectContext: (slug, operation) => runWithProjectRequestContext({ slug, projectRuntimeRoot }, operation),
@@ -32,6 +30,8 @@ async function commandFixture(t) {
       ]
     })
   };
+  const pages = createPagesService({ now: () => new Date().toISOString(), clock: Date.now, project, logger: quietLogger });
+  let provider = pages;
   const commandService = createAgentPagesCommandService({ logger: quietLogger, project, readPages: () => provider });
   const prepared = await prepareAgentPagesCommand({ commandService, sessionId: "session-1", wrapperHostDir });
   await prepareAgentHelperCommand({ wrapperHostDir, env: process.env });
@@ -122,7 +122,7 @@ test("the pages command refuses what a page cannot be, with a usable message", a
     [["publish", "linked"], 2, /secret\.txt is a link/u],
     [["publish", "notes.md"], 2, /Publish an HTML file, or a folder with an index\.html/u],
     [["publish", "missing.html"], 2, /There is no file or folder at missing\.html/u],
-    [["publish"], 2, /accepts publish, update, revert, list or guide/u],
+    [["publish"], 2, /accepts publish, update, revert, data, refresh, list or guide/u],
     [["publish", "notes.md", "--force"], 2, /Unsupported option: --force/u],
     [["list", "--title", "x"], 2, /--title takes a title/u],
     [["revert", "page-1", "latest"], 2, /revert takes the page id and the version number/u],
@@ -137,4 +137,53 @@ test("the pages command refuses what a page cannot be, with a usable message", a
   const unavailable = await pagesCommand("list");
   assert.equal(unavailable.code, 1);
   assert.match(unavailable.stderr, /Vibe64 pages are unavailable here/u);
+});
+
+test("the pages command replaces only a page's data, and sets, shows and stops its refresh", async (t) => {
+  const { pages, pagesCommand, work, inProject } = await commandFixture(t);
+  t.after(() => pages.closeRefreshes());
+  await mkdir(path.join(work, "board"), { recursive: true });
+  await writeFile(path.join(work, "board", "index.html"), "<p>Board</p>");
+  await writeFile(path.join(work, "board", "data.json"), "{\"open\":1}");
+  const { page } = JSON.parse((await pagesCommand("publish", "board", "--json")).stdout);
+  await writeFile(path.join(work, "new-data.json"), "{\"open\":2}");
+  const data = await pagesCommand("data", page.id, "new-data.json");
+  assert.equal(data.code, 0, data.stderr);
+  assert.match(data.stdout, new RegExp(`Updated the data of "board"\\. Page ${page.id} is now at version 2\\.`, "u"));
+  const viewed = await inProject(() => pages.openPageView({ pageId: page.id }));
+  const { versionFolder } = await pages.viewedPage(viewed.viewPath.split("/").at(-1));
+  assert.equal(await readFile(path.join(versionFolder, "data.json"), "utf8"), "{\"open\":2}");
+  assert.equal(await readFile(path.join(versionFolder, "index.html"), "utf8"), "<p>Board</p>", "the layout stays as it was");
+
+  await writeFile(path.join(work, "refresh.mjs"), "console.log('counting');\n");
+  const set = await pagesCommand("refresh", page.id, "--every", "30m", "--command", "refresh.mjs");
+  assert.equal(set.code, 0, set.stderr);
+  assert.match(set.stdout, new RegExp(`^Page ${page.id} now refreshes every 30 minutes by running refresh\\.mjs on Vibe64's server, as Alice Example\\.\\nThe next refresh is at \\S+\\. The Pages list shows each refresh`, "u"));
+  assert.match((await pagesCommand("list")).stdout, new RegExp(`^${page.id}  board  version 2  .*refreshes every 30 minutes by script, next `, "mu"));
+  const prompt = await pagesCommand("refresh", page.id, "--daily", "07:30", "--time-zone", "Europe/Rome", "--prompt", "Count the open issues", "--json");
+  assert.equal(prompt.code, 0, prompt.stderr);
+  const { refresh } = JSON.parse(prompt.stdout).page;
+  assert.deepEqual([refresh.kind, refresh.schedule, refresh.scheduledBy], ["prompt", "Daily at 07:30 (Europe/Rome)", { id: "alice", name: "Alice Example" }]);
+  const off = await pagesCommand("refresh", page.id, "--off");
+  assert.equal(off.code, 0, off.stderr);
+  assert.equal(off.stdout, `Page ${page.id} no longer refreshes; it keeps version 2.\n`);
+
+  await writeFile(path.join(work, "notes.txt"), "plain words");
+  const cases = [
+    [["refresh", page.id, "--every", "5m", "--command", "refresh.mjs"], 1, /at most every 15 minutes/u],
+    [["refresh", page.id, "--every", "30m"], 2, /--command <script> or --prompt/u],
+    [["refresh", page.id, "--command", "refresh.mjs"], 2, /--every \(such as 30m or 2h\) or --daily/u],
+    [["refresh", page.id, "--off", "--every", "30m"], 2, /--off takes no other option/u],
+    [["refresh", page.id, "--every", "30m", "--time-zone", "Europe/Rome", "--prompt", "Count"], 2, /--time-zone goes with --daily/u],
+    [["refresh", page.id, "--every", "30m", "--command", "notes.txt"], 1, /\.mjs, \.js, \.cjs, \.py or \.sh file/u],
+    [["refresh", page.id, "--every", "30m", "--command", "missing.mjs"], 2, /There is no file at missing\.mjs/u],
+    [["publish", "board", "--every", "30m"], 2, /go with refresh/u],
+    [["data", page.id, "notes.txt"], 1, /not valid JSON/u],
+    [["data", page.id], 2, /accepts publish, update, revert, data, refresh, list or guide/u]
+  ];
+  for (const [args, code, message] of cases) {
+    const result = await pagesCommand(...args);
+    assert.equal(result.code, code, `${args.join(" ")}: ${result.stderr}`);
+    assert.match(result.stderr, message, args.join(" "));
+  }
 });

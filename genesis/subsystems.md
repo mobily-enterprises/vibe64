@@ -650,6 +650,13 @@ menu; the application places them in the Dashboard, transcripts and that menu.
 The `_vibe64/page.css` stylesheet gives pages Vibe64's colours, font, light and
 dark modes and ready components, and the page design guide the agent reads with
 `vibe64-helper pages guide` shows how to build a page from them.
+A page can keep itself up to date: its refresh, set by the agent command and
+kept in `refresh.json` beside the page, writes it a new `data.json` on a
+schedule, as the person who set it, from the project as last saved. One server
+timer waits for the next refresh due; a command refresh runs its script in a
+throwaway checkout through the execution gateway, and a prompt refresh is an AI
+task that AI tasks run in the session it was set from, through a scheduler seam
+AI tasks set because they already require pages.
 
 ### Source
 - Directory `packages/vibe64-pages`
@@ -659,6 +666,7 @@ dark modes and ready components, and the page design guide the agent reads with
 - `genesis/program/pages/pages-list.md`
 - `genesis/program/pages/viewing.md`
 - `genesis/program/pages/stars.md`
+- `genesis/program/pages/refreshes.md`
 
 ### Data owned
 - Nothing.

@@ -5,7 +5,8 @@ preview sign-in or project setup problem, the whole fix happens in
 one window: the problem, the conversation with the AI, what Vibe64 is doing, and the
 result. Starting, adopting or inspecting a project from its setup screen, and
 creating or reviewing the Database's Data overview, use the same window. So do the
-tasks Colleague runs for you and its reviews. You close it once the task is
+tasks Colleague runs for you and its reviews, and a page's AI refresh, which starts
+by itself on its schedule ([Keep a page up to date](pages.md#keep-a-page-up-to-date)). You close it once the task is
 **Done** or **Not done**. It can't end any other way.
 
 The window holds only tasks that Vibe64 or Colleague start. A conversation of your
@@ -248,7 +249,10 @@ so and the task ends as soon as that run finishes.
 ## One at a time
 
 A session has one AI task at a time, whoever started it. Your temporary chats
-don't count toward it. Members see the same window
+don't count toward it. A page's AI refresh counts: while one runs, **Fix it with AI**
+says "A page refresh is running in this session. Wait for it, or cancel it.", and a
+refresh due while another task is open waits for its next time. A refresh doesn't
+hold Save or Update. Members see the same window
 live, and any of them can answer, Cancel or Close. While a fix is running, Vibe64
 refuses Save, Update and **Prepare workspace** with a
 message; try them again when it ends. While Update is failed, workspace preparation's fix waits for Update's: Update

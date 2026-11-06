@@ -102,4 +102,4 @@ function checkCommandRunner({ projectSlug = "", runCommand = runVibe64Command } 
   };
 }
 
-export { checkCommandRunner, runStageCommand };
+export { checkCommandRunner, projectCommandRequest, runStageCommand };

@@ -17,6 +17,7 @@ import { findRegisteredRoute, testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 const SLUG = "unit_project";
 const alice = { id: "alice", name: "Alice" };
+const quietLogger = { debug() {}, info() {}, warn() {}, error() {} };
 const files = (html, extra = {}) => [
   { path: "index.html", base64: Buffer.from(html).toString("base64") },
   ...Object.entries(extra).map(([filePath, content]) => ({ path: filePath, base64: Buffer.from(content).toString("base64") }))
@@ -27,11 +28,19 @@ async function withPages(operation, { clock } = {}) {
   const projectRuntimeRoot = path.join(root, "state", "projects", SLUG);
   await mkdir(projectRuntimeRoot, { recursive: true });
   let tick = 0;
+  const inProject = (run) => runWithProjectRequestContext({ projectRuntimeRoot, slug: SLUG }, run);
+  // A project with no saved version: these tests never run a refresh's script.
+  const project = {
+    runInProjectContext: (_slug, run) => inProject(run),
+    listProjects: async () => ({ projects: [{ slug: SLUG }] }),
+    readCurrentProject: async () => ({ slug: SLUG })
+  };
   const pages = createPagesService({
     now: () => new Date(Date.UTC(2026, 10, 6, 9, 0, tick++)).toISOString(),
-    ...(clock ? { clock } : {})
+    clock: clock || Date.now,
+    project,
+    logger: quietLogger
   });
-  const inProject = (run) => runWithProjectRequestContext({ projectRuntimeRoot, slug: SLUG }, run);
   try {
     await operation({ pages, inProject, projectRuntimeRoot, root });
   } finally {
@@ -261,6 +270,21 @@ test("project members' page routes run their actions behind the project access c
     assert.deepEqual(starred.pages.map((entry) => entry.id), [page.id]);
     assert.deepEqual((await call("GET", "/pages/stars")).payload.pages.map((entry) => entry.id), [page.id], "the member's own stars");
     assert.deepEqual((await inProject(() => pages.starredPages({ vibe64User: { username: "dan" } }))).pages, []);
+    // A refresh the session's AI set: members pause, resume, run and cancel it, and read its log.
+    await inProject(() => pages.setPageRefresh({ pageId: page.id, kind: "prompt", every: "2h", prompt: "Recount the files", by: alice, sessionId: "s" }));
+    const paused = (await call("POST", "/pages/:pageId/refresh/pause", { pageId: page.id })).payload.page.refresh;
+    assert.deepEqual([paused.paused, paused.pausedReason], [true, "Paused by Carol."]);
+    const resumed = (await call("POST", "/pages/:pageId/refresh/resume", { pageId: page.id })).payload.page.refresh;
+    assert.deepEqual([resumed.paused, resumed.scheduledBy], [false, { id: "carol", name: "Carol" }], "it runs as the member who resumed it");
+    assert.ok((await call("POST", "/pages/:pageId/refresh/run", { pageId: page.id })).payload.page.refresh.running);
+    await call("POST", "/pages/:pageId/refresh/cancel", { pageId: page.id });
+    let runs = [];
+    for (let attempt = 0; attempt < 200 && !runs.length; attempt += 1) {
+      runs = (await call("GET", "/pages/:pageId/refresh/runs", { pageId: page.id })).payload.runs;
+      if (!runs.length) await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].message, "AI refreshes are unavailable here.", "without the AI task window an AI refresh fails and says so");
     // The shared schema reads "yes", "on" and 1 as true; anything else, or nothing, is refused.
     for (const body of [{ starred: "perhaps" }, {}]) {
       await assert.rejects(call("POST", "/pages/:pageId/star", { pageId: page.id }, body), { statusCode: 400, code: "ACTION_VALIDATION_FAILED" });

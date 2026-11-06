@@ -24,6 +24,10 @@ project can open, outside the repository.
   its top. The wrapper reads the files with the agent's own access, skips hidden
   entries and refuses links. The title is `--title`, else the page's `<title>`,
   else the file or folder name.
+- `data <page-id> <data.json>` adds a version with only `data.json` replaced, and
+  `refresh <page-id> …` sets, replaces or (`--off`) stops the page's refresh
+  (see `refreshes.md`); `list` adds each page's refresh, and `refresh` prints its
+  schedule, how it runs, as whom and when it next runs.
 - `update <page-id> <file.html | folder>` adds a version under the same link and
   keeps the title unless `--title` changes it; an archived page refuses updates.
   `revert <page-id> <version>` brings a kept version back as the newest one.
@@ -31,8 +35,11 @@ project can open, outside the repository.
   state and link; `--json` prints the service's answer. `guide` prints the page
   design guide (`pageDesignGuide.md`, read by the pages service): rules (answer
   the reader's first question at the top, status as tinted pills, tables for
-  comparisons, inline SVG charts, no walls of text, self-contained, phone width)
-  and a short HTML example of each `_vibe64/page.css` component.
+  comparisons, inline SVG charts, no walls of text, self-contained, phone width),
+  a short HTML example of each `_vibe64/page.css` component, and how to build a
+  page that keeps itself up to date: its layout reads `data.json`, a command
+  refresh is the usual choice, and its script is tried first with
+  `VIBE64_PAGE_DATA=/tmp/data.json`.
 - Publish, update and revert print the page's link first: its app path,
   `/app/project/<slug>/dashboard/pages/<page id>`, then a Markdown link to give
   in the chat. Mistakes exit 2 with the usage; refusals exit 1 with their reason.
@@ -51,7 +58,10 @@ project can open, outside the repository.
   the AI to read `vibe64-helper pages guide` in full before writing a page and
   build it from `_vibe64/page.css` components, and tells it when to offer a
   page in one line, when to make one without
-  asking, to say a changing page can be kept up to date, to update a relevant
+  asking, to say a changing page can be kept up to date and, when the person
+  wants that, to build it with `index.html` reading `data.json` and
+  `vibe64-helper pages refresh`, preferring `--command` unless gathering the data
+  needs judgement, to update a relevant
   page instead of making another, not to offer pages for quick answers, code
   changes or repository documents, to offer once per topic, and never to put
   secrets in a page. Guidance registered before pages existed stays valid.

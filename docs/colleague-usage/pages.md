@@ -1,4 +1,4 @@
-# Make, open, star, archive and restore pages
+# Make, open, star, refresh, archive and restore pages
 
 A page is an HTML page the AI makes for the project: a report, a comparison, a
 status overview, a dashboard or a diagram. Everyone with access to the project
@@ -88,8 +88,67 @@ versions after it stay in the list, so this can itself be undone. An archived pa
   choose **Delete**, then **Delete** again to confirm. This removes the page
   and all its kept versions for everyone and cannot be undone.
 
-The **Refreshes** column is empty for now: pages change only when someone asks
-the AI to update them.
+## Keep a page up to date
+
+Ask the AI for a page that keeps itself up to date, in your own words, for
+example "make a page of the open issues that updates itself every hour" or "a
+test results page that refreshes every morning at 8". It can refresh every so
+many minutes or hours, never more often than every 15 minutes, or daily at a set
+time. When a page's content will change, the AI also offers to keep it up to
+date. To change or stop a page's refreshes, ask the AI ("refresh it every 2
+hours instead", "stop refreshing that page"); a page that stops refreshing keeps
+its last version.
+
+A refresh changes only the page's data, never its layout, and each one that
+works is a new version of the page. It reads the project as last saved with
+**Save work**, never a session's unsaved changes. It runs as the person who set
+it. There are two kinds:
+
+- **A script** (the usual kind): the AI writes a small script that collects the
+  data. Vibe64 runs it on its own on each refresh; no AI is used.
+- **An AI refresh** (**· AI** in the list): for data that needs judgement, such
+  as a summary of the week's work. Each refresh is a short AI task in the session
+  the refresh was set from, with the AI that session uses, and shows there like
+  any AI task ([Fix a problem with AI](ai-tasks.md)). Keep that session open.
+
+### See how a page's refreshes stand
+
+In the Pages list, the **Refreshes** column shows how often a page refreshes and
+how it stands. An open page shows the same beside its version.
+
+- **Next** and a time: when it refreshes next.
+- **Refreshing…**: a refresh is running.
+- **Refresh failed** and a time, in red: the last refresh failed. The page keeps
+  its last good version.
+- **Paused:** and why, in red: it refreshes no more until someone resumes it.
+- **Stopped while archived**: an archived page doesn't refresh.
+
+Under it:
+
+- **Refresh now** runs a refresh at once; the schedule carries on as before.
+- **Cancel**, while a refresh runs, stops it. The page keeps the version it has.
+- **Pause** stops the refreshes until **Resume**. Resuming runs them as you
+  from then on.
+- **Log** lists the last ten refreshes, newest first: how each ended, why, and
+  what it printed. A failed AI refresh has **Open its AI task**, which shows
+  what the AI did, until the next AI task starts in that session.
+
+### When refreshes pause or skip
+
+- Three refreshes fail in a row.
+- An AI refresh's AI account isn't available. Sign in again, then **Resume**.
+- An AI refresh's session is no longer open. Ask the AI in an open session to
+  set the refresh again.
+- Someone chose **Pause**.
+
+When another AI task is open in an AI refresh's session at refresh time, that
+refresh is skipped (**Skipped** in the log) and the next one runs as planned. A
+refresh never starts while the last one is still running. If Vibe64 was stopped
+when refreshes were due, the page refreshes once as soon as it starts again,
+not once for each missed time.
+
+Archiving a page cancels a refresh that is running and stops its refreshes.
+Restoring it starts them again from then.
 
 ## What a page can and cannot do
 
@@ -100,6 +159,8 @@ carries its own copy. Links inside a page open only its own files.
 
 ## What Colleague can do
 
-Colleague can explain these steps. Making and updating a page is done by the
-session's AI in the chat, and opening, archiving, restoring and deleting pages
-are done by you in the Pages list or the open page.
+Colleague can explain these steps. Making and updating a page, and setting,
+changing or stopping its refreshes, are done by the session's AI in the chat.
+Opening, archiving, restoring and deleting pages, and **Refresh now**,
+**Cancel**, **Pause**, **Resume** and **Log**, are done by you in the Pages list
+or the open page.

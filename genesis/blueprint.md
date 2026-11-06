@@ -515,7 +515,15 @@ whole screen. Each person can star the pages they come back to, on a page's
 chat card, beside its open title or in the Pages list, where their starred pages
 come first; stars are personal, shared by every session of the project, and the
 chat's **Starred** menu lists starred pages above starred files so one click
-opens a page beside the chat at once. The AI offers a page in one line when a
+opens a page beside the chat at once. A page can keep itself up to date: asked
+for one, the AI builds its layout to read a `data.json` and sets a refresh every
+15 minutes or more, or daily at a set time. Vibe64's server then writes the page
+new data from the project as last saved, as the person who set it, usually with
+a small script and no AI, or as a short AI task in that person's session when
+gathering the data needs judgement. A failed refresh keeps the last good
+version, three in a row pause it, and the Pages list shows each page's schedule
+and state, with Refresh now, Pause, Resume, Cancel and the log of its last runs;
+archiving a page stops its refreshes. The AI offers a page in one line when a
 result reads better as one, makes it without asking when the person says it is
 for others or for later, and updates an existing page instead of making a
 second one about the same thing. A page is untrusted: it shows only its own

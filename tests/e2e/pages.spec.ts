@@ -53,15 +53,32 @@ function nodeReply(response: ServerResponse) {
 
 // A Vibe64 origin whose page routes are the real ones, over real HTTP with
 // their real headers; everything else reaches the Playwright server. Pages are
-// published by the real agent command, as an AI would.
+// published by the real agent command, as an AI would, and refresh from the
+// project's saved Git commit.
 async function pagesWorld(frontend: string) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-pages-browser-"));
   const projectRuntimeRoot = path.join(root, "state", "projects", WORKSPACE_SLUG);
   const projectsRoot = path.join(root, "projects");
+  const projectRoot = path.join(projectsRoot, WORKSPACE_SLUG);
   const work = path.join(root, "work");
   const wrapperHostDir = path.join(root, "wrappers");
-  for (const folder of [projectRuntimeRoot, path.join(projectsRoot, WORKSPACE_SLUG), work, wrapperHostDir]) await mkdir(folder, { recursive: true });
-  const pages = createPagesService({ now: () => new Date().toISOString(), clock: Date.now });
+  for (const folder of [projectRuntimeRoot, projectRoot, work, wrapperHostDir]) await mkdir(folder, { recursive: true });
+  const git = (...args: string[]) => run("git", ["-C", projectRoot, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", ...args]);
+  await git("init", "--quiet", "--initial-branch=main");
+  await writeFile(path.join(projectRoot, "numbers.txt"), "4\n5\n6\n");
+  await git("add", "numbers.txt");
+  await git("commit", "--quiet", "-m", "Numbers");
+  const project = {
+    readCurrentProject: async () => ({
+      slug: WORKSPACE_SLUG, projectRoot, repositoryMode: "local_source", sourceRoot: projectRoot, repository: { defaultBranch: "main" }
+    }),
+    runInProjectContext: (slug: string, operation: () => Promise<unknown>) => runWithProjectRequestContext({ slug, projectRuntimeRoot }, operation),
+    listProjects: async () => ({ projects: [{ slug: WORKSPACE_SLUG }] }),
+    createSessionStore: async () => ({
+      readConversationTail: async () => [{ user: { text: "Make me a page" }, metadata: { actorId: "alice", actorDisplayName: "Alice Example" } }]
+    })
+  };
+  const pages = createPagesService({ now: () => new Date().toISOString(), clock: Date.now, project, logger: quietLogger });
   const inProject = <T>(operation: () => Promise<T>) => runWithProjectRequestContext({ projectRuntimeRoot, slug: WORKSPACE_SLUG }, operation);
   const member = { username: "alice", displayName: "Alice Example", role: "owner" };
   const projectContext = {
@@ -118,13 +135,6 @@ async function pagesWorld(frontend: string) {
   const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 
   // The agent's own command, as a session's AI runs it.
-  const project = {
-    readCurrentProject: async () => ({ slug: WORKSPACE_SLUG, projectRoot: path.join(projectsRoot, WORKSPACE_SLUG) }),
-    runInProjectContext: (slug: string, operation: () => Promise<unknown>) => runWithProjectRequestContext({ slug, projectRuntimeRoot }, operation),
-    createSessionStore: async () => ({
-      readConversationTail: async () => [{ user: { text: "Make me a page" }, metadata: { actorId: "alice", actorDisplayName: "Alice Example" } }]
-    })
-  };
   const commandService = createAgentPagesCommandService({ logger: quietLogger, project, readPages: () => pages });
   const prepared = await prepareAgentPagesCommand({ commandService, sessionId: SESSION_ID, wrapperHostDir });
   await prepareAgentHelperCommand({ wrapperHostDir, env: process.env });
@@ -147,6 +157,7 @@ async function pagesWorld(frontend: string) {
     origin, pages, inProject, fileRequests, pagesCommand, writePage, publish,
     pageFolder: (pageId: string) => path.join(projectRuntimeRoot, "pages", pageId),
     async close() {
+      pages.closeRefreshes();
       await commandService.closeAllForSession(SESSION_ID);
       server.closeAllConnections();
       server.close();
@@ -211,6 +222,29 @@ const SUMMARY = (version: string, javascriptFiles: number) => ({
   "data.json": JSON.stringify([["JavaScript", javascriptFiles], ["Vue", 17]]),
   "logo.svg": '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#1867c0"/></svg>'
 });
+
+// A page that keeps itself up to date: its layout reads data.json, and its
+// refresh scripts are what an AI writes beside it.
+const OPEN_ISSUES = {
+  "index.html": `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Open issues</title>
+<link rel="stylesheet" href="_vibe64/page.css"></head>
+<body><main><h1>Open issues</h1><p id="total"></p></main><script src="issues.js"></script></body></html>`,
+  "issues.js": `fetch("data.json").then((answer) => answer.json()).then(({ total }) => {
+  document.getElementById("total").textContent = "Total: " + total;
+});`,
+  "data.json": JSON.stringify({ total: 0 })
+};
+const REFRESH_SCRIPTS = {
+  "count.mjs": `import { readFileSync, writeFileSync } from "node:fs";
+const numbers = readFileSync("numbers.txt", "utf8").trim().split("\\n").map(Number);
+writeFileSync(process.env.VIBE64_PAGE_DATA, JSON.stringify({ total: numbers.reduce((sum, value) => sum + value, 0) }));
+console.log("Counted " + numbers.length + " numbers");
+`,
+  "broken.mjs": `console.error("The issue tracker did not answer.");
+process.exit(1);
+`,
+  "slow.mjs": "setTimeout(() => {}, 60_000);\n"
+};
 
 test.describe("Vibe64 pages", () => {
   test.describe.configure({ timeout: 120_000 });
@@ -408,6 +442,93 @@ test.describe("Vibe64 pages", () => {
       await page.getByRole("button", { name: "Starred (1)", exact: true }).click();
       await expect(starredPages.locator('[data-test="starred-page-open"]')).toHaveText([/Test results/u]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  for (const width of [390, 1280]) {
+    test(`a page that keeps itself up to date shows its refresh in the Pages list and beside the chat, keeps its last good version when a refresh fails, and its refreshes run, pause, resume, cancel and stop while archived at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await world.writePage("issues", OPEN_ISSUES);
+      await world.writePage(".", REFRESH_SCRIPTS);
+      const issues = await world.publish("issues");
+      const setRefresh = (script: string) => world.pagesCommand("refresh", issues.pageId, "--every", "30m", "--command", script);
+      expect(await setRefresh("count.mjs"))
+        .toContain(`Page ${issues.pageId} now refreshes every 30 minutes by running count.mjs on Vibe64's server, as Alice Example.`);
+      const version = async () => (await world.inProject(() => world.pages.readPage({ pageId: issues.pageId }))).page.version;
+
+      await page.goto(`${world.origin}${DASHBOARD_PATH}/pages`);
+      // A phone opens a Dashboard link with the chat in front.
+      if (width < 600) await page.getByRole("button", { name: "Show project", exact: true }).click();
+      const cell = page.locator(`[data-test="pages-list"] tr[data-page-id="${issues.pageId}"] [data-test="page-refresh"]`);
+      const state = cell.locator('[data-test="page-refresh-state"]');
+      const button = (name: string) => cell.getByRole("button", { name, exact: true });
+      const log = page.locator('[data-test="page-refresh-log"]');
+      const runs = log.locator('[data-test="page-refresh-run"]');
+      await expect(cell).toContainText("Every 30 minutes");
+      await expect(state).toHaveText(/^Next /u);
+
+      await button("Refresh now").click();
+      await expect.poll(version, { timeout: 15_000 }).toBe(2);
+      await expect(button("Refresh now")).toBeVisible({ timeout: 15_000 });
+      await button("Log").click();
+      await expect(log).toContainText("Every 30 minutes · a script, no AI · runs as Alice Example");
+      await expect(runs).toHaveCount(1);
+      await expect(runs.first()).toContainText("Refreshed: version 2.");
+      await expect(runs.first().locator('[data-test="page-refresh-run-log"]')).toContainText("Counted 3 numbers");
+      await page.screenshot({ path: testInfo.outputPath(`refresh-log-${width}.png`) });
+      await log.getByRole("button", { name: "Close", exact: true }).click();
+
+      // A refresh that fails keeps the page as it was and says so, with its log.
+      expect(await setRefresh("broken.mjs")).toContain("by running broken.mjs");
+      await page.getByRole("button", { name: "Refresh pages", exact: true }).click();
+      await button("Refresh now").click();
+      await expect(state).toHaveText(/^Refresh failed /u, { timeout: 15_000 });
+      await expect(state).toHaveClass(/vibe64-pages-list__refresh-alert/u);
+      expect(await version()).toBe(2);
+      await page.screenshot({ path: testInfo.outputPath(`refresh-failed-${width}.png`) });
+      await button("Log").click();
+      await expect(runs).toHaveCount(2);
+      await expect(runs.first()).toContainText("The refresh script stopped with exit status 1.");
+      await expect(runs.first().locator('[data-test="page-refresh-run-log"]')).toContainText("The issue tracker did not answer.");
+      await log.getByRole("button", { name: "Close", exact: true }).click();
+
+      await button("Pause").click();
+      await expect(state).toHaveText("Paused: Paused by Alice Example.");
+      await button("Resume").click();
+      await expect(state).toHaveText(/^Refresh failed /u);
+
+      // A running refresh can always be cancelled.
+      expect(await setRefresh("slow.mjs")).toContain("by running slow.mjs");
+      await page.getByRole("button", { name: "Refresh pages", exact: true }).click();
+      await button("Refresh now").click();
+      await expect(state).toHaveText("Refreshing…");
+      await expect(button("Cancel")).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath(`refresh-running-${width}.png`) });
+      await button("Cancel").click();
+      await expect(button("Refresh now")).toBeVisible({ timeout: 15_000 });
+      await button("Log").click();
+      await expect(runs.first()).toContainText("The refresh was cancelled.");
+      await log.getByRole("button", { name: "Close", exact: true }).click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+      // Beside the chat the page shows the refreshed data and how its refresh stands.
+      await page.locator(`[data-test="pages-list"] tr[data-page-id="${issues.pageId}"]`).getByRole("button", { name: "Open", exact: true }).click();
+      const line = page.locator('[data-test="page-viewer-refresh"]');
+      await expect(line).toContainText("Every 30 minutes");
+      await expect(pageFrame(page).locator("#total")).toHaveText("Total: 15");
+      await line.getByRole("button", { name: "Log", exact: true }).click();
+      await expect(runs).toHaveCount(3);
+      await log.getByRole("button", { name: "Close", exact: true }).click();
+      await page.screenshot({ path: testInfo.outputPath(`refresh-viewer-${width}.png`) });
+
+      await page.getByRole("link", { name: "All pages" }).click();
+      if (width < 600 && await page.getByRole("button", { name: "Show project", exact: true }).isVisible()) {
+        await page.getByRole("button", { name: "Show project", exact: true }).click();
+      }
+      await page.locator(`[data-test="pages-list"] tr[data-page-id="${issues.pageId}"]`).getByRole("button", { name: "Archive", exact: true }).click();
+      await page.locator('[data-test="pages-tab-archived"]').click();
+      await expect(state).toHaveText("Stopped while archived");
+      await expect(button("Refresh now")).toHaveCount(0);
     });
   }
 

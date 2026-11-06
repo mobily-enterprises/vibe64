@@ -123,3 +123,43 @@ A callout without a status modifier is informational.
 `--v64-background` (page), `--v64-surface` (cards), `--v64-on-surface` (text),
 `--v64-on-surface-muted`, `--v64-outline`, `--v64-track`, `--v64-primary`, and
 for each status `--v64-<status>` (text) and `--v64-<status>-tint` (background).
+
+## A page that keeps itself up to date
+
+When the content changes (test results, a status, open issues), make the page a
+folder: `index.html` keeps the layout and draws everything from `data.json`,
+which holds only the numbers and text. A refresh replaces only `data.json`, so
+it can never break the layout. Load the data when the page opens:
+
+```html
+<script>
+  fetch("data.json").then((response) => response.json()).then((data) => {
+    document.querySelector("#passed").textContent = data.passed;
+    document.querySelector("#checked").textContent = data.checkedAt;
+  });
+</script>
+```
+
+Show when the data was gathered (`checkedAt`), so a reader knows how fresh it
+is. To change only the data yourself, run
+`vibe64-helper pages data <page-id> <data.json>`.
+
+Then set the refresh, at most every 15 minutes:
+
+- **Command** (the default, for data a script can gather): write a small script
+  (`.mjs`, `.js`, `.cjs`, `.py` or `.sh`) that writes the new `data.json` to the
+  file `$VIBE64_PAGE_DATA` names. It runs on Vibe64's server with no AI and so
+  no AI cost, from the top folder of a fresh checkout of the project as last
+  saved, with no packages installed: use only what the language ships with,
+  plus `git`. It has 5 minutes. Try it first in this session, for example
+  `VIBE64_PAGE_DATA=/tmp/data.json node refresh.mjs`, then run
+  `vibe64-helper pages refresh <page-id> --every 1h --command refresh.mjs`.
+- **Prompt** (only when gathering the data needs judgement, such as summarising
+  discussions): `vibe64-helper pages refresh <page-id> --daily 07:30
+  --time-zone Europe/Rome --prompt "What to find and how to describe it"`. Each
+  refresh is a short AI task in this session, run with the AI account of the
+  person who asked for the page.
+
+A refresh runs as the person who asked for it. A failed refresh keeps the last
+good version and shows its log in the Pages list; three failures in a row pause
+the schedule. `--off` stops the refreshes.

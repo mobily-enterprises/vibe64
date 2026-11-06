@@ -49,6 +49,9 @@ function usageText() {
     "  vibe64-helper pages publish <file.html | folder> [--title \"Title\"] [--json]",
     "  vibe64-helper pages update <page-id> <file.html | folder> [--title \"Title\"] [--json]",
     "  vibe64-helper pages revert <page-id> <version> [--json]",
+    "  vibe64-helper pages data <page-id> <data.json> [--json]",
+    "  vibe64-helper pages refresh <page-id> (--every 30m|2h | --daily 07:30 [--time-zone Area/City]) (--command <script> | --prompt \"what to do\") [--json]",
+    "  vibe64-helper pages refresh <page-id> --off [--json]",
     "  vibe64-helper pages list [--json]",
     "  vibe64-helper pages guide",
     "",
@@ -59,7 +62,12 @@ function usageText() {
     "Everyone with access to the project can open a page: never put secrets in one.",
     "Publish and update print the page's link first; give it in the chat as a Markdown link.",
     "Update a current page instead of publishing a second one about the same thing; list shows them.",
-    "A page keeps its last ten versions; revert brings an earlier one back as the newest (list --json shows them)."
+    "A page keeps its last ten versions; revert brings an earlier one back as the newest (list --json shows them).",
+    "data replaces only the page's data.json in a new version: the layout stays as it is.",
+    "refresh keeps a page up to date on Vibe64's server, at most every 15 minutes. --command runs your script (.mjs, .js, .cjs, .py or .sh)",
+    "in a fresh checkout of the saved project, with no AI and no installed packages, for at most 5 minutes; it writes the new data.json",
+    "to the file $VIBE64_PAGE_DATA names. --prompt asks the AI in this session instead, for refreshes that need judgement.",
+    "The guide says how to build a page that refreshes."
   ].join("\n") + "\n";
 }
 
@@ -70,18 +78,20 @@ function usageText() {
  */
 function parsePagesArgs(args) {
   const values = Array.isArray(args) ? args.map((arg) => String(arg ?? "")) : [];
-  const parsed = { help: false, json: false, positionals: [], title: null, unsupportedFlag: "" };
+  const valueOptions = ["title", "every", "daily", "time-zone", "command", "prompt"];
+  const parsed = { help: false, json: false, off: false, options: {}, positionals: [], unsupportedFlag: "" };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
+    const option = /^--([a-z-]+)(?:=([\s\S]*))?$/u.exec(value);
     if (value === "--help" || value === "-h") {
       parsed.help = true;
     } else if (value === "--json") {
       parsed.json = true;
-    } else if (value === "--title") {
-      parsed.title = values[index + 1] ?? "";
-      index += 1;
-    } else if (value.startsWith("--title=")) {
-      parsed.title = value.slice("--title=".length);
+    } else if (value === "--off") {
+      parsed.off = true;
+    } else if (option && valueOptions.includes(option[1])) {
+      if (option[2] === undefined) index += 1;
+      parsed.options[option[1]] = option[2] ?? values[index] ?? "";
     } else if (value.startsWith("-")) {
       parsed.unsupportedFlag ||= value;
     } else {
@@ -93,7 +103,10 @@ function parsePagesArgs(args) {
     ...parsed,
     command,
     help: parsed.help || command === "help",
-    source: command === "publish" ? parsed.positionals[1] || "" : command === "update" ? parsed.positionals[2] || "" : ""
+    title: Object.hasOwn(parsed.options, "title") ? parsed.options.title : null,
+    source: command === "publish" ? parsed.positionals[1] || "" : command === "update" ? parsed.positionals[2] || "" : "",
+    dataFile: command === "data" ? parsed.positionals[2] || "" : "",
+    scriptFile: command === "refresh" ? parsed.options.command || "" : ""
   };
 }
 
@@ -101,17 +114,37 @@ function usageFailure(message, code) {
   return commandLineFailure(message, code, { exitCode: 2, stderr: `${message}\n\n${usageText()}` });
 }
 
+/**
+ * What `pages refresh` was given, or why it can't be used.
+ * @param {ReturnType<typeof parsePagesArgs>} parsed
+ */
+function refreshUsageProblem(parsed) {
+  const { options } = parsed;
+  const named = Object.keys(options).filter((name) => name !== "title");
+  if (parsed.off) return named.length ? "--off takes no other option." : "";
+  if (Boolean(options.every) === Boolean(options.daily)) return "refresh takes --every (such as 30m or 2h) or --daily (such as 07:30).";
+  if (Boolean(options.command) === Boolean(options.prompt)) return "refresh takes --command <script> or --prompt \"what to do\".";
+  if (options["time-zone"] !== undefined && !options.daily) return "--time-zone goes with --daily.";
+  return "";
+}
+
 function validateCommand(parsed) {
   if (parsed.unsupportedFlag) {
     return usageFailure(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_pages_command_option_unsupported");
   }
   if (!parsed.command || parsed.help) return { exitCode: 0, ok: true, stdout: usageText() };
-  const expected = { guide: 1, list: 1, publish: 2, revert: 3, update: 3 }[parsed.command];
+  const expected = { data: 3, guide: 1, list: 1, publish: 2, refresh: 2, revert: 3, update: 3 }[parsed.command];
   if (!expected || parsed.positionals.length !== expected) {
-    return usageFailure("The pages command accepts publish, update, revert, list or guide.", "vibe64_agent_pages_command_usage");
+    return usageFailure("The pages command accepts publish, update, revert, data, refresh, list or guide.", "vibe64_agent_pages_command_usage");
   }
   if (parsed.title !== null && (!["publish", "update"].includes(parsed.command) || !parsed.title.trim())) {
     return usageFailure("--title takes a title, for publish or update.", "vibe64_agent_pages_command_title_usage");
+  }
+  if (parsed.command === "refresh") {
+    const problem = refreshUsageProblem(parsed);
+    if (problem) return usageFailure(problem, "vibe64_agent_pages_command_refresh_usage");
+  } else if (parsed.off || Object.keys(parsed.options).some((name) => name !== "title")) {
+    return usageFailure("--every, --daily, --time-zone, --command, --prompt and --off go with refresh.", "vibe64_agent_pages_command_refresh_usage");
   }
   if (parsed.command === "revert" && !/^[1-9]\d{0,8}$/u.test(parsed.positionals[2])) {
     return usageFailure("revert takes the page id and the version number to bring back.", "vibe64_agent_pages_command_version_usage");
@@ -202,16 +235,29 @@ async function readPageSource(source) {
   return { fallbackTitle: path.basename(root).replace(/[-_]+/gu, " ").trim(), files };
 }
 
+async function readSmallFile(source, limit, tooLarge) {
+  const file = path.resolve(source);
+  const stat = await fs.stat(file).catch(() => fail("There is no file at " + source + ".", 2));
+  if (!stat.isFile()) fail(source + " is not a file.", 2);
+  if (stat.size > limit) fail(tooLarge, 2);
+  return { name: path.basename(file), base64: (await fs.readFile(file)).toString("base64") };
+}
+
 if (commandName !== ${JSON.stringify(AGENT_PAGES_COMMAND_NAME)}) fail("Unsupported Vibe64 pages command wrapper.");
 if (!socketPath || !sessionId || !token || !generationId) fail("Vibe64 pages command identity is unavailable for this session.");
 if (version !== expectedVersion) fail("Vibe64 pages command contract does not match this session.");
 
 const args = process.argv.slice(2);
 const parsed = parsePagesArgs(args);
-const page = parsed.source && !parsed.help && !parsed.unsupportedFlag ? await readPageSource(parsed.source) : {};
+const reading = !parsed.help && !parsed.unsupportedFlag;
+const page = parsed.source && reading ? await readPageSource(parsed.source) : {};
+const data = parsed.dataFile && reading ? { data: (await readSmallFile(parsed.dataFile, 5 * 1024 * 1024, "A page's data.json holds at most 5 MiB.")).base64 } : {};
+const script = parsed.scriptFile && reading ? { script: await readSmallFile(parsed.scriptFile, 256 * 1024, "A refresh script holds at most 256 KiB.") } : {};
 const responseText = await requestSocket({
   args,
   ...page,
+  ...data,
+  ...script,
   generationId,
   sessionId,
   token
@@ -267,9 +313,34 @@ async function pageAuthor(store, sessionId) {
   return { id: toText(actor.actorId), name: toText(actor.actorDisplayName) };
 }
 
+/** A schedule such as "Daily at 07:30 (Europe/Rome)" inside a sentence. */
+const inSentence = (schedule) => `${schedule.charAt(0).toLowerCase()}${schedule.slice(1)}`;
+
+/**
+ * How a page's refresh reads in one line of the list.
+ * @param {object | null} refresh
+ */
+function refreshLine(refresh) {
+  if (!refresh) return "";
+  const how = refresh.kind === "command" ? "script" : "AI";
+  if (refresh.paused) return `refresh paused (${refresh.pausedReason})`;
+  const last = refresh.lastRun?.outcome === "failed" ? `, last refresh failed: ${refresh.lastRun.message}` : "";
+  return `refreshes ${inSentence(refresh.schedule)} by ${how}, next ${refresh.nextAt}${last}`;
+}
+
 function pageLine(page) {
-  return [page.id, page.title, `version ${page.version}`, `updated ${page.updatedAt}`, page.archived ? "archived" : "", page.link]
+  return [page.id, page.title, `version ${page.version}`, `updated ${page.updatedAt}`, page.archived ? "archived" : "", refreshLine(page.refresh), page.link]
     .filter(Boolean).join("  ");
+}
+
+function refreshText(parsed, page) {
+  const { refresh } = page;
+  if (!refresh) return `Page ${page.id} no longer refreshes; it keeps version ${page.version}.\n`;
+  const how = refresh.kind === "command" ? `by running ${parsed.options.command.split("/").at(-1)} on Vibe64's server` : "by asking the AI in this session";
+  return [
+    `Page ${page.id} now refreshes ${inSentence(refresh.schedule)} ${how}, as ${refresh.scheduledBy.name || refresh.scheduledBy.id}.`,
+    `The next refresh is at ${refresh.nextAt}. The Pages list shows each refresh, with Refresh now, Pause and the log.`
+  ].join("\n") + "\n";
 }
 
 function publishedText(done, page) {
@@ -325,6 +396,22 @@ function createAgentPagesCommandService({ logger, project, readPages }) {
       if (parsed.command === "revert") {
         return pages.restorePageVersion({ pageId: parsed.positionals[1], version: Number(parsed.positionals[2]), by, sessionId });
       }
+      if (parsed.command === "data") return pages.updatePageData({ pageId: parsed.positionals[1], data: input.data, by, sessionId });
+      if (parsed.command === "refresh") {
+        if (parsed.off) return pages.removePageRefresh({ pageId: parsed.positionals[1] });
+        const { options } = parsed;
+        return pages.setPageRefresh({
+          pageId: parsed.positionals[1],
+          kind: options.command ? "command" : "prompt",
+          every: options.every || "",
+          daily: options.daily || "",
+          timeZone: options["time-zone"] || "",
+          script: input.script,
+          prompt: options.prompt || "",
+          by,
+          sessionId
+        });
+      }
       return pages.updatePage({ pageId: parsed.positionals[1], title, files: input.files, by, sessionId });
     });
   }
@@ -338,7 +425,9 @@ function createAgentPagesCommandService({ logger, project, readPages }) {
       if (!payload.pages.length) return "This project has no pages yet.\n";
       return [...current, ...archived].map(pageLine).join("\n") + "\n";
     }
+    if (parsed.command === "refresh") return refreshText(parsed, payload.page);
     const done = {
+      data: `Updated the data of "${payload.page.title}".`,
       publish: `Published "${payload.page.title}".`,
       revert: `Brought back version ${parsed.positionals[2]} of "${payload.page.title}".`,
       update: `Updated "${payload.page.title}".`
