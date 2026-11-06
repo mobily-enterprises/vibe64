@@ -20,7 +20,7 @@ missing, and how many optional extras aren't set up. Only **Needed** checks coun
 **Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
 tools you don't use, **Your name in Git**, the Playwright browser for automated
 browser checks, and **Custom endpoint · Codex** (or Claude Code, OpenCode) for each
-saved [custom model endpoint](ai-accounts.md#use-a-model-server-you-run-custom-endpoint).
+saved [custom model endpoint](custom-model-endpoints.md).
 That row asks the server for its model list once per Health read, which loads no
 model; nothing checks it in the background. A stopped server is a warning, even
 where every other check is needed: **Nothing answers at …**, with "Start your model

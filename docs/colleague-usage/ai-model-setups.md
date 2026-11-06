@@ -88,7 +88,7 @@ AI Accounts: your Claude plan's models, such as **Opus 5.5**, show **Claude**,
 and DeepSeek's models, which also run in Claude Code, show **DeepSeek**. **Recommended** marks the
 suggested model; unavailable choices show their reason and cannot be chosen.
 Type to search. Choose thinking in the separate thinking control beside it.
-A [custom endpoint](ai-accounts.md#use-a-model-server-you-run-custom-endpoint)'s
+A [custom endpoint](custom-model-endpoints.md)'s
 model shows the name its server uses, such as **qwen3.5:4b**, with **Custom
 endpoint** and the **Personal use** badge.
 Models from your own Codex sign-in, such as **GPT-5.5**, show **Codex (OpenAI)**,

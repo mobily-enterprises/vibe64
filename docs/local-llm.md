@@ -5,7 +5,7 @@ such as Ollama, LM Studio, llama.cpp's `llama-server` or vLLM. They enter the se
 the model name and, optionally, a key they type themselves. Vibe64 never installs, downloads,
 hosts or starts a model or a model server. It sends requests only for turns, connection checks
 and Health reads. Status: built (2026-11-06) as decided at the end; how to use it is in the
-[AI accounts guide](colleague-usage/ai-accounts.md#use-a-model-server-you-run-custom-endpoint).
+[custom model endpoints guide](colleague-usage/custom-model-endpoints.md).
 
 ## 1. What was proved (2026-11-06)
 
