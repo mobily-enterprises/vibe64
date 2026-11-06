@@ -9,7 +9,7 @@ import { checkedTitle, decodedPageFiles, htmlTitle } from "./pageFiles.js";
 import { createPageStore, projectPagesRoot } from "./pageStore.js";
 import { createPageViewLinks } from "./pageViewLinks.js";
 import { PAGE_VIEW_ROUTE } from "./pageSandbox.js";
-import { createPageFont } from "./pageStylesheet.js";
+import { createPageDesignGuide, createPageFont } from "./pageStylesheet.js";
 
 /** @typedef {import("./types.js").PageAuthor} PageAuthor */
 /** @typedef {import("./types.js").PageRecord} PageRecord */
@@ -57,6 +57,7 @@ function createPagesService({ now, clock }) {
   const store = createPageStore({ now });
   const viewLinks = createPageViewLinks({ clock });
   const font = createPageFont();
+  const designGuide = createPageDesignGuide();
 
   async function listPages() {
     const { pagesRoot, slug } = currentProject();
@@ -154,6 +155,7 @@ function createPagesService({ now, clock }) {
   return Object.freeze({
     archivePage,
     deletePage,
+    designGuide,
     font,
     listPages,
     openPageView,

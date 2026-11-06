@@ -61,6 +61,11 @@ test("the pages command publishes a file or a folder, prints its link first, and
   assert.equal(help.code, 0, help.stderr);
   assert.match(help.stdout, /vibe64-helper pages publish <file\.html \| folder>/u);
   assert.match(help.stdout, /never put secrets in one/u);
+  assert.match(help.stdout, /vibe64-helper pages guide\n/u);
+  const guide = await pagesCommand("guide");
+  assert.equal(guide.code, 0, guide.stderr);
+  assert.match(guide.stdout, /^# How to design a Vibe64 page\n/u, "the guide prints the page design guide");
+  assert.match(guide.stdout, /<link rel="stylesheet" href="_vibe64\/page\.css">/u);
 
   await writeFile(path.join(work, "summary.html"), "<!doctype html><title>Project summary</title><h1>Summary</h1>");
   const published = await pagesCommand("publish", "summary.html");
@@ -117,7 +122,7 @@ test("the pages command refuses what a page cannot be, with a usable message", a
     [["publish", "linked"], 2, /secret\.txt is a link/u],
     [["publish", "notes.md"], 2, /Publish an HTML file, or a folder with an index\.html/u],
     [["publish", "missing.html"], 2, /There is no file or folder at missing\.html/u],
-    [["publish"], 2, /accepts publish, update, revert or list/u],
+    [["publish"], 2, /accepts publish, update, revert, list or guide/u],
     [["publish", "notes.md", "--force"], 2, /Unsupported option: --force/u],
     [["list", "--title", "x"], 2, /--title takes a title/u],
     [["revert", "page-1", "latest"], 2, /revert takes the page id and the version number/u],

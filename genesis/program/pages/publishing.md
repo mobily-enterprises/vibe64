@@ -28,7 +28,11 @@ project can open, outside the repository.
   keeps the title unless `--title` changes it; an archived page refuses updates.
   `revert <page-id> <version>` brings a kept version back as the newest one.
   `list` prints every page with its id, title, version, last update, archived
-  state and link; `--json` prints the service's answer.
+  state and link; `--json` prints the service's answer. `guide` prints the page
+  design guide (`pageDesignGuide.md`, read by the pages service): rules (answer
+  the reader's first question at the top, status as tinted pills, tables for
+  comparisons, inline SVG charts, no walls of text, self-contained, phone width)
+  and a short HTML example of each `_vibe64/page.css` component.
 - Publish, update and revert print the page's link first: its app path,
   `/app/project/<slug>/dashboard/pages/<page id>`, then a Markdown link to give
   in the chat. Mistakes exit 2 with the usage; refusals exit 1 with their reason.
@@ -43,8 +47,10 @@ project can open, outside the repository.
   others and renamed into place before `page.json` is replaced, so a reader sees
   one whole version. The maker is the person behind the session's latest
   message, else whoever runs Vibe64 here.
-- The engine-neutral session guidance names the command for every engine and
-  tells the AI when to offer a page in one line, when to make one without
+- The engine-neutral session guidance names the command for every engine, tells
+  the AI to read `vibe64-helper pages guide` in full before writing a page and
+  build it from `_vibe64/page.css` components, and tells it when to offer a
+  page in one line, when to make one without
   asking, to say a changing page can be kept up to date, to update a relevant
   page instead of making another, not to offer pages for quick answers, code
   changes or repository documents, to offer once per topic, and never to put

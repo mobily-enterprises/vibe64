@@ -13,6 +13,11 @@ In the main chat or a temporary chat, ask in your own words, for example
 or "put the test results somewhere the team can see them". You do not need to
 name a command.
 
+Pages look finished by default: a bold title with when it was updated, summary
+tiles with the key counts, then sections of cards with coloured status labels,
+tables and charts, in light and dark mode and on a phone. To change the look,
+ask the AI ("make it more compact", "add a chart of the test times").
+
 - When you say a result is for someone else (a colleague, the team, a client,
   your manager, a meeting) or that you will come back to it, the AI makes the
   page straight away and gives you its link.

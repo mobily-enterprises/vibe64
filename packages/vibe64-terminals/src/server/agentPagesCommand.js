@@ -50,10 +50,12 @@ function usageText() {
     "  vibe64-helper pages update <page-id> <file.html | folder> [--title \"Title\"] [--json]",
     "  vibe64-helper pages revert <page-id> <version> [--json]",
     "  vibe64-helper pages list [--json]",
+    "  vibe64-helper pages guide",
     "",
+    "Read the guide before writing a page: how to build one from Vibe64's stylesheet so it looks finished.",
     "A page is one HTML file, or a folder with an index.html and its own scripts, styles, data and images.",
     "It runs sandboxed: it can load only its own files, never other addresses or Vibe64 itself.",
-    "Link _vibe64/page.css for Vibe64's colours, font and light and dark modes.",
+    "Link _vibe64/page.css for Vibe64's colours, font, light and dark modes and page components.",
     "Everyone with access to the project can open a page: never put secrets in one.",
     "Publish and update print the page's link first; give it in the chat as a Markdown link.",
     "Update a current page instead of publishing a second one about the same thing; list shows them.",
@@ -104,9 +106,9 @@ function validateCommand(parsed) {
     return usageFailure(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_pages_command_option_unsupported");
   }
   if (!parsed.command || parsed.help) return { exitCode: 0, ok: true, stdout: usageText() };
-  const expected = { list: 1, publish: 2, revert: 3, update: 3 }[parsed.command];
+  const expected = { guide: 1, list: 1, publish: 2, revert: 3, update: 3 }[parsed.command];
   if (!expected || parsed.positionals.length !== expected) {
-    return usageFailure("The pages command accepts publish, update, revert or list.", "vibe64_agent_pages_command_usage");
+    return usageFailure("The pages command accepts publish, update, revert, list or guide.", "vibe64_agent_pages_command_usage");
   }
   if (parsed.title !== null && (!["publish", "update"].includes(parsed.command) || !parsed.title.trim())) {
     return usageFailure("--title takes a title, for publish or update.", "vibe64_agent_pages_command_title_usage");
@@ -311,6 +313,7 @@ function createAgentPagesCommandService({ logger, project, readPages }) {
   async function runPagesCommand(parsed, input, sessionId) {
     const pages = readPages();
     if (!pages) throw vibe64Error("Vibe64 pages are unavailable here.", "vibe64_agent_pages_command_unavailable");
+    if (parsed.command === "guide") return { guide: await pages.designGuide() };
     return projectBinding.run(sessionId, async () => {
       if (parsed.command === "list") return pages.listPages();
       const store = await project.createSessionStore({ sessionId });
@@ -328,6 +331,7 @@ function createAgentPagesCommandService({ logger, project, readPages }) {
 
   function commandOutput(parsed, payload) {
     if (parsed.json) return `${JSON.stringify(payload, null, 2)}\n`;
+    if (parsed.command === "guide") return payload.guide;
     if (parsed.command === "list") {
       const current = payload.pages.filter((page) => !page.archived);
       const archived = payload.pages.filter((page) => page.archived);

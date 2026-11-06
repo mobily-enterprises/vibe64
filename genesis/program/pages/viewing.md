@@ -34,10 +34,16 @@ always runs sandboxed: page content is untrusted.
   Vibe64's cookies, call Vibe64's API as the viewer, reach another page or
   project, or send anything to another address. Missing files, other paths,
   links and ended links answer 404 in plain text.
-- `_vibe64/page.css` is Vibe64's optional stylesheet: its colours as `--v64-*`
-  custom properties, its font (`_vibe64/roboto.woff2`), the viewer's light or
-  dark theme (the device setting in a tab without one), plain element styles and
-  `v64-card`, `v64-grid`, `v64-stat`, `v64-badge` and `v64-muted` classes.
+- `_vibe64/page.css` is Vibe64's stylesheet for pages: its colours as `--v64-*`
+  custom properties, with a text colour and a tint for each status (done,
+  running, waiting, attention, error, later, neutral), its font
+  (`_vibe64/roboto.woff2`), the viewer's light or dark theme (the device setting
+  in a tab without one), one readable 880px column with a 16px phone gutter on
+  a soft background, styled headings, lists, code and tables, and components:
+  header and subtitle, summary tiles, section titles with a right-aligned
+  summary, cards and card lists, status pills, outlined tags, a done tick,
+  callouts, progress bars, a scroll wrapper for wide tables, number alignment
+  and inline SVG charts (`pageStylesheet.js`).
 - Open shows the viewer in the Dashboard panel beside the chat, with the
   Dashboard menu hidden, the page's version and last update, Reload, Versions
   (bring back a kept version), Archive or Restore, and Open in new tab, which

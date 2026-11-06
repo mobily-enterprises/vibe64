@@ -2,6 +2,7 @@
 // pages: the command, and when (and when not) to offer or make a page.
 const PAGES_GUIDANCE_RULES = Object.freeze([
   ["the command", /`vibe64-helper pages publish <file\.html\|folder>/u],
+  ["reading the design guide first", /Before writing a page, read `vibe64-helper pages guide` in full and follow it: link `_vibe64\/page\.css` and build from its components/u],
   ["offering a page in one line", /After answering with a report, comparison, status or progress overview, dashboard, diagram, plan or review, end the reply with a one-line offer/u],
   ["asking before making or changing a page otherwise", /offer to add it there\)\. Make or change a page only once they say yes/u],
   ["making it unasked for others", /says the result is for other people \(a colleague, the team, a client, a manager, a meeting\) or that they will come back to it, make the page without asking and give its link/u],

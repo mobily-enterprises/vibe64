@@ -666,8 +666,9 @@ page: the frame host and the page's files are served sandboxed, with an opaque
 origin and a Content-Security-Policy that admits only that link's own files.
 The client part holds the Pages list, the viewer beside the chat and the chat's
 page link cards; the application places them in the Dashboard and transcripts.
-The optional `_vibe64/page.css` stylesheet gives pages Vibe64's colours, font
-and light and dark modes.
+The `_vibe64/page.css` stylesheet gives pages Vibe64's colours, font, light and
+dark modes and ready components, and the page design guide the agent reads with
+`vibe64-helper pages guide` shows how to build a page from them.
 
 ### Source
 - Directory `packages/vibe64-pages`
