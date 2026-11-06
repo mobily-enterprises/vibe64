@@ -73,8 +73,8 @@ function requestCreate() {
               <span class="tcc-order__index" aria-hidden="true">{{ index + 1 }}</span>
               <span class="tcc-order__name">{{ topic.title }} · {{ topic.release }}</span>
               <span class="tcc-order__moves">
-                <v-btn variant="text" rounded="pill" min-height="48" :prepend-icon="icons.chevronUp" :disabled="busy || index === 0" :aria-label="`Move ${topic.title} up`" @click="move(index, -1)">Up</v-btn>
-                <v-btn variant="text" rounded="pill" min-height="48" :prepend-icon="icons.chevronDown" :disabled="busy || index === chosen.length - 1" :aria-label="`Move ${topic.title} down`" @click="move(index, 1)">Down</v-btn>
+                <v-btn variant="text" rounded="pill" :prepend-icon="icons.chevronUp" :disabled="busy || index === 0" :aria-label="`Move ${topic.title} up`" @click="move(index, -1)">Up</v-btn>
+                <v-btn variant="text" rounded="pill" :prepend-icon="icons.chevronDown" :disabled="busy || index === chosen.length - 1" :aria-label="`Move ${topic.title} down`" @click="move(index, 1)">Down</v-btn>
               </span>
             </li>
           </ol>
@@ -83,8 +83,8 @@ function requestCreate() {
     </ol>
 
     <footer class="tcc-actions">
-      <v-btn variant="text" rounded="pill" min-height="48" :disabled="busy" @click="emit('cancel')">Cancel</v-btn>
-      <v-btn color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="!createEnabled" @click="requestCreate">Create course</v-btn>
+      <v-btn variant="text" rounded="pill" :disabled="busy" @click="emit('cancel')">Cancel</v-btn>
+      <v-btn color="primary" variant="flat" rounded="pill" :prepend-icon="icons.plus" :disabled="!createEnabled" @click="requestCreate">Create course</v-btn>
     </footer>
   </section>
 </template>

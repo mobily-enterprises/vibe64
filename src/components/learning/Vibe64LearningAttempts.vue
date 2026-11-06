@@ -69,14 +69,14 @@ async function confirmThen(key, action) {
         </div>
         <template v-if="current.status !== 'deleting'">
           <v-btn
-            variant="flat" color="primary" rounded="pill" min-height="48" :disabled="Boolean(busy)"
+            variant="flat" color="primary" rounded="pill" :disabled="Boolean(busy)"
             data-test="learning-progress-open" @click="learning.openCurrent()"
           >
             Open
           </v-btn>
           <v-btn
             :variant="confirming === 'restart' ? 'flat' : 'tonal'" :color="confirming === 'restart' ? 'warning' : undefined"
-            rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'restart'"
+            rounded="pill" :disabled="Boolean(busy)" :loading="busy === 'restart'"
             title="Archive this attempt and start the lesson again" data-test="learning-progress-restart"
             @click="confirmThen('restart', () => learning.restart())"
           >
@@ -85,7 +85,7 @@ async function confirmThen(key, action) {
         </template>
         <v-btn
           :variant="confirming === 'current' ? 'flat' : 'text'" :color="confirming === 'current' ? 'error' : undefined"
-          rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'delete'"
+          rounded="pill" :disabled="Boolean(busy)" :loading="busy === 'delete'"
           :title="`Delete ${current.name}, its practice project and its conversation`" data-test="learning-progress-delete"
           @click="confirmThen('current', () => learning.deleteAttempt())"
         >
@@ -107,13 +107,13 @@ async function confirmThen(key, action) {
             </span>
           </div>
           <v-btn
-            v-if="confirming === entry.attemptId" variant="flat" color="error" rounded="pill" min-height="48"
+            v-if="confirming === entry.attemptId" variant="flat" color="error" rounded="pill"
             :disabled="Boolean(busy)" data-test="learning-archived-delete-confirm" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))"
           >
             Delete for good
           </v-btn>
           <v-btn
-            v-else variant="text" icon="$delete" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
+            v-else variant="text" icon="$delete" :aria-label="`Delete archived ${entry.name}`"
             :title="`Delete archived ${entry.name}`" :disabled="Boolean(busy)" :loading="busy === `archive-delete:${entry.attemptId}`"
             data-test="learning-archived-delete" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))"
           />

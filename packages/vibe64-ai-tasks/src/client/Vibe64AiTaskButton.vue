@@ -75,8 +75,4 @@ function activate(event) {
   min-inline-size: min(8.5rem, 100%);
   white-space: normal;
 }
-
-@media (pointer: coarse) {
-  .vibe64-ai-task-button { min-block-size: 3rem; }
-}
 </style>

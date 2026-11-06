@@ -46,7 +46,7 @@ describe("session header priority overflow", () => {
       expect(menu).toContain(`headerActions.overflow.includes('${id}')`);
     }
     expect(view).not.toContain("header-actions--compact");
-    expect(view).not.toContain('variant="tonal"\n              width="var(--session-action-size');
+    expect(view).not.toContain("--session-action-size");
   });
 });
 

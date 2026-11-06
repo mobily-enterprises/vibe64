@@ -76,11 +76,11 @@ async function request(operation, kind = "") {
     </v-alert>
     <v-alert v-if="aiNotice" type="warning" variant="tonal" class="vibe64-learning-launcher__error" data-test="learning-ai-notice">
       <p>{{ aiNotice }}</p>
-      <v-btn v-if="aiOnboardingAvailable" color="primary" variant="flat" rounded="pill" min-height="40" class="vibe64-learning-launcher__ai" @click="requestVibe64AiOnboarding()">
+      <v-btn v-if="aiOnboardingAvailable" color="primary" variant="flat" rounded="pill" class="vibe64-learning-launcher__ai" @click="requestVibe64AiOnboarding()">
         Set up your AI
       </v-btn>
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(courses.startRetry), '')">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" :disabled="busy || !canRequest" @click="start(toValue(courses.startRetry), '')">
       Retry lesson start
     </v-btn>
     <!-- A host's own Courses content (for example its own saved lessons) sits

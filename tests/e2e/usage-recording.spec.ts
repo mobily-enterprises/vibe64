@@ -8,6 +8,7 @@ import {
 } from "./support/base-shell-data";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+import { touchTarget } from "./support/touch-target";
 
 // The recording indicator across the layout. The page's HTTP is mocked; the
 // recording's changes arrive through a Socket.IO stand-in, as the server's
@@ -131,8 +132,8 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
         await expect(host.getByRole("button", { name: "Stop recording" })).toBeVisible();
         if (phone) {
           await expect(inHeader).toHaveCount(0);
-          const stop = await host.getByRole("button", { name: "Stop recording" }).boundingBox();
-          expect(Math.min(stop?.width || 0, stop?.height || 0)).toBeGreaterThanOrEqual(48);
+          const stop = await touchTarget(host.getByRole("button", { name: "Stop recording" }));
+          expect(Math.min(stop.width, stop.height)).toBeGreaterThanOrEqual(48);
           await headerFits(page);
         }
         await shot("1-dashboard");

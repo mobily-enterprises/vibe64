@@ -64,10 +64,9 @@ async function submit() {
         </v-card-text>
         <v-card-actions class="pa-6 pt-2">
           <v-spacer />
-          <v-btn height="48" variant="text" :disabled="pending" @click="emit('close')">Cancel</v-btn>
+          <v-btn variant="text" :disabled="pending" @click="emit('close')">Cancel</v-btn>
           <v-btn
             type="submit"
-            height="48"
             color="primary"
             variant="flat"
             rounded="pill"

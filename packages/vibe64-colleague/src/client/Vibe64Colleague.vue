@@ -244,7 +244,7 @@ onBeforeUnmount(() => {
   <Teleport :to="launcherTarget || 'body'" :disabled="!launcherTarget">
     <v-btn
       ref="launcher" class="vibe64-colleague__launcher" :class="{ 'vibe64-colleague__launcher--floating': !launcherTarget, 'vibe64-colleague__launcher--listening': holdingAvatar }"
-      icon variant="text" width="48" height="48" data-vibe64-guide="colleague"
+      icon variant="text" data-vibe64-guide="colleague"
       :aria-label="shown ? `Minimize ${voice.controller.state.binding?.label || name}` : minimizedVoice ? `Reopen ${voice.controller.state.binding.label || 'Assistant'} voice chat${listeningVoice ? ' · Listening' : ''}` : `Open ${name}`"
       :title="shown ? 'Minimize conversation' : listeningVoice ? 'Listening · Reopen voice chat' : minimizedVoice ? 'Reopen voice chat' : holdToTalk ? `${name} · Hold to talk` : name" aria-haspopup="dialog"
       :aria-expanded="shown"
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
     </v-btn>
     <v-btn
       v-if="minimizedVoice" class="vibe64-colleague__voice-stop" :class="{ 'vibe64-colleague__voice-stop--floating': !launcherTarget }"
-      icon="$close" variant="text" width="48" height="48" aria-label="Stop voice chat" title="Stop voice chat" @click="closeText"
+      icon="$close" variant="text" aria-label="Stop voice chat" title="Stop voice chat" @click="closeText"
     />
   </Teleport>
   <VNavigationDrawer
@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
       <v-alert v-if="product.modelSetupRequired" class="vibe64-colleague__notice" variant="tonal" type="warning" role="status">
         <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Connect an AI first, then press Teach me again. Nothing was sent.</p>
         <p v-else>Connect an AI first. Your message stays here until you do.</p>
-        <v-btn variant="flat" color="primary" min-height="48" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
+        <v-btn variant="flat" color="primary" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
       </v-alert>
       <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" v-model:avatar-size="avatarSize">
@@ -322,7 +322,7 @@ onBeforeUnmount(() => {
           </template>
           <template #system-message="{ message }">
             <AssistantConversationStatus :message="message" @check-delivery="adapter.actions.checkDelivery($event)" />
-            <v-btn v-if="message.delivery" variant="tonal" min-height="48" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
+            <v-btn v-if="message.delivery" variant="tonal" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
           </template>
           <template #composer="{ adapter: { composer } }">
             <div class="vibe64-colleague__composer-region">
@@ -346,14 +346,14 @@ onBeforeUnmount(() => {
                     />
                     <v-btn icon="$history" size="small" variant="text" aria-label="Previous conversations" title="Previous conversations" @click="loadHistory()" />
                     <v-btn
-                      v-if="operations.length" ref="operationButton" size="small" min-height="48" variant="text"
+                      v-if="operations.length" ref="operationButton" size="small" variant="text"
                       :aria-label="`Recent operations (${operations.length})`" title="Recent operations"
                       aria-haspopup="dialog" :aria-expanded="operationDetails" @click="operationDetails = true"
                     >
                       Operations {{ operations.length }}
                     </v-btn>
                     <v-btn
-                      v-if="watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
+                      v-if="watches.length || assignments.length" ref="watchButton" size="small" variant="text"
                       :aria-label="`Watches and assignments (${watchControlCount})`" title="Watches and assignments"
                       aria-haspopup="dialog" :aria-expanded="watchDetails" @click="watchDetails = true"
                     >
@@ -411,9 +411,9 @@ onBeforeUnmount(() => {
       <p v-if="historyError" role="alert">{{ historyError }}</p>
       <v-skeleton-loader v-if="historyLoading && !historyId" type="list-item-two-line@3" aria-label="Loading previous conversations" />
       <template v-if="!historyId">
-        <v-btn variant="tonal" min-height="48" :disabled="freshBusy || Boolean(freshBlocked)" @click="showFreshConfirmation">Start fresh</v-btn>
+        <v-btn variant="tonal" :disabled="freshBusy || Boolean(freshBlocked)" @click="showFreshConfirmation">Start fresh</v-btn>
         <p v-if="freshBlocked" role="status">{{ freshBlocked }}</p>
-        <v-btn v-for="item in historyConversations" :key="item.conversationId" variant="text" min-height="48" :disabled="historyLoading" @click="readHistoryPage(item.conversationId)">
+        <v-btn v-for="item in historyConversations" :key="item.conversationId" variant="text" :disabled="historyLoading" @click="readHistoryPage(item.conversationId)">
           {{ item.archivedAt }} · {{ item.unconfirmedCount }} unconfirmed
         </v-btn>
         <p v-if="!historyLoading && !historyConversations.length && !historyError">No previous conversations.</p>
@@ -462,11 +462,6 @@ onBeforeUnmount(() => {
 .vibe64-colleague__composer-actions { width: 100%; flex-wrap: wrap; }
 .vibe64-colleague__delivery { margin-inline-start: auto; flex-shrink: 0; }
 .vibe64-colleague__voice-tools { display: flex; min-width: 0; }
-@media (pointer: coarse), (max-width: 600px) {
-  .vibe64-colleague__composer-actions :deep(.v-btn) { min-width: 48px; min-height: 48px; }
-  .vibe64-colleague__voice-tools :deep(.v-btn),
-  .vibe64-colleague :deep(.assistant-conversation__avatar-size) { min-width: 48px !important; min-height: 48px !important; }
-}
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }

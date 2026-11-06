@@ -129,7 +129,7 @@ The repair instructions, messages and work already in the session remain. A mode
 does not undo edits or prove the merge correct: Vibe64 still runs Update when the AI says
 it has finished. If the repair is already complete, **Review resolved conflicts** (in the
 footer, or on the Update error without opening the window) lists the files; then choose
-**I've resolved these conflicts — apply Update**. This also works after edits made in
+**Conflicts resolved — apply Update**. This also works after edits made in
 Main chat, with no further AI turn. See
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts).
 

@@ -25,9 +25,9 @@ const open = defineModel({ type: Boolean, default: false });
             <p v-if="item.target">{{ [item.target.projectSlug, item.target.sessionId, item.target.conversationId].filter(Boolean).join(' · ') }}</p>
             <p v-if="item.error" class="text-error">{{ item.error }}</p>
             <div class="d-flex flex-wrap ga-1">
-              <v-btn v-if="item.target?.projectSlug" variant="text" min-height="48" @click="emit('open-target', item)">Open target</v-btn>
-              <v-btn v-if="item.status === 'unknown'" variant="text" min-height="48" @click="emit('prepare-recovery', item)">Prepare inspection</v-btn>
-              <v-btn v-else-if="item.status === 'failed' && item.canPrepareRetry" variant="text" min-height="48" @click="emit('prepare-recovery', item)">Prepare retry</v-btn>
+              <v-btn v-if="item.target?.projectSlug" variant="text" @click="emit('open-target', item)">Open target</v-btn>
+              <v-btn v-if="item.status === 'unknown'" variant="text" @click="emit('prepare-recovery', item)">Prepare inspection</v-btn>
+              <v-btn v-else-if="item.status === 'failed' && item.canPrepareRetry" variant="text" @click="emit('prepare-recovery', item)">Prepare retry</v-btn>
             </div>
           </li>
         </ol>

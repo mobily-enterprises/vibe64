@@ -91,7 +91,7 @@ function apply() {
     @reload="catalog.reload"
   >
     <template #footer>
-      <v-btn aria-label="Close AI controls" min-height="48" variant="text" @click="menuOpen = false">
+      <v-btn aria-label="Close AI controls" variant="text" @click="menuOpen = false">
         Close
       </v-btn>
     </template>

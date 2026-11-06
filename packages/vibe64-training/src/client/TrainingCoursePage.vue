@@ -75,7 +75,7 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Lesson in progress</p>
           <p class="training-course-page__next-title">Pick up where you left off.</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!resumeAllowed" @click="emit('resume')">Continue lesson</v-btn>
+        <v-btn color="primary" variant="flat" rounded="pill" :disabled="!resumeAllowed" @click="emit('resume')">Continue lesson</v-btn>
       </template>
       <template v-else-if="progress.next">
         <div class="training-course-page__next-text">
@@ -83,7 +83,7 @@ const path = computed(() => {
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
         <v-btn
-          color="primary" variant="flat" min-height="48" rounded="pill" :readonly="startingLesson(progress.next)"
+          color="primary" variant="flat" rounded="pill" :readonly="startingLesson(progress.next)"
           :disabled="!startAllowed && !startingLesson(progress.next)" @click="emit('start', progress.next)"
         >
           <template v-if="startingLesson(progress.next)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template>
@@ -138,7 +138,7 @@ const path = computed(() => {
               </div>
               <v-btn
                 v-if="offered(course, lesson, canTryPreviews) && !current"
-                :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
+                :variant="next ? 'tonal' : 'text'" color="primary" rounded="pill"
                 class="training-course-page__start" :readonly="startingLesson(lesson)" :disabled="!startAllowed && !startingLesson(lesson)"
                 @click="emit('start', lesson)"
               >

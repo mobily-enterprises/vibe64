@@ -284,7 +284,6 @@ function nodeLabel(node) {
 .usage-node__badge { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: var(--v64-shape-sm); background: rgb(var(--v-theme-surface-container-highest)); color: rgb(var(--v-theme-on-surface-variant)); }
 /* Touch: 48 px targets. Chips keep their look and gain an invisible margin. */
 @media (pointer: coarse) {
-  .usage-web__zoom :deep(.v-btn) { min-height: 48px; }
   .usage-web__untouched, .usage-web__zoom :deep(.v-chip) { position: relative; overflow: visible; margin-block: 8px; }
   .usage-web__untouched::after, .usage-web__zoom :deep(.v-chip)::after { content: ""; position: absolute; inset: -8px 0; }
 }

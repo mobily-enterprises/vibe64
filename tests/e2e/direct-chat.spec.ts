@@ -19,6 +19,7 @@ import {
   routeApiEndpoint
 } from "./support/base-shell/http";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
+import { touchTarget } from "./support/touch-target";
 
 test.beforeEach(({ page }) => suppressAiOnboarding(page));
 
@@ -773,7 +774,7 @@ test.describe("direct chat", () => {
       const stop = sessionChat(page).getByRole("button", { name: "Stop", exact: true });
       await expect(stop).toBeVisible();
       for (const control of [steer, stop]) {
-        const bounds = await control.boundingBox();
+        const bounds = await touchTarget(control);
         expect(bounds?.height).toBeGreaterThanOrEqual(48);
         expect(bounds?.width).toBeGreaterThanOrEqual(48);
       }
@@ -863,7 +864,7 @@ test.describe("direct chat", () => {
       await expect(review.getByText(/\/workspace\//u)).toHaveCount(0);
       await expect(review.getByText(/Save open file edits first/)).toBeVisible();
       for (const button of await review.getByRole("button").all()) {
-        await expect.poll(async () => (await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        await expect.poll(async () => (await touchTarget(button)).height).toBeGreaterThanOrEqual(48);
       }
       const bounds = await review.locator(".v-card").boundingBox();
       expect(bounds!.width).toBeLessThanOrEqual(scenario.width);
@@ -1210,10 +1211,10 @@ test.describe("direct chat", () => {
       const saveButton = sessionHeader.getByRole("button", { name: "Review selected session changes", exact: true });
       await expect(saveButton).toBeVisible();
       await expect(saveButton).toHaveText("");
-      // Session header actions are 44 px touch targets on coarse pointers.
-      const bounds = await saveButton.boundingBox();
-      expect(bounds?.height).toBeGreaterThanOrEqual(44);
-      expect(bounds?.width).toBeGreaterThanOrEqual(44);
+      // Session header actions are JSKIT's icon buttons, with 48 px touch targets.
+      const bounds = await touchTarget(saveButton);
+      expect(bounds.height).toBeGreaterThanOrEqual(48);
+      expect(bounds.width).toBeGreaterThanOrEqual(48);
       expect(await page.evaluate(() => (
         document.documentElement.scrollWidth <= window.innerWidth
       ))).toBe(true);
@@ -1342,7 +1343,7 @@ test.describe("direct chat", () => {
           navigation.getByRole("button", { name: "New temporary AI task", exact: true }),
         ];
         for (const control of coarseControls) {
-          const bounds = await control.boundingBox();
+          const bounds = await touchTarget(control);
           expect(bounds?.height).toBeGreaterThanOrEqual(48);
           expect(bounds?.width).toBeGreaterThanOrEqual(48);
         }
@@ -2126,8 +2127,8 @@ for (const width of [320, 390, 820]) {
       expect(reviewBox!.x).toBeLessThanOrEqual(16);
       expect(reviewBox!.x + reviewBox!.width).toBeLessThanOrEqual(width * 2 / 3 + 4);
       for (const button of await bubble.getByRole("button").all()) {
+        expect((await touchTarget(button)).height).toBeGreaterThanOrEqual(48);
         const target = await button.boundingBox();
-        expect(target!.height).toBeGreaterThanOrEqual(48);
         expect(target!.x + target!.width).toBeLessThanOrEqual(reviewBox!.x + reviewBox!.width);
       }
       if (action === "Send") await page.screenshot({ path: info.outputPath(`voice-review-${width}.png`), animations: "disabled" });

@@ -187,7 +187,7 @@ async function markRead() {
     <h2 :id="headingId || undefined">{{ step.title }}</h2>
     <p v-if="ended" class="vibe64-learning-step__note" role="status">
       This lesson has ended. You can read it; it is kept under Archived. To do it again, start it from Courses.
-      <v-btn variant="text" min-height="48" data-test="learning-ended-courses" @click="learning.show({ surface: 'courses' })">Go to Courses</v-btn>
+      <v-btn variant="text" data-test="learning-ended-courses" @click="learning.show({ surface: 'courses' })">Go to Courses</v-btn>
     </p>
     <Vibe64LearningMarkdown :text="step.bodyText || ''" />
 
@@ -202,7 +202,7 @@ async function markRead() {
       <v-skeleton-loader v-else-if="!visualError" type="image" aria-label="Loading the diagram" />
       <p v-if="visualError" class="vibe64-learning-step__error" role="alert">{{ visualError }}</p>
       <v-btn
-        v-if="step.visual.play?.length" variant="tonal" rounded="pill" min-height="48" data-test="learning-play"
+        v-if="step.visual.play?.length" variant="tonal" rounded="pill" data-test="learning-play"
         :disabled="!visualResource" :loading="playing" @click="play"
       >
         Play
@@ -224,7 +224,7 @@ async function markRead() {
         @update:model-value="toggleOption(optionIndex)"
       />
       <v-btn
-        color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
+        color="primary" variant="flat" rounded="pill" data-test="learning-answer"
         :disabled="!selected.length || Boolean(busy) || learning.stepStatus(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
         @click="answer"
       >
@@ -236,7 +236,7 @@ async function markRead() {
       <p v-if="step.check.files?.length">Make this change yourself in Dashboard → Files. Saving does not check it: press Check now when you are ready.</p>
       <p v-else-if="kind === 'auto'">This step is checked automatically when you do it in your practice project.</p>
       <v-btn
-        variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
+        variant="tonal" rounded="pill" data-test="learning-check"
         :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck"
       >
         Check now
@@ -250,7 +250,7 @@ async function markRead() {
       </p>
       <template v-else>
         <v-btn
-          variant="tonal" rounded="pill" min-height="48" data-test="learning-review"
+          variant="tonal" rounded="pill" data-test="learning-review"
           :disabled="Boolean(busy)" :loading="busy === `review:${step.id}`" @click="runReview"
         >
           {{ checkReason ? "Check again" : "Check my work" }}
@@ -263,7 +263,7 @@ async function markRead() {
       <!-- The step text says when to press Done; a step already passed is said here, as for questions. -->
       <p v-if="learning.stepStatus(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
       <v-btn
-        color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
+        color="primary" variant="flat" rounded="pill" data-test="learning-done"
         :disabled="Boolean(busy) || learning.stepStatus(step.id) === 'passed'" :loading="busy === `done:${step.id}`"
         @click="learning.done(step.id)"
       >
@@ -280,15 +280,15 @@ async function markRead() {
 
     <p v-if="actionError" class="vibe64-learning-step__error" role="alert">{{ actionError }}</p>
     <div class="vibe64-learning-step__actions">
-      <v-btn v-if="(step.guide || step.beats?.length) && !ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-show-me" @click="showMe">Show me</v-btn>
-      <v-btn v-if="!ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-teach-me" @click="teachMe">Teach me</v-btn>
-      <v-btn v-if="stuckOffered" variant="tonal" rounded="pill" min-height="48" data-test="learning-stuck" @click="askStuck">I'm stuck</v-btn>
+      <v-btn v-if="(step.guide || step.beats?.length) && !ended" variant="tonal" rounded="pill" data-test="learning-show-me" @click="showMe">Show me</v-btn>
+      <v-btn v-if="!ended" variant="tonal" rounded="pill" data-test="learning-teach-me" @click="teachMe">Teach me</v-btn>
+      <v-btn v-if="stuckOffered" variant="tonal" rounded="pill" data-test="learning-stuck" @click="askStuck">I'm stuck</v-btn>
     </div>
     <slot name="after-actions" />
     <div v-if="!ended && kind === 'none' && !readingDone" class="vibe64-learning-step__pager">
       <span class="vibe64-learning-step__pager-end">
         <v-btn
-          color="primary" variant="tonal" rounded="pill" min-height="48"
+          color="primary" variant="tonal" rounded="pill"
           data-test="learning-mark-read" :disabled="Boolean(busy)" :loading="busy === `done:${step.id}`" @click="markRead"
         >Mark as done</v-btn>
       </span>

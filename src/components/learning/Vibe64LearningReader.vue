@@ -60,7 +60,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
     <div class="vibe64-learning-reader" :aria-busy="learning.state.loading">
       <v-alert v-if="learning.state.lessonError" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
         {{ learning.state.lessonError }}
-        <template #append><v-btn variant="text" min-height="48" @click="learning.loadLesson()">Retry</v-btn></template>
+        <template #append><v-btn variant="text" @click="learning.loadLesson()">Retry</v-btn></template>
       </v-alert>
       <v-skeleton-loader v-if="!lesson && learning.state.loading" type="heading, paragraph, paragraph" aria-label="Loading the lesson" />
 
@@ -92,7 +92,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
               <span class="vibe64-learning-reader__complete-short">✓ Lesson complete</span>
             </p>
             <v-btn
-              color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
+              color="primary" variant="flat" rounded="pill" data-test="learning-finish"
               @click="learning.showFinished()"
             >
               Lesson finished

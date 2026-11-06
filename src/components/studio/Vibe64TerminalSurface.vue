@@ -613,11 +613,4 @@ watch(() => props.starting, (starting) => {
     height: 100%;
   }
 }
-
-@media (pointer: coarse) {
-  .vibe64-terminal-surface__actions :deep(.v-btn) {
-    min-height: 3rem;
-    min-width: 3rem;
-  }
-}
 </style>

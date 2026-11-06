@@ -221,7 +221,7 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
         </p>
       </div>
       <v-btn
-        class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
+        class="tlp-hero__refresh" variant="tonal" rounded="pill" :prepend-icon="icons.refresh"
         :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')"
       >
         Refresh courses
@@ -264,7 +264,7 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
         <p v-if="!canResume" class="tlp-note">Continuing a lesson is unavailable in this installation. Your lesson remains visible.</p>
         <div class="tlp-saved__actions">
           <v-btn
-            color="primary" variant="flat" rounded="pill" size="large" min-height="48" :prepend-icon="icons.play"
+            color="primary" variant="flat" rounded="pill" size="large" :prepend-icon="icons.play"
             :disabled="!resumeEnabled" @click="requestResume"
           >
             Continue lesson
@@ -358,13 +358,13 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
           </div>
           <div class="tlp-card__actions">
             <v-btn
-              v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
+              v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" :prepend-icon="icons.play"
               :disabled="!resumeEnabled" @click="requestResume"
             >
               Continue lesson
             </v-btn>
             <v-btn
-              v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48"
+              v-else-if="progress.next" color="primary" variant="flat" rounded="pill"
               :prepend-icon="startingHere(course, progress.next) ? undefined : icons.play"
               :readonly="startingHere(course, progress.next)" :disabled="!startPossible && !startingHere(course, progress.next)"
               @click="startLesson(course, progress.next)"
@@ -373,23 +373,23 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
               <template v-else>Start lesson</template>
             </v-btn>
             <v-btn
-              v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
+              v-if="updateFor(course)" variant="tonal" rounded="pill" :prepend-icon="icons.update"
               :loading="installState?.phase === 'installing' && installState.courseId === course.courseId"
               :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })"
             >
               Update
             </v-btn>
-            <v-btn variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight" @click="openCourseKey = key">View course</v-btn>
+            <v-btn variant="text" rounded="pill" :append-icon="icons.arrowRight" @click="openCourseKey = key">View course</v-btn>
           </div>
         </article>
         <div v-if="canCreateCourses && !creating" class="tlp-new" :style="{ '--tlp-index': summaries.length }">
           <span class="tlp-new__icon" aria-hidden="true"><v-icon :icon="icons.path" size="28" /></span>
           <p>Combine installed topics into a course of your own.</p>
-          <v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn>
+          <v-btn variant="tonal" rounded="pill" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn>
         </div>
       </div>
       <TrainingCourseCreator v-if="creating && canCreateCourses" :topics="availableTopics" :busy="busy" @create="requestCreateCourse" @cancel="creating = false" />
-      <div v-else-if="canCreateCourses && !courses.length"><v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
+      <div v-else-if="canCreateCourses && !courses.length"><v-btn variant="tonal" rounded="pill" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
       <TrainingCourseCatalogue
         v-if="showCatalogue && !creating" :available-result="availableResult" :available-loading="availableLoading"
         :available-error="availableError" :install-state="installState" :busy="busy"

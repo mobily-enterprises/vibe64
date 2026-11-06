@@ -466,11 +466,9 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view--compact .usage-view__modes { flex: 1 1 100%; }
 .usage-view--compact .usage-view__modes :deep(.v-btn) { flex: 1 1 0; min-width: 0; padding: 0 8px; }
 .usage-view__controls :deep(.v-chip--variant-outlined) { border-color: rgb(var(--v-theme-outline)); }
-/* Touch: 48 px targets; the chip keeps its look and gains an invisible margin. */
+/* Touch: 48 px targets; the chip keeps its look and gains an invisible margin (buttons have JSKIT's). */
 @media (pointer: coarse) {
   .usage-view__modes { height: 48px; }
-  .usage-view__record { min-height: 48px; }
-  .usage-view__record--icon { width: 48px; height: 48px; }
   .usage-view__controls :deep(.v-chip) { position: relative; overflow: visible; margin-block: 8px; }
   .usage-view__controls :deep(.v-chip)::after { content: ""; position: absolute; inset: -8px 0; }
 }

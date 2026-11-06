@@ -87,19 +87,19 @@ async function startNext() {
     </p>
     <v-alert v-if="finishError" type="error" variant="tonal" rounded="lg" role="alert">
       {{ finishError }}
-      <template #append><v-btn variant="text" min-height="48" :disabled="Boolean(busy)" data-test="learning-finished-retry" @click="finish">Finish lesson</v-btn></template>
+      <template #append><v-btn variant="text" :disabled="Boolean(busy)" data-test="learning-finished-retry" @click="finish">Finish lesson</v-btn></template>
     </v-alert>
 
     <p v-if="startError" class="vibe64-learning-finished__error" role="alert">{{ startError }}</p>
     <div class="vibe64-learning-finished__actions">
       <v-btn
-        v-if="nextLesson" color="primary" variant="flat" rounded="pill" min-height="48" :disabled="!canStart"
+        v-if="nextLesson" color="primary" variant="flat" rounded="pill" :disabled="!canStart"
         :loading="Boolean(toValue(courses.starting))" data-test="learning-finished-next" @click="startNext"
       >
         Next lesson: {{ nextLesson.lesson.title }}
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="48" data-test="learning-finished-courses"
+        variant="tonal" rounded="pill" data-test="learning-finished-courses"
         @click="learning.show({ surface: 'courses' })"
       >
         All courses

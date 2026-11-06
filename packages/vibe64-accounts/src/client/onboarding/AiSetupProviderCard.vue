@@ -373,8 +373,7 @@ function meterLabel([aspect, rating]) {
 .aio-plan__budget { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); }
 .aio-plan__more { border-top: 1px solid rgb(var(--v-theme-outline-variant)); font: var(--v64-type-label-lg); margin-top: var(--v64-space-2); padding-top: var(--v64-space-2); }
 .aio-card__ctas { display: grid; gap: var(--v64-space-1); }
-.aio-card__ctas .v-btn { min-height: 48px; }
-.aio-card__ctas .aio-card__link { font: var(--v64-type-label-lg); height: 40px; min-height: 40px; }
+.aio-card__ctas .aio-card__link { font: var(--v64-type-label-lg); }
 
 @keyframes aio-rise { from { opacity: 0; transform: translateY(8px); } }
 

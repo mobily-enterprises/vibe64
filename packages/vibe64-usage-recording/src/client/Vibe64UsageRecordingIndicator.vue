@@ -383,11 +383,6 @@ function openFromStrip() {
   min-height: 48px;
 }
 
-.usage-recording-indicator--strip .usage-recording-indicator__action {
-  min-width: 48px;
-  min-height: 48px;
-}
-
 @keyframes usage-recording-pulse {
   50% {
     opacity: 0.35;
@@ -401,8 +396,7 @@ function openFromStrip() {
 }
 
 @media (pointer: coarse) {
-  .usage-recording-indicator__body,
-  .usage-recording-indicator__action {
+  .usage-recording-indicator__body {
     min-width: 48px;
     min-height: 48px;
   }

@@ -60,7 +60,7 @@ function install(course) {
     </div>
     <v-alert v-else-if="availableError" type="error" variant="tonal" rounded="lg" role="alert">
       {{ availableError }}
-      <template #append><v-btn variant="text" min-height="40" :disabled="busy" @click="emit('refresh')">Retry</v-btn></template>
+      <template #append><v-btn variant="text" :disabled="busy" @click="emit('refresh')">Retry</v-btn></template>
     </v-alert>
     <p v-else-if="availableResult && !ready" class="tcc__note" role="status">
       <v-icon :icon="icons.info" size="20" /><span>{{ availableResult.error || 'The course catalogue is not available in this installation.' }}</span>
@@ -95,13 +95,13 @@ function install(course) {
           </div>
           <div class="tcc__actions">
             <v-btn
-              v-if="course.installed === 'enabled'" variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight"
+              v-if="course.installed === 'enabled'" variant="text" rounded="pill" :append-icon="icons.arrowRight"
               @click="emit('view', { courseId: course.courseId, release: course.release })"
             >
               View course
             </v-btn>
             <v-btn
-              v-else-if="installable(course)" color="primary" :variant="course.updateFrom ? 'flat' : 'tonal'" rounded="pill" min-height="48"
+              v-else-if="installable(course)" color="primary" :variant="course.updateFrom ? 'flat' : 'tonal'" rounded="pill"
               :prepend-icon="course.updateFrom ? icons.update : icons.download" :loading="stateOf(course)?.phase === 'installing'"
               :disabled="busy" @click="install(course)"
             >

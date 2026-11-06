@@ -10,9 +10,9 @@
           <div v-for="session in sessions" :key="session.sessionId" class="mb-3">
             <strong>{{ vibe64SessionDisplayTitle(session) }}</strong>
             <p class="text-body-medium mb-1">{{ session.unavailable.message }}</p>
-            <v-btn variant="text" height="48" @click="copyDetails(session)">Copy recovery details</v-btn>
+            <v-btn variant="text" @click="copyDetails(session)">Copy recovery details</v-btn>
           </div>
-          <v-btn variant="tonal" height="48" :disabled="loading" @click="$emit('recheck')">
+          <v-btn variant="tonal" :disabled="loading" @click="$emit('recheck')">
             {{ loading ? "Checking…" : "Check again" }}
           </v-btn>
         </div>

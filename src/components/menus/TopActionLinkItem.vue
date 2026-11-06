@@ -63,7 +63,6 @@ const resolvedTo = computed(() => {
     :to="resolvedTo"
     variant="tonal"
     color="primary"
-    density="comfortable"
   >
     {{ props.label || "Open" }}
   </v-btn>
@@ -73,7 +72,6 @@ const resolvedTo = computed(() => {
 .top-action-link-item {
   flex: 0 0 auto;
   letter-spacing: 0;
-  min-height: 48px;
 }
 
 .top-action-link-item--active {

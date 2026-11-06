@@ -3,6 +3,7 @@ import { DASHBOARD_PATH, viewports } from "./support/base-shell-data";
 import { assistantStatusServer, json } from "./support/assistant-status-server";
 import { expectSteady } from "./support/settled-ui";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
+import { touchTarget } from "./support/touch-target";
 
 let server: Awaited<ReturnType<typeof assistantStatusServer>>;
 let pageErrors: string[];
@@ -477,9 +478,9 @@ for (const viewport of viewports) {
     await expect(banner).toContainText("Connection lost. Reconnecting automatically.");
     const retry = page.getByRole("button", { name: "Reconnect live updates", exact: true });
     await expect(retry).toBeEnabled();
-    const bounds = await retry.boundingBox();
-    expect(bounds!.width).toBeGreaterThanOrEqual(48);
-    expect(bounds!.height).toBeGreaterThanOrEqual(48);
+    const bounds = await touchTarget(retry);
+    expect(bounds.width).toBeGreaterThanOrEqual(48);
+    expect(bounds.height).toBeGreaterThanOrEqual(48);
     await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toBeDisabled();
     await expect.poll(() => server.state.connectionAttempts).toBeGreaterThanOrEqual(2);
     expect((await page.request.get(`${server.url}/api/vibe64/sessions/${server.state.session.sessionId}`)).ok()).toBe(true);

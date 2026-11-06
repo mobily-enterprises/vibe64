@@ -123,7 +123,7 @@ async function onKeydown(event) {
       <p v-else-if="!suggestions.length && !warning" class="text-body-medium pa-3 ma-0" role="status">No matching people</p>
       <div v-if="warning" class="pa-3 text-body-small" role="status">
         {{ warning }}
-        <v-btn variant="text" height="48" :disabled="catalog.isFetching.value" @pointerdown.prevent @click="catalog.reload()">Retry</v-btn>
+        <v-btn variant="text" :disabled="catalog.isFetching.value" @pointerdown.prevent @click="catalog.reload()">Retry</v-btn>
       </div>
     </v-sheet>
   </v-overlay>

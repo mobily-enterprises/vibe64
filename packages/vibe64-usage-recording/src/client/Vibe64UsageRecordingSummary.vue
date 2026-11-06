@@ -119,10 +119,4 @@ async function deleteRecording() {
   min-height: 0;
   padding: var(--v64-space-5) 0 0;
 }
-
-@media (pointer: coarse) {
-  .usage-recording-summary__delete {
-    min-height: 48px;
-  }
-}
 </style>

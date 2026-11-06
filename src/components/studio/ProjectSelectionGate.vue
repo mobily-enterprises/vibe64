@@ -13,7 +13,6 @@
         class="project-selection-gate__deleted-learning"
         color="primary"
         variant="flat"
-        min-height="48"
         @click="openCourses"
       >
         Open Courses
@@ -32,7 +31,6 @@
       <v-btn
         color="primary"
         variant="flat"
-        min-height="48"
         data-test="learning-mode-project-switch"
         @click="toggleMode"
       >
@@ -58,7 +56,6 @@
         <v-btn
           color="primary"
           variant="flat"
-          min-height="48"
           :disabled="recovering"
           @click="retryProject"
         >
@@ -103,7 +100,6 @@
         <span>{{ learningModeNote }}</span>
         <v-btn
           variant="tonal"
-          min-height="40"
           data-test="learning-mode-picker-switch"
           @click="toggleMode"
         >
@@ -124,7 +120,6 @@
         <v-btn
           color="primary"
           variant="flat"
-          min-height="48"
           data-test="team-ai-owner-setup"
           @click="openTeamAiSetup"
         >

@@ -36,7 +36,6 @@
             class="local-remotes__branch"
             variant="tonal"
             rounded="lg"
-            height="32"
             :icon="xs"
             :width="xs ? 48 : undefined"
             :prepend-icon="xs ? undefined : '$forkRight'"
@@ -71,7 +70,6 @@
           class="mt-4"
           block
           color="primary"
-          height="48"
           variant="tonal"
           :loading="busy === 'fetch'"
           :disabled="isBusy"
@@ -98,7 +96,6 @@
           class="mt-4"
           block
           color="primary"
-          height="48"
           variant="flat"
           :loading="busy === 'init'"
           :disabled="isBusy"
@@ -116,10 +113,9 @@
           <span>{{ syncStatus.label }}</span>
         </div>
         <div class="d-flex flex-column ga-1">
-          <v-btn height="48" variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('switch')">Switch branch…</v-btn>
-          <v-btn height="48" variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('create')">New branch…</v-btn>
+          <v-btn variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('switch')">Switch branch…</v-btn>
+          <v-btn variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('create')">New branch…</v-btn>
           <v-btn
-            height="48"
             variant="text"
             prepend-icon="$refresh"
             :aria-label="busy === 'fetch' ? 'Fetching remote changes' : 'Fetch remote changes'"
@@ -130,7 +126,6 @@
           </v-btn>
           <v-btn
             v-if="state?.upstream && state.incoming > 0"
-            height="48"
             color="primary"
             variant="flat"
             prepend-icon="$arrowdown"
@@ -142,7 +137,6 @@
           </v-btn>
           <v-btn
             v-if="state?.push && state.outgoing > 0"
-            height="48"
             color="primary"
             :variant="state.incoming > 0 ? 'tonal' : 'flat'"
             prepend-icon="$arrowup"
@@ -172,7 +166,6 @@
         <v-btn
           variant="text"
           block
-          height="48"
           prepend-icon="$settings"
           :disabled="isBusy || !state?.branch"
           @click="openSettings"
@@ -194,9 +187,8 @@
         </v-card-text>
         <v-card-actions class="flex-wrap">
           <v-spacer />
-          <v-btn height="48" :disabled="isBusy" @click="branchAction = ''">Cancel</v-btn>
+          <v-btn :disabled="isBusy" @click="branchAction = ''">Cancel</v-btn>
           <v-btn
-            height="48"
             color="primary"
             variant="flat"
             :disabled="isBusy || !branchName || branchName === branchReview?.branch"
@@ -221,7 +213,7 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn height="48" :disabled="isBusy" @click="settingsOpen = false">Cancel</v-btn>
+          <v-btn :disabled="isBusy" @click="settingsOpen = false">Cancel</v-btn>
           <v-btn :disabled="isBusy || !settings.remote || !settings.branch || !settings.pushRemote || !settings.pushBranch" @click="saveSettings">{{ busy ? 'Saving…' : 'Save settings' }}</v-btn>
         </v-card-actions>
       </v-card>
@@ -239,8 +231,8 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn height="48" :disabled="isBusy" @click="pendingReview = null">Cancel</v-btn>
-          <v-btn height="48" :disabled="isBusy" @click="confirmOperation">{{ busy ? 'Working…' : pendingReview.action === 'push' ? 'Push saved work' : pendingReview.merge ? 'Merge remote changes' : 'Pull changes' }}</v-btn>
+          <v-btn :disabled="isBusy" @click="pendingReview = null">Cancel</v-btn>
+          <v-btn :disabled="isBusy" @click="confirmOperation">{{ busy ? 'Working…' : pendingReview.action === 'push' ? 'Push saved work' : pendingReview.merge ? 'Merge remote changes' : 'Pull changes' }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

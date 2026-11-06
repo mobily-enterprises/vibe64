@@ -1,6 +1,6 @@
 <template>
   <section class="source-interface" aria-label="File public interface">
-    <header class="source-interface__heading"><h3>{{ filePath?.split('/').pop() }}</h3><div class="source-interface__modes"><v-btn size="small" min-height="44" variant="text" @click="$emit('whole-file-code')">Code · whole file</v-btn></div><p>{{ filePath }}</p></header>
+    <header class="source-interface__heading"><h3>{{ filePath?.split('/').pop() }}</h3><div class="source-interface__modes"><v-btn size="small" variant="text" @click="$emit('whole-file-code')">Code · whole file</v-btn></div><p>{{ filePath }}</p></header>
     <v-alert v-if="analysisError" type="error" variant="tonal" class="mb-3">{{ analysisError }}</v-alert>
     <v-alert v-if="dirty" type="info" variant="tonal" class="mb-3">This file has unsaved edits. Save before generating an explanation or using indexed symbol ranges.</v-alert>
     <v-alert v-else-if="!current" type="info" variant="tonal" class="mb-3">{{ indexed ? 'Index out of date.' : 'Symbols not indexed.' }} Open whole-file Code. Update the index from Architecture → ⋯.</v-alert>
@@ -8,7 +8,7 @@
       <header class="source-interface__field-heading">
         <h4>Explanation</h4>
         <span v-if="fileInterpretation" class="source-interface__freshness" :class="{ 'source-interface__freshness--stale': !isCurrentInterpretation(fileInterpretation) }">{{ isCurrentInterpretation(fileInterpretation) ? 'Saved' : 'Out of date' }}</span>
-        <v-btn size="small" min-height="44" variant="text" :disabled="explanationDisabled" @click="$emit('explain-file', Boolean(fileInterpretation))">{{ fileInterpretation ? 'Update explanation' : 'Generate explanation' }}</v-btn>
+        <v-btn size="small" variant="text" :disabled="explanationDisabled" @click="$emit('explain-file', Boolean(fileInterpretation))">{{ fileInterpretation ? 'Update explanation' : 'Generate explanation' }}</v-btn>
       </header>
       <div class="source-interface__explanation" :class="{ 'source-interface__explanation--empty': !fileInterpretation && !activeFileInterpretation }">
         <slot v-if="activeFileInterpretation" name="explanation" :saved-body="fileInterpretation?.body || ''" />
@@ -30,9 +30,9 @@
             <p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
             <div class="source-interface__modes" aria-label="Symbol presentation">
               <h4 v-if="Array.isArray(selectedSymbol.parameters)">Pseudocode</h4>
-              <v-btn v-if="presentation === 'code' && selectedInterpretation" size="small" min-height="44" variant="text" @click="$emit('select-symbol', selectedId)">Pseudocode</v-btn>
-              <v-btn v-if="Array.isArray(selectedSymbol.parameters)" size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty || explanationDisabled" @click="$emit('present-symbol', 'steps', Boolean(selectedInterpretation))">{{ selectedInterpretation ? 'Update pseudocode' : 'Generate pseudocode' }}</v-btn>
-              <v-btn size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty" @click="$emit('present-symbol', 'code')">Code</v-btn>
+              <v-btn v-if="presentation === 'code' && selectedInterpretation" size="small" variant="text" @click="$emit('select-symbol', selectedId)">Pseudocode</v-btn>
+              <v-btn v-if="Array.isArray(selectedSymbol.parameters)" size="small" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty || explanationDisabled" @click="$emit('present-symbol', 'steps', Boolean(selectedInterpretation))">{{ selectedInterpretation ? 'Update pseudocode' : 'Generate pseudocode' }}</v-btn>
+              <v-btn size="small" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty" @click="$emit('present-symbol', 'code')">Code</v-btn>
             </div>
             <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Pseudocode needs an Explain & check model.</p>
             <pre v-if="presentation === 'code'" class="source-interface__code"><code>{{ source }}</code></pre>

@@ -259,9 +259,8 @@ describe("source explanation Material interaction", () => {
     expect(panel.match(/aria-label="Stop explanation"/gu)).toHaveLength(2);
     expect(panel).toContain('aria-label="Send follow-up"');
     expect(panel).toContain('aria-label="Collapse explanation"');
-    expect(panel).toContain(".vibe64-source-explanation__action-target");
-    expect(panel).toContain("min-block-size: 3rem");
-    expect(panel).toContain("min-inline-size: 3rem");
+    // Its buttons keep JSKIT's sizes and touch targets, with none of their own.
+    expect(panel).not.toContain("vibe64-source-explanation__action-target");
   });
 
   it("keeps cancellation available throughout a busy follow-up", () => {

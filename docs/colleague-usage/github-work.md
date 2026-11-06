@@ -163,7 +163,7 @@ intended changes from both versions. Wait for coding work to finish, then:
    checks have stopped.
 2. Review every file listed in **Apply resolved Update**. Select **Cancel** if
    further repair is needed; cancelling leaves the files unchanged.
-3. Select **I've resolved these conflicts — apply Update** to acknowledge the
+3. Select **Conflicts resolved — apply Update** to acknowledge the
    repair and run Update. Without a fix open, this works directly. With one, Update
    runs as that fix's check. It does not Save or push the work.
 

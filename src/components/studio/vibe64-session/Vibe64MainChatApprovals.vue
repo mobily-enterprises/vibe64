@@ -325,9 +325,6 @@ defineExpose({ open: () => { sheetOpen.value = true; } });
 .vibe64-approvals--phone .vibe64-approvals__actions--owner {
   flex-direction: column;
 }
-.vibe64-approvals--phone .vibe64-approvals__actions :deep(.v-btn) {
-  min-height: 48px;
-}
 .vibe64-approvals__decided {
   display: flex;
   flex-direction: column;

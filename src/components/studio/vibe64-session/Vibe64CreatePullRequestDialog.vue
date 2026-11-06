@@ -92,9 +92,9 @@ async function submit() {
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
-        <v-btn variant="text" height="48" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
+        <v-btn variant="text" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
         <v-btn
-          color="primary" variant="flat" rounded="pill" height="48" :disabled="pending || !title.trim() || !destinationReview || dashboardContext.sourceOperationsSuspended"
+          color="primary" variant="flat" rounded="pill" :disabled="pending || !title.trim() || !destinationReview || dashboardContext.sourceOperationsSuspended"
           :aria-busy="pending" @click="submit"
         >
           {{ pending ? 'Creating…' : draft ? 'Create draft PR' : 'Create pull request' }}

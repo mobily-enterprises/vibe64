@@ -77,7 +77,7 @@ defineExpose({
     <div v-if="state.error" class="vibe64-training-visual__error" role="alert">
       <v-icon class="vibe64-training-visual__error-icon" icon="$error" size="24" aria-hidden="true" />
       <p class="text-body-medium">{{ state.error }}</p>
-      <v-btn min-height="48" rounded="pill" variant="tonal" @click="reload">Reload diagram</v-btn>
+      <v-btn rounded="pill" variant="tonal" @click="reload">Reload diagram</v-btn>
     </div>
   </section>
 </template>

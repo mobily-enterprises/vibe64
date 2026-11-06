@@ -19,6 +19,7 @@
         :disabled="previewToolbarPosition === 'left'"
         icon="$chevronLeft"
         size="small"
+        density="comfortable"
         title="Move controls left"
         variant="text"
         @click="movePreviewToolbar(-1)"
@@ -45,6 +46,7 @@
         :disabled="previewToolbarPosition === 'right'"
         icon="$chevronRight"
         size="small"
+        density="comfortable"
         title="Move controls right"
         variant="text"
         @click="movePreviewToolbar(1)"
@@ -58,6 +60,7 @@
         :disabled="previewToolbarPosition === 'left'"
         icon="$chevronLeft"
         size="small"
+        density="comfortable"
         title="Move controls left"
         variant="text"
         @click="movePreviewToolbar(-1)"
@@ -68,6 +71,7 @@
         class="vibe64-launch-controls__mobile-collapse-button"
         icon="$collapse"
         size="small"
+        density="comfortable"
         title="Collapse preview controls"
         variant="text"
         @click="collapsePreviewToolbar"
@@ -112,6 +116,7 @@
             :key="action.id || action.href"
             icon="$openInNew"
             size="small"
+            density="comfortable"
             :title="action.label || action.href"
             variant="text"
             @click="openAction(action)"
@@ -122,6 +127,7 @@
             aria-label="Show run output"
             icon="$terminal"
             size="small"
+            density="comfortable"
             title="Show run output"
             variant="text"
             @click="showLaunchLog"
@@ -133,6 +139,7 @@
             :disabled="operationBusy"
             icon="$stopCircle"
             size="small"
+            density="comfortable"
             title="Stop preview"
             variant="text"
             @click="stopTerminal"
@@ -144,6 +151,7 @@
             :disabled="operationBusy"
             icon="$restartAlt"
             size="small"
+            density="comfortable"
             title="Restart preview"
             variant="text"
             @click="recoverEmbeddedPreview"
@@ -155,6 +163,7 @@
             :disabled="operationBusy"
             icon="$restartAlt"
             size="small"
+            density="comfortable"
             title="Retry"
             variant="text"
             @click="retryTerminal"
@@ -166,6 +175,7 @@
             :disabled="operationBusy"
             icon="$restartAlt"
             size="small"
+            density="comfortable"
             title="Restart"
             variant="text"
             @click="restartTerminal"
@@ -182,6 +192,7 @@
             :disabled="embeddedManualStartButtonDisabled"
             icon="$playCircle"
             size="small"
+            density="comfortable"
             title="Start preview"
             variant="text"
             @click="forceStartEmbeddedPreview"
@@ -194,6 +205,7 @@
           :disabled="operationBusy"
           icon="$settings"
           size="small"
+          density="comfortable"
           title="Preview options"
           variant="text"
           @click="openOutputOptions()"
@@ -245,6 +257,7 @@
           :disabled="loading"
           icon="$refresh"
           size="small"
+          density="comfortable"
           title="Retry preview status"
           variant="text"
           @click="retryLaunchStatus"
@@ -256,6 +269,7 @@
           :disabled="previewToolbarPosition === 'right'"
           icon="$chevronRight"
           size="small"
+          density="comfortable"
           title="Move controls right"
           variant="text"
           @click="movePreviewToolbar(1)"
@@ -423,13 +437,10 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
   display: none;
 }
 
-/* Address-bar buttons: compact, thin icons, a subtle hover tint only. */
+/* Address-bar buttons: compact (small and comfortable, 28px), thin icons, a subtle hover tint only. */
 .vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small) {
   border-radius: 6px;
   color: rgba(var(--v-theme-on-surface), 0.66);
-  height: 1.75rem;
-  min-width: 1.75rem;
-  width: 1.75rem;
 }
 
 .vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small .v-icon) {

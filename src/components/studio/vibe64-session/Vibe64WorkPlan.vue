@@ -203,7 +203,7 @@ watch(() => props.active, (active) => {
         <v-btn
           v-if="view === 'current' && plan?.current"
           prepend-icon="$archive" :disabled="!canChangePlan"
-          :aria-busy="pendingOperation === 'archive'" variant="text" size="small" width="120" min-height="48"
+          :aria-busy="pendingOperation === 'archive'" variant="text" size="small" width="120"
           aria-label="Archive plan" title="Move this plan to History without marking it completed" @click="changePlan('archive')"
         >
           {{ pendingOperation === 'archive' ? 'Archiving…' : 'Archive' }}
@@ -211,7 +211,7 @@ watch(() => props.active, (active) => {
         <v-btn
           v-if="archiveId && !plan?.current"
           prepend-icon="$restartAlt" :disabled="!canChangePlan"
-          :aria-busy="pendingOperation === 'restore'" variant="text" color="primary" size="small" width="128" min-height="48"
+          :aria-busy="pendingOperation === 'restore'" variant="text" color="primary" size="small" width="128"
           aria-label="Make current" title="Move this archived plan back to Current plan and reopen it as Active" @click="changePlan('restore')"
         >
           {{ pendingOperation === 'restore' ? 'Restoring…' : 'Make current' }}
@@ -304,9 +304,6 @@ watch(() => props.active, (active) => {
 
 <style scoped>
 .work-plan-control { display: inline-flex; align-items: center; flex: 0 0 auto; }
-@media (pointer: coarse) {
-  .work-plan-control > .v-btn { min-width: 48px; min-height: 48px; }
-}
 .work-plan-content { min-height: 0; overflow-wrap: anywhere; }
 .work-plan-archive-context { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
 .work-plan-archive-copy { min-width: 0; }

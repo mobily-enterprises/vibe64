@@ -71,9 +71,8 @@ const emit = defineEmits(["add", "snooze", "review"]);
 .ai-team-card__text { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 0; max-width: 62ch; }
 .ai-team-card__error { align-items: center; color: rgb(var(--v-theme-error)); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .ai-team-card__actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-2); margin-top: var(--v64-space-1); }
-.ai-team-card__actions .v-btn { min-height: 44px; }
 @media (max-width: 599.98px) {
   .ai-team-card { padding: var(--v64-space-4); }
-  .ai-team-card__actions .v-btn { flex: 1 1 100%; min-height: 48px; }
+  .ai-team-card__actions .v-btn { flex: 1 1 100%; }
 }
 </style>

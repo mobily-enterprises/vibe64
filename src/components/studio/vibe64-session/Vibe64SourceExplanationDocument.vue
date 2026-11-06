@@ -3,7 +3,7 @@
     <LongTextPreviewBlocks v-if="documentBody" :blocks="documentBlocks" @link-click="emit('link-click', $event)" />
     <div v-if="busy || closing" class="source-explanation-document__progress" role="status">
       <span>{{ closing ? 'Stopping…' : 'Generating explanation…' }}</span>
-      <v-btn v-if="!closing" size="small" min-height="44" variant="text" @click="emit('stop')">Stop</v-btn>
+      <v-btn v-if="!closing" size="small" variant="text" @click="emit('stop')">Stop</v-btn>
     </div>
     <details v-if="busy && documentProgress" class="source-explanation-document__activity" open>
       <summary>Progress</summary>
@@ -11,7 +11,7 @@
     </details>
     <div v-else-if="!busy && !closing && ['failed', 'stopped'].includes(explanation.status)" class="source-explanation-document__progress" role="status">
       <span>{{ explanation.status === 'stopped' ? 'Generation stopped.' : documentFailure || 'Generation failed.' }}</span>
-      <v-btn size="small" min-height="44" variant="text" :disabled="!assistantAvailable" @click="emit('retry')">Retry</v-btn>
+      <v-btn size="small" variant="text" :disabled="!assistantAvailable" @click="emit('retry')">Retry</v-btn>
     </div>
   </section>
 </template>

@@ -30,6 +30,7 @@ import {
 import {
   mockProjectGateReady
 } from "./support/base-shell-mocks";
+import { touchTarget } from "./support/touch-target";
 
 const SESSION_ID = "session-renderer";
 const TARGET_APP_URL = "http://127.0.0.1:4103/home";
@@ -1873,9 +1874,9 @@ test("@preview-lifecycle Codex terminal picker keeps a 48px coarse touch target"
     const attachFiles = page.getByRole("dialog", { name: "Codex terminal" })
       .getByRole("button", { name: "Attach files to Codex terminal" });
     await expect(attachFiles).toBeVisible();
-    const bounds = await attachFiles.boundingBox();
-    expect(Number(bounds?.height || 0)).toBeGreaterThanOrEqual(48);
-    expect(Number(bounds?.width || 0)).toBeGreaterThanOrEqual(48);
+    const bounds = await touchTarget(attachFiles);
+    expect(bounds.height).toBeGreaterThanOrEqual(48);
+    expect(bounds.width).toBeGreaterThanOrEqual(48);
   } finally {
     await context.close();
   }

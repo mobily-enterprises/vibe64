@@ -115,13 +115,13 @@ async function actionFinished({ apiPath }) {
       <v-btn v-if="available && number" color="primary" variant="text" @click="navigate({ pr: undefined })">All pull requests</v-btn>
       <v-spacer />
       <v-btn
-        v-if="available" prepend-icon="$refresh" variant="text" size="small" height="48" :disabled="resource.isFetching.value"
+        v-if="available" prepend-icon="$refresh" variant="text" size="small" :disabled="resource.isFetching.value"
         @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
       <v-btn
-        v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" height="48" prepend-icon="$add"
+        v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" prepend-icon="$add"
         :disabled="dashboardContext.sourceOperationsSuspended" @click="createDialog = true"
       >
         Create from session
@@ -135,7 +135,7 @@ async function actionFinished({ apiPath }) {
           :model-value="state" mandatory divided rounded="pill" color="primary" variant="outlined"
           aria-label="Pull request state" @update:model-value="filter($event)"
         >
-          <v-btn v-for="value in ['open', 'closed', 'merged', 'all']" :key="value" :value="value" height="48">{{ value[0].toUpperCase() + value.slice(1) }}</v-btn>
+          <v-btn v-for="value in ['open', 'closed', 'merged', 'all']" :key="value" :value="value">{{ value[0].toUpperCase() + value.slice(1) }}</v-btn>
         </v-btn-toggle>
         <v-text-field
           v-model="search" class="pull-requests__search" label="Search pull requests" prepend-inner-icon="$search"
@@ -149,7 +149,7 @@ async function actionFinished({ apiPath }) {
       </v-sheet>
       <v-alert v-else-if="resource.loadError.value" type="error" variant="tonal" rounded="lg">
         {{ resource.loadError.value }}
-        <template #append><v-btn variant="text" height="48" @click="resource.reload()">Retry</v-btn></template>
+        <template #append><v-btn variant="text" @click="resource.reload()">Retry</v-btn></template>
       </v-alert>
       <template v-else-if="!number">
         <div class="d-flex justify-space-between px-2 text-label-large text-medium-emphasis">
@@ -174,9 +174,9 @@ async function actionFinished({ apiPath }) {
           <p class="text-body-medium text-medium-emphasis">Try another filter, or turn your session into a pull request.</p>
         </v-sheet>
         <div class="d-flex justify-end ga-2">
-          <v-btn v-if="$route.query.prCursor" variant="text" height="48" @click="navigate({ prCursor: undefined })">First page</v-btn>
+          <v-btn v-if="$route.query.prCursor" variant="text" @click="navigate({ prCursor: undefined })">First page</v-btn>
           <v-btn
-            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" append-icon="$arrowForward"
+            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" append-icon="$arrowForward"
             @click="navigate({ prCursor: list.data.value.pageInfo.endCursor })"
           >
             Next page
@@ -208,13 +208,13 @@ async function actionFinished({ apiPath }) {
           <p v-else-if="pr.state === 'OPEN' && !toolbar.canCreateSession" class="text-body-medium ma-0">{{ toolbar.createSessionTitle }}</p>
           <div class="d-flex flex-wrap ga-2">
             <v-btn
-              v-if="pr.state === 'OPEN'" color="primary" rounded="pill" height="48" prepend-icon="$callMerge"
+              v-if="pr.state === 'OPEN'" color="primary" rounded="pill" prepend-icon="$callMerge"
               :disabled="Boolean(pr.unavailableReason) || !toolbar.canCreateSession || toolbar.createSessionRunning"
               @click="assistantDialog = true"
             >
               Open as session
             </v-btn>
-            <v-btn :href="pr.url" target="_blank" rel="noopener noreferrer" variant="text" height="48" append-icon="$openInNew">View on GitHub</v-btn>
+            <v-btn :href="pr.url" target="_blank" rel="noopener noreferrer" variant="text" append-icon="$openInNew">View on GitHub</v-btn>
           </div>
         </v-sheet>
         <GithubPullRequestActions

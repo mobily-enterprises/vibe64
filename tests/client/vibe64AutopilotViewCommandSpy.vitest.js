@@ -931,8 +931,9 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
     expect(sessionHeader).toContain('<v-icon v-else icon="$save" />');
-    expect(sessionHeader).toContain('height="var(--session-action-size, 36px)"');
-    expect(sessionHeader).toContain('width="var(--session-action-size, 36px)"');
+    // The header's icon buttons are JSKIT's 40dp icon buttons with their 48dp touch target, with no size of their own.
+    expect(sessionHeader).not.toContain("--session-action-size");
+    expect(sessionHeader).not.toMatch(/\s(?:min-)?(?:height|width)="/u);
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
   });
 
@@ -1196,7 +1197,8 @@ for (const state of ["failed", "reconciling", "disconnected", "account-unavailab
     expect(html.indexOf(label)).toBeLessThan(html.indexOf("Your draft is kept."));
     expect(html).toContain('role="status"');
     expect(html.includes("disabled")).toBe(state === "reconciling");
-    expect(html).toContain('min-height="32"');
-    expect(html).not.toContain('min-height="48"');
+    // The recovery actions are small JSKIT buttons, with no height of their own.
+    expect(html).toContain('size="small"');
+    expect(html).not.toMatch(/\smin-height="/u);
   });
 }

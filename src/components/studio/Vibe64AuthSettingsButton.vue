@@ -555,7 +555,6 @@ watch(
 }
 
 .vibe64-personal-profile__save {
-  min-height: 3rem;
   min-width: 7.5rem;
 }
 

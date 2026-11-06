@@ -105,7 +105,7 @@ async function submit() {
           <v-skeleton-loader v-if="catalog.isInitialLoading.value" type="list-item-two-line,button" min-height="152" aria-label="Loading labels" aria-busy="true" />
           <v-alert v-else-if="catalog.loadError.value" type="error" variant="tonal" rounded="lg">
             {{ catalog.loadError.value }}
-            <template #append><v-btn variant="text" height="48" @click="catalog.reload()">Retry</v-btn></template>
+            <template #append><v-btn variant="text" @click="catalog.reload()">Retry</v-btn></template>
           </v-alert>
           <template v-else>
             <v-autocomplete
@@ -128,15 +128,15 @@ async function submit() {
                 v-if="catalog.data.value?.canCreateLabels" :base-path="basePath" :labels="labels" :disabled="pending"
                 @created="selectedLabels = [...selectedLabels, $event.name]"
               />
-              <v-btn variant="text" height="48" :disabled="pending || catalog.isFetching.value" @click="catalog.reload()">Refresh labels</v-btn>
+              <v-btn variant="text" :disabled="pending || catalog.isFetching.value" @click="catalog.reload()">Refresh labels</v-btn>
             </div>
           </template>
         </template>
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
-        <v-btn variant="text" height="48" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
-        <v-btn type="submit" color="primary" variant="flat" rounded="pill" height="48" :disabled="!canSubmit" :aria-busy="pending">
+        <v-btn variant="text" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
+        <v-btn type="submit" color="primary" variant="flat" rounded="pill" :disabled="!canSubmit" :aria-busy="pending">
           {{ submitLabel }}
         </v-btn>
       </v-card-actions>

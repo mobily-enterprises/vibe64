@@ -169,13 +169,13 @@ function keydown(event) {
            covers (your place there is kept); Continue lesson goes on with the
            current lesson where it runs (its practice project for a project lesson). -->
       <v-btn
-        v-if="continueOffered" color="primary" variant="flat" rounded="pill" min-height="40" append-icon="$arrowForward"
+        v-if="continueOffered" color="primary" variant="flat" rounded="pill" append-icon="$arrowForward"
         class="vibe64-learning__exit" data-test="learning-continue-lesson" @click="continueLesson"
       >
         Continue lesson
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="40"
+        variant="tonal" rounded="pill"
         class="vibe64-learning__exit" title="Your place is kept"
         data-test="learning-close-courses" @click="learning.closeCourses()"
       >
@@ -213,8 +213,8 @@ function keydown(event) {
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" min-height="48" data-test="learning-archive-cancel" @click="keepCurrent">Keep it</v-btn>
-        <v-btn color="primary" variant="flat" min-height="48" data-test="learning-archive-start" @click="archiveAndStart">Archive and start</v-btn>
+        <v-btn variant="text" data-test="learning-archive-cancel" @click="keepCurrent">Keep it</v-btn>
+        <v-btn color="primary" variant="flat" data-test="learning-archive-start" @click="archiveAndStart">Archive and start</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

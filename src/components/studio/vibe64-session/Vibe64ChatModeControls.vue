@@ -168,10 +168,10 @@ function configure() {
         <div class="d-flex">
           <v-btn
             v-if="canConfigure"
-            icon="$settings" variant="text" width="48" height="48"
+            icon="$settings" variant="text"
             aria-label="Models" title="Models" @click="configure"
           />
-          <v-btn icon="$close" variant="text" width="48" height="48" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
+          <v-btn icon="$close" variant="text" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
         </div>
       </div>
       <div class="chat-modes__details-body">

@@ -172,7 +172,7 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
       <div v-if="aiRequired" class="vibe64-learning-step-bar__line">
         <span class="vibe64-learning-step-bar__beat" role="status" data-test="learning-step-bar-ai-required">{{ lesson.attempt.preparation.failure.message }}</span>
         <v-btn
-          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-set-up-ai"
+          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" data-test="learning-step-bar-set-up-ai"
           @click="requestVibe64AiOnboarding()"
         >
           Set up your AI
@@ -184,26 +184,26 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
           {{ step.required ? STEP_STATUS_LABELS[status] : "Done" }}
         </span>
         <v-btn
-          v-if="canDoIt" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-do-it"
+          v-if="canDoIt" color="primary" variant="flat" rounded="pill" data-test="learning-step-bar-do-it"
           :loading="doing" @click="doItForMe"
         >
           {{ learning.doItForMeKind(beat) === "point" ? "Show me" : "Do it for me" }}
         </v-btn>
         <v-btn
-          v-if="verdict" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-verdict"
+          v-if="verdict" color="primary" variant="flat" rounded="pill" data-test="learning-step-bar-verdict"
           :disabled="Boolean(busy)" :loading="Boolean(verdict.busy) && busy === verdict.busy" @click="verdict.run()"
         >
           {{ verdict.label }}
         </v-btn>
         <v-btn
-          v-if="stuckOffered" variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-stuck"
+          v-if="stuckOffered" variant="tonal" rounded="pill" data-test="learning-step-bar-stuck"
           :class="{ 'vibe64-learning-step-bar__stuck--beside': canDoIt }"
           @click="askStuck"
         >
           I'm stuck
         </v-btn>
         <v-btn
-          v-if="!beats.length && step.guide && !ended" variant="tonal" rounded="pill" min-height="40"
+          v-if="!beats.length && step.guide && !ended" variant="tonal" rounded="pill"
           data-test="learning-step-bar-show-me" @click="showMe"
         >
           Show me
@@ -211,7 +211,7 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
         <span v-if="reviewing && !beats.length" class="vibe64-learning-step-bar__note" role="status">Checking your work with your AI…</span>
         <span v-if="note" class="vibe64-learning-step-bar__note" role="status" data-test="learning-step-bar-note">{{ note }}</span>
         <v-btn
-          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-set-up-ai"
+          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" data-test="learning-step-bar-set-up-ai"
           @click="requestVibe64AiOnboarding()"
         >
           Set up your AI
@@ -219,17 +219,17 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
       </div>
       <nav class="vibe64-learning-step-bar__controls" aria-label="Lesson navigation">
         <v-btn
-          v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? '$play' : '$pause'" variant="text" size="small" min-width="40" min-height="40"
+          v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? '$play' : '$pause'" variant="text" size="small"
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
         <v-btn
-          variant="text" rounded="pill" min-height="40" :disabled="atStart"
+          variant="text" rounded="pill" :disabled="atStart"
           data-test="learning-step-bar-previous" @click="previous"
         >
           Previous
         </v-btn>
         <v-btn
-          v-if="forwardAction" :variant="final && verdict ? 'text' : 'tonal'" color="primary" rounded="pill" min-height="40"
+          v-if="forwardAction" :variant="final && verdict ? 'text' : 'tonal'" color="primary" rounded="pill"
           append-icon="$chevronRight" data-test="learning-step-bar-next" @click="forwardAction.run()"
         >
           {{ forwardAction.label }}
@@ -237,14 +237,14 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
       </nav>
       <span v-if="learning.lessonSwitchable" class="vibe64-learning-step-bar__lesson-toggle"><Vibe64LessonToggle /></span>
       <v-btn
-        v-if="practiceAway" variant="tonal" rounded="pill" min-height="40" min-width="40" prepend-icon="$webAsset"
+        v-if="practiceAway" variant="tonal" rounded="pill" prepend-icon="$webAsset"
         class="vibe64-learning-step-bar__practice" aria-label="Open practice project" data-test="learning-step-bar-practice"
         @click="openPractice"
       >
         <span class="vibe64-learning-step-bar__practice-label">Open practice project</span>
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="40" min-width="40" prepend-icon="$menuBook"
+        variant="tonal" rounded="pill" prepend-icon="$menuBook"
         class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses" data-vibe64-guide="courses"
         @click="learning.openCourses('courses')"
       >

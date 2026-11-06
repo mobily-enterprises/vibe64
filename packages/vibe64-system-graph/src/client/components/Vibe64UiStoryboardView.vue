@@ -11,7 +11,7 @@
         <v-btn value="usage">Usage</v-btn>
       </v-btn-toggle>
       <div class="ui-storyboard__actions">
-        <v-btn v-if="refreshing" size="small" variant="text" min-height="44" @click="cancelRefresh">Cancel analysis</v-btn>
+        <v-btn v-if="refreshing" size="small" variant="text" @click="cancelRefresh">Cancel analysis</v-btn>
         <v-btn v-if="usageState.view === 'map'" size="small" variant="text" :disabled="!contentCount" @click="fit()">Fit</v-btn>
         <v-menu>
           <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text" aria-label="Architecture options" title="Architecture options" min-width="36">⋯</v-btn></template>

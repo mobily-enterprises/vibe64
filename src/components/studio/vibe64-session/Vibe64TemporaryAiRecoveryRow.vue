@@ -2,7 +2,7 @@
   <div class="vibe64-temporary-ai__recovery-row">
     <v-alert v-if="props.restoreError" type="error" variant="tonal" density="compact">
       {{ props.restoreError }}
-      <v-btn color="error" variant="text" height="48" @click="emit('retry-restore')">Try again</v-btn>
+      <v-btn color="error" variant="text" @click="emit('retry-restore')">Try again</v-btn>
     </v-alert>
   </div>
 </template>

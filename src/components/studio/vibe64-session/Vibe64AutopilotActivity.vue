@@ -16,7 +16,6 @@
           v-if="assistantAccountUnavailable"
           color="primary"
           variant="flat"
-          min-height="32"
           size="small"
           @click="requestVibe64AccountConnectionsDialog({ section: 'ai' })"
         >
@@ -25,7 +24,6 @@
         <v-btn
           v-if="!assistantAccountUnavailable || props.sessionSelectionArchived"
           variant="tonal"
-          min-height="32"
           size="small"
           :disabled="props.agentConnectionStatus === 'reconciling'"
           @click="props.retryAgentConnection()"
@@ -35,7 +33,6 @@
         <v-btn
           v-if="props.agentConnectionStatus === 'failed' && props.sessionRenewal?.visible"
           variant="tonal"
-          min-height="32"
           size="small"
           @click="requestSessionRenewal($event.currentTarget)"
         >
@@ -58,7 +55,7 @@
           <strong class="text-body-medium">Recovery snapshot not saved</strong>
           <p class="text-body-small mb-0">{{ checkpointFailureReason }} Your files remain in this session. You can keep chatting.</p>
         </div>
-        <v-btn variant="text" min-height="48" aria-label="Dismiss recovery snapshot warning" @click="dismissCheckpointFailure">Dismiss</v-btn>
+        <v-btn variant="text" aria-label="Dismiss recovery snapshot warning" @click="dismissCheckpointFailure">Dismiss</v-btn>
       </div>
       <details :key="checkpointFailure">
         <summary class="text-body-small">Technical details</summary>
@@ -107,7 +104,7 @@
     >
       <template v-if="saveWorkError && (saveWorkCanResolveWithAi || saveWorkCanCreatePullRequest)" #error-actions>
         <v-btn
-          v-if="updateConflictRecovery && !aiTaskOpen" variant="tonal" height="48"
+          v-if="updateConflictRecovery && !aiTaskOpen" variant="tonal"
           :disabled="updateWorkDisabled || sourceOperationsSuspended"
           @click="reviewResolvedUpdate"
         >
@@ -122,7 +119,7 @@
             ? `Fix this ${saveWorkActivityIsUpdate ? 'Update' : 'Save'} with the AI` : assistantFixRestrictionMessage"
         />
         <v-btn
-          v-if="saveWorkCanCreatePullRequest" color="primary" variant="flat" height="48"
+          v-if="saveWorkCanCreatePullRequest" color="primary" variant="flat"
           :disabled="saveWorkDisabled || sourceOperationsSuspended" @click="createPullRequestOpen = true"
         >
           Create draft PR

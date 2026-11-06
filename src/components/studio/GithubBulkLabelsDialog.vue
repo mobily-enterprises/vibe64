@@ -74,8 +74,8 @@ async function submit() {
       <v-card-text class="d-flex flex-column ga-4">
         <p class="text-body-medium ma-0">{{ remaining.length }} selected. Other labels will stay unchanged.</p>
         <v-btn-toggle v-model="labelMode" mandatory divided rounded="pill" :disabled="pending" aria-label="Label action">
-          <v-btn value="add" height="48">Add labels</v-btn>
-          <v-btn value="remove" height="48">Remove labels</v-btn>
+          <v-btn value="add">Add labels</v-btn>
+          <v-btn value="remove">Remove labels</v-btn>
         </v-btn-toggle>
         <v-autocomplete
           v-model="selectedLabels" :items="labels" item-title="name" item-value="name" multiple chips closable-chips
@@ -99,8 +99,8 @@ async function submit() {
       </v-card-text>
       <v-card-actions class="pa-5 pt-2 d-flex flex-wrap">
         <v-spacer />
-        <v-btn variant="text" height="48" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
-        <v-btn type="submit" color="primary" variant="flat" height="48" :disabled="!canSubmit">
+        <v-btn variant="text" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
+        <v-btn type="submit" color="primary" variant="flat" :disabled="!canSubmit">
           {{ pending ? progress : failures.length ? 'Retry failed issues' : 'Apply labels' }}
         </v-btn>
       </v-card-actions>

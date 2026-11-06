@@ -117,9 +117,4 @@ function openAt(start, file = props.node.file) {
 .usage-panel__list :deep(.v-list-item__append) { padding-inline-start: 8px; }
 .usage-panel :deep(.v-chip--variant-outlined) { border-color: rgb(var(--v-theme-outline)); }
 .usage-panel__ran { color: rgb(var(--v-theme-primary)); font-weight: 500; }
-/* Touch: 48 px targets for Open source, the code buttons and Close. */
-@media (pointer: coarse) {
-  .usage-panel :deep(.v-btn) { min-height: 48px; }
-  .usage-panel :deep(.v-btn--icon) { width: 48px; height: 48px; }
-}
 </style>

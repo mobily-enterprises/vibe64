@@ -492,7 +492,6 @@ async function savedValueChanged() {
 
 .env-panel__add > .v-btn {
   border-radius: var(--v64-shape-full, 999px);
-  min-height: 40px;
   padding-inline: var(--v64-space-5, 24px);
 }
 

@@ -97,22 +97,22 @@ async function submit() {
       <p v-if="pullRequest.actions?.merge" class="text-body-medium ma-0">{{ pullRequest.actions.merge }}</p>
       <div class="d-flex flex-wrap ga-2">
         <v-btn
-          v-if="pullRequest.isDraft" color="primary" variant="tonal" min-height="48" height="auto" max-width="100%" prepend-icon="$check"
+          v-if="pullRequest.isDraft" color="primary" variant="tonal" max-width="100%" prepend-icon="$check"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.ready)" @click="open('ready')"
         >
-          <span class="text-wrap">Ready for review</span>
+          <span class="text-truncate">Ready for review</span>
         </v-btn>
         <v-btn
-          v-if="pullRequest.actions?.['update-branch'] === ''" variant="tonal" min-height="48" height="auto" max-width="100%" prepend-icon="$syncAlt"
+          v-if="pullRequest.actions?.['update-branch'] === ''" variant="tonal" max-width="100%" prepend-icon="$syncAlt"
           :disabled="actionDisabled" @click="open('update-branch')"
         >
-          <span class="text-wrap">Update branch from {{ pullRequest.baseRefName }}</span>
+          <span class="text-truncate">Update branch from {{ pullRequest.baseRefName }}</span>
         </v-btn>
         <v-btn
-          v-if="!pullRequest.isDraft" color="primary" variant="flat" min-height="48" height="auto" max-width="100%" prepend-icon="$merge"
+          v-if="!pullRequest.isDraft" color="primary" variant="flat" max-width="100%" prepend-icon="$merge"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.merge)" @click="open('merge')"
         >
-          <span class="text-wrap">Merge into {{ pullRequest.baseRefName }}</span>
+          <span class="text-truncate">Merge into {{ pullRequest.baseRefName }}</span>
         </v-btn>
       </div>
       <p v-if="pullRequest.isDraft && pullRequest.actions?.ready" class="text-body-small ma-0">{{ pullRequest.actions.ready }}</p>
@@ -149,8 +149,8 @@ async function submit() {
       </v-card-text>
       <v-card-actions class="pa-4 flex-wrap">
         <v-spacer />
-        <v-btn :disabled="pending" height="48" @click="confirmation = null">Cancel</v-btn>
-        <v-btn color="primary" variant="flat" height="48" :disabled="pending || disabled || failed" :aria-busy="pending" @click="submit">
+        <v-btn :disabled="pending" @click="confirmation = null">Cancel</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="pending || disabled || failed" :aria-busy="pending" @click="submit">
           {{ pending ? 'Working…' : confirmation.operation === 'ready' ? 'Ready for review' : confirmation.operation === 'merge' ? 'Merge pull request' : 'Update branch' }}
         </v-btn>
       </v-card-actions>

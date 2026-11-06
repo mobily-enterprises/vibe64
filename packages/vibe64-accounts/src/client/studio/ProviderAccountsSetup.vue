@@ -1,5 +1,5 @@
 <template>
-  <v-defaults-provider :defaults="{ VBtn: { minHeight: 48, rounded: 'pill' } }">
+  <v-defaults-provider :defaults="{ VBtn: { rounded: 'pill' } }">
     <section class="accounts-setup">
       <!-- Embedded, the header only appears while a sign-in offers its own buttons. -->
       <header

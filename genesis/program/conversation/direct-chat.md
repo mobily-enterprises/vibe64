@@ -1598,8 +1598,9 @@ visible chat uses OpenCode; its native capability remains `goals: false`.
 The session header gives its room to session names first, then Save, which never
 leaves the header. Temporary AI, Renew session, Pin session, Pull request and
 Prepare workspace follow in that priority; when the pane is too narrow, the
-lowest-priority actions move into Session actions first. Header actions are light
-36 px icon buttons with 18 px icons, and 44 px touch targets on coarse pointers.
+lowest-priority actions move into Session actions first. Header actions are JSKIT's
+40 px icon buttons with 48 px touch targets; the name strip's room counts 42 px for
+each (`HEADER_ACTION_WIDTH`).
 Update uses the commit icon, a vertical line through a circle, distinct from the
 pull-request branch glyph.
 
@@ -1835,7 +1836,7 @@ that main chat runs on the owner's AI.
 Routing progress stays on the message bubble, without a duplicate composer banner.
 Main chat uses the routing notice component: planning, implementation, review and
 delivery-recovery notices share a compact wrapping row, with expandable details,
-32px desktop controls and 44px coarse-pointer targets. Errors and review
+small JSKIT buttons and a 44px coarse-pointer summary. Errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
 Discussion and planning complete without reporting a skipped implementation review.

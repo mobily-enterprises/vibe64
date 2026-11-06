@@ -44,7 +44,6 @@
         </v-chip>
       </div>
       <v-btn
-        class="vibe64-source-explanation__action-target"
         aria-label="Collapse explanation"
         icon="$chevronRight"
         size="small"
@@ -54,7 +53,7 @@
         @click="emit('collapse', $event)"
       />
       <v-btn
-        class="vibe64-source-explanation__action-target vibe64-source-explanation__close-button"
+        class="vibe64-source-explanation__close-button"
         :aria-busy="closing ? 'true' : undefined"
         aria-label="Close explanation"
         :disabled="closing"
@@ -156,7 +155,6 @@
       <div class="vibe64-source-explanation__recovery-actions">
         <v-btn
           v-if="busy && !closing"
-          class="vibe64-source-explanation__action-target"
           aria-label="Stop explanation"
           color="error"
           icon="$stop"
@@ -168,7 +166,6 @@
         />
         <v-btn
           v-else
-          class="vibe64-source-explanation__action-target"
           color="primary"
           :disabled="closing || !assistantAvailable"
           prepend-icon="$refresh"
@@ -203,7 +200,6 @@
           <div class="vibe64-source-explanation__followup-footer">
             <v-btn
               v-if="busy && !closing"
-              class="vibe64-source-explanation__action-target"
               aria-label="Stop explanation"
               color="error"
               icon="$stop"
@@ -214,7 +210,6 @@
               @click="emit('stop')"
             />
             <v-btn
-              class="vibe64-source-explanation__action-target"
               aria-label="Send follow-up"
               color="primary"
               :disabled="!followup.trim() || busy || closing || !assistantAvailable"
@@ -676,11 +671,6 @@ watch(threadScrollKey, (value, previous) => {
 .vibe64-source-explanation__followup-footer :deep(.v-btn) {
   block-size: 3rem;
   inline-size: 3rem;
-  min-inline-size: 3rem;
-}
-
-.vibe64-source-explanation__action-target {
-  min-block-size: 3rem;
   min-inline-size: 3rem;
 }
 

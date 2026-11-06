@@ -66,13 +66,13 @@ async function clear() {
       />
       <div class="vibe64-teacher-notes__actions">
         <v-btn
-          color="primary" variant="flat" rounded="pill" min-height="48" :loading="status.saving"
+          color="primary" variant="flat" rounded="pill" :loading="status.saving"
           :disabled="status.saving || !draft.trim()" data-test="teacher-notes-save" @click="save"
         >
           Save
         </v-btn>
         <v-btn
-          variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-cancel"
+          variant="text" rounded="pill" :disabled="status.saving" data-test="teacher-notes-cancel"
           @click="editing = false"
         >
           Cancel
@@ -87,27 +87,27 @@ async function clear() {
       <p v-if="notes?.text && updated" class="vibe64-teacher-notes__updated">{{ updated }}</p>
       <div class="vibe64-teacher-notes__actions">
         <v-btn
-          variant="tonal" rounded="pill" min-height="48" :disabled="status.loading || status.saving"
+          variant="tonal" rounded="pill" :disabled="status.loading || status.saving"
           data-test="teacher-notes-edit" @click="edit"
         >
           {{ notes?.text ? "Edit" : "Write notes" }}
         </v-btn>
         <template v-if="notes?.text">
           <v-btn
-            v-if="!confirmingClear" variant="text" rounded="pill" min-height="48" :disabled="status.saving"
+            v-if="!confirmingClear" variant="text" rounded="pill" :disabled="status.saving"
             data-test="teacher-notes-clear" @click="confirmingClear = true"
           >
             Clear
           </v-btn>
           <template v-else>
             <v-btn
-              color="error" variant="flat" rounded="pill" min-height="48" :loading="status.saving" :disabled="status.saving"
+              color="error" variant="flat" rounded="pill" :loading="status.saving" :disabled="status.saving"
               data-test="teacher-notes-clear-confirm" @click="clear"
             >
               Clear all notes
             </v-btn>
             <v-btn
-              variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-clear-cancel"
+              variant="text" rounded="pill" :disabled="status.saving" data-test="teacher-notes-clear-cancel"
               @click="confirmingClear = false"
             >
               Keep them

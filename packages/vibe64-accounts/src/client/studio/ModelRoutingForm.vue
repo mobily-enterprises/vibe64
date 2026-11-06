@@ -269,7 +269,7 @@ async function reload() {
           </div>
           <template v-if="setup === 'owner' || teamChoices || !teamEmpty">
             <div v-if="canEdit && !(setup === 'nonOwner' && teamEmpty)" class="model-routing__tools">
-              <v-btn v-if="recommendedChanges.length" variant="outlined" color="primary" size="small" min-height="36" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
+              <v-btn v-if="recommendedChanges.length" variant="outlined" color="primary" size="small" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
               <p v-else class="text-body-small" role="status">No recommended changes.</p>
             </div>
             <template v-if="setup === 'owner'">
@@ -355,7 +355,7 @@ async function reload() {
 .model-routing__personal { background: rgba(var(--v-theme-warning), .12); border-radius: 12px; padding: 10px 12px; }
 @media (max-width: 599.98px) {
   .model-routing__switch { display: flex; width: 100%; }
-  .model-routing__switch .v-btn { flex: 1 1 0; min-height: 48px; }
+  .model-routing__switch .v-btn { flex: 1 1 0; }
   .model-routing__empty .v-btn { width: 100%; }
 }
 </style>

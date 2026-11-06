@@ -39,7 +39,6 @@ const emit = defineEmits(["open"]);
 .aio-models__list div { display: flex; gap: var(--v64-space-2); min-width: 0; }
 .aio-models__list dt { color: rgb(var(--v-theme-on-surface-variant)); }
 .aio-models__list dd { margin: 0; overflow-wrap: anywhere; }
-.aio-models__open { min-height: 44px; }
 
 /* Phone */
 @media (max-width: 599.98px) {

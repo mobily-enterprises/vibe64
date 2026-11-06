@@ -347,8 +347,7 @@ async function save() {
   .database-overview__toolbar { grid-template-columns: minmax(0, 1fr) 48px; gap: 4px 8px; }
   .database-overview__title { grid-column: 1; grid-row: 1; min-height: 48px; flex-wrap: wrap; align-content: center; gap: 0 8px; }
   .database-overview__controls { grid-column: 1 / -1; grid-row: 3; min-height: 48px; flex-wrap: wrap; }
-  .database-overview__all { grid-column: 1 / -1; grid-row: 2; justify-self: start; min-height: 48px; }
-  .database-overview__icon-button, .database-overview__controls :deep(.database-erd__icon-button) { width: 48px; height: 48px; }
+  .database-overview__all { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
   .database-overview__detail { grid-template-columns: 140px minmax(0, 1fr); }
   .database-overview__tables { padding: 6px; }
 }

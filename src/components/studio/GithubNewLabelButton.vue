@@ -81,7 +81,7 @@ async function submit() {
 </script>
 
 <template>
-  <v-btn prepend-icon="$add" color="primary" variant="text" height="48" :disabled="disabled || pending" @click="open = true">New label</v-btn>
+  <v-btn prepend-icon="$add" color="primary" variant="text" :disabled="disabled || pending" @click="open = true">New label</v-btn>
   <v-dialog v-model="open" max-width="30rem" scrollable :persistent="pending" aria-label="New label">
     <v-card tag="form" rounded="xl" @submit.prevent.stop="submit">
       <div class="d-flex align-center justify-space-between ga-3 pa-5 pb-2">
@@ -124,8 +124,8 @@ async function submit() {
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
-        <v-btn variant="text" height="48" :disabled="pending" @click="open = false">Cancel</v-btn>
-        <v-btn type="submit" color="primary" variant="flat" rounded="pill" height="48" :disabled="!canSubmit" :aria-busy="pending">
+        <v-btn variant="text" :disabled="pending" @click="open = false">Cancel</v-btn>
+        <v-btn type="submit" color="primary" variant="flat" rounded="pill" :disabled="!canSubmit" :aria-busy="pending">
           {{ pending ? 'Creating…' : 'Create label' }}
         </v-btn>
       </v-card-actions>

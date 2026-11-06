@@ -72,7 +72,7 @@ function setEnv(reference, value, secret) {
   <section aria-label="Application payments" class="mt-6">
     <h3 class="text-title-medium">Application payments</h3>
     <p class="mb-4">Define this project's recurring plans. Your application owns checkout, subscriptions, feature access and credits. Saving these settings does not charge anyone or change provider products.</p>
-    <v-btn v-for="environment in ['sandbox', 'live'].filter(value => !payments?.environments?.[value])" :key="environment" height="48" variant="outlined" class="mr-2 mb-4" :disabled="disabled" @click="addEnvironment(environment)">Configure {{ environment }} payments</v-btn>
+    <v-btn v-for="environment in ['sandbox', 'live'].filter(value => !payments?.environments?.[value])" :key="environment" variant="outlined" class="mr-2 mb-4" :disabled="disabled" @click="addEnvironment(environment)">Configure {{ environment }} payments</v-btn>
     <template v-if="payments">
       <p v-if="validation.length" role="status">Complete the required payment fields before saving. {{ validation[0].message }}</p>
       <section v-for="(item, environment) in payments.environments" :key="environment" :aria-label="`${environment} payment account`" class="mb-6">
@@ -82,13 +82,13 @@ function setEnv(reference, value, secret) {
         <v-select v-if="modelValue.integrations[item.integrationId]?.provider === 'paddle'" :model-value="item.taxCategory" :items="['digital-goods', 'ebooks', 'implementation-services', 'professional-services', 'saas', 'software-programming-services', 'standard', 'training-services', 'website-hosting']" label="Paddle product tax category" persistent-hint hint="Choose the category that accurately describes what your app sells." :error-messages="errors(`environments/${environment}/taxCategory`)" :disabled="disabled" @update:model-value="binding(environment, 'taxCategory', $event)" />
         <template v-if="modelValue.integrations[item.integrationId]?.provider === 'paddle'">
           <v-text-field :model-value="item.publicClientTokenRef" label="Paddle public client token Env reference" placeholder="env:PADDLE_CLIENT_TOKEN" persistent-hint hint="Public browser token for Paddle.js. Keep the private API key in the connection's separate secret Env variable." :disabled="disabled" :error-messages="errors(`environments/${environment}/publicClientTokenRef`)" @update:model-value="binding(environment, 'publicClientTokenRef', $event)" />
-          <v-btn height="48" variant="text" :disabled="disabled || !/^env:[A-Z_][A-Z0-9_]*$/.test(item.publicClientTokenRef || '')" @click="setEnv(item.publicClientTokenRef, undefined, false)">Set public client token in Env</v-btn>
+          <v-btn variant="text" :disabled="disabled || !/^env:[A-Z_][A-Z0-9_]*$/.test(item.publicClientTokenRef || '')" @click="setEnv(item.publicClientTokenRef, undefined, false)">Set public client token in Env</v-btn>
         </template>
         <v-text-field :model-value="item.webhookSecretRef" label="Webhook signing secret Env reference" placeholder="env:PAYMENT_WEBHOOK_SECRET" :disabled="disabled" :error-messages="errors(`environments/${environment}/webhookSecretRef`)" @update:model-value="binding(environment, 'webhookSecretRef', $event)" />
-        <v-btn height="48" variant="text" :disabled="disabled || !/^env:[A-Z_][A-Z0-9_]*$/.test(item.webhookSecretRef || '')" @click="setEnv(item.webhookSecretRef, undefined, true)">Set signing secret in Env</v-btn>
+        <v-btn variant="text" :disabled="disabled || !/^env:[A-Z_][A-Z0-9_]*$/.test(item.webhookSecretRef || '')" @click="setEnv(item.webhookSecretRef, undefined, true)">Set signing secret in Env</v-btn>
         <v-text-field :model-value="webhookUrl(item.integrationId)" label="Suggested webhook URL" readonly persistent-hint hint="Your app must implement this route. Create the provider destination with this exact URL; the editor is not the receiver." />
         <v-text-field :model-value="item.returnUrlRef" label="Checkout / return URL Env reference" :disabled="disabled" :error-messages="errors(`environments/${environment}/returnUrlRef`)" @update:model-value="binding(environment, 'returnUrlRef', $event)" />
-        <v-btn height="48" variant="text" :disabled="disabled || !returnUrl" @click="setEnv(item.returnUrlRef, returnUrl, false)">Set suggested application URL in Env</v-btn>
+        <v-btn variant="text" :disabled="disabled || !returnUrl" @click="setEnv(item.returnUrlRef, returnUrl, false)">Set suggested application URL in Env</v-btn>
         <p v-if="!returnUrl">No application address is available. Enter the actual application's HTTPS billing URL in Env; do not use the editor address.</p>
         <v-expansion-panels class="mt-4">
           <v-expansion-panel title="Set up payment events and checkout">
@@ -105,14 +105,14 @@ function setEnv(reference, value, secret) {
         <h4 class="text-title-small mb-3">Provider catalogue</h4>
         <p>Save the configuration, then ask your application to compare its plans with the provider. Applying the catalogue creates or updates provider products and prices. It does not charge customers.</p>
         <template v-if="canPrepare">
-          <v-btn height="48" variant="tonal" class="my-3" :disabled="managementDisabled" @click="emit('prepare')">Prepare payment implementation request</v-btn>
+          <v-btn variant="tonal" class="my-3" :disabled="managementDisabled" @click="emit('prepare')">Prepare payment implementation request</v-btn>
           <p>Adds the saved payment requirements to your chat draft for review before sending. Save any changes first.</p>
         </template>
         <template v-for="(item, environment) in payments.environments" :key="environment">
-          <v-btn v-if="item.integrationId === integrationId" height="48" variant="outlined" class="mr-2 my-3" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-preview', paymentEnvironment: environment })">Preview {{ environment }} catalogue</v-btn>
+          <v-btn v-if="item.integrationId === integrationId" variant="outlined" class="mr-2 my-3" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-preview', paymentEnvironment: environment })">Preview {{ environment }} catalogue</v-btn>
         </template>
         <template v-for="(item, environment) in payments.environments" :key="`readiness-${environment}`">
-          <v-btn v-if="item.integrationId === integrationId" height="48" variant="outlined" class="mr-2 my-3" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-readiness', paymentEnvironment: environment })">Check {{ environment }} readiness</v-btn>
+          <v-btn v-if="item.integrationId === integrationId" variant="outlined" class="mr-2 my-3" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-readiness', paymentEnvironment: environment })">Check {{ environment }} readiness</v-btn>
         </template>
         <section v-if="management?.status === 'payments-readiness'" aria-label="Payment readiness">
           <p>Account {{ management.providerAccountId }} · {{ management.paymentEnvironment }}</p>
@@ -132,7 +132,7 @@ function setEnv(reference, value, secret) {
             <p role="alert">An earlier provider request is unresolved. Check the matching provider account before continuing.</p>
             <p>{{ management.review.pendingOperation.action }} · {{ management.review.pendingOperation.planId }} · {{ management.review.pendingOperation.name || `${management.review.pendingOperation.currency} ${management.review.pendingOperation.amount} minor units / ${management.review.pendingOperation.interval}` }}</p>
             <v-text-field v-model="recoveryProviderId" label="Existing provider object ID" hint="Copy the matching product or price ID from the provider dashboard. The application verifies it before saving the mapping." persistent-hint :disabled="managementDisabled" />
-            <v-btn height="48" variant="tonal" :disabled="managementDisabled || !/^[A-Za-z0-9_-]{1,200}$/.test(recoveryProviderId)" @click="recoveryOpen = true">Review recovery</v-btn>
+            <v-btn variant="tonal" :disabled="managementDisabled || !/^[A-Za-z0-9_-]{1,200}$/.test(recoveryProviderId)" @click="recoveryOpen = true">Review recovery</v-btn>
             <p>If no matching object exists, use the application's authorized administrator tools to investigate. This screen cannot prove that a timed-out write never completed.</p>
           </section>
           <ul v-if="management.review.drift.length"><li v-for="item in management.review.drift" :key="item.planId + item.reason">{{ item.planId }}: {{ item.reason }}</li></ul>
@@ -144,7 +144,7 @@ function setEnv(reference, value, secret) {
           </ul>
           <p v-else>No product or price changes are needed.</p>
           <p v-if="management.review.removed.length">Plans absent from this configuration: {{ management.review.removed.join(', ') }}. Their provider records and subscriptions will remain; resolve existing subscribers in the application.</p>
-          <v-btn height="48" color="primary" class="mt-3" :disabled="managementDisabled || !management.review.changes.length || management.review.pending || Boolean(management.review.drift.length)" @click="publishOpen = true">Review changes</v-btn>
+          <v-btn color="primary" class="mt-3" :disabled="managementDisabled || !management.review.changes.length || management.review.pending || Boolean(management.review.drift.length)" @click="publishOpen = true">Review changes</v-btn>
         </template>
       </section>
       <v-sheet tag="section" aria-label="Billing history" class="mb-6">
@@ -152,7 +152,7 @@ function setEnv(reference, value, secret) {
         <v-text-field v-model="historySubject" label="Application billing account ID" :disabled="managementDisabled" :error-messages="historySubjectError" />
         <v-select v-model="historyCollection" label="Billing records" :items="[{ title: 'Invoices and transactions', value: 'transactions' }, { title: 'Subscriptions', value: 'subscriptions' }]" :disabled="managementDisabled" />
         <template v-for="(item, environment) in payments.environments" :key="`history-${environment}`">
-          <v-btn v-if="item.integrationId === integrationId" height="48" variant="tonal" class="mr-2 mb-4" :disabled="managementDisabled || !historySubject.trim() || Boolean(historySubjectError)" @click="emit('manage', { operation: 'payments-history', paymentEnvironment: environment, subjectId: historySubject, collection: historyCollection })">View {{ environment }} billing history</v-btn>
+          <v-btn v-if="item.integrationId === integrationId" variant="tonal" class="mr-2 mb-4" :disabled="managementDisabled || !historySubject.trim() || Boolean(historySubjectError)" @click="emit('manage', { operation: 'payments-history', paymentEnvironment: environment, subjectId: historySubject, collection: historyCollection })">View {{ environment }} billing history</v-btn>
         </template>
         <v-sheet min-height="240" aria-live="polite" :aria-busy="managementLoading">
           <v-skeleton-loader v-if="managementLoading" type="list-item-three-line@3" aria-label="Loading payment information" />
@@ -169,7 +169,7 @@ function setEnv(reference, value, secret) {
                 <p v-if="item.kind !== 'subscription'" class="text-body-small mt-1">{{ item.currency }} · Total: {{ item.totalMinor ?? 'Unknown' }} · Paid: {{ item.paidMinor ?? 'Unknown' }} (smallest currency units)</p>
               </v-list-item>
             </v-list>
-            <v-btn v-if="history.nextCursor" height="48" variant="text" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-history', paymentEnvironment: history.paymentEnvironment, subjectId: historySubject, collection: historyCollection, after: history.nextCursor })">Next billing page</v-btn>
+            <v-btn v-if="history.nextCursor" variant="text" :disabled="managementDisabled" @click="emit('manage', { operation: 'payments-history', paymentEnvironment: history.paymentEnvironment, subjectId: historySubject, collection: historyCollection, after: history.nextCursor })">Next billing page</v-btn>
           </template>
           <p v-else class="text-body-medium">Select a billing account and load its records. Viewing history does not change subscriptions or charge customers.</p>
         </v-sheet>
@@ -177,13 +177,13 @@ function setEnv(reference, value, secret) {
       <v-dialog v-model="recoveryOpen" max-width="560">
         <v-card title="Recover provider mapping?">
           <v-card-text>Account {{ management?.providerAccountId }} · {{ management?.paymentEnvironment }}. Verify and attach {{ recoveryProviderId }} to the pending {{ management?.review?.pendingOperation?.action }} for {{ management?.review?.pendingOperation?.planId }}. This updates the app's mapping and does not create a provider object.</v-card-text>
-          <v-card-actions><v-btn height="48" @click="recoveryOpen = false">Cancel</v-btn><v-btn height="48" :disabled="managementDisabled" @click="recoverCatalogue">Recover mapping</v-btn></v-card-actions>
+          <v-card-actions><v-btn @click="recoveryOpen = false">Cancel</v-btn><v-btn :disabled="managementDisabled" @click="recoverCatalogue">Recover mapping</v-btn></v-card-actions>
         </v-card>
       </v-dialog>
       <v-dialog v-model="publishOpen" max-width="560">
         <v-card title="Apply payment catalogue?">
           <v-card-text>Apply the listed changes to account {{ management?.providerAccountId }} in {{ management?.paymentEnvironment }}. Existing provider prices are retained. An interrupted request may have completed remotely; inspect its result before retrying.</v-card-text>
-          <v-card-actions><v-btn height="48" @click="publishOpen = false">Cancel</v-btn><v-btn height="48" color="primary" :disabled="managementDisabled" @click="publishCatalogue">Apply catalogue</v-btn></v-card-actions>
+          <v-card-actions><v-btn @click="publishOpen = false">Cancel</v-btn><v-btn color="primary" :disabled="managementDisabled" @click="publishCatalogue">Apply catalogue</v-btn></v-card-actions>
         </v-card>
       </v-dialog>
       <h4 class="text-title-small mb-3">Recurring plans</h4>
@@ -200,7 +200,7 @@ function setEnv(reference, value, secret) {
         <v-text-field :model-value="item.renewalCredits" label="Credits per paid period" type="number" min="0" step="1" persistent-hint hint="Zero means no usage credits. Cancellation does not claw back credits before their expiry." :disabled="disabled" :error-messages="errors(`plans/${id}/renewalCredits`)" @update:model-value="plan(id, 'renewalCredits', $event === '' ? null : Number($event))" />
       </section>
       <v-text-field v-model="planId" label="New stable plan ID" placeholder="pro" :error-messages="planIdError" :disabled="disabled" persistent-hint hint="Changing an existing logical ID would create a different plan. Keep IDs stable for existing subscribers." />
-      <v-btn height="48" variant="outlined" :disabled="disabled || !planId || Boolean(planIdError)" @click="addPlan">Add plan</v-btn>
+      <v-btn variant="outlined" :disabled="disabled || !planId || Boolean(planIdError)" @click="addPlan">Add plan</v-btn>
       <p class="mt-4">Save using this page's Save configuration action. The app still needs its payment implementation and a reviewed catalogue applied to the provider before checkout can use these plans.</p>
     </template>
   </section>

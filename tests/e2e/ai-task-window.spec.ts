@@ -50,8 +50,21 @@ async function expectTouchTargets(page: Page) {
     await Promise.allSettled((root.closest(".v-overlay__content")?.getAnimations() ?? []).map(animation => animation.finished));
     const controls = [...root.querySelectorAll("button, summary, [role='tab']")] as HTMLElement[];
     return controls.filter(control => control.getClientRects().length > 0).map((control) => {
+      // A control's own box, or the larger touch target JSKIT's buttons draw around it (their ::before). A button
+      // that follows another one stops its target at its own edge on that side, where the earlier button's target
+      // reaches, so its width counts the reach on its other side on both (tests/e2e/support/touch-target.ts).
       const box = control.getBoundingClientRect();
-      return { name: control.getAttribute("aria-label") || control.textContent?.trim(), height: Math.round(box.height), width: Math.round(box.width) };
+      const name = control.getAttribute("aria-label") || control.textContent?.trim();
+      const target = getComputedStyle(control, "::before");
+      if (target.content === "none" || target.content === "normal" || target.position !== "absolute") {
+        return { name, height: Math.round(box.height), width: Math.round(box.width) };
+      }
+      const reach = Math.max(0, -parseFloat(target.left) || 0, -parseFloat(target.right) || 0);
+      return {
+        name,
+        height: Math.round(Math.max(box.height, parseFloat(target.height) || 0)),
+        width: Math.round(Math.max(box.width, parseFloat(target.width) || 0, box.width + 2 * reach))
+      };
     }).filter(box => box.height < 48 || box.width < 48);
   });
   expect(small).toEqual([]);
@@ -517,7 +530,7 @@ test.describe("what the rest of the page does", () => {
     const review = page.getByRole("dialog", { name: "Apply resolved Update", exact: true });
     await expect(review).toBeVisible();
     shared.server.aiTasks.update = async () => ({ ok: true });
-    await review.getByRole("button", { name: "I've resolved these conflicts — apply Update", exact: true }).click();
+    await review.getByRole("button", { name: "Conflicts resolved — apply Update", exact: true }).click();
     await expectPhase(page, "done");
     expect(shared.server.aiTasks.updates.at(-1)?.reviewedConflictId).toBe("review-1");
   });

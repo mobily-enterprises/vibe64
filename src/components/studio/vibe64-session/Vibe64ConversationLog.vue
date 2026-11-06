@@ -12,7 +12,7 @@
     <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar-tools>
       <div ref="voiceToolsTarget" class="vibe64-main-conversation__voice-tools" :class="{ 'vibe64-main-conversation__voice-tools--opening': holdingVoice }">
         <v-btn
-          v-if="!voiceSession || holdingVoice" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? '$mic' : '$micOff'" variant="text" color="primary" width="40" min-width="40" min-height="44"
+          v-if="!voiceSession || holdingVoice" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? '$mic' : '$micOff'" variant="text" color="primary" width="40" min-width="40"
           :aria-label="holdingVoice ? 'Release to send' : 'Talk'" title="click or long press to talk"
           :aria-pressed="holdingVoice" :disabled="!voiceBinding.available"
           @pointerdown="voiceGesture.pointerDown" @pointerup="voiceGesture.pointerUp"
@@ -24,7 +24,7 @@
           <span class="vibe64-main-conversation__voice-disc"><v-icon size="20" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? '$mic' : '$micOff'" /></span>
         </v-btn>
         <v-btn
-          v-if="!voiceSession || holdingVoice" :icon="readAloud ? '$volumeHigh' : '$volumeOff'" variant="text" color="primary" width="40" min-width="40" min-height="44"
+          v-if="!voiceSession || holdingVoice" :icon="readAloud ? '$volumeHigh' : '$volumeOff'" variant="text" color="primary" width="40" min-width="40"
           :aria-pressed="readAloud" :aria-label="readAloud ? 'Turn project agent read-aloud off' : 'Read project agent answers aloud'"
           :title="readAloud ? 'Spoken replies on' : 'Spoken replies off'" :disabled="!voiceBinding.available || readAloudChangePending"
           @click="toggleReadAloud"
@@ -73,7 +73,6 @@
         <v-card-actions>
           <v-btn
             :disabled="turn.pending || !integrationRequestsEnabled"
-            min-height="48"
             @click="emit('open-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup?.requestId, integrationId: message.integrationRequest.integrationId })"
           >
             Configure
@@ -82,7 +81,6 @@
             v-if="turn.integrationSetup?.outcome === 'pending' && integrationConnections[turn.integrationSetup.requestId]?.status !== 'configuration-only'"
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
-            min-height="48"
             @click="emit('integration-action', { action: integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'check' : 'connect', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             {{ integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'Check connection' : 'Connect' }}
@@ -91,7 +89,6 @@
             v-if="turn.integrationSetup?.outcome === 'completed' && turn.integrationSetup.continuation?.status !== 'accepted'"
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
-            min-height="48"
             @click="emit('integration-action', { action: 'resume', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             Check continuation
@@ -100,7 +97,6 @@
             v-if="turn.integrationSetup?.outcome === 'pending'"
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
-            min-height="48"
             @click="emit('integration-action', { action: 'skip', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             Skip
@@ -113,7 +109,6 @@
             <a :href="integrationConnections[turn.integrationSetup.requestId].authorizationUrl" target="_blank" rel="noopener noreferrer">Continue with provider</a>
             <v-btn
               :disabled="!integrationRequestsEnabled || Boolean(integrationActionPending)"
-              min-height="48"
               @click="emit('integration-action', { action: 'cancel', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
             >
               Cancel connection

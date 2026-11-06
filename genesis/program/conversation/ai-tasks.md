@@ -165,8 +165,9 @@ Screen fit is one rule for every task. Under 600 px wide, or under 560 px tall a
 width, the window fills the screen and honours the safe area; the short-height case
 folds the header and problem into two rows. From 600 px it is a dialog of
 `min(92vw, 46rem)` by `88dvh`, and from 960 px `46rem` by `min(80dvh, 46rem)`. The
-height is fixed, so the window never jumps as its content changes. Touch targets are
-48 px on coarse pointers, and motion stops under reduced motion.
+height is fixed, so the window never jumps as its content changes. Its buttons are
+JSKIT's Material 3 buttons, whose touch targets are 48 px, and motion stops under
+reduced motion.
 
 The window has a header with a status line, the problem, a Progress and Chat tablist
 with arrow keys, the chosen view, and a footer present only while the person is

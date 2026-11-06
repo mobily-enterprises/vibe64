@@ -32,12 +32,10 @@
           data-vibe64-guide="save"
           :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
           :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable)"
-          height="var(--session-action-size, 36px)"
           icon
           :title="saveWorkHeaderHint"
           type="button"
           variant="text"
-          width="var(--session-action-size, 36px)"
           @click="requestSessionSaveWork"
         >
           <v-icon v-if="saveWorkRequiresUpdate" icon="$commit" />
@@ -74,12 +72,10 @@
           data-vibe64-temporary-ai-action
           data-vibe64-header-action="temporary-ai"
           :disabled="!sessionId || props.sessionSelectionArchived"
-          height="var(--session-action-size, 36px)"
           icon="$dominoMask"
           :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
           type="button"
           variant="text"
-          width="var(--session-action-size, 36px)"
           @click="openTemporaryAi"
         />
       </v-badge>
@@ -96,12 +92,10 @@
           class="studio-autopilot__header-action"
           data-vibe64-session-renew-action
           data-vibe64-header-action="renew"
-          height="var(--session-action-size, 36px)"
           icon="$autorenew"
           :title="sessionRenewalActionPresentation.reason"
           type="button"
           variant="text"
-          width="var(--session-action-size, 36px)"
           @click="requestSessionRenewal($event.currentTarget)"
         />
       </v-badge>
@@ -117,7 +111,7 @@
         v-if="headerActions.inline.includes('pull-request')"
         data-vibe64-header-action="pull-request"
         class="studio-autopilot__header-action"
-        icon="$callMerge" height="var(--session-action-size, 36px)" width="var(--session-action-size, 36px)" variant="text"
+        icon="$callMerge" variant="text"
         :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
         :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
         :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
@@ -130,12 +124,10 @@
         data-vibe64-prepare-workspace
         data-vibe64-header-action="prepare-workspace"
         :disabled="workspaceSetupRetryDisabled"
-        height="var(--session-action-size, 36px)"
         icon="$build"
         title="Prepare workspace: run all declared setup steps again"
         type="button"
         variant="text"
-        width="var(--session-action-size, 36px)"
         @click="retryWorkspaceSetup"
       />
       <v-menu
@@ -156,12 +148,10 @@
               :aria-label="sessionActionsLabel"
               class="studio-autopilot__header-action"
               data-vibe64-session-actions
-              height="var(--session-action-size, 36px)"
               icon="$moreVert"
               title="Session actions"
               type="button"
               variant="text"
-              width="var(--session-action-size, 36px)"
             />
           </v-badge>
         </template>
@@ -265,6 +255,7 @@ const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.
 const sessionHeader = ref(null);
 const headerActionRoom = ref(Infinity);
 const SESSION_NAME_MAX_WIDTH = 240; // the compact chip's max-width
+const HEADER_ACTION_WIDTH = 42; // a 40dp icon button and the 2px gap after it
 function measureHeaderActionRoom() {
   const header = sessionHeader.value;
   if (!header) return;
@@ -272,9 +263,8 @@ function measureHeaderActionRoom() {
   const names = vibe64SessionNameStripWidth(header.querySelector(".studio-ai-sessions__tabs")?.children, SESSION_NAME_MAX_WIDTH);
   const fixed = [...header.querySelectorAll(".studio-autopilot__save-work, .studio-autopilot__header-fixed")]
     .reduce((total, element) => total + element.offsetWidth + 2, 0);
-  const actionSize = (parseFloat(style.getPropertyValue("--session-action-size")) || 36) + 2;
   const room = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - names - fixed - 8;
-  headerActionRoom.value = Math.floor(room / actionSize);
+  headerActionRoom.value = Math.floor(room / HEADER_ACTION_WIDTH);
 }
 watch(sessionHeader, (header, _previous, onCleanup) => {
   if (!header || typeof ResizeObserver === "undefined") return;
@@ -445,12 +435,6 @@ watch(() => [
 .studio-autopilot__header-action :deep(.v-btn__overlay),
 .studio-autopilot__save-work :deep(.v-btn__overlay) {
   border-radius: inherit;
-}
-
-@media (pointer: coarse) {
-  .studio-autopilot__session-header {
-    --session-action-size: 44px;
-  }
 }
 
 .studio-autopilot__session-action-item {

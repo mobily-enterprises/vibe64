@@ -54,14 +54,14 @@ function date(value) {
       <v-spacer />
       <v-btn
         v-if="available" class="issues-panel__refresh"
-        prepend-icon="$refresh" variant="text" size="small" height="48"
+        prepend-icon="$refresh" variant="text" size="small"
         :disabled="resource.isFetching.value || Boolean(pending)" @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
       <v-btn
         v-if="available" class="issues-panel__new" prepend-icon="$add" color="primary" variant="tonal"
-        rounded="pill" size="small" height="48" @click="openEditor()"
+        rounded="pill" size="small" @click="openEditor()"
       >
         New issue
       </v-btn>
@@ -77,9 +77,9 @@ function date(value) {
             :model-value="state" mandatory divided rounded="pill" color="primary" variant="outlined"
             aria-label="Issue state" @update:model-value="filter($event)"
           >
-            <v-btn value="open" height="48">Open</v-btn>
-            <v-btn value="closed" height="48">Closed</v-btn>
-            <v-btn value="all" height="48">All</v-btn>
+            <v-btn value="open">Open</v-btn>
+            <v-btn value="closed">Closed</v-btn>
+            <v-btn value="all">All</v-btn>
           </v-btn-toggle>
           <v-text-field
             v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Number, text, label:new or label:&quot;some label&quot;"
@@ -94,7 +94,7 @@ function date(value) {
           <v-skeleton-loader v-if="labelCatalog.isInitialLoading.value" class="issues-panel__label-filter" type="list-item" height="80" aria-label="Loading label filters" aria-busy="true" />
           <v-alert v-else-if="labelCatalog.loadError.value" class="issues-panel__label-filter" type="error" variant="tonal" rounded="lg">
             {{ labelCatalog.loadError.value }}
-            <template #append><v-btn variant="text" height="48" @click="labelCatalog.reload()">Retry labels</v-btn></template>
+            <template #append><v-btn variant="text" @click="labelCatalog.reload()">Retry labels</v-btn></template>
           </v-alert>
           <v-autocomplete
             v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []" class="issues-panel__label-filter"
@@ -122,7 +122,7 @@ function date(value) {
       </v-sheet>
       <v-alert v-else-if="resource.loadError.value && (!number || !issue)" type="error" variant="tonal" rounded="lg">
         {{ resource.loadError.value }}
-        <template #append><v-btn variant="text" height="48" :disabled="resource.isFetching.value" @click="resource.reload()">Retry</v-btn></template>
+        <template #append><v-btn variant="text" :disabled="resource.isFetching.value" @click="resource.reload()">Retry</v-btn></template>
       </v-alert>
 
       <template v-else-if="!number">
@@ -140,8 +140,8 @@ function date(value) {
             @update:model-value="selectedNumbers = $event ? [...visibleNumbers] : []"
           />
           <span class="text-label-large" role="status">{{ selectedNumbers.length }} selected</span>
-          <v-btn variant="tonal" height="48" :disabled="!selectedNumbers.length" @click="bulkOpen = true">Bulk edit labels</v-btn>
-          <v-btn v-if="selectedNumbers.length" variant="text" height="48" @click="selectedNumbers = []">Clear selection</v-btn>
+          <v-btn variant="tonal" :disabled="!selectedNumbers.length" @click="bulkOpen = true">Bulk edit labels</v-btn>
+          <v-btn v-if="selectedNumbers.length" variant="text" @click="selectedNumbers = []">Clear selection</v-btn>
         </div>
         <v-list v-if="list.data.value?.issues?.length" class="pa-0" density="compact" lines="two" rounded="xl" border slim aria-label="GitHub issues">
           <template v-for="(item, index) in list.data.value.issues" :key="item.number">
@@ -187,10 +187,10 @@ function date(value) {
           <p class="text-body-medium text-medium-emphasis ma-0">Try a different filter or search.</p>
         </v-sheet>
         <div class="d-flex justify-space-between ga-2">
-          <v-btn v-if="$route.query.issueCursor" variant="text" height="48" @click="navigate({ issueCursor: undefined })">First page</v-btn>
+          <v-btn v-if="$route.query.issueCursor" variant="text" @click="navigate({ issueCursor: undefined })">First page</v-btn>
           <v-spacer />
           <v-btn
-            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" append-icon="$arrowForward"
+            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" append-icon="$arrowForward"
             @click="navigate({ issueCursor: list.data.value.pageInfo.endCursor })"
           >
             Next page
@@ -201,7 +201,7 @@ function date(value) {
       <template v-else-if="issue">
         <v-alert v-if="detail.loadError.value" type="error" variant="tonal" rounded="lg">
           {{ detail.loadError.value }}
-          <template #append><v-btn variant="text" height="48" :disabled="detail.isFetching.value" @click="detail.reload()">Refresh</v-btn></template>
+          <template #append><v-btn variant="text" :disabled="detail.isFetching.value" @click="detail.reload()">Refresh</v-btn></template>
         </v-alert>
         <div>
           <div class="d-flex align-center flex-wrap ga-2 mb-3">
@@ -210,8 +210,8 @@ function date(value) {
             </v-chip>
             <span class="text-label-large text-medium-emphasis">#{{ issue.number }}</span>
             <v-spacer />
-            <v-btn v-if="issue.viewerCanUpdate" prepend-icon="$edit" variant="text" height="48" @click="openEditor(issue, 'content')">Edit issue</v-btn>
-            <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" append-icon="$openInNew" variant="text" height="48">GitHub</v-btn>
+            <v-btn v-if="issue.viewerCanUpdate" prepend-icon="$edit" variant="text" @click="openEditor(issue, 'content')">Edit issue</v-btn>
+            <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" append-icon="$openInNew" variant="text">GitHub</v-btn>
           </div>
           <h2 class="text-title-large mb-2 issues-panel__title">{{ issue.title }}</h2>
           <p class="text-body-small text-medium-emphasis mb-0">{{ issue.author?.login || 'Deleted user' }} opened this on {{ date(issue.createdAt) }}</p>
@@ -221,7 +221,7 @@ function date(value) {
               tag="button" type="button" :aria-label="`Filter by label ${label.name}`" @click="filterLabel(label.name)"
             />
             <span v-if="!issue.labels?.nodes?.length" class="text-body-small text-medium-emphasis">No labels</span>
-            <v-btn v-if="issue.canEditLabels" prepend-icon="$label" variant="text" height="48" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
+            <v-btn v-if="issue.canEditLabels" prepend-icon="$label" variant="text" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
           </div>
         </div>
 
@@ -232,9 +232,9 @@ function date(value) {
         <div class="d-flex align-center justify-space-between flex-wrap ga-2 px-2">
           <h3 class="text-title-medium">Comments <span class="text-medium-emphasis">{{ commentCount }}</span></h3>
           <div class="d-flex flex-wrap ga-2">
-            <v-btn v-if="commentCursor" height="48" variant="text" @click="commentCursor = ''">Latest comments</v-btn>
+            <v-btn v-if="commentCursor" variant="text" @click="commentCursor = ''">Latest comments</v-btn>
             <v-btn
-              v-if="issue.comments.pageInfo.hasPreviousPage" height="48" variant="text"
+              v-if="issue.comments.pageInfo.hasPreviousPage" variant="text"
               @click="commentCursor = issue.comments.pageInfo.startCursor"
             >
               Older comments
@@ -258,7 +258,7 @@ function date(value) {
               <span v-if="comment.delivery === 'sending'" class="text-body-small text-medium-emphasis">Posting…</span>
               <template v-else>
                 <span class="text-body-small text-error">{{ comment.error }}</span>
-                <v-btn variant="text" height="48" :disabled="Boolean(pending)" @click="retryComment(comment.id)">Retry</v-btn>
+                <v-btn variant="text" :disabled="Boolean(pending)" @click="retryComment(comment.id)">Retry</v-btn>
               </template>
             </div>
           </div>
@@ -274,14 +274,14 @@ function date(value) {
           />
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">
             <v-btn
-              variant="tonal" height="48" :prepend-icon="issue.state === 'OPEN' ? '$check' : '$restartAlt'"
+              variant="tonal" :prepend-icon="issue.state === 'OPEN' ? '$check' : '$restartAlt'"
               :disabled="!canChangeState || Boolean(pending)" :title="canChangeState ? '' : 'Your GitHub account cannot change this issue’s state.'"
               @click="mutate('state')"
             >
               {{ pending === 'state' ? 'Updating…' : issue.state === 'OPEN' ? 'Close issue' : 'Reopen issue' }}
             </v-btn>
             <v-btn
-              type="submit" color="primary" variant="flat" rounded="pill" height="48"
+              type="submit" color="primary" variant="flat" rounded="pill"
               :disabled="!draft.trim() || draft.length > GITHUB_BODY_MAX_LENGTH || Boolean(pending)"
             >
               {{ pending === 'comment' ? 'Posting…' : 'Comment' }}

@@ -261,11 +261,6 @@ function focusSend() {
   width: 100%;
 }
 
-.ai-task-chat__composer-actions :deep(.v-btn) {
-  min-height: var(--ai-task-target);
-  min-width: var(--ai-task-target);
-}
-
 .ai-task-chat__feedback {
   flex: 0 0 auto;
   max-height: min(12dvh, 6rem);

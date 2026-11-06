@@ -64,7 +64,7 @@ watch(() => learning.state.modeRead, ready => { if (ready) void resolve(); }, { 
     <section class="vibe64-app-resolver">
       <StudioErrorNotice v-if="error" title="Project could not open" :error="error" compact>
         <template #actions>
-          <v-btn color="primary" variant="flat" min-height="48" @click="resolve">Try again</v-btn>
+          <v-btn color="primary" variant="flat" @click="resolve">Try again</v-btn>
         </template>
       </StudioErrorNotice>
       <v-skeleton-loader v-else type="article" aria-label="Opening your project" />

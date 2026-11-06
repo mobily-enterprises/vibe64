@@ -93,13 +93,13 @@
             </dl>
             <v-btn
               v-if="repositoryWorkStateProblem(sessionItem) && sessionItem.sessionId === selectedSessionId && showRepositoryProblem"
-              variant="text" height="48" prepend-icon="$error"
+              variant="text" prepend-icon="$error"
               @click.stop="showProblemNotice(sessionItem)"
             >
               Show {{ repositoryWorkStateProblem(sessionItem).operation === "update" ? "Update" : "Save" }} notice
             </v-btn>
             <v-btn
-              v-if="toolbar.sessionsApiPath" variant="text" height="48" prepend-icon="$edit"
+              v-if="toolbar.sessionsApiPath" variant="text" prepend-icon="$edit"
               :disabled="sessionItem.archiving || selectionArchived" @click.stop="renameSession(sessionItem)"
             >
               Rename session

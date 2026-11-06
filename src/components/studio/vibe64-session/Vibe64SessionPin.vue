@@ -64,8 +64,6 @@ async function toggle() {
     :aria-busy="pending"
     :disabled="pending || anotherPinned"
     variant="text"
-    height="var(--session-action-size, 36px)"
-    width="var(--session-action-size, 36px)"
     @click="toggle"
   />
 </template>

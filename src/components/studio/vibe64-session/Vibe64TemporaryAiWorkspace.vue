@@ -207,8 +207,8 @@
           </v-card-text>
           <v-card-actions class="pa-6 pt-2">
             <v-spacer />
-            <v-btn height="48" variant="text" :disabled="renamePending" @click="renamingTaskId = ''">Cancel</v-btn>
-            <v-btn type="submit" height="48" color="primary" variant="flat" rounded="pill" :loading="renamePending">Rename</v-btn>
+            <v-btn variant="text" :disabled="renamePending" @click="renamingTaskId = ''">Cancel</v-btn>
+            <v-btn type="submit" color="primary" variant="flat" rounded="pill" :loading="renamePending">Rename</v-btn>
           </v-card-actions>
         </form>
       </v-card>

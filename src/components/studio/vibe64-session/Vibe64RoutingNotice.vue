@@ -90,7 +90,6 @@ details[open] {
 }
 
 .vibe64-routing-notice__actions :deep(.v-btn) {
-  min-height: 32px;
   padding-inline: 8px;
 }
 
@@ -101,8 +100,7 @@ summary {
   overflow-wrap: anywhere;
 }
 @media (pointer: coarse) {
-  summary,
-  .vibe64-routing-notice__actions :deep(.v-btn) {
+  summary {
     min-height: 44px;
   }
 }

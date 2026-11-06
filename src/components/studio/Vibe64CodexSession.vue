@@ -286,12 +286,6 @@ defineExpose({
   min-width: 2.5rem;
 }
 
-@media (pointer: coarse) {
-  .vibe64-codex-session__attachment-action {
-    min-height: 3rem;
-    min-width: 3rem;
-  }
-}
 
 .vibe64-codex-session__start-action {
   min-inline-size: 10rem;

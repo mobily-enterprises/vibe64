@@ -16,11 +16,11 @@
       <v-card-actions class="flex-wrap">
         <v-btn @click="resolvedUpdateReview = null">Cancel</v-btn>
         <v-btn
-          color="primary" variant="flat" height="auto" min-height="48" style="max-width: 100%"
+          color="primary" variant="flat"
           :disabled="updateWorkDisabled || sourceOperationsSuspended"
           @click="confirmResolvedUpdate"
         >
-          <span class="text-wrap">I've resolved these conflicts — apply Update</span>
+          Conflicts resolved — apply Update
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -38,8 +38,8 @@
       </v-card-text>
       <v-card-actions class="flex-wrap ga-2 px-6 pb-5">
         <v-spacer />
-        <v-btn height="48" variant="text" @click="contextFullFailure = null">Close</v-btn>
-        <v-btn color="primary" variant="flat" height="48" @click="retryContextFull">Summarise and continue</v-btn>
+        <v-btn variant="text" @click="contextFullFailure = null">Close</v-btn>
+        <v-btn color="primary" variant="flat" @click="retryContextFull">Summarise and continue</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -50,7 +50,7 @@
       <v-card-text>
         <div class="d-flex align-center justify-space-between ga-2 mb-2">
           <span>{{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</span>
-          <v-btn height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
+          <v-btn variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
         </div>
         <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
           <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
@@ -64,13 +64,12 @@
       </v-card-text>
       <v-card-actions class="flex-wrap ga-2 px-6 pb-5">
         <v-spacer />
-        <v-btn :disabled="saveWorkSending" height="48" type="button" variant="text" @click="cancelSaveWork">
+        <v-btn :disabled="saveWorkSending" type="button" variant="text" @click="cancelSaveWork">
           Cancel
         </v-btn>
         <v-btn
           v-if="githubProject && !sessionPullRequest?.number"
           color="primary"
-          height="48"
           :variant="saveWorkNeedsPullRequest ? 'flat' : 'outlined'"
           :disabled="saveWorkDisabled || !saveWorkReview"
           @click="cancelSaveWork(); createPullRequestOpen = true"
@@ -80,7 +79,6 @@
         <v-btn
           :aria-busy="saveWorkSending ? 'true' : undefined"
           color="primary"
-          min-height="48"
           :disabled="saveWorkDisabled || !saveWorkReview || saveWorkNeedsPullRequest"
           type="button"
           :variant="saveWorkNeedsPullRequest ? 'outlined' : 'flat'"

@@ -509,10 +509,6 @@ async function showMainChat() {
   margin-inline-start: auto;
 }
 
-@media (pointer: coarse) {
-  .studio-autopilot__approval-send { min-height: 3rem; }
-}
-
 .studio-autopilot__settings-access {
   grid-column: 1 / -1;
 }
@@ -569,11 +565,5 @@ async function showMainChat() {
   max-width: calc(100vw - 24px);
 }
 
-@media (pointer: coarse) {
-  .studio-autopilot__composer-actions .studio-autopilot__composer-action {
-    min-height: 3rem;
-    min-width: 3rem;
-  }
-}
 .studio-autopilot__voice-feedback { flex: 1 1 100%; min-width: 0; }
 </style>

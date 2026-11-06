@@ -15,7 +15,7 @@ const learning = useVibe64Learning();
       <v-icon icon="$school" size="18" />
       <span class="vibe64-lesson-sheet__title">Lesson</span>
       <v-btn
-        class="vibe64-lesson-sheet__hide" variant="tonal" rounded="pill" size="small" min-height="32"
+        class="vibe64-lesson-sheet__hide" variant="tonal" rounded="pill" size="small"
         prepend-icon="$collapse" data-test="lesson-sheet-hide" @click="learning.hideLesson()"
       >
         Hide lesson

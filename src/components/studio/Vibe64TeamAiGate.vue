@@ -20,7 +20,6 @@
       <v-btn
         color="primary"
         variant="flat"
-        min-height="48"
         :loading="checking"
         data-test="team-ai-gate-check"
         @click="$emit('check')"
@@ -30,7 +29,6 @@
       <v-btn
         v-if="projectsPath"
         variant="text"
-        min-height="48"
         :to="projectsPath"
         data-test="team-ai-gate-projects"
       >

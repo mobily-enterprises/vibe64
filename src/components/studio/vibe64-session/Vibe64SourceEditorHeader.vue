@@ -18,9 +18,9 @@
         {{ selectedFileName }}
       </h2>
     </div>
-    <v-btn v-if="editor.selectedPath.value && markdownRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
-    <v-btn v-else-if="editor.selectedPath.value && svgRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the SVG source' : 'Show the image'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'SVG source' : 'Image' }}</v-btn>
-    <v-btn v-else-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
+    <v-btn v-if="editor.selectedPath.value && markdownRenderable" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
+    <v-btn v-else-if="editor.selectedPath.value && svgRenderable" variant="text" :title="filePresentation === 'rendered' ? 'Show the SVG source' : 'Show the image'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'SVG source' : 'Image' }}</v-btn>
+    <v-btn v-else-if="editor.selectedPath.value" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
     <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
       <v-btn
         :disabled="!editor.dirty.value || editor.saving.value"

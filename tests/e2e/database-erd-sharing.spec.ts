@@ -18,6 +18,7 @@ import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 import { DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+import { touchTarget } from "./support/touch-target";
 
 // Real database service, shared artifact operations, event provider and sockets.
 // Only the schema/SQL data and unrelated Studio shell are controlled fixtures.
@@ -1284,7 +1285,7 @@ for (const width of [390, 768, 1600]) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (width === 390) {
         for (const button of await overviewToolbar.getByRole("button").all()) {
-          const box = (await button.boundingBox())!;
+          const box = await touchTarget(button);
           expect(box.width).toBeGreaterThanOrEqual(48);
           expect(box.height).toBeGreaterThanOrEqual(48);
         }

@@ -29,8 +29,8 @@ const open = defineModel({ type: Boolean, default: false });
                 <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
               </div>
               <div class="d-flex flex-wrap ga-1">
-                <v-btn v-if="item.status === 'paused'" variant="text" min-height="48" :aria-label="`Resume watch: ${item.question}`" @click="emit('change-watch', item, 'resume')">Resume</v-btn>
-                <v-btn variant="text" min-height="48" :aria-label="`Cancel watch: ${item.question}`" @click="emit('change-watch', item, 'cancel')">Cancel</v-btn>
+                <v-btn v-if="item.status === 'paused'" variant="text" :aria-label="`Resume watch: ${item.question}`" @click="emit('change-watch', item, 'resume')">Resume</v-btn>
+                <v-btn variant="text" :aria-label="`Cancel watch: ${item.question}`" @click="emit('change-watch', item, 'cancel')">Cancel</v-btn>
               </div>
             </li>
           </ul>

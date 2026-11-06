@@ -8,7 +8,6 @@
       <v-btn
         class="project-settings__refresh"
         :disabled="loading"
-        height="48"
         type="button"
         variant="text"
         @click="refresh"
@@ -63,7 +62,6 @@
             <v-btn
               :disabled="!engineeringChanged || engineeringSaving"
               :color="engineeringChanged ? 'primary' : undefined"
-              height="48"
               type="button"
               variant="flat"
               @click="saveEngineeringProfile"
@@ -151,7 +149,6 @@
             <v-btn
               :disabled="!databaseChanged || !databaseSaveAllowed || databaseSaving"
               :color="databaseChanged ? 'primary' : undefined"
-              height="48"
               type="button"
               variant="flat"
               @click="saveDatabase"
@@ -172,7 +169,6 @@
           </p>
           <v-btn
             class="project-settings__account-link"
-            height="48"
             type="button"
             variant="text"
             @click="openPersonalSettings"
@@ -255,7 +251,6 @@
             <v-btn
               :disabled="!collaborationChanged || !collaborationAvailable || !collaborationCanEdit || collaborationSaving"
               :color="collaborationChanged ? 'primary' : undefined"
-              height="48"
               type="button"
               variant="flat"
               @click="saveCollaboration"
@@ -284,7 +279,6 @@
             <v-btn
               :disabled="!promptHintsChanged || !promptHintsCanEdit || promptHintsSaving"
               :color="promptHintsChanged ? 'primary' : undefined"
-              height="48"
               type="button"
               variant="flat"
               @click="savePromptHints"
@@ -315,7 +309,6 @@
           <div class="project-settings__action text-body-small">
             <v-btn
               :color="requirePullRequest !== repositoryWorkflow.requirePullRequest ? 'primary' : undefined"
-              height="48"
               variant="flat"
               :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning || requirePullRequest === repositoryWorkflow.requirePullRequest"
               @click="saveRepositoryWorkflow"

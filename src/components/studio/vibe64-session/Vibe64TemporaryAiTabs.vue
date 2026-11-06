@@ -40,9 +40,7 @@
           class="vibe64-temporary-ai__tab-rename"
           data-temporary-ai-rename
           :disabled="task.state === 'closing'"
-          height="32"
           icon="$edit"
-          min-width="32"
           size="x-small"
           :title="`Rename ${task.label}`"
           type="button"
@@ -53,9 +51,7 @@
           :aria-label="`Close ${task.label}`"
           class="vibe64-temporary-ai__tab-close"
           :disabled="props.repositoryBusy || props.closingTask || props.stoppingTaskId === task.id"
-          height="32"
           icon="$close"
-          min-width="32"
           size="x-small"
           :title="`Close ${task.label}`"
           type="button"
@@ -67,9 +63,7 @@
         :disabled="!props.sessionId"
         aria-label="New temporary AI task"
         class="vibe64-temporary-ai__new-task"
-        height="32"
         icon="$add"
-        min-width="32"
         size="x-small"
         title="New temporary AI task"
         type="button"
@@ -239,10 +233,7 @@ const props = defineProps({
 }
 
 @media (pointer: coarse) {
-  .vibe64-temporary-ai__tab-select,
-  .vibe64-temporary-ai__new-task,
-  .vibe64-temporary-ai__tab-rename,
-  .vibe64-temporary-ai__tab-close {
+  .vibe64-temporary-ai__tab-select {
     min-height: 3rem !important;
     min-width: 3rem !important;
   }

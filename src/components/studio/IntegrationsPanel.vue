@@ -229,7 +229,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
   <section class="integrations-panel">
     <header class="integrations-panel__header">
       <div><h2 class="text-headline-small font-weight-bold ma-0">Integrations</h2></div>
-      <v-btn height="48" variant="text" :disabled="command.isRunning" @click="dirty ? discardOpen = true : resource.reload()">Refresh</v-btn>
+      <v-btn variant="text" :disabled="command.isRunning" @click="dirty ? discardOpen = true : resource.reload()">Refresh</v-btn>
     </header>
     <v-btn-toggle v-if="dashboardContext.productionIntegrationsApiPath" v-model="environment" mandatory aria-label="Integration environment">
       <v-btn value="development">Development</v-btn><v-btn value="production">Production</v-btn>
@@ -274,7 +274,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-list :aria-label="group.title" bg-color="transparent">
                   <v-list-item v-for="entry in group.providers" :key="entry.id" :title="entry.name" :subtitle="entry.description">
                     <template #prepend><IntegrationServiceLogo :provider="entry.id" /></template>
-                    <template #append><v-btn :aria-label="`Add ${entry.name}`" height="48" variant="text" :disabled="disabled" @click="add(entry)">Add</v-btn></template>
+                    <template #append><v-btn :aria-label="`Add ${entry.name}`" variant="text" :disabled="disabled" @click="add(entry)">Add</v-btn></template>
                   </v-list-item>
                 </v-list>
               </v-expansion-panel-text>
@@ -286,7 +286,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
           <template v-if="selected">
             <header class="integrations-panel__header mb-4">
               <div class="d-flex align-center"><IntegrationServiceLogo :provider="selected.provider" /><div><h2>{{ selected.displayName || selected.provider }}</h2><p>Application configuration</p></div></div>
-              <v-btn v-if="!production" height="48" variant="text" color="error" :disabled="disabled" @click="removeOpen = true">Remove</v-btn>
+              <v-btn v-if="!production" variant="text" color="error" :disabled="disabled" @click="removeOpen = true">Remove</v-btn>
             </header>
             <section aria-label="Application connection" class="mb-6">
               <h3 class="text-title-medium">{{ production ? 'Production connection' : 'Development connection' }}</h3>
@@ -323,8 +323,8 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                   <p v-if="connection.accountLabel">Connected account: {{ connection.accountLabel }}</p>
                   <div class="integrations-panel__actions">
                     <template v-if="connection.status === 'pending'">
-                      <v-btn height="48" :href="connection.authorizationUrl" target="_blank" rel="noopener noreferrer" :disabled="disabled">Continue with provider</v-btn>
-                      <v-btn height="48" variant="text" :disabled="disabled" @click="runSetup('cancel')">Cancel connection</v-btn>
+                      <v-btn :href="connection.authorizationUrl" target="_blank" rel="noopener noreferrer" :disabled="disabled">Continue with provider</v-btn>
+                      <v-btn variant="text" :disabled="disabled" @click="runSetup('cancel')">Cancel connection</v-btn>
                     </template>
                     <template v-else-if="['disconnected', 'connected', 'reconnect-required'].includes(connection.status)">
                       <div v-if="provider?.verificationFields?.length" class="w-100">
@@ -337,25 +337,25 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                         />
                         <p v-if="verificationIncomplete">Enter the required verification inputs before connecting.</p>
                       </div>
-                      <v-btn height="48" color="primary" :disabled="dirty || disabled || verificationIncomplete" @click="runSetup('connect')">
+                      <v-btn color="primary" :disabled="dirty || disabled || verificationIncomplete" @click="runSetup('connect')">
                         {{
                           connection.status === 'disconnected' ? 'Connect account'
                           : connection.status === 'connected' && selected.authentication.method !== 'oauth2' ? 'Verify again' : 'Reconnect'
                         }}
                       </v-btn>
                     </template>
-                    <v-btn v-if="['connected', 'reconnect-required'].includes(connection.status)" height="48" variant="text" :disabled="dirty || disabled" @click="disconnectOpen = true">Disconnect</v-btn>
+                    <v-btn v-if="['connected', 'reconnect-required'].includes(connection.status)" variant="text" :disabled="dirty || disabled" @click="disconnectOpen = true">Disconnect</v-btn>
                   </div>
                 </template>
                 <v-alert v-if="connectionError" type="error" variant="tonal" role="alert">{{ connectionError }}</v-alert>
-                <v-btn height="48" variant="text" :disabled="dirty || disabled" @click="runSetup('status')">{{ setupCommand.isRunning ? 'Checking…' : 'Check connection' }}</v-btn>
+                <v-btn variant="text" :disabled="dirty || disabled" @click="runSetup('status')">{{ setupCommand.isRunning ? 'Checking…' : 'Check connection' }}</v-btn>
               </template>
               <template
                 v-if="!production && dashboardContext.requestAssistantDraft && dashboardContext.assistantDraftAvailable &&
                   (configurationOnly || selected.accountMode === 'per-user' || (connection?.status === 'unconfigured' && !connection.setupIssue))"
               >
                 <v-btn
-                  height="48" variant="tonal" :disabled="dirty || disabled"
+                  variant="tonal" :disabled="dirty || disabled"
                   @click="dashboardContext.requestAssistantDraft(setupPrompt)"
                 >
                   {{ selected.accountMode === 'per-user' ? 'Prepare app user connection request' : 'Prepare setup request' }}
@@ -388,7 +388,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <section v-if="provider?.id === 'n8n' && !production" aria-label="n8n OAuth discovery" class="mt-4">
               <h3 class="text-title-medium">Connect with n8n OAuth</h3>
               <p>In n8n, open Settings → Instance-level MCP and enable access. Copy its full Server URL into the field above, then discover OAuth settings. This reads public metadata; it does not register a client or connect an account.</p>
-              <v-btn height="48" variant="outlined" :disabled="disabled || !selected.settings?.serverUrl" :loading="discoveryCommand.isRunning" @click="discoverN8n">Discover OAuth settings</v-btn>
+              <v-btn variant="outlined" :disabled="disabled || !selected.settings?.serverUrl" :loading="discoveryCommand.isRunning" @click="discoverN8n">Discover OAuth settings</v-btn>
               <p v-if="discoveryError" role="alert">{{ discoveryError }}</p>
               <template v-if="selected.settings?.oauthDiscovery">
                 <p>Discovered authority: {{ selected.settings.oauthDiscovery.oauth.issuer }}</p>
@@ -397,7 +397,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <template v-if="selected.authentication.method === 'oauth2' && (!registration?.clientId || registration.clientId === 'MISSING')">
                   <p>Set the Suggested callback URL below and choose permissions above. Registering creates one client at the displayed n8n authority, saves this configuration and stores its secret, callback and recovery client ID in development Env. Existing Env values will not be replaced. Your application must already serve the callback and connection setup command to continue into consent.</p>
                   <v-btn
-                    height="48" color="primary" :disabled="disabled || dashboardContext.owner === false || registrationNeedsReview || !callbackUrl || !selected.scopes.length || selected.settings.oauthDiscovery.resource !== selected.settings.serverUrl"
+                    color="primary" :disabled="disabled || dashboardContext.owner === false || registrationNeedsReview || !callbackUrl || !selected.scopes.length || selected.settings.oauthDiscovery.resource !== selected.settings.serverUrl"
                     :loading="registrationCommand.isRunning" @click="registerOAuthClient(callbackUrl)"
                   >
                     Register client and connect
@@ -406,7 +406,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <p v-if="registrationError" role="alert">{{ registrationError }}</p>
                 <template v-if="registrationNeedsReview && !registrationCommand.isRunning">
                   <p>A failed request may still have created a client. Inspect n8n and project Env before another attempt; recover saved credentials when present.</p>
-                  <v-btn height="48" variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked n8n and Env — allow another attempt</v-btn>
+                  <v-btn variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked n8n and Env — allow another attempt</v-btn>
                 </template>
               </template>
             </section>
@@ -416,7 +416,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             >
               <p>Choose permissions above (and Region for Amplitude or workspace endpoint for Hex), then set the Suggested callback URL below. Registering creates a {{ provider.name }} OAuth client and saves its ID in configuration and its secret, callback and recovery ID in development Env. Existing Env values will not be replaced. Your application must implement the callback and setup command to complete consent.</p>
               <v-btn
-                height="48" color="primary"
+                color="primary"
                 :disabled="disabled || dashboardContext.owner === false || registrationNeedsReview || registrationCommand.isRunning || !callbackUrl || !selected.scopes.length || (provider.id === 'amplitude' && !selected.scopes.includes('mcp:read'))"
                 @click="registerOAuthClient(callbackUrl)"
               >
@@ -425,7 +425,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               <p v-if="registrationError" role="alert">{{ registrationError }}</p>
               <template v-if="registrationNeedsReview && !registrationCommand.isRunning">
                 <p>An unsuccessful request may still have created a client. Inspect {{ provider.name }} and project Env before another attempt; recover saved credentials when present.</p>
-                <v-btn height="48" variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
+                <v-btn variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
               </template>
             </section>
             <p v-if="production">Production Env is managed on Deploy. Deploy changes to apply them to the running release.</p>
@@ -436,7 +436,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               <p v-if="dirty">Save configuration first, then enter the credential.</p>
               <div class="integrations-panel__credential-actions">
                 <v-btn
-                  v-if="!credentialLinked(credential.key)" height="48" variant="text" :disabled="dirty || disabled" :to="{
+                  v-if="!credentialLinked(credential.key)" variant="text" :disabled="dirty || disabled" :to="{
                     path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
                     query: { prefillKey: credential.key, prefillSecret: 'true' }
                   }"
@@ -458,7 +458,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                   :model-value="connection.callbackUrl" label="Configured callback URL" readonly persistent-hint
                   hint="Reported by your application's setup command from its current configuration."
                 />
-                <v-btn height="48" variant="text" @click="copySetupValue(connection.callbackUrl)">Copy configured callback URL</v-btn>
+                <v-btn variant="text" @click="copySetupValue(connection.callbackUrl)">Copy configured callback URL</v-btn>
                 <p v-if="callbackUrl && callbackUrl !== connection.callbackUrl">The proposed URL differs from the application's configured callback. To change it, update Env and the provider's allowed redirect URLs. You may need to reconnect the account after changing the callback. Existing Env values are preserved until you save a replacement.</p>
               </template>
               <v-text-field
@@ -467,10 +467,10 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               />
               <p v-if="!callbackUrl">An application address is not available for this suggestion. Enter the full callback URL your application serves; do not use the editor dashboard address.</p>
               <p>This suggestion does not replace an existing Env value.</p>
-              <v-btn height="48" variant="text" :disabled="!callbackUrl" @click="copySetupValue(callbackUrl)">Copy callback URL</v-btn>
+              <v-btn variant="text" :disabled="!callbackUrl" @click="copySetupValue(callbackUrl)">Copy callback URL</v-btn>
               <p v-if="setupCopyMessage" role="status">{{ setupCopyMessage }}</p>
               <v-btn
-                height="48" variant="text" :disabled="!callbackUrl" :to="{
+                variant="text" :disabled="!callbackUrl" :to="{
                   path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
                   query: { prefillKey: callbackKey, prefillValue: callbackUrl }
                 }"
@@ -490,7 +490,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                     <p>Serve this public JSON at the Client metadata URL entered above, with Content-Type application/json and no login requirement. Your application owns that endpoint.</p>
                     <v-textarea :model-value="clientMetadata.json" label="Client metadata JSON" readonly rows="10" />
                     <p v-if="clientMetadata.error" role="status">{{ clientMetadata.error }}</p>
-                    <v-btn height="48" variant="text" :disabled="!clientMetadata.json" @click="copySetupValue(clientMetadata.json, 'Client metadata')">Copy client metadata</v-btn>
+                    <v-btn variant="text" :disabled="!clientMetadata.json" @click="copySetupValue(clientMetadata.json, 'Client metadata')">Copy client metadata</v-btn>
                     <p v-if="setupCopyMessage" role="status">{{ setupCopyMessage }}</p>
                     <p>This document uses the current name, metadata URL and suggested callback. Update the hosted document when these change, and obtain any required callback approval. Copying does not put it online or grant provider access.</p>
                   </section>
@@ -498,17 +498,17 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                     <h3 class="text-title-medium">OAuth client registration</h3>
                     <p>Before entering a Client ID, register a client for this application. In your HTTP client, create a POST request to the address below, set Content-Type to application/json, and paste the request body as raw JSON.</p>
                     <v-text-field :model-value="clientRegistrationEndpoint" label="Registration endpoint" readonly />
-                    <v-btn height="48" variant="text" @click="copySetupValue(clientRegistrationEndpoint, 'Registration endpoint')">Copy registration endpoint</v-btn>
+                    <v-btn variant="text" @click="copySetupValue(clientRegistrationEndpoint, 'Registration endpoint')">Copy registration endpoint</v-btn>
                     <p>The request uses the suggested callback above and the permissions currently selected in this form. Confirm the callback is the route your application will serve. Changing the form does not update a client already registered with the provider.</p>
                     <v-textarea :model-value="clientRegistrationBody" label="Registration request body" readonly rows="10" />
                     <p v-if="!clientRegistrationBody">Enter your application's suggested callback URL above to prepare the request.</p>
-                    <v-btn height="48" variant="text" :disabled="!clientRegistrationBody" @click="copySetupValue(clientRegistrationBody, 'Registration request')">Copy registration request</v-btn>
+                    <v-btn variant="text" :disabled="!clientRegistrationBody" @click="copySetupValue(clientRegistrationBody, 'Registration request')">Copy registration request</v-btn>
                     <p v-if="setupCopyMessage" role="status">{{ setupCopyMessage }}</p>
                     <p>Send the request once. Copy client_id from a successful response into Client ID, then save configuration. Store client_secret in the project's Env using {{ registration.clientSecretRef }}. Store the exact registered callback using {{ registration.callbackUrlRef }}. The fields here contain Env references, not the secret itself.</p>
                     <p>Keep the response private. Missing credentials, an error response or a different returned redirect URI is not a completed registration. A timeout may leave a client created: investigate before retrying. Copying this request does not send it or connect an account; user consent happens later.</p>
                   </section>
-                  <v-btn class="mt-3" height="48" :to="projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env')" variant="text">Open Env</v-btn>
-                  <v-btn height="48" :href="integrationSetupUrl(provider, selected)" target="_blank" rel="noopener" variant="text">Provider setup guide</v-btn>
+                  <v-btn class="mt-3" :to="projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env')" variant="text">Open Env</v-btn>
+                  <v-btn :href="integrationSetupUrl(provider, selected)" target="_blank" rel="noopener" variant="text">Provider setup guide</v-btn>
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
@@ -519,15 +519,15 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <footer v-if="!production" class="integrations-panel__footer">
         <p>{{ dirty ? 'Unsaved configuration changes.' : 'Configuration matches integrations.json.' }} Account access is verified by your application when a user connects.</p>
         <div class="integrations-panel__actions">
-          <v-btn height="48" variant="text" :disabled="!dirty || command.isRunning" @click="discardOpen = true">Discard</v-btn>
-          <v-btn height="48" color="primary" :disabled="!dirty || disabled" @click="save">{{ command.isRunning ? 'Saving…' : 'Save configuration' }}</v-btn>
+          <v-btn variant="text" :disabled="!dirty || command.isRunning" @click="discardOpen = true">Discard</v-btn>
+          <v-btn color="primary" :disabled="!dirty || disabled" @click="save">{{ command.isRunning ? 'Saving…' : 'Save configuration' }}</v-btn>
         </div>
       </footer>
     </template>
     <v-dialog v-model="discardOpen" max-width="440">
       <v-card title="Discard configuration changes?">
         <v-card-text>Your unsaved form changes will be replaced by integrations.json.</v-card-text>
-        <v-card-actions><v-btn height="48" @click="discardOpen = false">Keep editing</v-btn><v-btn height="48" @click="discardOpen = false; discard()">Discard and reload</v-btn></v-card-actions>
+        <v-card-actions><v-btn @click="discardOpen = false">Keep editing</v-btn><v-btn @click="discardOpen = false; discard()">Discard and reload</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
     <v-dialog v-model="disconnectOpen" max-width="440">
@@ -536,14 +536,14 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
           <p>This removes {{ projectSlug }}'s saved {{ environment }} connection and pending consent attempts. Features using this connection will need it connected again.</p>
           <p class="mt-3">Provider permissions are not revoked. To revoke consent or an API key, use the provider's account settings; that may affect other apps using the same registration or key. Saved configuration and credentials in Env stay available.</p>
         </v-card-text>
-        <v-card-actions><v-btn height="48" @click="disconnectOpen = false">Keep connection</v-btn><v-btn height="48" color="error" @click="disconnectOpen = false; runSetup('disconnect')">Disconnect account</v-btn></v-card-actions>
+        <v-card-actions><v-btn @click="disconnectOpen = false">Keep connection</v-btn><v-btn color="error" @click="disconnectOpen = false; runSetup('disconnect')">Disconnect account</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
     <v-dialog v-model="removeOpen" max-width="440">
       <v-card title="Remove this integration?">
         <v-card-text v-if="configurationOnly">This removes the public settings when you save. Your application applies the change through its normal configuration or deployment lifecycle. It does not delete provider data or undo events already sent.</v-card-text>
         <v-card-text v-else>This changes the application's configuration when you save. Existing account grants and shared app registrations remain available.</v-card-text>
-        <v-card-actions><v-btn height="48" @click="removeOpen = false">Cancel</v-btn><v-btn height="48" color="error" @click="remove">Remove integration</v-btn></v-card-actions>
+        <v-card-actions><v-btn @click="removeOpen = false">Cancel</v-btn><v-btn color="error" @click="remove">Remove integration</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
   </section>

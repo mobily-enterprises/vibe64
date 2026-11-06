@@ -555,10 +555,6 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
   padding: 0 1rem 1rem;
 }
 
-.vibe64-add-ai__choice-action {
-  min-height: 3rem;
-}
-
 .vibe64-codex-setup__body {
   padding: 1.5rem;
 }

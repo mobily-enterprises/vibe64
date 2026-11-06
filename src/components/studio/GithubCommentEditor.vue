@@ -47,14 +47,14 @@ async function submit() {
       :enabled="editing" variant="outlined" rows="4" auto-grow :maxlength="GITHUB_BODY_MAX_LENGTH"
     />
     <div class="d-flex flex-wrap justify-end ga-2">
-      <v-btn variant="text" height="48" :disabled="pending" @click="editing = false">Cancel</v-btn>
-      <v-btn type="submit" color="primary" variant="flat" height="48" :disabled="!canSubmit">
+      <v-btn variant="text" :disabled="pending" @click="editing = false">Cancel</v-btn>
+      <v-btn type="submit" color="primary" variant="flat" :disabled="!canSubmit">
         {{ pending ? 'Saving…' : 'Save comment' }}
       </v-btn>
     </div>
   </form>
   <template v-else>
     <slot />
-    <v-btn v-if="comment.viewerCanUpdate" variant="text" height="48" @click="edit">Edit comment</v-btn>
+    <v-btn v-if="comment.viewerCanUpdate" variant="text" @click="edit">Edit comment</v-btn>
   </template>
 </template>

@@ -183,10 +183,4 @@ function openFirstMatch() {
   }
 }
 
-@media (pointer: coarse) {
-  .starred-menu__trigger {
-    min-height: 3rem;
-    min-width: 3rem;
-  }
-}
 </style>

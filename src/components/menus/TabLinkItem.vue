@@ -42,12 +42,6 @@ const props = defineProps({
 </template>
 
 <style scoped>
-:deep(.v-btn),
-:deep(a),
-:deep(button) {
-  min-height: 38px;
-}
-
 :deep(.v-btn--active) {
   background: var(--studio-control-active-bg, #e7e7e7);
   color: var(--studio-control-text, #202124);

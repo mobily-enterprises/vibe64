@@ -32,11 +32,9 @@
           aria-label="Close session renewal"
           data-vibe64-session-renewal-close="icon"
           :disabled="dialogBusy"
-          height="48"
           icon="$close"
           title="Close"
           variant="text"
-          width="48"
           @click="renewal.close"
         />
       </v-card-title>
@@ -62,7 +60,6 @@
             <v-btn
               :aria-busy="renewal.refreshing ? 'true' : undefined"
               :disabled="renewal.refreshing"
-              height="48"
               type="button"
               variant="text"
               @click="renewal.reload"
@@ -140,10 +137,10 @@
               <span class="text-body-medium">Your unsaved edits are still here. Choose which version to continue editing before saving or renewing.</span>
             </span>
             <div class="studio-session-renewal__inline-actions">
-              <v-btn height="48" type="button" variant="text" @click="renewal.keepLocalDraft">
+              <v-btn type="button" variant="text" @click="renewal.keepLocalDraft">
                 Keep my edits
               </v-btn>
-              <v-btn color="primary" height="48" type="button" variant="tonal" @click="renewal.acceptLatestDraft">
+              <v-btn color="primary" type="button" variant="tonal" @click="renewal.acceptLatestDraft">
                 Discard my edits and use latest
               </v-btn>
             </div>
@@ -281,7 +278,6 @@
           :aria-busy="renewal.pendingAction === 'cancel' ? 'true' : undefined"
           class="studio-session-renewal__action"
           :disabled="dialogBusy || Boolean(renewal.draftConflict)"
-          height="48"
           type="button"
           variant="text"
           @click="renewal.cancel"
@@ -294,7 +290,6 @@
           class="studio-session-renewal__action"
           data-vibe64-session-renewal-cancel="failed"
           :disabled="dialogBusy"
-          height="48"
           type="button"
           variant="text"
           @click="renewal.cancel"
@@ -306,7 +301,6 @@
           class="studio-session-renewal__action"
           data-vibe64-session-renewal-close="footer"
           :disabled="dialogBusy"
-          height="48"
           type="button"
           variant="text"
           @click="renewal.close"
@@ -322,7 +316,6 @@
           autofocus
           class="studio-session-renewal__action studio-session-renewal__action--primary"
           :disabled="renewal.refreshing"
-          height="48"
           type="button"
           variant="tonal"
           @click="renewal.reload"
@@ -336,7 +329,6 @@
           class="studio-session-renewal__action studio-session-renewal__action--primary"
           color="primary"
           :disabled="renewal.busy"
-          height="48"
           prepend-icon="$editDocument"
           type="button"
           variant="flat"
@@ -349,7 +341,6 @@
             :aria-busy="renewal.pendingAction === 'save' ? 'true' : undefined"
             class="studio-session-renewal__action"
             :disabled="!renewal.canSaveDraft"
-            height="48"
             type="button"
             variant="tonal"
             @click="renewal.saveDraft"
@@ -361,7 +352,6 @@
             class="studio-session-renewal__action studio-session-renewal__action--primary"
             color="primary"
             :disabled="!canConfirmRenewal"
-            height="48"
             prepend-icon="$autorenew"
             type="button"
             variant="flat"
@@ -377,7 +367,6 @@
           class="studio-session-renewal__action studio-session-renewal__action--primary"
           color="primary"
           :disabled="renewal.busy"
-          height="48"
           prepend-icon="$refresh"
           type="button"
           variant="flat"
@@ -391,7 +380,6 @@
             :aria-busy="renewal.pendingAction === 'retry' ? 'true' : undefined"
             class="studio-session-renewal__action"
             :disabled="renewal.busy"
-            height="48"
             prepend-icon="$refresh"
             type="button"
             variant="tonal"
@@ -405,7 +393,6 @@
             class="studio-session-renewal__action studio-session-renewal__action--primary"
             color="primary"
             :disabled="renewal.successorSelectionPending"
-            height="48"
             type="button"
             variant="flat"
             @click="renewal.openSuccessor"

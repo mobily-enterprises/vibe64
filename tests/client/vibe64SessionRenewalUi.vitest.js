@@ -240,7 +240,7 @@ describe("session renewal dialog", () => {
     expect(html).toContain("Prepare handover");
     expect(html).toContain("renewal completes even if the model cannot answer");
     expect(html).toContain("autofocus");
-    expect(html).toContain('height="48"');
+    expect(html).not.toMatch(/\s(?:min-)?height="/u);
     expect(renewalUiHarness.dialogAttrs.persistent).toBe(false);
   });
 
@@ -617,15 +617,16 @@ describe("session renewal dialog", () => {
     expect(html).toContain("Open fresh session");
   });
 
-  it("makes the advisory available by tap with compact header targets", () => {
+  it("makes the advisory available by tap from JSKIT-sized header buttons", () => {
     expect(autopilotSource).toContain(":title=\"sessionRenewalActionPresentation.reason\"");
     expect(autopilotSource).toContain('ref="sessionActionsTrigger"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal(sessionActionsTrigger?.$el)"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal($event.currentTarget)"');
     expect(autopilotSource).toContain("props.sessionRenewal.request({ returnFocusTarget });");
-    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 36px\)"[\s\S]*?icon="\$autorenew"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
-    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="var\(--session-action-size, 36px\)"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
-    expect(autopilotSource).toMatch(/@media \(pointer: coarse\) \{\s*\.studio-autopilot__session-header \{\s*--session-action-size: 44px;/u);
+    expect(autopilotSource).toContain('icon="$autorenew"');
+    expect(autopilotSource).not.toContain("--session-action-size");
+    // The name strip's room counts each header action as a 40dp icon button and its gap.
+    expect(autopilotSource).toContain("const HEADER_ACTION_WIDTH = 42;");
     expect(autopilotSource).toContain(":aria-label=\"sessionActionsLabel\"");
     expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
     expect(autopilotSource).toContain('].filter(Boolean).join(": ")');
