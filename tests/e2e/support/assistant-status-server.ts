@@ -149,7 +149,6 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     saves: [] as Record<string, unknown>[],
     setups: [] as Record<string, unknown>[],
     signIns: [] as Record<string, unknown>[],
-    incoming: [] as Record<string, unknown>[],
     overviewReads: 0,
     // The session's workspace preparation, as a session read carries it.
     workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
@@ -158,7 +157,6 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
     setup: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
     signIn: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
-    review: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, status: "repair-review", diff: { content: "+both sides kept" } }),
     onboarding: async (): Promise<Record<string, unknown>> => ({ ok: true, inspection: { state: "ready", diagnostics: [] } }),
     // The Data overview as the database service reads it back.
     overview: async (): Promise<Record<string, unknown>> => ({ ok: true, overview: { present: true, hash: "h1", error: "" },
@@ -194,10 +192,6 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           retryWorkspaceSetup: (_sessionId, input) => {
             aiTaskWorld.setups.push(input);
             return aiTaskWorld.setup(input);
-          },
-          changeIncomingContribution: (_sessionId, input) => {
-            aiTaskWorld.incoming.push(input);
-            return aiTaskWorld.review(input);
           }
         } });
     },

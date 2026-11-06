@@ -129,11 +129,6 @@
         </v-btn>
       </template>
     </Vibe64TemporaryActionTerminal>
-    <Vibe64ConnectedReplacement
-      :project-slug="projectSlug" :session-id="sessionId" :failure="saveWorkFailure"
-      :disabled="saveWorkSending || saveWorkOperationActive || sourceOperationsSuspended || agentActive"
-      @replaced="props.refreshSessionData(); props.refreshSessionWork()"
-    />
 
     <Vibe64TemporaryActionTerminal
       :active="workspaceSetupRunning || workspaceSetupRetrying"
@@ -177,7 +172,7 @@
           Prepare workspace
         </v-btn>
         <Vibe64AiTaskButton
-          v-else-if="!workspaceSetupConnectedChoice"
+          v-else
           :allowed="assistantFixAllowed && !updateOwnsSession"
           :input="{}"
           kind="workspace-setup"
@@ -186,11 +181,6 @@
         />
       </template>
     </Vibe64TemporaryActionTerminal>
-    <Vibe64ConnectedSessionPicker
-      v-if="workspaceSetupConnectedChoice && !workspaceSetupDismissed"
-      :project-slug="projectSlug" :session-id="sessionId" :revision="props.session.workspaceSetup.updatedAt"
-      :disabled="workspaceSetupRetryDisabled"
-    />
     <WorkspaceSetupToolRows
       v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed"
       :active="workspaceSetupStatus === 'failed'"
@@ -213,8 +203,6 @@ import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnec
 import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/WorkspaceSetupToolRows.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
-import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue";
-import Vibe64ConnectedSessionPicker from "@/components/studio/vibe64-session/Vibe64ConnectedSessionPicker.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
 // Session activity above the chat: connection recovery, the recovery
@@ -226,7 +214,7 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  agentActive, assistantAccountMessage, assistantAccountUnavailable, assistantFixAllowed,
+  assistantAccountMessage, assistantAccountUnavailable, assistantFixAllowed,
   assistantFixRestrictionMessage, checkpointFailure, checkpointFailureReason, checkpointFailureVisible,
   connectionRecoveryVisible, createPullRequestOpen, dismissCheckpointFailure, dismissSaveWorkActivity,
   dismissWorkspaceSetupActivity, githubProject,
@@ -238,7 +226,7 @@ const {
   saveWorkStandInIdentity, saveWorkStatus,
   sessionId, sessionPullRequest, sourceOperationsSuspended, testApproval,
   updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey,
-  workspaceSetupConnectedChoice, workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
+  workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
   workspaceSetupNeedsAttention, workspaceSetupOutput, workspaceSetupRetryDisabled, workspaceSetupRetrying,
   workspaceSetupRunning, workspaceSetupStatus, workspaceSetupTitle
 } = view;

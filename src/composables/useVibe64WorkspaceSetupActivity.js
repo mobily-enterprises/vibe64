@@ -53,22 +53,8 @@ function useVibe64WorkspaceSetupActivity(props, {
   const workspaceSetupActionVisible = computed(() => Boolean(
     sessionId.value && workspaceSetupStatus.value !== "unconfigured"
   ));
-  // Preparation brings each connected repository up to its branch, so a
-  // consuming session offers it again under that name.
-  const connectedRepositoryCount = computed(() => {
-    try {
-      return JSON.parse(props.session?.metadata?.connected_sources || "null")?.sources?.length || 0;
-    } catch {
-      return 0;
-    }
-  });
-  const connectedUpdateActionVisible = computed(() => workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0);
   const workspaceSetupNeedsAttention = computed(() => (
     ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
-  ));
-  // Preparation is waiting for a person to choose connected sessions.
-  const workspaceSetupConnectedChoice = computed(() => (
-    workspaceSetupStatus.value === "ambiguous" && workspaceSetup.value?.connectedChoiceRequired === true
   ));
   const workspaceSetupDiagnostic = computed(() => (
     workspaceSetupRetryError.value || normalizeText(workspaceSetup.value?.diagnostic)
@@ -130,13 +116,11 @@ function useVibe64WorkspaceSetupActivity(props, {
   });
 
   return {
-    connectedUpdateActionVisible,
     dismissWorkspaceSetupActivity,
     retryWorkspaceSetup,
     workspaceSetup,
     workspaceSetupActionVisible,
     workspaceSetupActivityKey,
-    workspaceSetupConnectedChoice,
     workspaceSetupCurrentLabel,
     workspaceSetupDiagnostic,
     workspaceSetupDismissed,

@@ -1,6 +1,6 @@
 import { useRoute, useRouter } from "vue-router";
 
-/** Moves a list or item view (issues, pull requests, incoming changes) by changing some of the route's query. */
+/** Moves a list or item view (issues, pull requests) by changing some of the route's query. */
 function useRouteQueryNavigation() {
   const route = useRoute();
   const router = useRouter();

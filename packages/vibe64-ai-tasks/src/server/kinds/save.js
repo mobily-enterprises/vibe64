@@ -17,7 +17,6 @@ const WAITING_CODES = Object.freeze(["vibe64_session_save_agent_active", "vibe64
 // Save refused for a reason only a person can settle. The AI is not asked again.
 const PERSON_MESSAGES = Object.freeze({
   vibe64_session_repository_review_changed: "Save needs your review of where it goes. Choose Save, review it, then Check now.",
-  vibe64_connected_source_unavailable: "Save needs your review of the connected projects. Choose Save, then Check now.",
   vibe64_session_save_update_required: "Save needs Update first. Cancel this fix, then update the session.",
   vibe64_session_save_no_changes: "Save found nothing to save. Check the session's changes."
 });

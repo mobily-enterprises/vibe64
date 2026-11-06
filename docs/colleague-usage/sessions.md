@@ -35,11 +35,10 @@ make room for that pane's controls; choose **Show chat** to reach them again.
 On a phone the GitHub account shows only its GitHub icon; on a computer hover
 it to see which account the session's GitHub commands run as.
 
-For a project with connected projects, the dialog closes once the session's own
-source is ready. The session then shows **Preparing workspace…** while Vibe64
-prepares the connected projects together, naming those still in progress (for
-example **Preparing connected projects: jskit-ai, genesis (1 of 3 ready)**),
-followed by the project's setup steps. The assistant can start when preparation
+For a project with connected repositories, the dialog closes once the session's
+own source is ready. The session then shows **Preparing connected repositories**
+while Vibe64 makes the session's own copy of each one (one **[Connected]** line
+per repository in the output), followed by the project's setup steps. The assistant can start when preparation
 finishes; see [Prepare a session after updating its source](workspace-preparation.md)
 for failures and retry.
 

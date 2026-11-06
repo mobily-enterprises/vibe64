@@ -81,9 +81,6 @@ function setupCheckResult(result) {
   const setup = result.workspaceSetup || {};
   if (setup.status === "succeeded") return { passed: true, message: SETUP_SUCCEEDED_MESSAGE };
   const diagnostic = normalizeText(setup.diagnostic) || "Workspace preparation did not complete.";
-  if (setup.status === "ambiguous") {
-    return { passed: false, message: "Preparation needs your choice. Make it on the notice, then Check now.", retryKey: "", diagnostic };
-  }
   return {
     passed: false,
     message: `Workspace preparation still fails: ${diagnostic.split("\n")[0]}`,
@@ -115,9 +112,14 @@ function createWorkspaceSetupKind({ sessions }) {
       by: "vibe64",
       label: "Preparing the workspace…",
       output: "Preparation output",
-      // Cancel stops the preparation step that is running.
-      async run({ sessionId, signal, taskId }) {
-        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, { aiTaskId: taskId, signal }));
+      // Cancel stops the preparation step that is running. The person who started the task
+      // prepares as themselves, so a missing connected repository copy uses their GitHub account.
+      async run({ sessionId, signal, taskId }, task) {
+        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, {
+          aiTaskId: taskId,
+          signal,
+          vibe64User: task.startedBy
+        }));
       },
       retry: {
         limit: 3,

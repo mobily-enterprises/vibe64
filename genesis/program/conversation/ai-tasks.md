@@ -5,8 +5,7 @@ works on it, the proof that it worked, and an outcome. People find it in one
 window that presents the problem and its solution, or the lack of one, together.
 A task ends **Done** or **Not done**. Done is proved, never assumed; Not done is
 decided by a person. Every task Vibe64 or Colleague starts is an AI task: Fix it
-with AI on Update, Save, workspace preparation, preview sign-in, incoming merge and
-project setup, the setup screen's create, inspect and adopt requests, the Data
+with AI on Update, Save, workspace preparation, preview sign-in and project setup, the setup screen's create, inspect and adopt requests, the Data
 overview, and Colleague's own requests and reviews. A person's own request is a
 temporary chat, never an AI task ([temporary assistance](temporary-assistance.md)).
 The `20261104-temporary-repair-chats-removed` state upgrade deletes the repair chats
@@ -32,7 +31,6 @@ closing record, which Close finishes after that engine's next turn in the sessio
 - `packages/vibe64-ai-tasks/src/server/kinds/save.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/workspaceSetup.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/previewIdentity.js`
-- `packages/vibe64-ai-tasks/src/server/kinds/incomingMerge.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/projectSetup.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/databaseOverview.js`
 - `packages/vibe64-ai-tasks/src/shared/aiTaskPhases.js`
@@ -85,15 +83,12 @@ operation with the task's recorded conflict review. Save's check runs Vibe64's S
 to the destination the session has now, so a fixed Save pushes by itself; work a
 person saved meanwhile counts, because nothing left to save after a ready Save means
 Save succeeded. A Save refused for a reason only a person can settle (a changed
-destination review, connected projects, Update first, nothing to save) stops at
+destination review, Update first, nothing to save) stops at
 `needs_you(check_stuck)` without asking the AI again. Workspace preparation's check
 runs Vibe64's preparation retry and waits for its result; it refuses to start while
 Update is failed, because Update prepares the workspace again. Preview sign-in's
 check runs the application's identity command for the identity the person chose;
-the browser sends that identity and its error as the task's input. An incoming
-merge's check runs the explicit repair review and refuses leftover conflict markers;
-its conflict also arrives as input, because only the person's Merge met it. Merge
-stays the person's reviewed action. Project setup's check re-reads the opening
+the browser sends that identity and its error as the task's input. Project setup's check re-reads the opening
 inspection; one kind covers repair, adopt, inspect and create, so its problem names
 the task (`title`, `noun`, `opening`). The Data overview's check reads the overview
 back through the database service: present, valid against the refreshed schema and,
@@ -125,9 +120,8 @@ Starting the same problem reopens the open task; starting another is refused. A
 caller may name the task (`taskId`), so Colleague's retry finds the same task. A task
 that ended and waits for Close doesn't block: starting a new one closes it.
 Repository operations refuse to start during a task that changes the repository,
-apart from the task's own check. The session's Update, Save and Prepare actions,
-and Incoming's Merge, Discard and review, are refused this way, not hidden. A
-button's view reloads when its task ends Done (`done`).
+apart from the task's own check. The session's Update, Save and Prepare actions
+are refused this way, not hidden. A button's view reloads when its task ends Done (`done`).
 
 A completed repair runs its check by itself, on the server, whether or not any
 browser watched the turn end. A failed check returns to the same conversation.

@@ -1112,9 +1112,9 @@ describe("Vibe64 direct session view", () => {
     const preparationActions = component.slice(chatStart, activityStart);
     expect(preparationActions.match(/data-vibe64-prepare-workspace/gu)).toHaveLength(2);
     expect(preparationActions.match(/headerActions\.(?:inline|overflow)\.includes\('prepare-workspace'\)/gu)).toHaveLength(2);
-    expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(3);
-    expect(preparationActions).toContain('v-if="connectedUpdateActionVisible"');
-    expect(workspaceSetup).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");
+    expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(2);
+    expect(preparationActions).not.toContain("data-vibe64-update-connected");
+    expect(workspaceSetup).not.toContain("connected_sources");
     expect(component).not.toContain(':error-messages="composerError"');
     expect(component).not.toMatch(/workspace.*(?:dialog|stepper)|(?:dialog|stepper).*workspace/iu);
   });

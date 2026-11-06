@@ -2,18 +2,12 @@
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import { computed, provide } from "vue";
 import { useRoute } from "vue-router";
-import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import SectionContainerShell from "/src/components/SectionContainerShell.vue";
 import {
   activeSessionMobileSectionLinks,
   useVibe64DashboardPage
 } from "@/composables/useVibe64DashboardPage.js";
-import {
-  VIBE64_ACTIVE_SESSION_NAV_KEY,
-  VIBE64_INCOMING_PENDING_COUNT_KEY
-} from "@/lib/vibe64ActiveSessionNav.js";
+import { VIBE64_ACTIVE_SESSION_NAV_KEY } from "@/lib/vibe64ActiveSessionNav.js";
 
 const props = defineProps({
   dashboardContext: {
@@ -31,16 +25,6 @@ const props = defineProps({
 const emit = defineEmits(["select"]);
 
 const route = useRoute();
-const incomingPath = computed(() => scopedDevelopmentApiUrl("/api/vibe64/incoming", projectSlugFromRoute(route)));
-const incomingQuery = computed(() => ({ sessionId: props.dashboardContext.sessionId, state: "pending", limit: 1 }));
-const incoming = useEndpointResource({ path: incomingPath, readQuery: incomingQuery,
-  queryKey: computed(() => ["vibe64.incoming", incomingPath.value, "badge", incomingQuery.value]),
-  enabled: computed(() => props.dashboardContext.active !== false && Boolean(props.dashboardContext.sessionId) &&
-    props.dashboardContext.projectContext?.repositoryMode === "github"),
-  queryOptions: { retry: false, staleTime: 30_000, refetchInterval: 60_000 }
-});
-const incomingCount = computed(() => incoming.loadError.value ? null : incoming.data.value?.pendingCount ?? null);
-provide(VIBE64_INCOMING_PENDING_COUNT_KEY, incomingCount);
 // The GitHub browser and an open page use the whole panel.
 const wideSectionOpen = computed(() => /\/dashboard\/(?:issues|pull-requests|pages\/[^/]+)\/?$/u.test(route.path));
 
@@ -52,8 +36,7 @@ const activeSessionNav = computed(() => {
   return nav && typeof nav === "object" ? nav : null;
 });
 const mobileDashboardSectionLinks = computed(() => props.noProject ? [] : [
-  ...dashboardSectionLinks.value.map(link => link.id === "vibe64.incoming.link" && incomingCount.value > 0
-    ? { ...link, label: `${link.label} (${incomingCount.value})` } : link),
+  ...dashboardSectionLinks.value,
   ...activeSessionMobileSectionLinks(activeSessionNav.value)
 ]);
 

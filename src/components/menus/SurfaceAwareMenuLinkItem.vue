@@ -1,7 +1,6 @@
 <script setup>
 import ShellSurfaceAwareMenuLinkItem from "@jskit-ai/shell-web/client/components/ShellSurfaceAwareMenuLinkItem";
-import { computed, inject } from "vue";
-import { NO_INCOMING_PENDING_COUNT, VIBE64_INCOMING_PENDING_COUNT_KEY } from "@/lib/vibe64ActiveSessionNav.js";
+import { computed } from "vue";
 
 const props = defineProps({
   label: {
@@ -46,17 +45,10 @@ const linkProps = computed(() => {
   const { guideId, ...value } = props;
   return value;
 });
-/** @type {Readonly<import("vue").Ref<number | null>>} */
-const pendingCount = inject(VIBE64_INCOMING_PENDING_COUNT_KEY, NO_INCOMING_PENDING_COUNT);
-const incomingCount = computed(() => pendingCount.value);
-const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/incoming"));
 </script>
 
 <template>
-  <v-badge v-if="incomingLink" class="incoming-menu-link" :model-value="incomingCount > 0" :content="incomingCount" max="99" inline>
-    <ShellSurfaceAwareMenuLinkItem v-bind="linkProps" />
-  </v-badge>
-  <div v-else-if="guideId" class="surface-aware-menu-link-guide" :data-vibe64-guide="guideId">
+  <div v-if="guideId" class="surface-aware-menu-link-guide" :data-vibe64-guide="guideId">
     <ShellSurfaceAwareMenuLinkItem v-bind="linkProps" />
   </div>
   <ShellSurfaceAwareMenuLinkItem v-else v-bind="linkProps" />
@@ -69,7 +61,6 @@ const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/inco
 </style>
 
 <style scoped>
-.incoming-menu-link { width: 100%; }
 :deep(.v-list-item),
 :deep(a),
 :deep(button) {

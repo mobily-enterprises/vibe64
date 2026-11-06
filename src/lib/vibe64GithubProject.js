@@ -35,7 +35,6 @@ function invalidateGithubProjectQueries(queryClient, issuesPath) {
   const labelsPath = githubIssueLabelsPath(issuesPath);
   const mentionsPath = githubIssueMentionsPath(issuesPath);
   const prsPath = githubIssuesSiblingPath(issuesPath, "pull-requests");
-  const incomingPath = githubIssuesSiblingPath(issuesPath, "incoming");
   return queryClient.invalidateQueries({
     predicate: ({ queryKey }) => {
       if (!Array.isArray(queryKey)) return false;
@@ -44,8 +43,7 @@ function invalidateGithubProjectQueries(queryClient, issuesPath) {
         (resource === "vibe64.issue" && path?.startsWith(`${issuesPath}/`)) ||
         (resource === "vibe64.issueLabels" && path === labelsPath) ||
         (resource === "vibe64.issueMentions" && path === mentionsPath) ||
-        (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath) ||
-        (resource === "vibe64.incoming" && path === incomingPath);
+        (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath);
     }
   });
 }

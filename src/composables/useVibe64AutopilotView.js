@@ -592,13 +592,11 @@ function useVibe64AutopilotView(props, emit, {
     updateConflictRecovery: saveWork.updateConflictRecovery,
     updateWorkDisabled: saveWork.updateWorkDisabled,
     // Workspace preparation
-    connectedUpdateActionVisible: workspaceSetupActivity.connectedUpdateActionVisible,
     dismissWorkspaceSetupActivity: workspaceSetupActivity.dismissWorkspaceSetupActivity,
     retryWorkspaceSetup: workspaceSetupActivity.retryWorkspaceSetup,
     workspaceSetup: workspaceSetupActivity.workspaceSetup,
     workspaceSetupActionVisible: workspaceSetupActivity.workspaceSetupActionVisible,
     workspaceSetupActivityKey: workspaceSetupActivity.workspaceSetupActivityKey,
-    workspaceSetupConnectedChoice: workspaceSetupActivity.workspaceSetupConnectedChoice,
     workspaceSetupCurrentLabel: workspaceSetupActivity.workspaceSetupCurrentLabel,
     workspaceSetupDiagnostic: workspaceSetupActivity.workspaceSetupDiagnostic,
     workspaceSetupDismissed: workspaceSetupActivity.workspaceSetupDismissed,

@@ -6,9 +6,6 @@ import {
 
 type StatusServer = Awaited<ReturnType<typeof assistantStatusServer>>;
 
-const INCOMING_REVIEW = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40), id: "contribution-1",
-  activeHead: "b".repeat(40), discardedHead: "" };
-
 /**
  * Every kind of AI task, end to end once: it opens from its own notice with its problem, the AI finishes,
  * Vibe64 proves it, and Close ends it. Update's full matrix is in ai-task-window.spec.ts. A kind whose notice
@@ -51,16 +48,6 @@ const KINDS: {
     done: "Preview accepts missing now. Choose it again to sign in.",
     proof(server) {
       expect(server.aiTasks.signIns).toEqual([{ identityName: "missing" }]);
-    }
-  },
-  {
-    kind: "incoming-merge",
-    world: (page, server) => quietWorld(page, server),
-    open: (page, server) => openStarted(page, server, "incoming-merge", { review: INCOMING_REVIEW, conflictPaths: ["shared.txt"] }),
-    problem: "This contribution conflicts with main in 1 file.",
-    done: "The repaired merge is ready for your review. Check it, then choose Merge into main.",
-    proof(server, taskId) {
-      expect(server.aiTasks.incoming).toEqual([expect.objectContaining({ action: "review-repair", aiTaskId: taskId, review: INCOMING_REVIEW })]);
     }
   },
   {

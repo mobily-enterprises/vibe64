@@ -247,7 +247,7 @@ test("repeated source creation preserves committed, staged and untracked session
     await git(created.sourcePath, ["config", "user.email", "vibe64@example.test"]);
     await writeFile(path.join(created.sourcePath, "app.txt"), "committed work\n");
     await git(created.sourcePath, ["add", "app.txt"]);
-    await git(created.sourcePath, ["commit", "-m", "Contribution work"]);
+    await git(created.sourcePath, ["commit", "-m", "Committed work"]);
     await writeFile(path.join(created.sourcePath, "app.txt"), "staged work\n");
     await git(created.sourcePath, ["add", "app.txt"]);
     await writeFile(path.join(created.sourcePath, "app.txt"), "unstaged work\n");

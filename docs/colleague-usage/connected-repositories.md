@@ -1,6 +1,6 @@
 # Work in connected repositories
 
-This continues [Configure connected projects](connected-projects.md): how a
+This continues [Configure connected repositories](connected-projects.md): how a
 session works in the repositories its `vibe64.connections.json` lists, and how
 **Prepare workspace**, **Update this session (rebase)** and **Save** cover them.
 
@@ -36,7 +36,7 @@ does not depend on it afterwards. The output has one line per repository:
 
 Preparation then writes the Stack's `Sources file` pointing at the copies and
 runs the declared connected Prepare and Verify commands; see
-[Configure connected projects](connected-projects.md).
+[Configure connected repositories](connected-projects.md).
 
 Preparation stops, naming the repository, when:
 
@@ -110,16 +110,6 @@ Renewal needs every copy saved and current, like the session's own repository:
 Save and Update first. The renewed session makes new copies from the mains when
 its workspace is prepared; the old copies are removed once the renewal finishes,
 with their recovery kept in the old session's archive.
-
-## Sessions from before connected copies
-
-Earlier versions linked a session to sessions of the connected projects and saved
-their work to contribution branches reviewed in **Incoming changes**. The
-upgrade to this version removes those links; it moves and deletes no files. A
-session that used connected sessions prepares its workspace again and makes its
-own copies. A session that was used as a connected session is an ordinary
-session again and saves to its project's main. Contribution branches already on
-GitHub stay there: merge or delete them on GitHub if you still need them.
 
 Colleague can explain these steps and run **Prepare workspace**, **Update this
 session (rebase)** and **Save** through their existing actions when you ask; a

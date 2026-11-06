@@ -3,8 +3,8 @@
 People can open one or more clearly separate, short-lived temporary chats for
 focused help without adding those exchanges to the main project conversation or
 session history. Temporary chats are the person's own. Every task Vibe64 or
-Colleague starts (Fix it with AI, Update and Save repairs, incoming merge, project
-and workspace setup, preview identity, the Data overview, Colleague's tasks and
+Colleague starts (Fix it with AI, Update and Save repairs, project and workspace
+setup, preview identity, the Data overview, Colleague's tasks and
 reviews) is an [AI task](ai-tasks.md) and never appears as a temporary chat.
 
 Both live in one session conversation store. A record with a `task` field belongs

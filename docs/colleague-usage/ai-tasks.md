@@ -171,7 +171,6 @@ can be done next.
 | What Update said, after three failed checks | **Check now**, **Open chat** or **Review resolved conflicts**. |
 | What Save said, after three failed checks | **Check now** or **Open chat**. |
 | Save needs your review of where it goes | Choose **Save** and review it, then **Check now**. |
-| Preparation needs your choice | Make it on the preparation notice, then **Check now**. |
 | Preview isn't running | Start Preview, then **Check now**. |
 | This preview can't switch identity | Restart Preview, then **Check now**. |
 | Project setup waits for Update | Fix Update first, then **Check now**. |

@@ -1,5 +1,4 @@
 import { createDatabaseOverviewKind } from "./kinds/databaseOverview.js";
-import { createIncomingMergeKind } from "./kinds/incomingMerge.js";
 import { createPreviewIdentityKind } from "./kinds/previewIdentity.js";
 import { createProjectSetupKind } from "./kinds/projectSetup.js";
 import { createRequestKinds } from "./kinds/request.js";
@@ -28,7 +27,6 @@ function createAiTaskKinds({ databaseTools, project, sessions, terminals }) {
     createSaveKind({ sessions }),
     createWorkspaceSetupKind({ sessions }),
     createPreviewIdentityKind({ terminals }),
-    createIncomingMergeKind({ sessions }),
     createProjectSetupKind({ project }),
     createDatabaseOverviewKind({ databaseTools }),
     ...createRequestKinds()

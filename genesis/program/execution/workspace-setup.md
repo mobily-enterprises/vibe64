@@ -78,24 +78,27 @@ Inspection preserves the selected toolchain's commands without language or
 repository switches. Its identity covers the source-map location, steps and
 runtimes. Genesis transports the opaque section; inspection neither creates
 that file nor runs commands. A ready inspection only means the declaration is
-valid. Explicit connected-source preparation now asks Project to write the
-declared input map from authorized receiving sessions. That owner reports
-`inputs-prepared`; it does not run the recipe. Normal workspace preparation uses
-the same resolving owner, then executes ordinary setup followed by connected
-Prepare and Verify commands through the existing managed runner. Project's
-combined inspection includes both recipe identities and the exact source map.
-Sessions reauthorizes the receiving sources before each command and before
-accepting a cached success. Those authorized roots enter the existing execution
-request; the map itself grants no filesystem authority. Node.js consumption
-has a focused real npm/import proof; other toolchains remain unproven.
+valid. Preparation with connected development first makes the session's
+missing connected repository copies (`prepareConnectedRepositories` in
+`serviceSessionConnectedCopies.js`) and then asks Project to write the declared
+Sources file pointing at those copies. Project reports `inputs-prepared`; it does
+not run the recipe. Preparation then executes ordinary setup followed by
+connected Prepare and Verify commands through the existing managed runner.
+Project's combined inspection includes both recipe identities and the exact
+source map. Before each command and before accepting a cached success, setup
+reads the Sources file back and refuses when its inputs changed since
+preparation. The copies' roots enter the existing execution request; the map
+itself grants no filesystem authority. Node.js consumption has a focused real
+npm/import proof; other toolchains remain unproven.
 
 A requested run (session creation, Prepare or Retry) with connected development
-first saves a running `Preparing connected projects` state and returns; resolving
-the linked sessions and the rest of the recipe continue in the observed background run,
-so creating a session no longer waits for every connected checkout. Sessions
-reports which connected projects remain through that running label and publishes
-each change. An unrequested start keeps cached-success reuse and runs the same
-preparation inline.
+first saves a running `Preparing connected repositories` state and returns;
+making the copies and the rest of the recipe continue in the observed background
+run, so creating a session does not wait for every clone. Each repository adds
+one `[Connected]` line to the output. An unrequested start keeps cached-success
+reuse and runs the same preparation inline. A retry that an AI task's check runs
+prepares as the person who started the task, so a missing copy is cloned with
+their GitHub account.
 
 Working-session preparation and explicit Prepare/Retry consume the existing
 project connection file. They never create that file or import connections from

@@ -215,16 +215,6 @@
             title="Prepare workspace"
             @click="retryWorkspaceSetup"
           />
-          <v-list-item
-            v-if="connectedUpdateActionVisible"
-            data-vibe64-update-connected
-            min-height="48"
-            :disabled="workspaceSetupRetryDisabled"
-            :prepend-icon="mdiSourceBranchSync"
-            subtitle="Bring connected checkouts up to their branches, then prepare"
-            title="Update connected repositories"
-            @click="retryWorkspaceSetup"
-          />
         </v-list>
       </v-menu>
     </div>
@@ -239,7 +229,6 @@ import {
   mdiContentSaveOutline,
   mdiDotsVertical,
   mdiIncognito,
-  mdiSourceBranchSync,
   mdiSourceCommit,
   mdiSourcePull,
   mdiWrenchOutline
@@ -261,7 +250,7 @@ const { view } = defineProps({
 const emit = defineEmits(["chat-attention"]);
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  connectedUpdateActionVisible, createPullRequestOpen, githubProject,
+  createPullRequestOpen, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,
   retryWorkspaceSetup, revealApprovals, saveWorkActivityLabel, saveWorkDisabled,
   saveWorkError, saveWorkHeaderAriaLabel, saveWorkHeaderVisible, saveWorkOperationActive,
@@ -316,10 +305,10 @@ const headerActions = computed(() => {
   const available = headerActionsAvailable.value;
   const room = headerActionRoom.value;
   // Everything fits without the menu, or one slot goes to Session actions.
-  const slots = room >= available.length && !connectedUpdateActionVisible.value ? room : room - 1;
+  const slots = room >= available.length ? room : room - 1;
   return splitVibe64SessionHeaderActions(available, slots);
 });
-const sessionActionsMenuVisible = computed(() => headerActions.value.overflow.length > 0 || connectedUpdateActionVisible.value);
+const sessionActionsMenuVisible = computed(() => headerActions.value.overflow.length > 0);
 const sessionActionsAttention = computed(() =>
   (headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention === true) ||
   (headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value));
