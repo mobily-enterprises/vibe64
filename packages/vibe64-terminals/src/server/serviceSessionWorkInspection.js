@@ -162,15 +162,18 @@ function createServiceSessionWorkInspection({
 
   /**
    * Read-only Git evidence on whether a failed Update still describes the
-   * session's checkout; the sessions service decides and records the result.
+   * session's checkout, or the copy of `connectedRepository` when the failure
+   * was that copy's; the sessions service decides and records the result.
    */
   async function inspectSessionUpdateFailure(sessionId, input = {}) {
     const { session } = await sessionAccess.sessionContext(String(sessionId || "").trim(), input);
-    return inspectManagedSessionUpdateFailure({
-      project: await project.readCurrentProject(),
-      session,
-      targetCommit: input.targetCommit
-    });
+    const projectRecord = await project.readCurrentProject();
+    const name = String(input.connectedRepository || "").trim();
+    if (!name) return inspectManagedSessionUpdateFailure({ project: projectRecord, session, targetCommit: input.targetCommit });
+    const copy = sessionConnectedCopies(session).find(entry => entry.name === name);
+    if (!copy) throw new Error(`This session has no copy of connected repository ${name}.`);
+    const work = connectedCopyWork(session, projectRecord, copy);
+    return inspectManagedSessionUpdateFailure({ project: work.project, session: work.session, targetCommit: input.targetCommit });
   }
 
   async function inspectSessionChanges(sessionId, input = {}) {

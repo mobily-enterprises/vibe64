@@ -59,11 +59,21 @@ session's own repository. Each copy adds one line to the output:
   reason, for example the files that conflict.
 
 A copy that cannot be updated stays exactly as it was, and the other copies and
-the session's own repository still update. Conflict review and **Fix it with AI**
-on the Update notice apply to the session's own repository only. For a
-conflicting copy, ask Main chat to bring that copy's work onto its main, or
-resolve it yourself in the copy's folder, then choose **Update this session
-(rebase)** again.
+the session's own repository still update. The Update notice then shows that
+copy's problem. A conflict names the repository and its files from the session's
+source, for example `1 file in connected repository library needs review before
+this session can update: ../connected/library/src/index.js.` Resolve it as you
+would in the session's own repository: edit the listed files in the copy's
+folder, then use **Review resolved conflicts** to apply Update, or choose **Fix it
+with AI** and the AI repairs the files and runs Update itself. Only that copy
+resumes its review; with several conflicting copies, Update shows the next one
+afterwards.
+
+If Vibe64 stops while updating, for example on a restart, the copy it was
+changing is finished from what Update had prepared, as the session's own
+repository is. When Update had not yet reached the session's own repository, the
+notice says the update can be retried: choose **Update this session (rebase)**
+again.
 
 The session's regular check for newer saved work also watches each copy's main,
 so the session asks for an Update when any of them moves.
@@ -98,7 +108,9 @@ copy of a repository that requires pull requests cannot be saved from here.
 
 If Vibe64 stops while saving, for example on a restart, recovery records each
 copy whose push landed and never pushes it again; a copy that was not pushed
-keeps its work for the next Save.
+keeps its work for the next Save. A Save of copies alone shows **Interrupted
+Save recovered and reconciled.** with one `[Connected] library saved at …` line
+per copy once every copy it pushed is recorded and nothing is left unsaved.
 
 ## Archive and renewal
 

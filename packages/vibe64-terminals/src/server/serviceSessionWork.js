@@ -9,7 +9,13 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { requireCompletedConversationRewind } from "./assistantChangeover.js";
 import { recoverConnectedCopySaves, saveConnectedCopies, updateConnectedCopies } from "./sessionConnectedCopies.js";
-import { connectedCopyOperations, refuseBehindSessionSave } from "./serviceSessionConnectedCopies.js";
+import {
+  connectedCopyOperations,
+  conflictReviewFor,
+  copiesOnlySaveRecovered,
+  recoverConnectedUpdate,
+  refuseBehindSessionSave
+} from "./serviceSessionConnectedCopies.js";
 import { saveError } from "./sessionWorkCommands.js";
 import { throwIfUpdateCancelled, updateSessionWork as updateManagedSessionWork } from "./sessionWorkUpdate.js";
 import { recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
@@ -523,8 +529,10 @@ function createServiceSessionWork({
       if (copies.length) {
         await (input.onProgress || doNothing)({ kind: "connected", message: "Updating connected repositories.", stage: "connected-updating" });
       }
+      const review = conflictReviewFor(input);
       // Each copy updates on its own: one that cannot leaves the others and this session's own update to proceed.
       const connected = await updateConnectedCopies({
+        ...review.connected,
         beforeSourceChange,
         copies,
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
@@ -534,6 +542,7 @@ function createServiceSessionWork({
           runtime,
           vibe64User: input.vibe64User || null
         }),
+        onProgress: input.onProgress,
         operationId: input.operationId,
         project: projectRecord,
         runProjectSourceExclusive,
@@ -541,11 +550,10 @@ function createServiceSessionWork({
         signal
       });
       const updated = await updateManagedSessionWork({
+        ...review.own,
         beforeSourceChange,
         commandOptions: execution.commandOptions,
         historyReview: input.historyReview,
-        conflictRecovery: input.conflictRecovery,
-        reviewedConflictId: input.reviewedConflictId,
         onProgress: input.onProgress,
         operationId: input.operationId,
         project: projectRecord,
@@ -559,23 +567,28 @@ function createServiceSessionWork({
     });
   }
 
+  /**
+   * Recovers an interrupted Update: first the copy it was applying, then the session's own repository.
+   */
   async function recoverSessionWorkUpdate(sessionId, input = {}) {
     return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-update" }, async (context) => {
-      const { execution, session } = await sessionWorkExecution(
-        sessionId,
-        context,
-        "session-update-recovery",
-        { createsCommits: true }
-      );
-      return recoverManagedSessionWorkUpdate({
+      const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update-recovery", {
+        createsCommits: true
+      });
+      const recoveryInput = {
         beforeSourceChange: () => workspacePreparation.invalidateWorkspaceSetup(context),
-        commandOptions: execution.commandOptions,
         project: await project.readCurrentProject(),
         recovery: input.recovery || {},
-        runCommand: execution.runCommand,
         runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
         session
+      };
+      const connected = await recoverConnectedUpdate({ ...recoveryInput, codexGitCommand, env, runtime });
+      const recovered = await recoverManagedSessionWorkUpdate({
+        ...recoveryInput,
+        commandOptions: execution.commandOptions,
+        runCommand: execution.runCommand
       });
+      return connected ? { ...recovered, connected: [connected] } : recovered;
     });
   }
 
@@ -596,14 +609,20 @@ function createServiceSessionWork({
         session
       });
       const execution = await saveExecution(session, sessionId, "Save recovery");
-      const recovered = await recoverManagedSessionWorkSave({
-        commandOptions: execution.commandOptions,
-        project: projectRecord,
-        recovery: input.recovery || {},
-        runCommand: execution.runCommand,
-        runProjectSourceExclusive,
-        session
-      });
+      let recovered;
+      try {
+        recovered = await recoverManagedSessionWorkSave({
+          commandOptions: execution.commandOptions,
+          project: projectRecord,
+          recovery: input.recovery || {},
+          runCommand: execution.runCommand,
+          runProjectSourceExclusive,
+          session
+        });
+      } catch (error) {
+        if (!await copiesOnlySaveRecovered(error, { project: projectRecord, runtime, session })) throw error;
+        return { connected, ok: true, operationId: input.recovery?.operationId, reconciled: true, recovered: true, status: "saved" };
+      }
       return connected.length ? { ...recovered, connected } : recovered;
     });
   }

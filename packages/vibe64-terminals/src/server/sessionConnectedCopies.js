@@ -1,8 +1,8 @@
 // A session's own copies of the repositories its connections file lists, at
 // <session>/connected/<name>. Prepare makes the missing ones. Save, Update,
-// update checks and Save recovery reach each copy through the same engine as
-// the session's own repository: as a GitHub session of that repository whose
-// source is the copy and whose branch is the repository's main.
+// update checks, conflict repair and recovery reach each copy through the same
+// engine as the session's own repository: as a GitHub session of that
+// repository whose source is the copy and whose branch is the repository's main.
 import { lstat, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -29,7 +29,8 @@ import {
   retireSessionWorkSave,
   saveSessionWork
 } from "./sessionWorkSave.js";
-import { checkSessionUpdates, updateSessionWork } from "./sessionWorkUpdate.js";
+import { checkSessionUpdates, conflictMessage, updateSessionWork } from "./sessionWorkUpdate.js";
+import { recoverSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
 
 function connectedCopyRemoteUrl(repository = "") {
   return `https://github.com/${repository}.git`;
@@ -37,6 +38,27 @@ function connectedCopyRemoteUrl(repository = "") {
 
 function shortCommit(commit = "") {
   return normalizeText(commit).slice(0, 12);
+}
+
+/**
+ * The derived artifacts one copy keeps: the given ones only when the copy is
+ * itself a Genesis project, with a Blueprint. A plain repository has none, so
+ * its Save and Update regenerate nothing.
+ * @param {object} copy
+ * @param {string[]} derivedArtifactPaths
+ */
+async function copyDerivedArtifactPaths(copy, derivedArtifactPaths = []) {
+  if (!derivedArtifactPaths.length) return [];
+  return (await lstat(path.join(copy.path, "genesis", "blueprint.md")).catch(() => null))?.isFile() ? derivedArtifactPaths : [];
+}
+
+/**
+ * A copy's conflict paths as the session's source names them: the person and
+ * its agents work from there, and the copy sits beside it.
+ * @param {string} name
+ */
+function copyConflictPrefix(name) {
+  return `../connected/${name}/`;
 }
 
 /**
@@ -256,7 +278,7 @@ function inspectConnectedCopies({ copies = [], derivedArtifactPaths = [], projec
     const listed = { name: copy.name, path: copy.path, repository: copy.repository };
     try {
       const inspected = await inspectSessionWork({
-        derivedArtifactPaths,
+        derivedArtifactPaths: await copyDerivedArtifactPaths(copy, derivedArtifactPaths),
         project: work.project,
         ...(runCommand ? { runCommand } : {}),
         session: work.session
@@ -369,13 +391,14 @@ async function saveConnectedCopies({
       const execution = await executionFor(copy);
       options = {
         commandOptions: execution.commandOptions,
+        derivedArtifactPaths: await copyDerivedArtifactPaths(copy, derivedArtifactPaths),
         project: work.project,
         runCommand: execution.runCommand,
         session: work.session
       };
       const check = await checkSessionUpdates({ ...options, operationId, runProjectSourceExclusive });
       if (check.updateAvailable === true) throw updateFirstError(copy.name);
-      unsaved = (await inspectSessionWork({ ...options, derivedArtifactPaths })).unsaved === true;
+      unsaved = (await inspectSessionWork(options)).unsaved === true;
     } catch (error) {
       if (error?.code === "vibe64_session_save_update_required") throw error;
       throw connectedCopyError(copy.name, error);
@@ -388,11 +411,10 @@ async function saveConnectedCopies({
     let result;
     try {
       await onProgress({ kind: "connected", message: `Saving ${copy.name}.`, stage: "connected-saving" });
-      const prepared = await prepareSessionWorkSaveMessage({ ...options, derivedArtifactPaths, operationId });
+      const prepared = await prepareSessionWorkSaveMessage({ ...options, operationId });
       result = await saveSessionWork({
         ...options,
         checkpoint: prepared.checkpoint,
-        derivedArtifactPaths,
         message: await nameSave(prepared, copy),
         onCacheMaintenance,
         operationId,
@@ -420,27 +442,39 @@ async function saveConnectedCopies({
  * Update's part for the copies: each is rebased onto its main as the
  * session's own repository is. A copy that cannot be updated (a conflict)
  * stays exactly as it was and the others still update. Each result has the
- * line Update reports for it.
+ * line Update reports for it; a conflict's result also has the recovery that
+ * its review resumes, with paths from the session's source and the name of its
+ * repository (`connectedRepository`). Passing that recovery back with its
+ * `reviewedConflictId` resumes the review in that copy only, as the session's
+ * own Update does. Each copy's prepared update is reported as
+ * `connectedUpdate` progress until it is recorded, so an interrupted Update
+ * can recover it (`recoverConnectedCopyUpdate`).
  * @param {object} input
  * @param {() => Promise<void>} [input.beforeSourceChange]
+ * @param {object | null} [input.conflictRecovery] a copy conflict's recovery, as a result gave it
  * @param {object[]} input.copies
  * @param {string[]} input.derivedArtifactPaths
  * @param {(copy: object) => Promise<{ commandOptions: object, runCommand: Function }>} input.executionFor
+ * @param {(progress: object) => Promise<void>} [input.onProgress]
  * @param {string} input.operationId
  * @param {object} input.project
  * @param {(commits: object) => Promise<void>} input.recordCommits
+ * @param {string} [input.reviewedConflictId]
  * @param {Function} [input.runProjectSourceExclusive]
  * @param {object} input.session
  * @param {AbortSignal | null} [input.signal]
  */
 async function updateConnectedCopies({
   beforeSourceChange = doNothing,
+  conflictRecovery = null,
   copies = [],
   derivedArtifactPaths = [],
   executionFor,
+  onProgress = doNothing,
   operationId,
   project,
   recordCommits,
+  reviewedConflictId = "",
   runProjectSourceExclusive,
   session,
   signal = null
@@ -448,12 +482,33 @@ async function updateConnectedCopies({
   const results = [];
   for (const copy of copies) {
     const work = connectedCopyWork(session, project, copy);
+    const prefix = copyConflictPrefix(copy.name);
+    const review = conflictRecovery?.connectedRepository === copy.name
+      ? {
+          conflictRecovery: {
+            ...conflictRecovery,
+            conflictPaths: (conflictRecovery.conflictPaths || [])
+              .map(entry => entry.startsWith(prefix) ? entry.slice(prefix.length) : entry)
+          },
+          reviewedConflictId
+        }
+      : {};
     try {
       const execution = await executionFor(copy);
       const result = await updateSessionWork({
+        ...review,
         beforeSourceChange,
         commandOptions: execution.commandOptions,
-        derivedArtifactPaths,
+        derivedArtifactPaths: await copyDerivedArtifactPaths(copy, derivedArtifactPaths),
+        async onProgress(progress) {
+          if (progress.stage !== "prepared") return;
+          await onProgress({
+            connectedUpdate: { ...progress, name: copy.name, operationId },
+            kind: "connected",
+            message: `Applying the update to ${copy.name}.`,
+            stage: "connected-prepared"
+          });
+        },
         operationId,
         project: work.project,
         runCommand: execution.runCommand,
@@ -467,28 +522,83 @@ async function updateConnectedCopies({
           ...(result.reconciled === true ? { baseCommit: result.canonicalCommit } : {})
         }
       });
-      results.push({
-        canonicalCommit: result.canonicalCommit,
-        line: result.status === "already_current"
-          ? `[Connected] ${copy.name} was already current.`
-          : `[Connected] ${copy.name} updated to ${shortCommit(result.canonicalCommit)}.`,
-        name: copy.name,
-        status: result.status
-      });
+      const line = result.status === "already_current"
+        ? `[Connected] ${copy.name} was already current.`
+        : `[Connected] ${copy.name} updated to ${shortCommit(result.canonicalCommit)}.`;
+      await onProgress({ connectedUpdate: null, kind: "connected", message: line, stage: "connected-updated" });
+      results.push({ canonicalCommit: result.canonicalCommit, line, name: copy.name, status: result.status });
     } catch (error) {
       if (signal?.aborted) throw error;
-      const message = normalizeText(error?.message) || "It could not be updated.";
+      const recovery = error?.code === "vibe64_session_update_conflict" ? error.details?.conflictRecovery || null : null;
+      const conflictPaths = (recovery?.conflictPaths || error?.details?.conflictPaths || []).map(entry => `${prefix}${entry}`);
+      const message = recovery
+        ? conflictMessage(conflictPaths, copy.name)
+        : normalizeText(error?.message) || "It could not be updated.";
+      const line = `[Connected] ${copy.name} was not updated and is unchanged: ${message}`;
+      await onProgress({ connectedUpdate: null, kind: "connected", message: line, stage: "connected-failed" });
       results.push({
         code: normalizeText(error?.code),
-        conflictPaths: Array.isArray(error?.details?.conflictPaths) ? error.details.conflictPaths : [],
+        conflictPaths,
+        conflictRecovery: recovery ? { ...recovery, conflictPaths, connectedRepository: copy.name } : null,
         error: message,
-        line: `[Connected] ${copy.name} was not updated and is unchanged: ${message}`,
+        line,
         name: copy.name,
         status: "failed"
       });
     }
   }
   return results;
+}
+
+/**
+ * Recovers the copy an interrupted Update was applying, from the prepared
+ * update it reported (`connectedUpdate`), exactly as the session's own
+ * interrupted Update recovers, and records the copy's new commit. A copy no
+ * longer recorded is left alone.
+ * @param {object} input
+ * @param {() => Promise<void>} [input.beforeSourceChange]
+ * @param {object} input.connectedUpdate
+ * @param {object[]} input.copies
+ * @param {(copy: object) => Promise<{ commandOptions: object, runCommand: Function }>} input.executionFor
+ * @param {object} input.project
+ * @param {(commits: object) => Promise<void>} input.recordCommits
+ * @param {Function} [input.runProjectSourceExclusive]
+ * @param {object} input.session
+ * @returns {Promise<{ canonicalCommit: string, line: string, name: string } | null>}
+ */
+async function recoverConnectedCopyUpdate({
+  beforeSourceChange = doNothing,
+  connectedUpdate = {},
+  copies = [],
+  executionFor,
+  project,
+  recordCommits,
+  runProjectSourceExclusive,
+  session
+}) {
+  const copy = copies.find(entry => entry.name === normalizeText(connectedUpdate.name));
+  if (!copy) return null;
+  const work = connectedCopyWork(session, project, copy);
+  try {
+    const execution = await executionFor(copy);
+    const result = await recoverSessionWorkUpdate({
+      beforeSourceChange,
+      commandOptions: execution.commandOptions,
+      project: work.project,
+      recovery: connectedUpdate,
+      runCommand: execution.runCommand,
+      runProjectSourceExclusive,
+      session: work.session
+    });
+    await recordCommits({ [copy.name]: { baseCommit: result.canonicalCommit, canonicalCommit: result.canonicalCommit } });
+    return {
+      canonicalCommit: result.canonicalCommit,
+      line: `[Connected] ${copy.name} updated to ${shortCommit(result.canonicalCommit)}.`,
+      name: copy.name
+    };
+  } catch (error) {
+    throw connectedCopyError(copy.name, error);
+  }
 }
 
 /**
@@ -538,6 +648,7 @@ export {
   inspectConnectedCopies,
   prepareConnectedCopies,
   recoverConnectedCopySaves,
+  recoverConnectedCopyUpdate,
   saveConnectedCopies,
   updateConnectedCopies
 };

@@ -15,6 +15,21 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionUpdateChecks} SessionUpdateChecks */
 
 /**
+ * The copy whose Update failed, as the Update's own failure: a conflict first,
+ * so its review and repair run as the session's own conflict does.
+ * @param {object[]} [connected] Update's results for the copies
+ */
+function connectedUpdateFailure(connected = []) {
+  const failed = connected.filter(copy => copy.status === "failed");
+  const copy = failed.find(entry => entry.conflictRecovery) || failed[0];
+  if (!copy) return null;
+  return vibe64Error(copy.error, copy.code || "vibe64_connected_copy_update_failed", {
+    details: { conflictPaths: copy.conflictPaths || [], conflictRecovery: copy.conflictRecovery || null, connectedRepository: copy.name },
+    status: 409
+  });
+}
+
+/**
  * A session's work, in its own repository and its connected copies: its
  * current changes, the Save that publishes them, the Update that rebases them
  * onto the saved versions, and a pull request for them.
@@ -308,7 +323,9 @@ function createSessionWork({
   /**
    * Update: each connected copy, then the session's own repository, onto
    * their saved versions. A copy that cannot be updated stays unchanged and
-   * its line says why; the others still update.
+   * its line says why; the others still update, and the Update then fails
+   * with that copy's problem, a conflict being reviewed and repaired like the
+   * session's own (`reviewedConflictId` resumes the copy its recovery names).
    * @param {string} sessionId
    * @param {object} input
    */
@@ -383,6 +400,8 @@ function createSessionWork({
         await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
           originId: input.originId
         });
+        const copyFailure = connectedUpdateFailure(result.connected);
+        if (copyFailure) throw copyFailure;
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
             kind: result.status,
@@ -432,6 +451,7 @@ function createSessionWork({
               ? error.details.conflictPaths
               : recovery?.conflictPaths || [],
             conflictRecovery: recovery,
+            connectedRepository: normalizeText(error?.details?.connectedRepository || recovery?.connectedRepository),
             error: normalizeText(error?.message) || "Session update failed.",
             operationId,
             status: "failed"

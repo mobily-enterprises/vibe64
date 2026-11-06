@@ -160,15 +160,40 @@ pull-request path for them. When only copies have work, Save returns their
 results without saving the session's own repository. Creating a pull request runs
 the same copy Save before pushing the session's own work to its branch.
 
+Genesis's derived artifacts belong to a copy only when the copy is itself a
+Genesis project, with a Blueprint (`copyDerivedArtifactPaths`). A plain
+repository's inspection, Save and Update treat every path as its own work and
+regenerate nothing, so they never require a Genesis Stack.
+
 Update (`updateConnectedCopies`) runs the native Update for each copy before the
 session's own. A copy that fails, for example with `vibe64_session_update_conflict`,
-stays unchanged and is reported with its conflict paths, while the other copies
-and the session's own Update proceed. A copy has no conflict review, repair task
-or interrupted-apply recovery of its own yet. Interrupted Save recovery
-(`recoverConnectedCopySaves`) first records, from each copy's prepared-ref
-evidence for that operation, the copies whose push landed but was not recorded,
-skipping a copy the Save never pushed (`vibe64_session_save_interrupted_retryable`),
-then recovers the session's own repository.
+stays unchanged and is reported with its line, while the other copies and the
+session's own Update proceed. Sessions records the session's own result and
+prepares the workspace, then fails the Update task with that copy's problem
+(`connectedUpdateFailure` in `packages/vibe64-sessions/src/server/sessionWork.js`),
+a conflict before any other failure, recording `connectedRepository`. A copy's
+conflict carries the native conflict recovery with its paths named from the
+session's source (`../connected/<name>/<path>`), its repository in
+`connectedRepository`, and `conflictMessage` naming that repository, so **Review
+resolved conflicts** and the **Fix Update** AI task run unchanged. Rerunning with
+the `reviewedConflictId` passes that recovery, with its own paths, to that copy
+only (`conflictReviewFor`); the session's own repository gets none. Work
+inspection's repaired-failure check reads that copy's checkout instead of the
+session's (`inspectSessionUpdateFailure` with `connectedRepository`). Each copy's
+prepared update is reported as `connectedUpdate` progress on the Update task until
+it is recorded; interrupted Update recovery first recovers that copy with the
+native recovery (`recoverConnectedCopyUpdate`) and records it, then recovers the
+session's own repository, which stays retryable when it had not started.
+
+Interrupted Save recovery (`recoverConnectedCopySaves`) first records, from each
+copy's prepared-ref evidence for that operation, the copies whose push landed but
+was not recorded, skipping a copy the Save never pushed
+(`vibe64_session_save_interrupted_retryable`), then recovers the session's own
+repository. A Save of copies alone prepares nothing in the session's own
+repository; when that recovery finds nothing and neither the session's own
+repository nor any copy holds unsaved work, the Save is complete
+(`copiesOnlySaveRecovered`) and is recorded as recovered without a commit of the
+session's own.
 
 The update probe reads each copy's main head with the session heads, grouped by
 repository and branch, and rechecks a session when any of them moved; the check

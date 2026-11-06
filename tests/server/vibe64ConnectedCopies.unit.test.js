@@ -17,9 +17,12 @@ import {
   inspectConnectedCopies,
   prepareConnectedCopies,
   recoverConnectedCopySaves,
+  recoverConnectedCopyUpdate,
   saveConnectedCopies,
   updateConnectedCopies
 } from "../../packages/vibe64-terminals/src/server/sessionConnectedCopies.js";
+import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
+import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
 
 // Every copy's GitHub URL reaches a local bare repository through Git's own
 // URL rewriting, so the engine runs exactly as it does against GitHub.
@@ -89,6 +92,7 @@ async function fixture(t) {
     recordCommits: (commits) => recordSessionConnectedCopyCommits(store, SESSION_ID, commits),
     root,
     session,
+    store,
     writeCopies: async (copies) => { session.metadata.connected_copies = serializeSessionConnectedCopies(copies); }
   };
 }
@@ -164,7 +168,7 @@ function save(f, { beforePush, events = [], recordCommits = f.recordCommits } = 
   });
 }
 
-function update(f) {
+function update(f, input = {}) {
   return updateConnectedCopies({
     copies: f.copies(),
     derivedArtifactPaths: [],
@@ -172,8 +176,64 @@ function update(f) {
     operationId: "update-1",
     project: f.project,
     recordCommits: f.recordCommits,
-    session: f.session
+    session: f.session,
+    ...input
   });
+}
+
+/**
+ * This session's own repository `example/project`, cloned as its source, and the Save and Update
+ * service over it and its copies. Every Git command of the service goes through the fixture's GitHub.
+ */
+async function sessionService(f, { invalidateWorkspaceSetup = async () => {}, requirePullRequest = false } = {}) {
+  const own = await githubRepository(f, "project");
+  await git(f.root, ["clone", own.bare, f.session.sourcePath]);
+  await git(f.session.sourcePath, ["checkout", "-B", `vibe64/session/${SESSION_ID}`]);
+  Object.assign(f.session.metadata, {
+    base_commit: own.base,
+    canonical_commit: own.base,
+    repository_mode: "github",
+    source_remote_url: "https://github.com/example/project.git"
+  });
+  const github = { cloneUrl: "https://github.com/example/project.git", fullName: "example/project" };
+  const projectRecord = {
+    githubMirrorOptional: true,
+    githubMirrorPath: "",
+    githubRepository: github,
+    ownerUserKey: "owner",
+    repository: { defaultBranch: "main", github, mode: "github" },
+    repositoryMode: "github",
+    slug: "project"
+  };
+  const runtime = { getSessionWithoutSource: async () => f.session, store: f.store };
+  const project = {
+    readCurrentProject: async () => projectRecord,
+    readRepositoryWorkflow: async () => ({ requirePullRequest }),
+    runProjectSourceExclusive: (operation) => operation()
+  };
+  const sessionAccess = {
+    runMainAgentWrite: (_sessionId, _options, operation) => operation({ runtime, session: f.session }),
+    sessionContext: async () => ({ runtime, session: f.session })
+  };
+  const codexGitCommand = { sessionWorkSaveContext: async () => ({ commandOptions: {}, runCommand: f.github() }) };
+  const work = createServiceSessionWork({
+    agentConversations: {},
+    codexGitCommand,
+    env: {},
+    logger: { error() {}, info() {}, warn() {} },
+    project,
+    sessionAccess,
+    sessionAgent: {},
+    state: { lifecycle: { closing: false } },
+    workspacePreparation: { invalidateWorkspaceSetup },
+    workspaceSetup: { isRunning: () => false }
+  });
+  return {
+    destinationReview: { branch: "main", mode: "github", repository: "example/project", sessionId: SESSION_ID },
+    inspection: createServiceSessionWorkInspection({ codexGitCommand, env: {}, project, sessionAccess, sessionWork: work }),
+    own,
+    work
+  };
 }
 
 test("Prepare copies each listed repository from its default branch, through its mirror when one matches, and keeps no dependency on the mirror", async (t) => {
@@ -278,7 +338,7 @@ test("Update brings every copy onto its main; a copy that conflicts stays exactl
 
   assert.deepEqual(results.map(result => [result.name, result.status]), [["library", "failed"], ["tools", "updated"], ["docs", "already_current"]]);
   assert.equal(results[0].code, "vibe64_session_update_conflict");
-  assert.deepEqual(results[0].conflictPaths, ["library.txt"]);
+  assert.deepEqual(results[0].conflictPaths, ["../connected/library/library.txt"]);
   assert.match(results[0].line, /^\[Connected\] library was not updated and is unchanged: /u);
   assert.equal(results[1].line, `[Connected] tools updated to ${toolsPeer.slice(0, 12)}.`);
   assert.equal(results[2].line, "[Connected] docs was already current.");
@@ -425,4 +485,245 @@ test("Save recovery records a copy whose push landed before Save could record it
   assert.equal(await readFile(path.join(copyPath(f, "tools"), "work.txt"), "utf8"), "tools work\n");
   // The recovered Save is retired: recovering again finds nothing to record.
   assert.deepEqual(await recover("save-1"), []);
+});
+
+test("a copy keeps derived artifacts only when it is itself a Genesis project", async (t) => {
+  const f = await fixture(t);
+  await githubRepository(f, "library");
+  const tools = await githubRepository(f, "tools");
+  await mkdir(path.join(tools.seed, "genesis"));
+  await pushPeer(tools, "genesis/blueprint.md", "# Tools\n");
+  await prepare(f, ["library", "tools"]);
+  for (const name of ["library", "tools"]) await writeFile(path.join(copyPath(f, name), "derived.json"), "{}\n");
+
+  const inspected = await inspectConnectedCopies({
+    copies: f.copies(), derivedArtifactPaths: ["derived.json"], project: f.project, runCommand: f.github(), session: f.session
+  });
+
+  // A plain repository has no derived artifacts: the file is its work. The Genesis copy regenerates it.
+  assert.deepEqual(inspected.map(copy => [copy.name, copy.unsaved]), [["library", true], ["tools", false]]);
+});
+
+test("a copy that conflicts on Update reports its conflict for review, named by its repository, and its reviewed repair resumes in that copy only", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  const tools = await githubRepository(f, "tools");
+  await prepare(f, ["library", "tools"]);
+  const librarySession = await commitInCopy(f, "library", "library.txt", "session\n");
+  const peer = await pushPeer(library, "library.txt", "peer\n");
+  const progress = [];
+
+  const [conflicted, current] = await update(f, { onProgress: async (entry) => { progress.push(entry); } });
+
+  assert.equal(current.status, "already_current");
+  assert.equal(conflicted.code, "vibe64_session_update_conflict");
+  assert.deepEqual(conflicted.conflictPaths, ["../connected/library/library.txt"]);
+  assert.equal(conflicted.error, "1 file in connected repository library needs review before this session can update: " +
+    "../connected/library/library.txt. Resolve it manually or with AI, then use Review resolved conflicts to apply Update. " +
+    "Fix it with AI can help with the repair.");
+  assert.equal(conflicted.conflictRecovery.connectedRepository, "library");
+  assert.deepEqual(conflicted.conflictRecovery.conflictPaths, conflicted.conflictPaths);
+  assert.ok(conflicted.conflictRecovery.reviewId);
+  assert.deepEqual(progress.map(entry => [entry.stage, entry.connectedUpdate]), [
+    ["connected-failed", null],
+    ["connected-updated", null]
+  ]);
+
+  // The person or the AI resolves the file in the copy, then Update applies the reviewed resolution.
+  await writeFile(path.join(copyPath(f, "library"), "library.txt"), "peer and session\n");
+  const [repaired] = await update(f, {
+    conflictRecovery: conflicted.conflictRecovery,
+    operationId: "update-2",
+    reviewedConflictId: conflicted.conflictRecovery.reviewId
+  });
+
+  assert.equal(repaired.status, "updated");
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "library.txt"), "utf8"), "peer and session\n");
+  assert.notEqual(peer, librarySession);
+  assert.equal(f.copies().find(copy => copy.name === "library").canonicalCommit, peer);
+  assert.equal(await remoteMain(tools), tools.base);
+});
+
+test("a copy's Update interrupted after it was prepared recovers from the update it reported, as the session's own does", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "session work\n");
+  const peer = await pushPeer(library, "peer.txt", "peer\n");
+  const reported = [];
+
+  // Vibe64 stops just before the prepared update changes the copy.
+  const [stopped] = await update(f, {
+    beforeSourceChange: async () => { throw new Error("simulated service restart"); },
+    onProgress: async (entry) => { if (entry.connectedUpdate) reported.push(entry.connectedUpdate); }
+  });
+
+  assert.equal(stopped.status, "failed");
+  assert.equal(reported.length, 1);
+  assert.equal(reported[0].name, "library");
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), library.base);
+  assert.equal(f.copies()[0].canonicalCommit, library.base);
+
+  const recovered = await recoverConnectedCopyUpdate({
+    connectedUpdate: reported[0],
+    copies: f.copies(),
+    executionFor: f.executionFor,
+    project: f.project,
+    recordCommits: f.recordCommits,
+    session: f.session
+  });
+
+  assert.deepEqual(recovered, { canonicalCommit: peer, line: `[Connected] library updated to ${peer.slice(0, 12)}.`, name: "library" });
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "peer.txt"), "utf8"), "peer\n");
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "work.txt"), "utf8"), "session work\n");
+  assert.deepEqual([f.copies()[0].baseCommit, f.copies()[0].canonicalCommit], [peer, peer]);
+});
+
+test("Save of copies alone pushes them without the session's own pull request rule or behind check, and leaves its own repository alone", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const service = await sessionService(f, { requirePullRequest: true });
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "library work\n");
+  // The session's own main moved, but the session has nothing of its own to save.
+  const ownPeer = await pushPeer(service.own, "peer.txt", "peer\n");
+
+  const saved = await service.work.saveSessionWork(SESSION_ID, { destinationReview: service.destinationReview, operationId: "save-1" });
+
+  assert.equal(saved.status, "saved");
+  assert.equal(saved.saveCommit, undefined);
+  assert.deepEqual(saved.connected.map(copy => copy.name), ["library"]);
+  assert.equal(await remoteMain(library), saved.connected[0].saveCommit);
+  assert.equal(await git(library.bare, ["show", `${saved.connected[0].saveCommit}:work.txt`]), "library work");
+  assert.equal(await remoteMain(service.own), ownPeer);
+  assert.equal(f.session.metadata.canonical_commit, service.own.base);
+});
+
+test("Save refuses before any copy is pushed while the session's own repository, which has work, is behind its main", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const service = await sessionService(f);
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "library work\n");
+  await writeFile(path.join(f.session.sourcePath, "own.txt"), "own work\n");
+  const ownPeer = await pushPeer(service.own, "peer.txt", "peer\n");
+
+  await assert.rejects(
+    service.work.saveSessionWork(SESSION_ID, { destinationReview: service.destinationReview, operationId: "save-1" }),
+    (error) => {
+      assert.equal(error.code, "vibe64_session_save_update_required");
+      assert.match(error.message, /^The saved branch has changed\. Update this session/u);
+      return true;
+    }
+  );
+  assert.equal(await remoteMain(library), library.base);
+  assert.equal(await remoteMain(service.own), ownPeer);
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "work.txt"), "utf8"), "library work\n");
+});
+
+test("an interrupted Save of copies alone recovers as saved once every copy it pushed is recorded", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const service = await sessionService(f);
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "library work\n");
+  const write = f.store.writeMetadataValue;
+  // Vibe64 stops after the copy's push, before Save records it.
+  f.store.writeMetadataValue = async () => { throw new Error("simulated service restart"); };
+  await assert.rejects(
+    service.work.saveSessionWork(SESSION_ID, { destinationReview: service.destinationReview, operationId: "save-1" }),
+    /simulated service restart/u
+  );
+  f.store.writeMetadataValue = write;
+  const pushed = await remoteMain(library);
+  assert.notEqual(pushed, library.base);
+
+  const recovered = await service.work.recoverSessionWorkSave(SESSION_ID, { recovery: { operationId: "save-1", status: "running" } });
+
+  assert.equal(recovered.status, "saved");
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.saveCommit, undefined);
+  assert.deepEqual(recovered.connected, [{ name: "library", saveCommit: pushed }]);
+  assert.equal(f.copies()[0].canonicalCommit, pushed);
+  assert.equal(f.session.metadata.canonical_commit, service.own.base);
+});
+
+test("an interrupted Save of copies alone stays retryable while a copy still holds unsaved work", async (t) => {
+  const f = await fixture(t);
+  await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const service = await sessionService(f);
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "library work\n");
+
+  // This Save never pushed: the copy's work is still unsaved.
+  await assert.rejects(
+    service.work.recoverSessionWorkSave(SESSION_ID, { recovery: { operationId: "save-1", status: "running" } }),
+    { code: "vibe64_session_save_interrupted_retryable" }
+  );
+});
+
+test("the service routes a copy's conflict review to that copy, and failure inspection reads that copy's checkout", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const service = await sessionService(f);
+  await commitInCopy(f, "library", "library.txt", "session\n");
+  const peer = await pushPeer(library, "library.txt", "peer\n");
+
+  const conflicted = await service.work.updateSessionWork(SESSION_ID, { operationId: "update-1" });
+  assert.equal(conflicted.status, "already_current");
+  const recovery = conflicted.connected[0].conflictRecovery;
+  assert.equal(recovery.connectedRepository, "library");
+  const failure = (connectedRepository) => service.inspection.inspectSessionUpdateFailure(SESSION_ID, {
+    connectedRepository,
+    targetCommit: recovery.canonicalCommit
+  });
+  assert.deepEqual([(await failure("library")).targetInHead, (await failure("library")).updateNeeded], [false, true]);
+  // The session's own checkout knows nothing of the copy's main.
+  assert.equal((await failure("")).updateNeeded, false);
+
+  await writeFile(path.join(copyPath(f, "library"), "library.txt"), "peer and session\n");
+  const repaired = await service.work.updateSessionWork(SESSION_ID, {
+    conflictRecovery: recovery,
+    operationId: "update-2",
+    reviewedConflictId: recovery.reviewId
+  });
+
+  assert.equal(repaired.connected[0].status, "updated");
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "library.txt"), "utf8"), "peer and session\n");
+  assert.equal((await failure("library")).targetInHead, true);
+});
+
+test("an interrupted Update recovers the copy it was applying before the session's own repository", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  let stop = true;
+  const service = await sessionService(f, {
+    invalidateWorkspaceSetup: async () => {
+      if (stop) throw new Error("simulated service restart");
+    }
+  });
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "session work\n");
+  const peer = await pushPeer(library, "peer.txt", "peer\n");
+  const reported = [];
+  await service.work.updateSessionWork(SESSION_ID, {
+    onProgress: async (entry) => { if (entry.connectedUpdate) reported.push(entry.connectedUpdate); },
+    operationId: "update-1"
+  });
+  assert.equal(reported.length, 1);
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), library.base);
+  stop = false;
+
+  // The session's own repository had not started, so its part stays retryable, as it is without copies.
+  await assert.rejects(
+    service.work.recoverSessionWorkUpdate(SESSION_ID, { recovery: { connectedUpdate: reported.at(-1), operationId: "update-1", status: "running" } }),
+    { code: "vibe64_session_update_interrupted_retryable" }
+  );
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
+  assert.equal(await readFile(path.join(copyPath(f, "library"), "work.txt"), "utf8"), "session work\n");
+  assert.equal(f.copies()[0].canonicalCommit, peer);
 });

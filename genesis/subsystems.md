@@ -772,8 +772,9 @@ Owns assistant messages to exact or selected sessions in open projects through M
 Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. Working-session preparation consumes the project-owned connection file under existing source admission; Stack supplies generic development treatment. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
 Owns each session's connected repository copies (`connected_copies`, whose
 shape Core validates): workspace preparation makes the missing ones, and Save,
-Update, update checks, work inspection, turn checkpoints and Save recovery cover
-them through the same native Git owner as the session's own repository.
+Update with its conflict review and recovery, update checks, work inspection,
+turn checkpoints and Save recovery cover them through the same native Git owner
+as the session's own repository.
 
 ### Source
 - Directory `packages/vibe64-terminals`

@@ -2018,7 +2018,11 @@ function failedUpdateInspection(evidence) {
         return { unsaved: false, updateAvailable: false };
       },
       async inspectSessionUpdateFailure(sessionId, input) {
-        inspected.push({ sessionId, targetCommit: input.targetCommit });
+        inspected.push({
+          sessionId,
+          targetCommit: input.targetCommit,
+          ...(input.connectedRepository ? { connectedRepository: input.connectedRepository } : {})
+        });
         if (evidence instanceof Error) throw evidence;
         return evidence;
       }
@@ -2051,6 +2055,148 @@ test("work inspection resolves a failed Update the session repaired outside Save
     assert.match(event.message, reason);
     assert.match(event.message, /no unfinished Git operation or conflicted file/u);
   }
+});
+
+test("work inspection reads a connected copy's failed Update in that copy's checkout", async () => {
+  const unresolved = { canonicalCommit: "a".repeat(40), gitOperation: "", sessionHead: "d".repeat(40), targetInHead: false,
+    unmergedPaths: [], updateNeeded: true };
+  const { inspected, service, tasks } = failedUpdateInspection(unresolved);
+  tasks.set("update-session", { ...tasks.get("update-session"), connectedRepository: "library" });
+  const result = await service.inspectSessionWork("session-1", {});
+  assert.deepEqual(inspected, [{ connectedRepository: "library", sessionId: "session-1", targetCommit: "a".repeat(40) }]);
+  assert.equal(result.updateOperation.status, "failed");
+});
+
+test("an interrupted Save of connected copies alone records no commit of the session's own and lists the copies it saved", async () => {
+  const metadata = [];
+  const retired = [];
+  let saveTask = { id: "save-work", operationId: "save-1", status: "running" };
+  const runtime = {
+    async getSession() { return { sessionId: "session-1", status: "active" }; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask(_sessionId, taskId) {
+        return taskId === "save-work" ? saveTask : { id: "update-session", status: "ready" };
+      },
+      async writeBackgroundTaskEvent(_sessionId, _taskId, input) {
+        saveTask = { ...saveTask, ...input.patch, events: [input.event] };
+        return saveTask;
+      },
+      async writeMetadataValue(...args) { metadata.push(args); }
+    }
+  };
+  const service = createService({
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
+    terminals: {
+      async inspectSessionWork() { return { unsaved: false }; },
+      async recoverSessionWorkSave() {
+        return { connected: [{ name: "library", saveCommit: "f".repeat(40) }], ok: true, reconciled: true, recovered: true, status: "saved" };
+      },
+      async retireSessionWorkSave(_sessionId, input) { retired.push(input.operationId); }
+    }
+  });
+
+  const result = await service.inspectSessionWork("session-1", {});
+
+  assert.equal(result.operation.status, "ready");
+  assert.equal(result.operation.events[0].kind, "save-recovered");
+  assert.equal(result.operation.events[0].message, `Interrupted Save recovered and reconciled.\n[Connected] library saved at ${"f".repeat(12)}.`);
+  assert.deepEqual(metadata, []);
+  assert.deepEqual(retired, []);
+});
+
+test("a copy's Update conflict fails Update once the session's own update is recorded, and its review resumes from that record", async () => {
+  const recovery = {
+    baseCommit: "base",
+    canonicalCommit: "library-main",
+    checkpointTree: "checkpoint",
+    conflictPaths: ["../connected/library/library.txt"],
+    conflictTree: "conflict-tree",
+    connectedRepository: "library",
+    oldHead: "head",
+    oldIndexTree: "index",
+    reviewId: "review-library"
+  };
+  const message = "1 file in connected repository library needs review before this session can update: ../connected/library/library.txt.";
+  const conflicted = {
+    code: "vibe64_session_update_conflict",
+    conflictPaths: recovery.conflictPaths,
+    conflictRecovery: recovery,
+    error: message,
+    line: `[Connected] library was not updated and is unchanged: ${message}`,
+    name: "library",
+    status: "failed"
+  };
+  const tasks = new Map();
+  const metadata = [];
+  const session = { agentRuns: [], metadata: {}, sessionId: "session-1", status: "active" };
+  const runtime = {
+    async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    async listSessionSummaries() { return [session]; },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask(_sessionId, taskId) { return tasks.get(taskId) || null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+        const prior = input.reset === true ? { events: [], id: taskId } : tasks.get(taskId) || { events: [], id: taskId };
+        const task = { ...prior, ...input.patch, events: [...(prior.events || []), input.event], id: taskId };
+        tasks.set(taskId, task);
+        return task;
+      },
+      async writeMetadataValue(_sessionId, name, value) {
+        metadata.push([name, value]);
+        session.metadata[name] = value;
+      }
+    }
+  };
+  const calls = [];
+  let preparations = 0;
+  const service = createService({
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
+    async publishSessionChanged() {},
+    setupRunner: {
+      async start() {
+        preparations += 1;
+        session.workspaceSetup = { status: "ready" };
+        return { state: session.workspaceSetup, completion: Promise.resolve(session.workspaceSetup) };
+      }
+    },
+    terminals: {
+      async inspectSessionWork() { return { ahead: 0, behind: 0, canonicalCommit: "canonical", sessionHead: "canonical", updateAvailable: false }; },
+      async updateSessionWork(_sessionId, input) {
+        calls.push(input);
+        await input.onRepositoryWriteAcquired();
+        const connected = calls.length === 1 ? [conflicted] : [{ line: "[Connected] library updated to library-main.", name: "library", status: "updated" }];
+        return { canonicalCommit: "canonical", connected, reconciled: true, status: "updated" };
+      }
+    }
+  });
+
+  const failed = await service.updateSessionWork("session-1", {});
+
+  assert.equal(failed.ok, false);
+  assert.equal(failed.code, "vibe64_session_update_conflict");
+  assert.equal(failed.error, message);
+  assert.deepEqual(failed.details.conflictRecovery, recovery);
+  assert.equal(failed.details.connectedRepository, "library");
+  // The session's own repository was updated and stays recorded.
+  assert.deepEqual(metadata.filter(([name]) => name.endsWith("_commit")), [["canonical_commit", "canonical"], ["base_commit", "canonical"]]);
+  assert.equal(preparations, 1);
+  const record = tasks.get("update-session");
+  assert.equal(record.status, "failed");
+  assert.equal(record.connectedRepository, "library");
+  assert.deepEqual(record.conflictRecovery, recovery);
+  assert.deepEqual(record.conflictPaths, recovery.conflictPaths);
+
+  const retried = await service.updateSessionWork("session-1", { reviewedConflictId: "review-library" });
+
+  assert.deepEqual(calls[1].conflictRecovery, recovery);
+  assert.equal(calls[1].reviewedConflictId, "review-library");
+  assert.equal(retried.ok, true);
+  assert.equal(tasks.get("update-session").status, "ready");
+  assert.equal(tasks.get("update-session").conflictRecovery, null);
+  assert.equal(tasks.get("update-session").events.at(-1).message, "This session was updated.\n[Connected] library updated to library-main.");
 });
 
 test("work inspection keeps a failed Update, with its reason, while the conflict is unresolved", async () => {

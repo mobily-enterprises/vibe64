@@ -5,10 +5,17 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { connectedCopyActorSession, prepareConnectedCopies } from "./sessionConnectedCopies.js";
+import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
+import {
+  connectedCopyActorSession,
+  inspectConnectedCopies,
+  prepareConnectedCopies,
+  recoverConnectedCopyUpdate
+} from "./sessionConnectedCopies.js";
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { githubSourceCommandOptions } from "./sessionSource.js";
 import { saveError } from "./sessionWorkCommands.js";
+import { inspectSessionWork } from "./sessionWorkSave.js";
 import { checkSessionUpdates } from "./sessionWorkUpdate.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -150,9 +157,68 @@ async function refuseBehindSessionSave(input) {
   );
 }
 
+/**
+ * Update's conflict review belongs to one repository: the copy its recovery names
+ * (`connectedRepository`), or else the session's own. The other gets none.
+ * @param {{ conflictRecovery?: object | null, reviewedConflictId?: string }} input
+ */
+function conflictReviewFor({ conflictRecovery = null, reviewedConflictId = "" } = {}) {
+  const review = { conflictRecovery, reviewedConflictId };
+  const none = { conflictRecovery: null, reviewedConflictId: "" };
+  return conflictRecovery?.connectedRepository ? { connected: review, own: none } : { connected: none, own: review };
+}
+
+/**
+ * The copy an interrupted Update was applying, recovered when its prepared update was reported.
+ * @param {object} input `recoverConnectedCopyUpdate`'s input, with the Update's `recovery` record
+ * @param {CodexGitCommandService} input.codexGitCommand
+ * @param {RuntimeEnv} input.env
+ * @param {object} input.recovery
+ * @param {object} input.runtime
+ * @param {object} input.session
+ */
+function recoverConnectedUpdate({ codexGitCommand, env, recovery, runtime, session, ...input }) {
+  if (!recovery.connectedUpdate) return null;
+  return recoverConnectedCopyUpdate({
+    ...input,
+    connectedUpdate: recovery.connectedUpdate,
+    copies: sessionConnectedCopies(session),
+    ...connectedCopyOperations({ codexGitCommand, env, runtime, session }, {
+      createsCommits: true,
+      reason: "session-update-recovery",
+      runtime
+    }),
+    session
+  });
+}
+
+/**
+ * Whether an interrupted Save whose own recovery found nothing prepared was a Save of copies alone
+ * that is complete: the session has copies, and neither its own repository nor any copy holds unsaved
+ * work, so every copy that Save pushed is recorded.
+ * @param {unknown} error the own recovery's error
+ * @param {{ project: object, runtime: object, session: object }} input
+ */
+async function copiesOnlySaveRecovered(error, { project, runtime, session }) {
+  if (error?.code !== "vibe64_session_save_interrupted_retryable" || !sessionConnectedCopies(session).length) return false;
+  const current = await runtime.getSessionWithoutSource(session.sessionId);
+  const own = await inspectSessionWork({ derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS, project, session: current });
+  if (own.unsaved === true) return false;
+  const copies = await inspectConnectedCopies({
+    copies: sessionConnectedCopies(current),
+    derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+    project,
+    session: current
+  });
+  return !copies.some(copy => copy.unsaved);
+}
+
 export {
+  conflictReviewFor,
   connectedCopyExecution,
   connectedCopyOperations,
+  copiesOnlySaveRecovered,
   prepareConnectedRepositories,
+  recoverConnectedUpdate,
   refuseBehindSessionSave
 };

@@ -98,11 +98,18 @@ function normalizedConflictRecovery(value = {}) {
     : recovery;
 }
 
-function conflictMessage(conflictPaths = []) {
+/**
+ * What a conflict asks of the person. `repositoryName` names the connected repository whose copy
+ * conflicts; without it the conflict is in the session's own repository.
+ * @param {string[]} conflictPaths
+ * @param {string} [repositoryName]
+ */
+function conflictMessage(conflictPaths = [], repositoryName = "") {
   const count = conflictPaths.length;
   const files = conflictPaths.slice(0, 3).join(", ");
   const suffix = count > 3 ? ` and ${count - 3} more` : "";
-  return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Resolve ${count === 1 ? "it" : "them"} manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.`;
+  const where = repositoryName ? ` in connected repository ${repositoryName}` : "";
+  return `${count} ${count === 1 ? "file" : "files"}${where} ${count === 1 ? "needs" : "need"} review before this session can update: ${files}${suffix}. Resolve ${count === 1 ? "it" : "them"} manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.`;
 }
 
 function conflictRecoveryError(recovery) {
@@ -700,6 +707,7 @@ export {
   captureSessionWorkUpdateCheckpointDirect,
   checkSessionUpdates,
   checkSessionUpdatesDirect,
+  conflictMessage,
   prepareSessionWorkUpdateDirect,
   readSessionAuthorityHeads,
   regenerateSessionWorkUpdateDirect,

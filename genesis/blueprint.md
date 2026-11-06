@@ -21,7 +21,8 @@ followed by connected preparation and verification, preserving authored files
 and the copies' work on failure. Initial consumption verification covers Node.js;
 other stacks still require end-to-end evidence. Update brings every copy onto
 its repository's main with the session's own repository; a copy that conflicts
-stays as it was. Save pushes each copy that has work straight to its main first,
+stays as it was and its conflict is reviewed and repaired like the session's own,
+and an interrupted Update recovers the copy it was applying. Save pushes each copy that has work straight to its main first,
 then the session's own repository, and refuses before pushing anything while any
 of them is behind its main. The unsaved badge, the check for newer saved work,
 turn checkpoints, archive recovery and renewal cover the copies too.

@@ -58,18 +58,23 @@ function createSessionWorkRecovery({
         runtime,
         session
       });
-      await runtime.store.writeMetadataValue(session.sessionId, "canonical_commit", result.saveCommit);
-      if (result.reconciled === true) {
-        await runtime.store.writeMetadataValue(session.sessionId, "base_commit", result.saveCommit);
+      // A Save of connected copies alone has no commit of the session's own.
+      if (result.saveCommit) {
+        await runtime.store.writeMetadataValue(session.sessionId, "canonical_commit", result.saveCommit);
+        if (result.reconciled === true) {
+          await runtime.store.writeMetadataValue(session.sessionId, "base_commit", result.saveCommit);
+        }
       }
+      const recovered = result.cacheMaintenance?.retryable === true
+        ? "Interrupted Save recovered. The local clone cache could not be refreshed and will be retried later."
+        : result.reconciled === true
+          ? "Interrupted Save recovered and reconciled."
+          : "Interrupted Save was pushed and needs local reconciliation.";
       const recorded = await runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_SAVE_TASK_ID, {
         event: {
           kind: "save-recovered",
-          message: result.cacheMaintenance?.retryable === true
-            ? "Interrupted Save recovered. The local clone cache could not be refreshed and will be retried later."
-            : result.reconciled === true
-              ? "Interrupted Save recovered and reconciled."
-              : "Interrupted Save was pushed and needs local reconciliation.",
+          message: [recovered, ...(result.connected || []).map(copy => `[Connected] ${copy.name} saved at ${copy.saveCommit.slice(0, 12)}.`)]
+            .join("\n"),
           status: "ready"
         },
         patch: {
@@ -79,7 +84,7 @@ function createSessionWorkRecovery({
           status: "ready"
         }
       });
-      await retireRecordedSave(session.sessionId, task.operationId, { runtime });
+      if (result.saveCommit) await retireRecordedSave(session.sessionId, task.operationId, { runtime });
       return recorded;
     } catch (error) {
       // A prepared-ref check can prove this failed attempt never published.
@@ -128,10 +133,10 @@ function createSessionWorkRecovery({
       const recovered = await runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
         event: {
           kind: "update-recovered",
-          message: "Interrupted session update recovered.",
+          message: ["Interrupted session update recovered.", ...(result.connected || []).map(copy => copy.line)].join("\n"),
           status: "ready"
         },
-        patch: { ...result, status: "ready" }
+        patch: { ...result, connectedUpdate: null, status: "ready" }
       });
       await workspaceSetup.prepareUpdatedWorkspace(runtime, session.sessionId);
       return recovered;
@@ -194,9 +199,10 @@ function createSessionWorkRecovery({
   }
 
   /**
-   * A failed Update that the session's own repository has since repaired
-   * outside Save or Update (an assistant or a person using Git directly) no
-   * longer applies once its checkout proves all of this: HEAD contains the
+   * A failed Update that the session's own repository, or the connected copy
+   * whose failure it was (`connectedRepository`), has since repaired outside
+   * Save or Update (an assistant or a person using Git directly) no longer
+   * applies once that checkout proves all of this: HEAD contains the
    * saved version the Update was trying to reach, or Update has nothing left
    * to apply; no merge, rebase, cherry-pick or revert is unfinished; and no
    * file is conflicted. The record keeps its checkpoint and conflict evidence
@@ -213,6 +219,7 @@ function createSessionWorkRecovery({
     let evidence;
     try {
       evidence = await terminals.inspectSessionUpdateFailure(session.sessionId, {
+        connectedRepository: normalizeText(task.connectedRepository),
         runtime,
         session,
         targetCommit: normalizeText(task.conflictRecovery?.canonicalCommit)
