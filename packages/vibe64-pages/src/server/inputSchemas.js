@@ -14,5 +14,6 @@ const pagesListInput = validator({});
 const pageInput = validator({ pageId });
 const pageViewInput = validator({ pageId, theme: { type: "string", noTrim: false, required: false, maxLength: 8 } });
 const pageVersionInput = validator({ pageId, version: { type: "integer", required: true, min: 1 } });
+const pageStarInput = validator({ pageId, starred: { type: "boolean", required: true } });
 
-export { pageInput, pagesListInput, pageVersionInput, pageViewInput };
+export { pageInput, pagesListInput, pageStarInput, pageVersionInput, pageViewInput };

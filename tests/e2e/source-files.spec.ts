@@ -73,6 +73,7 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
   await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/update-check`, (route) => fulfillJson(route, { ok: true, status: "up-to-date" }));
   await routeApiEndpoint(page, "/vibe64/sessions/current", (route) => fulfillJson(route, { ok: true, sessionId: directChatSessionId }));
   await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/files`, (route) => fulfillJson(route, { ok: true, areas: ["repo"] }));
+  await routeApiEndpoint(page, "/vibe64/pages/stars", (route) => fulfillJson(route, { ok: true, pages: [] }));
   const base = `/vibe64/sessions/${directChatSessionId}/source-editor`;
   const files = { "README.md": "# Hello\n", "notes.bin": Buffer.from([0, 255, 3]), "src/app.js": "export const ready = true;\n", ...additionalFiles };
   let stars = [...initialStars];
@@ -398,10 +399,10 @@ for (const width of [390, 900, 1600]) {
     const showChat = page.getByRole("button", { name: "Show chat", exact: true });
     if (await showChat.isVisible()) await showChat.click();
     const beforePicker = starReads;
-    await page.getByRole("button", { name: "Starred files (6)", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "Find a starred file", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Starred (6)", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Find a starred page or file", exact: true })).toBeFocused();
     await expect.poll(() => starReads).toBe(beforePicker + 1);
-    await page.getByRole("textbox", { name: "Find a starred file", exact: true }).fill("src/app.js");
+    await page.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("src/app.js");
     await page.keyboard.press("Enter");
     await expect(editor).toBeVisible();
     await expect(editor.locator(".cm-content")).toContainText("export const ready = false;");
@@ -451,19 +452,19 @@ for (const width of [390, 900, 1600]) {
     // Compact screens retain chat behind the project pane; use the shell's back control.
     const showChat = page.getByRole("button", { name: "Show chat", exact: true });
     if (await showChat.isVisible()) await showChat.click();
-    const picker = page.getByRole("button", { name: "Starred files (3)", exact: true });
+    const picker = page.getByRole("button", { name: "Starred (3)", exact: true });
     const composer = page.getByLabel("Message AI assistant");
     await composer.fill("Keep this draft while browsing files.");
     await picker.click();
-    await expect(page.getByRole("textbox", { name: "Find a starred file", exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Find a starred file", exact: true })).toBeFocused();
+    await expect(page.getByRole("textbox", { name: "Find a starred page or file", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Find a starred page or file", exact: true })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(picker).toBeFocused();
     await picker.click();
-    await expect(page.locator(".starred-files-menu").getByText("Not found in this session")).toBeVisible();
-    await page.getByRole("textbox", { name: "Find a starred file", exact: true }).fill("app.js");
+    await expect(page.locator(".starred-menu").getByText("Not found in this session")).toBeVisible();
+    await page.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("app.js");
     await page.screenshot({ path: testInfo.outputPath(`starred-files-${width}.png`), animations: "disabled" });
-    await page.getByRole("textbox", { name: "Find a starred file", exact: true }).press("Enter");
+    await page.getByRole("textbox", { name: "Find a starred page or file", exact: true }).press("Enter");
     await expect(editor).toBeVisible();
     await expect(editor.locator(".cm-content")).toContainText("export const ready = true;");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

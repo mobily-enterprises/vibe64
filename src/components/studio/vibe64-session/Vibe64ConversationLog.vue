@@ -54,7 +54,7 @@
       <v-chip v-if="turn.metadata?.source === 'lesson'" size="x-small" variant="tonal" class="mt-1 align-self-start" data-test="lesson-sent-chip">
         Sent by the lesson
       </v-chip>
-      <Vibe64PageLinkCards :text="message.text || ''" />
+      <Vibe64PageLinkCards :text="message.text || ''" @opened="emit('open-page')" />
     </template>
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
@@ -126,7 +126,7 @@
           {{ integrationActionError.message }}
         </v-card-text>
       </v-card>
-      <Vibe64PageLinkCards :text="message.text || ''" />
+      <Vibe64PageLinkCards :text="message.text || ''" @opened="emit('open-page')" />
     </template>
     <template v-if="$slots.hints || voiceSession || voiceError" #hints>
       <div v-if="voiceSession && voiceBinding.presentation === 'inline'" v-show="!voice.controller.state.nextTarget">
@@ -249,6 +249,8 @@ const emit = defineEmits([
   // { action: "connect" | "check" | "cancel" | "skip" | "resume", sessionId, turnId, requestId }
   "integration-action",
   "open-source-file",
+  // A page card's Open: the page shows beside the chat.
+  "open-page",
   "open-plan-history",
   "reload",
   "resend-turn"

@@ -513,6 +513,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === `${sessionRoute}/main-chat-approvals`) result = { ok: true, sessionId: session.sessionId, owner: true, practice: false,
         viewer: { id: owner.username, username: owner.username, displayName: owner.username }, ownerName: owner.username, entries: [] };
       else if (route === `${sessionRoute}/source-editor/stars`) result = { ok: true, files: [] };
+      else if (route === "/vibe64/pages/stars") result = { ok: true, pages: [] };
       else if (route === `/vibe64/usage-recordings/sessions/${session.sessionId}/current`) result = { recording: null, serverTime: new Date().toISOString() };
       else if (route === "/vibe64/settings") result = { ok: true, promptHints: { enabled: false } };
       else if (route === "/vibe64/accounts") result = { ok: true, ready: true, accounts: [] };

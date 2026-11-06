@@ -433,10 +433,10 @@ test.describe("direct chat", () => {
     await expect(page.getByText("Chat mode", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(settings).toBeFocused();
-    const starredRow = page.getByRole("button", { name: "Starred files (0)", exact: true });
+    const starredRow = page.getByRole("button", { name: "Starred (0)", exact: true });
     await starredRow.click({ position: { x: 12, y: 16 } });
-    await expect(page.getByLabel("Find a starred file", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close starred files", exact: true }).click();
+    await expect(page.getByLabel("Find a starred page or file", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close starred", exact: true }).click();
     await expect(starredRow).toBeFocused();
     await settings.click();
     await page.screenshot({ path: test.info().outputPath("settings-menu.png") });

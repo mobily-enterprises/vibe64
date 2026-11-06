@@ -35,6 +35,13 @@ const readPage = (projectSlug, pageId) => pagesRequest(projectSlug, pageSuffix(p
 const openPageView = (projectSlug, pageId, theme) =>
   pagesRequest(projectSlug, `${pageSuffix(pageId)}/view`, { method: "POST", body: { theme } });
 
+/** The current pages this person starred, in the order they starred them. @param {string} projectSlug */
+const listStarredPages = (projectSlug) => pagesRequest(projectSlug, "/stars");
+
+/** @param {string} projectSlug @param {string} pageId @param {boolean} starred */
+const setPageStar = (projectSlug, pageId, starred) =>
+  pagesRequest(projectSlug, `${pageSuffix(pageId)}/star`, { method: "POST", body: { starred } });
+
 /** @param {string} projectSlug @param {string} pageId */
 const archivePage = (projectSlug, pageId) => pagesRequest(projectSlug, `${pageSuffix(pageId)}/archive`, { method: "POST", body: {} });
 
@@ -58,9 +65,11 @@ export {
   archivePage,
   deletePage,
   listPages,
+  listStarredPages,
   openPageView,
   pageTime,
   readPage,
   restorePage,
-  restorePageVersion
+  restorePageVersion,
+  setPageStar
 };

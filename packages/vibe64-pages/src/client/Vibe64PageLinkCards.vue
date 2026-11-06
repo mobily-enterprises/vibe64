@@ -1,19 +1,27 @@
 <script setup>
 // The pages a chat message links to, the AI's or pasted, each as a card with
-// its title, last update and Open, which shows it beside the chat.
+// its title, last update, its star and Open, which shows it beside the chat
+// and tells the chat ("opened"), so a phone brings the page forward.
 import { computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { mdiFileDocumentOutline } from "@mdi/js";
 import { pageLinksInText } from "../shared/pageLinks.js";
 import { pageLinkAnswers as answers, readPageLink } from "./pageLinkAnswers.js";
 import { pageTime } from "./pagesRequests.js";
+import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
 
 const props = defineProps({
   text: { type: String, default: "" }
 });
 
+const emit = defineEmits(["opened"]);
 const router = useRouter();
 const links = computed(() => pageLinksInText(props.text, { origin: globalThis.location?.origin || "" }));
+
+function open(link) {
+  void router.push(link.path);
+  emit("opened", link);
+}
 
 // Each card reads its page when it appears, which refreshes every card of that page.
 watch(() => links.value.map((link) => link.path).join("\n"), () => {
@@ -44,12 +52,17 @@ watch(() => links.value.map((link) => link.path).join("\n"), () => {
             {{ answers[link.path].error }}
           </span>
         </div>
+        <Vibe64PageStarButton
+          v-if="answers[link.path]?.page && !answers[link.path].page.archived"
+          :page="answers[link.path].page"
+          :project-slug="link.projectSlug"
+        />
         <v-btn
           :disabled="!answers[link.path]?.page"
           color="primary"
           variant="tonal"
           data-test="page-link-card-open"
-          @click="router.push(link.path)"
+          @click="open(link)"
         >
           Open
         </v-btn>
@@ -69,7 +82,7 @@ watch(() => links.value.map((link) => link.path).join("\n"), () => {
 .vibe64-page-link-card__body {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   padding: 0.75rem;
 }
 

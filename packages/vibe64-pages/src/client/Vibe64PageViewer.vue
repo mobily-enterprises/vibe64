@@ -1,9 +1,9 @@
 <script setup>
 // One page beside the chat, as Preview shows an app: a sandboxed frame on a
-// short-lived viewing link, with Open in new tab, its kept versions, and
-// archive or restore.
-import { computed, onMounted, ref, watch } from "vue";
-import { useTheme } from "vuetify";
+// short-lived viewing link, with its star, Open in new tab, its kept versions,
+// and archive or restore. A page opened from the Starred menu shows at once:
+// its title from the starred list and the viewing link the menu asked for.
+import { computed, ref, watch } from "vue";
 import {
   mdiArchiveArrowDownOutline,
   mdiArchiveArrowUpOutline,
@@ -12,7 +12,11 @@ import {
   mdiOpenInNew,
   mdiRefresh
 } from "@mdi/js";
+import { pageAppPath } from "../shared/pageLinks.js";
+import { pageLinkAnswers } from "./pageLinkAnswers.js";
+import { starredPageSummary, takePreparedPageView, usePageViewTheme } from "./pageStars.js";
 import { archivePage, openPageView, pageTime, restorePage, restorePageVersion } from "./pagesRequests.js";
+import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
 
 // The page's frame may run its own scripts and forms, never as Vibe64.
 const PAGE_SANDBOX = "allow-scripts allow-forms allow-modals";
@@ -23,8 +27,7 @@ const props = defineProps({
   projectSlug: { type: String, required: true }
 });
 
-const vuetifyTheme = useTheme();
-const themeName = computed(() => vuetifyTheme.current.value.dark ? "dark" : "light");
+const themeName = usePageViewTheme();
 const page = ref(null);
 const viewPath = ref("");
 const error = ref("");
@@ -33,14 +36,34 @@ const frameKey = ref(0);
 
 const versions = computed(() => [...(page.value?.versions || [])].reverse());
 
+// What is already known of the page while its viewing link is on its way.
+function knownPage() {
+  return starredPageSummary(props.projectSlug, props.pageId)
+    || pageLinkAnswers[pageAppPath(props.projectSlug, props.pageId)]?.page
+    || null;
+}
+
+function show(answer) {
+  page.value = answer.page;
+  viewPath.value = answer.viewPath;
+  frameKey.value += 1;
+  error.value = "";
+}
+
 async function open() {
   if (!props.projectSlug || !props.pageId) return;
+  const prepared = takePreparedPageView(props.projectSlug, props.pageId, themeName.value);
+  if (prepared?.answer) {
+    show(prepared.answer);
+    return;
+  }
+  if (page.value?.id !== props.pageId) {
+    page.value = knownPage();
+    viewPath.value = "";
+  }
+  const fresh = () => openPageView(props.projectSlug, props.pageId, themeName.value);
   try {
-    const answer = await openPageView(props.projectSlug, props.pageId, themeName.value);
-    page.value = answer.page;
-    viewPath.value = answer.viewPath;
-    frameKey.value += 1;
-    error.value = "";
+    show(await (prepared ? prepared.promise.catch(fresh) : fresh()));
   } catch (cause) {
     viewPath.value = "";
     error.value = cause?.message || "The page could not open.";
@@ -78,7 +101,8 @@ async function change(operation) {
   }
 }
 
-onMounted(open);
+// Opening starts in setup, so a link asked for ahead is in the first render.
+void open();
 watch(() => [props.projectSlug, props.pageId, themeName.value], open);
 </script>
 
@@ -92,6 +116,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
           Version {{ page.version }} · updated {{ pageTime(page.updatedAt) }}<template v-if="page.updatedBy?.name"> by {{ page.updatedBy.name }}</template>
         </span>
       </div>
+      <Vibe64PageStarButton v-if="page && !page.archived" :page="page" :project-slug="projectSlug" />
       <v-chip v-if="page?.archived" size="small" variant="tonal" data-test="page-viewer-archived">Archived</v-chip>
       <div class="vibe64-page-viewer__actions">
         <v-btn :icon="mdiRefresh" aria-label="Reload page" title="Reload" variant="text" @click="open" />

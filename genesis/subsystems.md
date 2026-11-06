@@ -659,13 +659,16 @@ times, archived) and the files of the last ten versions; never in the
 repository. The session agent publishes, updates, reverts and lists pages with
 `vibe64-helper pages`, whose wrapper and socket live with Terminals' other
 agent commands and reach this package's service through the pages provider
-slot. Project members list, read, archive, restore, delete and bring back
-versions through named actions behind the ordinary project access check; none
-is an AI tool. Viewing goes through short-lived viewing links that name one
-page: the frame host and the page's files are served sandboxed, with an opaque
+slot. Project members list, read, star, archive, restore, delete and bring
+back versions through named actions behind the ordinary project access check;
+none is an AI tool. Each member's starred pages are kept with the project's
+pages in `<project state>/pages/.stars/`, through Core's personal star store,
+which starred files use too. Viewing goes through short-lived viewing links
+that name one page: the frame host and the page's files are served sandboxed, with an opaque
 origin and a Content-Security-Policy that admits only that link's own files.
-The client part holds the Pages list, the viewer beside the chat and the chat's
-page link cards; the application places them in the Dashboard and transcripts.
+The client part holds the Pages list, the viewer beside the chat, the chat's
+page link cards, every page's star and the starred pages of the chat's Starred
+menu; the application places them in the Dashboard, transcripts and that menu.
 The `_vibe64/page.css` stylesheet gives pages Vibe64's colours, font, light and
 dark modes and ready components, and the page design guide the agent reads with
 `vibe64-helper pages guide` shows how to build a page from them.
@@ -677,6 +680,7 @@ dark modes and ready components, and the page design guide the agent reads with
 - `genesis/program/pages/publishing.md`
 - `genesis/program/pages/pages-list.md`
 - `genesis/program/pages/viewing.md`
+- `genesis/program/pages/stars.md`
 
 ### Data owned
 - Nothing.
@@ -1028,7 +1032,7 @@ Stores project-specific agent configuration.
 
 ## `packages-vibe64-core` Core primitives
 
-Provides the shared paths, errors, request/context helpers, atomic file publication and state-upgrade facilities used by Vibe64’s product packages. It defines common mechanics without owning project, session, teaching or conversation policy.
+Provides the shared paths, errors, request/context helpers, atomic file publication, the personal star store (one person's starred files or pages in a project) and state-upgrade facilities used by Vibe64’s product packages. It defines common mechanics without owning project, session, teaching or conversation policy.
 
 The shared upload byte policy keeps Files, chat HTTP admission and browser validation aligned; each product service retains authorization, streaming storage and cleanup.
 

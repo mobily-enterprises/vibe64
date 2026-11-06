@@ -1,4 +1,4 @@
-# Upload, create, preview, move and copy files
+# Upload, create, preview, star, move and copy files
 
 Open a session's **Dashboard → Files** to work with that session's files, or
 **Dashboard → Project files** for files every session of the project shares.
@@ -166,6 +166,17 @@ appear here. Symbolic links are not shown or cleaned automatically.
 
 **Session Dropzone** belongs to one session and disappears when that session is
 successfully archived. Copy anything you need into Project Dropzone first.
+
+## Star files you come back to
+
+Open a Repo file and choose **Star file** in its header (on a phone, under
+**File actions**); choose **Unstar file** to remove the star. Your stars are
+yours alone and show in every session of the project, up to 100. The file
+list's **Starred** section lists them; a file this session does not have shows
+**Not found in this session** until you unstar it. The star button beside the
+chat's message box (**Starred**) lists your starred pages and files with one
+**Search**; choose a file to open it in Files, or press Enter to open the first
+match. Starring pages is described in the Pages guide.
 
 ## Use files with the coding agent
 

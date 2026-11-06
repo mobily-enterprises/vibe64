@@ -28,7 +28,7 @@ function pageInput(request) {
   return { pageId: request.params.pageId };
 }
 
-function pageViewInput(request) {
+function pageBodyInput(request) {
   return { ...requestBody(request), pageId: request.params.pageId };
 }
 
@@ -76,6 +76,11 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
     summary: "List this project's pages, current and archived.",
     bodyLimit: PAGES_BODY_LIMIT
   });
+  routes.actionRoute("GET", "/pages/stars", {
+    actionId: PAGES_ACTIONS.STARS_READ,
+    summary: "List the current pages this person starred.",
+    bodyLimit: PAGES_BODY_LIMIT
+  });
   routes.actionRoute("GET", "/pages/:pageId", {
     actionId: PAGES_ACTIONS.READ,
     buildInput: pageInput,
@@ -84,8 +89,14 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
   });
   routes.actionRoute("POST", "/pages/:pageId/view", {
     actionId: PAGES_ACTIONS.VIEW_OPEN,
-    buildInput: pageViewInput,
+    buildInput: pageBodyInput,
     summary: "Open a short-lived viewing link to one page.",
+    bodyLimit: PAGES_BODY_LIMIT
+  });
+  routes.actionRoute("POST", "/pages/:pageId/star", {
+    actionId: PAGES_ACTIONS.STAR_SET,
+    buildInput: pageBodyInput,
+    summary: "Star or unstar a page for this person.",
     bodyLimit: PAGES_BODY_LIMIT
   });
   routes.actionRoute("POST", "/pages/:pageId/archive", {

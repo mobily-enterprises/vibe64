@@ -49,10 +49,10 @@ selected session; the workspace owner also sees the read-only **Session** area.
 **Project Backups**, shared by all sessions of the project. Choose an area to
 browse its folders and files; searching is optional. Uploading, creating text
 files, image previews and moving or copying between areas are described in
-[Upload, create, preview, move and copy files](files.md).
+[Upload, create, preview, star, move and copy files](files.md).
 **Pages**, also in the project section, lists the pages the AI made for the
 project, opens one beside the chat, and archives, restores and deletes them; see
-[Make, open, archive and restore pages](pages.md). Colleague explains Pages but
+[Make, open, star, archive and restore pages](pages.md). Colleague explains Pages but
 does not open it for you.
 Access follows the signed-in account; changing a link cannot select another role.
 Changes shows the session's source changes. AI Terminal shows the coding agent's

@@ -45,10 +45,16 @@ always runs sandboxed: page content is untrusted.
   callouts, progress bars, a scroll wrapper for wide tables, number alignment
   and inline SVG charts (`pageStylesheet.js`).
 - Open shows the viewer in the Dashboard panel beside the chat, with the
-  Dashboard menu hidden, the page's version and last update, Reload, Versions
+  Dashboard menu hidden, the page's star, version and last update, Reload, Versions
   (bring back a kept version), Archive or Restore, and Open in new tab, which
   gets its own viewing link and leaves the new tab no way back to Vibe64.
 - Every page link in a main or temporary chat message, the AI's or a pasted
   one (a path or a full address on this Vibe64), shows as a card with the
-  page's title and last update, and Open shows it beside the chat. A deleted
-  page's card says so.
+  page's title and last update, its star, and Open shows it beside the chat. A
+  main-chat card's Open, like a page opened from the Starred menu, also brings
+  the project side forward on a phone (the chat's `project-attention`). A
+  deleted page's card says so.
+- The viewer shows a page it already knows (from the member's starred pages or
+  a chat card) with its title at once, and takes the viewing link the chat's
+  Starred menu asked for ahead (`stars.md`) instead of asking again, so the
+  panel and its frame appear in the first render.

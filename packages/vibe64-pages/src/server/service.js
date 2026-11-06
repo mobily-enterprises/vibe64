@@ -1,11 +1,12 @@
-// A project's pages: what project members list, open, archive, restore and
-// delete, and what a session's agent publishes and updates through its
+// A project's pages: what project members list, open, star, archive, restore
+// and delete, and what a session's agent publishes and updates through its
 // command. Every operation runs inside the project request context that the
 // project access check (or the agent command's project binding) set up.
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { pageAppPath } from "../shared/pageLinks.js";
 import { checkedTitle, decodedPageFiles, htmlTitle } from "./pageFiles.js";
+import { changePageStar, forgetPageStars, readPageStars } from "./pageStars.js";
 import { createPageStore, projectPagesRoot } from "./pageStore.js";
 import { createPageViewLinks } from "./pageViewLinks.js";
 import { PAGE_VIEW_ROUTE } from "./pageSandbox.js";
@@ -72,6 +73,41 @@ function createPagesService({ now, clock }) {
   }
 
   /**
+   * The current pages among these ids, in their order: an archived page is
+   * left out until it is restored, and a missing one is skipped.
+   * @param {string} pagesRoot
+   * @param {string} slug
+   * @param {string[]} pageIds
+   */
+  async function currentPagesAmong(pagesRoot, slug, pageIds) {
+    const records = await Promise.all(pageIds.map((pageId) => store.read(pagesRoot, pageId).catch((error) => {
+      if (error?.code === "vibe64_pages_not_found") return null;
+      throw error;
+    })));
+    return records.filter((record) => record && !record.archived).map((record) => pageSummary(record, slug));
+  }
+
+  /**
+   * The current pages this person starred, in the order they starred them.
+   * @param {{ vibe64User?: object | null }} input
+   */
+  async function starredPages({ vibe64User }) {
+    const { pagesRoot, slug } = currentProject();
+    return { ok: true, pages: await currentPagesAmong(pagesRoot, slug, await readPageStars(pagesRoot, vibe64User)) };
+  }
+
+  /**
+   * Stars or unstars a page for this person; a star needs a page to name.
+   * @param {{ pageId: string, starred: boolean, vibe64User?: object | null }} input
+   */
+  async function setPageStar({ pageId, starred, vibe64User }) {
+    const { pagesRoot, slug } = currentProject();
+    if (starred) await store.read(pagesRoot, pageId);
+    const pageIds = await changePageStar(pagesRoot, vibe64User, pageId, starred);
+    return { ok: true, pages: await currentPagesAmong(pagesRoot, slug, pageIds) };
+  }
+
+  /**
    * Brings back an earlier kept version as the page's newest one.
    * @param {{ pageId: string, version: number, by: PageAuthor, sessionId?: string }} input
    */
@@ -108,6 +144,7 @@ function createPagesService({ now, clock }) {
     const { pagesRoot } = currentProject();
     const removed = await store.remove(pagesRoot, pageId);
     viewLinks.revokePage(pagesRoot, removed.id);
+    await forgetPageStars(pagesRoot, removed.id);
     return { ok: true, pageId: removed.id };
   }
 
@@ -163,6 +200,9 @@ function createPagesService({ now, clock }) {
     readPage,
     restorePage,
     restorePageVersion,
+    // readable-check: allow setter-seam - not a slot: setPageStar stars a page for one person
+    setPageStar,
+    starredPages,
     updatePage,
     viewedPage
   });

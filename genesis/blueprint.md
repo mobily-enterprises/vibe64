@@ -516,11 +516,16 @@ an archived page can be deleted. A page keeps its last ten versions, and any of
 them can be brought back as the newest. Any page link in the chat, the AI's or
 one a person pastes, shows as a card with the page's title, last update and Open,
 which shows the page beside the chat, like Preview, with Open in new tab for the
-whole screen. The AI offers a page in one line when a result reads better as one,
-makes it without asking when the person says it is for others or for later, and
-updates an existing page instead of making a second one about the same thing. A
-page is untrusted: it shows only its own files and cannot see Vibe64, the
-viewer's sign-in, other projects or other pages, or send anything anywhere.
+whole screen. Each person can star the pages they come back to, on a page's
+chat card, beside its open title or in the Pages list, where their starred pages
+come first; stars are personal, shared by every session of the project, and the
+chat's **Starred** menu lists starred pages above starred files so one click
+opens a page beside the chat at once. The AI offers a page in one line when a
+result reads better as one, makes it without asking when the person says it is
+for others or for later, and updates an existing page instead of making a
+second one about the same thing. A page is untrusted: it shows only its own
+files and cannot see Vibe64, the viewer's sign-in, other projects or other
+pages, or send anything anywhere.
 Uploads go straight into the open folder with no further step, in Repo too,
 where the current folder is the open file's folder and uploaded files are
 ordinary session changes; no partly uploaded file is ever visible to Git or Save
@@ -740,7 +745,7 @@ explicit model selection refreshes missing or stale routing without recreating
 the goal. The shared theme gives status and recovery panels contrasting text
 on a tinted blue surface. Connection, test approval, renewal and future notices
 inherit that foreground/background pair; disabled notice controls remain readable. Auto, automatic review and orchestrator changes remain unavailable
-for an unfinished goal. The starred-files, attachments and goal controls remain accessible
+for an unfinished goal. The Starred (pages and files), attachments and goal controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send and Stop stay alongside the icons, goal and allowance in one row on mobile.

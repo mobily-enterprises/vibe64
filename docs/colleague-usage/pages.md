@@ -1,4 +1,4 @@
-# Make, open, archive and restore pages
+# Make, open, star, archive and restore pages
 
 A page is an HTML page the AI makes for the project: a report, a comparison, a
 status overview, a dashboard or a diagram. Everyone with access to the project
@@ -38,7 +38,8 @@ or anything private to go into one.
 
 - **From the chat:** a page link in a message, the AI's or one you paste, shows
   as a card with the page's title and when it was last updated. Choose **Open**
-  on the card, or the link itself. The page opens beside the chat, like Preview.
+  on the card, or the link itself. The page opens beside the chat, like Preview;
+  on a phone it comes to the front, and **Show chat** goes back to the chat.
 - **From the Pages list:** open the Dashboard and choose **Pages** in its
   **Project** group. Choose a page's title or **Open**.
 
@@ -50,6 +51,24 @@ browser blocks the tab, allow pop-ups for Vibe64 and choose it again.
 A page link you open in a tab works for 15 minutes without use and 4 hours at
 most; after that, or after Vibe64 restarts, the tab says the link has ended.
 Open the page again from Vibe64 to get a new one.
+
+## Star a page to reach it quickly
+
+Choose the star (**Star page**) on a page's chat card, beside its title when it
+is open, or at the start of its row in the Pages list. The star fills in. Your
+stars are yours alone: other people on the project do not see them. They show
+in every session of the project. Choose the filled star (**Unstar page**) to
+remove one.
+
+To open a starred page, choose the star button beside the chat's message box
+(**Starred**). It lists your starred pages under **Pages**, above your starred
+files under **Files**, and **Search** finds either by name. Choose a page and it
+opens beside the chat straight away; choose a file and it opens in Files. On a
+phone the list opens from the bottom of the screen.
+
+In the Pages list, your starred pages come first under **Current**, each with a
+filled star. An archived page leaves your starred pages and comes back when it
+is restored. Deleting a page removes it from everyone's stars.
 
 ## Bring back an earlier version
 

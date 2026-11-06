@@ -2,7 +2,7 @@ import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionC
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 import { currentActorUser } from "@local/vibe64-execution/server";
 
-import { pageInput, pagesListInput, pageVersionInput, pageViewInput } from "./inputSchemas.js";
+import { pageInput, pagesListInput, pageStarInput, pageVersionInput, pageViewInput } from "./inputSchemas.js";
 
 /** @typedef {import("./types.js").PagesService} PagesService */
 
@@ -10,6 +10,8 @@ const PAGES_ACTIONS = Object.freeze({
   LIST: "vibe64.pages.list",
   READ: "vibe64.pages.read",
   VIEW_OPEN: "vibe64.pages.view.open",
+  STARS_READ: "vibe64.pages.stars.read",
+  STAR_SET: "vibe64.pages.star.set",
   ARCHIVE: "vibe64.pages.archive",
   RESTORE: "vibe64.pages.restore",
   VERSION_RESTORE: "vibe64.pages.version.restore",
@@ -57,6 +59,20 @@ function createPagesActions({ pages }) {
       input: pageViewInput,
       extensions: PAGE_OPERATION,
       execute: (input) => pages.openPageView(input)
+    }),
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: PAGES_ACTIONS.STARS_READ,
+      input: pagesListInput,
+      extensions: PAGE_OPERATION,
+      execute: (input) => pages.starredPages(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: PAGES_ACTIONS.STAR_SET,
+      input: pageStarInput,
+      extensions: PAGE_OPERATION,
+      execute: (input) => pages.setPageStar(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,

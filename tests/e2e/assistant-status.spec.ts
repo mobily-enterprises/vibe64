@@ -90,7 +90,7 @@ test("startup failure explains the cause and preserves the draft through manual 
 test("healthy assistant can receive steering in the built client", async ({ page }) => {
   await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
   await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Starred files (0)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Starred (0)", exact: true })).toBeVisible();
   await page.getByLabel("Message AI assistant").fill("Preserve my work.");
   await expect(page.getByRole("button", { name: "Steer assistant" })).toBeEnabled();
   await page.getByRole("button", { name: "Steer assistant" }).click();

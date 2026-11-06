@@ -57,6 +57,7 @@ from saved project work, and inspect one exact file change at a time.
 - `tests/server/vibe64SourceFileIndex.unit.test.js`
 - `tests/server/vibe64SourceSearchIndex.unit.test.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
+- `packages/vibe64-core/src/server/personalStars.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
 - `packages/vibe64-source-editor/src/server/routeInputs.js`
 - `packages/vibe64-source-editor/src/server/fileTransferRoutes.js`
@@ -70,7 +71,7 @@ from saved project work, and inspect one exact file change at a time.
 - `tests/server/vibe64IntegrationsService.unit.test.js`
 - `tests/server/vibe64SourceEditorRoutes.unit.test.js`
 - `src/composables/useVibe64StarredFiles.js`
-- `src/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue`
+- `src/components/studio/vibe64-session/Vibe64StarredMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesList.vue`
 - `packages/vibe64-terminals/src/server/repositoryHistory.js`
 - `packages/vibe64-terminals/src/server/gitRecords.js`
@@ -810,9 +811,10 @@ The collapsible Starred section and chat's searchable star picker share one
 client state. The file browser shows one filename per row, with an ellipsis for
 long names and the full path on hover and in each button's accessible name.
 More than four stars start collapsed.
-The picker is a popover on larger screens and a bottom sheet on
-compact screens, with a compact search field and Close on one row and no
-redundant heading. Opening a star uses normal Dashboard Files navigation without
+The picker, the chat's **Starred** menu, is a popover on larger screens and a
+bottom sheet on compact screens, with a compact search field and Close on one
+row; it lists starred pages (Pages Program `stars.md`) above starred files under
+small Pages and Files headings, and its search filters both. Opening a star uses normal Dashboard Files navigation without
 clearing the chat draft. Toggle failures roll back only the affected star and
 show action feedback without shifting the list. Once pending changes settle,
 a failed batch rereads saved stars to restore authoritative ordering without

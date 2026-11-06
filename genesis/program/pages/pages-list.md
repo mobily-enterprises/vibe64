@@ -18,7 +18,9 @@ Project members find, keep and tidy a project's pages in one Dashboard list.
   and **Archived**, newest update first. Each row shows the title, who made the
   page, when it was last updated and an empty Refreshes column, with Open and
   Archive, or Restore and Delete under Archived. Delete asks first and removes
-  the page and every kept version for everyone.
+  the page and every kept version for everyone. The member's starred pages
+  come first under Current, each row starting with its star (see
+  `stars.md`).
 - Actions, each a project operation behind the project access check and never an
   AI tool: `vibe64.pages.list` (`GET /api/app/:slug/vibe64/pages`),
   `vibe64.pages.read` (`GET …/pages/:pageId`), `vibe64.pages.archive` and

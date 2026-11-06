@@ -339,6 +339,75 @@ test.describe("Vibe64 pages", () => {
     await expect(cards.nth(1)).toContainText("Test results");
   });
 
+  for (const width of [390, 1280]) {
+    test(`a page starred from its chat card opens at once from the chat's Starred menu, comes first in the Pages list and leaves the stars while archived at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await world.writePage("summary", SUMMARY("First version", 42));
+      const summary = await world.publish("summary");
+      await world.writePage(".", { "results.html": "<!doctype html><title>Test results</title><h1>All 12 tests pass</h1>" });
+      const results = await world.publish("results.html");
+      conversation!.state.conversationLog = [{
+        turnId: "000001",
+        user: { role: "user", at: "2026-11-06T09:00:00Z", text: "Make me a page summarising this project" },
+        assistant: { role: "assistant", at: "2026-11-06T09:01:00Z", text: `Here it is: [Project summary](${summary.link})` }
+      }];
+      const viewRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.method() === "POST" && /\/pages\/[^/]+\/view$/u.test(new URL(request.url()).pathname)) viewRequests.push(request.url());
+      });
+
+      await page.goto(`${world.origin}${DASHBOARD_PATH}`);
+      const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+      if (await showChat.isVisible()) await showChat.click();
+      const card = page.locator('[data-test="page-link-card"]');
+      await expect(card).toContainText("Project summary");
+      await card.getByRole("button", { name: "Star page", exact: true }).click();
+      await expect(card.getByRole("button", { name: "Unstar page", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(async () => (await world.inProject(() => world.pages.starredPages({ vibe64User: { username: "alice" } }))).pages
+        .map((entry) => entry.id)).toEqual([summary.pageId]);
+
+      await page.getByRole("button", { name: "Starred (1)", exact: true }).click();
+      const menu = page.getByRole("dialog", { name: "Starred", exact: true });
+      await expect(menu.getByRole("textbox", { name: "Find a starred page or file", exact: true })).toBeFocused();
+      const starredPages = menu.getByRole("list", { name: "Starred pages", exact: true });
+      await expect(starredPages.getByRole("button", { name: /Project summary/u })).toBeVisible();
+      await expect(menu.getByText("Star files in Files to keep them handy while chatting.")).toBeVisible();
+      await menu.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("nothing like it");
+      await expect(menu.getByText("No matching starred pages.")).toBeVisible();
+      await menu.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("summ");
+      await expect.poll(() => viewRequests.length, { message: "the menu asks for the link as it opens" }).toBe(1);
+      await page.screenshot({ path: testInfo.outputPath(`starred-menu-${width}.png`) });
+      await starredPages.getByRole("button", { name: /Project summary/u }).click();
+      await expect(page).toHaveURL(new RegExp(`${summary.link}$`, "u"));
+      await expect(page.locator('[data-test="page-viewer-title"]')).toHaveText("Project summary");
+      await expect(pageFrame(page).locator("#version")).toHaveText("First version");
+      expect(viewRequests, "opening the page used the link asked for ahead").toHaveLength(1);
+      await expect(page.locator('[data-test="page-viewer"]').getByRole("button", { name: "Unstar page", exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`starred-page-open-${width}.png`) });
+      // A card's Open brings its page forward too, on a phone from behind the chat.
+      if (await showChat.isVisible()) await showChat.click();
+      await card.locator('[data-test="page-link-card-open"]').click();
+      await expect(page.locator('[data-test="page-viewer-title"]')).toBeVisible();
+
+      await page.goto(`${world.origin}${DASHBOARD_PATH}/pages`);
+      const rows = page.locator('[data-test="pages-list"] tbody tr');
+      await expect(rows).toHaveCount(2);
+      await expect(rows.nth(0)).toHaveAttribute("data-page-id", summary.pageId);
+      await expect(rows.nth(0).getByRole("button", { name: "Unstar page", exact: true })).toBeVisible();
+      await expect(rows.nth(1)).toHaveAttribute("data-page-id", results.pageId);
+      await rows.nth(1).getByRole("button", { name: "Star page", exact: true }).click();
+      await expect(rows.nth(1).getByRole("button", { name: "Unstar page", exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`pages-list-stars-${width}.png`) });
+      await rows.filter({ hasText: "Project summary" }).getByRole("button", { name: "Archive" }).click();
+      await expect(rows).toHaveCount(1);
+      await expect(rows.nth(0).getByRole("button", { name: "Unstar page", exact: true })).toBeVisible();
+      if (await showChat.isVisible()) await showChat.click();
+      await page.getByRole("button", { name: "Starred (1)", exact: true }).click();
+      await expect(starredPages.locator('[data-test="starred-page-open"]')).toHaveText([/Test results/u]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
   test("a hostile page reads no cookie, reaches neither Vibe64 nor anywhere else, and sees no other page, beside the chat or in its own tab", async ({ page, context }, testInfo) => {
     const outside = await outsideRecorder();
     try {

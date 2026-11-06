@@ -483,6 +483,11 @@ function useVibe64AutopilotView(props, emit, {
     emit("project-attention");
   }
 
+  // A page opened from the chat shows beside it; on a phone the project side comes forward.
+  function showOpenedPage() {
+    emit("project-attention");
+  }
+
   const assistantDraftAvailable = computed(() => Boolean(
     props.active &&
     sessionId.value &&
@@ -681,6 +686,7 @@ function useVibe64AutopilotView(props, emit, {
     numberedQuestions,
     openIntegrationRequest,
     runIntegrationRequest,
+    showOpenedPage,
     previewAttachmentState,
     projectSlug,
     questionAnswers,

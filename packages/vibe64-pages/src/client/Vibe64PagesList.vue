@@ -1,11 +1,14 @@
 <script setup>
-// A project's pages, Current and Archived: open one beside the chat, archive
-// or restore it, and delete it once archived.
+// A project's pages, Current and Archived: open one beside the chat, star it
+// (your starred pages come first), archive or restore it, and delete it once
+// archived.
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { mdiArchiveArrowDownOutline, mdiArchiveArrowUpOutline, mdiDeleteOutline, mdiOpenInApp, mdiRefresh } from "@mdi/js";
 import { pageAppPath } from "../shared/pageLinks.js";
+import { usePageStars } from "./pageStars.js";
 import { archivePage, deletePage, listPages, pageTime, restorePage } from "./pagesRequests.js";
+import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
 
 const props = defineProps({
   projectSlug: { type: String, required: true }
@@ -19,14 +22,19 @@ const error = ref("");
 const tab = ref("current");
 const busyPageId = ref("");
 const deleting = ref(null);
+const stars = usePageStars(() => props.projectSlug);
 
-const current = computed(() => pages.value.filter((page) => !page.archived));
+const current = computed(() => {
+  const pagesNow = pages.value.filter((page) => !page.archived);
+  return [...pagesNow.filter((page) => stars.isStarred(page.id)), ...pagesNow.filter((page) => !stars.isStarred(page.id))];
+});
 const archived = computed(() => pages.value.filter((page) => page.archived));
 const shown = computed(() => tab.value === "archived" ? archived.value : current.value);
 
 async function refresh() {
   if (!props.projectSlug) return;
   loading.value = true;
+  void stars.refresh();
   try {
     pages.value = (await listPages(props.projectSlug)).pages || [];
     error.value = "";
@@ -89,10 +97,15 @@ watch(() => props.projectSlug, refresh);
       <tbody>
         <tr v-for="page in shown" :key="page.id" :data-page-id="page.id">
           <td class="vibe64-pages-list__page">
-            <router-link class="vibe64-pages-list__title" :to="pageAppPath(projectSlug, page.id)">{{ page.title }}</router-link>
-            <span class="vibe64-pages-list__meta text-body-small">
-              Made by {{ page.createdBy?.name || page.createdBy?.id || "—" }} · updated {{ pageTime(page.updatedAt) }}
-            </span>
+            <div class="vibe64-pages-list__page-row">
+              <Vibe64PageStarButton v-if="!page.archived" :page="page" :project-slug="projectSlug" />
+              <div class="vibe64-pages-list__page-copy">
+                <router-link class="vibe64-pages-list__title" :to="pageAppPath(projectSlug, page.id)">{{ page.title }}</router-link>
+                <span class="vibe64-pages-list__meta text-body-small">
+                  Made by {{ page.createdBy?.name || page.createdBy?.id || "—" }} · updated {{ pageTime(page.updatedAt) }}
+                </span>
+              </div>
+            </div>
           </td>
           <td class="text-medium-emphasis" title="This page has no refresh schedule">—</td>
           <td>
@@ -179,6 +192,17 @@ watch(() => props.projectSlug, refresh);
 .vibe64-pages-list__page {
   min-width: 10rem;
   padding-block: 0.5rem;
+}
+
+.vibe64-pages-list__page-row {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+  margin-inline-start: -0.5rem;
+}
+
+.vibe64-pages-list__page-copy {
+  min-width: 0;
 }
 
 .vibe64-pages-list__title {

@@ -68,6 +68,7 @@ GET /api/app/:slug/vibe64/issues/:number public app - vibe64.project.issues.read
 GET /api/app/:slug/vibe64/onboarding public app - vibe64.project.onboarding.read
 GET /api/app/:slug/vibe64/pages public app 16384 vibe64.pages.list
 GET /api/app/:slug/vibe64/pages/:pageId public app 16384 vibe64.pages.read
+GET /api/app/:slug/vibe64/pages/stars public app 16384 vibe64.pages.stars.read
 GET /api/app/:slug/vibe64/preview-identities public app - vibe64.project.preview-identities.read
 GET /api/app/:slug/vibe64/project-files/:area/archive public app - -
 GET /api/app/:slug/vibe64/project-files/:area/download public app - -
@@ -206,6 +207,7 @@ POST /api/app/:slug/vibe64/issues public app 300000 vibe64.project.issues.create
 POST /api/app/:slug/vibe64/issues/:number/comments public app 300000 vibe64.project.issues.comment
 POST /api/app/:slug/vibe64/pages/:pageId/archive public app 16384 vibe64.pages.archive
 POST /api/app/:slug/vibe64/pages/:pageId/restore public app 16384 vibe64.pages.restore
+POST /api/app/:slug/vibe64/pages/:pageId/star public app 16384 vibe64.pages.star.set
 POST /api/app/:slug/vibe64/pages/:pageId/versions/:version/restore public app 16384 vibe64.pages.version.restore
 POST /api/app/:slug/vibe64/pages/:pageId/view public app 16384 vibe64.pages.view.open
 POST /api/app/:slug/vibe64/project-files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts

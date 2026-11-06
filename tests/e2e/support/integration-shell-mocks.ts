@@ -22,6 +22,7 @@ async function mockIntegrationShellReads(page: Page) {
     [`${session}/updates/check`, { ok: true, updateAvailable: false, status: "up-to-date" }],
     [`${session}/renewal`, { ok: true, renewal: null, viewerScope: owner }],
     [`${session}/source-editor/stars`, { ok: true, files: [] }],
+    ["/vibe64/pages/stars", { ok: true, pages: [] }],
     [`${session}/work-plan`, { ok: true, sessionId: directChatSessionId, available: false, current: null, history: [] }],
     [`${session}/ai-tasks`, { ok: true, tasks: [], viewerId: owner }],
     [`${session}/main-chat-approvals`, { ok: true, sessionId: directChatSessionId, owner: true, practice: false,

@@ -29,6 +29,7 @@
     @open-source-file="openSourceEditorFile"
     @open-plan-history="workPlanViewer?.showPlan('history')"
     @open-integration="openIntegrationRequest"
+    @open-page="showOpenedPage"
     @integration-action="runIntegrationRequest"
     @resend-turn="resendOptimisticMessage"
     @reload="reloadChatPane"
@@ -188,7 +189,7 @@
                   </v-btn>
                 </v-card>
               </v-menu>
-              <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
+              <Vibe64StarredMenu :bookmarks="fileBookmarks" :project-slug="projectSlug" @open-file="openSourceEditorFile" @open-page="showOpenedPage" />
               <Vibe64AgentPlanUsage
                 :active="props.active && !props.sessionSelectionArchived"
                 :session="props.session"
@@ -270,7 +271,7 @@ import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
-import Vibe64StarredFilesMenu from "@/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue";
+import Vibe64StarredMenu from "@/components/studio/vibe64-session/Vibe64StarredMenu.vue";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -305,7 +306,7 @@ const {
   openWorkingFile, phoneLayout, previewAttachmentState, projectSlug, props, questionAnswers,
   reasoningActive, reloadAssistantAccess, reloadChatPane, requestAgentInterrupt, resendOptimisticMessage,
   routingRequest, runIntegrationRequest, saveWorkOperationActive, saveWorkSending, selectedAnswerChoice,
-  sendLessonMessage, sessionId, sessionSourceRoot, sourceOperationsSuspended, submitComposerMessage,
+  sendLessonMessage, sessionId, sessionSourceRoot, showOpenedPage, sourceOperationsSuspended, submitComposerMessage,
   temporaryAiWorkspace, testApproval, thinkingLabel, thinkingVisible, updateComposerAttachments
 } = view;
 const conversationView = ref(null);

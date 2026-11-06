@@ -2371,7 +2371,7 @@ compact row and still grows with entered text. Add contains left-aligned file,
 preview, and diagnostics attachment actions. Chat mode opens the role and Custom choices, plus recovery guidance and pending
 message requests even when the role or model catalogue is unavailable. Custom
 opens the model dialog, with Cancel available unless a save is in progress. The
-host tools target and starred-files menu remain mounted independently of it. The public
+host tools target and Starred menu (starred pages and files) remain mounted independently of it. The public
 companion layer is offered only while Main chat is selected in the active,
 unarchived session, and names only that session. Opening a temporary chat
 withdraws that layer immediately; its retained submission action also rejects

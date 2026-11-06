@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -125,6 +126,85 @@ test("a page's files must stay inside it, within its limits, and leave Vibe64's 
   });
 });
 
+const ada = { username: "ada" };
+const ben = { username: "ben" };
+const starredIds = async (pages, inProject, user) => (await inProject(() => pages.starredPages({ vibe64User: user }))).pages.map((page) => page.id);
+
+test("a starred page is one person's, in one project, kept with its pages and shown in every session", async () => {
+  await withPages(async ({ pages, inProject, projectRuntimeRoot, root }) => {
+    const publish = (title, sessionId) => inProject(() => pages.publishPage({ title, files: files(`<p>${title}</p>`), by: alice, sessionId }));
+    const plan = (await publish("Plan", "session-1")).page;
+    const status = (await publish("Status", "session-2")).page;
+    assert.deepEqual(await starredIds(pages, inProject, ada), [], "nothing is starred at first");
+    const starred = await inProject(() => pages.setPageStar({ pageId: status.id, starred: true, vibe64User: ada }));
+    assert.deepEqual(starred.pages.map((page) => page.id), [status.id], "a star answers with the starred pages");
+    assert.equal(starred.pages[0].title, "Status");
+    await inProject(() => pages.setPageStar({ pageId: plan.id, starred: true, vibe64User: ada }));
+    assert.deepEqual(await starredIds(pages, inProject, ada), [status.id, plan.id], "in the order they were starred");
+    assert.deepEqual(await starredIds(pages, inProject, ben), [], "another person's stars are their own");
+
+    const record = path.join(projectRuntimeRoot, "pages", ".stars", `${createHash("sha256").update("ada").digest("hex")}.json`);
+    assert.deepEqual(JSON.parse(await readFile(record, "utf8")), { pageIds: [status.id, plan.id] });
+    assert.equal((await stat(record)).mode & 0o777, 0o600, "only Vibe64 reads a person's stars");
+    assert.deepEqual((await inProject(() => pages.listPages())).pages.map((page) => page.id).sort(), [plan.id, status.id].sort(),
+      "the stars folder is not a page");
+
+    const otherProject = path.join(root, "state", "projects", "other_project");
+    await mkdir(otherProject, { recursive: true });
+    const inOther = (run) => runWithProjectRequestContext({ projectRuntimeRoot: otherProject, slug: "other_project" }, run);
+    assert.deepEqual(await starredIds(pages, inOther, ada), [], "stars stay in their project");
+
+    await inProject(() => pages.setPageStar({ pageId: status.id, starred: false, vibe64User: ada }));
+    assert.deepEqual(await starredIds(pages, inProject, ada), [plan.id]);
+    await assert.rejects(inProject(() => pages.setPageStar({ pageId: "missing-page-123abc", starred: true, vibe64User: ada })),
+      { code: "vibe64_pages_not_found" }, "a star needs a page to name");
+    assert.deepEqual((await inProject(() => pages.setPageStar({ pageId: "missing-page-123abc", starred: false, vibe64User: ada }))).pages
+      .map((page) => page.id), [plan.id], "unstarring what is not starred changes nothing");
+  });
+});
+
+test("an archived page leaves the starred pages until it is restored, and a deleted page loses its stars", async () => {
+  await withPages(async ({ pages, inProject }) => {
+    const publish = (title) => inProject(() => pages.publishPage({ title, files: files(`<p>${title}</p>`), by: alice, sessionId: "s" }));
+    const first = (await publish("First")).page;
+    const second = (await publish("Second")).page;
+    for (const user of [ada, ben]) {
+      for (const page of [first, second]) await inProject(() => pages.setPageStar({ pageId: page.id, starred: true, vibe64User: user }));
+    }
+    await inProject(() => pages.archivePage({ pageId: first.id }));
+    assert.deepEqual(await starredIds(pages, inProject, ada), [second.id], "an archived page drops out");
+    await inProject(() => pages.restorePage({ pageId: first.id }));
+    assert.deepEqual(await starredIds(pages, inProject, ada), [first.id, second.id], "a restored page comes back in its place");
+
+    await inProject(() => pages.archivePage({ pageId: first.id }));
+    await inProject(() => pages.deletePage({ pageId: first.id }));
+    for (const user of [ada, ben]) {
+      assert.deepEqual(await starredIds(pages, inProject, user), [second.id]);
+    }
+    const again = (await publish("First")).page;
+    await inProject(() => pages.setPageStar({ pageId: again.id, starred: true, vibe64User: ada }));
+    assert.deepEqual(await starredIds(pages, inProject, ada), [second.id, again.id], "the deleted page left no star behind");
+  });
+});
+
+test("stars made at once are all kept, and a star past the limit is refused with the saved stars kept", async () => {
+  await withPages(async ({ pages, inProject, projectRuntimeRoot }) => {
+    const made = [];
+    for (let index = 0; index < 5; index += 1) {
+      made.push((await inProject(() => pages.publishPage({ title: `Page ${index}`, files: files("<p>x</p>"), by: alice, sessionId: "s" }))).page.id);
+    }
+    await Promise.all(made.map((pageId) => inProject(() => pages.setPageStar({ pageId, starred: true, vibe64User: ada }))));
+    assert.deepEqual((await starredIds(pages, inProject, ada)).sort(), [...made].sort());
+
+    const record = path.join(projectRuntimeRoot, "pages", ".stars", `${createHash("sha256").update("ben").digest("hex")}.json`);
+    const full = Array.from({ length: 100 }, (_, index) => `page-${index}-abcdef`);
+    await writeFile(record, JSON.stringify({ pageIds: full }));
+    await assert.rejects(inProject(() => pages.setPageStar({ pageId: made[0], starred: true, vibe64User: ben })),
+      { code: "vibe64_pages_star_limit", status: 400, message: "You can star up to 100 pages per project." });
+    assert.deepEqual(JSON.parse(await readFile(record, "utf8")).pageIds, full);
+  });
+});
+
 test("page links are the app path of the page, found in chat text on this origin only", () => {
   const origin = "http://127.0.0.1:4173";
   const link = pageAppPath("demo", "status-0a1b2c");
@@ -177,6 +257,11 @@ test("project members' page routes run their actions behind the project access c
     const brought = (await call("POST", "/pages/:pageId/versions/:version/restore", { pageId: page.id, version: "1" })).payload.page;
     assert.equal(brought.version, 3);
     assert.deepEqual(brought.updatedBy, { id: "carol", name: "Carol" }, "a member's own action is theirs");
+    const starred = (await call("POST", "/pages/:pageId/star", { pageId: page.id }, { starred: true })).payload;
+    assert.deepEqual(starred.pages.map((entry) => entry.id), [page.id]);
+    assert.deepEqual((await call("GET", "/pages/stars")).payload.pages.map((entry) => entry.id), [page.id], "the member's own stars");
+    assert.deepEqual((await inProject(() => pages.starredPages({ vibe64User: { username: "dan" } }))).pages, []);
+    await assert.rejects(call("POST", "/pages/:pageId/star", { pageId: page.id }, { starred: "yes" }), { statusCode: 400 });
     assert.equal((await call("POST", "/pages/:pageId/archive", { pageId: page.id })).payload.page.archived, true);
     assert.equal((await call("POST", "/pages/:pageId/restore", { pageId: page.id })).payload.page.archived, false);
     await assert.rejects(call("DELETE", "/pages/:pageId", { pageId: page.id }), { code: "vibe64_pages_delete_requires_archive" });
