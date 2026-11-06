@@ -154,7 +154,7 @@ for (const viewport of [
     await page.goto(`${DEVELOPMENT_PATH}/dashboard/system`);
     if (viewport.chat === "collapsed") await page.getByRole("button", { name: "Collapse chat", exact: true }).click();
     const sheet = page.getByRole("region", { name: "UI and Engine architecture" });
-    await expect(sheet.getByRole("heading", { level: 1, name: "Architecture" })).toBeVisible({ timeout: 20_000 });
+    await expect(sheet.getByRole("heading", { level: 2, name: "Architecture" })).toBeVisible({ timeout: 20_000 });
     await sheet.getByRole("group", { name: "Architecture view" }).getByRole("button", { name: "Usage" }).click();
     const usage = sheet.getByRole("region", { name: "Usage" });
     await expect(usage.getByRole("heading", { name: "Pick an entry point" })).toBeVisible();

@@ -229,7 +229,8 @@ activation host. The builder accepts only an empty separate destination and
 never prunes the development node_modules directory.
 
 The application theme is `src/theme/index.js`: one seed colour (Vuetify's default
-blue, `#1867C0`), the Learning colour, the app's typeface and its own icons from
+blue, `#1867C0`), the Learning colour (`blend: false`, so its golden hue does not
+move toward the blue seed), the app's typeface and its own icons from
 `src/theme/icons.js`, extended by `src/theme/extensions.js`, which Vibe64 leaves
 empty and an app composed from Vibe64 replaces with its own colours and icons.
 `src/main.js` builds Vuetify from it with JSKIT's `createMaterialVuetifyOptions`

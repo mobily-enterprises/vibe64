@@ -250,7 +250,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
     <Transition :name="`aio-${direction}`" mode="out-in" @after-enter="focusTitle">
       <section v-if="screen === 'choose'" key="choose" class="ai-onboarding__choose">
         <header class="ai-onboarding__intro">
-          <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ wasSetUp ? "Your AI setup" : "Pick the AI behind Vibe64" }}</h1>
+          <h2 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ wasSetUp ? "Your AI setup" : "Pick the AI behind Vibe64" }}</h2>
           <p class="ai-onboarding__lede">
             {{ wasSetUp ? "Keep what you have, switch your main AI, or add another. Nothing is removed."
               : "Ranked by how good Vibe64 feels. Our honest advice: Claude." }}
@@ -317,7 +317,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
         <header class="aio-chosen">
           <AiOnboardingMark :provider="chosen" :size="56" :settle-delay="chosen.crown ? 150 : -1" />
           <div class="aio-chosen__text">
-            <h1 id="ai-onboarding-title" tabindex="-1" class="aio-chosen__title">Connect {{ chosen.name }}</h1>
+            <h2 id="ai-onboarding-title" tabindex="-1" class="aio-chosen__title">Connect {{ chosen.name }}</h2>
             <p class="aio-chosen__plan">
               <template v-if="teamFlow">For team members · runs inside Claude Code</template>
               <template v-else>{{ chosen.plan.name }} · <span class="aio-tabular">{{ chosen.plan.price }}</span></template>
@@ -337,9 +337,9 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
         <header class="ai-onboarding__intro">
           <AiOnboardingMark v-if="!fullRouting" :provider="chosen" :size="56" class="mb-5" />
           <p class="ai-onboarding__eyebrow">YOUR MAIN AI</p>
-          <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
+          <h2 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
             {{ fullRouting ? "Review models" : autoRouting ? `Setting up ${chosen.name}…` : `Build with ${chosen.name}?` }}
-          </h1>
+          </h2>
           <p v-if="!fullRouting && !autoRouting" class="ai-onboarding__lede">{{ chosen.name }} is connected. Choose what Vibe64 builds with.</p>
         </header>
         <div v-if="autoRouting" class="aio-progress" role="status">
@@ -369,9 +369,9 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
 
       <section v-else-if="screen === 'success'" key="success" class="ai-onboarding__success">
         <AiSetupSuccessMark :provider="chosen" :proven="proven" />
-        <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
+        <h2 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
           {{ hello.state === "failed" ? "Almost there" : hello.state === "waiting" ? `${chosen.name} is connected` : `${chosen.name} is ready` }}
-        </h1>
+        </h2>
         <p v-if="colleagueNote !== 'menu' && hello.state !== 'failed'" class="ai-onboarding__lede">
           {{ learn ? `Next: ${inLesson ? "back to your lesson" : "choose a lesson"}.` : "Next: Colleague opens so you can ask it to build your first page." }}
         </p>
@@ -409,7 +409,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
 
       <section v-else key="owner" class="ai-onboarding__success">
         <v-icon icon="$error" size="48" color="primary" aria-hidden="true" />
-        <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ ownerNotice }}</h1>
+        <h2 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ ownerNotice }}</h2>
         <v-btn variant="tonal" color="primary" size="large" @click="openModels('nonOwner')">See team members' models</v-btn>
         <v-btn color="primary" variant="flat" size="large" @click="close('dismiss')">Close</v-btn>
       </section>

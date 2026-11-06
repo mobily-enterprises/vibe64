@@ -14,7 +14,10 @@ async function expectGeneratedScreenContract(page) {
 
   await expect(screen).toBeVisible();
   await expect(screen).toHaveClass(/generated-ui-screen--(?:app|studio)/u);
-  await expect(screen.locator("h1").first()).toBeVisible();
+  // The page's one h1 is its title in the top app bar; the screen's own headings are sections.
+  await expect(page.locator("[data-testid=jskit-shell-app-bar] h1")).toHaveCount(1);
+  await expect(screen.locator("h1")).toHaveCount(0);
+  await expect(screen.getByRole("heading").first()).toBeVisible();
 }
 
 async function expectSessionsRoute(page) {
@@ -54,7 +57,7 @@ async function expectVisibleTapTargets(page, {
 }
 
 async function expectSessionHistoryRoute(page) {
-  await expect(page.getByRole("heading", { level: 1, name: "Session history", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Session history", exact: true })).toBeVisible();
 }
 
 export {

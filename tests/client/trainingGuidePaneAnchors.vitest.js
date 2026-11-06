@@ -88,11 +88,12 @@ describe("guide pane anchors", () => {
     for (const tool of ["changes", "editor", "database", "system"]) {
       expect(source).toMatch(new RegExp(`rightPaneTab === '${tool}'"\\n\\s+:data-vibe64-guide-pane="vibe64SessionToolGuideId\\('${tool}'\\)"`, "u"));
     }
-    // A standalone tool pane hides the Dashboard shell's section select, so its
-    // own back button is the Dashboard step there.
-    const backButtons = source.match(/<Vibe64DashboardBackButton[^>]*>/gu);
-    expect(backButtons).toHaveLength(4);
-    for (const button of backButtons) expect(button).toContain('data-vibe64-guide-pane="dashboard"');
+    // A standalone tool pane hides the Dashboard shell's section select, so the
+    // bar's Up, which returns to a Dashboard page, is the Dashboard step there.
+    expect(source).not.toContain("Vibe64DashboardBackButton");
+    const shell = readFileSync("src/components/StudioAppShellLayout.vue", "utf8");
+    expect(shell).toContain('<ShellUpButton :data-vibe64-guide-pane="upGuidePane" />');
+    expect(shell).toContain('test(upTarget.value) ? "dashboard" : undefined');
     expect(readFileSync("src/components/studio/Vibe64EmptySessionLayout.vue", "utf8"))
       .toMatch(/class="studio-ai-sessions__preview-empty-pane"\n\s+data-vibe64-guide-pane="preview"/u);
     expect(readFileSync("src/components/studio/Vibe64DashboardShell.vue", "utf8")).toContain('navigation-guide-pane="dashboard"');

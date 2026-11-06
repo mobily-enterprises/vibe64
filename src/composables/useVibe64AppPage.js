@@ -12,7 +12,6 @@ import { vibe64SessionToolIdFromDashboardPath } from "@/lib/vibe64SessionToolDef
 import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
   useVibe64ProjectsResource
 } from "@/composables/useVibe64ProjectsResource.js";
@@ -215,10 +214,6 @@ function useVibe64AppPage() {
   const usageRecordingTeleportTarget = computed(() => (projectSlug.value
     ? `#${phoneBar.value ? USAGE_RECORDING_STRIP_HOST_ID : USAGE_RECORDING_HOST_ID}`
     : ""));
-
-  useStudioShellDrawer({
-    hidden: true
-  });
 
   useRealtimeEvent({
     enabled: computed(() => Boolean(projectSlug.value)),

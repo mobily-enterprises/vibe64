@@ -376,8 +376,9 @@ a live preview. A label created while choosing issue labels is selected immediat
 the issue draft stays intact. Duplicate names are explained and failed creation
 keeps the form's choices.
 Labels retain their GitHub colors with readable text in either theme. The issue browser
-uses the available pane width, with Back to dashboard, Refresh and New issue in
-one toolbar row and no extra heading or repository subtitle. Both browsers keep
+uses the available pane width, with Refresh and New issue in one toolbar row
+and no extra heading or repository subtitle; the top bar's Back arrow returns to
+the Dashboard. Both browsers keep
 the toolbar, underlined tabs and filters close together, with compact list rows.
 Issue labels sit beside their title when space permits and wrap when needed.
 Pull request branch details share the metadata row when space permits.
@@ -427,7 +428,8 @@ Git log belongs to the project-level Dashboard navigation, above the active
 session's tools. Current changes remains a session tool. Reviewing saved history
 keeps the selected session context for any update or reconciliation action.
 Current changes uses the full project pane, with the dashboard menu hidden and
-a Back to dashboard action, so file differences have room to read.
+the top bar's Back arrow returning to the Dashboard, so file differences have
+room to read.
 People can drag the divider between changed files and their difference, or resize
 it with the keyboard. This browser remembers the width; narrow panes stack the
 files above their difference.

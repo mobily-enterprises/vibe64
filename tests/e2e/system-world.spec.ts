@@ -114,7 +114,7 @@ test("Architecture shows the Engine map, zooms into a subsystem and its Program,
   await page.getByRole("link", { exact: true, name: "Architecture" }).click();
 
   const sheet = page.getByRole("region", { name: "UI and Engine architecture" });
-  await expect(sheet.getByRole("heading", { level: 1, name: "Architecture" })).toBeVisible();
+  await expect(sheet.getByRole("heading", { level: 2, name: "Architecture" })).toBeVisible();
   await expect(sheet.getByText("0 pages / screens / scenes · 1 subsystems")).toBeVisible({ timeout: 15_000 });
   const subsystem = sheet.locator(".engine-subsystem").filter({ hasText: "Catalog" });
   await expect(subsystem).toContainText("Owns the book catalogue.");

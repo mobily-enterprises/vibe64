@@ -129,9 +129,9 @@ function close(reason, card = null) {
             </div>
             <div class="ai-onboarding__why-copy">
               <p class="ai-onboarding__eyebrow">WELCOME TO VIBE64</p>
-              <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
+              <h2 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
                 First, give Vibe64 a <span class="ai-onboarding__accent">brilliant mind.</span>
-              </h1>
+              </h2>
               <p class="ai-onboarding__lede">Frontier AI makes Vibe64 dramatically better. Pick yours in two minutes.</p>
               <ul class="ai-onboarding__differences">
                 <li v-for="difference in DIFFERENCES" :key="difference.label">

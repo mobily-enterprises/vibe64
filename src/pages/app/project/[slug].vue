@@ -11,6 +11,8 @@
 <script setup>
 import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import { RouterView } from "vue-router";
+import ShellPageTitle from "@jskit-ai/shell-web/client/components/ShellPageTitle";
+import { useShellPageTitle } from "@jskit-ai/shell-web/client/composables/useShellPageTitle";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
@@ -68,6 +70,9 @@ const {
   projectTitle
 } = useVibe64AppPage();
 
+// The whole workspace (chat, Preview and the Dashboard's pages) carries the project's name as its title.
+useShellPageTitle(() => projectTitle.value || "Project");
+
 </script>
 
 <template>
@@ -83,18 +88,19 @@ const {
       >
         <div class="studio-home-shell-title-area">
           <div class="studio-home-shell-project-name">
+            <!-- The project's name is the page's title, the bar's one h1; the arrow beside it switches projects. -->
+            <ShellPageTitle class="studio-home-shell-project-title" />
             <v-menu location="bottom start">
               <template #activator="{ props: menuProps }">
                 <v-btn
                   class="studio-home-shell-project-selector"
                   :disabled="!projectSlug && !learnMode"
+                  icon="$expand"
                   variant="text"
                   v-bind="menuProps"
-                  :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
-                >
-                  <span>{{ projectTitle || "Project" }}</span>
-                  <v-icon icon="$expand" size="18" />
-                </v-btn>
+                  aria-label="Switch project"
+                  :title="projectSlug && projectTitle !== projectSlug ? `Switch project: ${projectTitle} (${projectSlug})` : 'Switch project'"
+                />
               </template>
               <v-list density="compact" min-width="240">
                 <Vibe64LearningCoursesItem />
@@ -332,40 +338,21 @@ const {
 }
 
 .studio-home-shell-project-name {
+  align-items: center;
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
 }
 
-.studio-home-shell-project-selector {
-  border-radius: var(--v64-shape-full);
-  color: rgb(var(--v-theme-on-surface)) !important;
+.studio-home-shell-project-title {
   flex: 0 1 auto;
-  font: var(--v64-type-title-md);
-  font-size: 1.0625rem;
-  justify-content: start;
-  letter-spacing: -0.005em;
-  max-width: 100%;
   min-width: 0;
-  padding-inline: var(--v64-space-3) var(--v64-space-2);
-  text-transform: none;
+  padding-inline-start: var(--v64-space-3);
 }
 
-.studio-home-shell-project-selector :deep(.v-icon) {
+.studio-home-shell-project-selector {
   color: rgb(var(--v-theme-on-surface-variant));
-  margin-inline-start: var(--v64-space-1);
-}
-
-.studio-home-shell-project-selector :deep(.v-btn__content) {
-  min-width: 0;
-}
-
-.studio-home-shell-project-selector span {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .studio-home-shell-github-actor-host {
@@ -476,16 +463,8 @@ const {
     display: none;
   }
 
-  .studio-home-shell-project-selector {
-    flex: 0 1 auto;
-    font-size: 0.95rem;
-    max-width: 100%;
-    min-width: 2.25rem;
-    padding-inline: 0.375rem 0.125rem;
-  }
-
-  .studio-home-shell-project-selector :deep(.v-icon) {
-    margin-inline-start: 0;
+  .studio-home-shell-project-title {
+    padding-inline-start: 0.375rem;
   }
 
   /* Room for the branch count badge before the collapse arrow. */
@@ -514,9 +493,10 @@ const {
 }
 
 /* Too little room for a readable name (a narrow phone showing Preview's
-   controls): hide the selector rather than show a sliver of it. The chat pane
-   shows it again. */
-@container (max-width: 4rem) {
+   controls): hide the title and its Switch project arrow rather than show a
+   sliver of them. The chat pane shows them again. */
+@container (max-width: 6.5rem) {
+  .studio-home-shell-project-title,
   .studio-home-shell-project-selector {
     visibility: hidden;
   }

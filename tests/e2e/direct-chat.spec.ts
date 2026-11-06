@@ -2179,9 +2179,10 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${BASE_URL}/app/project/${PRACTICE_SLUG}`);
     await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-    const selector = page.locator(".studio-home-shell-project-selector");
-    await expect(selector).toContainText("Practice: Refuse empty titles");
-    await expect(selector).not.toContainText(PRACTICE_SLUG);
+    // The project's name is the bar's title, the page's one h1.
+    const title = page.locator("[data-testid=jskit-shell-app-bar] h1");
+    await expect(title).toHaveText("Practice: Refuse empty titles");
+    await expect(title).not.toContainText(PRACTICE_SLUG);
     const sessionControls = {
       create: page.locator("#studio-home-shell-create-session .studio-ai-sessions__create-button"),
       ...(repository ? {
@@ -2247,9 +2248,9 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
       // phones, or beside the full repository controls below 540px) hidden
       // rather than squeezed to a sliver.
       const nameShownFrom = pane === "project" ? 390 : repository ? 540 : 0;
-      if (width >= nameShownFrom) await expect(selector).toBeVisible();
-      if (await selector.isVisible()) {
-        const label = await selector.locator("span").first().evaluate(element => element.getBoundingClientRect().width);
+      if (width >= nameShownFrom) await expect(title).toBeVisible();
+      if (await title.isVisible()) {
+        const label = await title.evaluate(element => element.getBoundingClientRect().width);
         expect(label, `the project name stays readable with the ${pane} pane`).toBeGreaterThanOrEqual(44);
       }
       for (const box of boxes) {

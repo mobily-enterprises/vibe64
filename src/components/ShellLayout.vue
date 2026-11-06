@@ -1,83 +1,37 @@
-<script>
-import { h } from "vue";
-import PackageShellLayout from "@jskit-ai/shell-web/client/components/ShellLayout";
-import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
-import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
-import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
-import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
+<script setup>
+import ShellPageTitle from "@jskit-ai/shell-web/client/components/ShellPageTitle";
+import StudioAppShellLayout from "./StudioAppShellLayout.vue";
 
-export default {
-  name: "ShellLayout",
-  inheritAttrs: false,
-  setup(_, { attrs, slots }) {
-    // A page's own content for one of the header's places, read at each render; a page passes only what it has.
-    // readable-check: allow optional-call - optional operation: a page fills only the header places it has content for
-    const pageSlot = (name, slotProps) => slots[name]?.(slotProps);
-    return () => h(PackageShellLayout, attrs, {
-      ...slots,
-      // The L button leads every management page header, as in the Studio shell.
-      "top-left": (slotProps) => [h(Vibe64LearningButton), pageSlot("top-left", slotProps)],
-      "top-right": (slotProps) => [
-        h(ShellOutlet, { target: "shell-layout:top-right" }),
-        pageSlot("top-right", slotProps),
-        h(Vibe64AiTaskTrayTarget),
-        h(Vibe64ColleagueLauncherTarget)
-      ]
-    });
+// A page outside the project workspace in the Studio bar: the L button, the Up arrow on inner pages and the page's
+// title, its own top-left and top-right content, then the AI task tray and the Colleague launcher. There is no
+// navigation drawer; the page's title is its route's meta.jskit.title (or useShellPageTitle), else `title`.
+defineOptions({ inheritAttrs: false });
+defineProps({
+  // The title of pages that declare none and set none. A message key or plain text.
+  title: {
+    type: String,
+    default: ""
   }
-};
+});
 </script>
 
-<style>
-body.studio-shell-drawer-hidden [aria-label="Toggle navigation menu"] {
-  display: none !important;
-}
+<template>
+  <StudioAppShellLayout v-bind="$attrs">
+    <template #top-left>
+      <ShellPageTitle class="vibe64-shell-layout__title" :title="title" />
+      <slot name="top-left" />
+    </template>
+    <template #top-right>
+      <slot name="top-right" />
+    </template>
+    <slot />
+  </StudioAppShellLayout>
+</template>
 
-body.studio-shell-drawer-hidden [data-testid="jskit-shell-drawer"] {
-  display: none !important;
-  visibility: hidden !important;
-  width: 0 !important;
-}
-
-body.studio-shell-drawer-hidden .v-main {
-  --v-layout-left: 0px !important;
-  padding-left: 0 !important;
-}
-
-body.studio-shell-drawer-hidden .shell-layout__content {
-  padding-inline: 0.75rem;
-}
-
-body.studio-home-shell-active {
-  overflow: hidden;
-}
-
-body.studio-home-shell-active .v-application,
-body.studio-home-shell-active .v-application__wrap {
-  height: 100dvh;
-  min-height: 100dvh;
-  overflow: hidden;
-}
-
-body.studio-home-shell-active .v-main {
-  min-height: 0;
-  overflow: hidden;
-}
-
-body.studio-home-shell-active .shell-layout__content {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
-  min-height: 0;
-  overflow: hidden;
-}
-
-body.studio-home-shell-active .shell-route-transition,
-body.studio-home-shell-active .shell-route-transition__pane {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
+<style scoped>
+.vibe64-shell-layout__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-inline-start: 1rem;
 }
 </style>

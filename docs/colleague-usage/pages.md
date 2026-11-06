@@ -46,7 +46,8 @@ or anything private to go into one.
 Beside the chat, the page shows its version and last update. **Open in new
 tab** shows it on its own in a new browser tab, for the whole screen; if the
 browser blocks the tab, allow pop-ups for Vibe64 and choose it again.
-**Reload** shows the page's newest version. **All pages** goes back to the list.
+**Reload** shows the page's newest version. The **Back** arrow in the top bar
+returns to the list.
 
 A page link you open in a tab works for 15 minutes without use and 4 hours at
 most; after that, or after Vibe64 restarts, the tab says the link has ended.

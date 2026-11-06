@@ -189,7 +189,7 @@ for (const width of [390, 900, 1280, 2400]) {
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`current-changes-${width}.png`), animations: "disabled" });
-    await page.getByRole("button", { name: "Back to dashboard", exact: true }).click();
+    await page.locator("[data-testid=jskit-shell-back]").click();
     await expect(page).toHaveURL(/\/dashboard\/env$/u);
     await expect(width < 760
       ? page.getByRole("combobox", { name: "Dashboard section" })
@@ -257,7 +257,7 @@ for (const width of [390, 900, 1600]) {
     await expect(editor.getByRole("heading", { name: "staff guide.docx", exact: true })).toBeVisible();
     await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
 
-    await page.getByRole("button", { name: "Back to dashboard", exact: true }).click();
+    await page.locator("[data-testid=jskit-shell-back]").click();
     if (await showChat.isVisible()) await showChat.click();
     await page.getByRole("link", { name: "Download the Word staff guide", exact: true }).click();
     await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();

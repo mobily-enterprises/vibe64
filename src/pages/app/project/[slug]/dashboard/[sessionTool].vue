@@ -5,6 +5,8 @@ import {
   vibe64SessionToolIdFromRouteSegment
 } from "@/lib/vibe64SessionToolDefinitions.js";
 
+definePage({ meta: { jskit: { parent: "/project/:slug/dashboard" } } });
+
 const route = useRoute();
 const sessionToolId = computed(() => vibe64SessionToolIdFromRouteSegment(route.params.sessionTool));
 </script>

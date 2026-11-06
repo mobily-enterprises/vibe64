@@ -1,6 +1,6 @@
 <script setup>
 // The shared top of every Dashboard section page: an icon tile matching the
-// section's navigation icon, the page title (h1), an optional one-line
+// section's navigation icon, the page's section title (h2; the top app bar carries the page's h1), an optional one-line
 // description, inline status chips and right-aligned actions.
 defineProps({
   description: { default: "", type: String },
@@ -17,7 +17,7 @@ defineProps({
     <div class="vibe64-dashboard-page-header__copy">
       <div class="vibe64-dashboard-page-header__title-row">
         <slot name="title">
-          <h1 class="vibe64-dashboard-page-header__title">{{ title }}</h1>
+          <h2 class="vibe64-dashboard-page-header__title">{{ title }}</h2>
         </slot>
         <slot name="meta" />
       </div>
@@ -74,7 +74,7 @@ defineProps({
 }
 
 .vibe64-dashboard-page-header__title,
-.vibe64-dashboard-page-header__title-row :slotted(h1) {
+.vibe64-dashboard-page-header__title-row :slotted(h2) {
   color: rgb(var(--v-theme-on-surface));
   font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif);
   letter-spacing: 0;

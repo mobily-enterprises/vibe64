@@ -48,7 +48,6 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
     run: vi.fn(async () => ({ ok: true, runtime: { open: true } }))
   })
 }));
-vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@/components/StudioAppShellLayout.vue", () => ({ default: passthroughComponent("section") }));
 vi.mock("@/components/studio/Vibe64AuthSettingsButton.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({ default: passthroughComponent("aside") }));

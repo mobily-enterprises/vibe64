@@ -44,9 +44,6 @@
       class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
       role="tabpanel"
     >
-      <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
-      </header>
       <div class="studio-autopilot__right-pane-page">
         <slot name="dashboard" :dashboard-context="dashboardContext" />
       </div>
@@ -58,10 +55,8 @@
       class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
       role="tabpanel"
     >
-      <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
-          {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
-        </Vibe64DashboardBackButton>
+      <header v-if="architectureReturnAvailable" class="studio-autopilot__session-tool-header">
+        <v-btn color="primary" variant="text" @click="reopenArchitecture">Show Architecture</v-btn>
       </header>
       <Vibe64SessionFiles
         :key="assistantAccessScopeKey"
@@ -89,10 +84,8 @@
       class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
       role="tabpanel"
     >
-      <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
-          {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
-        </Vibe64DashboardBackButton>
+      <header v-if="architectureReturnAvailable" class="studio-autopilot__session-tool-header">
+        <v-btn color="primary" variant="text" @click="reopenArchitecture">Show Architecture</v-btn>
       </header>
       <Vibe64DatabaseWorkspace
         :key="assistantAccessScopeKey"
@@ -131,9 +124,6 @@
         @open-source-file-immersive="openSourceEditorFile"
         @open-source-file="openSourceEditorFile"
       >
-        <template #navigation>
-          <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
-        </template>
         <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
         <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
           <Vibe64SessionSourceEditor
@@ -208,7 +198,6 @@
 </template>
 
 <script setup>
-import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { defineAsyncComponent, inject, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
@@ -237,13 +226,13 @@ const emit = defineEmits(["project-attention"]);
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   agentActive, askAssistantAboutFile, assistantAccessScopeKey, assistantCanUsePurpose,
-  assistantDraftAvailable, assistantFixAllowed, assistantPurposes, backToDashboard, backToSystemFromEditor,
+  architectureReturnAvailable, assistantDraftAvailable, assistantFixAllowed, assistantPurposes,
   aiTaskComposer, composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
   fileBookmarks, lessonShown,
   openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
-  systemBackAvailable, systemRestoreRequest, temporaryAiWorkspace,
+  reopenArchitecture, systemRestoreRequest, temporaryAiWorkspace,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
 /** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
@@ -326,6 +315,11 @@ async function attachPreviewFileProducer(options = {}) {
 
 .studio-autopilot__session-tool-pane {
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* A file or table opened from Architecture has a bar above it with Show Architecture. */
+.studio-autopilot__session-tool-pane:has(> .studio-autopilot__session-tool-header) {
   grid-template-rows: auto minmax(0, 1fr);
 }
 

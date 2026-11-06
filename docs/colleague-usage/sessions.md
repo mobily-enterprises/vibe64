@@ -192,8 +192,8 @@ To open the coding agent's own terminal, or leave it on a phone, see [Open the c
 
 ## Leave a dashboard tool
 
-On mobile, use **Back to dashboard** from Database, Files, Changes or System,
-then use **Dashboard section** to select another page. The back control works
+On mobile, use the **Back** arrow in the top bar from Database, Files, Changes or
+Architecture, then use **Dashboard section** to select another page. The arrow works
 even when you opened the tool from a direct link or its data is still loading.
 Database opens Overview when the link does not specify a view; selecting ERD
 or Data updates that view in the URL.

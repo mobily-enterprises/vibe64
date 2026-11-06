@@ -1,9 +1,8 @@
 <template>
   <section class="ui-storyboard" aria-label="UI and Engine architecture">
     <header class="ui-storyboard__toolbar">
-      <slot name="navigation" />
       <div class="ui-storyboard__heading">
-        <h1>Architecture</h1>
+        <h2>Architecture</h2>
         <p v-if="refreshProgress" role="status">{{ refreshProgress.message }} · {{ refreshProgress.elapsedSeconds }}s</p>
         <p v-else-if="usageState.view === 'map'">{{ uiIds.length }} pages / screens / scenes · {{ engineIds.length - (externalCount ? 1 : 0) }} subsystems<span v-if="externalCount"> · {{ externalCount }} external packages</span> <span v-if="coverage && coverage !== 'complete'">· {{ coverage }} page discovery</span><span v-if="architecture?.ui?.capabilities?.operationUses === 'unconfigured'" title="This project has no UI-call discovery configured. Missing arrows do not prove there are no calls."> · UI calls not analysed</span></p>
       </div>
@@ -168,7 +167,7 @@ function showUsageForDetail(owner) {
 .ui-storyboard *, .ui-storyboard *::before, .ui-storyboard *::after { box-sizing: border-box; }
 .ui-storyboard__toolbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; flex-wrap: wrap; border-bottom: 1px solid rgba(110, 130, 150, .18); }
 .ui-storyboard__heading { display: flex; align-items: baseline; flex: 1; min-width: 0; gap: 4px 12px; flex-wrap: wrap; }
-.ui-storyboard__heading h1 { margin: 0; font-size: 18px; font-weight: 650; line-height: 26px; }
+.ui-storyboard__heading h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 26px; }
 .ui-storyboard__heading p { margin: 0; font-size: 11px; line-height: 16px; opacity: .65; }
 .ui-storyboard__actions { display: flex; align-items: center; gap: 4px; }
 .ui-storyboard__views { flex: none; }

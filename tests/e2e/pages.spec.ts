@@ -340,7 +340,7 @@ test.describe("Vibe64 pages", () => {
     await page.screenshot({ path: testInfo.outputPath("page-versions.png") });
     await page.keyboard.press("Escape");
 
-    await page.getByRole("link", { name: "All pages" }).click();
+    await page.locator("[data-testid=jskit-shell-back]").click();
     await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/pages$`, "u"));
     const current = page.locator('[data-test="pages-tab-current"]');
     const archived = page.locator('[data-test="pages-tab-archived"]');

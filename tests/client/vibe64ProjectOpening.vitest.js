@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], sel
 vi.mock("@/lib/vibe64ProjectScope.js", async (importOriginal) => ({
   ...await importOriginal(), projectListPath: () => mocks.listPath
 }));
-vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent(options) { mocks.realtime.push(options); } }));
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
   useVibe64ProjectsResource: () => ({

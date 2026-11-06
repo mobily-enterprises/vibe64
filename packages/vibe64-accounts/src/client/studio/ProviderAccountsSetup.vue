@@ -7,7 +7,7 @@
         class="accounts-setup__header"
       >
         <div class="accounts-setup__header-actions">
-          <h1 v-if="!embedded" class="text-headline-small ma-0">{{ title }}</h1>
+          <h2 v-if="!embedded" class="text-headline-small ma-0">{{ title }}</h2>
           <v-chip
             v-if="!embedded"
             :color="statusReady ? 'success' : undefined"

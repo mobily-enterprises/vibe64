@@ -2,7 +2,7 @@
   <section class="project-settings">
     <header class="project-settings__header">
       <div>
-        <h1 class="text-headline-small font-weight-bold ma-0">Project settings</h1>
+        <h2 class="text-headline-small font-weight-bold ma-0">Project settings</h2>
         <p class="text-body-medium">Choose how you and your AI work on this project.</p>
       </div>
       <v-btn

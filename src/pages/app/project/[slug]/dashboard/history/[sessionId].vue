@@ -1,7 +1,7 @@
 <template>
   <section class="vibe64-dashboard-page vibe64-dashboard-page--archive-detail">
     <header class="vibe64-dashboard-page__header">
-      <h1 class="text-headline-small font-weight-bold ma-0">Archived Session</h1>
+      <h2 class="text-headline-small font-weight-bold ma-0">Archived Session</h2>
     </header>
 
     <v-alert
@@ -23,7 +23,6 @@
 
     <ArchivedVibe64SessionDetail
       v-if="session"
-      :back-to="backTo"
       :conversation-log="conversationLog"
       :session="session"
       :sessions-api-path="sessionsApiPath"
@@ -39,13 +38,6 @@
       <h2>Archived session unavailable</h2>
       <p>Session {{ sessionId || "unknown" }} could not be loaded.</p>
       <div class="vibe64-dashboard-page__empty-actions">
-        <v-btn
-          prepend-icon="$arrowBack"
-          :to="backTo"
-          variant="tonal"
-        >
-          Back to sessions
-        </v-btn>
         <v-btn
           prepend-icon="$refresh"
           variant="text"
@@ -64,8 +56,9 @@ import {
   useArchivedVibe64SessionDetail
 } from "@/composables/useArchivedVibe64Sessions.js";
 
+definePage({ meta: { jskit: { parent: "/project/:slug/dashboard/history" } } });
+
 const {
-  backTo,
   conversationLog,
   error,
   loading,

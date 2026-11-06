@@ -1556,8 +1556,8 @@ for (const route of ["session", "repository", "changes", "files", "database", "s
     const showProject = page.getByRole("button", { name: "Show project", exact: true });
     if (await showProject.isVisible()) await showProject.click();
     if (["changes", "files", "database", "system", "issues", "pull-requests"].includes(route)) {
-      const back = page.getByRole("button", { name: "Back to dashboard", exact: true })
-        .or(page.getByRole("link", { name: "Back to dashboard", exact: true }));
+      // The tool's page declares the Dashboard as its parent: the bar's Up, opened directly, returns there.
+      const back = page.locator("[data-testid=jskit-shell-back]");
       await expect(back).toBeInViewport();
       await back.click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/env(?:\\?|$)`));

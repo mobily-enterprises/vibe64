@@ -140,10 +140,9 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(view.rightPaneTab.value).toBe("changes");
     expect(view.dashboardShellVisible.value).toBe(false);
     expect(view.dashboardRouteVisible.value).toBe(false);
-    view.backToDashboard();
-    expect(router.push).toHaveBeenCalledExactlyOnceWith(
-      `/app/project/chat-test/dashboard/${direct ? "env" : "health"}`
-    );
+    // The shell's Up returns to the Dashboard; the view keeps no way back of its own.
+    expect(view).not.toHaveProperty("backToDashboard");
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it.each([

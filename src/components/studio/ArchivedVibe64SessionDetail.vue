@@ -13,16 +13,6 @@
           <p>Read-only history. Source restore is not available from archived sessions.</p>
         </div>
       </div>
-      <v-btn
-        v-if="backTo"
-        class="studio-archived-session-detail__back"
-        prepend-icon="$arrowBack"
-        size="small"
-        :to="backTo"
-        variant="tonal"
-      >
-        Back to sessions
-      </v-btn>
     </div>
 
     <div class="studio-archived-session-detail__grid">
@@ -90,10 +80,6 @@ import { shortVibe64SessionId } from "@/lib/vibe64SessionViewModel.js";
 const props = defineProps({
   sessionsApiPath: { type: String, default: "" },
   projectSlug: { type: String, default: "" },
-  backTo: {
-    default: null,
-    type: [Object, String]
-  },
   conversationLog: {
     default: () => ({}),
     type: Object
@@ -150,11 +136,6 @@ const conversationLoadingMore = computed(() => Boolean(props.conversationLog?.lo
   color: rgba(var(--v-theme-on-surface), 0.66);
   font-size: 0.86rem;
   margin: 0;
-}
-
-.studio-archived-session-detail__back {
-  flex: 0 0 auto;
-  min-height: 40px;
 }
 
 .studio-archived-session-detail__grid {

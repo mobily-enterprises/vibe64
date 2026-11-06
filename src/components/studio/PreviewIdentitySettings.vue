@@ -2,7 +2,7 @@
   <section class="preview-identity-settings">
     <header class="preview-identity-settings__header">
       <div>
-        <h1 class="text-headline-small font-weight-bold ma-0">Managed app access</h1>
+        <h2 class="text-headline-small font-weight-bold ma-0">Managed app access</h2>
         <p>
           Named existing application accounts for authenticated Preview and Playwright.
           The first identity is the default.
@@ -330,7 +330,7 @@ async function save() {
   justify-content: space-between;
 }
 
-.preview-identity-settings__header h1,
+.preview-identity-settings__header h2,
 .preview-identity-settings__header p,
 .preview-identity-settings__section-copy h2,
 .preview-identity-settings__section-copy p,

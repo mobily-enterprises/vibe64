@@ -19,9 +19,10 @@ exactly the page you last had open in the other mode, also after a reload.
 Learn mode is saved for your account: every tab and device is in the same mode,
 and a new tab opens in it. In Learn mode the header is Learning yellow, with a
 warm yellow wash and an amber line along its bottom. After the L comes the
-same project selector as in Develop. It shows your lesson's name, or **No
-project selected** without a lesson in progress. Its menu holds **Courses**,
-which opens the Courses overlay, and your lesson's practice project.
+same project title as in Develop. It shows your lesson's name, or **No
+project selected** without a lesson in progress. The arrow beside it,
+**Switch project**, opens a menu with **Courses**, which opens the Courses
+overlay, and your lesson's practice project.
 
 You have at most one lesson in progress. In Learn mode you are in your learning
 space only (see [Practice projects](learning-practice-projects.md)):

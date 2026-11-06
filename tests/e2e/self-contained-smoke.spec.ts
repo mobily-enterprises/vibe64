@@ -18,7 +18,7 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
   await page.goto(`${DASHBOARD_PATH}/history`);
-  await expect(page.getByRole("heading", { level: 1, name: "Session history", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Session history", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
@@ -31,9 +31,9 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeVisible();
   // AI Accounts is the AI setup screen; its Advanced section (with Refresh) shows
   // once something is connected, and this shell has nothing connected.
-  await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "Pick the AI behind Vibe64" })).toBeVisible();
+  await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Pick the AI behind Vibe64" })).toBeVisible();
   await accountConnectionsDialog.getByRole("tab", { name: "GitHub" }).click();
-  await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "GitHub Connection" })).toBeVisible();
+  await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "GitHub Connection" })).toBeVisible();
   await accountConnectionsDialog.getByRole("button", { name: "Close account settings" }).click();
   await expect(accountConnectionsDialog).toBeHidden();
   await expect(page.getByText("Session type", { exact: true })).toHaveCount(0);

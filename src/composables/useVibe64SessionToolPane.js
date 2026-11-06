@@ -92,7 +92,6 @@ function useVibe64SessionToolPane(props, emit, {
   const route = useRoute();
   const router = useRouter();
   const rightPaneTab = ref("preview");
-  const lastDashboardRoutePath = ref("");
   const sourceEditorOpenRequest = ref(null);
   const systemRestoreRequest = ref(null);
   const databaseOpenRequest = ref(null);
@@ -121,9 +120,6 @@ function useVibe64SessionToolPane(props, emit, {
     "info",
     "repository"
   ].includes(rightPaneTab.value));
-  const sessionToolBackPath = computed(() => (
-    lastDashboardRoutePath.value || projectAppPath(projectSlug.value, "/dashboard/env")
-  ));
 
   function sessionToolRuntimeState(toolId = "") {
     if (
@@ -188,13 +184,6 @@ function useVibe64SessionToolPane(props, emit, {
     return true;
   }
 
-  function backToDashboard() {
-    const targetPath = sessionToolBackPath.value;
-    if (targetPath && normalizeProjectRoutePath(targetPath) !== normalizeProjectRoutePath(route.path)) {
-      void router.push(targetPath);
-    }
-  }
-
   function rightPaneTabMounted(tabId = "") {
     return rightPaneTab.value === String(tabId || "");
   }
@@ -230,7 +219,7 @@ function useVibe64SessionToolPane(props, emit, {
     workState: props.workState || null
   }));
 
-  const systemBackAvailable = computed(() => Boolean(
+  const architectureReturnAvailable = computed(() => Boolean(
     systemReturnContext.value?.sessionId === sessionId.value
   ));
 
@@ -267,8 +256,9 @@ function useVibe64SessionToolPane(props, emit, {
     return selectSessionTool("database");
   }
 
-  function backToSystemFromEditor() {
-    if (!systemBackAvailable.value) {
+  // A file or table opened from Architecture offers Show Architecture, which reopens Architecture where it was.
+  function reopenArchitecture() {
+    if (!architectureReturnAvailable.value) {
       return false;
     }
     systemRestoreSequence += 1;
@@ -301,14 +291,12 @@ function useVibe64SessionToolPane(props, emit, {
         return;
       }
       const fallbackPath = projectAppPath(projectSlug.value, "/dashboard/env");
-      lastDashboardRoutePath.value = fallbackPath;
       rightPaneTab.value = "dashboard";
       if (normalizeProjectRoutePath(fallbackPath) !== normalizeProjectRoutePath(route.path)) {
         void router.replace(fallbackPath);
       }
       return;
     }
-    lastDashboardRoutePath.value = route.path;
     rightPaneTab.value = "dashboard";
   }, { immediate: true });
 
@@ -319,20 +307,19 @@ function useVibe64SessionToolPane(props, emit, {
   });
 
   return {
-    backToDashboard,
-    backToSystemFromEditor,
+    architectureReturnAvailable,
     dashboardRouteVisible,
     dashboardSessionContext,
     dashboardShellVisible,
     databaseOpenRequest,
     openSourceEditorFile,
     openSubsystemTable,
+    reopenArchitecture,
     rightPaneTab,
     rightPaneTabMounted,
     selectSessionTool,
     sourceEditorOpenRequest,
     sourceToolLoading,
-    systemBackAvailable,
     systemRestoreRequest
   };
 }
