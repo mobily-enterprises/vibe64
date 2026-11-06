@@ -16,9 +16,10 @@ name a command.
 - When you say a result is for someone else (a colleague, the team, a client,
   your manager, a meeting) or that you will come back to it, the AI makes the
   page straight away and gives you its link.
-- When an answer would read better as a page, the AI offers one in a single
-  line, such as "Want this as a page everyone on the project can open?". Answer
-  yes to get it. It does not offer pages for quick answers or code changes, and
+- After an answer that would read better as a page (a report, comparison,
+  status or progress overview, dashboard, diagram, plan or review), the AI ends
+  with a one-line offer, such as "Want this as a page everyone on the project
+  can open?". Answer yes to get it. It does not offer pages for quick answers or code changes, and
   offers once per topic.
 - To change a page, ask the AI to update it ("add last week's numbers to that
   page"). It updates the same page, so its link stays the same, instead of
