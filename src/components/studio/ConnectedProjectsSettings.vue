@@ -1,32 +1,32 @@
 <template>
   <section class="project-settings__section" aria-labelledby="connected-projects-title">
     <div class="project-settings__section-copy text-body-medium">
-      <h2 id="connected-projects-title" class="text-title-medium font-weight-bold">Connected projects</h2>
+      <h2 id="connected-projects-title" class="text-title-medium font-weight-bold">Connected repositories</h2>
       <p>Libraries and source projects you contribute to from this project.</p>
       <p>Saved in this source checkout’s <code>vibe64.connections.json</code>. Changes follow normal project Save.</p>
     </div>
     <div class="project-settings__content text-body-medium">
-      <p v-if="!state.available">{{ state.unavailableReason || 'Select a session to configure connected projects.' }}</p>
+      <p v-if="!state.available">{{ state.unavailableReason || 'Select a session to configure connected repositories.' }}</p>
       <template v-else>
-        <p v-if="!state.exists">No connection file yet. Add projects below, then save the list.</p>
+        <p v-if="!state.exists">No connection file yet. Add repositories below, then save the list.</p>
         <v-alert v-if="stale" type="warning" variant="tonal">
           The saved list changed while you were editing. Reload the saved list and review your changes before saving.
           <v-btn variant="text" @click="resetDraft">Reload saved list</v-btn>
         </v-alert>
         <fieldset v-for="(entry, index) in draft" :key="index" class="connection-entry" :disabled="!state.canEdit || saving">
-          <legend class="text-label-large">Connected project {{ index + 1 }}</legend>
+          <legend class="text-label-large">Connected repository {{ index + 1 }}</legend>
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.name" label="Name" maxlength="100" variant="outlined" hide-details="auto" />
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.repository" label="GitHub repository URL" placeholder="https://github.com/owner/repository" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" v-model="entry.relationship" label="Relationship" :items="relationships" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" :model-value="entry.type || ''" @update:model-value="setPackageType(entry, $event)" label="Package type" :items="packageTypes" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
           <v-text-field :disabled="!state.canEdit || saving || !scriptAllowed(entry)" :model-value="entry.script || ''" @update:model-value="setScript(entry, $event)" label="Preparation script (project-relative)" placeholder="tooling/prepare-native-worker.mjs" maxlength="1024" hint="Required for custom. Relative to this project's root; Stack declares the runtime." persistent-hint variant="outlined" hide-details="auto" />
-          <v-btn :disabled="!state.canEdit || saving" variant="text" :aria-label="`Remove ${entry.name || 'connected project'}`" @click="draft.splice(index, 1)">Remove</v-btn>
+          <v-btn :disabled="!state.canEdit || saving" variant="text" :aria-label="`Remove ${entry.name || 'connected repository'}`" @click="draft.splice(index, 1)">Remove</v-btn>
         </fieldset>
-        <p v-if="state.exists && !draft.length">No connected projects.</p>
-        <p class="text-body-small">Removing a connection preserves its existing contributions and pending work.</p>
+        <p v-if="state.exists && !draft.length">No connected repositories.</p>
+        <p class="text-body-small">Removing a connection keeps each session's copy of it until that copy's work is saved.</p>
         <div class="connection-actions">
-          <v-btn :disabled="!state.canEdit || saving || draft.length >= CONNECTED_PROJECTS_LIMIT" variant="outlined" @click="draft.push({ name: '', repository: '', relationship: 'dependency' })">Add project</v-btn>
-          <v-btn :disabled="!state.canEdit || saving || stale || (!changed && state.exists)" color="primary" variant="flat" @click="save">{{ saving ? 'Saving…' : 'Save connected projects' }}</v-btn>
+          <v-btn :disabled="!state.canEdit || saving || draft.length >= CONNECTED_PROJECTS_LIMIT" variant="outlined" @click="draft.push({ name: '', repository: '', relationship: 'dependency' })">Add repository</v-btn>
+          <v-btn :disabled="!state.canEdit || saving || stale || (!changed && state.exists)" color="primary" variant="flat" @click="save">{{ saving ? 'Saving…' : 'Save connected repositories' }}</v-btn>
         </div>
       </template>
     </div>
@@ -86,8 +86,8 @@ const saveCommand = useCommand({
   access: "never", apiSuffix: "/vibe64/settings/connections",
   buildCommandOptions: () => ({ method: "PUT", path: scopedDevelopmentApiUrl("/api/vibe64/settings/connections", props.projectSlug) }),
   buildRawPayload: (_model, { context }) => context,
-  fallbackRunError: "Connected projects could not be saved.",
-  messages: { error: "Connected projects could not be saved.", success: "Connected projects saved in source." },
+  fallbackRunError: "Connected repositories could not be saved.",
+  messages: { error: "Connected repositories could not be saved.", success: "Connected repositories saved in source." },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, placementSource: "vibe64.project.connections.save",
   surfaceId: VIBE64_SURFACE_ID, writeMethod: "PUT"
 });

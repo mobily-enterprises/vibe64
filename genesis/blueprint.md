@@ -1,7 +1,7 @@
 # Blueprint
 
-People declare connected libraries and source projects in the project's
-`vibe64.connections.json`, using Project settings or source editing, and can add
+People declare connected repositories, such as libraries and assembled source,
+in the project's `vibe64.connections.json`, using Project settings or source editing, and can add
 repositories later. Stack describes technology and generic source treatment;
 it never contains repository identities or a starting connection list.
 Connections may use different package types from the app: each entry can

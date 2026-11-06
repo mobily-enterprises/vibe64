@@ -16,7 +16,7 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
 
 /**
- * Project settings kept in the project's source: connected projects, collaboration
+ * Project settings kept in the project's source: connected repositories, collaboration
  * guidance, prompt suggestions, the engineering profile and Preview identities, with
  * who may edit them.
  * @param {object} dependencies
@@ -49,7 +49,7 @@ function createProjectSettings({
         available: false,
         canEdit: false,
         source: scope,
-        unavailableReason: "Create or select a session to configure connected projects."
+        unavailableReason: "Create or select a session to configure connected repositories."
       };
     }
     await assertProjectDirectoryUsable(source.sourceRoot);
@@ -68,7 +68,7 @@ function createProjectSettings({
 
   async function saveConnectedProjectsState(input = {}) {
     if (!canEditProjectSettings(input)) {
-      throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required", {
+      throw vibe64Error("Only the project owner can change connected repositories.", "vibe64_owner_required", {
         messageCode: "vibe64_connected_projects_owner_required"
       });
     }
@@ -77,7 +77,7 @@ function createProjectSettings({
     const write = async () => {
       const source = await selection.genesisSettingsSourceForInput(sourceInput);
       if (!source.sourceRoot) {
-        throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
+        throw vibe64Error("Create or select a session before configuring connected repositories.", "vibe64_connections_source_required");
       }
       await assertProjectDirectoryUsable(source.sourceRoot);
       return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(), async () => {

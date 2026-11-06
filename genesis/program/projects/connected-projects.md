@@ -1,4 +1,4 @@
-# Configure connected projects
+# Configure connected repositories
 
 People maintain a portable list of repositories they work on alongside a
 project. Every session keeps its own copy of each listed repository (see

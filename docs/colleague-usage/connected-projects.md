@@ -1,4 +1,4 @@
-# Configure connected projects
+# Configure connected repositories
 
 A project can list other GitHub repositories it works with, such as a library it
 uses. Every session then keeps its own copy of each listed repository, and
@@ -7,11 +7,11 @@ copies with the session's own repository; see
 [Work in connected repositories](connected-repositories.md).
 
 Open the intended project and session, then **Dashboard → Project settings →
-Connected projects**. On phones, use **Show project** and **Dashboard section**
+Connected repositories**. On phones, use **Show project** and **Dashboard section**
 to reach Project settings. The list belongs to the displayed source checkout.
 
 `vibe64.connections.json` is the only repository connection list. If it does not
-exist, use **Add project**, then **Save connected projects** to create it. You can
+exist, use **Add repository**, then **Save connected repositories** to create it. You can
 also edit this tracked source file directly. Stack contains technology and generic
 placement/treatment instructions, never repository identities or initial lists.
 Opening Settings and preparing a workspace do not create or import this file.
@@ -19,8 +19,8 @@ Opening Settings and preparing a workspace do not create or import this file.
 For each entry, provide a **Name**, a **GitHub repository URL**, and a
 **Relationship**: Dependency for a library or tool; Composition for source
 assembled into this project. Use an HTTPS URL without credentials. The same
-repository cannot appear twice under different names. More projects can be
-added later, up to 64 entries within a 64 KiB file. Oversized saves preserve the
+repository cannot appear twice under different names. More repositories can
+be added later, up to 64 entries within a 64 KiB file. Oversized saves preserve the
 current list; shorten the entries before retrying.
 
 **Package type** is separate from Relationship. Choose **Stack default** to
@@ -64,7 +64,7 @@ failure. Keep generated development artifacts ignored by Git and preserve
 release manifests and lockfiles. Vibe64 provides execution and failure reporting;
 it cannot infer what a custom artifact means or prove it from a zero-exit no-op.
 
-Use **Save connected projects** to write the complete list to
+Use **Save connected repositories** to write the complete list to
 `vibe64.connections.json` in the selected source. You must be the project owner
 and have write access to each listed repository through your connected GitHub
 account. The file is ordinary project source and follows normal project Save.

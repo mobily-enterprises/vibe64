@@ -13,7 +13,7 @@ selected npm sources without modifying release manifests or installing over the
 editable checkouts. Vibe64's own composition treats only npm dependencies and
 custom connections; a connection with another package type, such as pip, stops
 Preview with "has no treatment for pip connections". Choose npm or custom for
-Vibe64's connections. See [Connected projects](connected-projects.md) for Settings and
+Vibe64's connections. See [Connected repositories](connected-projects.md) for Settings and
 preparation, and [Work in connected repositories](connected-repositories.md) for
 Update and Save.
 

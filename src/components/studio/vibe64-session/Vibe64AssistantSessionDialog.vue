@@ -102,7 +102,7 @@
         <v-progress-linear indeterminate color="primary" rounded />
         <p class="text-body-small mb-0">
           Copying the project source for the new session. This can take a little while for a large project.
-          Any connected projects and workspace setup then continue in the session, which shows their progress.
+          Any connected repositories and workspace setup then continue in the session, which shows their progress.
         </p>
       </div>
 

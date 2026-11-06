@@ -330,7 +330,7 @@
 </template>
 
 <script setup>
-// Project settings: connected projects, the engineering approach, the development database, AI behaviour,
+// Project settings: connected repositories, the engineering approach, the development database, AI behaviour,
 // prompt suggestions and the Git workflow, each saved on its own.
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
