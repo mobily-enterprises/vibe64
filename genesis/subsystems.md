@@ -650,6 +650,39 @@ of regular Z.AI saved setup facts. Account writes and paid consent remain exclud
 ### Data used
 - Nothing.
 
+## `packages-vibe64-pages` Pages
+
+Owns pages: HTML pages an AI makes that everyone with access to a project can
+open. It keeps each project's pages in that project's Vibe64 state,
+`<project state>/pages/<page id>/`, with `page.json` (title, maker, session,
+times, archived) and the files of the last ten versions; never in the
+repository. The session agent publishes, updates, reverts and lists pages with
+`vibe64-helper pages`, whose wrapper and socket live with Terminals' other
+agent commands and reach this package's service through the pages provider
+slot. Project members list, read, archive, restore, delete and bring back
+versions through named actions behind the ordinary project access check; none
+is an AI tool. Viewing goes through short-lived viewing links that name one
+page: the frame host and the page's files are served sandboxed, with an opaque
+origin and a Content-Security-Policy that admits only that link's own files.
+The client part holds the Pages list, the viewer beside the chat and the chat's
+page link cards; the application places them in the Dashboard and transcripts.
+The optional `_vibe64/page.css` stylesheet gives pages Vibe64's colours, font
+and light and dark modes.
+
+### Source
+- Directory `packages/vibe64-pages`
+
+### Program
+- `genesis/program/pages/publishing.md`
+- `genesis/program/pages/pages-list.md`
+- `genesis/program/pages/viewing.md`
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
 ## `packages-vibe64-ai-tasks` AI tasks
 
 Holds every specific job given to an agent as one AI task: the problem, the

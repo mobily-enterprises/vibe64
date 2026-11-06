@@ -162,7 +162,9 @@ works must therefore get a short visible reply first (a direct question gets a
 direct answer) before the agent continues; an answer left only in thinking is
 not a reply. The
 contribution points agents to `vibe64-helper spec` for exact Vibe64-owned
-contracts instead of restating their grammar. Framework conventions, such as
+contracts instead of restating their grammar. With the pages command it also
+tells every engine how to publish a page and when to offer one
+([publishing pages](../pages/publishing.md)). Framework conventions, such as
 JSKIT's test-database names, belong to the Stack piece that owns them; Vibe64
 keeps only host rules, such as the `PLAYWRIGHT_BASE_URL` its managed Playwright
 supplies. The

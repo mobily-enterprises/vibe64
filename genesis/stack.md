@@ -129,6 +129,7 @@
 - Subsystem: `packages/vibe64-database-tools`
 - Subsystem: `packages/vibe64-voice`
 - Subsystem: `packages/vibe64-publishing`
+- Subsystem: `packages/vibe64-pages`
 - Subsystem: `packages/vibe64-packaging`
 
 ### Group `workspace`: Workspace services

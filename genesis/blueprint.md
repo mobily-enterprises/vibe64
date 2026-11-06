@@ -507,6 +507,20 @@ storage whose daily maintenance deletes files 14 days after their last write or
 filesystem change; Files shows each backup's expiry date. Project Backups is not
 an automatic project snapshot. Users and coding agents can add files to both
 with the same Files controls.
+The project Dashboard's **Pages** list holds pages the AI made: reports,
+comparisons, dashboards, diagrams and status overviews that everyone with access
+to the project can open. A page belongs to the project, never to the repository,
+and records who made it, in which session and when it last changed. The list has
+Current and Archived tabs; a page can be opened, archived and restored, and only
+an archived page can be deleted. A page keeps its last ten versions, and any of
+them can be brought back as the newest. Any page link in the chat, the AI's or
+one a person pastes, shows as a card with the page's title, last update and Open,
+which shows the page beside the chat, like Preview, with Open in new tab for the
+whole screen. The AI offers a page in one line when a result reads better as one,
+makes it without asking when the person says it is for others or for later, and
+updates an existing page instead of making a second one about the same thing. A
+page is untrusted: it shows only its own files and cannot see Vibe64, the
+viewer's sign-in, other projects or other pages, or send anything anywhere.
 Uploads go straight into the open folder with no further step, in Repo too,
 where the current folder is the open file's folder and uploaded files are
 ordinary session changes; no partly uploaded file is ever visible to Git or Save
