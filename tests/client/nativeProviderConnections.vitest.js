@@ -11,6 +11,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useCodexProviderC
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 import NativeProviderConnections from "../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue";
 import CustomEndpointForm from "../../packages/vibe64-accounts/src/client/studio/CustomEndpointForm.vue";
+import CustomEndpointAdvanced from "../../packages/vibe64-accounts/src/client/studio/CustomEndpointAdvanced.vue";
 
 let app;
 function mount(props, component = NativeProviderConnections) {
@@ -30,9 +31,9 @@ afterEach(() => app?.unmount());
 it("shows each orchestrator's actual verification with warm connection data", () => {
   const state = mount({ engineId: "claude", modelValue: "deepseek" });
   expect(state.choices.map(choice => choice.label)).toEqual([
-    "Claude Code - Claude · Claude subscription", "Claude Code - DeepSeek · Connected", "Claude Code - GLM · Coding Plan", "Claude Code - GLM · Pay-as-you-go API",
-    "Claude Code - Custom endpoint"
+    "Claude Code - Claude · Claude subscription", "Claude Code - DeepSeek · Connected", "Claude Code - GLM · Coding Plan", "Claude Code - GLM · Pay-as-you-go API"
   ]);
+  expect(state.customUnlisted).toBe(true);
   expect(state.connected).toBe(true);
   expect(state.connectionStatus).toBe("connected");
   expect(state.engineLabel).toBe("Claude Code");
@@ -166,6 +167,34 @@ it("shows a saved custom endpoint's model and its own form with Check and save a
   expect(html).toContain("only the workspace owner can use this custom endpoint");
   expect(html).toContain("Disconnect");
   expect(html).not.toContain("Check and replace key");
+});
+
+it("keeps an unset custom endpoint under a closed Advanced with its tool's API, and lists it once set up", async () => {
+  const view = createSSRApp(NativeProviderConnections, { engineId: "claude", modelValue: "anthropic" });
+  view.use(createVuetify({ ssr: true }));
+  const html = await renderToString(view);
+  expect(html).toContain("Advanced");
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).not.toContain("Custom endpoint");
+  const notes = ["codex", "claude", "opencode"].map((engineId) => {
+    const advanced = mount({ engineId }, CustomEndpointAdvanced);
+    expect(advanced.open).toBe(false);
+    app.unmount();
+    return advanced.apiNote;
+  });
+  expect(notes).toEqual([
+    "Codex needs the OpenAI Responses API. Its base URL usually ends in /v1.",
+    "Claude Code needs the Anthropic Messages API. Its base URL has no /v1.",
+    "OpenCode needs OpenAI Chat Completions. Its base URL usually ends in /v1."
+  ]);
+  const picker = mount({ engineId: "claude", modelValue: "anthropic" });
+  picker.providerId = "custom";
+  expect(picker.choices.at(-1).label).toBe("Claude Code - Custom endpoint");
+  app.unmount();
+  mocks.connections.value.push({ ...customConnection(false), claudeReady: true, configuredEngines: ["claude"] });
+  const saved = mount({ engineId: "claude", modelValue: "anthropic" });
+  expect(saved.choices.at(-1).label).toBe("Claude Code - Custom endpoint · Connected");
+  expect(saved.customUnlisted).toBe(false);
 });
 
 it("keeps a saved custom endpoint key unless a new one is typed, and refuses a context below 32,768", () => {

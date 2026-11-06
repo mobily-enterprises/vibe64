@@ -1,9 +1,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { mdiArrowLeft, mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
-import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, CUSTOM_AI_PROVIDER_ID, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
+import CustomEndpointAdvanced from "./CustomEndpointAdvanced.vue";
 import CustomEndpointForm from "./CustomEndpointForm.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import AiPersonalUse from "./AiPersonalUse.vue";
@@ -45,15 +46,19 @@ const models = computed(() => provider.value?.custom
   ? engineState.value?.endpoint ? [{ id: engineState.value.endpoint.model, label: engineState.value.endpoint.model }] : []
   : provider.value?.models || []);
 const useExistingKey = computed(() => props.adding && connectionStatus.value === "connected");
+const providerChoices = computed(() => CURATED_CODEX_PROVIDERS.map(({ id, label, custom }) => {
+  const row = connections.value.find((row) => row.id === id);
+  const ready = props.engineId === "claude" ? row?.claudeReady : row?.connected;
+  // A custom endpoint is for advanced users: it joins the list once it is set up, and until then waits under Advanced.
+  const listed = !custom || row?.configuredEngines?.includes(props.engineId) || providerId.value === id;
+  return { id, label: `${engineLabel.value} - ${label}${ready ? " · Connected" : ""}`, custom, listed };
+}));
 const choices = computed(() => [
   props.engineId === "claude" ? { id: "anthropic", label: "Claude Code - Claude · Claude subscription" }
     : { id: "openai", label: "Codex - OpenAI · ChatGPT or OpenAI API key" },
-  ...CURATED_CODEX_PROVIDERS.map(({ id, label }) => {
-    const row = connections.value.find((row) => row.id === id);
-    const ready = props.engineId === "claude" ? row?.claudeReady : row?.connected;
-    return { id, label: `${engineLabel.value} - ${label}${ready ? " · Connected" : ""}` };
-  })
+  ...providerChoices.value.filter(({ listed }) => listed).map(({ id, label }) => ({ id, label }))
 ]);
+const customUnlisted = computed(() => providerChoices.value.some(({ custom, listed }) => custom && !listed));
 const apiKey = ref("");
 const visible = ref(false);
 const confirmRemove = ref(false);
@@ -96,10 +101,13 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
       @saved="routingProposal = false; emit('changed'); emit('close')"
     />
     <template v-else>
-      <div v-if="selectProvider" class="d-flex align-center ga-2 mb-3">
+      <div v-if="selectProvider" class="mb-3">
         <v-select
           v-model="providerId" :items="choices" item-title="label" item-value="id"
           :label="`Use ${engineLabel} with`" variant="outlined" hide-details :disabled="busy"
+        />
+        <CustomEndpointAdvanced
+          v-if="customUnlisted" :engine-id="engineId" :disabled="!actionsEnabled || busy" @choose="providerId = CUSTOM_AI_PROVIDER_ID"
         />
       </div>
       <template v-if="provider">

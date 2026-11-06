@@ -66,7 +66,10 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
   const openCodeCustomAvailable = computed(() => !codexProviders.connections.value.some(
     (connection) => connection.id === CUSTOM_AI_PROVIDER_ID && connection.configuredEngines?.includes("opencode")
   ));
-  const nativeAvailableProviders = computed(() => nativeChoices.value.find((engine) => engine.id === nativeSetupProviderId.value)?.providers || []);
+  const nativeSetupProviders = computed(() => nativeChoices.value.find((engine) => engine.id === nativeSetupProviderId.value)?.providers || []);
+  // A custom endpoint is for advanced users: the picker lists the others and keeps it under Advanced.
+  const nativeAvailableProviders = computed(() => nativeSetupProviders.value.filter(({ custom }) => !custom));
+  const nativeCustomAvailable = computed(() => nativeSetupProviders.value.some(({ custom }) => custom));
   // A missing or broken CLI keeps the tool's own name and the server's plain explanation.
   const nativeSetupToolProblem = computed(() => cliProblem(nativeSetupAccount.value) ? nativeSetupAccount.value.status : "");
   const nativeSetupRows = computed(() => [{
@@ -88,12 +91,15 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
     nativeSetupOpen.value = true;
   }
 
-  /** Opens the custom endpoint form for OpenCode from its provider picker. */
-  function chooseOpenCodeCustomEndpoint() {
-    if (!openCodeCustomAvailable.value) return;
-    nativeSetupProviderId.value = "opencode";
+  /** Opens one tool's custom endpoint form from its provider picker's Advanced. */
+  function chooseCustomEndpoint(engineId = "") {
+    const available = engineId === "opencode" ? openCodeCustomAvailable.value
+      : nativeChoices.value.some((engine) => engine.id === engineId && engine.providers.some(({ custom }) => custom));
+    if (!available) return;
+    nativeSetupProviderId.value = engineId;
     nativeModelProviderId.value = CUSTOM_AI_PROVIDER_ID;
     nativeSetupOrigin.value = "add";
+    nativeProviderPickerOpen.value = false;
     nativeSetupOpen.value = true;
   }
 
@@ -118,8 +124,8 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
 
   return {
     backFromNativeSetup,
+    chooseCustomEndpoint,
     chooseNativeProvider,
-    chooseOpenCodeCustomEndpoint,
     claudeAccount,
     claudeConnected,
     codexAccount,
@@ -128,6 +134,7 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
     nativeAvailableProviders,
     nativeChoices,
     nativeConnected,
+    nativeCustomAvailable,
     nativeModelProviderId,
     nativeProviderPickerOpen,
     nativeRoutingReady,

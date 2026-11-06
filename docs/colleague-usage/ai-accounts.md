@@ -131,7 +131,8 @@ option**.
 
 Claude Code, Codex and OpenCode can each use a model server you already run or
 can reach, such as Ollama, LM Studio, llama.cpp's `llama-server` or vLLM: open
-**Advanced → Add a connection** and choose **Custom endpoint**.
+**Advanced → Add a connection**, pick the tool, then open **Advanced** at the
+bottom of its provider list and choose **Custom endpoint**.
 [Custom model endpoints](custom-model-endpoints.md) explains the form, the
 connection check and what to fix when it refuses.
 

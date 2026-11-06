@@ -46,9 +46,12 @@ Vibe64's own instructions.
 
 ## 2. What the person enters
 
-The connection is one row per engine, named **Codex - Custom endpoint** and so on. It appears
-only under **Advanced → Add a connection**: Codex and Claude Code list it after their other
-providers, and OpenCode's provider picker offers it above the OpenCode catalogue.
+The connection is one row per engine, named **Codex - Custom endpoint** and so on. It is for
+advanced users: under **Advanced → Add a connection**, each tool's provider picker (Codex,
+Claude Code, OpenCode) keeps it out of its provider list, in a collapsed **Advanced** at the
+bottom. That section names the API the tool needs (Responses with `/v1`, Messages without
+`/v1`, Chat Completions with `/v1`), says Ollama serves all three, and warns never to expose a
+server without a key or a private tunnel. Once set up, the connection lists like any other.
 
 | Field | Codex | OpenCode | Claude Code |
 | --- | --- | --- | --- |

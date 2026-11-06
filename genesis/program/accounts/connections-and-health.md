@@ -94,6 +94,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-core/src/server/stateUpgrades/20261029-codex-unused-caches.js`
 - `packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue`
 - `packages/vibe64-accounts/src/client/studio/CustomEndpointForm.vue`
+- `packages/vibe64-accounts/src/client/studio/CustomEndpointAdvanced.vue`
 - `tests/server/customModelEndpoints.unit.test.js`
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
@@ -589,7 +590,15 @@ The existing host Codex-management policy authorizes reads and mutations, and
 lists never return keys.
 
 The `custom` provider is the one exception: a model server the owner already runs
-or reaches (`docs/local-llm.md`). Under Advanced only, Codex, Claude Code and,
+or reaches (`docs/local-llm.md`). It is for advanced users: no provider list
+shows it until it is set up for that tool. Each tool's provider picker (Codex's
+and Claude Code's, OpenCode's, and the exported provider select) ends in a
+collapsed Advanced (`CustomEndpointAdvanced`), closed by default, that names the
+API the tool needs (Responses with a `/v1` base URL, Messages without `/v1`,
+Chat Completions with `/v1`), says Ollama serves all three, warns against
+exposing a server without a key or a private tunnel and opens the form; Add a
+connection still offers an orchestrator whose only open choice is its custom
+endpoint. Codex, Claude Code and,
 for this provider alone, OpenCode each save their own `{ baseUrl, model,
 contextWindow, apiKey }` under `ai-connections/<engine>/custom`. The server
 accepts only an `http(s)` base URL without credentials, query or fragment, a model

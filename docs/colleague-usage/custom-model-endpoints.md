@@ -5,19 +5,23 @@ can reach, such as Ollama, LM Studio, llama.cpp's `llama-server` or vLLM. Vibe64
 never installs, downloads or starts a model or a model server; it sends the
 server requests only for your turns, the connection check and Health.
 
+It is for advanced users, so no provider list shows it until it is set up.
 Open **Account settings → AI Accounts** from the account menu (or **Your AI
 setup** in AI onboarding), expand **Advanced** below the provider cards and
-choose **Add a connection**. Pick **Claude Code** or **Codex**, then **Custom
-endpoint**; for OpenCode choose **OpenCode**, then **Custom endpoint** at the
-top of its provider list. Each tool has its own connection, for example
-**Codex - Custom endpoint**, and several tools can point at the same server.
-Enter:
+choose **Add a connection**. Pick **Claude Code**, **Codex** or **OpenCode**;
+at the bottom of its provider list, open **Advanced** (closed until you open
+it) and choose **Custom endpoint**. That section names the API the tool needs,
+says Ollama serves all three, and warns never to expose a model server to the
+internet without a key or a private tunnel. Each tool has its own connection,
+for example **Codex - Custom endpoint**, and several tools can point at the
+same server. Once connected, it shows with your other connections. Enter:
 
-- **Base URL**: Codex and OpenCode need an OpenAI-compatible address, which
-  usually ends in `/v1`, such as `http://127.0.0.1:11434/v1` for Ollama. Claude
-  Code needs an Anthropic-compatible address without `/v1`, such as
-  `http://127.0.0.1:11434`. The address must be reachable from the computer
-  Vibe64 runs on; when Vibe64 runs on a server, `127.0.0.1` is that server.
+- **Base URL**: Codex needs the OpenAI Responses API and OpenCode OpenAI Chat
+  Completions, both at an address that usually ends in `/v1`, such as
+  `http://127.0.0.1:11434/v1` for Ollama. Claude Code needs the Anthropic
+  Messages API at an address without `/v1`, such as `http://127.0.0.1:11434`.
+  The address must be reachable from the computer Vibe64 runs on; when Vibe64
+  runs on a server, `127.0.0.1` is that server.
 - **Model name**: exactly as the server names it, such as `qwen3.5:4b`. The
   model must support tool calling.
 - **Context length (tokens)**: 65,536 to start with, and at least 32,768. The

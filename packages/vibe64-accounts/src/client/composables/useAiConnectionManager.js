@@ -108,8 +108,8 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   });
   const {
     backFromNativeSetup,
+    chooseCustomEndpoint: chooseNativeCustomEndpoint,
     chooseNativeProvider,
-    chooseOpenCodeCustomEndpoint,
     claudeAccount,
     claudeConnected,
     codexAccount,
@@ -118,6 +118,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     nativeAvailableProviders,
     nativeChoices,
     nativeConnected,
+    nativeCustomAvailable,
     nativeModelProviderId,
     nativeProviderPickerOpen,
     nativeRoutingReady,
@@ -239,11 +240,11 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     }
   }
 
-  /** OpenCode's provider picker leads to the custom endpoint form. */
-  function chooseOpenCodeCustom() {
+  /** A provider picker's Advanced leads to that tool's custom endpoint form. */
+  function chooseCustomEndpoint(engineId = "") {
     nativeSetupActivator.value = document.activeElement;
     providerPickerOpen.value = false;
-    chooseOpenCodeCustomEndpoint();
+    chooseNativeCustomEndpoint(engineId);
   }
 
   /** Back from a setup dialog: OpenCode's returns to its own provider picker. */
@@ -318,8 +319,8 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     checkingOpenCode,
     checkOpenCodeAgain,
     chooseAiType,
+    chooseCustomEndpoint,
     chooseNativeProvider,
-    chooseOpenCodeCustom,
     chooseProvider,
     claudeAccount,
     claudeConnected,
@@ -373,6 +374,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     nativeAvailableProviders,
     nativeChoices,
     nativeConnected,
+    nativeCustomAvailable,
     nativeLoadError,
     nativeModelProviderId,
     nativeProviderPickerOpen,

@@ -11,6 +11,7 @@ import {
 } from "@mdi/js";
 import AiProviderKeyForm from "./AiProviderKeyForm.vue";
 import CliInstallNotice from "./CliInstallNotice.vue";
+import CustomEndpointAdvanced from "./CustomEndpointAdvanced.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
@@ -28,8 +29,8 @@ const {
   checkingOpenCode,
   checkOpenCodeAgain,
   chooseAiType,
+  chooseCustomEndpoint,
   chooseNativeProvider,
-  chooseOpenCodeCustom,
   chooseProvider,
   closeEditor,
   codexProviders,
@@ -61,6 +62,7 @@ const {
   nativeAvailableProviders,
   nativeChoices,
   nativeConnected,
+  nativeCustomAvailable,
   nativeModelProviderId,
   nativeProviderPickerOpen,
   nativeRoutingReady,
@@ -118,7 +120,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
                 <v-card-subtitle>{{ missingTool(choice.id) ? "Not installed on this computer" : "Choose a provider" }}</v-card-subtitle>
               </v-card-item>
               <v-card-text class="vibe64-add-ai__choice-copy text-body-medium">
-                {{ choice.providers.map(provider => provider.label).join(', ') }}
+                {{ choice.providers.filter(provider => !provider.custom).map(provider => provider.label).join(', ') || "Your own model server, under Advanced" }}
               </v-card-text>
               <v-card-actions class="vibe64-add-ai__choice-actions">
                 <v-btn class="vibe64-add-ai__choice-action" block color="primary" type="button" variant="tonal" @click="chooseAiType(choice.id)">
@@ -173,7 +175,11 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
             <template #append><span class="text-label-large text-primary">Connect</span></template>
           </v-list-item>
         </v-list>
-        <p v-else class="text-body-medium">All available {{ nativeSetupDetails.label }} connections are configured.</p>
+        <p v-else-if="!nativeCustomAvailable" class="text-body-medium">All available {{ nativeSetupDetails.label }} connections are configured.</p>
+        <CustomEndpointAdvanced
+          v-if="nativeCustomAvailable" :engine-id="nativeSetupProviderId" :disabled="!isOwner"
+          @choose="chooseCustomEndpoint(nativeSetupProviderId)"
+        />
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -210,22 +216,6 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
             placeholder="Try OpenAI, Anthropic, GLM…"
             variant="outlined"
           />
-
-          <v-sheet v-if="openCodeCustomAvailable" border class="vibe64-provider-picker__list mt-3" rounded="xl">
-            <v-list lines="two" aria-label="Your own model server">
-              <v-list-item
-                class="vibe64-provider-picker__item" title="Custom endpoint"
-                subtitle="custom · A model server you run or reach, such as Ollama or LM Studio" @click="chooseOpenCodeCustom"
-              >
-                <template #prepend>
-                  <v-avatar color="primary" size="44" variant="tonal">
-                    <v-icon :icon="mdiRobotOutline" size="22" />
-                  </v-avatar>
-                </template>
-                <template #append><span class="text-label-large text-primary">Connect</span></template>
-              </v-list-item>
-            </v-list>
-          </v-sheet>
 
           <div
             v-if="providerPickerLoading"
@@ -292,6 +282,9 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
                 : "Manage an existing connection, or remove one before adding it again." }}
             </span>
           </v-sheet>
+          <CustomEndpointAdvanced
+            v-if="openCodeCustomAvailable" engine-id="opencode" :disabled="!isOwner" @choose="chooseCustomEndpoint('opencode')"
+          />
         </template>
       </v-card-text>
     </v-card>

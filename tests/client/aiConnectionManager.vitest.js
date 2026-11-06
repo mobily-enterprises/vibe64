@@ -255,11 +255,26 @@ it("reports busy while a removal runs so Redo onboarding cannot interrupt it", (
   expect(state.busy).toBe(true);
 });
 
+it("keeps each orchestrator's custom endpoint out of its provider list, under its picker's Advanced", () => {
+  const state = mount();
+  state.nativeSetupProviderId = "codex";
+  expect(state.nativeChoices.find(({ id }) => id === "codex").providers.map(({ id }) => id)).toEqual(["custom"]);
+  expect([state.nativeAvailableProviders, state.nativeCustomAvailable]).toEqual([[], true]);
+  state.nativeProviderPickerOpen = true;
+  state.chooseNativeProvider("custom");
+  expect([state.nativeProviderPickerOpen, state.nativeSetupOpen]).toEqual([true, false]);
+  state.chooseCustomEndpoint("codex");
+  expect([state.nativeProviderPickerOpen, state.nativeSetupOpen, state.nativeSetupProviderId, state.nativeModelProviderId])
+    .toEqual([false, true, "codex", "custom"]);
+  state.backFromNativeSetup();
+  expect([state.nativeSetupOpen, state.nativeProviderPickerOpen]).toEqual([false, true]);
+});
+
 it("offers OpenCode a custom endpoint from its provider picker until one is saved, and Back returns there", () => {
   const state = mount();
   expect(state.openCodeCustomAvailable).toBe(true);
   state.providerPickerOpen = true;
-  state.chooseOpenCodeCustom();
+  state.chooseCustomEndpoint("opencode");
   expect([state.providerPickerOpen, state.nativeSetupOpen, state.nativeSetupProviderId, state.nativeModelProviderId])
     .toEqual([false, true, "opencode", "custom"]);
   expect(state.nativeSetupDetails.label).toBe("OpenCode");
