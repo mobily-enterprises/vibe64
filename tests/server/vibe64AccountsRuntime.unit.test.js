@@ -1872,6 +1872,32 @@ test("Codex status exposes the account email and access scope without rotating a
   });
 });
 
+test("a fresh Vibe64 asks Codex itself on its first status read instead of trusting a marker no one wrote yet", async () => {
+  for (const signedIn of [true, false]) {
+    await withTempDir(async (root) => {
+      const systemRoot = path.join(root, "system");
+      const commands = [];
+      const service = createTestService({ logger: silentLogger,
+        publishAccountChanged: async () => null,
+        publishAuthSessionChanged: async () => null,
+        accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: path.join(root, "daemon"), requireExplicitRoots: true, systemRoot }),
+        project: { currentTargetRoot: () => "" },
+        invalidateAgentRuntimes: async () => ({ ok: true }),
+        runHostToolCommand: async (args) => {
+          commands.push(args);
+          return signedIn ? { ok: true, output: "Logged in using ChatGPT" } : { ok: false, exitCode: 1, output: "Not logged in" };
+        }
+      });
+      const first = await service.getStatus({ accountIds: ["codex"] });
+      assert.equal(first.accounts[0].connected, signedIn, "Codex signed in outside Vibe64 shows on the first read");
+      assert.equal(commands.length, 1);
+      assert.equal(Boolean(await readCodexLoginId(systemRoot)), signedIn, "the first read records a sign-in it finds");
+      assert.equal((await service.getStatus({ accountIds: ["codex"] })).accounts[0].connected, signedIn);
+      assert.equal(commands.length, 1, "later reads use what the first one recorded");
+    });
+  }
+});
+
 test("proven invalid Codex auth stays reconnect-required until a login session finalizes", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

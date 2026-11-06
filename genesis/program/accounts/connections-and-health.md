@@ -795,6 +795,10 @@ The existing `<systemRoot>/auth/codex/status.json` marker owns a random local
 successful Vibe64 sign-in replaces it; status reads, token refreshes, runtime
 retirement retries and server restarts preserve it. Failed or cancelled sign-in
 attempts do not replace an existing identity. Logout removes the marker.
+Ordinary status reads use the marker, except the server's first read while the
+marker is missing: it asks Codex itself (`accountStatusReads.js`,
+`codexAccountStatus.js`), so a Codex already signed in outside Vibe64 shows as
+signed in on a fresh Vibe64 and gets its marker without a manual refresh.
 Existing connected markers without an ID are repaired once by the stopped-service
 `20260923-codex-login-id` state upgrade, never by an account read. Invalid existing
 IDs block the upgrade instead of being replaced silently. This ID is local

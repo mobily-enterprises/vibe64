@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -85,17 +85,25 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
 }
 `);
   await chmod(claudeCommand, 0o700);
+  // This computer's own Codex may be signed in; the example's Codex is signed out.
+  const fakeBin = path.join(root, "bin");
+  await mkdir(fakeBin);
+  await writeFile(path.join(fakeBin, "codex"), `#!${process.execPath}
+if (process.argv.slice(-2).join(" ") === "login status") console.log("Not logged in");
+process.exit(1);
+`, { mode: 0o700 });
   let logs = "";
-  const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
-    cwd: path.resolve(import.meta.dirname, "../.."),
-    env: resolveCommandEnv({ actor: { actor: "daemon", user: currentActorUser() },
+  const env = resolveCommandEnv({ actor: { actor: "daemon", user: currentActorUser() },
       localPath: process.env.PATH, baseEnv: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
       VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project",
       VIBE64_CLAUDE_COMMAND: claudeCommand, LOG_LEVEL: "debug",
       VIBE64_WORKSPACE: "example", VIBE64_PUBLIC_USER_DOMAIN: "users.example.test",
       VIBE64_PUBLIC_PROTOCOL: "https", VIBE64_PREVIEW_PUBLIC_DOMAIN: "preview.example.test",
       VIBE64_PREVIEW_PUBLIC_NAMESPACE: "parent-editor",
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") } }),
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") } });
+  const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
+    cwd: path.resolve(import.meta.dirname, "../.."),
+    env: { ...env, PATH: `${fakeBin}${path.delimiter}${env.PATH}` },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
@@ -127,7 +135,7 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
     assert.equal(aiState.ok, true);
     assert.deepEqual(aiState.connections, [], "Vibe64 includes no AI connection of its own");
     const nativeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=codex`)).json();
-    assert.equal(nativeAccounts.accounts.find((account) => account.id === "codex").connected, false);
+    assert.equal(nativeAccounts.accounts.find((account) => account.id === "codex").connected, false, "a fresh Vibe64 asks its Codex, which is signed out");
     const claudeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=claude`)).json();
     const claudeAccount = claudeAccounts.accounts.find((account) => account.id === "claude");
     assert.equal(claudeAccount.connected, true);

@@ -46,7 +46,9 @@ Vibe64 talks to each AI through that AI's own program: **Claude Code** for Claud
 **Codex** for ChatGPT and OpenAI keys, and **opencode** for providers connected through
 OpenCode. On your own computer these programs must be installed; Vibe64 uses the copy
 you installed and the sign-in you already have (Claude Code and Codex keep their
-logins in your home folder, so a login made in a terminal works in Vibe64 too).
+logins in your home folder, so a login made in a terminal works in Vibe64 too). Vibe64
+asks Codex about its login the first time it shows your accounts after it starts; after
+logging in or out in a terminal while Vibe64 is running, choose **Refresh**.
 opencode is different: Vibe64 runs your installed opencode program but signs it in with
 the keys you add in AI Accounts, not with opencode's own login.
 

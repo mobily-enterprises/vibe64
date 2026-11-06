@@ -196,11 +196,13 @@ function createAccountStatusReads({
           codexContext: access.codexContextForInput(),
           systemRoot: access.systemRoot
         });
-        return refresh || localAccount?.status === "reconnecting"
-          ? codexStatus.readLiveCodexStatus({
-            reason: refresh ? "accounts-status-refresh" : "accounts-status-recovery"
-          })
-          : localAccount;
+        if (refresh) return codexStatus.readLiveCodexStatus({ reason: "accounts-status-refresh" });
+        if (localAccount.status === "reconnecting") return codexStatus.readLiveCodexStatus({ reason: "accounts-status-recovery" });
+        // The first read after start asks Codex itself, so a sign-in made outside Vibe64 shows at once.
+        if (!localAccount.connected && !codexStatus.hasAskedCodex()) {
+          return codexStatus.readLiveCodexStatus({ reason: "accounts-status-first-read" });
+        }
+        return localAccount;
       }
       if (accountId === "github") {
         return refresh

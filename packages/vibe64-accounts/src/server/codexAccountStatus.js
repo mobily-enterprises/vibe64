@@ -157,6 +157,9 @@ function createCodexAccountStatus({
   notifications
 }) {
   let codexStatusRead = null;
+  // Whether this server has asked Codex itself yet. Until it has, a missing marker
+  // means only that no one recorded a sign-in made outside Vibe64.
+  let codexAsked = false;
 
   async function invalidateCodexAppServersForAuthChange({
     account = {},
@@ -330,6 +333,7 @@ function createCodexAccountStatus({
         env,
         runHostToolCommand: access.accountRunHostCommand
       });
+      codexAsked = true;
       if (account?.status === "reconnect_required") {
         await markCodexReconnectRequired(access.systemRoot, {
           reason
@@ -356,7 +360,13 @@ function createCodexAccountStatus({
     }
   }
 
+  /** Whether this server has asked Codex itself for its sign-in yet. */
+  function hasAskedCodex() {
+    return codexAsked;
+  }
+
   return Object.freeze({
+    hasAskedCodex,
     readLiveCodexStatus
   });
 }
