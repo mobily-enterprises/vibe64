@@ -1,11 +1,11 @@
 # Review and publish session work
 
-The existing session repository-state projection treats `connectedSaveRequired`
-as unsaved work without inventing a main-repository changed-file count. Running
-operations and failed/unknown inspections keep their existing precedence. The
-temporary action terminal retains viewed completed details only when status,
-stage or output remains; a connected Save with no origin operation therefore
-cannot leave an empty "Working…" card after success.
+The existing session repository-state projection reads the session's work
+inspection, whose `unsaved` and `updateAvailable` include its connected copies,
+so a session whose only work is in a copy shows unsaved work without inventing a
+changed-file count for its own repository. Running operations and failed/unknown
+inspections keep their existing precedence. The temporary action terminal
+retains viewed completed details only when status, stage or output remains.
 
 A session tab shows the projection's **All work is saved** tick in the success
 colour only while that tab reports no assistant work. During its existing
@@ -31,17 +31,6 @@ same reading feeds the session assistant's `vibe64-helper session status`
 to guess. The failure does not disable Save: Save stays unavailable only when
 there is nothing to save.
 
-A clean Main Save checks retained submitted revisions before reporting that there
-is no work to save. Its existing preparation job receives the freshly authorized
-connected snapshots and reuses the native integration gate on the no-change path;
-no naming or publication follows a pending requirement. Dirty Save retains its
-final publication-time gate and fresh snapshot recheck.
-
-Receiving-status failures preserve the originating repository's work inspection
-and ordinary Main Save presentation. The Save operation rechecks connected
-authority and work before publication, so an unknown or inaccessible receiver
-still blocks the main push with an actionable error.
-
 For Genesis projects with declared generated artifacts, the managed `save-message`
 operation inspects the current selected Stack through the existing Genesis owner
 before capturing/naming work. Missing operation contracts fail read-only, before
@@ -60,7 +49,6 @@ Git commands.
 
 ## Sources
 
-- `src/components/studio/IncomingChangesPanel.vue`
 - `src/components/studio/Vibe64DashboardShell.vue`
 
 - `packages/vibe64-execution/src/server/gitTurnCheckpoint.js`
@@ -95,7 +83,8 @@ Git commands.
 - `packages/vibe64-terminals/src/shared/sessionWorkProblem.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
-- `packages/vibe64-terminals/src/server/sessionIncomingContributions.js`
+- `packages/vibe64-terminals/src/server/sessionConnectedCopies.js`
+- `packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
@@ -108,9 +97,6 @@ Git commands.
 - `packages/vibe64-sessions/src/server/repositoryUpdateProbe.js`
 - `packages/vibe64-sessions/src/server/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
-- `packages/vibe64-sessions/src/server/connectedContributions.js`
-- `packages/vibe64-sessions/src/server/receivingContributions.js`
-- `packages/vibe64-sessions/src/server/connectedContributionActions.js`
 - `packages/vibe64-sessions/src/server/sessionActions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
@@ -136,65 +122,71 @@ Git commands.
 
 ## Public contract
 
-Core validates optional session `connected_submissions` metadata: schema one
-contains exact contribution identities and submitted commit IDs, without queue
-status. The original Save Git owner carries those bindings into managed native
-operations and fetches current receiving refs immediately before publication.
-The exact submitted revision must be an ancestor of the configured target;
-pending, discarded, interrupted-discard, inaccessible and incomplete-history
-evidence refuse publication. Retained ancestry can prove integration after a
-queue ref is deleted. Later unrelated branch commits do not invalidate that
-proof. Feature-branch creation checks the same requirements. Renewal preserves
-them; reading or removing connection-file entries cannot erase them.
-Explicit replacement after discard preserves those requirements. Acceptance is
-checked for every exact submitted commit, while accepted-source consumption is
-checked against the current authorized source for that repository and target.
-Contribution UUIDs remain immutable across renewal; the authorized work snapshot
-identifies the actual receiving session that currently owns the source.
+Save, Update, update checks, inspection and Save recovery reach each connected
+copy (`sessionConnectedCopies.js`) through the same engine as the session's own
+repository. `connectedCopyWork` presents the copy as a GitHub session of its
+repository (`https://github.com/<owner>/<name>.git`) whose source is the copy,
+whose branch is the repository's main and whose base and canonical commits are
+the copy's record; its mirror is optional, so no mirror maintenance follows. Its
+Git commands run as the session's recorded Git actor for that repository
+(`connectedCopyActorSession`), recorded first on a write when the session has none.
+The terminals service supplies those commands, the commit records and workspace
+preparation's connected step from `serviceSessionConnectedCopies.js`.
 
+Prepare (`prepareConnectedCopies`) clones each missing copy from the repository's
+default branch with the person's GitHub credentials, through `--reference` to a
+registered project's verified GitHub mirror of the same repository when one
+exists, then repacks and removes the alternates so the copy depends on nothing
+else (`cloneCanonicalSource`). It checks out `vibe64/<sessionId>`, removes the
+cloned default branch like any new source and records the copy at once. It never
+fetches, resets or replaces an existing copy, and refuses the project's own
+repository, an unrecorded folder at the copy's path and a recorded copy whose
+folder is missing. A copy no longer listed is removed only when its worktree is
+clean and it has no commit beyond its canonical commit. Each repository adds one
+line to the preparation output.
 
-Explicit `vibe64.sessions.connected.prepare` now resolves the origin session's
-`connected_sources` bindings through the receiving projects, and creates no
-session: a project without a usable link is linked or left for a person, as
-[Workspaces](../sessions/workspaces.md) explains. Each receiving operation
-authenticates the original connection and authorizes that project again. Projects
-checks fresh repository write access and its integration target. Only a confirmed
-replacement creates a contribution session, through normal capacity admission and
-source creation, without starting that session's workspace setup. The originating
-Stack recipe treats its finite direct source map; preparation cannot recursively
-traverse receiving connection lists or cycles. Ordinary session creation still
-starts setup, and an explicit receiving-session Prepare remains its own operation.
-The Git checkout stays under the receiving project's managed session source root.
-Renewal retains these source bindings as well as exact submissions.
-Preparation failures retain completed receiver summaries, including when a later
-action throws. An unready source returns a failure with its existing receiving
-session identity; preparation does not replace it or claim it succeeded.
+Save (`saveConnectedCopies`) first runs the update check for every copy: a copy
+behind its main refuses with `vibe64_session_save_update_required` (details
+`connectedRepository` and `updateRequired`), even when it has no work. Then
+`beforePush` runs the session's own check (`refuseBehindSessionSave`) when its
+own repository has work, so a behind repository refuses before anything is
+pushed. Each copy with unsaved work is then saved in list order through the
+ordinary message preparation and native Save, recorded with Core's
+`recordSessionConnectedCopyCommits` and its prepared ref retired, before the
+next copy. A push refused because the main moved becomes
+the same Update-first refusal; any other failure also stops there, before the
+session's own Save. Copies always publish straight to their main; there is no
+pull-request path for them. When only copies have work, Save returns their
+results without saving the session's own repository. Creating a pull request runs
+the same copy Save before pushing the session's own work to its branch.
 
-Automatic preparation, standalone connected-project ownership, task execution
-selection and Stack-declared development placement/treatment remain incomplete.
-Connected-first Save now records each confirmed receiving commit before moving
-to the next repository. The main Save action accepts the exact reviewed connected
-destinations; this mode never publishes the main project. Each receiving action
-reauthenticates and checks its immutable source binding before using native Save.
-A retry skips unchanged completed sources and recovers a missing origin record
-from the receiving session. Main Save checks for new connected work before
-checkpoint preparation and again under the publication lock.
-The latter authorized inspection returns ephemeral receiving source snapshots
-through the existing internal action. Only those source roots enter the managed
-Save command. After preparing the main commit and checking exact submitted-SHA
-integration, native Save repeats the existing worktree-tree, HEAD and observed
-canonical reads immediately before publication. Changed or unreadable sources
-refuse publication and retain the main checkpoint. Browser Save input cannot
-supply these snapshots. This closes preparation-time staleness, not the interval
-between the final read and push: no receiving locks, cross-repository transaction,
-or persisted snapshot ledger are introduced.
-The coordinator reinspects each receiver immediately before its turn, retaining
-earlier confirmed results if later inspection fails. Native Save confirms a lost
-push acknowledgement when the remote contains its exact proposed commit, then
-uses the original reconciliation path. An unreadable post-push authority records
-`vibe64_session_save_publication_unknown` on the existing Save task; its original
-operation ID and prepared Git refs remain recovery evidence. Work inspection or
-an explicit retry resumes that verifier after restart, without publishing again.
+Update (`updateConnectedCopies`) runs the native Update for each copy before the
+session's own. A copy that fails, for example with `vibe64_session_update_conflict`,
+stays unchanged and is reported with its conflict paths, while the other copies
+and the session's own Update proceed. A copy has no conflict review, repair task
+or interrupted-apply recovery of its own yet. Interrupted Save recovery
+(`recoverConnectedCopySaves`) first records, from each copy's prepared-ref
+evidence for that operation, the copies whose push landed but was not recorded,
+skipping a copy the Save never pushed (`vibe64_session_save_interrupted_retryable`),
+then recovers the session's own repository.
+
+The update probe reads each copy's main head with the session heads, grouped by
+repository and branch, and rechecks a session when any of them moved; the check
+records each copy's observed main. Work inspection includes every copy
+(`inspectConnectedCopies`), and `vibe64-helper session status --json` lists them
+under `repository.connected` with `name`, `path`, `behind` and `unsaved`. Each
+outer assistant turn's checkpoint is also taken in every copy. Sources:
+`tests/server/vibe64ConnectedCopies.unit.test.js`,
+`tests/server/vibe64RepositoryUpdateProbe.unit.test.js`,
+`tests/server/codexOuterTurnCheckpoint.unit.test.js` and
+`tests/server/agentSessionCommand.unit.test.js`.
+
+Native Save confirms a lost push acknowledgement when the remote contains its
+exact proposed commit, then uses the original reconciliation path. An unreadable
+post-push authority records `vibe64_session_save_publication_unknown` on the
+existing Save task; its original operation ID and prepared Git refs remain
+recovery evidence. Work inspection or an explicit retry resumes that verifier
+after restart, without publishing again.
 The open session view inspects work when it opens or changes session, when a Save
 or Update starts, is replaced by another operation or ends, and on agent
 checkpoints. Progress events of one running Save or Update update only the
@@ -206,37 +198,24 @@ repository status registry, which inspects every session's work, and receives
 each of the registry's results for its session, including those the registry
 started for a realtime change. The realtime event and the view's task revision
 of one change therefore read the session's work once.
-An unresolved unknown outcome cannot be overwritten by another Save or treated
-as a completed connected contribution.
+An unresolved unknown outcome cannot be overwritten by another Save.
 Failed native publishing tasks also use that verifier before replacement, so a
 post-push local write error cannot cause another publication. Proven unpublished
-attempts retain their original rejection. Receiving Save carries the authenticated
-action context into its own connected checks, without recursively submitting its
-dependencies or weakening their gate.
-A receiving Save still marked running blocks Main Save even if its native child
-has already made the receiving worktree clean; metadata/finalization must finish
-before that source is considered reconciled.
+attempts retain their original rejection.
 Within the native Save owner, a refusal before the first publication command
 retires only that attempt's exact prepared ref while retaining its checkpoint.
-This lets an unpublished first contribution retry after its prerequisite is
-fixed. Once push or local baseline merge has been attempted, failure retains
-the prepared evidence; remote absence cannot prove that a first push never
-succeeded or authorize recreating a deleted branch.
+This lets an unpublished first Save retry after its cause is fixed. Once push or
+local baseline merge has been attempted, failure retains the prepared evidence;
+remote absence cannot prove that a first push never succeeded or authorize
+recreating a deleted branch.
 A successful or recovered Save keeps its prepared ref only until the sessions
 service has recorded the ready outcome; it then calls `retireSessionWorkSave`
 to delete it, so no completed Save leaves evidence that later reads as a lost
-contribution publication. Retiring takes only the session write lock, which
-serialises it with Save and recovery; it deletes a Vibe64-internal ref without
-touching the worktree, so an assistant turn started right after Save does not
-block it.
-The chat Save control uses a branch icon and connected destination review while
-submission is required, including when the main source is clean. It reports
-confirmed receiving pushes on success or partial failure, then returns to ordinary
-Main Save after submission. Accepted-source reconciliation remains incomplete.
-Existing sessions without
-these new metadata fields retain their original behavior; no read creates inferred
-bindings. Development consumption must use the project's explicit Stack contract
-for its toolchain, across every supported stack; the connection file is not a
+publication. Retiring takes only the session write lock, which serialises it
+with Save and recovery; it deletes a Vibe64-internal ref without touching the
+worktree, so an assistant turn started right after Save does not block it.
+Development consumption must use the project's explicit Stack contract for its
+toolchain, across every supported stack; the connection file is not a
 package-manager prescription.
 
 Each outer assistant turn owns one private Git checkpoint. Later failed,
@@ -360,85 +339,6 @@ Save is reconciled only when the canonical authority proves the privately
 recorded prepared commit was already published. Disposable GitHub mirror
 maintenance runs after Save completes and cannot change the Save result.
 
-Contribution sessions retain their validated `connected_contribution` binding
-through the same managed command boundary. The native child receives the saved
-integration target and resolves the reserved incoming destination again. A first
-Save uses the bound base when neither remote contribution ref exists, prepares
-the ordinary Save commit, and creates the incoming ref with an absent-ref lease.
-Later Saves use an exact observed-head lease after the existing ancestry checks;
-they cannot recreate a branch removed by a racing discard. No preliminary empty
-branch or PR is published. The project's PR preference continues to govern
-ordinary sessions; contribution submission targets its separate incoming ref
-and still obeys GitHub's actual branch rules.
-
-An existing discarded ref refuses publication; both forms require interrupted-
-discard recovery. A missing ref after recorded or prepared publication remains
-unknown and refuses automatic recreation. The existing checkpoint and prepared
-ref retain work after failures, and recovery reconciles a lost acknowledgement
-only when the remote proves the exact prepared commit. These are contribution
-publication primitives, not the connected-first coordinator or main Save gate.
-
-Incoming inspection also uses this Git owner and its managed command boundary.
-It resolves the receiving project's configured target independently of the
-selected session's Save destination, enumerates only reserved UUID branch names,
-and fetches exact reviewed refs into operation-owned temporary refs. A changed
-head, incomplete history or unavailable remote fails rather than classifying an
-unknown result as integrated. Complete Git ancestry classifies current heads as
-pending, merged or discarded; both active/discarded refs require recovery.
-An integrated discarded head still reads as merged. Pagination includes all
-classified states, with commit titles, bounded changed-file lists and optional
-bounded review diffs. Reads preserve source files, index, branch, origin and
-remote refs, and do not replace FETCH_HEAD. There is no queue record.
-Receiving mutations use the same managed boundary and project source lock. They
-require the exact reviewed repository, target and contribution heads. Merge
-fast-forwards when possible or uses the existing tree-merge owner to create an
-ordinary two-parent commit. Before a divergent merge, the existing derived-path
-tree owner replaces contribution artifacts with the reviewed target's artifacts;
-only authored paths can require repair. The existing Save/Update regeneration
-owner rebuilds artifacts in a temporary worktree from the complete proposed
-merged source. Generated-only conflicts therefore need no AI. Regeneration
-failure leaves receiving source and remote heads untouched. Final merge parents
-remain the original target and contribution, not the temporary normalized input.
-Authored conflicts retain a private checkpoint through the original Update checkpoint
-owner before offering the `incoming-merge` [AI task](../conversation/ai-tasks.md)
-in the receiving session. Incoming's explicit repair review reuses Update's conflict-path tree
-overlay; it changes neither the real index nor worktree. The candidate combines
-only conflicting local paths with the native merge result for other files, then
-regenerates artifacts. Both review and final Merge recompute that generated tree;
-the reviewed identity covers the complete candidate, including its artifacts.
-The shared overlay treats selected paths literally, including filenames with
-Git pathspec syntax, so a conflict filename cannot select unrelated work.
-The transient review carries exact candidate, source tree, HEAD and index
-identities, recomputed by the server rather than trusted as client evidence.
-Final Merge rechecks those identities and both remote heads, then creates the
-ordinary two-parent commit. The task's check runs the explicit repair review with
-the task's identity and refuses a candidate whose added lines still hold conflict
-markers; it never merges, runs Update or publishes. When it ends Done the page
-shows that review. Incoming Merge, Discard and review refuse to start while a
-repository AI task runs, apart from that task's own check. Restart/reload
-preserves the task and checkpoint owners; fresh Git/source review replaces the
-transient candidate.
-No Incoming queue, repair-status store or second Git engine is introduced.
-The contribution branch remains after integration. Discard uses a guarded atomic
-create-and-delete push; only an explicit lack of atomic support permits copying
-and verifying the discarded ref before deleting the exact active head. An
-interrupted copy leaves both refs available for a fresh reviewed retry. A
-different discarded head or a racing contribution update is never overwritten.
-Project-level Incoming actions use an existing session only for source storage.
-Projects checks the current actor's GitHub write access and configured PR policy;
-Terminals records that actor before mutation and retains session admission and
-the project source lock. The dashboard defaults to pending contributions, links
-interrupted discards to recovery, exposes history filters and exact-head review,
-and confirms Merge or Discard. Its badge is replaceable Git-derived observation.
-Logical API failures remain failures even when HTTP delivery succeeds. Conflict
-failures expose Fix it with AI and Review resolved conflicts; uncertain actions
-require Refresh before retry. Candidate review never refreshes publication state.
-HTTP review includes a bounded diff; Colleague receives bounded summaries and
-exact confirmation identities without source contents. Mutations refresh the
-shared GitHub observation; a notification failure cannot negate a confirmed push.
-Configured GitHub receiving projects are supported here. Local-folder receiving
-target resolution and origin exact-submission gates remain separate work.
-
 The shared terminal surface gives operation cards a subtle theme-aware background
 in both compact and expanded states, separating them from the conversation.
 While Save runs, the workspace shows one compact progress line. The output includes
@@ -484,10 +384,9 @@ server runs behind a proxy its own requests would not use, where Git would
 case); that choice is made before the read, never after a failure. Both list only the named branches and
 fetch nothing. It runs the ordinary forced check, with its fetch under the
 project source lock, only for a session whose head moved; that check's realtime
-result reaches every viewer and notifies sibling sessions as above. A
-connected contribution's read covers its published, discarded and integration
-branches; it is checked once when the probe first sees it and again when any of
-them moves. A probe never overlaps itself, and a tick that passes while one runs
+result reaches every viewer and notifies sibling sessions as above. A session's
+read also covers each connected copy's main, so a session is checked again when
+any of them moves. A probe never overlaps itself, and a tick that passes while one runs
 is skipped. A failed probe appears once on the affected sessions' repository
 status, is retried every 60 seconds, and is cleared by the check that follows
 recovery. The first tick that finds no watching browser and no running turn
@@ -789,9 +688,9 @@ Push of that upstream stay with the original folder.
   and one managed publish-and-reconcile transaction under the project source
   lock. A deterministic private prepared-commit ref supplies restart evidence;
   disposable mirror refresh is deferred until after Save.
-- Save, Update and Incoming refusals (`saveError()`) are AppErrors with their
-  own code: a 409 conflict, or 400 for a bad request and 404 for a change or
-  contribution that is gone. Git command and helper failures are 500s with
+- Save and Update refusals (`saveError()`) are AppErrors with their
+  own code: a 409 conflict, or 400 for a bad request and 404 for a change that
+  is gone. Git command and helper failures are 500s with
   their message shown. The repository helper process reports a refusal's
   status and message code, so `runSessionWorkOperation()` rethrows it unchanged.
 - `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) as that
@@ -804,8 +703,8 @@ Push of that upstream stay with the original folder.
   credentials) drops that actor's token, so the next operation reads it again.
   It is never written to disk or logs; the actor authorization hook still runs
   for every operation.
-- Writes that record commits (Save, Update and its recovery, Merge or repair of
-  an incoming contribution) ask `sessionWorkSaveContext()` with
+- Writes that record commits (Save, Update and its recovery, in the session's
+  own repository or a connected copy) ask `sessionWorkSaveContext()` with
   `createsCommits`; checks, probes and inspections do not and read nobody's Git
   identity. The author is a GitHub session's Git actor, whose credential
   publishes the commit, or for any other repository mode the person asking.

@@ -22,7 +22,7 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain push needs a state check before another request.
 
-Save, Update and merging an incoming contribution record the Git name and email
+Save and Update record the Git name and email
 you have at that moment, the ones **Account settings → GitHub** shows, for every
 kind of project. If one says Vibe64 could not read your Git name and email,
 nothing was changed; try it again.
@@ -193,11 +193,10 @@ External writes use the connected person's GitHub identity; missing sign-in or
 repository access cannot be bypassed by using another workspace account.
 On mobile, reveal the project and choose the corresponding **Dashboard section**.
 
-Creating a pull request uses the same connected-work checks as Main Save. Save
-connected work first, merge its submitted revisions in the receiving projects,
-and Update those connected sessions to the accepted source before creating the
-pull request. Changed source or revoked receiving access stops the push;
-creating a pull request does not bypass those checks.
+Creating a pull request saves the session's connected copies first, straight to
+their mains, exactly as Save does, then pushes this session's work to the pull
+request branch; see [Work in connected repositories](connected-repositories.md).
+A copy behind its main stops it with the same **Update first** refusal.
 
 Colleague can explain these workflows, open their views, inspect bounded saved-work
 status, request native Save/Update, and use supported issue/PR actions when asked.

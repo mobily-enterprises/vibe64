@@ -115,8 +115,8 @@ chats without a completed plan. When it cannot save, nothing is changed and the
 chat shows a short note: **Automatic save: nothing new to save.**, or
 **Automatic save didn't run:** followed by Save's own reason (for example an
 Update is needed, a conflict, a required pull request or an unavailable
-repository). A session with connected repositories always gets that note: use
-**Save connected first** and **Save** yourself. Turn the switch off to review and
+repository). In a session with connected repositories it saves their copies too,
+as **Save** does. Turn the switch off to review and
 Save by hand. Like Deslop, it is the owner's Main chat choice, changes take effect
 for the next completed plan, and the switch is disabled while a goal is active.
 Colleague can explain both switches and, for the owner, change either through

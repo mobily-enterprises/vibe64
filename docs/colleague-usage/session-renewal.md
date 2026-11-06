@@ -32,9 +32,9 @@ When a renewal fails, the session header's renewal action reads **Renewal needs
 attention** and the old session stays in use. Open it to read the error, then
 choose one of two ways out:
 
-- **Retry** continues the same saved renewal. Fix the reported condition first. A
-  connected project that needs a session is fixed from the old session, so
-  [cancel and choose there](connected-contributions.md#renew-a-session-that-uses-connected-sessions).
+- **Retry** continues the same saved renewal. Fix the reported condition first,
+  for example save and update a [connected repository](connected-repositories.md#archive-and-renewal)
+  copy that has unsaved work.
 - **Cancel renewal** stops it. Vibe64 discards the fresh session that renewal
   created and keeps the old session, which you can go on using, renew again
   later or archive.

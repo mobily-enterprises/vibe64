@@ -1,19 +1,10 @@
 # Configure connected projects
 
-If a receiving repository's status cannot be checked, the ordinary Main Save
-control remains available. Save checks access and state again and reports the
-blocker without pushing the main project. An unavailable status does not count
-as a merged contribution.
-
-Checking connected Save status can take longer on a busy development workspace
-because it checks each receiving repository. Allow up to two minutes for the
-check. If status remains unavailable, use Save to check again and read its
-reported blocker; an incomplete check never saves the main project.
-
-The session badge shows **Unsaved changes** when a connected repository needs
-saving, even if the main repository is clean. After connected Save succeeds,
-the result lists the pushed commits. An empty progress card closes when the action
-finishes; opened details with real output remain available until dismissed.
+A project can list other GitHub repositories it works with, such as a library it
+uses. Every session then keeps its own copy of each listed repository, and
+**Prepare workspace**, **Update this session (rebase)** and **Save** cover those
+copies with the session's own repository; see
+[Work in connected repositories](connected-repositories.md).
 
 Open the intended project and session, then **Dashboard → Project settings →
 Connected projects**. On phones, use **Show project** and **Dashboard section**
@@ -24,18 +15,6 @@ exist, use **Add project**, then **Save connected projects** to create it. You c
 also edit this tracked source file directly. Stack contains technology and generic
 placement/treatment instructions, never repository identities or initial lists.
 Opening Settings and preparing a workspace do not create or import this file.
-
-For concurrent tasks, configure each receiving project's **Project settings
-→ Development database → A separate database for each session** before opening
-its sessions. **One database shared by this project** permits only one open
-session unless **Allow multiple sessions with this shared database** is enabled,
-including connected contributions and libraries with no database. With project
-scope already selected, enable the override and choose **Save database choice**
-without closing work; all sessions share data and the ordinary three-session cap
-still applies. Then start the session you want to connect and use workspace
-preparation **Retry**. Disabling the override
-preserves existing sessions but blocks additional creation. Preparation never
-archives existing work or changes this preference for you.
 
 For each entry, provide a **Name**, a **GitHub repository URL**, and a
 **Relationship**: Dependency for a library or tool; Composition for source
@@ -87,16 +66,16 @@ it cannot infer what a custom artifact means or prove it from a zero-exit no-op.
 
 Use **Save connected projects** to write the complete list to
 `vibe64.connections.json` in the selected source. You must be the project owner
-and have write access to each receiving repository through your connected GitHub
+and have write access to each listed repository through your connected GitHub
 account. The file is ordinary project source and follows normal project Save.
 Saving this configuration does not commit, push, merge or deploy source.
 
 In the standalone editor, the local project owner can use these controls without
 signing in. A connected GitHub account still supplies repository access.
 
-**Remove** removes an entry from the draft. Saving that removal does not delete
-existing contribution source, branches or pending work. An empty saved list
-remains authoritative.
+**Remove** removes an entry from the draft. Saving that removal deletes no work:
+a session's next **Prepare workspace** removes its copy of that repository only
+when the copy holds no unsaved work. An empty saved list remains authoritative.
 
 If another edit changed the file, saving refuses to overwrite it. Review your
 draft, use **Reload saved list**, and reapply the intended edits. A malformed
@@ -110,14 +89,10 @@ through the same actions. It preserves unrelated entries and uses the read
 source session and revision. A how-to question does not authorize changes.
 Account login and repository permission grants remain human-controlled steps.
 
-The current configuration controls declare the connections. Source preparation,
-connected-first Save and Incoming changes are separate facilities; configuration
-success alone does not establish that those sources are ready or used by Preview.
-GitHub receiving projects expose [Incoming changes](incoming-changes.md) in
-Dashboard. This view reconstructs contributions from Git, independently of the
-originating project's connection list.
-
-For preparing sources, contribution sessions, Save connected work and integration, see [Connected contributions and saving](connected-contributions.md).
+The configuration controls only declare the connections. Saving the list does
+not prepare any session: configuration success alone does not establish that the
+copies are ready or used by Preview. For how each session copies, updates and
+saves them, see [Work in connected repositories](connected-repositories.md).
 
 Development consumption belongs to the project's Stack declarations. Those
 declarations must identify the connected source, where the task exposes it, how
@@ -134,18 +109,16 @@ executable or library to the app, and verify the app uses that build. It need
 not appear in `node_modules`. A cloned repository alone does not establish that
 Preview or tests use its changes.
 Use the existing **Prepare workspace** action (or its **Retry** action after a
-failure). When Stack declares `Connected development`, preparation uses the
-sessions linked for this task. Where a project has none, it links that project's
-only free session when that session is untouched, or stops for you to
-[choose one](connected-contributions.md#choose-a-connected-session). It then writes the declared source
-map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
-commands in order. Success requires those commands to succeed. If a non-custom
+failure). When Stack declares `Connected development`, preparation makes this
+session's missing copies, writes the declared source map pointing at them, runs
+ordinary Workspace setup, then runs the connected Prepare and Verify commands in
+order. Success requires those commands to succeed. If a non-custom
 connection exists without a Verify command, preparation is blocked with
 `vibe64_connected_verification_required` ("Declare a Verify command for the
 connected pip packages."); add a Verify entry to Stack and use **Retry**. The preparation
-identity includes both recipes and the exact task source selection; changing
-that selection requires preparation again. Access is rechecked before each
-command and when checking whether preparation remains current.
+identity includes both recipes and this session's copies; changing the list
+requires preparation again. The copies are checked again before each command and
+when checking whether preparation remains current.
 
 If a command reports that it requires an undeclared runtime, add that runtime
 to the affected command in Stack and prepare again. Vibe64's own Node
@@ -170,43 +143,37 @@ connection; `examples/connected-development/run-all.sh` runs every proof whose
 toolchain is installed. A proof shows the recipe works; each project still
 declares and verifies its own commands.
 
-For API clients, the explicit **Prepare connected sources** operation is
-`POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare`. It uses the
-session's configured list and requires access to each registered receiving
-project plus GitHub write access. A project with no usable link and exactly one
-free session is linked and reported in the returned `linked` list, on success and
-on a stop alike. Otherwise it fails with `vibe64_connected_link_required`:
-`GET .../connected/choices` lists the projects that need a session and their free
-sessions, and `POST .../connected/link` saves one choice as
-`{ repository, connectedSessionId }`. The returned `prepared` entries identify the
-receiving project/session and report source readiness and workspace setup.
-Once every receiving source is ready, the operation writes the Stack's
-`Sources file` and returns `development.status: "inputs-prepared"`. The JSON
-file uses contract `vibe64.connected-sources.v1` and identifies the originating
-session and each connected repository's exact source path and contribution ID.
-Vibe64 excludes this generated file from Git locally; the portable connection
-list remains unchanged. The consuming project's commands can read this map,
-and **Prepare workspace** executes and verifies the complete recipe. This explicit
-API operation only prepares inputs; `inputs-prepared` does not mean its commands
-have run.
+The `Sources file` is JSON with schema `vibe64.connected-sources.v2`:
+
+```json
+{
+  "schema": "vibe64.connected-sources.v2",
+  "sessionId": "<this session>",
+  "repositories": [
+    {
+      "name": "Library",
+      "repository": "https://github.com/example/library",
+      "relationship": "dependency",
+      "type": "npm",
+      "sourceRoot": "<this session's copy of the repository>"
+    }
+  ]
+}
+```
+
+Each entry is the listed connection with its effective package type, its
+`script` for a custom type, and `sourceRoot`, the absolute path of this session's
+copy. Vibe64 excludes this generated file from Git locally; the portable
+connection list remains unchanged. The consuming project's commands read this
+map, and **Prepare workspace** executes and verifies the complete recipe.
 
 The source-map location must be a development-only, project-relative file.
 Vibe64 refuses to overwrite tracked files, symbolic links, unrelated content or
 another session's map. If this check fails, preserve the file, choose another
 `Sources file` location in Stack and retry. A missing or invalid Connected
 development declaration also requires correcting Stack before retrying; the
-already-created receiving sources remain available.
-An internal readiness check can recheck receiving access and compare the map
-with the task's saved bindings without changing files. The workspace runner uses that check before running
-commands and before accepting cached preparation. `inputs-prepared` still does
-not mean the Stack's development commands have run.
-After failure or a lost response, retry the same originating session; it creates
-no session. A failure retains the earlier
-`prepared` entries and identifies the receiving repository that failed. If an
-entry reports `sourceReady: false`, open that receiving session and use its
-source recovery controls before retrying; preparation does not replace the
-failed checkout with a fresh one. Missing registration requires
-setting up the receiving project first; mismatched saved authority requires
-inspection and reconciliation. Use the existing workspace preparation controls for the full recipe. Colleague
-can explain the process and offer supported preparation actions; it must not
-claim successful preparation from a declaration or an input-map response alone.
+copies already made stay in place. If a copy is missing when the map is written
+or checked, preparation stops with `vibe64_connected_copy_missing`; see
+[Work in connected repositories](connected-repositories.md). Colleague can
+explain the process and offer supported preparation actions; it must not claim
+successful preparation from a declaration alone.

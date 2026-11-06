@@ -6,7 +6,7 @@ investigation you don't want in Main chat's history. Each one is a tab in the
 **Temporary AI** workspace, and you can keep several open at once.
 
 Temporary chats are only yours. Tasks that Vibe64 starts (**Fix it with AI** on
-Update, Save, workspace preparation, a preview sign-in, an incoming merge or project
+Update, Save, workspace preparation, a preview sign-in or project
 setup, starting or inspecting a project from its setup screen, and the Database's
 Data overview) and the tasks and reviews Colleague runs for you open in the
 [AI task window](ai-tasks.md) instead. They never appear as temporary chat tabs,

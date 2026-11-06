@@ -1706,7 +1706,7 @@ after them starts with both on. A mode change that omits a choice keeps the
 chat's own. When Auto's
 completing Senior turn archives a plan, routing calls the Sessions-owned
 plan-completed handler after its lock; with `autoSave` on it inspects work and
-runs the ordinary Save once (never for connected sessions), and routing writes
+runs the ordinary Save once, connected copies included, and routing writes
 its short result note to chat. Turning the switch off first opens a confirmation explaining that
 code quality will suffer unless the person runs Deslop themselves; Cancel keeps
 it on. Existing saved preferences are not rewritten: an off value cannot be told

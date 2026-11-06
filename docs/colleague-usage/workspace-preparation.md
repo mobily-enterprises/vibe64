@@ -21,26 +21,15 @@ preparation notice. It runs the complete current recipe, including declared
 database steps and connected-source Prepare/Verify commands. It is unavailable
 while another assistant or repository operation is active, or for archived sessions.
 
-A new session with connected projects starts preparation automatically. Its
-first step, **Preparing connected projects**, checks each connected project's
-linked session at the same time and lists the ones still in progress, for example
-**(1 of 3 ready; vibe64 failed)**, then **Linking connected sources** and **Checking
-connected sources** while it rechecks access to each one. If one fails, the notice
-names the project and the reason, and the output keeps them; earlier prepared
-sources are kept and **Retry** reuses them instead of copying them again. Each
-retry starts its own lines in the output, so an earlier failure is never shown as
-its progress.
-
-Preparation never creates a session in a connected project. When a project has no
-linked session yet, or its session was archived, preparation links that project's
-session if exactly one is free and it is untouched: no commits of its own, no unsaved
-work and nothing running in it. It uses that session as it stands and says so in the
-output, so update it first if you want it on the latest main. Otherwise, with work in
-that session, two or more free, or none, it stops at **Workspace setup needs a
-choice**, naming that project and why, and you settle it in the notice. Preview
-stays unavailable until then, and after your last choice the server carries on by
-itself. See
-[Choose a connected session](connected-contributions.md#choose-a-connected-session).
+A new session with connected repositories starts preparation automatically. Its
+first step, **Preparing connected repositories**, makes this session's missing
+copies of them, one output line per repository, then **Checking connected
+repositories** checks them. It never fetches or replaces a copy it already has.
+If one fails, the notice reads **Prepare connected repositories** with the
+reason, and the output keeps it; copies already made are kept and **Retry** does
+not copy them again. Each retry starts its own lines in the output, so an earlier
+failure is never shown as its progress. See
+[Work in connected repositories](connected-repositories.md#prepare-workspace-makes-the-missing-copies).
 
 A successful result records the previous recipe execution. It does not prove
 that custom compiled outputs still match later source or script edits. Rerun

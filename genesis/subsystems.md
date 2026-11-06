@@ -527,20 +527,15 @@ callers own those and choose where the keys live.
 
 Owns project discovery, the portable collaboration, engineering and deployment
 settings, and the project-wide GitHub issue and pull request workflows.
-Owns the portable connected-project list and its Settings editor,
-repository-access checks and source-write coordination. Stack supplies generic
-source treatment and never initializes the connection list.
-Checks fresh receiving-repository write access and publication policy for Incoming
-integration. Terminals retains the Git operation and source admission owners.
-Resolves portable connection repositories to registered project identities and
-supplies the receiving contribution's exact integration source after checking
-repository write access. This lookup grants no cross-project access itself.
-Projects projects authorized task source bindings into the Stack-declared,
-locally ignored source-map file using its existing file projection and source
-lock owners. The map does not grant access or certify command execution.
-Its read-only input inspection compares the same projection without repairing it.
-Its workspace inspection combines ordinary and connected recipe identities
-with the exact task source selection.
+Owns the portable connected-repository list (`vibe64.connections.json`) and its
+Settings editor, repository-access checks and source-write coordination. Stack
+supplies generic source treatment and never initializes the connection list.
+Projects projects each session's own connected copies into the Stack-declared,
+locally ignored Sources file (`vibe64.connected-sources.v2`) using its existing
+file projection and source lock owners. The file does not grant access or
+certify command execution. Its read-only input inspection compares the same
+projection without repairing it. Its workspace inspection combines ordinary and
+connected recipe identities with the session's copies.
 Its ordinary HTTP operations dispatch canonical project actions with fresh actor
 and project authority. Existing services retain source/repository review checks,
 GitHub credentials and locks; secret reveal and owner settings enforce the same
@@ -587,27 +582,9 @@ Coordinates the selected project’s working conversations through the original 
 Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
 Sessions also owns each person's last opened session per project, a small record under the project's runtime state (never inside a session) that the project page uses to reopen that session.
 
-Runtime owns the stored session descriptors and source workspaces. Sessions owns the session metadata records it writes through Runtime's session store (`main_chat_approvals`, `connected_sources`, `connected_submissions`, `connected_session_name`, `session_archive_operation`, `repository_update_check`) and the session renewal state record. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
-Sessions coordinates explicit and workspace-driven connected-source preparation through receiving
-project actions and the existing session creation owner. It retains reserved
-source bindings in the originating session before creating receiving source,
-so retries reuse the same identity. Terminals owns origin write admission.
-After all receiving sources are ready, Sessions asks Projects to materialize
-their exact source-map inputs; failed projection retains the receiving work.
-Internal input inspection reauthorizes receiving project access and exact source
-bindings before Project compares the generated map, without allocating sources.
-The existing workspace runner invokes this inspection before commands and cached
-readiness. Allocated contribution sessions do not automatically prepare their
-own connections; the originating Stack treats its finite direct source list.
-Sessions also coordinates connected-first Save through native receiving Save
-actions. Each confirmed commit becomes an exact integration requirement in the
-origin session before continuing; Git and the receiving Save owner determine
-publication and recovery, without a separate completion ledger. Main Save
-rechecks connected work through those same authorized receiving actions.
-Sessions also reviews and reserves explicit discarded-contribution replacements
-through the same source owner. It preserves old sources and submitted requirements;
-Core validates the predecessor identity and Terminals freezes source at its reviewed
-discarded commit. There is no second queue or replacement transaction store.
+Runtime owns the stored session descriptors and source workspaces, including archive recovery and renewal staging of each session's connected copies. Sessions owns the session metadata records it writes through Runtime's session store (`main_chat_approvals`, `session_archive_operation`, `repository_update_check`) and the session renewal state record. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
+Sessions creates, links and changes no session of another project for connected
+repositories; each session's own copies belong to Terminals' Save work owner.
 
 ### Source
 - Directory `packages/vibe64-sessions`
@@ -793,15 +770,10 @@ inspecting the selected project or session declaration.
 Owns assistant messages to exact or selected sessions in open projects through Main admission, with source attribution, self-delivery rejection and existing access checks.
 
 Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. Working-session preparation consumes the project-owned connection file under existing source admission; Stack supplies generic development treatment. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
-Owns Git-derived Incoming inspection and ancestry-preserving Merge/Discard under
-the existing managed Git boundary. Sessions exposes the authorized actions;
-Projects retains receiving access and publication-policy decisions.
-Incoming conflict repair reuses the existing checkpoint, AI task and
-conflict-path tree owners. Its transient review binds both remote heads and
-receiving source state; only a separately reviewed native Merge publishes.
-The same Save owner verifies exact retained connected submissions against fresh
-receiving Git ancestry before publication; Core validates their metadata shape,
-and Runtime preserves the bindings across renewal.
+Owns each session's connected repository copies (`connected_copies`, whose
+shape Core validates): workspace preparation makes the missing ones, and Save,
+Update, update checks, work inspection, turn checkpoints and Save recovery cover
+them through the same native Git owner as the session's own repository.
 
 ### Source
 - Directory `packages/vibe64-terminals`

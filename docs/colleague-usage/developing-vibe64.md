@@ -6,15 +6,16 @@ Colleague can explain it; it cannot edit source or run shell commands.
 ## Prepare the connected checkouts
 
 The Vibe64 repository declares its libraries in `vibe64.connections.json`.
-**Prepare workspace** creates or reuses this session's isolated contribution
-sources and writes its ignored `.development/connected.json` selection. The
+**Prepare workspace** makes this session's own copies of them, beside its source
+in `connected/`, and writes its ignored `.development/connected.json` map. The
 checked-in Preview command supplies that map to `dev:example`. It consumes the
 selected npm sources without modifying release manifests or installing over the
 editable checkouts. Vibe64's own composition treats only npm dependencies and
 custom connections; a connection with another package type, such as pip, stops
 Preview with "has no treatment for pip connections". Choose npm or custom for
-Vibe64's connections. See [Connected projects](connected-projects.md) for Settings,
-preparation and contribution Save.
+Vibe64's connections. See [Connected projects](connected-projects.md) for Settings and
+preparation, and [Work in connected repositories](connected-repositories.md) for
+Update and Save.
 
 For a local prepared map, run
 `npm run dev:example -- --connected-sources .development/connected.json`.
@@ -30,9 +31,9 @@ In the Vibe64 project's **Env → Development**, set either or both entries:
 | `VIBE64_JSKIT_SOURCE_ROOT` | Absolute path to the JSKIT checkout |
 | `VIBE64_GENESIS_SOURCE_ROOT` | Absolute path to the Genesis checkout |
 
-A session with connected sources (above) uses them instead of these entries;
+A session with connected copies (above) uses them instead of these entries;
 remove any old `sessions/pinned/source` values from **Env → Development**.
-A connected checkout's own session still owns its tests and setup.
+A copy's own tests and setup run with that repository's own commands.
 For laptop development, export these variables with ordinary local checkout
 paths before running the development command. Do not set them in Production.
 Keep each selected checkout prepared with its own normal dependency setup.

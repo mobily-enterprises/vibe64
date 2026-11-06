@@ -11,29 +11,20 @@ project's Stack. A type records intent only; the project's declared commands
 give the source that ecosystem's treatment, and custom treatment belongs to
 project scripts.
 The connection file travels with project source. Configuration requires
-the owner's connected account to have write access to the receiving repositories.
-Removing an entry preserves existing contributions; configuration changes alone
-do not publish, merge or deploy work.
+the owner's connected account to have write access to the listed repositories.
+Configuration changes alone do not publish, merge or deploy work.
 
-Workspace preparation retains an isolated receiving checkout for each task and
-provides the project's declared development commands with a local map of those
-exact sources. It runs ordinary setup followed by connected preparation and
-verification, and preserves authored files and receiving work on failure.
-Access and source selection are checked again before accepting preparation.
-Initial consumption verification covers Node.js; other stacks and the full
-connected-source development workflow still require end-to-end evidence.
-
-Receiving GitHub projects show Incoming changes in Dashboard. People can review
-reserved contribution branches, merge them while preserving their history, or
-discard them while retaining the work on a renamed branch. An interrupted discard
-remains visible for recovery. An explicit replacement starts a new contribution
-from the discarded revision, preserving the old source and integration requirements.
-Conflicting contributions can use an incoming-merge AI task in the receiving
-session, with a private checkpoint preserving its original work. People review the repaired result and explicitly merge it;
-AI completion does not publish. Save checks any retained submitted revisions against
-their receiving integration branches before publishing the originating project.
-The connection list alone does not establish contribution source preparation or
-the connected-first Save workflow.
+Every session works in its own copy of each listed repository, kept beside its
+source. Workspace preparation makes the missing copies, gives the project's
+declared development commands a local map of them, runs ordinary setup
+followed by connected preparation and verification, preserving authored files
+and the copies' work on failure. Initial consumption verification covers Node.js;
+other stacks still require end-to-end evidence. Update brings every copy onto
+its repository's main with the session's own repository; a copy that conflicts
+stays as it was. Save pushes each copy that has work straight to its main first,
+then the session's own repository, and refuses before pushing anything while any
+of them is behind its main. The unsaved badge, the check for newer saved work,
+turn checkpoints, archive recovery and renewal cover the copies too.
 
 Applications in Preview can request the person's microphone and play audio
 through the browser's ordinary permission controls, on HTTPS or localhost.

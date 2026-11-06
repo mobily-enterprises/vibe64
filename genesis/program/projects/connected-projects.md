@@ -1,8 +1,9 @@
 # Configure connected projects
 
-People maintain a portable list of repositories they intend to contribute to
-alongside a project. Project Settings edits the same source file as ordinary
-source editing.
+People maintain a portable list of repositories they work on alongside a
+project. Every session keeps its own copy of each listed repository (see
+`genesis/program/source/save-work.md`). Project Settings edits the same source
+file as ordinary source editing.
 
 ## Sources
 
@@ -26,7 +27,7 @@ source editing.
 
 ## Public contract
 
-`vibe64.connections.json` contains exactly a `projects` array, with up to 64
+`vibe64.connections.json` contains exactly a `repositories` array, with up to 64
 entries containing `name`, `repository` and `relationship`, plus optional `type`
 and `script`.
 The explicit types are one Vibe64-owned vocabulary shared by Stack parsing,
@@ -55,15 +56,15 @@ script exists within the consumer using the existing symlink guard. Configuratio
 another executor or make a script executable merely by saving it. Repository URLs are
 GitHub HTTPS addresses without credentials, fragments or query parameters.
 Case and optional `.git` suffixes normalize to one repository identity;
-duplicates fail. Relationships are `dependency` and `composition`. Local paths,
-session IDs and remote contribution status do not belong in this file.
+duplicates fail. Relationships are `dependency` and `composition`. Local paths
+and session IDs do not belong in this file.
 
 The repository file is the sole connection authority from the first entry.
 Settings creates it on an explicit save; reads and workspace preparation never
 import a list from Stack. Stack contains technology and generic placement or
 treatment instructions, not repository identities. Existing files, including
 empty lists, are authoritative. Malformed files fail without being replaced.
-Settings writes check receiving repository write access through the actor's
+Settings writes check each listed repository's write access through the actor's
 existing GitHub credential owner.
 
 Settings writes require the project owner and retain session agent-write and
@@ -72,31 +73,29 @@ bytes reject the write. Ordinary atomic source publication preserves unrelated
 files. Symbolic links and oversized connection files are rejected. No new
 runtime queue or historical metadata repair is introduced by configuration.
 
-During workspace preparation or explicit connected-source preparation, Sessions supplies freshly authorized
-receiving sessions to Project's `prepareConnectedDevelopmentInputs`. Under the
-existing origin admission and project source lock, Project checks the current
-connection list against retained contribution bindings and ready receiving
-sources, then projects their exact paths to the Stack's declared Sources file.
-This `vibe64.connected-sources.v1` JSON belongs to that originating session.
-The existing projection-path checks, managed Git excludes and atomic JSON writer
-preserve tracked files, symlinks, unrelated content and other sessions' maps.
-The connected-source exclude block coexists with the Environment file block.
-Repeated preparation preserves an unchanged map; removing a connection removes
-its projected entry without deleting the receiving work or retained binding.
-The map grants no authority and is not a publication ledger. `inputs-prepared`
-does not certify command execution or development consumption.
+During workspace preparation, Terminals first makes the session's missing
+copies, then asks Project's `prepareConnectedDevelopmentInputs` to project them.
+Under the existing project source lock, Project resolves every listed repository
+to this session's recorded copy (`connected_copies`, validated by Core), failing
+with `vibe64_connected_copy_missing` when one is absent, and writes the Stack's
+declared Sources file: `{ "schema": "vibe64.connected-sources.v2", "sessionId",
+"repositories": [{ name, repository, relationship, type, script?, sourceRoot }] }`,
+where `type` is the effective package type and `sourceRoot` the copy's absolute
+path. The file belongs to that session. The existing projection-path checks,
+managed Git excludes and atomic JSON writer preserve tracked files, symlinks,
+unrelated content and other sessions' maps. The connected-source exclude block
+coexists with the Environment file block. Repeated preparation preserves an
+unchanged map; removing a connection removes its projected entry, and the copy
+goes only when Prepare finds it holds no work. The map grants no authority.
+`inputs-prepared` does not certify command execution or development consumption.
 
-The internal connected-input inspection action reauthorizes each receiving
-project through the original request and checks its exact retained contribution
-before asking Project to compare the map with those authoritative sessions.
-The shared projection reader rejects missing, changed or foreign inputs without
-creating a checkout, editing the map or rewriting Git exclusions. This query is
-the workspace runner's preflight facility. It revalidates access before each
-command and when accepting cached preparation. It has no HTTP route or
+The internal connected-input inspection compares the map with the session's
+recorded copies through the shared projection reader, which rejects missing,
+changed or foreign inputs without creating a copy, editing the map or rewriting
+Git exclusions. This query is the workspace runner's preflight facility before
+each command and when accepting cached preparation. It has no HTTP route or
 Colleague tool projection. Project combines the ordinary and connected recipes
-with the exact projected source selection to form one preparation identity;
-Sessions supplies the existing authorized preparation operation under the
-runner's originating agent-write lease.
+with the projected copies to form one preparation identity.
 
 The shared action boundary admits owner actions for the explicitly opened local
 project only through its existing local-request checks. Signed-in actions retain
@@ -104,6 +103,6 @@ fresh owner authority; a foreign request or unadmitted automation cannot claim
 the standalone owner merely by omitting a user.
 
 Colleague uses the same owner-authorized actions and bounded settings result.
-Configuration success is not source preparation, contribution publication,
-integration or deployment evidence. Removing a connection changes the list;
-it does not delete existing work or satisfy a pending integration requirement.
+Configuration success is not source preparation, publication or deployment
+evidence. Removing a connection changes the list; it does not delete a copy that
+holds work.
