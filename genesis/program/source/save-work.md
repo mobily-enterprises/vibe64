@@ -202,8 +202,16 @@ records each copy's observed main. Work inspection includes every copy
 (`inspectConnectedCopies`), and `vibe64-helper session status --json`
 (`readAgentSessionStatus`) lists them
 under `repository.connected` with `name`, `path`, `behind` and `unsaved`. Each
-outer assistant turn's checkpoint is also taken in every copy. Sources:
+outer assistant turn's checkpoint is also taken in every copy. The AI's managed
+`git` runs in a copy as in the session's source: a working directory outside the
+source that is inside a recorded copy (`connectedCopyAtCwd` in
+`codexGitCommand.js`, which reads the copies only for such a directory) runs
+Git's local commands there with no credential, confined to that copy. Commands
+that reach the remote, and `gh`, are refused there
+(`vibe64_codex_git_command_connected_remote`), because Save publishes copies and
+Update brings in their main; any other directory stays refused. Sources:
 `tests/server/vibe64ConnectedCopies.unit.test.js`,
+`tests/server/codexGitCommand.unit.test.js`,
 `tests/server/vibe64RepositoryUpdateProbe.unit.test.js`,
 `tests/server/codexOuterTurnCheckpoint.unit.test.js` and
 `tests/server/agentSessionCommand.unit.test.js`.

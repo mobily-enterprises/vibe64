@@ -11,6 +11,7 @@ import {
 } from "./sessionGitCommandActor.js";
 import { prepareCodexAttachmentRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
@@ -192,6 +193,21 @@ function validateCommandCwd(cwd = "", actor = {}) {
     cwd: resolvedCwd,
     ok: true
   };
+}
+
+/**
+ * The session's connected copy (beside its source, at `../connected/<name>`)
+ * that a working directory outside the source is in. Only such a directory
+ * reads the copies, so the hot path reads no more metadata.
+ * @param {ProjectService} project
+ * @param {object} session
+ * @param {string} cwd
+ */
+async function connectedCopyAtCwd(project, session, cwd) {
+  const store = await project.createSessionStore({ sessionId: session.sessionId });
+  const recorded = await store.readMetadataValue(session.sessionId, "connected_copies");
+  const copies = sessionConnectedCopies({ metadata: { ...session.metadata, connected_copies: recorded } });
+  return copies.find(copy => pathInsideOrEqual(path.resolve(copy.path), cwd)) || null;
 }
 
 function localGitCommandToolHome() {
@@ -453,10 +469,27 @@ function createCodexGitCommandService({
         actor
       );
     }
-    const cwd = validateCommandCwd(input.cwd, actor);
+    let cwd = validateCommandCwd(input.cwd, actor);
+    let copy = null;
     if (cwd.ok === false) {
-      return finish(cwd, actor);
+      try {
+        copy = await connectedCopyAtCwd(project, session, cwd.cwd);
+      } catch (error) {
+        return finish(commandFailure(error.message, error.code || "vibe64_connected_copies_invalid"), actor);
+      }
+      if (!copy) return finish(cwd, actor);
+      // Save publishes a copy and Update brings in its main, so only Git's
+      // local commands run in it, with no credential.
+      if (command !== "git" || commandRequiresGithubToken(command, args)) {
+        return finish(commandFailure(
+          `In connected repository ${copy.name} the AI's Git works on the copy only: Save publishes it and Update brings in its main.`,
+          "vibe64_codex_git_command_connected_remote",
+          { statusCode: 403 }
+        ), actor);
+      }
+      cwd = { cwd: cwd.cwd, ok: true };
     }
+    const commandRoot = copy?.path || actor.sourceRoot;
     const authorize = actor.githubRequired !== false && authorizeActorAccess;
     if (authorize) {
       stage = "authorization";
@@ -502,7 +535,7 @@ function createCodexGitCommandService({
       }, actor);
     }
     if (phaseElapsedMs) phaseElapsedMs.access = Math.round(performance.now() - startedAt);
-    const requiresGithubToken = actor.githubRequired !== false && commandRequiresGithubToken(command, args);
+    const requiresGithubToken = !copy && actor.githubRequired !== false && commandRequiresGithubToken(command, args);
     stage = "github-account";
     const toolHome = actor.githubRequired === false || !requiresGithubToken
       ? localGitCommandToolHome()
@@ -541,7 +574,7 @@ function createCodexGitCommandService({
     const result = await runWithinBudget({
       actor: "app",
       allowedRoots: [
-        actor.sourceRoot
+        commandRoot
       ],
       args,
       command,
@@ -554,7 +587,7 @@ function createCodexGitCommandService({
         ? { label: "Running GitHub CLI for the AI", operationId: "agent-gh", projectSlug }
         : { label: "Running Git for the AI", operationId: "agent-git", projectSlug },
       gitSafeDirectories: [
-        actor.sourceRoot,
+        commandRoot,
         cwd.cwd
       ],
       gitAuthToken: command === "git" ? githubToken.token : "",
@@ -573,7 +606,7 @@ function createCodexGitCommandService({
       session: {
         metadata: session.metadata || {},
         sessionId,
-        sourcePath: actor.sourceRoot
+        sourcePath: commandRoot
       },
       userKey: gatewayUserKey
     });

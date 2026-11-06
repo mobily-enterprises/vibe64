@@ -12,6 +12,12 @@ the repository's `owner/name`, in lower case. You, Main chat and the coding
 agent edit a copy like any other files. Other sessions never see this session's
 copies, and no session of another project is involved.
 
+The AI's Git works in a copy too: inside `connected/<name>` it runs Git's local
+commands, such as `status`, `diff`, `log` and `show`. It does not run the ones
+that reach the repository on GitHub, such as `fetch`, `pull` and `push`, or
+`gh`, there: **Save** publishes the copy and **Update this session (rebase)**
+brings in its main.
+
 `vibe64-helper session status --json` lists the copies under
 `repository.connected`, each with its `name`, `path`, how many commits it is
 `behind` its main and whether it holds `unsaved` work.

@@ -992,6 +992,45 @@ test("Codex separates GitHub authorization from the Git filesystem identity", as
   });
 });
 
+test("the AI's Git runs local commands in a connected copy without a credential, refuses its remote and gh there, and stays refused beside it", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    const sessionRoot = path.dirname(session.metadata.source_path);
+    const copyPath = path.join(sessionRoot, "connected", "library");
+    const commit = "a".repeat(40);
+    session.metadata.connected_copies = JSON.stringify({
+      library: { repository: "acme/library", branch: "main", path: copyPath, baseCommit: commit, canonicalCommit: commit }
+    });
+    await mkdir(path.join(copyPath, "src"), { recursive: true });
+    await mkdir(path.join(sessionRoot, "connected", "other"), { recursive: true });
+    const gatewayCalls = [];
+    const service = serviceForSession(session, {
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        return { exitCode: 0, ok: true, stdout: "export default 1;" };
+      }
+    });
+
+    const shown = await service.run({ args: ["show", "HEAD:index.js"], command: "git", cwd: path.join(copyPath, "src"), sessionId: session.sessionId });
+    assert.equal(shown.ok, true);
+    assert.equal(gatewayCalls.length, 1);
+    assert.equal(gatewayCalls[0].cwd, path.join(copyPath, "src"));
+    assert.deepEqual(gatewayCalls[0].allowedRoots, [copyPath]);
+    assert.equal(gatewayCalls[0].session.sourcePath, copyPath);
+    assert.equal(gatewayCalls[0].gitTransport, "none");
+    assert.equal(gatewayCalls[0].gitAuthToken, "");
+
+    for (const [command, args] of [["git", ["push", "origin", "HEAD:main"]], ["git", ["fetch", "origin"]], ["gh", ["pr", "list"]]]) {
+      const refused = await service.run({ args, command, cwd: copyPath, sessionId: session.sessionId });
+      assert.equal(refused.code, "vibe64_codex_git_command_connected_remote", `${command} ${args[0]}`);
+      assert.match(refused.error, /connected repository library .*Save publishes it and Update brings in its main/u);
+    }
+    const beside = await service.run({ args: ["status"], command: "git", cwd: path.join(sessionRoot, "connected", "other"), sessionId: session.sessionId });
+    assert.equal(beside.code, "vibe64_codex_git_command_cwd_invalid");
+    assert.equal(gatewayCalls.length, 1, "only the copy's local command ran");
+  });
+});
+
 // A gateway whose owner-user `git config` read runs git as the person, in the
 // person's own home.
 function personHomeGateway(personHome, calls = []) {
