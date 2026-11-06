@@ -190,7 +190,7 @@ test("restored executions are cleaned up through the gateway's durable identity"
   assert.equal((await host.stop("owned-saved-execution")).scopeEmpty, true);
   assert.equal((await host.stop("unowned-execution")).scopeEmpty, false);
   assert.equal(calls[0].id, "owned-saved-execution");
-  assert.equal(calls[0].options.allowMissingRecordScopeRecovery, true);
+  assert.deepEqual(calls[0].options, { reason: "conversation-stop", termTimeoutMs: 3_000 });
 });
 
 test("failed cleanup retains the execution and its files until the host proves the scope empty", async t => {

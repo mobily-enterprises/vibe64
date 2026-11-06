@@ -162,8 +162,8 @@ SIGHUP outlives the server. Captured commands are not held. A saved service
 execution ID this server does not hold therefore belongs to an earlier server
 whose groups were already stopped. `stopVibe64RestoredService`, the default stop
 of the Claude host and of the conversation execution facility, whose owners keep
-only that ID, reports such a restored stop (`allowMissingRecordScopeRecovery`)
-as an empty scope without claiming to have stopped anything.
+only that ID, reports such a restored stop as an empty scope without claiming
+to have stopped anything.
 `stopVibe64Execution` still reports an unknown ID as not found, so an owner that
 also keeps the process's own identity, such as the Codex app-server, runs its
 identity proof, which also finds command groups that left the service's group.

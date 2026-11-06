@@ -153,8 +153,7 @@ async function stopVibe64Execution(executionId = "", options = {}) {
  */
 async function stopVibe64RestoredService(executionId = "", options = {}) {
   const result = await stopVibe64Execution(executionId, options);
-  if (installedProvider || result?.code !== "vibe64_execution_not_found" ||
-      options.allowMissingRecordScopeRecovery !== true || process.platform === "win32") {
+  if (installedProvider || result?.code !== "vibe64_execution_not_found" || process.platform === "win32") {
     return result;
   }
   return {

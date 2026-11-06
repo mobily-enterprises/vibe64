@@ -83,7 +83,7 @@ test("a local detached service ends with the server that started it, even when i
 
     // A restarted server never saw this ID. A restored service stop proves it
     // ended, so a saved Claude or helper execution ID no longer blocks its chat.
-    const restored = await stopVibe64RestoredService(started.executionId, { allowMissingRecordScopeRecovery: true });
+    const restored = await stopVibe64RestoredService(started.executionId);
     assert.deepEqual(restored, { executionId: started.executionId, ok: true, scopeEmpty: true, stopped: false });
     const conversation = createVibe64ConversationExecution({});
     assert.equal((await conversation.stop(started.executionId)).scopeEmpty, true);
@@ -95,15 +95,12 @@ test("a local detached service ends with the server that started it, even when i
 
 test("an execution ID unknown to this server is proven ended only by a restored service stop", async () => {
   const unknown = randomUUID();
-  const ordinary = await stopVibe64RestoredService(unknown);
-  assert.equal(ordinary.code, "vibe64_execution_not_found");
-  assert.equal(ordinary.scopeEmpty, false);
   // An owner that keeps the process identity (Codex) still gets not found, so
   // its own identity proof runs instead of trusting the earlier server's end.
-  const identityOwned = await stopVibe64Execution(unknown, { allowMissingRecordScopeRecovery: true });
+  const identityOwned = await stopVibe64Execution(unknown);
   assert.equal(identityOwned.code, "vibe64_execution_not_found");
   assert.equal(identityOwned.scopeEmpty, false);
-  const restored = await stopVibe64RestoredService(unknown, { allowMissingRecordScopeRecovery: true });
+  const restored = await stopVibe64RestoredService(unknown);
   assert.equal(restored.scopeEmpty, posix);
 });
 

@@ -69,7 +69,6 @@ export function createVibe64ConversationExecution({
       // A restored conversation supplies its durable execution ID. The gateway,
       // not this transient socket map, proves ownership and drains that scope.
       const proof = await stopExecution(id, {
-        allowMissingRecordScopeRecovery: true,
         reason: `${operationId}-stop`,
         termTimeoutMs: 3_000,
         ...options
