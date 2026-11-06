@@ -7,7 +7,7 @@
     >
       <div v-if="title || $slots.title || description" class="studio-archived-sessions__copy">
         <slot name="title"><h2 class="text-headline-small font-weight-bold ma-0">{{ title }}</h2></slot>
-        <p v-if="description" class="text-body-2 text-medium-emphasis mb-0">{{ description }}</p>
+        <p v-if="description" class="text-body-medium on-surface-variant mb-0">{{ description }}</p>
       </div>
       <v-btn
         v-if="showRefresh"
@@ -55,8 +55,8 @@
     </div>
 
     <v-sheet v-if="!loading && sessions.length < 1 && !unavailableSessions.length && !error" rounded="lg" border class="studio-archived-sessions__empty">
-      <h2 class="text-subtitle-1 mb-1">{{ emptyTitle }}</h2>
-      <p class="text-body-2 text-medium-emphasis mb-0">{{ emptyText }}</p>
+      <h2 class="text-title-medium mb-1">{{ emptyTitle }}</h2>
+      <p class="text-body-medium on-surface-variant mb-0">{{ emptyText }}</p>
     </v-sheet>
 
     <div v-if="sessions.length" class="studio-archived-sessions__grid">
@@ -85,7 +85,7 @@
                 </v-chip>
               </div>
               <time
-                class="studio-archived-sessions__archived-at text-caption text-medium-emphasis"
+                class="studio-archived-sessions__archived-at text-body-small on-surface-variant"
                 :datetime="session.archivedAt || undefined"
               >
                 Archived {{ formatArchivedAt(session.archivedAt) }}

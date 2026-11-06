@@ -53,7 +53,7 @@
           <v-btn variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
         </div>
         <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
-          <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
+          <div class="text-label-small on-surface-variant">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
           <Vibe64SessionSaveTarget v-if="saveWorkTarget" :target="saveWorkTarget" />
           <p v-if="sessionPullRequest" class="text-body-small mt-1 mb-0">PR #{{ sessionPullRequest.number }} · {{ sessionPullRequest.headBranch }} → {{ sessionPullRequest.baseBranch }}</p>
         </v-sheet>

@@ -58,7 +58,7 @@
             <p class="text-body-large font-weight-medium ma-0">{{ gitUnavailable.title }}</p>
             <p
               class="local-remotes__hint text-body-medium mt-1 mb-0"
-              :class="stillMissing ? 'text-high-emphasis' : 'text-medium-emphasis'"
+              :class="stillMissing ? 'text-high-emphasis' : 'on-surface-variant'"
               aria-live="polite"
             >
               {{ stillMissing ? "Still not found. Did the command finish without errors? Then check again." : gitUnavailable.hint }}
@@ -87,7 +87,7 @@
           </v-avatar>
           <div class="min-w-0">
             <p class="text-body-large font-weight-medium ma-0">This folder isn't using Git yet.</p>
-            <p class="text-body-medium text-medium-emphasis mt-1 mb-0">
+            <p class="text-body-medium on-surface-variant mt-1 mb-0">
               Git keeps a history of every change, so sessions can save work and you can go back.
             </p>
           </div>
@@ -104,7 +104,7 @@
         >
           Start version control here
         </v-btn>
-        <p class="text-body-small text-medium-emphasis mt-2 mb-0">Nothing is uploaded. You can connect GitHub later.</p>
+        <p class="text-body-small on-surface-variant mt-2 mb-0">Nothing is uploaded. You can connect GitHub later.</p>
       </v-sheet>
       <v-sheet v-else class="pa-4" rounded="lg" elevation="3">
         <div class="text-label-large mb-2">Local repository</div>
@@ -159,7 +159,7 @@
           <dd>{{ state?.checkedAt ? new Date(state.checkedAt).toLocaleString() : 'Not checked yet' }}</dd>
         </dl>
         <p v-if="remoteError" class="text-body-medium text-error mt-3 local-remotes__message">{{ remoteError }}</p>
-        <p v-else-if="!state?.upstream || !state?.push" class="text-body-small text-medium-emphasis mt-3">
+        <p v-else-if="!state?.upstream || !state?.push" class="text-body-small on-surface-variant mt-3">
           Set pull and push destinations to track remote changes.
         </p>
         <v-divider class="my-3" />

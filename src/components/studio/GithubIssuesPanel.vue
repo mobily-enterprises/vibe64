@@ -126,10 +126,10 @@ function date(value) {
       </v-alert>
 
       <template v-else-if="!number">
-        <p v-if="list.data.value?.searchLimit && list.data.value.total > list.data.value.searchLimit" class="text-body-small text-medium-emphasis ma-0">
+        <p v-if="list.data.value?.searchLimit && list.data.value.total > list.data.value.searchLimit" class="text-body-small on-surface-variant ma-0">
           GitHub returns up to 1,000 matches for text searches or multiple labels. Narrow the filters to see more specific results.
         </p>
-        <div class="d-flex align-center justify-space-between px-2 text-label-large text-medium-emphasis">
+        <div class="d-flex align-center justify-space-between px-2 text-label-large on-surface-variant">
           <span>{{ list.data.value?.total || 0 }} {{ list.data.value?.total === 1 ? 'issue' : 'issues' }}</span>
           <span>Recently updated</span>
         </div>
@@ -173,7 +173,7 @@ function date(value) {
                 </v-list-item-subtitle>
                 <template #append>
                   <span
-                    class="d-flex align-center ga-1 ml-3 text-label-medium text-medium-emphasis"
+                    class="d-flex align-center ga-1 ml-3 text-label-medium on-surface-variant"
                     :aria-label="`${item.comments.totalCount} comments`"
                   ><v-icon icon="$comment" size="18" />{{ item.comments.totalCount }}</span>
                 </template>
@@ -184,7 +184,7 @@ function date(value) {
         <v-sheet v-else rounded="xl" color="surface-light" class="pa-8 text-center">
           <v-icon icon="$radioOn" size="40" class="mb-3" />
           <p class="text-title-medium mb-1">No issues here</p>
-          <p class="text-body-medium text-medium-emphasis ma-0">Try a different filter or search.</p>
+          <p class="text-body-medium on-surface-variant ma-0">Try a different filter or search.</p>
         </v-sheet>
         <div class="d-flex justify-space-between ga-2">
           <v-btn v-if="$route.query.issueCursor" variant="text" @click="navigate({ issueCursor: undefined })">First page</v-btn>
@@ -208,29 +208,29 @@ function date(value) {
             <v-chip :prepend-icon="issue.state === 'OPEN' ? '$radioOn' : '$check'" :color="issue.state === 'OPEN' ? 'success' : 'primary'" variant="tonal">
               {{ issue.state === 'OPEN' ? 'Open' : 'Closed' }}
             </v-chip>
-            <span class="text-label-large text-medium-emphasis">#{{ issue.number }}</span>
+            <span class="text-label-large on-surface-variant">#{{ issue.number }}</span>
             <v-spacer />
             <v-btn v-if="issue.viewerCanUpdate" prepend-icon="$edit" variant="text" @click="openEditor(issue, 'content')">Edit issue</v-btn>
             <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" append-icon="$openInNew" variant="text">GitHub</v-btn>
           </div>
           <h2 class="text-title-large mb-2 issues-panel__title">{{ issue.title }}</h2>
-          <p class="text-body-small text-medium-emphasis mb-0">{{ issue.author?.login || 'Deleted user' }} opened this on {{ date(issue.createdAt) }}</p>
+          <p class="text-body-small on-surface-variant mb-0">{{ issue.author?.login || 'Deleted user' }} opened this on {{ date(issue.createdAt) }}</p>
           <div class="d-flex align-center flex-wrap ga-2 mt-3">
             <GithubLabelChip
               v-for="label in issue.labels?.nodes || []" :key="label.name" :label="label"
               tag="button" type="button" :aria-label="`Filter by label ${label.name}`" @click="filterLabel(label.name)"
             />
-            <span v-if="!issue.labels?.nodes?.length" class="text-body-small text-medium-emphasis">No labels</span>
+            <span v-if="!issue.labels?.nodes?.length" class="text-body-small on-surface-variant">No labels</span>
             <v-btn v-if="issue.canEditLabels" prepend-icon="$label" variant="text" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
           </div>
         </div>
 
         <v-sheet border rounded="xl" class="pa-5 issues-panel__markdown">
           <GithubMarkdown v-if="issue.body || issue.bodyHTML" :text="issue.body" :html="issue.bodyHTML" />
-          <p v-else class="text-body-medium text-medium-emphasis ma-0">No description provided.</p>
+          <p v-else class="text-body-medium on-surface-variant ma-0">No description provided.</p>
         </v-sheet>
         <div class="d-flex align-center justify-space-between flex-wrap ga-2 px-2">
-          <h3 class="text-title-medium">Comments <span class="text-medium-emphasis">{{ commentCount }}</span></h3>
+          <h3 class="text-title-medium">Comments <span class="on-surface-variant">{{ commentCount }}</span></h3>
           <div class="d-flex flex-wrap ga-2">
             <v-btn v-if="commentCursor" variant="text" @click="commentCursor = ''">Latest comments</v-btn>
             <v-btn
@@ -241,13 +241,13 @@ function date(value) {
             </v-btn>
           </div>
         </div>
-        <p v-if="!comments.length" class="text-body-medium text-medium-emphasis px-2">No comments yet. Start the conversation.</p>
+        <p v-if="!comments.length" class="text-body-medium on-surface-variant px-2">No comments yet. Start the conversation.</p>
         <article v-for="comment in comments" :key="comment.id" class="issues-panel__comment d-flex ga-3">
           <v-avatar color="primary" variant="tonal" size="36" class="mt-1 text-label-large" aria-hidden="true">{{ (comment.author?.login || '?').slice(0, 1).toUpperCase() }}</v-avatar>
           <div class="issues-panel__comment-body">
             <div class="d-flex flex-wrap align-center ga-2 mb-2">
               <span class="text-label-large">{{ comment.author?.login || 'Deleted user' }}</span>
-              <time class="text-body-small text-medium-emphasis" :datetime="comment.createdAt">{{ date(comment.createdAt) }}</time>
+              <time class="text-body-small on-surface-variant" :datetime="comment.createdAt">{{ date(comment.createdAt) }}</time>
             </div>
             <GithubCommentEditor :key="`${basePath}:${issue.number}:${comment.id}`" :comment="comment" :issue="issue" :base-path="basePath" @saved="issueUpdated">
               <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown">
@@ -255,7 +255,7 @@ function date(value) {
               </v-sheet>
             </GithubCommentEditor>
             <div v-if="comment.delivery && comment.delivery !== 'sent'" class="d-flex flex-wrap align-center ga-2 mt-1" aria-live="polite">
-              <span v-if="comment.delivery === 'sending'" class="text-body-small text-medium-emphasis">Posting…</span>
+              <span v-if="comment.delivery === 'sending'" class="text-body-small on-surface-variant">Posting…</span>
               <template v-else>
                 <span class="text-body-small text-error">{{ comment.error }}</span>
                 <v-btn variant="text" :disabled="Boolean(pending)" @click="retryComment(comment.id)">Retry</v-btn>
@@ -265,7 +265,7 @@ function date(value) {
         </article>
         <v-divider />
         <form class="d-flex flex-column ga-3" @submit.prevent="mutate('comment')">
-          <p v-if="issue.locked" class="text-body-small text-medium-emphasis ma-0">This conversation is locked. GitHub limits comments to permitted collaborators.</p>
+          <p v-if="issue.locked" class="text-body-small on-surface-variant ma-0">This conversation is locked. GitHub limits comments to permitted collaborators.</p>
           <GithubMentionTextarea
             v-model="draft" label="Add a comment" placeholder="Share an update or ask a question…" variant="outlined" rounded="lg"
             rows="4" auto-grow :counter="draft.length > 65000 ? GITHUB_BODY_MAX_LENGTH : undefined"

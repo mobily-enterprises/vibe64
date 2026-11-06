@@ -110,7 +110,7 @@
         </span>
         <span
           v-if="copyStatus || attachmentStatus"
-          class="text-caption text-medium-emphasis"
+          class="text-body-small on-surface-variant"
         >
           {{ attachmentStatus || copyStatus }}
         </span>

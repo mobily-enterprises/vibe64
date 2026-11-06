@@ -67,7 +67,7 @@
         <div v-if="$slots.close" class="accounts-setup__close">
           <slot name="close" />
         </div>
-        <p v-if="lede" class="text-body-medium text-medium-emphasis ma-0">
+        <p v-if="lede" class="text-body-medium on-surface-variant ma-0">
           {{ lede }}
         </p>
       </header>
@@ -124,7 +124,7 @@
             />
             <div>
               <h2 class="text-title-medium ma-0">{{ embedded ? `Signed in to ${signInName(account)}` : account.label }}</h2>
-              <p class="text-body-medium text-medium-emphasis ma-0">
+              <p class="text-body-medium on-surface-variant ma-0">
                 {{ account.message || accountStatusMessage(account) }}
               </p>
               <p
@@ -248,7 +248,7 @@
               class="accounts-setup__instruction-copy"
             >
               <h2 class="text-title-large ma-0">Allow sign-in with a code</h2>
-              <p class="text-body-medium text-medium-emphasis ma-0">
+              <p class="text-body-medium on-surface-variant ma-0">
                 In ChatGPT’s Security settings, turn on “Enable device code authorization for Codex”.
               </p>
               <div class="accounts-setup__settings-actions">
@@ -278,7 +278,7 @@
                 alt="ChatGPT Security settings with device code authorization for Codex enabled"
                 :src="codexDeviceSettingsImage"
               >
-                <p class="text-body-small text-medium-emphasis mt-3 mb-0">
+                <p class="text-body-small on-surface-variant mt-3 mb-0">
                   If your workspace manages this setting, ask a workspace admin to enable it.
                 </p>
               </SignInReferenceImage>
@@ -335,7 +335,7 @@
                   </AiWaitStatus>
                 </form>
               </template>
-              <p v-if="!sessionWaiting(session)" class="text-body-medium text-medium-emphasis ma-0" role="status">{{ statusMessage }}</p>
+              <p v-if="!sessionWaiting(session)" class="text-body-medium on-surface-variant ma-0" role="status">{{ statusMessage }}</p>
               <v-btn
                 v-if="session.status === 'failed'"
                 class="align-self-start"
@@ -355,7 +355,7 @@
                 color="surface-light"
                 rounded="lg"
               >
-                <p class="text-label-large text-medium-emphasis ma-0">One-time code</p>
+                <p class="text-label-large on-surface-variant ma-0">One-time code</p>
                 <div class="accounts-setup__code-row">
                   <p
                     v-if="userCode"
@@ -376,7 +376,7 @@
                     @click="copyAuthCode(session)"
                   />
                 </div>
-                <p class="accounts-setup__copy-status text-body-small text-medium-emphasis ma-0" role="status">
+                <p class="accounts-setup__copy-status text-body-small on-surface-variant ma-0" role="status">
                   <template v-if="authCopyStatus[session.id]">{{ authCopyStatus[session.id] }}</template>
                   <template v-else-if="userCode">Copy this code before continuing.</template>
                   <template v-else-if="session.status === 'failed'">Cancel this attempt to try again.</template>
@@ -400,7 +400,7 @@
                   <v-btn variant="text" color="primary" :disabled="authStartBusy" @click="retryAccountAuth(account, session)">Start again</v-btn>
                 </template>
               </AiWaitStatus>
-              <p v-if="statusMessage && !sessionWaiting(session)" class="text-body-medium text-medium-emphasis ma-0" role="status">
+              <p v-if="statusMessage && !sessionWaiting(session)" class="text-body-medium on-surface-variant ma-0" role="status">
                 {{ statusMessage }}
               </p>
               <SignInReferenceImage

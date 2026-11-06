@@ -90,7 +90,7 @@ async function submit() {
       </div>
       <v-card-text class="d-flex flex-column ga-4">
         <v-sheet color="surface-light" rounded="lg" class="pa-4 d-flex flex-column align-center ga-2">
-          <span class="text-label-small text-medium-emphasis">Preview</span>
+          <span class="text-label-small on-surface-variant">Preview</span>
           <GithubLabelChip :label="preview" class="new-label__preview" />
         </v-sheet>
         <v-text-field
@@ -120,7 +120,7 @@ async function submit() {
             autocomplete="off" spellcheck="false"
           />
         </div>
-        <p class="text-body-small text-medium-emphasis ma-0">Available to all issues in this repository.</p>
+        <p class="text-body-small on-surface-variant ma-0">Available to all issues in this repository.</p>
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />

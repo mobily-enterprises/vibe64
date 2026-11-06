@@ -18,10 +18,10 @@
         Archive session?
       </v-card-title>
       <v-card-text>
-        <p class="text-body-2 mb-2">
+        <p class="text-body-medium mb-2">
           This stops the assistant and terminals, preserves the session, and removes its active workspace.
         </p>
-        <p class="text-body-2 text-medium-emphasis mb-0">
+        <p class="text-body-medium on-surface-variant mb-0">
           Session:
           <strong>{{ archive.sessionTitle || shortSessionId(archive.sessionId) }}</strong>
         </p>

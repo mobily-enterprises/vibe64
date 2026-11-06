@@ -162,7 +162,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
               <strong>{{ !kitDate ? "No recovery kit yet" : kitStale ? "Your recovery kit is out of date" : `Saved ${relativeTime(kitDate)}` }}</strong>
               <span v-if="kitStale && installKeys.length">Save a new kit: an install key is not in it yet.</span>
               <span v-else-if="kitStale">Save a new kit so it holds every key.</span>
-              <span v-if="kitStale && kitDate" class="text-medium-emphasis">Last saved {{ relativeTime(kitDate) }}.</span>
+              <span v-if="kitStale && kitDate" class="on-surface-variant">Last saved {{ relativeTime(kitDate) }}.</span>
               <span v-else>Holds every key. Keep it somewhere safe off this computer.</span>
             </div>
             <v-btn :color="kitStale ? 'primary' : undefined" :variant="kitStale ? 'flat' : 'tonal'" rounded="pill" size="small" @click="emit('recovery-kit')">{{ kitStale ? "Save kit" : "Manage" }}</v-btn>

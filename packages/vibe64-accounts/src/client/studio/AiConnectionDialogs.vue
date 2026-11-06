@@ -246,7 +246,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
                   </v-avatar>
                 </template>
                 <template #append>
-                  <span v-if="providerUnavailableReason(provider)" class="text-label-medium text-medium-emphasis">
+                  <span v-if="providerUnavailableReason(provider)" class="text-label-medium on-surface-variant">
                     More setup needed
                   </span>
                   <span v-else class="text-label-large text-primary">Connect</span>
@@ -262,7 +262,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
                 ? `No providers match “${providerSearch.trim()}”`
                 : "Every OpenCode provider is already connected" }}
             </strong>
-            <span class="text-body-medium text-medium-emphasis">
+            <span class="text-body-medium on-surface-variant">
               {{ providerSearch.trim()
                 ? "Try a provider name or its OpenCode ID."
                 : "Manage an existing connection, or remove one before adding it again." }}

@@ -49,7 +49,7 @@
         />
       </template>
       <template #before-terminal>
-        <p v-if="session?.assistantSelection?.engineId === 'claude'" class="text-caption px-3 py-2 ma-0">
+        <p v-if="session?.assistantSelection?.engineId === 'claude'" class="text-body-small px-3 py-2 ma-0">
           Claude resumes this conversation in a new interactive process. Finish or stop any active chat turn first.
           Chat is unavailable while this terminal is open. Claude may ask you to complete its first-use setup or sign in.
         </p>
@@ -80,7 +80,7 @@
         <span class="vibe64-native-agent-session__command">
           {{ commandPreview || `${assistantLabel} is not running.` }}
         </span>
-        <span v-if="attachmentStatus" class="text-caption text-medium-emphasis" role="status">
+        <span v-if="attachmentStatus" class="text-body-small on-surface-variant" role="status">
           {{ attachmentStatus }}
         </span>
         <v-chip v-if="status" size="x-small" variant="tonal">

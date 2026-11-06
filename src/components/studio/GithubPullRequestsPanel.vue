@@ -152,7 +152,7 @@ async function actionFinished({ apiPath }) {
         <template #append><v-btn variant="text" @click="resource.reload()">Retry</v-btn></template>
       </v-alert>
       <template v-else-if="!number">
-        <div class="d-flex justify-space-between px-2 text-label-large text-medium-emphasis">
+        <div class="d-flex justify-space-between px-2 text-label-large on-surface-variant">
           <span>{{ list.data.value?.total || 0 }} pull requests</span><span>Recently updated</span>
         </div>
         <v-list v-if="list.data.value?.pullRequests?.length" class="pa-0" density="compact" rounded="xl" border slim aria-label="GitHub pull requests">
@@ -161,7 +161,7 @@ async function actionFinished({ apiPath }) {
             <v-list-item class="py-2" :active="false" :to="{ query: { ...$route.query, pr: String(item.number) } }">
               <template #prepend><v-icon :icon="icon(item)" :color="color(item)" /></template>
               <v-list-item-title class="text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
-              <div class="d-flex flex-wrap ga-2 text-body-small text-medium-emphasis mt-1">
+              <div class="d-flex flex-wrap ga-2 text-body-small on-surface-variant mt-1">
                 <span>#{{ item.number }} · {{ status(item) }} · {{ item.author?.login }} · {{ date(item.updatedAt) }}</span>
                 <span class="pull-requests__branch">{{ item.headRefName }} → {{ item.baseRefName }}</span>
               </div>
@@ -171,7 +171,7 @@ async function actionFinished({ apiPath }) {
         <v-sheet v-else rounded="xl" color="surface-light" class="pa-8 text-center">
           <v-icon icon="$callMerge" size="40" class="mb-3" />
           <h2 class="text-title-large mb-2">No pull requests here</h2>
-          <p class="text-body-medium text-medium-emphasis">Try another filter, or turn your session into a pull request.</p>
+          <p class="text-body-medium on-surface-variant">Try another filter, or turn your session into a pull request.</p>
         </v-sheet>
         <div class="d-flex justify-end ga-2">
           <v-btn v-if="$route.query.prCursor" variant="text" @click="navigate({ prCursor: undefined })">First page</v-btn>
@@ -187,10 +187,10 @@ async function actionFinished({ apiPath }) {
         <div class="px-2">
           <div class="d-flex align-center flex-wrap ga-2 mb-3">
             <v-chip :color="color(pr)" :prepend-icon="icon(pr)" variant="tonal">{{ status(pr) }}</v-chip>
-            <span class="text-body-medium text-medium-emphasis">#{{ pr.number }} · {{ pr.author?.login }}</span>
+            <span class="text-body-medium on-surface-variant">#{{ pr.number }} · {{ pr.author?.login }}</span>
           </div>
           <h2 class="text-headline-small mb-3">{{ pr.title }}</h2>
-          <div class="d-flex flex-wrap ga-3 text-body-small text-medium-emphasis">
+          <div class="d-flex flex-wrap ga-3 text-body-small on-surface-variant">
             <span>{{ pr.changedFiles }} files changed</span><span class="text-success">+{{ pr.additions }}</span><span class="text-error">−{{ pr.deletions }}</span>
           </div>
         </div>
@@ -200,7 +200,7 @@ async function actionFinished({ apiPath }) {
             <div class="pull-requests__branch">
               <div class="text-label-large">Session source · Save destination</div>
               <div class="text-body-medium mt-1">{{ pr.headRepository?.nameWithOwner || 'Deleted repository' }}:{{ pr.headRefName }}</div>
-              <div class="text-body-small text-medium-emphasis mt-1">Proposed into {{ repository }}:{{ pr.baseRefName }}</div>
+              <div class="text-body-small on-surface-variant mt-1">Proposed into {{ repository }}:{{ pr.baseRefName }}</div>
             </div>
           </div>
           <p v-if="pr.state === 'OPEN'" class="text-body-medium ma-0">Open an isolated session with this PR’s changes and description. Save pushes further work to its source branch.</p>
@@ -224,7 +224,7 @@ async function actionFinished({ apiPath }) {
         <v-sheet rounded="xl" border class="pa-5 pull-requests__description">
           <h3 class="text-title-medium mb-4">Description</h3>
           <LongTextPreviewBlocks v-if="pr.body" :blocks="description" />
-          <p v-else class="text-body-medium text-medium-emphasis ma-0">No description provided.</p>
+          <p v-else class="text-body-medium on-surface-variant ma-0">No description provided.</p>
         </v-sheet>
       </template>
     </template>

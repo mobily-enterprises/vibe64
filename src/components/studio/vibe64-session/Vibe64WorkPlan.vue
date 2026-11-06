@@ -227,7 +227,7 @@ watch(() => props.active, (active) => {
         <v-btn variant="text" @click="archiveId = ''">Plan history</v-btn>
         <div class="work-plan-archive-copy">
           <v-chip color="primary" variant="tonal" size="small" class="mb-1">Archived · read-only</v-chip>
-          <p class="text-body-small text-medium-emphasis">{{ selectedArchive ? `Archived ${selectedArchive.archivedDate}` : 'Saved snapshot' }}</p>
+          <p class="text-body-small on-surface-variant">{{ selectedArchive ? `Archived ${selectedArchive.archivedDate}` : 'Saved snapshot' }}</p>
         </div>
       </v-sheet>
       <v-card-text class="work-plan-content pa-4 pa-sm-6" :class="{ 'd-flex flex-column': showHistory && !history.length }">
@@ -246,19 +246,19 @@ watch(() => props.active, (active) => {
                 <v-list-item-title class="work-plan-history-title text-title-medium">{{ item.title }}</v-list-item-title>
                 <v-icon icon="$chevronRight" class="flex-shrink-0" />
               </div>
-              <p class="text-body-small text-medium-emphasis mt-1">Archived {{ item.archivedDate }}</p>
+              <p class="text-body-small on-surface-variant mt-1">Archived {{ item.archivedDate }}</p>
               <div class="d-flex align-center flex-wrap ga-2 mt-2">
                 <v-chip :color="item.status === 'completed' ? 'success' : undefined" size="small" variant="tonal">
                   <span class="text-high-emphasis">{{ item.status === 'completed' ? 'Completed' : 'Unfinished' }}</span>
                 </v-chip>
-                <span v-if="typeof item.total === 'number'" class="text-body-small text-medium-emphasis">{{ item.total }} requirements</span>
+                <span v-if="typeof item.total === 'number'" class="text-body-small on-surface-variant">{{ item.total }} requirements</span>
               </div>
             </v-list-item>
           </v-list>
           <div v-else class="work-plan-empty text-center pa-4">
-            <v-icon icon="$history" size="48" class="text-medium-emphasis mb-4" />
+            <v-icon icon="$history" size="48" class="on-surface-variant mb-4" />
             <p class="text-title-medium mb-2">No archived plans</p>
-            <p class="text-body-medium text-medium-emphasis">Archive a plan to keep it here.</p>
+            <p class="text-body-medium on-surface-variant">Archive a plan to keep it here.</p>
           </div>
         </template>
         <v-skeleton-loader v-else-if="!selectedPlanReady && !resource.loadError.value" type="heading, paragraph, paragraph, paragraph" aria-label="Loading plan" aria-busy="true" />
@@ -270,7 +270,7 @@ watch(() => props.active, (active) => {
             >
               <span class="text-high-emphasis">{{ plan.status === 'completed' ? 'Completed' : archiveId ? 'Unfinished' : 'Active' }}</span>
             </v-chip>
-            <span class="text-body-small text-medium-emphasis">{{ plan.total }} requirements</span>
+            <span class="text-body-small on-surface-variant">{{ plan.total }} requirements</span>
           </div>
           <v-tabs v-model="planDocument" grow height="48" aria-label="Plan documents" class="mb-4">
             <v-tab value="plan">Plan</v-tab>
@@ -293,9 +293,9 @@ watch(() => props.active, (active) => {
           </v-expansion-panels>
         </template>
         <div v-else-if="!resource.loadError.value" class="work-plan-empty text-center pa-4">
-          <v-icon icon="$inventory2" size="48" class="text-medium-emphasis mb-4" />
+          <v-icon icon="$inventory2" size="48" class="on-surface-variant mb-4" />
           <p class="text-title-medium mb-2">No current plan</p>
-          <p class="text-body-medium text-medium-emphasis">Ask Senior in chat to create a plan or reopen one from History.</p>
+          <p class="text-body-medium on-surface-variant">Ask Senior in chat to create a plan or reopen one from History.</p>
         </div>
       </v-card-text>
     </v-card>

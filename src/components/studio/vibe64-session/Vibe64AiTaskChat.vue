@@ -21,7 +21,7 @@
         <p class="ai-task-chat__ended">{{ WORDS.chat.ended }}</p>
       </template>
       <template v-else #composer>
-        <p v-if="task.draftSaveState === 'failed'" class="text-caption" role="status" aria-live="polite">{{ WORDS.chat.draftFailed }}</p>
+        <p v-if="task.draftSaveState === 'failed'" class="text-body-small" role="status" aria-live="polite">{{ WORDS.chat.draftFailed }}</p>
         <Vibe64AutopilotPromptTextarea
           ref="prompt"
           :aria-label="WORDS.chat.composerLabel"

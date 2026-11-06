@@ -75,7 +75,7 @@ async function submit() {
         <v-sheet color="surface-light" rounded="lg" class="pa-3 pr-destination">
           <div class="text-label-large">{{ repository }}</div>
           <div class="text-body-medium mt-1">{{ branch }} → {{ base }}</div>
-          <p class="text-body-small text-medium-emphasis mt-2 mb-0">The base branch stays unchanged.</p>
+          <p class="text-body-small on-surface-variant mt-2 mb-0">The base branch stays unchanged.</p>
         </v-sheet>
         <p class="text-body-small ma-0">Save open file edits first.</p>
         <p v-if="!destinationReview" role="status">Refresh repository status before creating a pull request.</p>

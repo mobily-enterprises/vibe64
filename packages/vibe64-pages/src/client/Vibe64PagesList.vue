@@ -147,7 +147,7 @@ watch(() => props.projectSlug, refresh);
                 <v-btn size="small" variant="text" @click="logPage = page">Log</v-btn>
               </div>
             </template>
-            <span v-else class="text-medium-emphasis" title="This page has no refresh schedule">—</span>
+            <span v-else class="on-surface-variant" title="This page has no refresh schedule">—</span>
           </td>
           <td class="vibe64-pages-list__row-actions">
             <div class="vibe64-pages-list__actions">

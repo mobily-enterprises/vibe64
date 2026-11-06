@@ -80,7 +80,7 @@
           </div>
         </template>
         <template #composer>
-          <p v-if="activeTask.draftSaveState === 'failed'" class="text-caption" role="status" aria-live="polite">
+          <p v-if="activeTask.draftSaveState === 'failed'" class="text-body-small" role="status" aria-live="polite">
             Draft not saved; check the error and retry.
           </p>
           <Vibe64AutopilotPromptTextarea

@@ -36,9 +36,9 @@
               </v-avatar>
               <div class="vibe64-approvals__who">
                 <div class="text-body-medium font-weight-medium text-truncate">
-                  {{ heading(entry) }}<span class="text-medium-emphasis font-weight-regular"> · {{ time(entry.createdAt) }}</span>
+                  {{ heading(entry) }}<span class="on-surface-variant font-weight-regular"> · {{ time(entry.createdAt) }}</span>
                 </div>
-                <div v-if="!approvals.isOwner" class="text-body-small text-medium-emphasis">
+                <div v-if="!approvals.isOwner" class="text-body-small on-surface-variant">
                   Waiting for {{ approvals.ownerName }} to approve
                 </div>
               </div>
@@ -73,7 +73,7 @@
             </div>
             <p v-else class="vibe64-approvals__text">{{ entry.text }}</p>
 
-            <p v-if="entry.steer && entry.status === 'waiting'" class="vibe64-approvals__note text-body-small text-medium-emphasis">
+            <p v-if="entry.steer && entry.status === 'waiting'" class="vibe64-approvals__note text-body-small on-surface-variant">
               {{ approvals.isOwner
                 ? "Sent while the assistant was working. It joins the current turn if it's still running when you approve."
                 : `Sent while the assistant was working. It joins the current turn if it's still running when ${approvals.ownerName} approves.` }}

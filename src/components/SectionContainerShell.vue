@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
   <section class="section-container-shell" :class="{ 'section-container-shell--with-heading': hasHeading, 'section-container-shell--collapsed': navigationCollapsed }">
     <header v-if="hasHeading" class="section-container-shell__heading">
       <h2 v-if="resolvedTitle" class="section-container-shell__title">{{ resolvedTitle }}</h2>
-      <p v-if="resolvedSubtitle" class="text-body-2 text-medium-emphasis mb-0">{{ resolvedSubtitle }}</p>
+      <p v-if="resolvedSubtitle" class="text-body-medium on-surface-variant mb-0">{{ resolvedSubtitle }}</p>
     </header>
 
     <v-sheet
