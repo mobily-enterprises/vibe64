@@ -180,7 +180,7 @@ hr { border: 0; border-top: 1px solid var(--v64-outline); margin: 24px 0; }
 /* Callouts and progress bars. */
 .v64-callout { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--v64-radius); border-left: 4px solid var(--v64-running); background: var(--v64-running-tint); }
 .v64-callout > :last-child { margin-bottom: 0; }
-.v64-progress { height: 6px; border-radius: 3px; background: var(--v64-track); overflow: hidden; }
+.v64-progress { height: 6px; margin: 0 0 10px; border-radius: 3px; background: var(--v64-track); overflow: hidden; }
 .v64-progress > i { display: block; height: 100%; background: var(--v64-primary); }
 
 /* Tables: a rounded panel with quiet headings; numbers line up. */
