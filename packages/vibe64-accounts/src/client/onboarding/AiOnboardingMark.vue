@@ -56,10 +56,10 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -2px 0 rgb(120 80 0 / 18%),
     0 calc(var(--aio-s) * 0.12) calc(var(--aio-s) * 0.3) calc(var(--aio-s) * -0.14) rgb(160 110 0 / 70%);
 }
-.aio-mark--secondary { --aio-tone-bg: var(--v64-secondary-container); --aio-tone-fg: var(--v64-on-secondary-container); }
-.aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #7d5260 18%, var(--v64-surface)); --aio-tone-fg: #633b48; }
-.v-theme--dark .aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #efb8c8 20%, var(--v64-surface)); --aio-tone-fg: #efb8c8; }
-.aio-mark--neutral { --aio-tone-bg: var(--v64-surface-container-highest); --aio-tone-fg: var(--v64-on-surface); }
+.aio-mark--secondary { --aio-tone-bg: rgb(var(--v-theme-secondary-container)); --aio-tone-fg: rgb(var(--v-theme-on-secondary-container)); }
+.aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #7d5260 18%, rgb(var(--v-theme-surface))); --aio-tone-fg: #633b48; }
+.v-theme--dark .aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #efb8c8 20%, rgb(var(--v-theme-surface))); --aio-tone-fg: #efb8c8; }
+.aio-mark--neutral { --aio-tone-bg: rgb(var(--v-theme-surface-container-highest)); --aio-tone-fg: rgb(var(--v-theme-on-surface)); }
 
 /* The crown sits on the tile's top edge: much wider than the tile, under half as tall. */
 .aio-mark__crown {

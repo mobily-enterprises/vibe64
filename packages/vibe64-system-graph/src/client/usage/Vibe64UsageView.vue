@@ -417,21 +417,21 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 </script>
 
 <style scoped>
-.usage-view { position: relative; display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--v64-surface); color: var(--v64-on-surface); }
+.usage-view { position: relative; display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
 .usage-view--panel { grid-template-columns: 280px minmax(0, 1fr) 360px; }
 .usage-view--compact { grid-template-columns: minmax(0, 1fr); }
-.usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid var(--v64-outline-variant); background: var(--v64-surface-container-low); }
+.usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid rgb(var(--v-theme-outline-variant)); background: rgb(var(--v-theme-surface-container-low)); }
 .usage-view__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; container-type: inline-size; }
 .usage-view__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .usage-view__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
 .usage-view__entry { margin: 0; min-width: 0; overflow-wrap: break-word; }
-.usage-view__entry--none { color: var(--v64-on-surface-variant); }
+.usage-view__entry--none { color: rgb(var(--v-theme-on-surface-variant)); }
 /* The click is one line beside the heading, shortened to fit while keeping its
    component file and, for a chosen click, how many requests it probably
    started. Where that is too narrow it has a line of its own, kept even while
    empty, so choosing a request or a click never changes the header's height. */
-.usage-view__click { display: flex; flex: 1 1 0; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; color: var(--v64-on-surface-variant); }
+.usage-view__click { display: flex; flex: 1 1 0; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-view__click-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .usage-view__click-file, .usage-view__click-count { flex: none; white-space: pre; }
 @container (max-width: 720px) {
@@ -452,9 +452,9 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__state h3, .usage-view__state p { margin: 0; }
 .usage-view__skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
 .usage-view__skeleton-card { border-radius: 12px; }
-.usage-view__note { margin: 0; color: var(--v64-on-surface-variant); }
-.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid var(--v64-outline-variant); background: var(--v64-surface); }
-.usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); border-left: 0; border-radius: var(--v64-shape-lg) 0 0 var(--v64-shape-lg); background: var(--v64-surface-container-high); box-shadow: var(--v64-elevation-3); }
+.usage-view__note { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid rgb(var(--v-theme-outline-variant)); background: rgb(var(--v-theme-surface)); }
+.usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); border-left: 0; border-radius: var(--v64-shape-lg) 0 0 var(--v64-shape-lg); background: rgb(var(--v-theme-surface-container-high)); box-shadow: var(--v64-elevation-3); }
 .usage-view__scrim { position: absolute; inset: 0; z-index: 1; background: rgb(0 0 0 / .32); }
 .usage-view__sheet { max-height: 80vh; overflow: auto; border-radius: 28px 28px 0 0; }
 .usage-view--compact .usage-view__header { padding: 8px 12px; }
@@ -465,7 +465,7 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 /* The modes take a whole row on phones; Exact only wraps below them. */
 .usage-view--compact .usage-view__modes { flex: 1 1 100%; }
 .usage-view--compact .usage-view__modes :deep(.v-btn) { flex: 1 1 0; min-width: 0; padding: 0 8px; }
-.usage-view__controls :deep(.v-chip--variant-outlined) { border-color: var(--v64-outline); }
+.usage-view__controls :deep(.v-chip--variant-outlined) { border-color: rgb(var(--v-theme-outline)); }
 /* Touch: 48 px targets; the chip keeps its look and gains an invisible margin. */
 @media (pointer: coarse) {
   .usage-view__modes { height: 48px; }

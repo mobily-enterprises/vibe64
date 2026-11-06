@@ -354,10 +354,10 @@ async function copyKey(key = "") {
 .runtime-config-records-table__key {
   /* A tonal copy chip; without this reset the browser draws its default button. */
   appearance: none;
-  background: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.12));
+  background: rgb(var(--v-theme-primary-container));
   border: 0;
   border-radius: var(--v64-shape-sm, 8px);
-  color: var(--v64-on-primary-container, rgb(var(--v-theme-primary)));
+  color: rgb(var(--v-theme-on-primary-container));
   cursor: pointer;
   padding: 2px 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -408,9 +408,9 @@ async function copyKey(key = "") {
 /* A linked value reads as one quiet line: where the value comes from. */
 .runtime-config-records-table__linked {
   align-items: center;
-  background: var(--v64-surface-container, rgba(var(--v-theme-on-surface), 0.05));
+  background: rgb(var(--v-theme-surface-container));
   border-radius: var(--v64-shape-sm, 8px);
-  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
+  color: rgb(var(--v-theme-on-surface-variant));
   display: inline-flex;
   gap: 6px;
   margin-block: 6px;
@@ -420,7 +420,7 @@ async function copyKey(key = "") {
 }
 
 .runtime-config-records-table__linked-icon {
-  color: var(--v64-primary, rgb(var(--v-theme-primary)));
+  color: rgb(var(--v-theme-primary));
   flex: 0 0 auto;
 }
 

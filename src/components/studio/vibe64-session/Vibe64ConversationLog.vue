@@ -364,7 +364,7 @@ const adapter = computed(() => ({
 }
 /* Progress reads as a quiet timeline under the turn it belongs to. */
 :deep(.assistant-transcript__thinking) {
-  border-left: 2px solid var(--v64-outline-variant, rgba(0, 0, 0, .12));
+  border-left: 2px solid rgb(var(--v-theme-outline-variant));
   padding: .1rem 0 .1rem .75rem;
 }
 :deep(.assistant-progress__toggle) {
@@ -391,14 +391,14 @@ const adapter = computed(() => ({
 .vibe64-conversation-log__thumbnail { display: block; width: 28px; height: 28px; }
 /* The avatar tools float over the transcript as one M3 toolbar pill. */
 :deep(.assistant-conversation__avatar-tools) {
-  background: var(--v64-surface-container-high, rgb(var(--v-theme-surface)));
+  background: rgb(var(--v-theme-surface-container-high));
   border-radius: var(--v64-shape-full, 999px);
   box-shadow: var(--v64-elevation-2);
   padding: 0 4px;
 }
 .vibe64-main-conversation__voice-disc {
   display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%;
-  background: var(--v64-primary-container, rgba(var(--v-theme-primary), .12));
+  background: rgb(var(--v-theme-primary-container));
   transition: background-color var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease), box-shadow var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
 }
 .vibe64-main-conversation__voice-tools :deep(.v-btn:hover:not(:disabled)) .vibe64-main-conversation__voice-disc { box-shadow: var(--v64-elevation-1); }

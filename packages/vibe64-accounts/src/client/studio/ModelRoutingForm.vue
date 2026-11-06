@@ -322,12 +322,12 @@ async function reload() {
 .model-routing__title { font: var(--v64-type-title-lg); margin: 0 0 var(--v64-space-3); }
 .model-routing__switch { margin-bottom: var(--v64-space-4); max-width: 100%; }
 .model-routing__switch .v-btn { letter-spacing: 0; text-transform: none; }
-.model-routing__intro { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin-bottom: var(--v64-space-4); }
+.model-routing__intro { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin-bottom: var(--v64-space-4); }
 .model-routing__intro p { margin: 0 0 var(--v64-space-2); max-width: 62ch; }
 .model-routing__empty {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-md);
   display: flex;
   flex-wrap: wrap;
@@ -338,17 +338,17 @@ async function reload() {
 }
 .model-routing__empty p { font: var(--v64-type-body-md); margin: 0; max-width: 40ch; }
 .model-routing__tools { align-items: center; display: flex; margin-bottom: var(--v64-space-3); min-height: 36px; }
-.model-routing__tools p { color: var(--v64-on-surface-variant); margin: 0; }
+.model-routing__tools p { color: rgb(var(--v-theme-on-surface-variant)); margin: 0; }
 .model-routing__group + .model-routing__group { margin-top: var(--v64-space-4); }
 .model-routing__group-title {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-md);
   letter-spacing: 0.08em;
   margin: 0 0 var(--v64-space-1);
   text-transform: uppercase;
 }
 .model-routing__actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-2); justify-content: flex-end; padding-top: var(--v64-space-4); }
-.model-routing__checking { color: var(--v64-on-surface-variant); font: 400 0.8125rem/1.125rem var(--v64-font-family); margin-inline-end: auto; }
+.model-routing__checking { color: rgb(var(--v-theme-on-surface-variant)); font: 400 0.8125rem/1.125rem var(--v64-font-family); margin-inline-end: auto; }
 .model-routing__changes { overflow-wrap: anywhere; }
 .model-routing__proposal { margin-block: 6px; }
 .model-routing__proposal :deep(.v-selection-control) { align-items: flex-start; }

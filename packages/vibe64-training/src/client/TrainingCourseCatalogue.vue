@@ -123,35 +123,35 @@ function install(course) {
   display: inline-flex; align-items: center; gap: var(--v64-space-1, 4px); margin: 0;
   font: var(--v64-type-label-md); letter-spacing: 0.08em; text-transform: uppercase; color: var(--v64-on-learning-container);
 }
-.tcc__intro { margin: 0; max-width: 40rem; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tcc__intro { margin: 0; max-width: 40rem; font: var(--v64-type-body-md); color: rgb(var(--v-theme-on-surface-variant)); }
 .tcc__loading, .tcc__note, .tcc__progress, .tcc__failure {
   display: flex; align-items: flex-start; gap: var(--v64-space-2, 8px); margin: 0; font: var(--v64-type-body-md);
 }
-.tcc__note { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); background: var(--v64-surface-container); color: var(--v64-on-surface-variant); }
-.tcc__progress { color: var(--v64-on-primary-container); }
+.tcc__note { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface-container)); color: rgb(var(--v-theme-on-surface-variant)); }
+.tcc__progress { color: rgb(var(--v-theme-on-primary-container)); }
 .tcc__failure { color: rgb(var(--v-theme-error)); }
 .tcc__topic { display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); }
 .tcc__topic-title { display: flex; align-items: center; gap: var(--v64-space-2, 8px); margin: 0; font: var(--v64-type-title-md); }
-.tcc__empty { margin: 0; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tcc__empty { margin: 0; font: var(--v64-type-body-md); color: rgb(var(--v-theme-on-surface-variant)); }
 .tcc__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); }
 .tcc__course {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--v64-space-3, 12px);
   padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px);
-  border: 1px solid var(--v64-outline-variant); background: var(--v64-surface-container-low);
+  border: 1px solid rgb(var(--v-theme-outline-variant)); background: rgb(var(--v-theme-surface-container-low));
 }
 .tcc__course-main { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--v64-space-1, 4px); }
 .tcc__title { font: var(--v64-type-title-md); }
 .tcc__chips { display: flex; flex-wrap: wrap; gap: var(--v64-space-1, 4px); margin: 0; }
 .tcc__chip {
   display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 1px 8px; border-radius: var(--v64-shape-sm, 8px);
-  font: var(--v64-type-label-md); background: var(--v64-surface-container-high); color: var(--v64-on-surface-variant);
+  font: var(--v64-type-label-md); background: rgb(var(--v-theme-surface-container-high)); color: rgb(var(--v-theme-on-surface-variant));
 }
 .tcc__chip code { font-size: 0.75rem; }
-.tcc__chip--enabled { background: var(--v64-success-container); color: var(--v64-on-surface); }
-.tcc__chip--preview { background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
-.tcc__chip--disabled { background: var(--v64-surface-container-highest); }
+.tcc__chip--enabled { background: rgb(var(--v-theme-success-container)); color: rgb(var(--v-theme-on-surface)); }
+.tcc__chip--preview { background: rgb(var(--v-theme-primary-container)); color: rgb(var(--v-theme-on-primary-container)); }
+.tcc__chip--disabled { background: rgb(var(--v-theme-surface-container-highest)); }
 .tcc__chip--update { background: var(--v64-learning); color: var(--v64-on-learning); }
-.tcc__detail { margin: 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant); }
+.tcc__detail { margin: 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .tcc__actions { flex: none; display: flex; gap: var(--v64-space-2, 8px); }
 :global(.v-theme--dark .tcc__eyebrow) { color: var(--v64-learning); }
 @container (max-width: 34rem) {

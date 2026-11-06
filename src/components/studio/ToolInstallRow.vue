@@ -138,8 +138,8 @@ watch(() => props.checking, (now, before) => {
 <style scoped>
 .tool-row {
   align-items: start;
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md, 12px);
   display: grid;
   gap: var(--v64-space-3, 12px);
@@ -171,7 +171,7 @@ watch(() => props.checking, (now, before) => {
   justify-content: center;
 }
 
-.tool-row--ready .tool-row__icon { color: var(--v64-success); }
+.tool-row--ready .tool-row__icon { color: rgb(var(--v-theme-success)); }
 .tool-row--missing .tool-row__icon,
 .tool-row--broken .tool-row__icon { color: rgb(var(--v-theme-warning)); }
 
@@ -191,7 +191,7 @@ watch(() => props.checking, (now, before) => {
 }
 
 .tool-row__aside {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-size: 0.8125rem;
 }
 
@@ -236,7 +236,7 @@ watch(() => props.checking, (now, before) => {
 }
 
 .tool-row__path {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.75rem;
   max-width: 100%;
@@ -252,7 +252,7 @@ watch(() => props.checking, (now, before) => {
 
 .tool-row__sentence,
 .tool-row__note {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
@@ -272,7 +272,7 @@ watch(() => props.checking, (now, before) => {
   padding-top: 2px;
 }
 
-.tool-row__sentence--feedback { color: var(--v64-on-surface); }
+.tool-row__sentence--feedback { color: rgb(var(--v-theme-on-surface)); }
 
-.tool-row--optional.tool-row--missing .tool-row__icon { color: var(--v64-on-surface-variant); }
+.tool-row--optional.tool-row--missing .tool-row__icon { color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

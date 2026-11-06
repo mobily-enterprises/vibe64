@@ -38,9 +38,9 @@ const visible = computed(() => Math.max(0, fraction.value * circumference.value 
 <style scoped>
 .training-progress-ring { position: relative; flex: none; display: inline-grid; place-items: center; }
 .training-progress-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.training-progress-ring__track { stroke: var(--training-ring-track, var(--v64-outline-variant, rgba(127, 127, 127, 0.2))); }
+.training-progress-ring__track { stroke: var(--training-ring-track, rgb(var(--v-theme-outline-variant))); }
 .training-progress-ring__indicator {
-  stroke: var(--training-ring-color, var(--v64-primary, currentColor));
+  stroke: var(--training-ring-color, rgb(var(--v-theme-primary)));
   transition: stroke-dasharray var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out);
 }
 .training-progress-ring__content { position: relative; font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif); font-variant-numeric: tabular-nums; }

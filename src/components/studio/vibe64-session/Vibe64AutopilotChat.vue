@@ -482,7 +482,7 @@ async function showMainChat() {
 }
 
 .studio-autopilot__composer {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
   box-sizing: border-box;
   flex: 0 0 auto;
   max-width: 100%;

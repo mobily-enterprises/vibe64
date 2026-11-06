@@ -124,14 +124,14 @@ onBeforeUnmount(stop);
   aspect-ratio: 1;
   background: #fff;
   border-radius: var(--v64-shape-lg, 16px);
-  box-shadow: 0 0 0 1px var(--v64-outline-variant), var(--v64-elevation-1);
+  box-shadow: 0 0 0 1px rgb(var(--v-theme-outline-variant)), var(--v64-elevation-1);
   display: flex;
   justify-content: center;
   padding: 10px;
 }
 
 .publish-install__qr.is-waiting {
-  background: var(--v64-surface-container-low);
+  background: rgb(var(--v-theme-surface-container-low));
 }
 
 .publish-install__code,
@@ -147,7 +147,7 @@ onBeforeUnmount(stop);
 }
 
 .publish-install__title small {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: block;
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
@@ -155,7 +155,7 @@ onBeforeUnmount(stop);
 
 .publish-install__badge {
   align-items: center;
-  background: var(--v64-success-container);
+  background: rgb(var(--v-theme-success-container));
   border-radius: var(--v64-shape-md, 12px);
   color: rgb(var(--v-theme-success));
   display: inline-flex;
@@ -186,7 +186,7 @@ onBeforeUnmount(stop);
 }
 
 .publish-install__steps li {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   counter-increment: step;
   font: var(--v64-type-body-md);
   padding-left: 34px;
@@ -195,7 +195,7 @@ onBeforeUnmount(stop);
 
 .publish-install__steps li::before {
   align-items: center;
-  background: var(--v64-success-container);
+  background: rgb(var(--v-theme-success-container));
   border-radius: 50%;
   color: rgb(var(--v-theme-success));
   content: counter(step);
@@ -210,12 +210,12 @@ onBeforeUnmount(stop);
 }
 
 .publish-install__steps strong {
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .publish-install__expiry {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;

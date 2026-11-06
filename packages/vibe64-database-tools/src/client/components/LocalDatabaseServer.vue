@@ -402,8 +402,8 @@ async function saveAndCheck(database) {
 }
 
 .db-server--ready {
-  background: var(--v64-surface-container-low);
-  border-color: var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border-color: rgb(var(--v-theme-outline-variant));
   padding-block: var(--v64-space-3, 12px);
 }
 
@@ -422,7 +422,7 @@ async function saveAndCheck(database) {
   justify-content: center;
 }
 
-.db-server--ready .db-server__icon { color: var(--v64-success); }
+.db-server--ready .db-server__icon { color: rgb(var(--v-theme-success)); }
 
 .db-server__heading {
   display: grid;
@@ -439,7 +439,7 @@ async function saveAndCheck(database) {
 .db-server__lead,
 .db-server__where,
 .db-server__sentence {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
@@ -463,7 +463,7 @@ async function saveAndCheck(database) {
 
 .db-server__looking {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-wrap: wrap;
   font: var(--v64-type-body-md);
@@ -474,7 +474,7 @@ async function saveAndCheck(database) {
 
 .db-server__looking code {
   background: none;
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
@@ -486,9 +486,9 @@ async function saveAndCheck(database) {
 .db-server__status {
   align-items: start;
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-sm, 8px);
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   display: flex;
   font: var(--v64-type-body-md);
   gap: 8px;
@@ -504,7 +504,7 @@ async function saveAndCheck(database) {
   margin-top: 2px;
 }
 
-.db-server--ready .db-server__status .v-icon { color: var(--v64-success); }
+.db-server--ready .db-server__status .v-icon { color: rgb(var(--v-theme-success)); }
 
 .db-server__status--fresh {
   box-shadow: 0 0 0 2px color-mix(in srgb, rgb(var(--v-theme-primary)) 45%, transparent);
@@ -537,12 +537,12 @@ async function saveAndCheck(database) {
 }
 
 .db-server__saved-where {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-size: 0.8125rem;
 }
 
 .db-server__help {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-sm, 8px);
   overflow: hidden;
 }
@@ -574,13 +574,13 @@ async function saveAndCheck(database) {
 }
 
 .db-server__steps li > span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
 .db-server__note {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   font-size: 0.8125rem;
   gap: 6px;

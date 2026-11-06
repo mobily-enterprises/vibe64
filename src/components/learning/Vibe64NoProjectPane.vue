@@ -86,7 +86,7 @@ const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttem
 }
 
 .studio-screen__lesson-layout {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 14px;
   height: 100%;
   min-height: 0;
@@ -95,7 +95,7 @@ const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttem
 }
 
 .studio-screen__no-project-text {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: grid;
   gap: var(--v64-space-3);
   justify-items: start;
@@ -122,7 +122,7 @@ const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttem
 }
 
 .studio-screen__no-lesson-note {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
   margin: 0;
   max-width: 18rem;

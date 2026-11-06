@@ -221,7 +221,7 @@ function openPreview() {
 
 .usage-record-dialog__reason,
 .usage-record-dialog__footnote {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 

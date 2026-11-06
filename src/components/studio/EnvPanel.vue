@@ -437,7 +437,7 @@ async function savedValueChanged() {
 }
 
 .env-panel__tabs {
-  border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .env-panel__tabs :deep(.v-tab) {
@@ -452,8 +452,8 @@ async function savedValueChanged() {
 /* M3 filled cards: tonal surfaces instead of hairline boxes. */
 .env-panel__expected,
 .env-panel__add {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
 }
 
@@ -479,7 +479,7 @@ async function savedValueChanged() {
 }
 
 .env-panel__add :deep(.v-field) {
-  background: var(--v64-surface);
+  background: rgb(var(--v-theme-surface));
   border-radius: var(--v64-shape-sm, 8px);
 }
 

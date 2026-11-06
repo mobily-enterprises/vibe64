@@ -35,9 +35,9 @@ defineProps({
   z-index: -1;
 }
 .aio-success-mark--primary { --aio-glow: color-mix(in srgb, var(--aio-crown) 45%, transparent); }
-.aio-success-mark--secondary { --aio-glow: color-mix(in srgb, var(--v64-primary) 30%, transparent); }
+.aio-success-mark--secondary { --aio-glow: color-mix(in srgb, rgb(var(--v-theme-primary)) 30%, transparent); }
 .aio-success-mark--tertiary { --aio-glow: color-mix(in srgb, #b5838f 40%, transparent); }
-.aio-success-mark--neutral { --aio-glow: color-mix(in srgb, var(--v64-outline) 40%, transparent); }
+.aio-success-mark--neutral { --aio-glow: color-mix(in srgb, rgb(var(--v-theme-outline)) 40%, transparent); }
 .aio-check {
   animation: aio-pop var(--v64-duration-medium) var(--v64-ease-emphasized-decelerate) both;
   bottom: -10px;
@@ -46,7 +46,7 @@ defineProps({
   right: -12px;
   width: 40px;
 }
-.aio-check circle { fill: var(--v64-success); stroke: var(--v64-surface); stroke-width: 3; }
+.aio-check circle { fill: rgb(var(--v-theme-success)); stroke: rgb(var(--v-theme-surface)); stroke-width: 3; }
 .aio-check path {
   animation: aio-draw calc(var(--v64-duration-medium) + 100ms) var(--v64-ease-emphasized-decelerate) 150ms both;
   fill: none;

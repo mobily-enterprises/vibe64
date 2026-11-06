@@ -225,7 +225,7 @@ function chooseThinking(variantId) {
 
 <style scoped>
 .routing-row {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
   display: grid;
   gap: var(--v64-space-1) var(--v64-space-4);
   grid-template-columns: minmax(7.5rem, 9.5rem) minmax(0, 1fr);
@@ -233,7 +233,7 @@ function chooseThinking(variantId) {
 }
 .routing-row__label { font: var(--v64-type-label-lg); padding-top: 2px; }
 .routing-row__body { display: grid; gap: var(--v64-space-2); min-width: 0; }
-.routing-row__description, .routing-row__same { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 0; }
+.routing-row__description, .routing-row__same { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 0; }
 .routing-row__same { align-items: center; display: flex; gap: var(--v64-space-2); justify-content: space-between; }
 .routing-row__same > span { min-width: 0; overflow-wrap: anywhere; }
 .routing-row__change { flex: none; margin-inline-end: calc(var(--v64-space-3) * -1); }
@@ -247,16 +247,16 @@ function chooseThinking(variantId) {
 .routing-row__return:first-child { margin-inline-start: calc(var(--v64-space-3) * -1); }
 .routing-row__option-title { align-items: center; display: flex; flex-wrap: wrap; gap: 4px 8px; white-space: normal; }
 .routing-row__model-name { font-weight: 500; overflow-wrap: anywhere; }
-.routing-row__status { color: var(--v64-on-surface-variant); font: 400 0.8125rem/1.125rem var(--v64-font-family); }
-.routing-row__option :deep(.v-list-item-subtitle) { color: var(--v64-on-surface-variant); opacity: 1; }
+.routing-row__status { color: rgb(var(--v-theme-on-surface-variant)); font: 400 0.8125rem/1.125rem var(--v64-font-family); }
+.routing-row__option :deep(.v-list-item-subtitle) { color: rgb(var(--v-theme-on-surface-variant)); opacity: 1; }
 /* The tool suffix is the only sign of a non-default tool: in a narrow field the
    model name shortens with an ellipsis and the suffix stays whole. */
 .routing-row__selection { align-items: center; display: inline-flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .routing-row__selection .routing-row__model-name { min-width: 0; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; }
-.routing-row__runs-in { align-items: center; color: var(--v64-on-surface-variant); display: inline-flex; flex-shrink: 0; font: var(--v64-type-body-md); gap: 4px; }
+.routing-row__runs-in { align-items: center; color: rgb(var(--v-theme-on-surface-variant)); display: inline-flex; flex-shrink: 0; font: var(--v64-type-body-md); gap: 4px; }
 .routing-row__advanced {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md);
   display: grid;
   gap: var(--v64-space-1);
@@ -269,9 +269,9 @@ function chooseThinking(variantId) {
 .routing-row__connect { justify-self: start; margin-inline-start: calc(var(--v64-space-3) * -1); }
 .routing-tool {
   align-items: center;
-  background: var(--v64-surface-container-highest);
+  background: rgb(var(--v-theme-surface-container-highest));
   border-radius: 6px;
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   display: inline-flex;
   flex: none;
   font: 700 0.625rem/1 var(--v64-font-family);

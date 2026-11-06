@@ -206,8 +206,8 @@ function meterLabel([aspect, rating]) {
 <style scoped>
 /* Rating meters: five segments, low ratings in the warning tone. */
 .aio-meter { display: inline-flex; flex: none; gap: 3px; }
-.aio-meter i { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--v64-outline); height: 6px; width: 10px; }
-.aio-meter i.is-filled { background: var(--v64-primary); box-shadow: none; }
+.aio-meter i { border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(var(--v-theme-outline)); height: 6px; width: 10px; }
+.aio-meter i.is-filled { background: rgb(var(--v-theme-primary)); box-shadow: none; }
 .aio-meter--low i.is-filled { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, transparent); }
 
 /* One card per provider. On desktop each card is one row: Claude's offer sits
@@ -215,8 +215,8 @@ function meterLabel([aspect, rating]) {
 .aio-card {
   animation: aio-rise var(--v64-duration-medium) var(--v64-ease-emphasized-decelerate) both;
   animation-delay: calc(var(--aio-index) * 40ms);
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: flex;
   flex-direction: column;
@@ -227,10 +227,10 @@ function meterLabel([aspect, rating]) {
   transition: border-color var(--v64-duration-short) var(--v64-ease-standard), box-shadow var(--v64-duration-short) var(--v64-ease-standard);
 }
 @media (hover: hover) {
-  .ai-setup--pointer .aio-card:hover { border-color: var(--v64-outline); box-shadow: var(--v64-elevation-1); }
+  .ai-setup--pointer .aio-card:hover { border-color: rgb(var(--v-theme-outline)); box-shadow: var(--v64-elevation-1); }
 }
 .aio-card--featured {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 10%, var(--v64-surface)), var(--v64-surface) 55%);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 10%, rgb(var(--v-theme-surface))), rgb(var(--v-theme-surface)) 55%);
   border-radius: var(--v64-shape-xl);
   box-shadow: 0 24px 48px -30px color-mix(in srgb, var(--aio-crown-strong) 60%, transparent), var(--v64-elevation-1);
   padding: var(--v64-space-5) var(--v64-space-6) var(--v64-space-4);
@@ -239,8 +239,8 @@ function meterLabel([aspect, rating]) {
   .ai-setup--pointer .aio-card--featured:hover { box-shadow: 0 28px 56px -30px color-mix(in srgb, var(--aio-crown-strong) 70%, transparent), var(--v64-elevation-2); }
 }
 .v-theme--dark .aio-card--featured {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 14%, var(--v64-surface)), var(--v64-surface) 60%);
-  border-color: color-mix(in srgb, var(--aio-crown) 35%, var(--v64-outline-variant));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 14%, rgb(var(--v-theme-surface))), rgb(var(--v-theme-surface)) 60%);
+  border-color: color-mix(in srgb, var(--aio-crown) 35%, rgb(var(--v-theme-outline-variant)));
 }
 @media (min-width: 960px) {
   .aio-card { column-gap: var(--v64-space-5); display: grid; row-gap: var(--v64-space-2); }
@@ -274,14 +274,14 @@ function meterLabel([aspect, rating]) {
   }
   .aio-card:not(.aio-card--featured) .aio-card__install { grid-area: install; margin-top: var(--v64-space-2); }
 }
-.aio-card--connected { border: 2px solid var(--v64-success); }
+.aio-card--connected { border: 2px solid rgb(var(--v-theme-success)); }
 .aio-card--reconnect { border: 2px solid color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, transparent); }
 /* Badges straddle the top border, so they never compete with the name for width. */
 .aio-card__ribbon,
 .aio-card__connected {
   align-items: center;
   border-radius: var(--v64-shape-full);
-  box-shadow: 0 0 0 3px var(--v64-surface);
+  box-shadow: 0 0 0 3px rgb(var(--v-theme-surface));
   display: inline-flex;
   font: var(--v64-type-label-lg);
   gap: var(--v64-space-1);
@@ -291,8 +291,8 @@ function meterLabel([aspect, rating]) {
   top: -14px;
 }
 .aio-card__ribbon { background: var(--aio-crown); color: var(--aio-crown-ink); right: var(--v64-space-6); }
-.aio-card__connected { background: var(--v64-success-container); color: var(--v64-on-success-container); left: var(--v64-space-5); }
-.aio-card__connected--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, var(--v64-surface)); color: var(--aio-warn-ink); }
+.aio-card__connected { background: rgb(var(--v-theme-success-container)); color: var(--v64-on-success-container); left: var(--v64-space-5); }
+.aio-card__connected--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, rgb(var(--v-theme-surface))); color: var(--aio-warn-ink); }
 .aio-card__head {
   align-items: center;
   background: none;
@@ -308,9 +308,9 @@ function meterLabel([aspect, rating]) {
 .aio-card--featured .aio-card__head { gap: var(--v64-space-4); padding: var(--v64-space-4) 0 0 var(--v64-space-2); }
 .aio-card__rank {
   align-items: center;
-  background: var(--v64-surface-container-highest);
+  background: rgb(var(--v-theme-surface-container-highest));
   border-radius: var(--v64-shape-full);
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   display: inline-flex;
   flex: none;
   font: var(--v64-type-label-lg);
@@ -321,7 +321,7 @@ function meterLabel([aspect, rating]) {
 .aio-card__identity { display: grid; flex: 1; min-width: 0; }
 .aio-card__name { font: var(--v64-type-title-lg); }
 .aio-card--featured .aio-card__name { font: 600 1.75rem/2.25rem var(--v64-font-family); letter-spacing: -0.015em; }
-.aio-card__tagline { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
+.aio-card__tagline { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); }
 .aio-card__chevron { transition: transform var(--v64-duration-short) var(--v64-ease-standard); }
 .aio-card__head[aria-expanded="true"] .aio-card__chevron { transform: rotate(180deg); }
 .aio-card__facts { align-content: start; display: grid; gap: var(--v64-space-3); }
@@ -329,16 +329,16 @@ function meterLabel([aspect, rating]) {
 .aio-card__bullets li { align-items: center; display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-3); }
 .aio-card--featured .aio-card__bullets li { font: var(--v64-type-body-lg); }
 .aio-card__why { font: var(--v64-type-body-lg); margin: 0; }
-.aio-card__free { align-items: center; border-top: 1px solid var(--v64-outline-variant); display: flex; flex-wrap: wrap;
+.aio-card__free { align-items: center; border-top: 1px solid rgb(var(--v-theme-outline-variant)); display: flex; flex-wrap: wrap;
   gap: var(--v64-space-2); margin-top: var(--v64-space-3); padding-top: var(--v64-space-3); }
 .aio-card__free-label { display: grid; flex: 1 1 16rem; font: var(--v64-type-body-md); gap: 2px; margin: 0; }
-.aio-card__free-label span { color: var(--v64-on-surface-variant); }
-.aio-card__note { color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
+.aio-card__free-label span { color: rgb(var(--v-theme-on-surface-variant)); }
+.aio-card__note { color: rgb(var(--v-theme-on-surface-variant)); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .aio-card__note .v-icon { flex: none; margin-top: 1px; }
 .aio-card__offer { display: grid; gap: var(--v64-space-3); }
 .aio-card__needs {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   font: var(--v64-type-body-md);
   gap: var(--v64-space-2);
@@ -346,21 +346,21 @@ function meterLabel([aspect, rating]) {
   margin: 0;
 }
 .aio-card__free .aio-card__needs { justify-content: flex-start; margin-top: var(--v64-space-1); }
-.aio-card__needs--ready .v-icon { color: var(--v64-success); }
+.aio-card__needs--ready .v-icon { color: rgb(var(--v-theme-success)); }
 .aio-card__free .aio-card__install { flex: 1 1 100%; }
 /* A card whose tool is missing is greyed until it is installed; its actions and install row keep their colour. */
 .aio-card--needs-tool,
-.aio-card--needs-tool.aio-card--featured { background: var(--v64-surface-container-low); border-color: var(--v64-outline-variant); box-shadow: none; }
+.aio-card--needs-tool.aio-card--featured { background: rgb(var(--v-theme-surface-container-low)); border-color: rgb(var(--v-theme-outline-variant)); box-shadow: none; }
 .ai-setup .aio-card--needs-tool:hover { box-shadow: none; }
 .aio-card--needs-tool :is(.aio-card__head, .aio-card__facts, .aio-card__note-row, .aio-plan, .aio-card__ribbon) { filter: grayscale(1); opacity: 0.7; }
-.aio-card--needs-tool .aio-plan { border-left-color: var(--v64-outline-variant); }
+.aio-card--needs-tool .aio-plan { border-left-color: rgb(var(--v-theme-outline-variant)); }
 .aio-card__note-row:empty { display: none; }
 .aio-card__facts :deep(.v-skeleton-loader) { background: transparent; }
 
 /* The plan: official name and price first, the budget advice beneath. */
 .aio-plan {
   align-content: start;
-  background: var(--v64-surface-container);
+  background: rgb(var(--v-theme-surface-container));
   border-radius: var(--v64-shape-md);
   display: grid;
   gap: 2px;
@@ -370,8 +370,8 @@ function meterLabel([aspect, rating]) {
 .aio-plan__name { font: var(--v64-type-label-lg); }
 .aio-plan__price { font: var(--v64-type-title-lg); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .aio-card--featured .aio-plan__price { font: 600 2rem/2.5rem var(--v64-font-family); letter-spacing: -0.02em; }
-.aio-plan__budget { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
-.aio-plan__more { border-top: 1px solid var(--v64-outline-variant); font: var(--v64-type-label-lg); margin-top: var(--v64-space-2); padding-top: var(--v64-space-2); }
+.aio-plan__budget { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); }
+.aio-plan__more { border-top: 1px solid rgb(var(--v-theme-outline-variant)); font: var(--v64-type-label-lg); margin-top: var(--v64-space-2); padding-top: var(--v64-space-2); }
 .aio-card__ctas { display: grid; gap: var(--v64-space-1); }
 .aio-card__ctas .v-btn { min-height: 48px; }
 .aio-card__ctas .aio-card__link { font: var(--v64-type-label-lg); height: 40px; min-height: 40px; }
@@ -391,7 +391,7 @@ function meterLabel([aspect, rating]) {
 
 .aio-card__head:focus-visible { border-radius: var(--v64-shape-sm); }
 .aio-card__head:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 

@@ -91,8 +91,8 @@ const ready = computed(() => tasks.value.every((task) => task.done));
 
 <style scoped>
 .publish-android-tasks {
-  background: var(--v64-surface);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md, 12px);
   display: grid;
   list-style: none;
@@ -109,7 +109,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
 }
 
 .publish-android-tasks li + li {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .publish-android-tasks strong {
@@ -118,13 +118,13 @@ const ready = computed(() => tasks.value.every((task) => task.done));
 }
 
 .publish-android-tasks span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: block;
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
 }
 
 .publish-android-tasks li.is-done strong {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 </style>

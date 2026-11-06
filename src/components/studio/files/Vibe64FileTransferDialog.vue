@@ -259,7 +259,7 @@ function resolveConflict(choice) {
 }
 
 .vibe64-transfer-dialog__subtitle {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   opacity: 1;
   align-items: center;
   display: flex;
@@ -292,9 +292,9 @@ function resolveConflict(choice) {
 }
 
 .vibe64-transfer-dialog__areas .vibe64-transfer-dialog__chip--selected {
-  background: var(--v64-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
   border-color: transparent;
-  color: var(--v64-on-secondary-container);
+  color: rgb(var(--v-theme-on-secondary-container));
 }
 
 .vibe64-transfer-dialog__chip-label {
@@ -309,14 +309,14 @@ function resolveConflict(choice) {
 }
 
 .vibe64-transfer-dialog__hint {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
 
 .vibe64-transfer-dialog__crumbs {
   align-items: center;
-  border-block-start: 1px solid var(--v64-outline-variant);
+  border-block-start: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
   flex-wrap: wrap;
   padding-block-start: var(--v64-space-2);
@@ -358,7 +358,7 @@ function resolveConflict(choice) {
 }
 
 .vibe64-transfer-dialog__target {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   flex: 1 1 12rem;
   font: var(--v64-type-body-md);
   margin: 0;

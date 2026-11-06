@@ -305,7 +305,7 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__chat-panel {
   background: rgb(var(--v-theme-surface));
-  border-right: 1px solid var(--v64-outline-variant);
+  border-right: 1px solid rgb(var(--v-theme-outline-variant));
   container-name: studio-chat-pane;
   container-type: inline-size;
   display: grid;

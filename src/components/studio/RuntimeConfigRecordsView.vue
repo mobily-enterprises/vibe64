@@ -161,9 +161,9 @@ function recordEditable(record = {}) {
 
 /* An M3-style empty state: a quiet dashed slot where values will appear. */
 .runtime-config-records__empty {
-  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24));
+  border: 1px dashed rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-lg, 16px);
-  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
   margin: 0;
   padding: var(--v64-space-5, 24px) var(--v64-space-4, 16px);

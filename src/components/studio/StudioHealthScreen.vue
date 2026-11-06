@@ -198,9 +198,9 @@ function iconColor(check) {
 }
 
 .studio-health__summary strong { font: var(--v64-type-title-md); }
-.studio-health__summary p { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 2px 0 0; }
-.studio-health__summary--ok { background: var(--v64-success-container); }
-.studio-health__summary--ok > .v-icon { color: var(--v64-success); }
+.studio-health__summary p { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 2px 0 0; }
+.studio-health__summary--ok { background: rgb(var(--v-theme-success-container)); }
+.studio-health__summary--ok > .v-icon { color: rgb(var(--v-theme-success)); }
 .studio-health__summary--attention { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 12%, rgb(var(--v-theme-surface))); }
 .studio-health__summary--attention > .v-icon { color: rgb(var(--v-theme-warning)); }
 
@@ -216,13 +216,13 @@ function iconColor(check) {
 }
 
 .studio-health__section-title span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
 .studio-health__list {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   overflow: hidden;
 }
@@ -235,7 +235,7 @@ function iconColor(check) {
   padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
 }
 
-.studio-health__check + .studio-health__check { border-top: 1px solid var(--v64-outline-variant); }
+.studio-health__check + .studio-health__check { border-top: 1px solid rgb(var(--v-theme-outline-variant)); }
 /* Icons sit on the 24px heading line, like the tool rows' icons. */
 .studio-health__check > .v-icon { margin-top: 2px; }
 .studio-health__check--tool { padding-inline: var(--v64-space-4, 16px); }
@@ -257,7 +257,7 @@ function iconColor(check) {
 .studio-health__check-heading strong { font-size: 0.9375rem; font-weight: 600; }
 
 .studio-health__check-heading span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-size: 0.8125rem;
   min-width: 0;
   overflow-wrap: break-word;
@@ -265,7 +265,7 @@ function iconColor(check) {
 }
 
 .studio-health__sentence {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 2px 0 0;
 }
@@ -273,7 +273,7 @@ function iconColor(check) {
 .studio-health__action { justify-self: start; margin-top: var(--v64-space-2, 8px); }
 
 .studio-health__check-copy small {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-size: 0.8125rem;
 }
 </style>

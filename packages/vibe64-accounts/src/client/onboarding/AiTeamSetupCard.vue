@@ -44,31 +44,31 @@ const emit = defineEmits(["add", "snooze", "review"]);
 
 <style scoped>
 .ai-team-card {
-  background: color-mix(in srgb, var(--v64-primary-container) 40%, var(--v64-surface));
-  border: 1px solid var(--v64-outline-variant);
+  background: color-mix(in srgb, rgb(var(--v-theme-primary-container)) 40%, rgb(var(--v-theme-surface)));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: flex;
   gap: var(--v64-space-4);
   margin: 0 0 var(--v64-space-6);
   padding: var(--v64-space-4) var(--v64-space-5);
 }
-.ai-team-card:focus-visible { outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color); outline-offset: var(--v64-focus-ring-offset); }
-.ai-team-card--ready { background: color-mix(in srgb, var(--v64-success-container) 55%, var(--v64-surface)); }
+.ai-team-card:focus-visible { outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary)); outline-offset: var(--v64-focus-ring-offset); }
+.ai-team-card--ready { background: color-mix(in srgb, rgb(var(--v-theme-success-container)) 55%, rgb(var(--v-theme-surface))); }
 .ai-team-card__icon {
   align-items: center;
-  background: var(--v64-surface);
+  background: rgb(var(--v-theme-surface));
   border-radius: var(--v64-shape-full);
-  color: var(--v64-primary);
+  color: rgb(var(--v-theme-primary));
   display: inline-flex;
   flex: none;
   height: 44px;
   justify-content: center;
   width: 44px;
 }
-.ai-team-card--ready .ai-team-card__icon { color: var(--v64-success); }
+.ai-team-card--ready .ai-team-card__icon { color: rgb(var(--v-theme-success)); }
 .ai-team-card__body { display: grid; gap: var(--v64-space-2); min-width: 0; }
 .ai-team-card__title { font: var(--v64-type-title-md); margin: 0; }
-.ai-team-card__text { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 0; max-width: 62ch; }
+.ai-team-card__text { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 0; max-width: 62ch; }
 .ai-team-card__error { align-items: center; color: rgb(var(--v-theme-error)); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .ai-team-card__actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-2); margin-top: var(--v64-space-1); }
 .ai-team-card__actions .v-btn { min-height: 44px; }

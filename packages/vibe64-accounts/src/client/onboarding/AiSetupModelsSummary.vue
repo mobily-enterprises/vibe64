@@ -24,8 +24,8 @@ const emit = defineEmits(["open"]);
 /* Models: the overview's one-line summary of the AI setup. */
 .aio-models {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: flex;
   flex-wrap: wrap;
@@ -37,7 +37,7 @@ const emit = defineEmits(["open"]);
 .aio-models__title { font: var(--v64-type-title-md); margin: 0; }
 .aio-models__list { display: flex; flex-wrap: wrap; font: var(--v64-type-body-md); gap: var(--v64-space-1) var(--v64-space-5); margin: 0; }
 .aio-models__list div { display: flex; gap: var(--v64-space-2); min-width: 0; }
-.aio-models__list dt { color: var(--v64-on-surface-variant); }
+.aio-models__list dt { color: rgb(var(--v-theme-on-surface-variant)); }
 .aio-models__list dd { margin: 0; overflow-wrap: anywhere; }
 .aio-models__open { min-height: 44px; }
 

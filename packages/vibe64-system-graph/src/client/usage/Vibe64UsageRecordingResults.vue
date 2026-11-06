@@ -194,5 +194,5 @@ function subtitle(request) {
 .usage-recordings__method { min-width: 64px; justify-content: center; margin-right: 12px; font-family: ui-monospace, monospace; }
 .usage-recordings__request--secondary { color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-recordings__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; padding: 0 4px; }
-.usage-recordings__footer p { margin: 0; color: var(--v64-on-surface-variant); }
+.usage-recordings__footer p { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

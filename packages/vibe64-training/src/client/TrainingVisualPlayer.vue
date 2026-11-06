@@ -85,9 +85,9 @@ defineExpose({
 <style scoped>
 .vibe64-training-visual { min-width: 0; display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); }
 .vibe64-training-visual__frame {
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
-  background: var(--v64-surface-container-lowest, rgb(var(--v-theme-surface)));
+  background: rgb(var(--v-theme-surface-container-lowest));
   box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
   overflow: hidden;
   animation: vibe64-training-visual-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out);
@@ -98,8 +98,8 @@ defineExpose({
   gap: var(--v64-space-2, 8px);
   min-height: 40px;
   padding: 0 var(--v64-space-4, 16px);
-  background: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05));
-  border-bottom: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  background: rgb(var(--v-theme-surface-container));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
 }
 .vibe64-training-visual__bar-icon { flex: 0 0 auto; color: rgb(var(--v-theme-primary)); }
 .vibe64-training-visual__bar-title {
@@ -117,7 +117,7 @@ defineExpose({
   padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
   border-radius: var(--v64-shape-md, 12px);
   border-inline-start: 4px solid var(--v64-learning, #f5c518);
-  background: var(--v64-surface-container-low, rgba(var(--v-theme-primary), 0.03));
+  background: rgb(var(--v-theme-surface-container-low));
 }
 .vibe64-training-visual__error {
   display: flex;
@@ -126,7 +126,7 @@ defineExpose({
   gap: var(--v64-space-3, 12px);
   padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
   border-radius: var(--v64-shape-lg, 16px);
-  background: var(--v64-error-container, rgba(var(--v-theme-error), 0.12));
+  background: rgb(var(--v-theme-error-container));
   color: rgb(var(--v-theme-on-surface));
 }
 .vibe64-training-visual__error p { flex: 1 1 12rem; min-width: 0; }

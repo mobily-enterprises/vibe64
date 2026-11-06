@@ -15,19 +15,20 @@ function previewComponentSourcePath(file = "", sourceRoot = "") {
   return relative.split("/").every((part) => part && part !== "." && part !== "..") ? relative : "";
 }
 
-// The editor's primary colour and the colour on it, as the element shows them,
-// for the Preview's Pick highlight: { color, onColor } as #rrggbb, else {}.
+// The editor's primary colour and the colour on it, as the element's theme
+// declares them (Vuetify's "r,g,b" role channels), for the Preview's Pick
+// highlight: { color, onColor } as #rrggbb, else {}.
 function previewPickColors(element) {
   const style = element && hasWindowFunction("getComputedStyle") ? window.getComputedStyle(element) : null;
   const hex = (name) => {
-    const channels = String(style?.getPropertyValue(name) || "").match(/^\s*rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)\s*$/u)
+    const channels = String(style?.getPropertyValue(name) || "").match(/^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*$/u)
       ?.slice(1).map(Number);
     return channels?.every((channel) => channel <= 255)
       ? `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`
       : "";
   };
-  const color = hex("--v64-primary");
-  const onColor = hex("--v64-on-primary");
+  const color = hex("--v-theme-primary");
+  const onColor = hex("--v-theme-on-primary");
   return color && onColor ? { color, onColor } : {};
 }
 

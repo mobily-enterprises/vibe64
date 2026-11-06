@@ -28,7 +28,7 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
   padding: 0 14px 0 10px;
   white-space: nowrap;
 }
-.aio-setup-pill:focus-visible { outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color); outline-offset: var(--v64-focus-ring-offset); }
+.aio-setup-pill:focus-visible { outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary)); outline-offset: var(--v64-focus-ring-offset); }
 .aio-setup-pill .v-icon { font-size: 18px; height: 18px; width: 18px; }
 @media (hover: hover) {
   .aio-setup-pill:hover { background: #f9d65c; }

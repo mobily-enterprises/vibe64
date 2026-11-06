@@ -398,8 +398,8 @@ function closeVersion() {
 
 .vibe64-repository-workspace__summary,
 .vibe64-repository-workspace__update-status {
-  background: var(--v64-surface-container-low) !important;
-  border-color: var(--v64-outline-variant) !important;
+  background: rgb(var(--v-theme-surface-container-low)) !important;
+  border-color: rgb(var(--v-theme-outline-variant)) !important;
   border-radius: var(--v64-shape-lg, 16px) !important;
 }
 
@@ -464,8 +464,8 @@ function closeVersion() {
 
 /* M3 empty state: a quiet dashed slot, centred, where content will appear. */
 .vibe64-repository-workspace__empty {
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24));
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-lg, 16px);
   justify-items: center;
   padding: var(--v64-space-6, 32px) var(--v64-space-4, 16px);

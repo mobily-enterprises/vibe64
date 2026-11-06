@@ -70,7 +70,7 @@ function transferred(event) {
 <style scoped>
 .vibe64-project-files {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md);
   display: flex;
   flex-direction: column;

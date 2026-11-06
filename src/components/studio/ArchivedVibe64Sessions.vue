@@ -169,8 +169,8 @@ defineExpose({
 
 /* M3 empty state: a quiet dashed slot, centred, where archived chats will appear. */
 .studio-archived-sessions__empty {
-  background: var(--v64-surface-container-low) !important;
-  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24)) !important;
+  background: rgb(var(--v-theme-surface-container-low)) !important;
+  border: 1px dashed rgb(var(--v-theme-outline)) !important;
   border-radius: var(--v64-shape-lg, 16px) !important;
   padding: var(--v64-space-6, 32px) var(--v64-space-4, 16px);
   text-align: center;

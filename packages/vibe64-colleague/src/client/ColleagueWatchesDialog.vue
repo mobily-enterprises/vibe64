@@ -51,22 +51,22 @@ const open = defineModel({ type: Boolean, default: false });
 </template>
 
 <style scoped>
-.vibe64-colleague__watch-dialog { border-radius: var(--v64-shape-xl, 28px); background: var(--v64-surface-container-low, rgb(var(--v-theme-surface))); }
+.vibe64-colleague__watch-dialog { border-radius: var(--v64-shape-xl, 28px); background: rgb(var(--v-theme-surface-container-low)); }
 .vibe64-colleague__watch-title { gap: 12px; padding: 20px 16px 8px 24px; }
-.vibe64-colleague__watch-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14)); color: var(--v64-on-primary-container, rgb(var(--v-theme-primary))); }
+.vibe64-colleague__watch-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: rgb(var(--v-theme-primary-container)); color: rgb(var(--v-theme-on-primary-container)); }
 .vibe64-colleague__watch-details { padding: 8px 24px 24px; min-height: 0; overflow: auto; overflow-wrap: anywhere; font: var(--v64-type-body-md, inherit); }
 .vibe64-colleague__watch-details p { margin-block: 0 8px; }
-.vibe64-colleague__watch-card { padding: 16px; border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), .12)); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface)); }
+.vibe64-colleague__watch-card { padding: 16px; border: 1px solid rgb(var(--v-theme-outline-variant)); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface)); }
 .vibe64-colleague__watch-card > .text-title-medium { margin-bottom: 12px; }
 .vibe64-colleague__watch-details section + section { margin-top: 12px; }
 .vibe64-colleague__watch-details ul { list-style: none; padding: 0; margin: 0; }
 .vibe64-colleague__watch-details li { padding-block: 12px; }
-.vibe64-colleague__watch-details li + li { border-top: 1px solid var(--v64-outline-variant); }
-.vibe64-colleague__watch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--v64-shape-sm, 8px); background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), .08)); font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif); text-transform: capitalize; }
-.vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v64-on-surface-variant, currentColor); }
-.vibe64-colleague__watch-chip[data-status="active"] { background: var(--v64-success-container); }
-.vibe64-colleague__watch-chip[data-status="active"]::before { background: var(--v64-success); }
+.vibe64-colleague__watch-details li + li { border-top: 1px solid rgb(var(--v-theme-outline-variant)); }
+.vibe64-colleague__watch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--v64-shape-sm, 8px); background: rgb(var(--v-theme-surface-container-high)); font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif); text-transform: capitalize; }
+.vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--v-theme-on-surface-variant)); }
+.vibe64-colleague__watch-chip[data-status="active"] { background: rgb(var(--v-theme-success-container)); }
+.vibe64-colleague__watch-chip[data-status="active"]::before { background: rgb(var(--v-theme-success)); }
 .vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning, #f5c518); }
-.vibe64-colleague__watch-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
-.vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: var(--v64-on-surface-variant); }
+.vibe64-colleague__watch-meta { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-label-md, inherit); }
+.vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

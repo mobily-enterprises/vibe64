@@ -159,7 +159,7 @@ const {
 .vibe64-launch-controls__preview-nav {
   align-items: center;
   background: rgba(var(--v-theme-on-surface), 0.045);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 8px;
   display: flex;
   flex: 1 1 19rem;

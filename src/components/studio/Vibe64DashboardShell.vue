@@ -76,7 +76,7 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
 
 <style scoped>
 .vibe64-dashboard-nav-group-label {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-md);
   letter-spacing: 0.06em;
   padding: var(--v64-space-1) var(--v64-space-4) var(--v64-space-1);

@@ -82,7 +82,7 @@ const truncated = computed(() => props.payload?.truncated === true);
 }
 
 .vibe64-repository-diff__rendered :deep(.d2h-file-wrapper) {
-  border-color: var(--v64-outline-variant);
+  border-color: rgb(var(--v-theme-outline-variant));
   margin: 0;
 }
 

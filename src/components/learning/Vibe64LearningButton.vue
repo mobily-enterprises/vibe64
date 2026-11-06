@@ -41,10 +41,10 @@ const title = computed(() => learn.value ? "Back to Develop (your projects)" : "
    pop. Same footprint as the neighbouring header icon buttons. */
 .vibe64-learning-button {
   --v64-plate-ink: #1d1600;
-  background: var(--v64-surface-container-low) !important;
-  border: 1.5px solid var(--v64-outline) !important;
+  background: rgb(var(--v-theme-surface-container-low)) !important;
+  border: 1.5px solid rgb(var(--v-theme-outline)) !important;
   border-radius: var(--v64-shape-sm);
-  color: var(--v64-on-surface-variant) !important;
+  color: rgb(var(--v-theme-on-surface-variant)) !important;
   flex: 0 0 auto;
   font-family: system-ui, sans-serif;
   font-size: 1.05rem;
@@ -82,7 +82,7 @@ const title = computed(() => learn.value ? "Back to Develop (your projects)" : "
 }
 
 .vibe64-learning-button:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: 3px;
 }
 

@@ -188,8 +188,8 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
   align-items: center;
   background:
     linear-gradient(135deg, color-mix(in srgb, rgb(var(--v-theme-primary)) 10%, transparent), transparent 70%),
-    var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+    rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   display: flex;
   gap: 14px;
@@ -199,14 +199,14 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 .publish-keys__vault.is-open {
   background:
     linear-gradient(135deg, color-mix(in srgb, rgb(var(--v-theme-success)) 12%, transparent), transparent 70%),
-    var(--v64-surface-container-low);
+    rgb(var(--v-theme-surface-container-low));
 }
 
 .publish-keys__vault-icon {
   align-items: center;
-  background: var(--v64-primary-container);
+  background: rgb(var(--v-theme-primary-container));
   border-radius: 50%;
-  color: var(--v64-primary);
+  color: rgb(var(--v-theme-primary));
   display: inline-flex;
   flex: 0 0 auto;
   height: 48px;
@@ -215,7 +215,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 }
 
 .is-open .publish-keys__vault-icon {
-  background: var(--v64-success-container);
+  background: rgb(var(--v-theme-success-container));
   color: rgb(var(--v-theme-success));
 }
 
@@ -234,7 +234,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 .publish-keys__note,
 .publish-keys__list span,
 .publish-keys__kit span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
 }
@@ -261,7 +261,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 }
 
 .publish-keys__list {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   list-style: none;
   margin: 0;
@@ -283,7 +283,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 }
 
 .publish-keys__list li + li {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .publish-keys__list strong,
@@ -298,7 +298,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 }
 
 .publish-keys__add {
-  background: var(--v64-surface-container-low);
+  background: rgb(var(--v-theme-surface-container-low));
   border-radius: var(--v64-shape-lg, 16px);
   padding: 16px;
 }
@@ -310,13 +310,13 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 }
 
 .publish-keys__kit {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
 }
 
 .publish-keys__kit.is-stale {
   background: color-mix(in srgb, rgb(var(--v-theme-warning)) 8%, transparent);
-  border-color: color-mix(in srgb, rgb(var(--v-theme-warning)) 40%, var(--v64-outline-variant));
+  border-color: color-mix(in srgb, rgb(var(--v-theme-warning)) 40%, rgb(var(--v-theme-outline-variant)));
 }
 
 @media (max-width: 600px) {

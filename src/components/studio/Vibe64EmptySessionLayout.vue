@@ -112,7 +112,7 @@ defineProps({
 .studio-ai-sessions__empty-main,
 .studio-ai-sessions__empty-project-panel {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 14px;
   box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.06);
   min-height: 0;

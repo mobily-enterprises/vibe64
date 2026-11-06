@@ -303,22 +303,22 @@ function openFromStrip() {
   max-width: 100%;
   padding-inline: var(--v64-space-1);
   border-radius: var(--v64-shape-full);
-  background: var(--v64-surface-container-high);
-  color: var(--v64-on-surface);
+  background: rgb(var(--v-theme-surface-container-high));
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .usage-recording-indicator__pill--recording,
 .usage-recording-indicator__pill--failed {
-  background: var(--v64-error-container);
+  background: rgb(var(--v-theme-error-container));
 }
 
 .usage-recording-indicator__pill--stopped {
-  background: var(--v64-secondary-container);
-  color: var(--v64-on-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
+  color: rgb(var(--v-theme-on-secondary-container));
 }
 
 .usage-recording-indicator__pill--failed .v-icon {
-  color: var(--v64-error);
+  color: rgb(var(--v-theme-error));
 }
 
 .usage-recording-indicator__body {
@@ -341,7 +341,7 @@ function openFromStrip() {
 }
 
 .usage-recording-indicator__body:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 
@@ -357,7 +357,7 @@ function openFromStrip() {
   width: 10px;
   height: 10px;
   border-radius: var(--v64-shape-full);
-  background: var(--v64-error);
+  background: rgb(var(--v-theme-error));
   animation: usage-recording-pulse 1.6s var(--v64-ease-standard) infinite;
 }
 
@@ -366,7 +366,7 @@ function openFromStrip() {
 }
 
 .usage-recording-indicator__menu-status {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 /* The phone strip: a full-width tonal band with 48 px targets; its actions

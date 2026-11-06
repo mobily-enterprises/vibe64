@@ -396,7 +396,7 @@ watch(() => props.starting, (starting) => {
 
 <style scoped>
 .vibe64-terminal-surface {
-  border: 1px solid var(--v64-outline);
+  border: 1px solid rgb(var(--v-theme-outline));
   color: rgb(var(--v-theme-on-surface));
   display: flex;
   flex-direction: column;
@@ -470,7 +470,7 @@ watch(() => props.starting, (starting) => {
 .vibe64-terminal-surface__summary {
   align-items: baseline;
   background: rgba(var(--v-theme-on-surface), 0.045);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 0.45rem;
   display: flex;
   gap: 0.4rem;

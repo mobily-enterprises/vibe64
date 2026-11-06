@@ -126,7 +126,7 @@ function statusColor(item) {
 
 <style scoped>
 .vibe64-upload-queue {
-  background: var(--v64-surface-container-high);
+  background: rgb(var(--v-theme-surface-container-high));
   border-radius: var(--v64-shape-md);
   box-shadow: var(--v64-elevation-2);
   color: rgb(var(--v-theme-on-surface));
@@ -169,13 +169,13 @@ function statusColor(item) {
 
 .vibe64-upload-queue__heading p,
 .vibe64-upload-queue__status {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
 
 .vibe64-upload-queue__items {
-  border-block-start: 1px solid var(--v64-outline-variant);
+  border-block-start: 1px solid rgb(var(--v-theme-outline-variant));
   list-style: none;
   margin: 0;
   min-block-size: 0;

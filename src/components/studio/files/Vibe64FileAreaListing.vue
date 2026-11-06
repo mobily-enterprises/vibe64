@@ -112,7 +112,7 @@ function entrySubtitle(entry) {
 
 .vibe64-file-area__open:focus-visible::after {
   background-color: rgba(var(--v-theme-on-surface), var(--v64-state-focus));
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
 
@@ -122,7 +122,7 @@ function entrySubtitle(entry) {
 }
 
 .vibe64-file-area__open-icon {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   flex: none;
 }
 
@@ -144,7 +144,7 @@ function entrySubtitle(entry) {
 }
 
 .vibe64-file-area__open-detail {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 </style>

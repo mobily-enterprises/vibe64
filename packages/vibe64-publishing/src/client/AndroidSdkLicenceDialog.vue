@@ -91,7 +91,7 @@ async function install() {
 
 .publish-licence__lead,
 .publish-licence__packages {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
@@ -112,8 +112,8 @@ async function install() {
 }
 
 .publish-licence__text {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md, 12px);
   font-family: inherit;
   font-size: 0.8125rem;

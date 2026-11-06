@@ -68,11 +68,11 @@ const emit = defineEmits(["close", "use-sql"]);
 .database-workspace__copilot-unavailable { display: grid; align-content: center; justify-items: center; gap: 0.4rem; padding: 2rem; color: rgba(var(--v-theme-on-surface), 0.62); text-align: center; }
 .database-workspace__copilot-unavailable strong { color: rgb(var(--v-theme-on-surface)); }
 .database-workspace__copilot-unavailable span { max-width: 30rem; font-size: 0.74rem; }
-.database-workspace__copilot > header { display: flex; gap: 0.55rem; align-items: center; min-height: 3.7rem; padding: 0.65rem; border-bottom: 1px solid var(--v64-outline-variant); }
+.database-workspace__copilot > header { display: flex; gap: 0.55rem; align-items: center; min-height: 3.7rem; padding: 0.65rem; border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); }
 .database-workspace__copilot > header > div { min-width: 0; flex: 1; }
 .database-workspace__copilot > header strong, .database-workspace__copilot > header small { display: block; }
 .database-workspace__copilot > header small { color: rgba(var(--v-theme-on-surface), 0.54); font-size: 0.63rem; }
 .database-workspace__copilot-body { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
-.database-workspace__assistant-note { margin: 0.65rem; padding: 0.6rem; border-radius: 10px; background: var(--v64-surface-container-high); color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.67rem; }
+.database-workspace__assistant-note { margin: 0.65rem; padding: 0.6rem; border-radius: 10px; background: rgb(var(--v-theme-surface-container-high)); color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.67rem; }
 .database-workspace__assistant-skeleton { margin: 0.5rem 0; }
 </style>

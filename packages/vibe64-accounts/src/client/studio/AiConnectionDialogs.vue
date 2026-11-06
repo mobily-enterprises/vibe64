@@ -573,7 +573,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-provider-picker__list {
-  border-color: var(--v64-outline-variant);
+  border-color: rgb(var(--v-theme-outline-variant));
   overflow: hidden;
 }
 
@@ -582,7 +582,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-provider-picker__item + .vibe64-provider-picker__item {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .vibe64-provider-picker__empty {

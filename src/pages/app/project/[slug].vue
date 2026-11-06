@@ -244,13 +244,13 @@ const {
   --studio-home-chat-column-width: 32rem;
   --studio-home-project-gap: 0.75rem;
   /* Shared studio control roles, mapped onto the Material 3 tokens. */
-  --studio-control-bg: var(--v64-surface);
-  --studio-control-rest-bg: var(--v64-surface-container-high);
-  --studio-control-active-bg: var(--v64-secondary-container);
-  --studio-control-border: var(--v64-outline-variant);
-  --studio-control-border-strong: var(--v64-outline);
-  --studio-control-text: var(--v64-on-surface);
-  --studio-control-muted-text: var(--v64-on-surface-variant);
+  --studio-control-bg: rgb(var(--v-theme-surface));
+  --studio-control-rest-bg: rgb(var(--v-theme-surface-container-high));
+  --studio-control-active-bg: rgb(var(--v-theme-secondary-container));
+  --studio-control-border: rgb(var(--v-theme-outline-variant));
+  --studio-control-border-strong: rgb(var(--v-theme-outline));
+  --studio-control-text: rgb(var(--v-theme-on-surface));
+  --studio-control-muted-text: rgb(var(--v-theme-on-surface-variant));
   --studio-control-radius: var(--v64-shape-md);
 }
 
@@ -339,7 +339,7 @@ const {
 
 .studio-home-shell-project-selector {
   border-radius: var(--v64-shape-full);
-  color: var(--v64-on-surface) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
   flex: 0 1 auto;
   font: var(--v64-type-title-md);
   font-size: 1.0625rem;
@@ -352,7 +352,7 @@ const {
 }
 
 .studio-home-shell-project-selector :deep(.v-icon) {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   margin-inline-start: var(--v64-space-1);
 }
 

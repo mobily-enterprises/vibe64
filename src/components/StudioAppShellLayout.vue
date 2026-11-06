@@ -235,7 +235,7 @@ function endPaneSwipe(event) {
 
 /* M3 small top app bar: surface at rest with a hairline outline-variant divider. */
 .shell-layout__app-bar {
-  border-bottom-color: var(--v64-outline-variant) !important;
+  border-bottom-color: rgb(var(--v-theme-outline-variant)) !important;
 }
 
 @media (max-width: 600px) {

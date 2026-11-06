@@ -249,7 +249,7 @@ watch([loading, error], () => {
 
 <style scoped>
 .studio-renewal-assistant {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 0.75rem;
   display: grid;
   gap: 0.75rem;

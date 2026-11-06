@@ -369,7 +369,7 @@ onBeforeUnmount(() => {
 .vibe64-launch-controls--embedded {
   align-items: stretch;
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 14px;
   display: block;
   height: 100%;
@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, rgba(var(--v-theme-primary), 0.035), rgba(var(--v-theme-surface), 0.86)),
     rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 12px;
   display: grid;
   height: 100%;

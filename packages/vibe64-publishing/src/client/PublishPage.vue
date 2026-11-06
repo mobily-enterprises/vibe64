@@ -400,19 +400,19 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-banner span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: block;
   font: var(--v64-type-body-md);
 }
 
 .publish-banner--ask {
-  background: var(--v64-primary-container);
-  color: var(--v64-on-primary-container);
+  background: rgb(var(--v-theme-primary-container));
+  color: rgb(var(--v-theme-on-primary-container));
 }
 
 .publish-banner--running {
-  background: var(--v64-surface-container);
-  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-primary)) 30%, var(--v64-outline-variant));
+  background: rgb(var(--v-theme-surface-container));
+  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-primary)) 30%, rgb(var(--v-theme-outline-variant)));
   grid-template-columns: 22px minmax(0, 1fr);
 }
 
@@ -426,8 +426,8 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-saved {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   display: grid;
   gap: 12px 32px;
@@ -436,7 +436,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-saved > .publish-saved__packages {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
   grid-column: 1 / -1;
   padding-top: 12px;
 }
@@ -448,7 +448,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-saved__label {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-md);
   letter-spacing: 0.02em;
 }
@@ -472,22 +472,22 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-chip {
-  background: var(--v64-surface);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 999px;
   font: var(--v64-type-label-lg);
   padding: 2px 10px;
 }
 
 .publish-chip em {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-style: normal;
   font-variant-numeric: tabular-nums;
   margin-left: 4px;
 }
 
 .publish-saved__muted {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
@@ -504,9 +504,9 @@ function openInstall({ releaseId, targetId }) {
 .publish-targets__add {
   align-content: center;
   background: transparent;
-  border: 1.5px dashed var(--v64-outline-variant);
+  border: 1.5px dashed rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   cursor: pointer;
   display: grid;
   font: inherit;
@@ -527,7 +527,7 @@ function openInstall({ releaseId, targetId }) {
 
 .publish-targets__add-icon {
   align-items: center;
-  background: var(--v64-surface-container-high);
+  background: rgb(var(--v-theme-surface-container-high));
   border-radius: 50%;
   display: inline-flex;
   height: 40px;
@@ -536,7 +536,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-targets__add strong {
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   font: var(--v64-type-title-md);
 }
 
@@ -547,8 +547,8 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-saved__output {
-  background: var(--v64-surface);
-  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-error)) 30%, var(--v64-outline-variant));
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-error)) 30%, rgb(var(--v-theme-outline-variant)));
   border-radius: var(--v64-shape-sm, 8px);
   font-size: 0.75rem;
   grid-column: 1 / -1;
@@ -563,8 +563,8 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-empty {
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   display: grid;
   gap: 8px;
@@ -579,7 +579,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-empty p {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
   max-width: 38rem;
@@ -598,7 +598,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-start__lead {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }
@@ -612,8 +612,8 @@ function openInstall({ releaseId, targetId }) {
 .publish-start__tile {
   --accent: rgb(var(--v-theme-primary));
   align-content: start;
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   color: inherit;
   cursor: pointer;
@@ -653,7 +653,7 @@ function openInstall({ releaseId, targetId }) {
 
 .publish-start__icon {
   align-items: center;
-  background: color-mix(in srgb, var(--accent) 14%, var(--v64-surface));
+  background: color-mix(in srgb, var(--accent) 14%, rgb(var(--v-theme-surface)));
   border-radius: var(--v64-shape-md, 12px);
   color: var(--accent);
   display: inline-flex;
@@ -668,7 +668,7 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-start__tile > span:not(.publish-start__icon) {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 

@@ -130,8 +130,8 @@ const failure = computed(() => props.activity?.failure || null);
 <style scoped>
 .publish-target {
   --accent: rgb(var(--v-theme-primary));
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   display: flex;
   flex-direction: column;
@@ -154,7 +154,7 @@ const failure = computed(() => props.activity?.failure || null);
 }
 
 .publish-target:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--v64-outline-variant));
+  border-color: color-mix(in srgb, var(--accent) 40%, rgb(var(--v-theme-outline-variant)));
   box-shadow: var(--v64-elevation-1);
 }
 
@@ -171,7 +171,7 @@ const failure = computed(() => props.activity?.failure || null);
 
 .publish-target__icon {
   align-items: center;
-  background: color-mix(in srgb, var(--accent) 14%, var(--v64-surface));
+  background: color-mix(in srgb, var(--accent) 14%, rgb(var(--v-theme-surface)));
   border-radius: var(--v64-shape-md, 12px);
   color: var(--accent);
   display: inline-flex;
@@ -194,7 +194,7 @@ const failure = computed(() => props.activity?.failure || null);
 
 .publish-target__title p,
 .publish-target__version span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
   overflow: hidden;
@@ -214,7 +214,7 @@ const failure = computed(() => props.activity?.failure || null);
 }
 
 .publish-target__version strong.publish-target__none {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-title-md);
 }
 
@@ -261,7 +261,7 @@ const failure = computed(() => props.activity?.failure || null);
 
 .publish-target__failure {
   align-items: flex-start;
-  background: color-mix(in srgb, rgb(var(--v-theme-error)) 9%, var(--v64-surface));
+  background: color-mix(in srgb, rgb(var(--v-theme-error)) 9%, rgb(var(--v-theme-surface)));
   border: 1px solid color-mix(in srgb, rgb(var(--v-theme-error)) 28%, transparent);
   border-radius: var(--v64-shape-md, 12px);
   color: inherit;
@@ -299,7 +299,7 @@ const failure = computed(() => props.activity?.failure || null);
 }
 
 .publish-target__verified span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -341,7 +341,7 @@ const failure = computed(() => props.activity?.failure || null);
 }
 
 .publish-target__facts :deep(dt) {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-md);
 }
 

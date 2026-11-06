@@ -125,7 +125,7 @@ const restore = () => act(async () => {
 }
 
 .publish-kit__lead {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0 0 8px;
 }

@@ -147,21 +147,21 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
 
 <style scoped>
 .ai-row {
-  --ai-row-on-success: color-mix(in srgb, var(--v64-success) 55%, #000);
+  --ai-row-on-success: color-mix(in srgb, rgb(var(--v-theme-success)) 55%, #000);
   --ai-row-type-title-sm: 500 0.9375rem/1.375rem var(--v64-font-family);
   --ai-row-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
-  background: var(--v64-surface);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: grid;
   gap: var(--v64-space-3);
   min-width: 0;
   padding: var(--v64-space-4);
 }
-.v-theme--dark .ai-row { --ai-row-on-success: color-mix(in srgb, var(--v64-success) 45%, #fff); }
+.v-theme--dark .ai-row { --ai-row-on-success: color-mix(in srgb, rgb(var(--v-theme-success)) 45%, #fff); }
 .ai-row--attention {
-  background: color-mix(in srgb, rgb(var(--v-theme-warning)) 6%, var(--v64-surface));
-  border-color: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, var(--v64-outline-variant));
+  background: color-mix(in srgb, rgb(var(--v-theme-warning)) 6%, rgb(var(--v-theme-surface)));
+  border-color: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, rgb(var(--v-theme-outline-variant)));
 }
 .ai-row :deep(.v-btn:not(.v-btn--icon)) { border-radius: var(--v64-shape-md); letter-spacing: 0; text-transform: none; }
 .ai-row__main { align-items: flex-start; display: grid; gap: var(--v64-space-3); grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -173,19 +173,19 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
   justify-content: center;
   width: 36px;
 }
-.ai-row__status--ok { background: var(--v64-success-container); color: var(--ai-row-on-success); }
-.ai-row__status--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, var(--v64-surface)); color: rgb(var(--v-theme-warning)); }
+.ai-row__status--ok { background: rgb(var(--v-theme-success-container)); color: var(--ai-row-on-success); }
+.ai-row__status--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, rgb(var(--v-theme-surface))); color: rgb(var(--v-theme-warning)); }
 .ai-row__identity { display: grid; gap: 2px; min-width: 0; }
 .ai-row__title { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0 var(--v64-space-2); }
 .ai-row__title strong { font: var(--v64-type-title-md); }
-.ai-row__via { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
+.ai-row__via { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); }
 .ai-row__detail { font: var(--v64-type-body-md); overflow-wrap: anywhere; }
-.ai-row__meta { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); overflow-wrap: anywhere; }
-.ai-row__meta--warn { color: color-mix(in srgb, rgb(var(--v-theme-warning)) 75%, var(--v64-on-surface)); font-weight: 500; }
+.ai-row__meta { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); overflow-wrap: anywhere; }
+.ai-row__meta--warn { color: color-mix(in srgb, rgb(var(--v-theme-warning)) 75%, rgb(var(--v-theme-on-surface))); font-weight: 500; }
 .ai-row__key { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
 .ai-row__chips { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-1); justify-content: flex-end; }
 .ai-row__chip {
-  background: var(--v64-success-container);
+  background: rgb(var(--v-theme-success-container));
   border-radius: var(--v64-shape-full);
   color: var(--ai-row-on-success);
   font: var(--v64-type-label-md);
@@ -195,7 +195,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
 
 /* A connection's own setting, inside its tile. */
 .ai-row__panel {
-  background: var(--v64-surface-container-low);
+  background: rgb(var(--v-theme-surface-container-low));
   border-radius: var(--v64-shape-md);
   display: grid;
   gap: var(--v64-space-3);
@@ -203,12 +203,12 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
   padding: var(--v64-space-3) var(--v64-space-4);
 }
 .ai-row__panel--switch { align-items: center; grid-template-columns: minmax(0, 1fr) auto; }
-.ai-row__panel--paid { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 10%, var(--v64-surface)); }
+.ai-row__panel--paid { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 10%, rgb(var(--v-theme-surface))); }
 .ai-row__panel-copy { align-items: flex-start; display: flex; gap: var(--v64-space-3); min-width: 0; }
 .ai-row__panel-copy > span { display: grid; gap: 2px; min-width: 0; }
 .ai-row__panel-copy strong { font: var(--ai-row-type-title-sm); }
-.ai-row__panel-copy small, .ai-row__progress small { color: var(--v64-on-surface-variant); font: var(--ai-row-type-body-sm); }
-.ai-row__panel-icon { color: var(--v64-primary); flex: none; margin-top: 1px; }
+.ai-row__panel-copy small, .ai-row__progress small { color: rgb(var(--v-theme-on-surface-variant)); font: var(--ai-row-type-body-sm); }
+.ai-row__panel-icon { color: rgb(var(--v-theme-primary)); flex: none; margin-top: 1px; }
 .ai-row__panel--paid .ai-row__panel-icon { color: rgb(var(--v-theme-warning)); }
 .ai-row__panel .v-switch { flex: none; }
 .ai-row__progress { display: grid; gap: var(--v64-space-1); }

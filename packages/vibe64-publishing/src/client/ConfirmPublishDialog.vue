@@ -123,8 +123,8 @@ async function publish() {
 .publish-confirm__hero {
   background:
     radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, rgb(var(--v-theme-primary)) 16%, transparent), transparent 70%),
-    var(--v64-surface-container-low);
-  border-bottom: 1px solid var(--v64-outline-variant);
+    rgb(var(--v-theme-surface-container-low));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
   display: grid;
   justify-items: center;
   padding: 28px 24px 20px;
@@ -150,7 +150,7 @@ async function publish() {
 }
 
 .publish-confirm__hero p {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
   max-width: 26rem;
@@ -162,7 +162,7 @@ async function publish() {
 
 .publish-confirm__meta {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-wrap: wrap;
   font: var(--v64-type-label-lg);
@@ -182,7 +182,7 @@ async function publish() {
 }
 
 .publish-confirm__targets {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   list-style: none;
   margin: 0;
@@ -200,7 +200,7 @@ async function publish() {
 }
 
 .publish-confirm__targets li + li {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .publish-confirm__targets li.is-success { --accent: rgb(var(--v-theme-success)); }
@@ -221,7 +221,7 @@ async function publish() {
 }
 
 .publish-confirm__where span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
 }

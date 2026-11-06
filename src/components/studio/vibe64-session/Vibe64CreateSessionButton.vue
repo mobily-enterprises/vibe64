@@ -116,7 +116,7 @@ function handleCreated(response) {
   border: 1px solid transparent;
   border-radius: 999px;
   box-shadow: none !important;
-  color: var(--v64-primary) !important;
+  color: rgb(var(--v-theme-primary)) !important;
   height: 3rem;
   min-height: 3rem;
   min-width: 3rem;
@@ -135,7 +135,7 @@ function handleCreated(response) {
 }
 
 .studio-ai-sessions__create-button--attention:not(.v-btn--disabled) {
-  border-color: color-mix(in srgb, var(--v64-primary) 36%, transparent);
+  border-color: color-mix(in srgb, rgb(var(--v-theme-primary)) 36%, transparent);
 }
 
 .studio-ai-sessions__create-button--attention:not(.v-btn--disabled)::after {

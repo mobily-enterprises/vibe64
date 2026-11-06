@@ -400,7 +400,7 @@ function barAction(icon, label) {
 }
 
 .vibe64-file-area__description {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
   padding: 0 var(--v64-space-4) var(--v64-space-2);
@@ -414,13 +414,13 @@ function barAction(icon, label) {
 /* Secondary text at full on-surface-variant contrast. */
 .vibe64-file-area__dialog :deep(.v-card-subtitle),
 .vibe64-file-area__new-file :deep(.v-card-subtitle) {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   opacity: 1;
 }
 
 .vibe64-file-area__file-bar {
   align-items: center;
-  border-block-end: 1px solid var(--v64-outline-variant);
+  border-block-end: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
   flex: none;
   flex-wrap: wrap;
@@ -457,7 +457,7 @@ function barAction(icon, label) {
 }
 
 .vibe64-file-area__file-folder {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
@@ -490,7 +490,7 @@ function barAction(icon, label) {
 
 .vibe64-file-area__empty {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-direction: column;
   font: var(--v64-type-body-md);

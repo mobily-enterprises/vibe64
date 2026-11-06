@@ -429,15 +429,15 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
   --aio-crown-strong: #8a6a00;
   --aio-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
   --aio-stage-top: clamp(24px, 6vh, 72px);
-  --v64-on-success-container: color-mix(in srgb, var(--v64-success) 55%, #000);
+  --v64-on-success-container: color-mix(in srgb, rgb(var(--v-theme-success)) 55%, #000);
   --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, #000);
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   font-family: var(--v64-font-family);
 }
 .v-theme--dark .ai-setup {
   --aio-crown-strong: #f5c518;
   --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 55%, #fff);
-  --v64-on-success-container: color-mix(in srgb, var(--v64-success) 45%, #fff);
+  --v64-on-success-container: color-mix(in srgb, rgb(var(--v-theme-success)) 45%, #fff);
 }
 /* One button shape across the flow, embedded AI Accounts parts included. */
 .ai-setup :deep(.v-btn:not(.v-btn--icon)) { border-radius: var(--v64-shape-md); letter-spacing: 0; text-transform: none; }
@@ -448,8 +448,8 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 }
 /* Disabled primaries use the neutral disabled tokens, not a faded primary. */
 .ai-setup :deep(.v-btn--disabled.v-btn--variant-flat) {
-  background: color-mix(in srgb, var(--v64-on-surface) 12%, transparent) !important;
-  color: color-mix(in srgb, var(--v64-on-surface) 38%, transparent) !important;
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 12%, transparent) !important;
+  color: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 38%, transparent) !important;
   opacity: 1;
 }
 .ai-setup :deep(.v-btn--disabled .v-btn__overlay) { opacity: 0; }
@@ -472,7 +472,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 .ai-setup--inline { letter-spacing: normal; }
 .ai-setup--inline > section, .ai-setup--inline > .ai-onboarding__choose { padding-top: 0; }
 .ai-onboarding__eyebrow {
-  color: var(--v64-primary);
+  color: rgb(var(--v-theme-primary));
   font: var(--v64-type-label-lg);
   letter-spacing: 0.12em;
   margin: 0 0 var(--v64-space-3);
@@ -485,13 +485,13 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
   text-wrap: balance;
 }
 .ai-onboarding__lede {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-lg);
   margin: 0 0 var(--v64-space-4);
   max-width: 60ch;
   text-wrap: pretty;
 }
-.ai-onboarding__footnote { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: var(--v64-space-6) 0 0; }
+.ai-onboarding__footnote { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: var(--v64-space-6) 0 0; }
 .ai-onboarding__intro { margin-bottom: var(--v64-space-6); }
 /* Choose: a compact header, so the cards start near the top. */
 .ai-onboarding__choose .ai-onboarding__intro { margin-bottom: var(--v64-space-5); }
@@ -503,8 +503,8 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 /* Currently using (redo) */
 .aio-current {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: flex;
   flex-wrap: wrap;
@@ -514,14 +514,14 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 }
 .aio-current__marks { display: flex; gap: var(--v64-space-2); }
 .aio-current__text { display: grid; flex: 1 1 12rem; }
-.aio-current__label { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md); letter-spacing: 0.06em; text-transform: uppercase; }
+.aio-current__label { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-label-md); letter-spacing: 0.06em; text-transform: uppercase; }
 .aio-current__value { font: var(--v64-type-title-md); }
-.aio-current__hint { align-items: center; color: var(--v64-primary); display: inline-flex; font: var(--v64-type-label-lg); gap: var(--v64-space-1); }
+.aio-current__hint { align-items: center; color: rgb(var(--v-theme-primary)); display: inline-flex; font: var(--v64-type-label-lg); gap: var(--v64-space-1); }
 
 /* Provider cards: one column, Claude first. */
 .ai-onboarding__cards { display: grid; gap: var(--v64-space-4); }
 .aio-ready-here { margin-top: 0; }
-.aio-ready-here__icon { color: var(--v64-success); }
+.aio-ready-here__icon { color: rgb(var(--v-theme-success)); }
 
 /* Connect and routing: one centred column. */
 .ai-setup > .ai-onboarding__connect,
@@ -529,16 +529,16 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 .aio-chosen { align-items: center; margin-top: var(--v64-space-6); padding-inline-start: var(--v64-space-5); animation: aio-lift var(--v64-duration-long) var(--v64-ease-emphasized-decelerate) both; display: flex; gap: var(--v64-space-4); margin-bottom: var(--v64-space-6); }
 .aio-chosen__text { flex: 1; min-width: 0; }
 .aio-chosen__title { font: var(--v64-type-headline-md); letter-spacing: -0.015em; margin: 0; outline: none; }
-.aio-chosen__plan { color: var(--v64-on-surface-variant); font: var(--v64-type-body-lg); margin: 2px 0 0; }
+.aio-chosen__plan { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-lg); margin: 2px 0 0; }
 .ai-onboarding__panel {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   margin-top: var(--v64-space-4);
   min-width: 0;
   padding: var(--v64-space-5);
 }
-.aio-progress { align-items: center; color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-lg); gap: var(--v64-space-3); }
+.aio-progress { align-items: center; color: rgb(var(--v-theme-on-surface-variant)); display: flex; font: var(--v64-type-body-lg); gap: var(--v64-space-3); }
 .aio-details-toggle { margin-top: var(--v64-space-4); }
 .aio-details-toggle :deep(.v-btn__append) { transition: transform var(--v64-duration-short) var(--v64-ease-standard); }
 .aio-details-toggle.is-open :deep(.v-btn__append) { transform: rotate(180deg); }
@@ -556,13 +556,13 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 .ai-onboarding__success > .v-btn { margin-top: var(--v64-space-5); }
 .aio-success-actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-3); justify-content: center; margin-top: var(--v64-space-5); width: 100%; }
 .aio-recap { display: flex; font: var(--v64-type-body-lg); gap: var(--v64-space-2); justify-content: center; margin: var(--v64-space-2) 0 0; }
-.aio-recap dt { color: var(--v64-on-surface-variant); }
+.aio-recap dt { color: rgb(var(--v-theme-on-surface-variant)); }
 .aio-recap dt::after { content: ":"; }
 .aio-recap dd { font-weight: 500; margin: 0; }
-.aio-recap dd span { color: var(--v64-on-surface-variant); font-weight: 400; }
+.aio-recap dd span { color: rgb(var(--v-theme-on-surface-variant)); font-weight: 400; }
 .ai-onboarding__colleague { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-3); justify-content: center; margin-bottom: var(--v64-space-3); }
 .ai-onboarding__colleague-error { margin: 0 auto var(--v64-space-3); max-width: 36rem; text-align: left; }
-.ai-onboarding__note { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 0 0 var(--v64-space-2); }
+.ai-onboarding__note { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 0 0 var(--v64-space-2); }
 
 /* Screen motion */
 .aio-forward-enter-active, .aio-back-enter-active {
@@ -593,7 +593,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 }
 
 .ai-setup :deep(.v-btn:focus-visible) {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 

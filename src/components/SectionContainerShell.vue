@@ -169,8 +169,8 @@ onBeforeUnmount(() => {
 }
 
 .section-container-shell__panel {
-  background: var(--v64-surface-container-lowest);
-  border-color: var(--v64-outline-variant) !important;
+  background: rgb(var(--v-theme-surface-container-lowest));
+  border-color: rgb(var(--v-theme-outline-variant)) !important;
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
 
 /* M3 navigation drawer: a tonal container holding pill-shaped destinations. */
 .section-container-shell__nav {
-  background: var(--v64-surface-container-low);
+  background: rgb(var(--v-theme-surface-container-low));
   border-radius: var(--v64-shape-lg);
   min-height: 0;
   min-width: 0;
@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
 
 .section-container-shell__nav :deep(.v-list-item) {
   border-radius: var(--v64-shape-full);
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   margin: 0;
   min-height: 40px;
   padding-inline: var(--v64-space-3) var(--v64-space-4);
@@ -219,27 +219,27 @@ onBeforeUnmount(() => {
 }
 
 .section-container-shell__nav :deep(.v-list-item:not(.v-list-item--active):not(.v-list-item--disabled):hover) {
-  background: color-mix(in srgb, var(--v64-on-surface) calc(var(--v64-state-hover) * 100%), transparent);
-  color: var(--v64-on-surface);
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) calc(var(--v64-state-hover) * 100%), transparent);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .section-container-shell__nav :deep(.v-list-item:focus-visible) {
-  outline: 2px solid var(--v64-primary);
+  outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
 
 .section-container-shell__nav :deep(.v-list-item:not(.v-list-item--disabled):active) {
-  background: color-mix(in srgb, var(--v64-on-surface) calc(var(--v64-state-pressed) * 100% + 4%), transparent);
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) calc(var(--v64-state-pressed) * 100% + 4%), transparent);
 }
 
 .section-container-shell__nav :deep(.v-list-item.v-list-item--active) {
-  background: var(--v64-primary-container);
-  color: var(--v64-on-primary-container);
+  background: rgb(var(--v-theme-primary-container));
+  color: rgb(var(--v-theme-on-primary-container));
   font-weight: 650;
 }
 
 .section-container-shell__nav :deep(.v-list-item.v-list-item--active .v-list-item__prepend > .v-icon) {
-  color: var(--v64-primary);
+  color: rgb(var(--v-theme-primary));
   opacity: 1;
 }
 
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
   }
 
   .section-container-shell__mobile-select :deep(.v-field) {
-    background: var(--v64-surface-container-low);
+    background: rgb(var(--v-theme-surface-container-low));
     min-height: 48px;
   }
 

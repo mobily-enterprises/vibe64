@@ -157,11 +157,11 @@ const path = computed(() => {
 
 <style scoped>
 .training-course-page__spinner { margin-right: var(--v64-space-2, 8px); }
-.training-course-page__earlier { margin: 2px 0 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant); }
+.training-course-page__earlier { margin: 2px 0 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .training-course-page {
   --tcp-node: 40px;
   --tcp-done: rgb(var(--v-theme-success));
-  --tcp-done-container: var(--v64-success-container, rgba(var(--v-theme-success), 0.14));
+  --tcp-done-container: rgb(var(--v-theme-success-container));
   --tcp-progress: var(--v64-learning, #f5c518);
   --tcp-progress-container: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
   display: flex;
@@ -181,10 +181,10 @@ const path = computed(() => {
 .training-course-page__hero {
   position: relative;
   border-radius: var(--v64-shape-xl, 28px);
-  background: var(--v64-surface-container-low, rgb(var(--v-theme-surface)));
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
-  color: var(--v64-on-surface, rgb(var(--v-theme-on-surface)));
+  color: rgb(var(--v-theme-on-surface));
   overflow: hidden;
   animation: tcp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out) both;
 }
@@ -201,7 +201,7 @@ const path = computed(() => {
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--v64-on-surface-variant, inherit);
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 .training-course-page__title { margin: 2px 0 var(--v64-space-2, 8px); font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif); }
 .training-course-page__meta { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -210,17 +210,17 @@ const path = computed(() => {
   align-items: center;
   min-height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
+  border: 1px solid rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-sm, 8px);
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
 }
 .training-course-page__chip code { font: inherit; background: none; padding: 0; }
-.training-course-page__chip.is-muted { color: var(--v64-on-surface-variant, inherit); border-style: dashed; }
+.training-course-page__chip.is-muted { color: rgb(var(--v-theme-on-surface-variant)); border-style: dashed; }
 .training-course-page__count { margin: var(--v64-space-3, 12px) 0 0; font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
-.training-course-page__ring { --training-ring-color: var(--v64-primary); --training-ring-track: color-mix(in srgb, var(--v64-primary, #6750a4) 16%, transparent); }
+.training-course-page__ring { --training-ring-color: rgb(var(--v-theme-primary)); --training-ring-track: color-mix(in srgb, rgb(var(--v-theme-primary)) 16%, transparent); }
 .is-complete .training-course-page__ring { --training-ring-color: rgb(var(--v-theme-success)); }
-.training-course-page__ring-value { font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
-.training-course-page__ring-value strong { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); color: var(--v64-on-surface, inherit); }
+.training-course-page__ring-value { font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
+.training-course-page__ring-value strong { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface)); }
 
 /* Up next */
 .training-course-page__next {
@@ -231,8 +231,8 @@ const path = computed(() => {
   gap: var(--v64-space-3, 12px);
   padding: var(--v64-space-4, 16px) var(--v64-space-4, 16px) var(--v64-space-4, 16px) var(--v64-space-5, 24px);
   border-radius: var(--v64-shape-lg, 16px);
-  background: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05));
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  background: rgb(var(--v-theme-surface-container));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   animation: tcp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out) 60ms both;
 }
 .training-course-page__next.is-complete { background: var(--tcp-done-container); border-color: transparent; }
@@ -242,7 +242,7 @@ const path = computed(() => {
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--v64-on-surface-variant, inherit);
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 .training-course-page__next-title { font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
 .training-course-page__next .v-btn { letter-spacing: 0; text-transform: none; padding-inline: 24px; }
@@ -258,22 +258,22 @@ const path = computed(() => {
   width: var(--tcp-node);
   height: var(--tcp-node);
   border-radius: var(--v64-shape-md, 12px);
-  background: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.14));
-  color: var(--v64-on-primary-container, rgb(var(--v-theme-primary)));
+  background: rgb(var(--v-theme-primary-container));
+  color: rgb(var(--v-theme-on-primary-container));
   font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
 }
 .training-course-page__topic-text { flex: 1 1 auto; min-width: 0; }
 .training-course-page__topic-text h4 { margin: 0; font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
-.training-course-page__topic-text p { margin: 0; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
+.training-course-page__topic-text p { margin: 0; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .training-course-page__topic-done {
   flex: 0 0 auto;
   padding: 2px 10px;
   border-radius: var(--v64-shape-full, 999px);
-  background: var(--v64-surface-container-highest, rgba(var(--v-theme-primary), 0.11));
+  background: rgb(var(--v-theme-surface-container-highest));
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
 }
-.training-course-page__empty { margin: 0 0 0 calc(var(--tcp-node) + var(--v64-space-3, 12px)); color: var(--v64-on-surface-variant, inherit); }
+.training-course-page__empty { margin: 0 0 0 calc(var(--tcp-node) + var(--v64-space-3, 12px)); color: rgb(var(--v-theme-on-surface-variant)); }
 
 .training-course-page__path { list-style: none; margin: 0; padding: 0; }
 .training-course-page__lesson { position: relative; display: flex; gap: var(--v64-space-3, 12px); padding-bottom: var(--v64-space-3, 12px); }
@@ -286,7 +286,7 @@ const path = computed(() => {
   left: calc(var(--tcp-node) / 2 - 2px);
   width: 4px;
   border-radius: 2px;
-  background: var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  background: rgb(var(--v-theme-outline-variant));
 }
 .training-course-page__lesson:last-child::before { display: none; }
 .training-course-page__lesson.is-completed::before { background: color-mix(in srgb, var(--tcp-done) 55%, transparent); }
@@ -300,9 +300,9 @@ const path = computed(() => {
   height: var(--tcp-node);
   margin-top: 6px;
   border-radius: 50%;
-  border: 2px solid var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
-  background: var(--v64-surface, rgb(var(--v-theme-surface)));
-  color: var(--v64-on-surface-variant, inherit);
+  border: 2px solid rgb(var(--v-theme-outline));
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
   transition: transform var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
@@ -327,31 +327,31 @@ const path = computed(() => {
   gap: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
   padding: var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-4, 16px);
   border-radius: var(--v64-shape-lg, 16px);
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
-  background: var(--v64-surface-container-low, rgb(var(--v-theme-surface)));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+  background: rgb(var(--v-theme-surface-container-low));
   transition: box-shadow var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
 }
 .training-course-page__lesson:hover .training-course-page__card { box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12)); }
 .training-course-page__lesson:hover > .training-course-page__node { transform: scale(1.06); }
-.is-next > .training-course-page__card { border-color: rgba(var(--v-theme-primary), 0.5); background: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05)); box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12)); }
+.is-next > .training-course-page__card { border-color: rgba(var(--v-theme-primary), 0.5); background: rgb(var(--v-theme-surface-container)); box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12)); }
 .is-completed > .training-course-page__card { background: color-mix(in srgb, var(--tcp-done) 5%, rgb(var(--v-theme-surface))); }
 .training-course-page__card-main { flex: 1 1 14rem; min-width: 0; }
 .training-course-page__lesson-title { display: block; font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
-.training-course-page__lesson-meta { margin: 4px 0 0; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
+.training-course-page__lesson-meta { margin: 4px 0 0; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .training-course-page__status {
   display: inline-block;
   padding: 1px 8px;
   border-radius: var(--v64-shape-full, 999px);
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
-  background: var(--v64-surface-container-highest, rgba(var(--v-theme-on-surface), 0.08));
-  color: var(--v64-on-surface, inherit);
+  background: rgb(var(--v-theme-surface-container-highest));
+  color: rgb(var(--v-theme-on-surface));
 }
 .training-course-page__status.is-completed { background: var(--tcp-done-container); color: color-mix(in srgb, var(--tcp-done) 60%, rgb(var(--v-theme-on-surface))); }
 .training-course-page__status.is-in-progress { background: var(--tcp-progress-container); color: var(--v64-on-learning-container, inherit); }
-.training-course-page__identity { margin-top: 6px; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
+.training-course-page__identity { margin-top: 6px; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .training-course-page__identity summary { cursor: pointer; width: fit-content; border-radius: var(--v64-shape-xs, 4px); }
 .training-course-page__identity summary:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
-.training-course-page__identity code { display: block; margin-top: 4px; padding: 6px 8px; border-radius: var(--v64-shape-sm, 8px); background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), 0.06)); font-size: 0.75rem; }
+.training-course-page__identity code { display: block; margin-top: 4px; padding: 6px 8px; border-radius: var(--v64-shape-sm, 8px); background: rgb(var(--v-theme-surface-container-high)); font-size: 0.75rem; }
 .training-course-page__start { letter-spacing: 0; text-transform: none; }
 
 @keyframes tcp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

@@ -30,8 +30,8 @@ const emit = defineEmits(["use", "keep"]);
 <style scoped>
 .aio-options { display: grid; gap: var(--v64-space-3); }
 .aio-option {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   color: inherit;
   cursor: pointer;
@@ -42,14 +42,14 @@ const emit = defineEmits(["use", "keep"]);
   text-align: left;
   transition: border-color var(--v64-duration-short) var(--v64-ease-standard), background-color var(--v64-duration-short) var(--v64-ease-standard);
 }
-.aio-option--primary { background: color-mix(in srgb, var(--v64-primary-container) 55%, var(--v64-surface)); border-color: var(--v64-primary); }
+.aio-option--primary { background: color-mix(in srgb, rgb(var(--v-theme-primary-container)) 55%, rgb(var(--v-theme-surface))); border-color: rgb(var(--v-theme-primary)); }
 @media (hover: hover) {
-  .aio-option:hover:not(:disabled) { border-color: var(--v64-primary); }
+  .aio-option:hover:not(:disabled) { border-color: rgb(var(--v-theme-primary)); }
 }
-.aio-option:focus-visible { outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color); outline-offset: var(--v64-focus-ring-offset); }
+.aio-option:focus-visible { outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary)); outline-offset: var(--v64-focus-ring-offset); }
 .aio-option:disabled { cursor: default; opacity: 0.6; }
 .aio-option__title { font: var(--v64-type-title-md); }
-.aio-option__body { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
+.aio-option__body { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); }
 .aio-option__busy { position: absolute; right: var(--v64-space-4); top: var(--v64-space-4); }
 
 @media (prefers-reduced-motion: reduce) {

@@ -431,7 +431,7 @@ defineExpose({
 
 .vibe64-temporary-ai {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 12px;
   bottom: 0.3rem;
   box-shadow: 0 14px 38px rgba(15, 23, 42, 0.22);

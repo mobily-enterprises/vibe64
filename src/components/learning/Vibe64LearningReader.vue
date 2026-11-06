@@ -126,10 +126,10 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
   min-height: 0;
 }
 .vibe64-learning-reader__alert { grid-column: 1 / -1; }
-.vibe64-learning-reader__steps { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); border-inline-end: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12)); }
+.vibe64-learning-reader__steps { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); border-inline-end: 1px solid rgb(var(--v-theme-outline-variant)); }
 .vibe64-learning-reader__steps ol { list-style: none; margin: var(--v64-space-3, 12px) 0; padding: 0; display: grid; gap: 4px; }
 .vibe64-learning-reader__lesson { display: grid; gap: 2px; margin: 0; }
-.vibe64-learning-reader__code { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
+.vibe64-learning-reader__code { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); color: rgb(var(--v-theme-on-surface-variant)); }
 .vibe64-learning-reader__step {
   align-items: center;
   background: transparent;
@@ -145,7 +145,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
   text-align: start;
   width: 100%;
 }
-.vibe64-learning-reader__step:hover { background: var(--v64-surface-container, rgba(0, 0, 0, 0.04)); }
+.vibe64-learning-reader__step:hover { background: rgb(var(--v-theme-surface-container)); }
 /* The Lesson pane is Learning yellow: the current step lifts out of it as a surface card with the Learning stroke. */
 .vibe64-learning-reader__step.is-current {
   background: rgb(var(--v-theme-surface));
@@ -159,7 +159,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
 }
 .vibe64-learning-reader__step.is-passed .vibe64-learning-reader__step-mark { background: rgb(var(--v-theme-success)); border-color: rgb(var(--v-theme-success)); color: rgb(var(--v-theme-on-success)); }
 .vibe64-learning-reader__step-title { overflow-wrap: anywhere; font-weight: 600; }
-.vibe64-learning-reader__step-status { font-size: 0.75rem; color: var(--v64-on-surface-variant, inherit); }
+.vibe64-learning-reader__step-status { font-size: 0.75rem; color: rgb(var(--v-theme-on-surface-variant)); }
 .vibe64-learning-reader__summary { display: grid; gap: var(--v64-space-2, 8px); justify-items: start; }
 .vibe64-learning-reader__complete { color: rgb(var(--v-theme-success)); font-weight: 600; margin: 0; }
 .vibe64-learning-reader__complete-short { display: none; }
@@ -170,7 +170,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
 @container (max-width: 760px) {
   /* Narrow: steps become a horizontal strip above the step. */
   .vibe64-learning-reader { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 0; }
-  .vibe64-learning-reader__steps { border-inline-end: 0; border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12)); padding: var(--v64-space-2, 8px) var(--v64-space-3, 12px); }
+  .vibe64-learning-reader__steps { border-inline-end: 0; border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); padding: var(--v64-space-2, 8px) var(--v64-space-3, 12px); }
   .vibe64-learning-reader__steps ol { display: flex; overflow-x: auto; margin: var(--v64-space-2, 8px) 0 0; }
   .vibe64-learning-reader__step { grid-template-columns: 28px; min-width: 48px; justify-items: center; }
   .vibe64-learning-reader__step-title, .vibe64-learning-reader__step-status { display: none; }

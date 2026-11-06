@@ -139,10 +139,10 @@ describe("Pick colours", () => {
       expect(target).toBe(element);
       return { getPropertyValue: (name) => values[name] || "" };
     } });
-    styleOf({ "--v64-primary": " rgb(103,80,164)", "--v64-on-primary": "rgb(255, 255, 255)" });
+    styleOf({ "--v-theme-primary": " 103,80,164", "--v-theme-on-primary": "255, 255, 255" });
     expect(previewPickColors(element)).toEqual({ color: "#6750a4", onColor: "#ffffff" });
-    for (const values of [{ "--v64-primary": "rgb(103,80,164)" }, { "--v64-primary": "rgb(300,0,0)", "--v64-on-primary": "rgb(0,0,0)" },
-      { "--v64-primary": "red;background:url(x)", "--v64-on-primary": "rgb(0,0,0)" }]) {
+    for (const values of [{ "--v-theme-primary": "103,80,164" }, { "--v-theme-primary": "300,0,0", "--v-theme-on-primary": "0,0,0" },
+      { "--v-theme-primary": "red;background:url(x)", "--v-theme-on-primary": "0,0,0" }]) {
       styleOf(values);
       expect(previewPickColors(element)).toEqual({});
     }
@@ -174,7 +174,7 @@ describe("Pick", () => {
     const f = mountPick();
     f.ready();
     window.getComputedStyle = () => ({ getPropertyValue: (name) => ({
-      "--v64-primary": "rgb(21, 101, 192)", "--v64-on-primary": "rgb(255,255,255)" })[name] || "" });
+      "--v-theme-primary": "21, 101, 192", "--v-theme-on-primary": "255,255,255" })[name] || "" });
     f.state.togglePreviewPick();
     expect(f.sent(PREVIEW_PICK_START_MESSAGE_TYPE).map((post) => post.data)).toEqual([
       { type: PREVIEW_PICK_START_MESSAGE_TYPE, color: "#1565c0", onColor: "#ffffff", version: PREVIEW_BRIDGE_VERSION }]);

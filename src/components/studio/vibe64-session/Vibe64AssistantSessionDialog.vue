@@ -260,7 +260,7 @@ watch(submitting, async (running, wasRunning) => {
 }
 
 .vibe64-assistant-dialog {
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .vibe64-assistant-dialog__title {
@@ -296,7 +296,7 @@ watch(submitting, async (running, wasRunning) => {
 }
 
 .vibe64-assistant-dialog__actions {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
   gap: 0.5rem;
   justify-content: flex-end;
   padding: 0.75rem 1.25rem;

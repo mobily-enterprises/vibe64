@@ -76,7 +76,7 @@ const choices = computed(() => {
 
 .vibe64-conflict-dialog__subtitle,
 .vibe64-conflict-dialog :deep(.v-list-item-subtitle) {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   opacity: 1;
 }
 
@@ -87,7 +87,7 @@ const choices = computed(() => {
 }
 
 .vibe64-conflict-dialog__names {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0 0 var(--v64-space-3);
   padding-inline-start: var(--v64-space-5);

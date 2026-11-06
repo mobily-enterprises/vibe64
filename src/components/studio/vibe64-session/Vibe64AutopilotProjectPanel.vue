@@ -336,8 +336,8 @@ async function attachPreviewFileProducer(options = {}) {
 
 .studio-autopilot__session-tool-header {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border-bottom: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
   gap: 0.4rem;
   min-height: 3rem;

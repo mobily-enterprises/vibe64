@@ -94,7 +94,7 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
 .aio-checklist li { display: grid; gap: var(--v64-space-4); grid-template-columns: 32px minmax(0, 1fr); }
 .aio-checklist__marker {
   align-items: center;
-  border: 1.5px solid var(--v64-outline);
+  border: 1.5px solid rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-full);
   display: inline-flex;
   font: var(--v64-type-label-lg);
@@ -102,11 +102,11 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
   justify-content: center;
   width: 32px;
 }
-.aio-checklist .is-done .aio-checklist__marker { background: var(--v64-primary); border-color: var(--v64-primary); color: var(--v64-on-primary); }
+.aio-checklist .is-done .aio-checklist__marker { background: rgb(var(--v-theme-primary)); border-color: rgb(var(--v-theme-primary)); color: rgb(var(--v-theme-on-primary)); }
 .aio-checklist__title { font: var(--v64-type-title-md); margin: 4px 0 0; }
-.aio-checklist__body { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 4px 0 var(--v64-space-4); }
+.aio-checklist__body { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 4px 0 var(--v64-space-4); }
 .aio-checklist__setup { min-width: 0; }
 /* The embedded sign-in sits flat inside its step. */
 .aio-checklist__setup :deep(.accounts-setup__item) { background: transparent; border: 0 !important; padding: 0 !important; }
-.ai-onboarding__security { align-items: center; color: var(--v64-on-surface-variant); display: flex; font: var(--aio-type-body-sm); gap: var(--v64-space-2); margin: var(--v64-space-4) 0 0; }
+.ai-onboarding__security { align-items: center; color: rgb(var(--v-theme-on-surface-variant)); display: flex; font: var(--aio-type-body-sm); gap: var(--v64-space-2); margin: var(--v64-space-4) 0 0; }
 </style>

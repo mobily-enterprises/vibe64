@@ -149,10 +149,10 @@ function isApk(release, targetId) {
 
 <style scoped>
 .publish-history__empty {
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
   padding: 20px;
@@ -160,8 +160,8 @@ function isApk(release, targetId) {
 }
 
 .publish-history__list {
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   list-style: none;
   margin: 0;
@@ -170,7 +170,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__list > li + li {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
 }
 
 .publish-history__row {
@@ -187,7 +187,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__row:hover {
-  background: color-mix(in srgb, var(--v64-on-surface) 4%, transparent);
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 4%, transparent);
 }
 
 .publish-history__what {
@@ -203,7 +203,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__what span {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
 }
@@ -241,7 +241,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__message {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -249,7 +249,7 @@ function isApk(release, targetId) {
 
 .publish-history__outcomes li {
   align-items: center;
-  background: var(--v64-surface);
+  background: rgb(var(--v-theme-surface));
   border-radius: var(--v64-shape-sm, 8px);
   display: flex;
   flex-wrap: wrap;
@@ -265,7 +265,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__proof {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -288,8 +288,8 @@ function isApk(release, targetId) {
 }
 
 .publish-history__log {
-  background: var(--v64-surface);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-sm, 8px);
   font-size: 0.75rem;
   max-height: 16rem;
@@ -299,7 +299,7 @@ function isApk(release, targetId) {
 }
 
 .publish-history__log--failure {
-  border-color: color-mix(in srgb, rgb(var(--v-theme-error)) 35%, var(--v64-outline-variant));
+  border-color: color-mix(in srgb, rgb(var(--v-theme-error)) 35%, rgb(var(--v-theme-outline-variant)));
 }
 
 @media (max-width: 600px) {

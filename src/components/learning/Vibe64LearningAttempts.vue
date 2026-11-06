@@ -126,13 +126,13 @@ async function confirmThen(key, action) {
 <style scoped>
 .vibe64-learning-attempts { margin: 0 auto; max-width: 48rem; padding: var(--v64-space-4, 16px); }
 .vibe64-learning-attempts__title { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); margin: 0 0 4px; }
-.vibe64-learning-attempts__intro, .vibe64-learning-attempts__empty { color: var(--v64-on-surface-variant, inherit); font-size: 0.875rem; margin: 0 0 var(--v64-space-3, 12px); }
-.vibe64-learning-attempts__loading { align-items: center; color: var(--v64-on-surface-variant, inherit); display: flex; font-size: 0.875rem; gap: var(--v64-space-2, 8px); min-height: 48px; }
+.vibe64-learning-attempts__intro, .vibe64-learning-attempts__empty { color: rgb(var(--v-theme-on-surface-variant)); font-size: 0.875rem; margin: 0 0 var(--v64-space-3, 12px); }
+.vibe64-learning-attempts__loading { align-items: center; color: rgb(var(--v-theme-on-surface-variant)); display: flex; font-size: 0.875rem; gap: var(--v64-space-2, 8px); min-height: 48px; }
 .vibe64-learning-attempts__error { margin-bottom: var(--v64-space-2, 8px); }
 .vibe64-learning-attempts__list { display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); list-style: none; margin: 0; padding: 0; }
 .vibe64-learning-attempts__row {
   align-items: center;
-  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-md, 12px);
   display: flex;
   flex-wrap: wrap;
@@ -142,6 +142,6 @@ async function confirmThen(key, action) {
 }
 .vibe64-learning-attempts__text { display: flex; flex: 1 1 12rem; flex-direction: column; min-width: 0; }
 .vibe64-learning-attempts__name { font-weight: 600; overflow-wrap: anywhere; }
-.vibe64-learning-attempts__status { color: var(--v64-on-surface-variant, inherit); font-size: 0.8125rem; }
+.vibe64-learning-attempts__status { color: rgb(var(--v-theme-on-surface-variant)); font-size: 0.8125rem; }
 .vibe64-learning-attempts .v-btn { letter-spacing: 0; text-transform: none; }
 </style>

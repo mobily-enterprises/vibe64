@@ -32,7 +32,7 @@ const emit = defineEmits(["update:modelValue"]);
 </script>
 
 <style scoped>
-.usage-picker { justify-content: space-between; text-transform: none; letter-spacing: normal; min-height: 44px; border-color: var(--v64-outline); }
+.usage-picker { justify-content: space-between; text-transform: none; letter-spacing: normal; min-height: 44px; border-color: rgb(var(--v-theme-outline)); }
 @media (pointer: coarse) {
   .usage-picker { min-height: 48px; }
 }

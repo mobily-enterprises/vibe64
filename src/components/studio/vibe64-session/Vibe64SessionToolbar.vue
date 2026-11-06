@@ -426,10 +426,10 @@ const visibleSessions = computed(() => {
 /* Unselected chips rest on a neutral (untinted) tone with an outline-variant
    edge, so the selected chip's secondary container stands out clearly. */
 .studio-ai-sessions__tab-main {
-  --studio-ai-sessions-chip-rest: color-mix(in srgb, var(--v64-on-surface) 5%, var(--v64-surface));
+  --studio-ai-sessions-chip-rest: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 5%, rgb(var(--v-theme-surface)));
   align-items: center;
   background: var(--studio-ai-sessions-chip-rest);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 999px;
   box-sizing: border-box;
   color: var(--studio-control-text, #202124);
@@ -465,23 +465,23 @@ const visibleSessions = computed(() => {
   background: var(--studio-control-active-bg, #e7e7e7);
   border-color: transparent;
   border-radius: 999px 0 0 999px;
-  color: var(--v64-on-secondary-container);
+  color: rgb(var(--v-theme-on-secondary-container));
   padding-inline-end: 0.34rem;
 }
 
 /* Hover and keyboard focus add the M3 state layer over the chip's own tone
    instead of flooding it with primary. */
 .studio-ai-sessions__tab:not(.studio-ai-sessions__tab--active) .studio-ai-sessions__tab-main:hover {
-  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--studio-ai-sessions-chip-rest));
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 8%, var(--studio-ai-sessions-chip-rest));
 }
 
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover,
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover + .studio-ai-sessions__tab-close-slot {
-  background: color-mix(in srgb, var(--v64-on-secondary-container) 8%, var(--studio-control-active-bg, #e7e7e7));
+  background: color-mix(in srgb, rgb(var(--v-theme-on-secondary-container)) 8%, var(--studio-control-active-bg, #e7e7e7));
 }
 
 .studio-ai-sessions__tab:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 

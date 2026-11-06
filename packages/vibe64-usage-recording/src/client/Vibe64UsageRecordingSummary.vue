@@ -83,7 +83,7 @@ async function deleteRecording() {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
@@ -106,7 +106,7 @@ async function deleteRecording() {
   display: grid;
   gap: var(--v64-space-4);
   padding: 0;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 

@@ -247,10 +247,11 @@ unless they chose Light or Dark.
 `src/App.vue` keeps disabled actions on status and alert surfaces legible through
 the shared roles. New notices use the theme surface/foreground pair, or a semantic
 warning/error alert; components do not introduce grey background constants.
-Borders, dividers and container tints use the Material 3 roles in
-`src/styles/vibe64-m3.css` (`--v64-outline`, `--v64-outline-variant`, the
-`--v64-surface-container-*` tiers), which derive from the theme. A component
-names only `--v-theme-*` colours Vuetify declares for this theme, because the
+Borders, dividers and container tints use the theme's Material 3 roles directly
+(`rgb(var(--v-theme-outline-variant))`, the `surface-container-*` tiers);
+`src/styles/vibe64-m3.css` keeps only shape, spacing, motion, elevation and type
+tokens and the Learning accent (`--v64-learning*`), built from the learning
+roles. A component names only `--v-theme-*` colours Vuetify declares for this theme, because the
 browser ignores a declaration that names an undefined one;
 `tests/client/vibe64ThemeColours.vitest.js` derives that set from the generated
 theme, and fails on any other name in `src/` or a package's `src/`.

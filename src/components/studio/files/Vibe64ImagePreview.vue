@@ -100,14 +100,14 @@ watch(() => props.src, () => {
 }
 
 .vibe64-image-preview__stage:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: calc(var(--v64-focus-ring-width) * -1);
 }
 
 /* Auto margins centre the image and fall back to the start when it overflows. */
 .vibe64-image-preview__stage img {
-  background-color: var(--v64-surface-container-low);
-  background-image: conic-gradient(var(--v64-surface-container-highest) 25%, transparent 0 50%, var(--v64-surface-container-highest) 0 75%, transparent 0);
+  background-color: rgb(var(--v-theme-surface-container-low));
+  background-image: conic-gradient(rgb(var(--v-theme-surface-container-highest)) 25%, transparent 0 50%, rgb(var(--v-theme-surface-container-highest)) 0 75%, transparent 0);
   background-size: 16px 16px;
   border-radius: var(--v64-shape-xs);
   box-shadow: var(--v64-elevation-1);
@@ -136,7 +136,7 @@ watch(() => props.src, () => {
 
 .vibe64-image-preview__failed {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-direction: column;
   font: var(--v64-type-body-md);
@@ -151,8 +151,8 @@ watch(() => props.src, () => {
 
 .vibe64-image-preview__caption {
   align-items: center;
-  border-block-start: 1px solid var(--v64-outline-variant);
-  color: var(--v64-on-surface-variant);
+  border-block-start: 1px solid rgb(var(--v-theme-outline-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-wrap: wrap;
   font: var(--v64-type-body-md);

@@ -25,9 +25,9 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
 .aio-nudge {
   --aio-crown-strong: #8a6a00;
   align-items: center;
-  background: var(--v64-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
   border-radius: var(--v64-shape-md);
-  color: var(--v64-on-secondary-container);
+  color: rgb(var(--v-theme-on-secondary-container));
   display: flex;
   flex-wrap: wrap;
   gap: var(--v64-space-1) var(--v64-space-3);

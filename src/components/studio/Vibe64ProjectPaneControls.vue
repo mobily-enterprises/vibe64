@@ -103,11 +103,11 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 /* M3 tonal icon button: circular, surface-container tone, state layer on
    hover/press. */
 .studio-home-shell-chat-toggle {
-  background: var(--v64-surface-container-high) !important;
+  background: rgb(var(--v-theme-surface-container-high)) !important;
   border: 0;
   border-radius: var(--v64-shape-full);
   box-shadow: none;
-  color: var(--v64-on-surface-variant) !important;
+  color: rgb(var(--v-theme-on-surface-variant)) !important;
   flex: 0 0 auto;
   height: 2.25rem;
   min-height: 2.25rem;
@@ -117,7 +117,7 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 }
 
 .studio-home-shell-chat-toggle:hover {
-  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--v64-surface-container-high)) !important;
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 8%, rgb(var(--v-theme-surface-container-high))) !important;
 }
 
 /* M3 segmented button: an outlined pill of equal-width segments split by
@@ -127,14 +127,14 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
    then its own pill. */
 .studio-home-shell-lesson-toggle {
   align-items: center;
-  border-inline-start: 1px solid var(--v64-outline-variant);
+  border-inline-start: 1px solid rgb(var(--v-theme-outline-variant));
   display: inline-flex;
   flex: 0 0 auto;
   padding-inline-start: var(--studio-home-project-gap);
 }
 
 .studio-home-shell-project-tabs {
-  border: 1px solid var(--v64-outline);
+  border: 1px solid rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-full);
   display: inline-grid;
   flex: 0 0 auto;
@@ -148,8 +148,8 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
   align-items: center;
   background: transparent;
   border: 0;
-  border-inline-start: 1px solid var(--v64-outline);
-  color: var(--v64-on-surface);
+  border-inline-start: 1px solid rgb(var(--v-theme-outline));
+  color: rgb(var(--v-theme-on-surface));
   cursor: pointer;
   display: inline-flex;
   font: var(--v64-type-label-lg);
@@ -189,13 +189,13 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 }
 
 .studio-home-shell-project-tab:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: -4px;
 }
 
 .studio-home-shell-project-tab--active {
-  background: var(--v64-secondary-container);
-  color: var(--v64-on-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
+  color: rgb(var(--v-theme-on-secondary-container));
   font-weight: 600;
 }
 
@@ -215,7 +215,7 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 }
 
 .studio-home-shell-project-tab:disabled {
-  color: color-mix(in srgb, var(--v64-on-surface) 38%, transparent);
+  color: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 38%, transparent);
   cursor: not-allowed;
 }
 
@@ -259,10 +259,10 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 /* Phone "next pane" control: an M3 tonal pill button with a 40px target. */
 .studio-home-shell-project-mobile-action {
   align-items: center;
-  background: var(--v64-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
   border: 0;
   border-radius: var(--v64-shape-full);
-  color: var(--v64-on-secondary-container);
+  color: rgb(var(--v-theme-on-secondary-container));
   cursor: pointer;
   display: none;
   flex: 0 0 auto;
@@ -283,11 +283,11 @@ const emit = defineEmits(["select-pane", "update:chat-collapsed"]);
 }
 
 .studio-home-shell-project-mobile-action:hover {
-  background: color-mix(in srgb, var(--v64-on-secondary-container) 8%, var(--v64-secondary-container));
+  background: color-mix(in srgb, rgb(var(--v-theme-on-secondary-container)) 8%, rgb(var(--v-theme-secondary-container)));
 }
 
 .studio-home-shell-project-mobile-action:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 

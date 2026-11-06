@@ -44,11 +44,11 @@ defineProps({
 .vibe64-dashboard-page-header__icon {
   align-items: center;
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--v64-surface) 55%, transparent), transparent 60%),
-    var(--v64-primary-container);
+    linear-gradient(145deg, color-mix(in srgb, rgb(var(--v-theme-surface)) 55%, transparent), transparent 60%),
+    rgb(var(--v-theme-primary-container));
   border-radius: var(--v64-shape-md, 12px);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v64-primary) 16%, transparent);
-  color: var(--v64-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, rgb(var(--v-theme-primary)) 16%, transparent);
+  color: rgb(var(--v-theme-primary));
   display: inline-flex;
   flex: 0 0 auto;
   height: 44px;
@@ -75,14 +75,14 @@ defineProps({
 
 .vibe64-dashboard-page-header__title,
 .vibe64-dashboard-page-header__title-row :slotted(h1) {
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif);
   letter-spacing: 0;
   margin: 0;
 }
 
 .vibe64-dashboard-page-header__description {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
   margin: 0;
 }

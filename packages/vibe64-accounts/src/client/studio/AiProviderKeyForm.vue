@@ -99,7 +99,7 @@ const {
 .vibe64-provider-editor__provider {
   align-items: center;
   background: rgba(var(--v-theme-primary), 0.06);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
   gap: 0.75rem;
   padding: 0.85rem;
@@ -116,7 +116,7 @@ const {
 
 .vibe64-provider-editor__route {
   background: rgba(var(--v-theme-primary), 0.06);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   display: grid;
   gap: 0.45rem;
   padding: 0.85rem;

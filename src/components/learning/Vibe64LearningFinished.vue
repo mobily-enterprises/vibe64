@@ -112,9 +112,9 @@ async function startNext() {
 .vibe64-learning-finished { display: grid; gap: var(--v64-space-3, 12px); justify-items: start; max-width: 40rem; margin: 0 auto; padding: var(--v64-space-6, 32px) var(--v64-space-5, 24px); overflow-y: auto; max-height: 100%; }
 .vibe64-learning-finished > * { margin: 0; max-width: 100%; }
 .vibe64-learning-finished__mark { color: rgb(var(--v-theme-success)); }
-.vibe64-learning-finished__eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.06em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
+.vibe64-learning-finished__eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--v-theme-on-surface-variant)); }
 .vibe64-learning-finished h2 { font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif); overflow-wrap: anywhere; }
-.vibe64-learning-finished__hint { display: flex; align-items: center; color: var(--v64-on-surface-variant, inherit); }
+.vibe64-learning-finished__hint { display: flex; align-items: center; color: rgb(var(--v-theme-on-surface-variant)); }
 .vibe64-learning-finished__actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-2, 8px); }
 .vibe64-learning-finished__error { color: rgb(var(--v-theme-error)); }
 .vibe64-learning-finished .v-btn { letter-spacing: 0; text-transform: none; }

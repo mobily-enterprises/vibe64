@@ -44,9 +44,9 @@ const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
 .vibe64-lesson-toggle {
   align-items: center;
   background: transparent;
-  border: 1px solid var(--v64-outline, rgba(127, 127, 127, 0.6));
+  border: 1px solid rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-full, 999px);
-  color: var(--v64-on-surface, inherit);
+  color: rgb(var(--v-theme-on-surface));
   cursor: pointer;
   display: inline-flex;
   flex: 0 0 auto;
@@ -71,7 +71,7 @@ const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
   transition: opacity 120ms ease;
 }
 .vibe64-lesson-toggle:hover::before { opacity: 0.08; }
-.vibe64-lesson-toggle:focus-visible { outline: 2px solid var(--v64-primary, currentColor); outline-offset: 2px; }
+.vibe64-lesson-toggle:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-lesson-toggle.is-on {
   background: var(--v64-learning, #f5c518);
   border-color: var(--v64-learning-strong, #f5c518);

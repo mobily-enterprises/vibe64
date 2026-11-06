@@ -107,16 +107,16 @@ function openAt(start, file = props.node.file) {
 .usage-panel__header { display: flex; align-items: flex-start; gap: 8px; }
 .usage-panel__heading { flex: 1; min-width: 0; }
 .usage-panel__heading h3, .usage-panel__heading p { margin: 0; overflow-wrap: anywhere; }
-.usage-panel__heading p { color: var(--v64-on-surface-variant); }
+.usage-panel__heading p { color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-panel__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.usage-panel__note { margin: 0; color: var(--v64-on-surface-variant); }
+.usage-panel__note { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-panel__section h4 { margin: 0 0 4px; }
 .usage-panel__list { padding: 0; background: transparent; }
 .usage-panel__callee code { font-size: .8125rem; overflow-wrap: anywhere; white-space: normal; }
 .usage-panel__list :deep(.v-list-item-subtitle) { -webkit-line-clamp: 3; }
 .usage-panel__list :deep(.v-list-item__append) { padding-inline-start: 8px; }
-.usage-panel :deep(.v-chip--variant-outlined) { border-color: var(--v64-outline); }
-.usage-panel__ran { color: var(--v64-primary); font-weight: 500; }
+.usage-panel :deep(.v-chip--variant-outlined) { border-color: rgb(var(--v-theme-outline)); }
+.usage-panel__ran { color: rgb(var(--v-theme-primary)); font-weight: 500; }
 /* Touch: 48 px targets for Open source, the code buttons and Close. */
 @media (pointer: coarse) {
   .usage-panel :deep(.v-btn) { min-height: 48px; }

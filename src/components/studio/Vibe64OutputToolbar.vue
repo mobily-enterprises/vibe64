@@ -378,7 +378,7 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
 
 .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported) {
   background: rgba(var(--v-theme-surface), 0.94);
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 999px;
   box-shadow: 0 0.4rem 1.2rem rgba(15, 23, 42, 0.14);
   left: 50%;
@@ -396,13 +396,13 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
 .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported):hover,
 .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported):focus-within {
   background: rgba(var(--v-theme-surface), 0.94);
-  border-color: var(--v64-outline);
+  border-color: rgb(var(--v-theme-outline));
   opacity: 1;
 }
 
 .vibe64-launch-controls__toolbar--teleported {
   background: var(--studio-control-rest-bg, rgba(var(--v-theme-surface), 0.94));
-  border: 1px solid var(--studio-control-border, var(--v64-outline-variant));
+  border: 1px solid var(--studio-control-border, rgb(var(--v-theme-outline-variant)));
   border-radius: var(--studio-control-radius, 7px);
   box-shadow: none;
   /* A crowded app bar shortens the address first. */
@@ -471,7 +471,7 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
 .vibe64-launch-controls__dock {
   align-items: center;
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline);
+  border: 1px solid rgb(var(--v-theme-outline));
   border-radius: 8px;
   display: flex;
   flex: 0 0 auto;

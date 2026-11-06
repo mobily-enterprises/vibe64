@@ -111,13 +111,13 @@ function selectTool() {
 }
 
 .vibe64-active-session-nav-item__divider {
-  border-color: var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border-color: rgb(var(--v-theme-outline-variant));
   margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px) var(--v64-space-1, 4px);
   opacity: 1;
 }
 
 .vibe64-dashboard-nav-group-label {
-  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.72));
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   letter-spacing: 0.06em;
   padding: var(--v64-space-1, 4px) var(--v64-space-4, 16px) 0;
@@ -126,9 +126,9 @@ function selectTool() {
 
 .vibe64-active-session-nav-item__heading {
   align-items: center;
-  background: var(--v64-surface-container-high, rgba(0, 0, 0, 0.06));
+  background: rgb(var(--v-theme-surface-container-high));
   border-radius: var(--v64-shape-full, 999px);
-  color: var(--v64-on-surface, inherit);
+  color: rgb(var(--v-theme-on-surface));
   display: flex;
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   font-weight: 650;

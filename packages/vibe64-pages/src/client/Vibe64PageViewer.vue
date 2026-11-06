@@ -245,7 +245,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
 /* The frame box matches Preview's: a rounded surface the page fills, down to the bottom of the pane. */
 .vibe64-page-viewer__frame-box {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-border-color), var(--v-border-opacity)));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 12px;
   height: max(24rem, calc(100dvh - 10rem));
   overflow: hidden;

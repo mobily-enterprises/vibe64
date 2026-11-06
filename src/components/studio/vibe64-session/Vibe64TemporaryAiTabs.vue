@@ -133,9 +133,9 @@ const props = defineProps({
    tonal selected chip with a leading check. */
 .vibe64-temporary-ai__tab {
   align-items: center;
-  border: 1px solid var(--v64-outline-variant);
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-full);
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: inline-flex;
   flex: 0 0 auto;
   isolation: isolate;
@@ -201,14 +201,14 @@ const props = defineProps({
 }
 
 .vibe64-temporary-ai__tab:has(> .vibe64-temporary-ai__tab-select:focus-visible) {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary));
   outline-offset: var(--v64-focus-ring-offset);
 }
 
 .vibe64-temporary-ai__tab--active {
-  background: var(--v64-secondary-container);
+  background: rgb(var(--v-theme-secondary-container));
   border-color: transparent;
-  color: var(--v64-on-secondary-container);
+  color: rgb(var(--v-theme-on-secondary-container));
 }
 
 /* The tonal fill alone is under 3:1 against the surface, so the selected

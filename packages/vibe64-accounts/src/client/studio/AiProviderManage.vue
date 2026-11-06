@@ -103,20 +103,20 @@ function connectAgain() {
 .ai-manage {
   --aio-crown: #f5c518;
   --aio-crown-strong: #8a6a00;
-  background: var(--v64-surface-container-lowest, var(--v64-surface));
-  color: var(--v64-on-surface);
+  background: rgb(var(--v-theme-surface-container-lowest));
+  color: rgb(var(--v-theme-on-surface));
   font-family: var(--v64-font-family);
   letter-spacing: normal;
 }
 .v-theme--dark .ai-manage { --aio-crown-strong: #f5c518; }
 .ai-manage :deep(.v-btn:not(.v-btn--icon)) { border-radius: var(--v64-shape-md); letter-spacing: 0; text-transform: none; }
-.ai-manage :deep(.v-btn:focus-visible) { outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color); outline-offset: var(--v64-focus-ring-offset); }
+.ai-manage :deep(.v-btn:focus-visible) { outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary)); outline-offset: var(--v64-focus-ring-offset); }
 
 /* The header carries the provider's tone, like its card. */
 .ai-manage__header {
   align-items: center;
-  background: radial-gradient(520px 200px at 90% -40%, var(--v64-primary-container), transparent 75%), var(--v64-surface);
-  border-bottom: 1px solid var(--v64-outline-variant);
+  background: radial-gradient(520px 200px at 90% -40%, rgb(var(--v-theme-primary-container)), transparent 75%), rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
   display: grid;
   flex: none;
   gap: var(--v64-space-2) var(--v64-space-4);
@@ -124,13 +124,13 @@ function connectAgain() {
   padding: var(--v64-space-6) var(--v64-space-4) var(--v64-space-4) var(--v64-space-6);
 }
 .ai-manage--primary .ai-manage__header {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 14%, var(--v64-surface)), var(--v64-surface) 60%);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 14%, rgb(var(--v-theme-surface))), rgb(var(--v-theme-surface)) 60%);
 }
 .ai-manage__heading { min-width: 0; }
-.ai-manage__eyebrow { color: var(--v64-primary); font: var(--v64-type-label-md); letter-spacing: 0.12em; margin: 0; text-transform: uppercase; }
+.ai-manage__eyebrow { color: rgb(var(--v-theme-primary)); font: var(--v64-type-label-md); letter-spacing: 0.12em; margin: 0; text-transform: uppercase; }
 .ai-manage--primary .ai-manage__eyebrow { color: var(--aio-crown-strong); }
 .ai-manage__title { font: var(--v64-type-headline-sm); letter-spacing: -0.01em; margin: 0; }
-.ai-manage__summary { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 2px 0 0; }
+.ai-manage__summary { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-body-md); margin: 2px 0 0; }
 .ai-manage__header > .v-btn--icon { align-self: start; margin-top: calc(var(--v64-space-3) * -1); }
 .ai-manage__billing { grid-column: 2 / 4; justify-self: start; margin-inline-start: calc(var(--v64-space-2) * -1); }
 
@@ -138,7 +138,7 @@ function connectAgain() {
 .ai-manage__group { display: grid; gap: var(--v64-space-3); }
 .ai-manage__group-title {
   align-items: baseline;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   flex-wrap: wrap;
   font: var(--v64-type-label-md);
@@ -147,11 +147,11 @@ function connectAgain() {
   margin: 0;
   text-transform: uppercase;
 }
-.ai-manage__group-title span { color: var(--v64-on-surface); font: var(--v64-type-title-md); letter-spacing: 0; text-transform: none; }
+.ai-manage__group-title span { color: rgb(var(--v-theme-on-surface)); font: var(--v64-type-title-md); letter-spacing: 0; text-transform: none; }
 .ai-manage__empty {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg);
   display: grid;
   gap: var(--v64-space-3);
@@ -162,7 +162,7 @@ function connectAgain() {
 .ai-manage__empty p { font: var(--v64-type-body-lg); margin: 0; }
 .ai-manage__note {
   align-items: center;
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   font: var(--v64-type-body-md);
   gap: var(--v64-space-2);

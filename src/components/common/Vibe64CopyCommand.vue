@@ -49,8 +49,8 @@ onScopeDispose(() => clearTimeout(timer));
 <style scoped>
 .v64-copy-command {
   align-items: center;
-  background: var(--v64-surface-container-highest);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-highest));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-sm, 8px);
   display: flex;
   gap: 4px;
@@ -62,7 +62,7 @@ onScopeDispose(() => clearTimeout(timer));
 
 .v64-copy-command__text {
   background: none;
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   flex: 1;
   font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
   font-size: 0.8125rem;

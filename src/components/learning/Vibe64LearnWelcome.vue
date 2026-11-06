@@ -42,14 +42,14 @@ const learning = useVibe64Learning();
 }
 
 .vibe64-learn-welcome__title {
-  color: var(--v64-on-surface);
+  color: rgb(var(--v-theme-on-surface));
   font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif);
   letter-spacing: -0.01em;
   margin: var(--v64-space-2) 0 0;
 }
 
 .vibe64-learn-welcome__text {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-lg, 400 1rem/1.5rem system-ui, sans-serif);
   margin: 0;
 }

@@ -118,11 +118,11 @@ function focusRunButton() {
 </script>
 
 <style scoped>
-.database-workspace__query { display: grid; grid-template-rows: auto 5.25rem; min-height: 0; border-bottom: 1px solid var(--v64-outline-variant); }
+.database-workspace__query { display: grid; grid-template-rows: auto 5.25rem; min-height: 0; border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); }
 .database-workspace__query-toolbar, .database-workspace__query-actions, .database-workspace__query-options { display: flex; gap: 0.55rem; align-items: center; }
 .database-workspace__query-toolbar { justify-content: space-between; min-height: 3.2rem; padding: 0.45rem 0.65rem; }
 .database-workspace__query-actions { min-width: 0; flex-wrap: wrap; }
-.database-workspace__editor-wrap { min-height: 0; margin: 0 0.65rem 0.65rem; overflow: hidden; border: 1px solid var(--v64-outline); border-radius: 12px; background: var(--v64-surface-container-low); }
+.database-workspace__editor-wrap { min-height: 0; margin: 0 0.65rem 0.65rem; overflow: hidden; border: 1px solid rgb(var(--v-theme-outline)); border-radius: 12px; background: rgb(var(--v-theme-surface-container-low)); }
 
 @container (max-width: 760px) {
   .database-workspace__query-toolbar { align-items: flex-start; }

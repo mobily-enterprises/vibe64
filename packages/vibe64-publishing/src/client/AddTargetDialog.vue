@@ -174,8 +174,8 @@ async function add() {
 .publish-destination {
   --accent: rgb(var(--v-theme-primary));
   align-items: flex-start;
-  background: var(--v64-surface-container-low);
-  border: 1px solid var(--v64-outline-variant);
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   color: inherit;
   cursor: pointer;
@@ -189,7 +189,7 @@ async function add() {
 
 .publish-destination:not(:disabled):hover,
 .publish-destination:focus-visible {
-  background: color-mix(in srgb, var(--accent) 6%, var(--v64-surface-container-low));
+  background: color-mix(in srgb, var(--accent) 6%, rgb(var(--v-theme-surface-container-low)));
   border-color: var(--accent);
   transform: translateY(-1px);
 }
@@ -215,7 +215,7 @@ async function add() {
 
 .publish-destination__icon {
   align-items: center;
-  background: color-mix(in srgb, var(--accent) 14%, var(--v64-surface));
+  background: color-mix(in srgb, var(--accent) 14%, rgb(var(--v-theme-surface)));
   border-radius: var(--v64-shape-md, 12px);
   color: var(--accent);
   display: inline-flex;
@@ -237,7 +237,7 @@ async function add() {
 
 .publish-destination__copy > span,
 .publish-destination__meta {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
 }
 
@@ -260,7 +260,7 @@ async function add() {
 }
 
 .publish-add-needs {
-  background: var(--v64-surface-container-low);
+  background: rgb(var(--v-theme-surface-container-low));
   border-radius: var(--v64-shape-lg, 16px);
   margin-bottom: var(--v64-space-3, 12px);
   padding: var(--v64-space-4, 16px);
@@ -286,7 +286,7 @@ async function add() {
 }
 
 .publish-add-needs li .v-icon {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   flex: 0 0 auto;
   transform: translateY(3px);
 }
@@ -296,7 +296,7 @@ async function add() {
 }
 
 .publish-add-needs p {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md);
   margin: 0;
 }

@@ -42,7 +42,7 @@ defineProps({
 .training-start-feedback > :first-child { flex: none; }
 .training-start-feedback strong { display: block; font: var(--v64-type-label-lg); }
 .training-start-feedback p { margin: 2px 0 0; white-space: normal; overflow-wrap: anywhere; }
-.training-start-feedback--progress { background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
+.training-start-feedback--progress { background: rgb(var(--v-theme-primary-container)); color: rgb(var(--v-theme-on-primary-container)); }
 .training-start-feedback--warn { background: var(--v64-learning-container); color: var(--v64-on-learning-container); }
 .training-start-feedback--error { background: rgba(var(--v-theme-error), 0.12); color: rgb(var(--v-theme-error)); }
 </style>

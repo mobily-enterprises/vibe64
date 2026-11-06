@@ -103,7 +103,7 @@ function openVersion(version) {
 
 <style scoped>
 .vibe64-repository-workspace__history {
-  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -113,8 +113,8 @@ function openVersion(version) {
 
 .vibe64-repository-workspace__history-intro {
   align-items: center;
-  background: var(--v64-surface-container-low);
-  border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  background: rgb(var(--v-theme-surface-container-low));
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
   gap: 1rem;
   justify-content: space-between;
@@ -173,7 +173,7 @@ function openVersion(version) {
 }
 
 .vibe64-repository-workspace__commit-marker::before {
-  background: var(--v64-outline-variant);
+  background: rgb(var(--v-theme-outline-variant));
   bottom: 0;
   content: "";
   left: calc(50% - 1px);
@@ -193,7 +193,7 @@ function openVersion(version) {
 .vibe64-repository-workspace__commit-node {
   align-items: center;
   background: rgb(var(--v-theme-surface));
-  border: 2px solid var(--v64-outline);
+  border: 2px solid rgb(var(--v-theme-outline));
   border-radius: 50%;
   color: rgba(var(--v-theme-on-surface), 0.7);
   display: flex;
@@ -216,7 +216,7 @@ function openVersion(version) {
   align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--v64-outline-variant);
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
   color: inherit;
   cursor: pointer;
   display: grid;
@@ -287,7 +287,7 @@ function openVersion(version) {
 }
 
 .vibe64-repository-workspace__load-more {
-  border-top: 1px solid var(--v64-outline-variant);
+  border-top: 1px solid rgb(var(--v-theme-outline-variant));
   padding: 0.55rem 1rem 0.55rem 3.25rem;
 }
 

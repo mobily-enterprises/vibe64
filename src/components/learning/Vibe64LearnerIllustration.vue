@@ -90,15 +90,15 @@
 }
 
 .vibe64-learner-art__body {
-  fill: var(--v64-primary);
-  stroke: var(--v64-primary);
+  fill: rgb(var(--v-theme-primary));
+  stroke: rgb(var(--v-theme-primary));
   stroke-linejoin: round;
   stroke-width: 6;
 }
 
 .vibe64-learner-art__collar {
-  fill: var(--v64-primary-container);
-  stroke: var(--v64-primary-container);
+  fill: rgb(var(--v-theme-primary-container));
+  stroke: rgb(var(--v-theme-primary-container));
   stroke-linejoin: round;
   stroke-width: 3;
 }
@@ -150,14 +150,14 @@
 }
 
 .vibe64-learner-art__bit--primary {
-  fill: var(--v64-primary);
+  fill: rgb(var(--v-theme-primary));
   opacity: 0.65;
 }
 
 .vibe64-learner-art__bit--outline,
 .vibe64-learner-art__bit--ring {
   fill: none;
-  stroke: var(--v64-primary);
+  stroke: rgb(var(--v-theme-primary));
   stroke-linejoin: round;
   stroke-opacity: 0.55;
   stroke-width: 3;

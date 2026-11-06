@@ -119,8 +119,8 @@ onBeforeUnmount(() => {
 
 /* M3 empty state: a quiet dashed slot, centred. */
 .vibe64-session-info-page__empty {
-  background: var(--v64-surface-container-low);
-  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24));
+  background: rgb(var(--v-theme-surface-container-low));
+  border: 1px dashed rgb(var(--v-theme-outline));
   border-radius: var(--v64-shape-lg, 16px);
   display: grid;
   gap: var(--v64-space-1, 4px);
@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-session-info-page__empty p {
-  color: var(--v64-on-surface-variant);
+  color: rgb(var(--v-theme-on-surface-variant));
   font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
 }
 </style>

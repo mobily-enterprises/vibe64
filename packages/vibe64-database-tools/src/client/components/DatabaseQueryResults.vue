@@ -166,18 +166,18 @@ function cellTitle(rowIndex, columnIndex) {
 
 <style scoped>
 .database-workspace__results { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
-.database-workspace__results > header { display: flex; gap: 1rem; align-items: center; justify-content: space-between; min-height: 3.1rem; padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--v64-outline-variant); }
+.database-workspace__results > header { display: flex; gap: 1rem; align-items: center; justify-content: space-between; min-height: 3.1rem; padding: 0.45rem 0.75rem; border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); }
 .database-workspace__results > header > div { min-width: 0; }
 .database-workspace__results > header strong, .database-workspace__results > header span { display: block; }
 .database-workspace__results > header span { overflow: hidden; color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
 .database-workspace__results > header .v-text-field { max-width: 15rem; }
 .database-workspace__table-wrap { min-height: 0; overflow: auto; }
 .database-workspace__table-wrap table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.72rem; }
-.database-workspace__table-wrap th, .database-workspace__table-wrap td { max-width: 24rem; padding: 0.42rem 0.6rem; overflow: hidden; border-right: 1px solid var(--v64-outline-variant); border-bottom: 1px solid var(--v64-outline-variant); text-overflow: ellipsis; white-space: nowrap; }
-.database-workspace__table-wrap thead th { position: sticky; z-index: 2; top: 0; background: var(--v64-surface-container); text-align: left; }
+.database-workspace__table-wrap th, .database-workspace__table-wrap td { max-width: 24rem; padding: 0.42rem 0.6rem; overflow: hidden; border-right: 1px solid rgb(var(--v-theme-outline-variant)); border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); text-overflow: ellipsis; white-space: nowrap; }
+.database-workspace__table-wrap thead th { position: sticky; z-index: 2; top: 0; background: rgb(var(--v-theme-surface-container)); text-align: left; }
 .database-workspace__table-wrap thead th span, .database-workspace__table-wrap thead th small { display: block; }
 .database-workspace__table-wrap thead th small { color: rgba(var(--v-theme-on-surface), 0.48); font-size: 0.58rem; font-weight: 400; }
-.database-workspace__row-number { position: sticky; z-index: 1; left: 0; width: 3rem; background: var(--v64-surface-container-low); color: rgba(var(--v-theme-on-surface), 0.48); text-align: right !important; }
+.database-workspace__row-number { position: sticky; z-index: 1; left: 0; width: 3rem; background: rgb(var(--v-theme-surface-container-low)); color: rgba(var(--v-theme-on-surface), 0.48); text-align: right !important; }
 .database-workspace__row-actions { width: 4rem; text-align: center !important; }
 .database-workspace__cell--editable { padding: 0 !important; }
 .database-workspace__cell-editor { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; padding: 0.42rem 0.6rem; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
