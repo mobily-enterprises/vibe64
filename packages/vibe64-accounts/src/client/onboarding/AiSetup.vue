@@ -424,28 +424,17 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, choose
 
 <style scoped>
 .ai-setup {
-  --aio-crown: #f5c518;
-  --aio-crown-ink: #2b2100;
-  --aio-crown-strong: #8a6a00;
+  --aio-crown: var(--v64-learning);
+  --aio-crown-ink: var(--v64-on-learning);
+  --aio-crown-strong: var(--v64-learning-strong);
   --aio-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
   --aio-stage-top: clamp(24px, 6vh, 72px);
-  --v64-on-success-container: color-mix(in srgb, rgb(var(--v-theme-success)) 55%, #000);
-  --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, #000);
+  --aio-warn-ink: rgb(var(--v-theme-on-warning-container));
   color: rgb(var(--v-theme-on-surface));
   font-family: var(--v64-font-family);
 }
-.v-theme--dark .ai-setup {
-  --aio-crown-strong: #f5c518;
-  --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 55%, #fff);
-  --v64-on-success-container: color-mix(in srgb, rgb(var(--v-theme-success)) 45%, #fff);
-}
 /* One button shape across the flow, embedded AI Accounts parts included. */
 .ai-setup :deep(.v-btn:not(.v-btn--icon)) { border-radius: var(--v64-shape-md); letter-spacing: 0; text-transform: none; }
-/* Dark: filled primary buttons take dark ink on a lighter primary (AA contrast). */
-.v-theme--dark .ai-setup :deep(.v-btn--variant-flat.bg-primary:not(.v-btn--disabled)) {
-  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 45%, #fff) !important;
-  color: #0b1d33 !important;
-}
 /* Disabled primaries use the neutral disabled tokens, not a faded primary. */
 .ai-setup :deep(.v-btn--disabled.v-btn--variant-flat) {
   background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 12%, transparent) !important;

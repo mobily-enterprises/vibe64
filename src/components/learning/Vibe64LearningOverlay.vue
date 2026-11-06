@@ -244,7 +244,7 @@ function keydown(event) {
 .vibe64-learning__bar {
   align-items: center;
   background: var(--v64-learning-app-bar, rgb(var(--v-theme-surface)));
-  border-bottom: 2px solid var(--v64-learning, #f5c518);
+  border-bottom: 2px solid var(--v64-learning);
   display: flex;
   flex: 0 0 auto;
   gap: var(--v64-space-2, 8px);

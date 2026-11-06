@@ -66,7 +66,7 @@ const open = defineModel({ type: Boolean, default: false });
 .vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--v-theme-on-surface-variant)); }
 .vibe64-colleague__watch-chip[data-status="active"] { background: rgb(var(--v-theme-success-container)); }
 .vibe64-colleague__watch-chip[data-status="active"]::before { background: rgb(var(--v-theme-success)); }
-.vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning, #f5c518); }
+.vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning); }
 .vibe64-colleague__watch-meta { color: rgb(var(--v-theme-on-surface-variant)); font: var(--v64-type-label-md, inherit); }
 .vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

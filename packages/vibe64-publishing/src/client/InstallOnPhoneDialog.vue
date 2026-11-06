@@ -85,12 +85,13 @@ onBeforeUnmount(stop);
           <v-btn v-if="!showQr" prepend-icon="$qrCode" rounded="pill" variant="text" @click="revealQr">Show a QR code for another phone</v-btn>
         </div>
         <div v-if="showQr" class="publish-install__layout">
-          <div class="publish-install__qr" :class="{ 'is-waiting': !qr }">
+          <!-- The code is dark on a light tile in either appearance, as phone cameras read it. -->
+          <v-sheet class="publish-install__qr" :class="{ 'is-waiting': !qr }" color="surface-container-lowest" theme="light">
             <!-- eslint-disable-next-line vue/no-v-html -- qrSvg escapes its only text -->
             <div v-if="qr" class="publish-install__code" v-html="qr" />
             <v-progress-circular v-else-if="busy" color="primary" indeterminate />
             <v-btn v-else prepend-icon="$wifi" rounded="pill" variant="tonal" @click="start">Share again</v-btn>
-          </div>
+          </v-sheet>
           <ol class="publish-install__steps">
             <li><strong>Scan</strong> with your Android phone's camera, on the same Wi-Fi as this computer.</li>
             <li><strong>Download</strong> {{ title || "the app" }}. Android asks once to allow installs from your browser.</li>
@@ -122,7 +123,6 @@ onBeforeUnmount(stop);
 .publish-install__qr {
   align-items: center;
   aspect-ratio: 1;
-  background: #fff;
   border-radius: var(--v64-shape-lg, 16px);
   box-shadow: 0 0 0 1px rgb(var(--v-theme-outline-variant)), var(--v64-elevation-1);
   display: flex;

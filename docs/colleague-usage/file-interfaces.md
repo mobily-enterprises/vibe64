@@ -44,7 +44,7 @@ file interface; **Previous view**, **×** or Esc returns to the Program. The bro
 retains its directory navigation. Program membership never links to a raw Genesis
 Markdown document or guesses an entry file.
 
-Main file icons have a gold border, star and **Main · …** label. The anchor is the
+Main file icons have an amber border, star and **Main · …** label. The anchor is the
 place to start reading, not necessarily an executable entry point. It belongs to
 the Program’s owning subsystem; supporting files may be shared libraries elsewhere.
 Program explanations describe the capability rather than each individual function.

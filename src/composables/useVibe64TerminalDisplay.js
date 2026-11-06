@@ -9,6 +9,7 @@ import {
   terminalTranscriptTail
 } from "@/lib/studioTerminalSize.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
+import { terminalColours } from "@/theme/terminal.js";
 
 function normalizedOutputVersion(value) {
   const version = Number(value || 0);
@@ -153,8 +154,8 @@ function useVibe64TerminalDisplay({
         fontSize: 13,
         scrollback: STUDIO_TERMINAL_SCROLLBACK_ROWS,
         theme: {
-          background: "#101216",
-          foreground: "#f5f7fb"
+          background: terminalColours.background,
+          foreground: terminalColours.foreground
         }
       });
       terminalFitAddon = new terminalLibrary.FitAddon();

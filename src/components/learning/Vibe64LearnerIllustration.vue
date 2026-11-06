@@ -2,6 +2,7 @@
 // A smiling learner in a mortarboard, hand raised to a bright idea, built from
 // circles and triangles: the welcome of Learn mode with no lesson in
 // progress. Decorative only.
+import { learnerIllustration } from "../../theme/palettes.js";
 </script>
 
 <template>
@@ -63,8 +64,8 @@
 
 <style scoped>
 .vibe64-learner-art {
-  --learner-skin: #f4c7a1;
-  --learner-ink: #2b2118;
+  --learner-skin: v-bind("learnerIllustration.skin");
+  --learner-ink: v-bind("learnerIllustration.ink");
   display: block;
   height: auto;
   max-width: 100%;
@@ -108,12 +109,12 @@
 }
 
 .vibe64-learner-art__cheek {
-  fill: #f08a7e;
+  fill: v-bind("learnerIllustration.cheek");
   opacity: 0.55;
 }
 
 .vibe64-learner-art__smile {
-  fill: #8c2f22;
+  fill: v-bind("learnerIllustration.smile");
 }
 
 .vibe64-learner-art__cap {
@@ -141,7 +142,7 @@
 }
 
 .vibe64-learner-art__base {
-  fill: color-mix(in srgb, var(--learner-ink) 55%, #c9c4b8);
+  fill: color-mix(in srgb, var(--learner-ink) 55%, v-bind("learnerIllustration.bulbBase"));
 }
 
 .vibe64-learner-art__ray,

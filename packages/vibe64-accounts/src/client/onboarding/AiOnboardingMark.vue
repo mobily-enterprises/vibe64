@@ -51,14 +51,13 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 .aio-mark--diamond .aio-mark__tile { border-radius: 22%; transform: rotate(45deg) scale(0.78); }
 .aio-mark--diamond .aio-mark__glyph { transform: rotate(-45deg) scale(1.28); }
 .aio-mark--primary .aio-mark__tile {
-  --aio-tone-bg: radial-gradient(120% 120% at 25% 15%, #ffe48a, #f2bd1d 55%, #d79c00);
-  --aio-tone-fg: #2b2100;
+  --aio-tone-bg: radial-gradient(120% 120% at 25% 15%, color-mix(in srgb, var(--v64-learning), rgb(var(--v-theme-surface-container-lowest)) 45%), var(--v64-learning) 55%, color-mix(in srgb, var(--v64-learning), var(--v64-learning-strong) 35%));
+  --aio-tone-fg: var(--v64-on-learning);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -2px 0 rgb(120 80 0 / 18%),
     0 calc(var(--aio-s) * 0.12) calc(var(--aio-s) * 0.3) calc(var(--aio-s) * -0.14) rgb(160 110 0 / 70%);
 }
 .aio-mark--secondary { --aio-tone-bg: rgb(var(--v-theme-secondary-container)); --aio-tone-fg: rgb(var(--v-theme-on-secondary-container)); }
-.aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #7d5260 18%, rgb(var(--v-theme-surface))); --aio-tone-fg: #633b48; }
-.v-theme--dark .aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #efb8c8 20%, rgb(var(--v-theme-surface))); --aio-tone-fg: #efb8c8; }
+.aio-mark--tertiary { --aio-tone-bg: rgb(var(--v-theme-tertiary-container)); --aio-tone-fg: rgb(var(--v-theme-on-tertiary-container)); }
 .aio-mark--neutral { --aio-tone-bg: rgb(var(--v-theme-surface-container-highest)); --aio-tone-fg: rgb(var(--v-theme-on-surface)); }
 
 /* The crown sits on the tile's top edge: much wider than the tile, under half as tall. */
@@ -73,7 +72,7 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 .aio-mark__crown i {
   background:
     linear-gradient(105deg, transparent 38%, rgb(255 248 210 / 90%) 48%, transparent 58%) 100% 0 / 320% 100%,
-    linear-gradient(180deg, #ffe48a, #f2bd1d 50%, #c48a00);
+    linear-gradient(180deg, color-mix(in srgb, var(--v64-learning), rgb(var(--v-theme-surface-container-lowest)) 45%), var(--v64-learning) 50%, color-mix(in srgb, var(--v64-learning), var(--v64-learning-strong) 35%));
   display: block;
   height: 100%;
   -webkit-mask: var(--aio-crown-mask) center / contain no-repeat;

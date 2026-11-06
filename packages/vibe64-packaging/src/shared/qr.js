@@ -676,11 +676,11 @@ function escapeAttribute(value) {
 
 /**
  * A crisp, scalable SVG: one path, a quiet zone of `margin` modules, colours
- * as given (defaults follow the surrounding text colour on a white tile, so it
- * stays scannable in dark themes).
+ * as given (by default the modules take the surrounding text colour on a
+ * transparent tile, so the caller's light tile keeps it scannable in dark themes).
  */
 function qrSvg(text, options = {}) {
-  const { level = "M", margin = 4, dark = "#000000", light = "#ffffff", title = "" } = options;
+  const { level = "M", margin = 4, dark = "currentColor", light = "transparent", title = "" } = options;
   const { size, modules } = qrMatrix(text, { level });
   const extent = size + margin * 2;
   const parts = [];

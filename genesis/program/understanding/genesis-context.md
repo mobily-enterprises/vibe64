@@ -32,6 +32,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue`
+- `packages/vibe64-system-graph/src/theme/palettes.js`
 - `packages/vibe64-system-graph/src/client/layeredGraph.js`
 - `packages/vibe64-genesis/src/server/architectureInspection.js`
 - `packages/vibe64-genesis/src/server/architectureLayout.js`
@@ -198,7 +199,7 @@ selecting one opens its preview and cited files in a dedicated Program reader.
 Read full explanation opens the complete authored text in a separate scrollable
 dialog, full-screen on phones; closing it preserves the Program and source list. Each module explicitly
 names a reading anchor in its owning subsystem, exposed by Genesis as mainSource.
-File icons distinguish it with a gold border, star and Main label. Other files
+File icons distinguish it with an amber border, star and Main label. Other files
 show only Part of links to the Program reader; cross-subsystem library citations remain
 visible without changing ownership. The former list-and-detail screen is retired.
 Program is fallible authored explanation, not proof of a function's behavior or
@@ -221,6 +222,11 @@ loader. `pageStoryboard` uses explicit parents and registrations; parents centre
 over child subtrees, siblings never wrap into descendants and roots remain
 independent. `architectureOverview` places UI above Engine on the existing
 Vue Flow canvas. Fit/UI/Engine and a compact options menu share host navigation.
+The canvas, nodes, inspectors and edges draw with theme roles, so they follow the
+person's light or dark appearance: pages and focus use primary, subsystems the
+theme's teal subsystem colour, libraries and UI-call arrows tertiary, main files,
+cycles and unresolved items warning; the file tree's language tints are content
+colours from the package's `src/theme/palettes.js`.
 
 `engineOverview` shows every native source owner as a circle. Genesis supplies readable names/descriptions. Architecture
 layout supplies only explicit library/support roles

@@ -9,6 +9,7 @@
       rounded="lg"
       color="surface-light"
       class="vibe64-terminal-surface"
+      :style="{ '--vibe64-terminal-background': terminalColours.background, '--vibe64-terminal-foreground': terminalColours.foreground }"
       :class="{
         'vibe64-terminal-surface--collapsed': !surfaceExpanded,
         'vibe64-terminal-surface--draggable': draggable,
@@ -210,6 +211,7 @@ import { computed, ref, useId, watch } from "vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useVibe64TerminalMobileTakeover } from "@/composables/useVibe64TerminalMobileTakeover.js";
 import { terminalLastMeaningfulLine } from "@/lib/codexOutput.js";
+import { terminalColours } from "@/theme/terminal.js";
 
 defineOptions({ inheritAttrs: false });
 
@@ -539,7 +541,7 @@ watch(() => props.starting, (starting) => {
 }
 
 .vibe64-terminal-surface__host {
-  background: #101216;
+  background: var(--vibe64-terminal-background);
   border-radius: 0.45rem;
   height: var(--vibe64-terminal-host-height);
   min-height: 0;
@@ -547,9 +549,9 @@ watch(() => props.starting, (starting) => {
 }
 
 .vibe64-terminal-surface__log {
-  background: #101216;
+  background: var(--vibe64-terminal-background);
   border-radius: 0.45rem;
-  color: #f1f3f4;
+  color: var(--vibe64-terminal-foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.75rem;
   height: var(--vibe64-terminal-host-height);

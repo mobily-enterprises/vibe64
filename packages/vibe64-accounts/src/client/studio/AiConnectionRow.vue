@@ -147,7 +147,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
 
 <style scoped>
 .ai-row {
-  --ai-row-on-success: color-mix(in srgb, rgb(var(--v-theme-success)) 55%, #000);
+  --ai-row-on-success: rgb(var(--v-theme-on-success-container));
   --ai-row-type-title-sm: 500 0.9375rem/1.375rem var(--v64-font-family);
   --ai-row-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
   background: rgb(var(--v-theme-surface));
@@ -158,7 +158,6 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
   min-width: 0;
   padding: var(--v64-space-4);
 }
-.v-theme--dark .ai-row { --ai-row-on-success: color-mix(in srgb, rgb(var(--v-theme-success)) 45%, #fff); }
 .ai-row--attention {
   background: color-mix(in srgb, rgb(var(--v-theme-warning)) 6%, rgb(var(--v-theme-surface)));
   border-color: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, rgb(var(--v-theme-outline-variant)));

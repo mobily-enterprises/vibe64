@@ -1,5 +1,6 @@
 <script setup>
 import { useVoiceAvatar } from "@jskit-ai/assistant-voice/client";
+import { mercBlueMangaAvatar } from "../theme/palettes.js";
 
 const props = defineProps({
   mouthLevel: {
@@ -289,45 +290,45 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 
 <style scoped>
 .merc-avatar__shirt {
-  fill: #72777c;
+  fill: v-bind("mercBlueMangaAvatar.shirt");
 }
 
 .merc-avatar--blond-girl .merc-avatar__shirt {
-  fill: #f4f1e7;
-  stroke: #24252b;
+  fill: v-bind("mercBlueMangaAvatar.blondGirlShirt");
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 4;
 }
 
 .merc-avatar__undershirt {
-  fill: #d63a39;
-  stroke: #24252b;
+  fill: v-bind("mercBlueMangaAvatar.undershirt");
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 4;
 }
 
 .merc-avatar__hood {
-  fill: #c9d329;
-  stroke: #24252b;
+  fill: v-bind("mercBlueMangaAvatar.hood");
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 4;
 }
 
 .merc-avatar__hood-shadow {
-  fill: #aebb24;
+  fill: v-bind("mercBlueMangaAvatar.hoodShadow");
   opacity: 0.9;
 }
 
 .merc-avatar__jacket-panel {
-  fill: #f8f7f0;
-  stroke: #24252b;
+  fill: v-bind("mercBlueMangaAvatar.jacketPanel");
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 4;
 }
 
 .merc-avatar__shirt-neckline {
   fill: none;
-  stroke: #f7f4eb;
+  stroke: v-bind("mercBlueMangaAvatar.shirtNecklineStroke");
   stroke-linecap: round;
   stroke-width: 4;
 }
@@ -335,27 +336,27 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 .merc-avatar__neck,
 .merc-avatar__ear,
 .merc-avatar__face {
-  fill: #e2a06f;
+  fill: v-bind("mercBlueMangaAvatar.face");
 }
 
 .merc-avatar--blond-girl .merc-avatar__neck,
 .merc-avatar--blond-girl .merc-avatar__ear,
 .merc-avatar--blond-girl .merc-avatar__face {
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 4;
 }
 
 .merc-avatar__neck {
-  fill: #d78d60;
+  fill: v-bind("mercBlueMangaAvatar.neck");
 }
 
 .merc-avatar__hair {
-  fill: #237fbd;
+  fill: v-bind("mercBlueMangaAvatar.hair");
 }
 
 .merc-avatar--blond-girl .merc-avatar__hair {
-  stroke: #22242b;
+  stroke: v-bind("mercBlueMangaAvatar.blondGirlHairStroke");
   stroke-linejoin: round;
   stroke-width: 4;
 }
@@ -363,44 +364,44 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 .merc-avatar__hair-lock {
   fill: none;
   opacity: 0.72;
-  stroke: #4fa6d7;
+  stroke: v-bind("mercBlueMangaAvatar.hairLockStroke");
   stroke-linecap: round;
   stroke-width: 5;
 }
 
 .merc-avatar__hair-swoops {
   fill: none;
-  stroke: #67add6;
+  stroke: v-bind("mercBlueMangaAvatar.hairSwoopsStroke");
   stroke-linecap: round;
   stroke-width: 4;
 }
 
 .merc-avatar__brow {
   fill: none;
-  stroke: #8b6528;
+  stroke: v-bind("mercBlueMangaAvatar.browStroke");
   stroke-linecap: round;
   stroke-width: 7;
 }
 
 .merc-avatar--blond-girl .merc-avatar__brow {
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-width: 3.5;
 }
 
 .merc-avatar__eye-white {
-  fill: #fffaf4;
+  fill: v-bind("mercBlueMangaAvatar.eyeWhite");
 }
 
 .merc-avatar--blond-girl .merc-avatar__eye-white {
-  fill: #fffef7;
-  stroke: #24252b;
+  fill: v-bind("mercBlueMangaAvatar.blondGirlEyeWhite");
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-width: 2.6;
 }
 
 .merc-avatar__eyelashes,
 .merc-avatar__eyeliner {
   fill: none;
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linecap: round;
 }
 
@@ -413,83 +414,83 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 }
 
 .merc-avatar__iris {
-  fill: #2f3136;
+  fill: v-bind("mercBlueMangaAvatar.iris");
 }
 
 .merc-avatar__pupil {
-  fill: #0e0f12;
+  fill: v-bind("mercBlueMangaAvatar.pupil");
 }
 
 .merc-avatar__eye-light,
 .merc-avatar__teeth {
-  fill: #fffaf0;
+  fill: v-bind("mercBlueMangaAvatar.teeth");
 }
 
 .merc-avatar__nose {
   fill: none;
   opacity: 0.5;
-  stroke: #c4826e;
+  stroke: v-bind("mercBlueMangaAvatar.noseStroke");
   stroke-linecap: round;
   stroke-width: 3;
 }
 
 .merc-avatar--blond-girl .merc-avatar__nose {
   opacity: 0.8;
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-width: 2.4;
 }
 
 .merc-avatar__cheek {
-  fill: #ed9993;
+  fill: v-bind("mercBlueMangaAvatar.cheek");
   opacity: 0.22;
 }
 
 .merc-avatar--blond-girl .merc-avatar__cheek {
-  fill: #df865e;
+  fill: v-bind("mercBlueMangaAvatar.blondGirlCheek");
   opacity: 0.14;
 }
 
 .merc-avatar__mouth-inside {
-  fill: #292227;
+  fill: v-bind("mercBlueMangaAvatar.mouthInside");
 }
 
 .merc-avatar--blond-girl .merc-avatar__mouth-inside {
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-linejoin: round;
   stroke-width: 2.6;
 }
 
 .merc-avatar__tongue {
-  fill: #e94e44;
+  fill: v-bind("mercBlueMangaAvatar.tongue");
 }
 
 .merc-avatar__lip {
   fill: none;
-  stroke: #873f49;
+  stroke: v-bind("mercBlueMangaAvatar.lipStroke");
   stroke-linecap: round;
   stroke-width: 5;
 }
 
 .merc-avatar--blond-girl .merc-avatar__lip {
-  stroke: #24252b;
+  stroke: v-bind("mercBlueMangaAvatar.ink");
   stroke-width: 3.5;
 }
 
 .merc-avatar__lip-light {
   fill: none;
-  stroke: #984d55;
+  stroke: v-bind("mercBlueMangaAvatar.lipLightStroke");
   stroke-width: 5;
 }
 
 .merc-avatar__earring {
   fill: none;
-  stroke: #d7b76e;
+  stroke: v-bind("mercBlueMangaAvatar.earringStroke");
   stroke-width: 3;
 }
 
 .merc-avatar__earring-drop {
-  fill: #dca4c8;
-  stroke: #a77b42;
+  fill: v-bind("mercBlueMangaAvatar.earringDrop");
+  stroke: v-bind("mercBlueMangaAvatar.earringDropStroke");
   stroke-linejoin: round;
   stroke-width: 1.5;
 }

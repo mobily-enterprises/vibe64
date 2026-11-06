@@ -23,7 +23,7 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
 
 <style scoped>
 .aio-nudge {
-  --aio-crown-strong: #8a6a00;
+  --aio-crown-strong: var(--v64-learning-strong);
   align-items: center;
   background: rgb(var(--v-theme-secondary-container));
   border-radius: var(--v64-shape-md);
@@ -33,7 +33,6 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
   gap: var(--v64-space-1) var(--v64-space-3);
   padding: var(--v64-space-3) var(--v64-space-1) var(--v64-space-3) var(--v64-space-4);
 }
-.v-theme--dark .aio-nudge { --aio-crown-strong: #f5c518; }
 .aio-nudge__crown { color: var(--aio-crown-strong); flex: none; }
 .aio-nudge__text { flex: 1 1 12rem; font: var(--v64-type-body-md); margin: 0; }
 .aio-nudge__actions { align-items: center; display: flex; margin-left: auto; }

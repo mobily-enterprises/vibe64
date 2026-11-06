@@ -43,8 +43,8 @@ const props = defineProps({
 
 <style scoped>
 :deep(.v-btn--active) {
-  background: var(--studio-control-active-bg, #e7e7e7);
-  color: var(--studio-control-text, #202124);
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container)));
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface)));
   font-weight: 560;
 }
 </style>

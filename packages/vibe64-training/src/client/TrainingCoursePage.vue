@@ -159,7 +159,7 @@ const path = computed(() => {
   --tcp-node: 40px;
   --tcp-done: rgb(var(--v-theme-success));
   --tcp-done-container: rgb(var(--v-theme-success-container));
-  --tcp-progress: var(--v64-learning, #f5c518);
+  --tcp-progress: var(--v64-learning);
   --tcp-progress-container: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
   display: flex;
   flex-direction: column;
@@ -303,8 +303,8 @@ const path = computed(() => {
   font-variant-numeric: tabular-nums;
   transition: transform var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
 }
-.is-completed > .training-course-page__node { border-color: transparent; background: var(--tcp-done); color: rgb(var(--v-theme-on-success)); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-done) 60%, #000); }
-.is-in-progress > .training-course-page__node { border-color: transparent; background: var(--tcp-progress); color: var(--v64-on-learning, #2b2100); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-progress) 60%, #000); }
+.is-completed > .training-course-page__node { border-color: transparent; background: var(--tcp-done); color: rgb(var(--v-theme-on-success)); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-done) 60%, rgb(var(--v-theme-shadow))); }
+.is-in-progress > .training-course-page__node { border-color: transparent; background: var(--tcp-progress); color: var(--v64-on-learning); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-progress) 60%, rgb(var(--v-theme-shadow))); }
 .is-next > .training-course-page__node { border-color: rgb(var(--v-theme-primary)); color: rgb(var(--v-theme-primary)); }
 .is-next > .training-course-page__node::after {
   content: "";

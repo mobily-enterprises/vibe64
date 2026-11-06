@@ -21,6 +21,7 @@ infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/client/TrainingCoursePage.vue`
 - `packages/vibe64-training/src/client/TrainingCourseCreator.vue`
 - `packages/vibe64-training/src/client/courseProgress.js`
+- `packages/vibe64-training/src/theme/palettes.js`
 - `packages/vibe64-training/src/client/TrainingCourseCatalogue.vue`
 - `packages/vibe64-training/src/server/courseInstaller.js`
 - `packages/vibe64-execution/src/host/commandEnvironment.js`

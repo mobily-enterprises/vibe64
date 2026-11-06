@@ -1779,7 +1779,7 @@ through the existing native index, while local declarations remain internal.
 A callable has a Pseudocode field (a short purpose statement followed by informational English
 steps), and exact Code. File membership links open the dedicated Program explanation inside Architecture,
 with its mandatory main source and supporting files; they never open the authored
-Markdown document. Gold main-file icons distinguish it in the browser.
+Markdown document. Amber main-file icons distinguish it in the browser.
 The Program explains a capability, not each declaration. The file opens as a
 document: an empty Explanation field offers Generate explanation, and saved text
 appears directly with Update explanation. Selecting a callable expands its

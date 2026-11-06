@@ -120,7 +120,7 @@ export function pageStoryboard(ui) {
     edges: rows.filter(page => page.parentId).map(page => ({
       id: `parent:${page.id}`, source: page.parentId, target: page.id,
       sourceHandle: 'children', targetHandle: 'parent', type: 'smoothstep',
-      selectable: false, style: { stroke: '#93a7ba', strokeWidth: 2 }
+      selectable: false, style: { stroke: 'rgb(var(--v-theme-outline))', strokeWidth: 2 }
     }))
   };
 }
@@ -425,8 +425,8 @@ export function architectureOverview(architecture, expandedSubsystemId = '', ord
         id: `call:${page.id}:${connection.id}`, source: page.id, target: owner.id,
         sourceHandle: 'engine-out', targetHandle: `controller:${file.id}`, type: 'controller',
         selectable: true, zIndex: 2,
-        markerEnd: { type: 'arrowclosed', color: '#7954b3', width: 18, height: 18 },
-        style: { stroke: '#7954b3', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: 'rgb(var(--v-theme-tertiary))', width: 18, height: 18 },
+        style: { stroke: 'rgb(var(--v-theme-tertiary))', strokeWidth: 2 },
         data: { connection, controllerFile: file.path, operation,
           label: `${file.path.split('/').pop()} · ${operation}` }
       });

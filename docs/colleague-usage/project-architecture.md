@@ -58,7 +58,7 @@ offer **Show usage** to open it there. See
    text in a separate scrollable dialog, filling the screen on phones. Close it
    with **×**, Esc or a click outside on desktop to return to the unchanged Program
    view. The subsystem list limits each Program preview to two lines. Click a source icon to open that file with the shared
-   Files viewer. A gold border, star and **Main · …** identify the mandatory main
+   Files viewer. An amber border, star and **Main · …** identify the mandatory main
    source; supporting icons say **Part of · …**. A library can participate in
    another subsystem’s Program without changing source ownership.
    There are no links to the raw Genesis subsystem or Program documents here.

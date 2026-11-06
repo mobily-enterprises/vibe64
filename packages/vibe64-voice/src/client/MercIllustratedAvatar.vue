@@ -1,5 +1,6 @@
 <script setup>
 import { useVoiceAvatar } from "@jskit-ai/assistant-voice/client";
+import { mercAvatar } from "../theme/palettes.js";
 
 const props = defineProps({
   mouthLevel: {
@@ -215,20 +216,20 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 
 <style scoped>
 .merc-avatar__shirt {
-  fill: #72777c;
+  fill: v-bind("mercAvatar.shirt");
 }
 
 .merc-avatar__blouse-neckline {
   fill: none;
-  stroke: #e8c9dd;
+  stroke: v-bind("mercAvatar.blouseNecklineStroke");
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 5;
 }
 
 .merc-avatar__blouse-bow {
-  fill: #dca4c8;
-  stroke: #5e466f;
+  fill: v-bind("mercAvatar.blouseBow");
+  stroke: v-bind("mercAvatar.blouseBowStroke");
   stroke-linejoin: round;
   stroke-width: 2;
 }
@@ -236,51 +237,51 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 .merc-avatar__neck,
 .merc-avatar__ear,
 .merc-avatar__face {
-  fill: #f1c7a3;
+  fill: v-bind("mercAvatar.face");
 }
 
 .merc-avatar__neck {
-  fill: #e6b18d;
+  fill: v-bind("mercAvatar.neck");
 }
 
 .merc-avatar__hair {
-  fill: #d2a13a;
+  fill: v-bind("mercAvatar.hair");
 }
 
 .merc-avatar__hair--fringe {
-  fill: #e2b84e;
+  fill: v-bind("mercAvatar.hairFringe");
 }
 
 .merc-avatar__hair-lock {
   fill: none;
   opacity: 0.72;
-  stroke: #f5d978;
+  stroke: v-bind("mercAvatar.hairLockStroke");
   stroke-linecap: round;
   stroke-width: 5;
 }
 
 .merc-avatar__hair-swoops {
   fill: none;
-  stroke: #f6ce63;
+  stroke: v-bind("mercAvatar.hairSwoopsStroke");
   stroke-linecap: round;
   stroke-width: 5;
 }
 
 .merc-avatar__brow {
   fill: none;
-  stroke: #8b6528;
+  stroke: v-bind("mercAvatar.browStroke");
   stroke-linecap: round;
   stroke-width: 7;
 }
 
 .merc-avatar__eye-white {
-  fill: #fffaf4;
+  fill: v-bind("mercAvatar.eyeWhite");
 }
 
 .merc-avatar__eyelashes,
 .merc-avatar__eyeliner {
   fill: none;
-  stroke: #765021;
+  stroke: v-bind("mercAvatar.eyelinerStroke");
   stroke-linecap: round;
 }
 
@@ -293,61 +294,61 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 }
 
 .merc-avatar__iris {
-  fill: #5c3829;
+  fill: v-bind("mercAvatar.iris");
 }
 
 .merc-avatar__pupil {
-  fill: #241815;
+  fill: v-bind("mercAvatar.pupil");
 }
 
 .merc-avatar__eye-light,
 .merc-avatar__teeth {
-  fill: #fffaf0;
+  fill: v-bind("mercAvatar.teeth");
 }
 
 .merc-avatar__nose {
   fill: none;
   opacity: 0.5;
-  stroke: #c4826e;
+  stroke: v-bind("mercAvatar.noseStroke");
   stroke-linecap: round;
   stroke-width: 3;
 }
 
 .merc-avatar__cheek {
-  fill: #ed9993;
+  fill: v-bind("mercAvatar.cheek");
   opacity: 0.22;
 }
 
 .merc-avatar__mouth-inside {
-  fill: #592d35;
+  fill: v-bind("mercAvatar.mouthInside");
 }
 
 .merc-avatar__tongue {
-  fill: #c96870;
+  fill: v-bind("mercAvatar.tongue");
 }
 
 .merc-avatar__lip {
   fill: none;
-  stroke: #873f49;
+  stroke: v-bind("mercAvatar.lipStroke");
   stroke-linecap: round;
   stroke-width: 5;
 }
 
 .merc-avatar__lip-light {
   fill: none;
-  stroke: #984d55;
+  stroke: v-bind("mercAvatar.lipLightStroke");
   stroke-width: 5;
 }
 
 .merc-avatar__earring {
   fill: none;
-  stroke: #d7b76e;
+  stroke: v-bind("mercAvatar.earringStroke");
   stroke-width: 3;
 }
 
 .merc-avatar__earring-drop {
-  fill: #dca4c8;
-  stroke: #a77b42;
+  fill: v-bind("mercAvatar.earringDrop");
+  stroke: v-bind("mercAvatar.earringDropStroke");
   stroke-linejoin: round;
   stroke-width: 1.5;
 }

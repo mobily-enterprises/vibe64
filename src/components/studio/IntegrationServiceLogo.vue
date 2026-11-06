@@ -17,13 +17,14 @@ const logo = computed(() => logos[props.provider]);
 </script>
 
 <template>
-  <span class="integration-service-logo mr-3" aria-hidden="true">
+  <!-- Vendor logos keep their own colours on a light tile in either appearance. -->
+  <v-sheet tag="span" class="integration-service-logo mr-3" color="surface-container-lowest" theme="light" aria-hidden="true">
     <img v-if="logo" :src="logo" alt="" width="28" height="28" loading="lazy">
     <v-icon v-else :icon="provider === 'ai' ? '$autoAwesomeFilled' : '$cable'" size="28" color="grey-darken-3" />
-  </span>
+  </v-sheet>
 </template>
 
 <style scoped>
-.integration-service-logo { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 8px; background: #fff; /* Preserve vendor colors on a neutral backing in either theme. */ }
+.integration-service-logo { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 8px; }
 .integration-service-logo img { display: block; object-fit: contain; }
 </style>

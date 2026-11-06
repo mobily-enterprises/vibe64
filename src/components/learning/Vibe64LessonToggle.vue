@@ -73,9 +73,9 @@ const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
 .vibe64-lesson-toggle:hover::before { opacity: 0.08; }
 .vibe64-lesson-toggle:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-lesson-toggle.is-on {
-  background: var(--v64-learning, #f5c518);
-  border-color: var(--v64-learning-strong, #f5c518);
-  color: var(--v64-on-learning, #2b2100);
+  background: var(--v64-learning);
+  border-color: var(--v64-learning-strong);
+  color: var(--v64-on-learning);
   font-weight: 700;
 }
 /* The little Material switch: track and thumb, off left, on right with a check. */
@@ -105,13 +105,13 @@ const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
   width: 8px;
 }
 .vibe64-lesson-toggle.is-on .vibe64-lesson-toggle__switch {
-  background: var(--v64-on-learning, #2b2100);
-  border-color: var(--v64-on-learning, #2b2100);
+  background: var(--v64-on-learning);
+  border-color: var(--v64-on-learning);
   opacity: 1;
 }
 .vibe64-lesson-toggle.is-on .vibe64-lesson-toggle__thumb {
-  background: var(--v64-learning, #f5c518);
-  color: var(--v64-on-learning, #2b2100);
+  background: var(--v64-learning);
+  color: var(--v64-on-learning);
   height: 11px;
   left: 13px;
   top: 1px;

@@ -101,14 +101,13 @@ function connectAgain() {
 
 <style scoped>
 .ai-manage {
-  --aio-crown: #f5c518;
-  --aio-crown-strong: #8a6a00;
+  --aio-crown: var(--v64-learning);
+  --aio-crown-strong: var(--v64-learning-strong);
   background: rgb(var(--v-theme-surface-container-lowest));
   color: rgb(var(--v-theme-on-surface));
   font-family: var(--v64-font-family);
   letter-spacing: normal;
 }
-.v-theme--dark .ai-manage { --aio-crown-strong: #f5c518; }
 .ai-manage :deep(.v-btn:not(.v-btn--icon)) { border-radius: var(--v64-shape-md); letter-spacing: 0; text-transform: none; }
 .ai-manage :deep(.v-btn:focus-visible) { outline: var(--v64-focus-ring-width) solid rgb(var(--v-theme-primary)); outline-offset: var(--v64-focus-ring-offset); }
 

@@ -331,7 +331,7 @@ async function save() {
 .database-overview__actor p { font-size: 13px; margin: 8px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .database-overview__actor small { font-size: 12px; }
 .database-overview__status { position: absolute; bottom: 8px; left: 8px; padding: 8px; background: rgb(var(--v-theme-surface)); }
-.database-overview__inspector { position: absolute; top: 8px; right: 8px; max-height: calc(100% - 16px); width: min(360px, calc(100% - 16px)); overflow: auto; padding: 14px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-on-surface), .2); border-radius: 10px; overflow-wrap: anywhere; box-shadow: 0 2px 10px #0002; }
+.database-overview__inspector { position: absolute; top: 8px; right: 8px; max-height: calc(100% - 16px); width: min(360px, calc(100% - 16px)); overflow: auto; padding: 14px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-on-surface), .2); border-radius: 10px; overflow-wrap: anywhere; box-shadow: 0 2px 10px rgba(var(--v-theme-shadow), 0.13); }
 .database-overview__close { float: right; }
 .database-overview__inspector p { margin: 12px 0; font-size: 13px; }
 .database-overview__relationship { border-top: 1px solid rgba(var(--v-theme-on-surface), .15); padding-top: 10px; margin-top: 10px; }

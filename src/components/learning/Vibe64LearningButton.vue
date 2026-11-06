@@ -40,7 +40,7 @@ const title = computed(() => learn.value ? "Switch to Develop (your projects)" :
    is a solid yellow learner plate with a crisp ink edge, a soft glow and a small
    pop. Same footprint as the neighbouring header icon buttons. */
 .vibe64-learning-button {
-  --v64-plate-ink: #1d1600;
+  --v64-plate-ink: var(--v64-on-learning);
   background: rgb(var(--v-theme-surface-container-low)) !important;
   border: 1.5px solid rgb(var(--v-theme-outline)) !important;
   border-radius: var(--v64-shape-sm);
@@ -75,7 +75,7 @@ const title = computed(() => learn.value ? "Switch to Develop (your projects)" :
 .vibe64-learning-button--active,
 .vibe64-learning-button--active:hover {
   animation: vibe64-learning-button-pop var(--v64-duration-long) var(--v64-ease-emphasized-decelerate);
-  background: linear-gradient(150deg, #ffe680 0%, var(--v64-learning) 55%, #f0b400 100%) !important;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--v64-learning), rgb(var(--v-theme-surface-container-lowest)) 45%) 0%, var(--v64-learning) 55%, color-mix(in srgb, var(--v64-learning), var(--v64-learning-strong) 35%) 100%) !important;
   border-color: var(--v64-plate-ink) !important;
   box-shadow: 0 0 0 3px var(--v64-learning-glow), var(--v64-elevation-1);
   color: var(--v64-plate-ink) !important;

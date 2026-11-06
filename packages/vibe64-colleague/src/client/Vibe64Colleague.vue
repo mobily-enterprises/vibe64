@@ -481,6 +481,6 @@ onBeforeUnmount(() => {
 .vibe64-colleague__history { display: flex; flex-direction: column; gap: 8px; padding: 16px; min-height: 0; overflow: auto; }
 .vibe64-colleague__history-annotation p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vibe64-colleague__voice-feedback { flex: 1 1 100%; min-width: 0; }
-.vibe64-colleague__step-button { flex: 0 0 auto; min-width: 0; padding: 0 12px; font-size: 0.875rem; line-height: 1.25rem; background: var(--v64-learning, #f5c518) !important; color: var(--v64-on-learning, #2b2100) !important; font-weight: 700; letter-spacing: 0; text-transform: none; }
-.vibe64-colleague__step-button--passed { background: var(--v64-learning-container, #fdf3c4) !important; color: var(--v64-on-learning-container, inherit) !important; }
+.vibe64-colleague__step-button { flex: 0 0 auto; min-width: 0; padding: 0 12px; font-size: 0.875rem; line-height: 1.25rem; background: var(--v64-learning) !important; color: var(--v64-on-learning) !important; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.vibe64-colleague__step-button--passed { background: var(--v64-learning-container) !important; color: var(--v64-on-learning-container, inherit) !important; }
 </style>

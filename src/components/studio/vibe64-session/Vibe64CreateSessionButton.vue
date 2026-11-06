@@ -112,7 +112,7 @@ function handleCreated(response) {
 
 <style scoped>
 .studio-ai-sessions__create-button {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  background: var(--studio-control-rest-bg, rgb(var(--v-theme-surface-container-high))) !important;
   border: 1px solid transparent;
   border-radius: 999px;
   box-shadow: none !important;
@@ -126,7 +126,7 @@ function handleCreated(response) {
 }
 
 .studio-ai-sessions__create-button:hover {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container))) !important;
 }
 
 .studio-ai-sessions__create-button :deep(.v-icon) {
@@ -153,11 +153,11 @@ function handleCreated(response) {
 }
 
 .studio-ai-sessions__preview-create-button {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container))) !important;
   border: 1px solid transparent;
   border-radius: var(--studio-control-radius, 7px);
   box-shadow: none !important;
-  color: var(--studio-control-text, #202124) !important;
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface))) !important;
   font-weight: 500;
   letter-spacing: 0;
   min-height: 3rem;
@@ -165,7 +165,7 @@ function handleCreated(response) {
 }
 
 .studio-ai-sessions__preview-create-button:hover {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  background: var(--studio-control-rest-bg, rgb(var(--v-theme-surface-container-high))) !important;
 }
 
 .studio-ai-sessions__create-button--unavailable {
@@ -174,7 +174,7 @@ function handleCreated(response) {
 }
 
 .studio-ai-sessions__create-button--unavailable:hover {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  background: var(--studio-control-rest-bg, rgb(var(--v-theme-surface-container-high))) !important;
 }
 
 @keyframes studio-ai-session-create-pulse {

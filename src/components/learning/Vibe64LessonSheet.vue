@@ -28,7 +28,7 @@ const learning = useVibe64Learning();
 <style scoped>
 .vibe64-lesson-sheet {
   background: var(--v64-learning-container, rgb(var(--v-theme-surface)));
-  border: 1px solid var(--v64-learning-strong, #f5c518);
+  border: 1px solid var(--v64-learning-strong);
   border-radius: var(--v64-shape-md, 12px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   display: flex;
@@ -41,7 +41,7 @@ const learning = useVibe64Learning();
 }
 .vibe64-lesson-sheet__header {
   align-items: center;
-  border-bottom: 1px solid var(--v64-learning-strong, #f5c518);
+  border-bottom: 1px solid var(--v64-learning-strong);
   color: var(--v64-on-learning-container, inherit);
   display: flex;
   flex: 0 0 auto;

@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { courseArt, courseMonogram } from "./courseArt.js";
+import { courseCover } from "../theme/palettes.js";
 
 // Decorative course cover. The pattern comes from the course ID; the lesson
 // path mirrors the supplied saved statuses only (it is hidden from assistive
@@ -64,34 +65,34 @@ const path = computed(() => {
       </defs>
       <rect width="320" height="120" :fill="`url(#${art.id}-bg)`" />
       <rect width="320" height="120" :fill="`url(#${art.id}-glow)`" />
-      <g v-if="art.pattern === 'waves'" fill="none" stroke="#fff" stroke-linecap="round">
+      <g v-if="art.pattern === 'waves'" fill="none" stroke="currentColor" stroke-linecap="round">
         <path v-for="(d, index) in waves" :key="index" :d="d" :stroke-opacity="0.14 + index * 0.06" :stroke-width="10 - index * 3" />
       </g>
-      <g v-else-if="art.pattern === 'orbits'" fill="none" stroke="#fff">
+      <g v-else-if="art.pattern === 'orbits'" fill="none" stroke="currentColor">
         <circle v-for="(r, index) in orbits.radii" :key="r" :cx="orbits.cx" :cy="orbits.cy" :r="r" :stroke-opacity="0.26 - index * 0.05" stroke-width="2" />
         <circle :cx="orbits.cx" :cy="orbits.cy" r="10" :fill="art.accent" fill-opacity="0.7" stroke="none" />
       </g>
       <g v-else-if="art.pattern === 'grid'">
         <circle
           v-for="dot in dots" :key="`${dot.x}-${dot.y}`" :cx="dot.x" :cy="dot.y" :r="dot.on ? 3.2 : 1.6"
-          :fill="dot.on ? art.accent : '#fff'" :fill-opacity="dot.on ? 0.9 : 0.28"
+          :fill="dot.on ? art.accent : 'currentColor'" :fill-opacity="dot.on ? 0.9 : 0.28"
         />
       </g>
-      <g v-else fill="#fff">
+      <g v-else fill="currentColor">
         <path v-for="(d, index) in peaks" :key="index" :d="d" :fill-opacity="0.08 + index * 0.06" />
       </g>
       <g v-if="path" class="training-course-art__path">
-        <path :d="path.d" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round" />
+        <path :d="path.d" fill="none" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round" />
         <g v-for="(node, index) in path.nodes" :key="index">
           <circle
-            :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? '#fff' : 'rgba(0,0,0,0.18)'"
-            stroke="#fff" :stroke-opacity="node.status === 'not-started' ? 0.6 : 1" stroke-width="2"
+            :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? 'currentColor' : 'rgba(0,0,0,0.18)'"
+            stroke="currentColor" :stroke-opacity="node.status === 'not-started' ? 0.6 : 1" stroke-width="2"
           />
           <path
             v-if="node.status === 'completed'" :d="`M ${node.x - 3.2} ${node.y} l 2.2 2.3 l 4.2 -4.6`" fill="none"
             :stroke="art.from" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
           />
-          <circle v-else-if="node.status === 'in-progress'" :cx="node.x" :cy="node.y" r="3" fill="#fff" />
+          <circle v-else-if="node.status === 'in-progress'" :cx="node.x" :cy="node.y" r="3" fill="currentColor" />
         </g>
       </g>
     </svg>
@@ -100,14 +101,14 @@ const path = computed(() => {
 </template>
 
 <style scoped>
-.training-course-art { position: relative; height: 112px; overflow: hidden; isolation: isolate; }
+.training-course-art { position: relative; height: 112px; overflow: hidden; isolation: isolate; color: v-bind("courseCover.mark"); }
 .training-course-art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .training-course-art__monogram {
   position: absolute; left: var(--v64-space-4, 16px); bottom: var(--v64-space-3, 12px);
   display: grid; place-items: center; width: 48px; height: 48px;
   border-radius: var(--v64-shape-md, 12px);
   background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(6px); color: #fff; font: 700 1.125rem/1 system-ui, sans-serif; letter-spacing: 0.02em;
+  backdrop-filter: blur(6px); font: 700 1.125rem/1 system-ui, sans-serif; letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 </style>

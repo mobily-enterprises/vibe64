@@ -1,0 +1,65 @@
+// Content colours: the avatars' artwork, drawn the same in light and dark. They are pictures, not interface
+// colours, so they are plain values here and never theme roles.
+
+// Merc, the illustrated assistant avatar.
+export const mercAvatar = Object.freeze({
+  shirt: "#72777c",
+  blouseNecklineStroke: "#e8c9dd",
+  blouseBow: "#dca4c8",
+  blouseBowStroke: "#5e466f",
+  face: "#f1c7a3",
+  neck: "#e6b18d",
+  hair: "#d2a13a",
+  hairFringe: "#e2b84e",
+  hairLockStroke: "#f5d978",
+  hairSwoopsStroke: "#f6ce63",
+  browStroke: "#8b6528",
+  eyeWhite: "#fffaf4",
+  eyelinerStroke: "#765021",
+  iris: "#5c3829",
+  pupil: "#241815",
+  teeth: "#fffaf0",
+  noseStroke: "#c4826e",
+  cheek: "#ed9993",
+  mouthInside: "#592d35",
+  tongue: "#c96870",
+  lipStroke: "#873f49",
+  lipLightStroke: "#984d55",
+  earringStroke: "#d7b76e",
+  earringDrop: "#dca4c8",
+  earringDropStroke: "#a77b42"
+});
+
+// Merc in blue manga style, with the blond-girl variant's own shirt, hair, eyes and cheeks.
+export const mercBlueMangaAvatar = Object.freeze({
+  shirt: "#72777c",
+  blondGirlShirt: "#f4f1e7",
+  ink: "#24252b",
+  undershirt: "#d63a39",
+  hood: "#c9d329",
+  hoodShadow: "#aebb24",
+  jacketPanel: "#f8f7f0",
+  shirtNecklineStroke: "#f7f4eb",
+  face: "#e2a06f",
+  neck: "#d78d60",
+  hair: "#237fbd",
+  blondGirlHairStroke: "#22242b",
+  hairLockStroke: "#4fa6d7",
+  hairSwoopsStroke: "#67add6",
+  browStroke: "#8b6528",
+  eyeWhite: "#fffaf4",
+  blondGirlEyeWhite: "#fffef7",
+  iris: "#2f3136",
+  pupil: "#0e0f12",
+  teeth: "#fffaf0",
+  noseStroke: "#c4826e",
+  cheek: "#ed9993",
+  blondGirlCheek: "#df865e",
+  mouthInside: "#292227",
+  tongue: "#e94e44",
+  lipStroke: "#873f49",
+  lipLightStroke: "#984d55",
+  earringStroke: "#d7b76e",
+  earringDrop: "#dca4c8",
+  earringDropStroke: "#a77b42"
+});

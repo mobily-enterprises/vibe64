@@ -13,6 +13,8 @@ so the same command works without a source checkout in the relocated runtime.
 - `src/theme/index.js`
 - `src/theme/icons.js`
 - `src/theme/extensions.js`
+- `src/theme/terminal.js`
+- `src/theme/palettes.js`
 - `src/styles/vibe64-m3.css`
 - `src/styles/vibe64-font.css`
 - `tests/client/vibe64ThemeColours.vitest.js`
@@ -230,7 +232,9 @@ never prunes the development node_modules directory.
 
 The application theme is `src/theme/index.js`: one seed colour (Vuetify's default
 blue, `#1867C0`), the Learning colour (`blend: false`, so its golden hue does not
-move toward the blue seed), the app's typeface and its own icons from
+move toward the blue seed), the subsystem colour (the teal of Architecture's
+subsystem map, also `blend: false`, so subsystems stay apart from the blue pages),
+the app's typeface and its own icons from
 `src/theme/icons.js`, extended by `src/theme/extensions.js`, which Vibe64 leaves
 empty and an app composed from Vibe64 replaces with its own colours and icons.
 `src/main.js` builds Vuetify from it with JSKIT's `createMaterialVuetifyOptions`
@@ -252,7 +256,15 @@ Borders, dividers and container tints use the theme's Material 3 roles directly
 (`rgb(var(--v-theme-outline-variant))`, the `surface-container-*` tiers);
 `src/styles/vibe64-m3.css` keeps only shape, spacing, motion, elevation and type
 tokens and the Learning accent (`--v64-learning*`), built from the learning
-roles. A component names only `--v-theme-*` colours Vuetify declares for this theme, because the
+roles. `src/theme/terminal.js` gives the terminal the dark scheme's surface and
+on-surface in either appearance, because it is always a dark console. Content
+colours, drawn the same in light and dark, are plain values in a `palettes.js`
+beside the theme (`src/theme/palettes.js`, or a package's own `src/theme/`): the
+Learn welcome's learner, Merc's avatars, the file tree's language tints and the
+white marks over course covers; components read them through `v-bind()` in their
+styles or bound attributes. A light tile that must stay light in either
+appearance, such as the install QR code or a vendor logo, is a `v-sheet` with
+`theme="light"`. A component names only `--v-theme-*` colours Vuetify declares for this theme, because the
 browser ignores a declaration that names an undefined one;
 `tests/client/vibe64ThemeColours.vitest.js` derives that set from the generated
 theme, and fails on any other name in `src/` or a package's `src/`.

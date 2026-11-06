@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { mercBlueMangaAvatar } from "../../packages/vibe64-voice/src/theme/palettes.js";
 
 const AVATAR_MOTION_URL = new URL(import.meta.resolve("@jskit-ai/assistant-voice/client").replace(/index\.js$/, "voiceAvatar.js"));
 const MERC_AVATAR_URL = new URL(
@@ -84,8 +85,10 @@ test("the fifth avatar rests in a slight smile with lighter skin, uniform blue h
   assert.match(avatar, /class="merc-avatar__eye-white"[\s\S]*?rx="19"\s+ry="23"/u);
   assert.match(avatar, /class="merc-avatar__iris"[\s\S]*?rx="14\.5"\s+ry="19\.5"/u);
   assert.match(avatar, /class="merc-avatar__pupil"[\s\S]*?rx="9\.5"\s+ry="14"/u);
-  assert.match(avatar, /\.merc-avatar__face \{\s*fill: #e2a06f;/u);
-  assert.match(avatar, /\.merc-avatar__hair \{\s*fill: #237fbd;/u);
+  assert.match(avatar, /\.merc-avatar__face \{\s*fill: v-bind\("mercBlueMangaAvatar\.face"\);/u);
+  assert.match(avatar, /\.merc-avatar__hair \{\s*fill: v-bind\("mercBlueMangaAvatar\.hair"\);/u);
+  assert.equal(mercBlueMangaAvatar.face, "#e2a06f");
+  assert.equal(mercBlueMangaAvatar.hair, "#237fbd");
   assert.match(avatar, /class="merc-avatar__hair merc-avatar__hair--crown-spikes"/u);
   assert.match(avatar, /class="merc-avatar__hair merc-avatar__hair--temples"/u);
   assert.match(avatar, /class="merc-avatar__hair merc-avatar__hair--fringe"/u);

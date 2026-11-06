@@ -149,7 +149,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
 /* The Lesson pane is Learning yellow: the current step lifts out of it as a surface card with the Learning stroke. */
 .vibe64-learning-reader__step.is-current {
   background: rgb(var(--v-theme-surface));
-  box-shadow: inset 0 0 0 2px var(--v64-learning-strong, #c99a00);
+  box-shadow: inset 0 0 0 2px var(--v64-learning-strong);
   color: rgb(var(--v-theme-on-surface));
 }
 .vibe64-learning-reader__step:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }

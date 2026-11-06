@@ -263,7 +263,7 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
 .vibe64-learning-step-bar {
   align-items: center;
   background: var(--v64-learning-container, rgba(245, 197, 24, 0.16));
-  border: 1px solid var(--v64-learning-strong, #f5c518);
+  border: 1px solid var(--v64-learning-strong);
   border-radius: var(--v64-shape-md, 12px);
   color: var(--v64-on-learning-container, inherit);
   display: flex;
@@ -295,7 +295,7 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
 .vibe64-learning-step-bar__note { flex-basis: 100%; font-size: 0.8125rem; }
 .vibe64-learning-step-bar__controls { align-items: center; display: flex; flex: 0 0 auto; gap: 2px; }
 .vibe64-learning-step-bar__progress {
-  background: var(--v64-learning-strong, #f5c518);
+  background: var(--v64-learning-strong);
   bottom: 0;
   height: 3px;
   left: 0;

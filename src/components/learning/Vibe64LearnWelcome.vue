@@ -58,7 +58,7 @@ const learning = useVibe64Learning();
 .vibe64-learn-welcome__choose {
   background: var(--v64-learning) !important;
   box-shadow: 0 4px 14px var(--v64-learning-glow);
-  color: #1d1600 !important;
+  color: var(--v64-on-learning) !important;
   font-weight: 700;
   letter-spacing: 0.01em;
   margin-top: var(--v64-space-2);

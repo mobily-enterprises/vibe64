@@ -337,7 +337,7 @@ Clicking an already-selected dashboard tab keeps the conversation and dashboard
 mounted; repeating navigation retries opening only after an opening failure.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
-Warnings use a muted gold palette in light and dark themes, with readable text
+Warnings use the theme's amber warning roles in light and dark themes, with readable text
 and restrained accents. Setup notices pair a soft warning surface with dark or
 light foreground text appropriate to the theme; disabled actions remain legible.
 GitHub-connected projects offer one Issues/PR entry in the project-wide Dashboard

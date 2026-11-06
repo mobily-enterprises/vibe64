@@ -10,6 +10,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/MercIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/mercAvatarMotion.css`
+- `packages/vibe64-voice/src/theme/palettes.js`
 - `packages/vibe64-voice/src/client/Vibe64AvatarSetting.vue`
 - `packages/vibe64-voice/src/shared/avatars.js`
 - `packages/vibe64-voice/src/shared/routes.js`

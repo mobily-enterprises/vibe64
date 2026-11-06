@@ -68,14 +68,14 @@ const linkProps = computed(() => {
 }
 
 :deep(.v-list-item--active) {
-  background: var(--studio-control-active-bg, #e7e7e7);
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container)));
   border-left: 0;
-  color: var(--studio-control-text, #202124);
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface)));
   font-weight: 560;
 }
 
 :deep(.v-list-item--active .v-list-item__prepend),
 :deep(.v-list-item--active .v-list-item-title) {
-  color: var(--studio-control-text, #202124);
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface)));
 }
 </style>

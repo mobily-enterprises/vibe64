@@ -311,7 +311,7 @@ test('UI bridges retain exact receivers and use the same relationship contract a
   assert.equal(bridges[2].target, 'importer');
   assert.equal(diagram.nodes.find(node => node.id === 'web').data.unresolvedCalls, 2);
   assert.deepEqual(diagram.nodes.find(node => node.id === 'controllers').data.receivers.map(receiver => receiver.id), ['js','go']);
-  assert.ok(bridges.every(edge => edge.sourceHandle === 'engine-out' && edge.markerEnd.color === '#7954b3'));
+  assert.ok(bridges.every(edge => edge.sourceHandle === 'engine-out' && edge.markerEnd.color === 'rgb(var(--v-theme-tertiary))'));
 });
 
 

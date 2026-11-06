@@ -116,7 +116,7 @@ defineExpose({
 .vibe64-training-visual__caption {
   padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
   border-radius: var(--v64-shape-md, 12px);
-  border-inline-start: 4px solid var(--v64-learning, #f5c518);
+  border-inline-start: 4px solid var(--v64-learning);
   background: rgb(var(--v-theme-surface-container-low));
 }
 .vibe64-training-visual__error {

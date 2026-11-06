@@ -409,7 +409,7 @@ const visibleSessions = computed(() => {
   border: 0;
   border-radius: 999px;
   box-shadow: none !important;
-  color: var(--studio-control-text, #202124) !important;
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface))) !important;
   font-weight: 500;
   max-width: 18rem;
   overflow: visible;
@@ -432,7 +432,7 @@ const visibleSessions = computed(() => {
   border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 999px;
   box-sizing: border-box;
-  color: var(--studio-control-text, #202124);
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface)));
   display: inline-flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -440,7 +440,7 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__tab--active {
-  color: var(--studio-control-text, #202124) !important;
+  color: var(--studio-control-text, rgb(var(--v-theme-on-surface))) !important;
   font-weight: 560;
 }
 
@@ -462,7 +462,7 @@ const visibleSessions = computed(() => {
 
 /* M3 selected input chip: secondary container with its on-colour. */
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main {
-  background: var(--studio-control-active-bg, #e7e7e7);
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container)));
   border-color: transparent;
   border-radius: 999px 0 0 999px;
   color: rgb(var(--v-theme-on-secondary-container));
@@ -477,7 +477,7 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover,
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover + .studio-ai-sessions__tab-close-slot {
-  background: color-mix(in srgb, rgb(var(--v-theme-on-secondary-container)) 8%, var(--studio-control-active-bg, #e7e7e7));
+  background: color-mix(in srgb, rgb(var(--v-theme-on-secondary-container)) 8%, var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container))));
 }
 
 .studio-ai-sessions__tab:focus-visible {
@@ -547,7 +547,7 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__tab-close-slot {
   align-items: center;
-  background: var(--studio-control-active-bg, #e7e7e7);
+  background: var(--studio-control-active-bg, rgb(var(--v-theme-secondary-container)));
   border: 1px solid transparent;
   border-left: 0;
   border-radius: 0 999px 999px 0;
