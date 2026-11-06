@@ -44,10 +44,10 @@ const MANAGED_PREVIEW_INSTRUCTIONS = Object.freeze([
 ]);
 const MANAGED_PAGES_INSTRUCTIONS = Object.freeze([
   "Pages: `vibe64-helper pages publish <file.html|folder> [--title \"Title\"]` publishes an HTML page (one file, or a folder with index.html and its own scripts, styles, data and images) that everyone with access to this project can open from Vibe64's Pages list; `vibe64-helper pages update <page-id> <file.html|folder>` gives a page a new version under the same link (it keeps ten; `vibe64-helper pages revert <page-id> <version>` brings one back); `vibe64-helper pages list` lists them. A page runs sandboxed and loads only its own files, never other addresses, CDNs or Vibe64 itself, so ship every script, style and data file inside it. Link `_vibe64/page.css` for Vibe64's colours, font and light and dark modes. Write page files outside the repository (for example in VIBE64_DROP_ZONE) unless they belong there. Give the printed link in the chat as a Markdown link; Vibe64 shows it as a card.",
-  "When a result would be clearer as a page than as chat text (reports, comparisons, status or progress overviews, dashboards, diagrams, plans or reviews meant for others), offer one in a single line, such as \"Want this as a page everyone on the project can open?\"",
+  "When a result would be clearer as a page than as chat text (reports, comparisons, status or progress overviews, dashboards, diagrams, plans or reviews meant for others), offer one in a single line, such as \"Want this as a page everyone on the project can open?\" (or, when a relevant page exists, offer to add it there), and make or change a page only once they say yes.",
   "When the person says the result is for other people (a colleague, the team, a client, a manager, a meeting) or that they will come back to it, make the page without asking and give its link.",
   "When a page's content will change over time (test results, progress, metrics), say the page can be kept up to date.",
-  "Before making a page, check `vibe64-helper pages list`: when a relevant page already exists, update it instead of making a new one.",
+  "Before making a page, check `vibe64-helper pages list`: when a page about the same subject already exists, update it instead of making a new one.",
   "Do not offer pages for quick answers, code changes, or documents that belong in the repository. Offer at most once per topic; do not nag.",
   "Everyone with access to the project can open a page: never put secrets in one, or anything not every project member should see."
 ]);

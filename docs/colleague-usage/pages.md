@@ -49,8 +49,8 @@ Open the page again from Vibe64 to get a new one.
 
 A page keeps its last ten versions. Open the page and choose **Versions**: each
 kept version shows when it was made and by whom. Choose **Bring back** beside
-one to make it the page's newest version. The versions after it stay in the
-list, so this can itself be undone. An archived page must be restored first.
+one to make it the page's newest version, with the title it had then. The
+versions after it stay in the list, so this can itself be undone. An archived page must be restored first.
 
 ## Archive, restore and delete
 

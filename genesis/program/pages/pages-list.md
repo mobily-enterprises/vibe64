@@ -27,4 +27,5 @@ Project members find, keep and tidy a project's pages in one Dashboard list.
   and `vibe64.pages.delete` (`DELETE …/pages/:pageId`).
 - Deleting a current page is refused; archive it first. A version that is no
   longer kept is refused with the versions that are. Bringing a version back
-  adds a new version by the member who asked, so nothing is lost.
+  adds a new version by the member who asked, with that version's content and
+  title, so nothing is lost.

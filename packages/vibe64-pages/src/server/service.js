@@ -41,8 +41,8 @@ function pageSummary(record, projectSlug) {
     archived: record.archived,
     archivedAt: record.archivedAt,
     version: record.version,
-    versions: record.versions.map(({ number, createdAt, createdBy, restoredFrom }) => ({
-      number, createdAt, createdBy, ...(restoredFrom ? { restoredFrom } : {})
+    versions: record.versions.map(({ number, title, createdAt, createdBy, restoredFrom }) => ({
+      number, title: title || record.title, createdAt, createdBy, ...(restoredFrom ? { restoredFrom } : {})
     })),
     link: pageAppPath(projectSlug, record.id)
   };

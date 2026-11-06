@@ -68,11 +68,13 @@ test("pages live in project state with their maker, session and last ten version
     assert.equal(record.createdAt, "2026-11-06T09:00:00.000Z");
 
     for (let version = 2; version <= 12; version += 1) {
-      await inProject(() => pages.updatePage({ pageId: page.id, files: files(`<p>Run ${version}</p>`), by: { id: "bob", name: "Bob" }, sessionId: "session-2" }));
+      const retitle = version === 12 ? { title: "Test results, run 12" } : {};
+      await inProject(() => pages.updatePage({ pageId: page.id, ...retitle, files: files(`<p>Run ${version}</p>`), by: { id: "bob", name: "Bob" }, sessionId: "session-2" }));
     }
     const updated = (await inProject(() => pages.readPage({ pageId: page.id }))).page;
     assert.equal(updated.version, 12);
-    assert.equal(updated.title, "Test results", "an update without a title keeps the page's");
+    assert.equal(updated.versions.at(-2).title, "Test results", "an update without a title keeps the page's");
+    assert.equal(updated.title, "Test results, run 12");
     assert.deepEqual(updated.versions.map((version) => version.number), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     assert.deepEqual(updated.updatedBy, { id: "bob", name: "Bob" });
     assert.deepEqual((await readdir(path.join(folder, "versions"))).sort((a, b) => a - b), ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
@@ -80,6 +82,7 @@ test("pages live in project state with their maker, session and last ten version
     const restored = (await inProject(() => pages.restorePageVersion({ pageId: page.id, version: 4, by: alice }))).page;
     assert.equal(restored.version, 13);
     assert.equal(restored.versions.at(-1).restoredFrom, 4);
+    assert.equal(restored.title, "Test results", "a version brought back brings back its title");
     assert.equal(await readFile(path.join(folder, "versions", "13", "index.html"), "utf8"), "<p>Run 4</p>");
     await assert.rejects(inProject(() => pages.restorePageVersion({ pageId: page.id, version: 1, by: alice })), { code: "vibe64_pages_version_not_found" });
 

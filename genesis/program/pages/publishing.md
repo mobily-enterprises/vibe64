@@ -38,7 +38,7 @@ project can open, outside the repository.
   digits.
 - Storage: `<project state>/pages/<page id>/page.json` (contract
   `vibe64.page.v1`: title, maker, session, created and updated times and makers,
-  archived state, the current version and the kept versions) and
+  archived state, the current version and the kept versions, each with its title) and
   `versions/<n>/`. The last ten versions are kept. A version is written beside the
   others and renamed into place before `page.json` is replaced, so a reader sees
   one whole version. The maker is the person behind the session's latest

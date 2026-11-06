@@ -14,6 +14,7 @@
  * One kept version of a page.
  * @typedef {object} PageVersionEntry
  * @property {number} number
+ * @property {string} title the page's title at this version
  * @property {string} createdAt
  * @property {PageAuthor} createdBy
  * @property {string} sessionId the session whose agent published it
@@ -52,7 +53,7 @@
  * @property {boolean} archived
  * @property {string | null} archivedAt
  * @property {number} version
- * @property {{ number: number, createdAt: string, createdBy: PageAuthor, restoredFrom?: number }[]} versions the kept versions, oldest first
+ * @property {{ number: number, title: string, createdAt: string, createdBy: PageAuthor, restoredFrom?: number }[]} versions the kept versions, oldest first
  * @property {string} link the in-app path that opens it beside the chat
  */
 

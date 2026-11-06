@@ -1,11 +1,12 @@
 <script setup>
 // The pages a chat message links to, the AI's or pasted, each as a card with
 // its title, last update and Open, which shows it beside the chat.
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { mdiFileDocumentOutline } from "@mdi/js";
 import { pageLinksInText } from "../shared/pageLinks.js";
-import { pageTime, readPage } from "./pagesRequests.js";
+import { pageLinkAnswers as answers, readPageLink } from "./pageLinkAnswers.js";
+import { pageTime } from "./pagesRequests.js";
 
 const props = defineProps({
   text: { type: String, default: "" }
@@ -13,20 +14,10 @@ const props = defineProps({
 
 const router = useRouter();
 const links = computed(() => pageLinksInText(props.text, { origin: globalThis.location?.origin || "" }));
-const answers = ref({});
 
-watch(links, (next) => {
-  for (const link of next) {
-    if (answers.value[link.path]) continue;
-    answers.value = { ...answers.value, [link.path]: { loading: true } };
-    readPage(link.projectSlug, link.pageId).then(
-      (answer) => { answers.value = { ...answers.value, [link.path]: { page: answer.page } }; },
-      (cause) => {
-        const missing = cause?.status === 404 || cause?.code === "vibe64_pages_not_found";
-        answers.value = { ...answers.value, [link.path]: { error: missing ? "This page no longer exists." : cause?.message || "This page could not load." } };
-      }
-    );
-  }
+// Each card reads its page when it appears, which refreshes every card of that page.
+watch(() => links.value.map((link) => link.path).join("\n"), () => {
+  for (const link of links.value) readPageLink(link);
 }, { immediate: true });
 </script>
 

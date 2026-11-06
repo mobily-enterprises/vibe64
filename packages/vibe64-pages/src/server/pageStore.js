@@ -102,9 +102,10 @@ async function writeVersion(folder, number, files) {
   }
 }
 
-function versionEntry({ number, files, by, sessionId, at, restoredFrom = 0 }) {
+function versionEntry({ number, title, files, by, sessionId, at, restoredFrom = 0 }) {
   return {
     number,
+    title,
     createdAt: at,
     createdBy: by,
     sessionId,
@@ -204,7 +205,7 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
         archived: false,
         archivedAt: null,
         version: 1,
-        versions: [versionEntry({ number: 1, files, by: maker, sessionId, at })]
+        versions: [versionEntry({ number: 1, title, files, by: maker, sessionId, at })]
       };
       await writeJsonFileAtomic(path.join(folder, PAGE_RECORD_FILE), record);
       return record;
@@ -229,9 +230,10 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
     const maker = author(by);
     const number = current.version + 1;
     await writeVersion(folder, number, files);
-    const versions = [...current.versions, versionEntry({ number, files, by: maker, sessionId, at, restoredFrom })]
+    const versionTitle = title || current.title;
+    const versions = [...current.versions, versionEntry({ number, title: versionTitle, files, by: maker, sessionId, at, restoredFrom })]
       .slice(-PAGE_LIMITS.versionsKept);
-    const record = { ...current, title: title || current.title, updatedAt: at, updatedBy: maker, version: number, versions };
+    const record = { ...current, title: versionTitle, updatedAt: at, updatedBy: maker, version: number, versions };
     await writeJsonFileAtomic(path.join(folder, PAGE_RECORD_FILE), record);
     const kept = new Set(versions.map((version) => String(version.number)));
     const stored = await readdir(path.join(folder, VERSIONS_DIR));
@@ -265,7 +267,8 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
     return exclusive(folder, async () => {
       const current = await read(pagesRoot, pageId);
       if (number === current.version) return current;
-      if (!current.versions.some((version) => version.number === number)) {
+      const kept = current.versions.find((version) => version.number === number);
+      if (!kept) {
         throw vibe64Error(
           `Page ${pageId} keeps no version ${number}; it keeps versions ${current.versions.map((version) => version.number).join(", ")}.`,
           "vibe64_pages_version_not_found",
@@ -273,7 +276,8 @@ function createPageStore({ now = () => new Date().toISOString() } = {}) {
         );
       }
       const files = await readVersionFiles(path.join(folder, VERSIONS_DIR, String(number)));
-      return appendVersion(folder, current, { files, by, sessionId, restoredFrom: number });
+      // A version brought back comes back with the title it had.
+      return appendVersion(folder, current, { title: kept.title, files, by, sessionId, restoredFrom: number });
     });
   }
 
