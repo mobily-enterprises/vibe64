@@ -34,7 +34,7 @@ describe("Vibe64 session info", () => {
       "Agent turn": "turn-456",
       "Base branch": "main",
       "Base commit": "1234567890abcdef",
-      Branch: "vibe64/2026-08-17_01-02-03",
+      "Session branch": "vibe64/2026-08-17_01-02-03",
       Repository: "https://example.test/company/dogandgroom.git",
       Session: "2026-08-17_01-02-03",
       Source: "/home/merc/.local/state/vibe64/managed-sources/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source"

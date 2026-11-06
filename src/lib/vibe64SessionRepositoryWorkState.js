@@ -22,9 +22,12 @@ const REPOSITORY_WORK_STATE_PRESENTATION = Object.freeze({
 
 function sessionRepositoryWorkState(workState = null) {
   const source = workState && typeof workState === "object" ? workState : {};
+  // What every state carries: when it was checked and, once the server has
+  // resolved it, where the session's Save goes.
   const freshness = {
     checkedAt: String(source.checkedAt || ""),
-    ...(source.updateStatusPending === true ? { updateStatusPending: true } : {})
+    ...(source.updateStatusPending === true ? { updateStatusPending: true } : {}),
+    ...(source.destination && typeof source.destination === "object" ? { destination: source.destination } : {})
   };
   const operationStatus = String(source.operation?.status || "").trim();
   const updateStatus = String(source.updateOperation?.status || "").trim();

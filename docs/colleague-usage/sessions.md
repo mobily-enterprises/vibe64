@@ -88,6 +88,26 @@ Select a session tab above the chat to open that session's conversation and work
 The selected tab includes the Archive session control. Hover or keyboard focus
 alone does not select a session.
 
+Hover or keyboard-focus a session tab for one second to read its details; on
+phones and other touch screens, tap the tab's info button instead. The details
+list **Status**, **Assistant**, **Model**, **Work**, **Saves to**, **Session**,
+**Session branch** and **Created**, with **Rename session**. **Saves to**
+always names where that session's **Save** puts its work: the repository in
+short form (`owner/name` for GitHub, the project's short name for Vibe64 Git,
+or **Project repository** for a project folder on this computer, never a
+folder path or sign-in details) followed by the branch, for example
+`example-owner/example-app · main`. When the branch is not the project's main
+branch, such as a session opened on another branch or a pull request's branch,
+it is a highlighted chip followed by **(not main)** (naming the project's main
+branch), so a session that saves somewhere else is obvious; a fork's branch
+with the main branch's name reads **(not this project's repository)**. Until
+Vibe64 has checked the session's work it reads **Checking…**, and **Unknown**
+if that check failed, until the next check. **Session branch** is the
+session's own working branch, `vibe64/<session id>`, not where Save goes. The
+**Save changes** review and the Save button's hint name the destination the
+same way. Reading the details changes nothing; it is the person's step, on
+desktop and mobile alike.
+
 A project link can initially select the session named in its URL. You can then
 select another tab; session-list refreshes preserve that choice. Following a
 different session link selects its named session. A session being archived is

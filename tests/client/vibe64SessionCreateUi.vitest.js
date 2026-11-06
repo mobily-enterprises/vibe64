@@ -126,6 +126,7 @@ async function renderCreateButton({
 async function renderToolbar({
   canCreate = true,
   createVisible = true,
+  projectContext = undefined,
   sessions = [],
   selectedSessionId = "",
   sessionsApiPath = "",
@@ -142,6 +143,7 @@ async function renderToolbar({
       createSession: vi.fn(),
       createSessionRunning: false,
       createSessionTitle: title,
+      projectContext,
       sessionsApiPath,
       sessions
     }
@@ -503,5 +505,62 @@ describe("session toolbar archive and repository controls", () => {
     });
     expect(unselected).toMatch(fact("Why", message));
     expect(unselected).not.toContain("Show Update notice");
+  });
+});
+
+describe("session toolbar Save target", () => {
+  const project = { repository: { defaultBranch: "main", github: { fullName: "example-owner/example-app" }, mode: "github" }, repositoryMode: "github" };
+  const fact = (label) => new RegExp(`<dt[^>]*>${label}</dt><dd[^>]*>([\\s\\S]*?)</dd>`, "u");
+  const savesTo = (html) => (html.match(fact("Saves to"))?.[1] || "").replace(/<[^>]+>/gu, "");
+  const renderTarget = (destination, projectContext = project) => renderToolbar({
+    createVisible: false, projectContext, selectedSessionId: "work",
+    sessions: [{
+      metadata: { branch: "vibe64/work" }, sessionId: "work",
+      repositoryWorkState: sessionRepositoryWorkState({ checkedAt: "now", destination, unsaved: false })
+    }]
+  });
+
+  it("always names where Save goes, plainly when it is the project's main branch", async () => {
+    const html = await renderTarget({ branch: "main", mode: "github", repository: "example-owner/example-app", sessionId: "work" });
+    expect(savesTo(html)).toBe("example-owner/example-app · main");
+    expect(html).toContain("vibe64-save-target__branch");
+    expect(html).not.toContain("vibe64-save-target--off-main");
+    expect(html).not.toContain("not main");
+    // The session's own working branch keeps its row under a name that tells the two apart.
+    expect(html).toMatch(/<dt[^>]*>Session branch<\/dt><dd[^>]*>vibe64\/work<\/dd>/u);
+  });
+
+  it("highlights a branch other than the project's main branch", async () => {
+    const html = await renderTarget({ branch: "example-feature", mode: "github", repository: "example-owner/example-app", sessionId: "work" });
+    expect(savesTo(html)).toBe("example-owner/example-app · example-feature (not main)");
+    expect(html).toMatch(/class="vibe64-save-target vibe64-save-target--off-main"/u);
+    // The highlight is the theme's warning colour and its on-colour, defined for light and dark.
+    const styles = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64SessionSaveTarget.vue"), "utf8");
+    expect(styles).toMatch(/\.vibe64-save-target--off-main \.vibe64-save-target__branch\s*\{\s*background: rgb\(var\(--v-theme-warning\)\);\s*border-color: transparent;\s*color: rgb\(var\(--v-theme-on-warning\)\);/u);
+  });
+
+  it("shows a local project folder as the project's own repository, never its path", async () => {
+    const html = await renderTarget(
+      { branch: "main", mode: "local_source", repository: "/home/example/projects/example-app", sessionId: "work" },
+      { repository: { defaultBranch: "main", mode: "local_source" }, repositoryMode: "local_source" }
+    );
+    expect(savesTo(html)).toBe("Project repository · main");
+    expect(html).not.toContain("/home/example/projects");
+  });
+
+  it("names a URL's repository in short form without its credentials", async () => {
+    const html = await renderTarget({
+      branch: "main", mode: "github", sessionId: "work",
+      repository: "https://x-access-token:example-secret@github.com/example-owner/example-app.git?token=example-hidden"
+    });
+    expect(savesTo(html)).toBe("example-owner/example-app · main");
+    expect(html).not.toContain("example-secret");
+    expect(html).not.toContain("example-hidden");
+    expect(html).not.toContain("x-access-token");
+  });
+
+  it("keeps the row while the server has not resolved the destination yet", async () => {
+    const html = await renderToolbar({ createVisible: false, projectContext: project, sessions: [{ sessionId: "work" }] });
+    expect(html).toMatch(/<dt[^>]*>Saves to<\/dt><dd[^>]*>Checking…<\/dd>/u);
   });
 });

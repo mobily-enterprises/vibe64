@@ -2,7 +2,10 @@
 
 Source edits in a session, saving a project version and deploying an application
 are separate operations. A different session has its own worktree. Check which
-project, session and branch you are using before saving or creating a pull request.
+project, session and branch you are using before saving or creating a pull request:
+the session tab's details show **Saves to**, the repository and branch its Save
+uses, marked **(not main)** when that is not the project's main branch (see
+[Create and switch sessions](sessions.md#switch-between-open-sessions)).
 
 Open **Changes** in Dashboard to inspect the work. Use the session's **Save**
 control for its native review and save workflow. When the selected session has

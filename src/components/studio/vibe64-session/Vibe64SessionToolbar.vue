@@ -87,7 +87,8 @@
             <dl class="studio-ai-sessions__info-facts">
               <template v-for="fact in sessionInfoFacts(sessionItem)" :key="fact.key">
                 <dt>{{ fact.label }}</dt>
-                <dd>{{ fact.value }}</dd>
+                <dd v-if="fact.saveTarget"><Vibe64SessionSaveTarget :target="fact.saveTarget" /></dd>
+                <dd v-else>{{ fact.value }}</dd>
               </template>
             </dl>
             <v-btn
@@ -154,8 +155,10 @@ import {
 } from "@mdi/js";
 import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
+import Vibe64SessionSaveTarget from "./Vibe64SessionSaveTarget.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
+import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
 import { vibe64SessionDisplayTitle, vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
@@ -273,6 +276,8 @@ function sessionInfoFacts(sessionItem) {
         value: Number.isFinite(createdAt) ? createdAtFormatter.format(createdAt) : fact.copyValue
       };
     });
+  // Every session says where Save goes, from its server-resolved work destination.
+  const saveTarget = vibe64SessionSaveTarget(sessionItem.repositoryWorkState?.destination, props.toolbar.projectContext);
   return [
     {
       key: "status",
@@ -288,6 +293,12 @@ function sessionInfoFacts(sessionItem) {
     { key: "saved-work", label: "Work", value: repositoryWorkStateLabel(sessionItem) },
     { key: "work-problem", label: "Why", value: repositoryWorkStateProblem(sessionItem)?.message },
     { key: "work-next", label: "Next", value: repositoryWorkStateProblem(sessionItem)?.nextStep },
+    {
+      key: "save-target",
+      label: "Saves to",
+      saveTarget,
+      value: saveTarget?.text || (repositoryWorkState(sessionItem) === "checking" ? "Checking…" : "Unknown")
+    },
     ...details
   ].filter((fact) => fact.value);
 }

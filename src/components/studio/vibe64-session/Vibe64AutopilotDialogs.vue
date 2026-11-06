@@ -64,7 +64,7 @@
         </div>
         <v-sheet v-if="saveWorkReview && !saveWorkConnectedReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
           <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
-          <strong>{{ saveWorkReview.repository }}:{{ saveWorkReview.branch }}</strong>
+          <Vibe64SessionSaveTarget v-if="saveWorkTarget" :target="saveWorkTarget" />
           <p v-if="sessionPullRequest" class="text-body-small mt-1 mb-0">PR #{{ sessionPullRequest.number }} · {{ sessionPullRequest.headBranch }} → {{ sessionPullRequest.baseBranch }}</p>
         </v-sheet>
         <p v-else-if="!saveWorkReview" role="status">Refresh repository status to review the destination.</p>
@@ -106,6 +106,8 @@
 <script setup>
 import { computed, inject } from "vue";
 import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
+import Vibe64SessionSaveTarget from "./Vibe64SessionSaveTarget.vue";
+import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
 
 // The session's confirmations: applying a resolved Update, a message that
 // does not fit the assistant's memory, and Save.
@@ -133,6 +135,8 @@ function confirmResolvedUpdate() {
   resolvedUpdateReview.value = null;
   void aiTasks.check({ reviewedConflictId: reviewId });
 }
+// The reviewed destination, said as the session tab's info says it.
+const saveWorkTarget = computed(() => vibe64SessionSaveTarget(saveWorkReview.value, props.projectContext));
 const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value && githubProject.value &&
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const publicationLabel = computed(() => {

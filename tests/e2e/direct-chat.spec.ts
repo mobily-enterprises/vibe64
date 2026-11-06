@@ -809,7 +809,7 @@ test.describe("direct chat", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Save changes", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("example-target-app:main", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("example-target-app · main", { exact: true })).toBeVisible();
     await expect(dialog.getByText("What's included", { exact: true })).toHaveCount(0);
     await expect(dialog.getByText(/Database data and chat history are separate/iu)).toHaveCount(0);
 
@@ -855,7 +855,11 @@ test.describe("direct chat", () => {
       await page.screenshot({ path: testInfo.outputPath(`save-icon-${scenario.mode}-${scenario.width}.png`), animations: "disabled" });
       await save.click();
       const review = page.getByRole("dialog");
-      await expect(review.getByText(`${scenario.repository}:${scenario.branch}`, { exact: true })).toBeVisible();
+      // The review says the destination as the session tab's info does: a local folder is the
+      // project's own repository, and a branch other than main is marked.
+      const target = `${scenario.mode === "local_source" ? "Project repository" : scenario.repository} · ${scenario.branch}`;
+      await expect(review.getByText(scenario.branch === "main" ? target : `${target} (not main)`, { exact: true })).toBeVisible();
+      await expect(review.getByText(/\/workspace\//u)).toHaveCount(0);
       await expect(review.getByText(/Save open file edits first/)).toBeVisible();
       for (const button of await review.getByRole("button").all()) {
         await expect.poll(async () => (await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
@@ -890,6 +894,77 @@ test.describe("direct chat", () => {
       } else {
         await publish.click();
         await expect.poll(() => saves).toEqual([{ destinationReview }]);
+      }
+    });
+  }
+
+  for (const viewport of [{ width: 390, phone: true }, { width: 1280, phone: false }]) {
+    test.describe(`session info at ${viewport.width}px`, () => {
+      test.use({ hasTouch: viewport.phone, isMobile: viewport.phone });
+      for (const theme of ["light", "dark"] as const) {
+        test(`names where each session saves, marking a branch other than main, in ${theme}`, async ({ page }, testInfo) => {
+          await page.setViewportSize({ width: viewport.width, height: 844 });
+          await page.addInitScript((value) => window.localStorage.setItem("vibe64.appearance", JSON.stringify(value)), theme);
+          const branchSessionId = "save-target-branch-session";
+          await mockDirectChat(page, {
+            additionalSessionIds: [branchSessionId],
+            sessionMetadata: { branch: `vibe64/${SESSION_ID}` },
+            workState: { operation: null, unsaved: false, updateOperation: null }
+          });
+          const project = { ...readyProjectSelectionPayload.currentProject, repositoryMode: "github",
+            repository: { mode: "github", defaultBranch: "main", github: { fullName: "example-owner/example-app" } } };
+          await routeApiEndpoint(page, "/vibe64/projects", (route) => fulfillJson(route, {
+            ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+          }));
+          for (const [sessionId, branch] of [[SESSION_ID, "main"], [branchSessionId, "example-feature"]]) {
+            await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/work`, (route) => fulfillJson(route, {
+              destination: { sessionId, mode: "github", repository: "example-owner/example-app", branch },
+              ok: true, operation: null, unsaved: false, updateOperation: null
+            }));
+          }
+          await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+          // A marked branch's chip is filled with the theme's warning colour and its on-colour.
+          const warning = theme === "dark"
+            ? { background: "rgb(223, 196, 119)", color: "rgb(61, 47, 0)" }
+            : { background: "rgb(114, 92, 12)", color: "rgb(255, 255, 255)" };
+          for (const { sessionId, label, text, offMain } of [
+            { sessionId: SESSION_ID, label: "Direct chat", text: "example-owner/example-app · main", offMain: false },
+            { sessionId: branchSessionId, label: "Second session", text: "example-owner/example-app · example-feature (not main)", offMain: true }
+          ]) {
+            const tab = page.locator(`[data-vibe64-session-id="${sessionId}"]:visible`).first();
+            await expect(tab).toBeVisible();
+            const infoButton = tab.getByRole("button", { name: `Session info: ${label}`, exact: true });
+            if (viewport.phone) await infoButton.click();
+            else await tab.hover();
+            const info = page.locator(".studio-ai-sessions__info:visible").filter({ hasText: label });
+            await expect(info).toBeVisible();
+            const savesTo = info.locator("dt", { hasText: "Saves to" });
+            await expect(savesTo).toBeVisible();
+            await expect(info.locator(".vibe64-save-target")).toHaveText(text);
+            // The session's own working branch is a separate row (the fixture gives only the first session one).
+            if (!offMain) {
+              await expect(info.locator("dt", { hasText: "Session branch" })).toBeVisible();
+              await expect(info).toContainText(`vibe64/${SESSION_ID}`);
+            }
+            const chip = info.locator(".vibe64-save-target__branch");
+            if (offMain) {
+              await expect(chip).toHaveCSS("background-color", warning.background);
+              await expect(chip).toHaveCSS("color", warning.color);
+            } else {
+              await expect(info.locator(".vibe64-save-target--off-main")).toHaveCount(0);
+            }
+            const box = await info.boundingBox();
+            expect(box!.x).toBeGreaterThanOrEqual(0);
+            expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+            await page.screenshot({
+              path: testInfo.outputPath(`save-target-${viewport.width}-${theme}-${offMain ? "branch" : "main"}.png`),
+              animations: "disabled"
+            });
+            if (viewport.phone) await infoButton.click();
+            else await page.mouse.move(0, 843);
+            await expect(info).toHaveCount(0);
+          }
+        });
       }
     });
   }

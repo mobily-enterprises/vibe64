@@ -488,7 +488,10 @@ precedence over an automatic suggestion. Names never change session IDs,
 directory names, branches, or URLs. Naming failures do not interrupt chat.
 Hovering or keyboard-focusing a session tab for one second shows its basic
 details. Touch users can tap its info button to read the same details without
-switching sessions.
+switching sessions. The details always say where the session's Save goes, its
+repository in short form and its branch, and mark a branch other than the
+project's main branch, so a session saving elsewhere is obvious; the Save
+review and the Save button's hint say it the same way.
 Selecting a session keeps those details closed until the pointer leaves and
 enters its tab again. Deliberate keyboard focus and its info button still make
 the details available on demand.

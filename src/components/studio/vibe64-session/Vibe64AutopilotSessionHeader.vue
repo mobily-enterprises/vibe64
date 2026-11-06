@@ -250,6 +250,7 @@ import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
 
 // The session header: the session names, Save, this session's actions and
 // Session actions, which holds whatever does not fit.
@@ -365,14 +366,16 @@ const saveWorkHeaderHint = computed(() => {
   const status = saveWorkError.value && !saveWorkSending.value && !saveWorkOperationActive.value
     ? `${saveWorkActivityLabel.value} needs attention: ${saveWorkError.value}\n${checkStatus}`
     : checkStatus;
+  // Where Save goes, said as the session tab's info says it.
   const destination = props.workState?.destination;
-  if (!destination) return status;
+  const target = vibe64SessionSaveTarget(destination, props.projectContext);
+  if (!target) return status;
   if (saveWorkRequiresUpdate.value || saveWorkDisabled.value || saveWorkChecking.value) {
-    return `${status}\n${destination.repository}:${destination.branch}`;
+    return `${status}\nSaves to ${target.text}`;
   }
   const action = destination.mode === "local_source" ? "Local commit"
     : destination.mode === "github" ? "Commit & push" : "Project version";
-  return `${action} · ${destination.repository}:${destination.branch}\n${status}`;
+  return `${action} to ${target.text}\n${status}`;
 });
 
 async function requestSessionSaveWork() {

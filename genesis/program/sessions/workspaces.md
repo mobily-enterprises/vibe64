@@ -97,6 +97,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/components/studio/Vibe64SessionPanel.vue`
 - `src/components/studio/Vibe64UnavailableSessions.vue`
 - `src/lib/vibe64SessionInfo.js`
+- `src/lib/vibe64SessionSaveTarget.js`
+- `src/components/studio/vibe64-session/Vibe64SessionSaveTarget.vue`
+- `tests/client/vibe64SessionSaveTarget.vitest.js`
 - `src/lib/vibe64SessionTooltip.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`
@@ -703,10 +706,22 @@ contracts; an unknown name prints the list and exits 2. Field lists come from th
 parsers' own tables, and a focused test parses every printed example.
 
 Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
-including its full name, status, assistant and model when available, save state, identifier,
-branch, and creation time. A touch-visible info button opens the same tooltip
-without selecting or archiving the session. This uses the loaded session data
-and does not fetch or poll for details.
+including its full name, status, assistant and model when available, save state,
+where Save goes, identifier, session branch, and creation time. A touch-visible
+info button opens the same tooltip without selecting or archiving the session.
+Its Saves to row is always present. Its value is the destination the server
+resolves for the session's work (`sessionRepositoryDestination`, the work
+inspection's `destination`, which Save rechecks), carried by
+`sessionRepositoryWorkState()` and said by `src/lib/vibe64SessionSaveTarget.js`:
+the repository in short form (`owner/name` on GitHub, `host/path` elsewhere,
+never credentials, a query or a local path, which reads Project repository) and
+the branch as a chip. A branch other than the project's
+`repository.defaultBranch`, or a fork's repository, is a filled warning chip
+with a note such as "(not main)". Before the repository status registry's first
+inspection it reads Checking…, and Unknown after a failed one. The Session
+branch row is the session's own `vibe64/<session id>` branch. This uses the
+loaded session data and the existing repository status inspection, and does not
+fetch or poll for details.
 Selecting a tab dismisses its tooltip and suppresses automatic hover/focus
 opening until the pointer leaves and enters that tab again from outside. The
 panel shares click suppression across its retained session toolbars; revealing

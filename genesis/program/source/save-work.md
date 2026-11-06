@@ -128,6 +128,8 @@ Git commands.
 - `packages/vibe64-ai-tasks/src/server/kinds/update.js`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/lib/vibe64SessionRepositoryWorkState.js`
+- `src/lib/vibe64SessionSaveTarget.js`
+- `src/components/studio/vibe64-session/Vibe64SessionSaveTarget.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
@@ -290,7 +292,10 @@ shows the changed-file count, View diff and captured destination, with a short
 reminder to save open editor changes first.
 
 The confirmation is Save for local and Vibe64 Git projects, or Commit & push for
-GitHub, with the exact repository and branch shown once above the actions.
+GitHub, with the exact repository and branch shown once above the actions, in
+the session tab's Saves to form (`Vibe64SessionSaveTarget`: short repository,
+branch chip, marked when it is not the project's main branch). The review sent
+back to the server stays the exact destination object.
 GitHub also offers Create draft PR. The existing project `requirePullRequest`
 setting makes it primary and disables direct publication until a session has
 a numbered PR; otherwise Commit & push is primary. Project settings exposes
@@ -309,9 +314,10 @@ The header Save icon is a floppy disk for local and Vibe64 Git destinations;
 GitHub combines a floppy disk and Git commit symbol with partial transparency
 so both remain visible. Update uses a branch-sync icon, distinct from the
 pull-request icon used for Create/View PR.
-The Save icon's hover hint includes the operation and repository/branch alongside
-its current status. Update/rebase, status checks and unavailable actions use their
-own status with the repository/branch, without a save or push label.
+The Save icon's hover hint includes the operation and the same Saves to text
+alongside its current status. Update/rebase, status checks and unavailable
+actions use their own status with "Saves to" and that text, without a save or
+push label.
 Update session labels name the session's bound branch. This action loads newer
 commits from that same branch; bringing a PR's target branch into its source is
 the separate Update branch action in PR details.

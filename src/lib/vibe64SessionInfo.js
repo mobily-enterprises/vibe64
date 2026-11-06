@@ -134,7 +134,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
       detail: "Session branch remains recoverable in Git",
       icon: mdiSourceBranch,
       key: "branch",
-      label: "Branch",
+      label: "Session branch",
       value: branch,
       visible: Boolean(branch)
     },
