@@ -120,8 +120,9 @@ async function connectedCopyExecution({
       });
     }
   }
+  // The copy engine names the repository when it reports this.
   if (execution?.ok === false) {
-    throw Object.assign(new Error(`Connected repository ${copy.name}: ${execution.error || "Its Git actor is not available."}`), {
+    throw Object.assign(new Error(execution.error || "Its Git actor is not available."), {
       code: execution.code || "vibe64_session_work_actor_unavailable"
     });
   }

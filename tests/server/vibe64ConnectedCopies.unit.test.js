@@ -21,6 +21,7 @@ import {
   saveConnectedCopies,
   updateConnectedCopies
 } from "../../packages/vibe64-terminals/src/server/sessionConnectedCopies.js";
+import { connectedCopyExecution } from "../../packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js";
 import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
 
@@ -147,7 +148,7 @@ async function commitInCopy(f, name, file, content) {
   return git(copyPath(f, name), ["rev-parse", "HEAD"]);
 }
 
-function save(f, { beforePush, events = [], recordCommits = f.recordCommits } = {}) {
+function save(f, { beforePush, events = [], executionFor = f.executionFor, recordCommits = f.recordCommits } = {}) {
   return saveConnectedCopies({
     beforePush: async () => {
       events.push("beforePush");
@@ -155,7 +156,7 @@ function save(f, { beforePush, events = [], recordCommits = f.recordCommits } = 
     },
     copies: f.copies(),
     derivedArtifactPaths: [],
-    executionFor: f.executionFor,
+    executionFor,
     nameSave: async (_prepared, copy) => `Save ${copy.name}`,
     onProgress: async ({ message }) => { events.push(message); },
     operationId: "save-1",
@@ -485,6 +486,21 @@ test("Save recovery records a copy whose push landed before Save could record it
   assert.equal(await readFile(path.join(copyPath(f, "tools"), "work.txt"), "utf8"), "tools work\n");
   // The recovered Save is retired: recovering again finds nothing to record.
   assert.deepEqual(await recover("save-1"), []);
+});
+
+test("a copy whose Git commands cannot run names its repository once, in Save and in Update", async (t) => {
+  const f = await fixture(t);
+  await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  await writeFile(path.join(copyPath(f, "library"), "work.txt"), "library work\n");
+  const codexGitCommand = {
+    sessionWorkSaveContext: async () => ({ code: "vibe64_test_actor_unavailable", error: "spawn gh ENOENT", ok: false })
+  };
+  const executionFor = (copy) => connectedCopyExecution({ codexGitCommand, copy, env: {}, session: f.session });
+
+  await assert.rejects(save(f, { executionFor }), { code: "vibe64_test_actor_unavailable", message: "Connected repository library: spawn gh ENOENT" });
+  const [updated] = await update(f, { executionFor });
+  assert.equal(updated.line, "[Connected] library was not updated and is unchanged: spawn gh ENOENT");
 });
 
 test("a copy keeps derived artifacts only when it is itself a Genesis project", async (t) => {
