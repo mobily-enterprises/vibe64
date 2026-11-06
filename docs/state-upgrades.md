@@ -1744,3 +1744,41 @@ This upgrade reached `main` on 5 November 2026 leaving Codex and OpenCode
 conversations in the engine's storage. Before any release or deployment ran it
 (the last release, 0.1.53, is from 3 November), it was amended under the same id
 to hand them to Close.
+
+## Connected repository copies (`20261106-connected-repository-copies`)
+
+Connected repositories became per-session copies, beside each session's source
+in `connected/<name>`, replacing the links between sessions of different
+projects. This upgrade follows `20261104-temporary-repair-chats-removed` and
+retires those links. The owner is Runtime's `connectedRepositoryCopiesUpgrade.js`,
+supplied by the candidate CLI; the script refuses to run without it.
+
+It visits every project's active sessions. A session that records any of
+`connected_sources`, `connected_contribution`, `connected_submissions` or
+`connected_session_name` loses them, together with its cached update check
+(`repository_update_check`), which may still describe a linked session. A former
+consumer, one with `connected_sources`, also has its stored preparation's
+`recipeHash` cleared in `workspace_setup`, so it prepares its workspace again on
+its next start and makes its own copies. A former receiving session keeps
+everything else and is an ordinary session again: it saves to its project's
+main. Sessions whose status is not active or blocked (a renewal or archive owns
+them) are skipped and reported; their old records stay and nothing reads them.
+Archived sessions are not visited. No file, commit or branch is moved or
+deleted, nothing is fetched or pushed, and the former contribution branches stay
+on GitHub.
+
+Before changing a session, apply writes
+`upgrades/backups/20261106-connected-repository-copies/<project>/<session>.json`
+(private): `{ schemaVersion: 1, project, sessionId, metadata }`, where `metadata`
+holds the exact value of every record it removes or rewrites. It reads the file
+back and compares it first; an earlier backup that differs stops the upgrade
+before that session changes. To restore a session, with Vibe64 stopped, write
+each value back as the file of that name in the session's `metadata/` folder,
+followed by a newline.
+
+Check is read-only: it reports, per session, which records would go and whether
+it would prepare again, and how many sessions it would change and skip. A rerun
+finds nothing left to remove and keeps the first backup. Run it as the OS user
+that owns the session state, with Vibe64 and every session process stopped.
+Focused evidence: `connectedRepositoryCopiesUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.
