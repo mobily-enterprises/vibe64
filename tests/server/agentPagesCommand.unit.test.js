@@ -108,7 +108,9 @@ test("the pages command refuses what a page cannot be, with a usable message", a
   await writeFile(path.join(work, "no-index", "about.html"), "<p>About</p>");
   await mkdir(path.join(work, "linked"), { recursive: true });
   await writeFile(path.join(work, "linked", "index.html"), "<p>Linked</p>");
-  await symlink("/etc/hostname", path.join(work, "linked", "secret.txt"));
+  // A link to a file elsewhere on the computer, outside the page's folder.
+  await writeFile(path.join(work, "secret.txt"), "not for the page");
+  await symlink(path.join(work, "secret.txt"), path.join(work, "linked", "secret.txt"));
   await writeFile(path.join(work, "notes.md"), "# Notes");
   const cases = [
     [["publish", "no-index"], 1, /index\.html/u],
