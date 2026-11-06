@@ -32,7 +32,7 @@ const open = ref(false);
         <v-alert type="warning" variant="tonal" density="compact" class="text-body-small">
           Never expose a model server to the internet without a key or a private tunnel.
         </v-alert>
-        <v-sheet border rounded="xl">
+        <v-sheet color="surface-container-low" rounded="xl">
           <v-list lines="two" aria-label="Your own model server">
             <v-list-item
               title="Custom endpoint" subtitle="A model server you run or reach, such as Ollama or LM Studio"

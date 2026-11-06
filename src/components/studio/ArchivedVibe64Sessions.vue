@@ -39,7 +39,6 @@
         :key="`archived-session-skeleton-${index}`"
         class="studio-archived-sessions__card"
         rounded="lg"
-        variant="outlined"
       >
         <v-card-text class="studio-archived-sessions__card-body">
           <div class="studio-archived-sessions__card-heading">
@@ -54,7 +53,7 @@
       </v-card>
     </div>
 
-    <v-sheet v-if="!loading && sessions.length < 1 && !unavailableSessions.length && !error" rounded="lg" border class="studio-archived-sessions__empty">
+    <v-sheet v-if="!loading && sessions.length < 1 && !unavailableSessions.length && !error" rounded="lg" class="studio-archived-sessions__empty">
       <h2 class="text-title-medium mb-1">{{ emptyTitle }}</h2>
       <p class="text-body-medium on-surface-variant mb-0">{{ emptyText }}</p>
     </v-sheet>
@@ -65,7 +64,6 @@
         :key="session.sessionId"
         class="studio-archived-sessions__card"
         rounded="lg"
-        variant="outlined"
       >
         <v-card-text class="studio-archived-sessions__card-body">
           <div class="studio-archived-sessions__card-heading">
@@ -184,10 +182,6 @@ defineExpose({
 .studio-archived-sessions__grid {
   display: grid;
   gap: 0.7rem;
-}
-
-.studio-archived-sessions__card {
-  background: rgb(var(--v-theme-surface));
 }
 
 .studio-archived-sessions__card-body {

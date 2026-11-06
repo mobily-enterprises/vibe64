@@ -102,8 +102,7 @@
           v-for="{ account, session, userCode, settingsStep, authorizeStep, statusMessage } in setupRows"
           :key="account.id"
           rounded="xl"
-          :border="!session"
-          :color="session ? 'transparent' : undefined"
+          :color="session ? 'transparent' : 'surface-container-low'"
           :class="[
             'accounts-setup__item',
             session ? 'pa-0' : 'pa-4 pa-sm-6',

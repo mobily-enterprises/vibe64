@@ -144,7 +144,7 @@ async function actionFinished({ apiPath }) {
           <template #append-inner><v-btn icon="$arrowForward" variant="text" size="48" aria-label="Search pull requests" @click="filter()" /></template>
         </v-text-field>
       </form>
-      <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" border class="pa-4" aria-label="Loading pull requests" aria-busy="true">
+      <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" color="surface-container-low" class="pa-4" aria-label="Loading pull requests" aria-busy="true">
         <v-skeleton-loader v-for="index in 4" :key="index" :type="number ? 'paragraph' : 'list-item-two-line'" />
       </v-sheet>
       <v-alert v-else-if="resource.loadError.value" type="error" variant="tonal" rounded="lg">
@@ -221,7 +221,7 @@ async function actionFinished({ apiPath }) {
           :pull-request="pr" :api-path="`${basePath}/${number}`"
           :disabled="detail.isFetching.value" @changed="actionFinished"
         />
-        <v-sheet rounded="xl" border class="pa-5 pull-requests__description">
+        <v-sheet rounded="xl" color="surface-container-low" class="pa-5 pull-requests__description">
           <h3 class="text-title-medium mb-4">Description</h3>
           <LongTextPreviewBlocks v-if="pr.body" :blocks="description" />
           <p v-else class="text-body-medium on-surface-variant ma-0">No description provided.</p>

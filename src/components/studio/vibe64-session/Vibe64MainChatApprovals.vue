@@ -26,9 +26,10 @@
           <v-card
             v-for="entry in approvals.open"
             :key="entry.id"
-            variant="outlined"
             class="vibe64-approvals__card"
+            color="secondary-container"
             :data-approval-id="entry.id"
+            variant="flat"
           >
             <div class="vibe64-approvals__head">
               <v-avatar size="32" color="secondary" variant="tonal" class="vibe64-approvals__avatar">
@@ -281,8 +282,6 @@ defineExpose({ open: () => { sheetOpen.value = true; } });
   gap: 0.5rem;
 }
 .vibe64-approvals__card {
-  border-color: rgba(var(--v-theme-secondary), 0.45);
-  background: rgba(var(--v-theme-secondary), 0.05);
   padding: 0.75rem;
 }
 .vibe64-approvals__head {

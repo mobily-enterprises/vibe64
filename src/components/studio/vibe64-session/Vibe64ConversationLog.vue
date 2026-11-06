@@ -66,7 +66,7 @@
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
     </template>
     <template #message-actions="{ message, turn }">
-      <v-card v-if="message.integrationRequest" class="mt-3" variant="outlined">
+      <v-card v-if="message.integrationRequest" class="mt-3">
         <v-card-text class="text-break">
           Configure integration: {{ message.integrationRequest.integrationId }}
         </v-card-text>

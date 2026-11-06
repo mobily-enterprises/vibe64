@@ -33,7 +33,7 @@
       v-else-if="!loading"
       class="vibe64-dashboard-page__empty"
       rounded="lg"
-      border
+      color="surface-container-low"
     >
       <h2>Archived session unavailable</h2>
       <p>Session {{ sessionId || "unknown" }} could not be loaded.</p>

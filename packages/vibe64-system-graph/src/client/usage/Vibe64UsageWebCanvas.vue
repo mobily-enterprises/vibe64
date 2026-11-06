@@ -10,7 +10,6 @@
             :key="card.id"
             class="usage-web__card"
             :class="{ 'usage-web__card--untouched': !reached(card) }"
-            variant="outlined"
             rounded="lg"
             :disabled="!reached(card)"
             :aria-label="`${card.title}: ${cardText(card).count}`"
@@ -239,7 +238,7 @@ function nodeLabel(node) {
 .usage-web__group { display: flex; flex-direction: column; gap: 8px; }
 .usage-web__group-title { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-web__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
-.usage-web__card { min-width: 0; border-color: rgb(var(--v-theme-outline-variant)); }
+.usage-web__card { min-width: 0; }
 .usage-web__card--untouched { opacity: .6; }
 .usage-web__card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 0; }
 .usage-web__card-body p { margin: 0; }

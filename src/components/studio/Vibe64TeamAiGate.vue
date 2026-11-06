@@ -2,7 +2,7 @@
   <v-sheet
     class="vibe64-team-ai-gate"
     rounded="lg"
-    border
+    color="surface-container-low"
     role="status"
     data-test="team-ai-gate"
   >

@@ -58,7 +58,6 @@
       <v-sheet
         v-if="view === 'history'"
         aria-live="polite"
-        border
         class="vibe64-repository-workspace__update-status"
         role="status"
         rounded="lg"
@@ -88,7 +87,6 @@
 
       <v-sheet
         v-if="view === 'changes'"
-        border
         class="vibe64-repository-workspace__summary"
         rounded="lg"
       >
@@ -399,7 +397,6 @@ function closeVersion() {
 .vibe64-repository-workspace__summary,
 .vibe64-repository-workspace__update-status {
   background: rgb(var(--v-theme-surface-container-low)) !important;
-  border-color: rgb(var(--v-theme-outline-variant)) !important;
   border-radius: var(--v64-shape-lg, 16px) !important;
 }
 

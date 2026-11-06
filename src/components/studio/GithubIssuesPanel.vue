@@ -117,7 +117,7 @@ function date(value) {
         </div>
       </template>
 
-      <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" border class="pa-4" aria-label="Loading issues" aria-busy="true">
+      <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" color="surface-container-low" class="pa-4" aria-label="Loading issues" aria-busy="true">
         <v-skeleton-loader v-for="index in 4" :key="index" :type="number ? 'paragraph' : 'list-item-two-line'" />
       </v-sheet>
       <v-alert v-else-if="resource.loadError.value && (!number || !issue)" type="error" variant="tonal" rounded="lg">
@@ -225,7 +225,7 @@ function date(value) {
           </div>
         </div>
 
-        <v-sheet border rounded="xl" class="pa-5 issues-panel__markdown">
+        <v-sheet color="surface-container-low" rounded="xl" class="pa-5 issues-panel__markdown">
           <GithubMarkdown v-if="issue.body || issue.bodyHTML" :text="issue.body" :html="issue.bodyHTML" />
           <p v-else class="text-body-medium on-surface-variant ma-0">No description provided.</p>
         </v-sheet>

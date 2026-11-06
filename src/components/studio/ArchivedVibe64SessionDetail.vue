@@ -3,7 +3,7 @@
     v-if="session"
     class="studio-archived-session-detail"
     rounded="lg"
-    border
+    color="surface-container-low"
   >
     <div class="studio-archived-session-detail__header">
       <div class="studio-archived-session-detail__title">

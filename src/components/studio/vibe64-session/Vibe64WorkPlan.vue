@@ -223,13 +223,14 @@ watch(() => props.active, (active) => {
         <v-tab value="history" prepend-icon="$history">History</v-tab>
       </v-tabs>
       <v-divider />
-      <v-sheet v-if="archiveId" color="surface" border="b" class="work-plan-archive-context px-4 py-3">
+      <v-sheet v-if="archiveId" color="surface" class="work-plan-archive-context px-4 py-3">
         <v-btn variant="text" @click="archiveId = ''">Plan history</v-btn>
         <div class="work-plan-archive-copy">
           <v-chip color="primary" variant="tonal" size="small" class="mb-1">Archived · read-only</v-chip>
           <p class="text-body-small on-surface-variant">{{ selectedArchive ? `Archived ${selectedArchive.archivedDate}` : 'Saved snapshot' }}</p>
         </div>
       </v-sheet>
+      <v-divider v-if="archiveId" />
       <v-card-text class="work-plan-content pa-4 pa-sm-6" :class="{ 'd-flex flex-column': showHistory && !history.length }">
         <v-alert v-if="resource.loadError.value" type="warning" variant="tonal" class="mb-4">
           {{ resource.loadError.value }}

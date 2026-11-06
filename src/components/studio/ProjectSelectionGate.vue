@@ -4,7 +4,7 @@
       v-if="practiceDeleted"
       class="project-selection-gate__deleted"
       rounded="lg"
-      border
+      color="surface-container-low"
       role="status"
     >
       <h2 class="project-selection-gate__title">This practice project is gone</h2>
@@ -23,7 +23,7 @@
       v-else-if="learningModeBlocked"
       class="project-selection-gate__deleted"
       rounded="lg"
-      border
+      color="surface-container-low"
       role="status"
       data-test="learning-mode-project-note"
     >
@@ -81,7 +81,7 @@
       v-else-if="runtimeReady && pickerVisible"
       class="project-selection-gate__picker"
       rounded="lg"
-      border
+      color="surface-container-low"
     >
       <div class="project-selection-gate__header">
         <div>

@@ -87,7 +87,7 @@ async function submit() {
 </script>
 
 <template>
-  <v-sheet rounded="xl" border class="pa-5 d-flex flex-column ga-3 pr-actions">
+  <v-sheet rounded="xl" color="surface-container-low" class="pa-5 d-flex flex-column ga-3 pr-actions">
     <p v-if="notice" role="status" class="text-body-medium ma-0">{{ notice }}</p>
     <template v-if="pullRequest.state === 'OPEN'">
       <div class="d-flex flex-wrap ga-2 text-body-small">

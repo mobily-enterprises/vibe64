@@ -101,7 +101,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       <v-card-text class="vibe64-add-ai__body">
         <v-row align="stretch">
           <v-col v-for="choice in (aiStatusLoaded ? nativeChoices : [])" :key="choice.id" cols="12" sm="6">
-            <v-card class="vibe64-add-ai__choice fill-height" rounded="xl" variant="outlined">
+            <v-card class="vibe64-add-ai__choice fill-height" rounded="xl">
               <v-card-item>
                 <template #prepend>
                   <v-avatar color="secondary" rounded="lg" size="52" variant="tonal">
@@ -123,7 +123,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           </v-col>
           <v-col v-if="openCodeAddAvailable" cols="12" :sm="nativeChoices.length ? 6 : 12">
             <v-skeleton-loader v-if="!registryLoaded && !registryLoadError" type="card" aria-label="Loading OpenCode connections" />
-            <v-card v-else class="vibe64-add-ai__choice fill-height" rounded="xl" variant="outlined">
+            <v-card v-else class="vibe64-add-ai__choice fill-height" rounded="xl">
               <v-card-item>
                 <template #prepend>
                   <v-avatar color="secondary" rounded="lg" size="52" variant="tonal">
@@ -224,7 +224,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 
           <v-sheet
             v-else-if="filteredProviders.length"
-            border
+            color="surface-container-low"
             class="vibe64-provider-picker__list"
             rounded="xl"
           >
@@ -560,7 +560,6 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
 }
 
 .vibe64-provider-picker__list {
-  border-color: rgb(var(--v-theme-outline-variant));
   overflow: hidden;
 }
 

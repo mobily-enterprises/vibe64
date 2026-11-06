@@ -1,6 +1,5 @@
 <template>
   <v-sheet
-    border
     rounded="lg"
     role="alert"
     class="studio-error-notice"
@@ -204,7 +203,6 @@ async function copyRepairCommand() {
   background:
     linear-gradient(135deg, rgba(var(--v-theme-error), 0.1), rgba(var(--v-theme-error), 0.035)),
     rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-error), 0.34) !important;
   color: rgb(var(--v-theme-on-surface));
   display: grid;
   gap: 0.75rem;

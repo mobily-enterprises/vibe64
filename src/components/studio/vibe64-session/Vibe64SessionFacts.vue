@@ -2,7 +2,7 @@
   <v-sheet
     v-if="facts.length"
     rounded="lg"
-    border
+    color="surface-container-low"
     class="studio-ai-session-facts"
   >
     <div class="studio-ai-session-facts__header">

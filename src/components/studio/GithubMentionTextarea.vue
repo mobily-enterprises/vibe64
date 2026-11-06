@@ -110,7 +110,7 @@ async function onKeydown(event) {
     scroll-strategy="reposition" :scrim="false" :close-on-back="false" :capture-focus="false" :retain-focus="false"
     width="360" max-width="calc(100vw - 32px)" @update:model-value="!$event && (mention = null)"
   >
-    <v-sheet rounded="lg" border elevation="3" class="overflow-y-auto" max-height="320">
+    <v-sheet rounded="lg" color="surface-container" elevation="3" class="overflow-y-auto" max-height="320">
       <v-list :id="listId" role="listbox" aria-label="Mention suggestions" density="compact" class="pa-1">
         <v-list-item
           v-for="(user, index) in suggestions" :id="`${listId}-${index}`" :key="user.login"

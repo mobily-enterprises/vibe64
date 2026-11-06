@@ -101,7 +101,6 @@ onBeforeUnmount(() => {
 
     <v-sheet
       :rounded="navigationCollapsed ? 0 : 'xl'"
-      :border="!navigationCollapsed"
       class="section-container-shell__panel"
     >
       <div class="section-container-shell__body">
@@ -170,7 +169,6 @@ onBeforeUnmount(() => {
 
 .section-container-shell__panel {
   background: rgb(var(--v-theme-surface-container-lowest));
-  border-color: rgb(var(--v-theme-outline-variant)) !important;
   display: grid;
   min-height: 0;
   overflow: hidden;

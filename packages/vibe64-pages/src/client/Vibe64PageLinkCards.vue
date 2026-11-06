@@ -36,7 +36,6 @@ watch(() => links.value.map((link) => link.path).join("\n"), () => {
       class="vibe64-page-link-card"
       data-test="page-link-card"
       :data-page-id="link.pageId"
-      variant="outlined"
     >
       <div class="vibe64-page-link-card__body">
         <v-icon icon="$description" color="primary" size="22" />
