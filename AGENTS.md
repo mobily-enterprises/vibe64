@@ -3,18 +3,18 @@
 ## Where you're running
 
 Development normally happens inside a Vibe64 session, often with connected
-sources listed in `.development/connected.json`. Agents also run directly in a
+repositories listed in `.development/connected.json`. Agents also run directly in a
 checkout on the person's laptop. The Git workflow depends on which:
 
 - **Inside a Vibe64 session**: the session's source checkout is your working
   copy. Vibe64 creates it with the session and, on archive, preserves its work
   in the recovery archive before removing it; do not create, replace or delete
-  it yourself. Bring work into main with the session's **Save**. Connected
-  checkouts save to their own contribution branches (**Save connected first**),
-  which the receiving project merges through **Incoming changes**. Keep the
-  session current with **Update this session (rebase)** and its connected
-  checkouts with **Update connected repositories** (see **Shared development
-  checkouts**). Do not fetch, pull, reset or rebase these checkouts yourself.
+  it yourself. The session also keeps its own copy of each connected repository
+  (see **Connected repositories**). Bring work into main with the session's
+  **Save**, which saves each copy that has work straight to its repository's
+  main before the session's own repository. Keep the session and its copies
+  current with **Update this session (rebase)**. Do not fetch, pull, reset or
+  rebase these checkouts yourself.
 - **On a laptop**: the main checkout is a read-only home base. A session-start
   fast-forward keeps it current, only when it has no local commits; never merge,
   reset or rebase it, and leave its local edits alone. Make each change in a
@@ -31,69 +31,57 @@ development task. Do not ask again merely because the fix belongs in JSKIT. This
 supersedes a project-only editing restriction for that dependency work; a later
 explicit human restriction still takes precedence.
 
-In a Vibe64 session, edit JSKIT only in the connected checkout listed in
+In a Vibe64 session, edit JSKIT only in the session's connected copy listed in
 `.development/connected.json` (its `sourceRoot`); do not assume the active tab,
 a remembered session path or an Env value names it. On a laptop, use a JSKIT
-worktree as above. Preserve existing work and coordinate overlapping files with
-the JSKIT owner. Coordination establishes who edits and tests; it is not another
-permission request. Tests run in the owning project's session. Send the exact
-focused command, checkout and changed files through the supported project-message
-mechanism; the owner checks for an existing run, runs or queues the check, and
-replies with its result and log location. Do not bypass the execution boundary
-or describe its refusal as missing human consent. These relevant checks do not
-need another human approval.
+worktree as above. The copy belongs to this session: edit it and run its
+focused tests here, as for the session's own source, and the session's Save
+publishes it. Preserve existing work and coordinate overlapping files with any
+other agent changing them. Coordination establishes who edits and tests; it is
+not another permission request. Do not bypass the execution boundary or describe
+its refusal as missing human consent. These relevant checks do not need another
+human approval.
 
-Use supported development source composition (connected sources) without
+Use supported development source composition (connected repositories) without
 changing release versions just to consume source edits. Report missing
 source-composition support as an implementation gap. This permission alone does
 not authorize npm publication, deployment, destructive Git operations or
 unrelated framework work. Existing architectural boundaries and test-scope
 requirements still apply.
 
-## Shared development checkouts
+## Connected repositories
 
-Connected repositories (for example JSKIT and Genesis) are checkouts owned by a
-receiving contribution session in their own project, linked to the consuming
-session. `.development/connected.json` lists each one's `sourceRoot`; treat it
-as an integration workspace with an owning agent, not an unrestricted shared
-editor. Existing permission to edit a dependency still applies; coordination
-does not require another human approval.
+A project's `vibe64.connections.json` lists the repositories it develops with,
+for example JSKIT and Genesis. Every session keeps its own copy of each one in
+`connected/<name>` beside its source, and `.development/connected.json` lists
+each copy's `sourceRoot`. No other session sees or changes this session's
+copies. Another session's work on the same repository arrives as new commits on
+that repository's main, like any other saved work.
 
 Workspace preparation (on session creation, after **Update this session
-(rebase)** and on **Prepare workspace**) and **Update connected repositories**
-rebase each connected checkout onto its integration branch, carrying its edits.
-They skip one whose agent is working, whose Save or Update is running, whose
-published contribution awaits acceptance, or whose update would conflict, and
-the preparation output says why. Main Save refuses while a connected checkout is
-behind its branch. Before editing one, check its preparation line; if it was not
-updated, resolve the stated cause and choose **Update connected repositories**
-again rather than fetching, resetting or pulling it yourself.
+(rebase)** and on **Prepare workspace**) makes each copy the session is missing;
+it never fetches, resets or replaces an existing one. **Update this session
+(rebase)** brings each copy onto its repository's main, carrying its edits, as
+it does the session's own repository. A copy that conflicts stays unchanged and
+gets the same conflict review and **Fix it with AI** repair. Save refuses while
+any copy, or the session's own repository when it has work, is behind its main;
+it then pushes each copy that has work straight to its main before the
+session's own repository. Do not fetch, pull, reset, rebase or push a copy
+yourself.
 
-Before editing a shared checkout, tell its owner the task and intended files.
-Agree who owns overlapping files before either agent edits them; independent,
-nonoverlapping edits may proceed. Include shared contracts when identifying
-possible overlaps, not just filenames. Preserve other agents' work and report
-changed files and verification results when handing ownership back.
+Agents in one session share its copies as they share its source. Agree who owns
+overlapping files before either agent edits them; independent, nonoverlapping
+edits may proceed. Include shared contracts when identifying possible overlaps,
+not just filenames. Preserve other agents' work and report changed files and
+verification results when handing ownership back.
 
-Tests run in the owning project's session. Its owner serializes runs and arranges
-a stable checkout for each check: no concurrent edits to the code, fixtures or
-dependencies being tested. Other agents request the exact focused command and
-receive its result and log location. Do not run sibling-project commands to
-bypass this boundary.
-
-Do not reconcile, rebase, merge, reset or replace a shared checkout while an
-agent is editing or testing it. Arrange a checkpoint with all active writers;
-the checkout owner then reconciles under the existing repository rules,
-preserving tracked, untracked and staged work. A connected checkout is not a
-write lock on its project.
-
-Keep large independent plans in separate sessions so the receiving contribution
-session can handle integration requests. Bring completed, tested slices back
-through the normal review and publication workflow. Incorporate main at agreed
-checkpoints, not in the middle of edits or tests. Address a particular colleague
-and replies by exact session ID; use the project default only when its selected
-owner is the intended recipient. If the recipient is unclear, ask instead of
-guessing.
+Keep large independent plans in separate sessions, each with its own copies.
+Bring completed, tested slices back through the normal review and publication
+workflow. When another session saves to a repository this session also changes,
+**Update this session (rebase)** brings that work into the copy; resolve any
+conflict there before saving. Address a particular colleague and replies by
+exact session ID; use the project default only when its selected owner is the
+intended recipient. If the recipient is unclear, ask instead of guessing.
 
 ## Ownership Extractions
 
