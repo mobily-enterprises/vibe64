@@ -6,10 +6,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({ useCommand:
 import ConnectedProjectsSettings from "../../src/components/studio/ConnectedProjectsSettings.vue";
 
 let app;
-function mount(projects) {
+function mount(repositories) {
   const renderer = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...ConnectedProjectsSettings, render: () => null }, { projectSlug: "books", state: {
-    available: true, canEdit: true, exists: true, revision: "r1", source: { sessionId: "s1" }, projects
+    available: true, canEdit: true, exists: true, revision: "r1", source: { sessionId: "s1" }, repositories
   } });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});

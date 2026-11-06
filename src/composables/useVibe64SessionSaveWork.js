@@ -40,7 +40,6 @@ function useVibe64SessionSaveWork(props, {
 }) {
   const saveWorkConfirmOpen = ref(false);
   const saveWorkReview = ref(null);
-  const saveWorkConnectedReview = ref(null);
   const saveWorkConnectedResults = ref([]);
   // The last Save was recorded with the stand-in Git name and email.
   const saveWorkStandInIdentity = ref(false);
@@ -87,11 +86,10 @@ function useVibe64SessionSaveWork(props, {
       updateStatusPending: monitored.updateStatusPending === true || monitoredState === "updating"
     };
   });
-  const saveConnectedFirst = computed(() => saveWorkRepositoryState.value?.connectedSaveRequired === true);
-  const saveWorkUnsaved = computed(() => saveWorkRepositoryState.value?.unsaved === true || saveConnectedFirst.value);
+  const saveWorkUnsaved = computed(() => saveWorkRepositoryState.value?.unsaved === true);
   const saveWorkRequiresUpdate = computed(() => Boolean(
-    !saveConnectedFirst.value && (saveWorkRepositoryState.value?.updateAvailable === true ||
-    saveWorkRepositoryState.value?.updateStatusPending === true)
+    saveWorkRepositoryState.value?.updateAvailable === true ||
+    saveWorkRepositoryState.value?.updateStatusPending === true
   ));
   const saveWorkRepositoryBusy = computed(() => ["saving", "updating"].includes(
     String(toolbarRepositoryWorkState.value?.state || "")
@@ -111,17 +109,14 @@ function useVibe64SessionSaveWork(props, {
   ));
   const saveWorkDisabled = computed(() => Boolean(
     updateWorkDisabled.value ||
-    (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
-      !saveWorkRepositoryState.value?.connectedInspectionError)
+    (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
   ));
   const sessionUpdateLabel = computed(() => {
     const branch = saveWorkRepositoryState.value?.destination?.branch;
     return branch ? `Update session from ${branch}` : "Update session";
   });
   const saveWorkHeaderAriaLabel = computed(() => (
-    saveConnectedFirst.value ? "Save connected first" : saveWorkRequiresUpdate.value
-      ? sessionUpdateLabel.value
-      : "Review selected session changes"
+    saveWorkRequiresUpdate.value ? sessionUpdateLabel.value : "Review selected session changes"
   ));
   const saveWorkHeaderVisible = computed(() => Boolean(
     props.active && sessionId.value
@@ -147,14 +142,12 @@ function useVibe64SessionSaveWork(props, {
     if (saveWorkRepositoryState.value?.error) {
       return "Repository status is unavailable; check for updates before saving";
     }
-    if (saveConnectedFirst.value) return "Review and push connected contributions before saving this project";
     if (saveWorkRequiresUpdate.value) {
       return saveWorkUnsaved.value
         ? `${sessionUpdateLabel.value}, preserving its unsaved work. Save will be available when the update finishes.`
         : `${sessionUpdateLabel.value} to load its latest saved changes.`;
     }
-    if (!saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
-        !saveWorkRepositoryState.value?.connectedInspectionError) {
+    if (!saveWorkUnsaved.value) {
       return "No work to save";
     }
     return "Review changes and choose where to commit them";
@@ -403,11 +396,6 @@ function useVibe64SessionSaveWork(props, {
     saveWorkReview.value = saveWorkRepositoryState.value?.destination
       ? { ...saveWorkRepositoryState.value.destination }
       : null;
-    saveWorkConnectedReview.value = saveConnectedFirst.value
-      ? (saveWorkRepositoryState.value?.connectedReview || []).map(item => ({
-          projectSlug: item.projectSlug, destination: { ...item.destination }
-        }))
-      : null;
     saveWorkConfirmOpen.value = true;
     return true;
   }
@@ -445,12 +433,8 @@ function useVibe64SessionSaveWork(props, {
     saveWorkStandInIdentity.value = false;
     saveWorkConfirmOpen.value = false;
     return runRepositoryRequest("save", "Session work could not be saved.", () => props.saveSessionWork({
-      destinationReview: saveWorkReview.value,
-      ...(saveWorkConnectedReview.value !== null ? { connectedReview: saveWorkConnectedReview.value } : {})
+      destinationReview: saveWorkReview.value
     }), {
-      onFailure() {
-        saveWorkConnectedResults.value = saveWorkFailure.value?.details?.connected || [];
-      },
       onSuccess(result) {
         saveWorkConnectedResults.value = result?.connected || [];
         saveWorkStandInIdentity.value = result?.standInIdentity === true;
@@ -462,7 +446,6 @@ function useVibe64SessionSaveWork(props, {
   watch([sessionId, projectSlug, actorKey], () => {
     repositoryRequestSequence += 1;
     saveWorkConfirmOpen.value = false;
-    saveWorkConnectedReview.value = null;
     saveWorkConnectedResults.value = [];
     saveWorkStandInIdentity.value = false;
     resolvedUpdateReview.value = null;
@@ -481,7 +464,6 @@ function useVibe64SessionSaveWork(props, {
     resolvedUpdateReview,
     retrySaveWork,
     reviewResolvedUpdate,
-    saveConnectedFirst,
     saveWorkActivityDismissed,
     saveWorkActivityIsUpdate,
     saveWorkActivityKey,
@@ -490,7 +472,6 @@ function useVibe64SessionSaveWork(props, {
     saveWorkConfirmOpen,
     saveWorkConflictFailure,
     saveWorkConnectedResults,
-    saveWorkConnectedReview,
     saveWorkDisabled,
     saveWorkError,
     saveWorkFailure,

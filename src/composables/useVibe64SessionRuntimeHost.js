@@ -403,7 +403,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return true;
   }
 
-  async function saveSessionWork({ destinationReview, connectedReview } = {}) {
+  async function saveSessionWork({ destinationReview } = {}) {
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -415,9 +415,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/save"
       ),
       {
-        body: { ...vibe64RealtimeOriginPayload(), destinationReview,
-          ...(connectedReview !== undefined ? { connectedReview } : {})
-        },
+        body: { ...vibe64RealtimeOriginPayload(), destinationReview },
         method: "POST"
       }
     );

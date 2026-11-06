@@ -2302,77 +2302,21 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkSending.value).toBe(false);
   });
 
-  it("reviews connected-only work separately and returns to ordinary Main Save after publication", async () => {
+  it("saves connected repositories with the ordinary Save and lists each saved copy until the session changes", async () => {
     const destination = { sessionId: "session-1", mode: "github", repository: "example/app", branch: "main" };
-    const connectedReview = [{ projectSlug: "library", destination: {
-      sessionId: "contribution-1", mode: "github", repository: "example/library", branch: "vibe64-incoming/123"
-    } }];
-    const completed = [{ repository: "example/library", sessionId: "contribution-1",
-      saveCommit: "b".repeat(40), recorded: true, reconciled: true }];
-    const saveSessionWork = vi.fn(async () => ({ ok: true, status: "connected_saved", connected: completed }));
+    const connected = [{ name: "library", saveCommit: "b".repeat(40) }];
+    const saveSessionWork = vi.fn(async () => ({ ok: true, status: "saved", connected }));
     const { props, view } = await createViewWithProps({ saveSessionWork,
-      workState: { destination, connectedReview, connectedSaveRequired: true, unsaved: false, updateAvailable: true }
+      workState: { destination, unsaved: true, updateAvailable: false }
     });
-    expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkHeaderAriaLabel.value).toBe("Save connected first");
-    expect(view.saveWorkRequiresUpdate.value).toBe(false);
-    expect(view.requestSaveWork()).toBe(true);
-    connectedReview[0].destination.branch = "changed-after-review";
-    await view.confirmSaveWork();
-    expect(saveSessionWork).toHaveBeenCalledTimes(1);
-    expect(saveSessionWork.mock.calls[0][0]).toEqual({ destinationReview: destination,
-      connectedReview: [{ projectSlug: "library", destination: {
-        sessionId: "contribution-1", mode: "github", repository: "example/library", branch: "vibe64-incoming/123"
-      } }]
-    });
-    expect(view.saveWorkConnectedResults.value).toEqual(completed);
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
-
-    props.workState = { destination, connectedReview, connectedSaveRequired: false,
-      connectedRequirementsPresent: true, unsaved: false, updateAvailable: false };
-    await nextTick();
-    expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
-    view.requestSaveWork();
-    expect(view.saveWorkConnectedReview.value).toBeNull();
-    await view.confirmSaveWork();
-    expect(saveSessionWork.mock.calls[1][0]).toEqual({ destinationReview: destination });
-  });
-
-  it("keeps ordinary Main Save available when receiving status is unknown and reports its fresh refusal", async () => {
-    const destination = { sessionId: "session-1", mode: "github", repository: "example/app", branch: "main" };
-    const saveSessionWork = vi.fn(async () => { throw new Error("Receiving repository access is unavailable. Reconnect and retry."); });
-    const view = await createView({ saveSessionWork, workState: {
-      destination, unsaved: false, connectedSaveRequired: false, connectedRequirementsPresent: false,
-      connectedInspectionError: "Receiving status unavailable"
-    } });
-    expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
-    expect(view.saveWorkTitle.value).not.toBe("No work to save");
     expect(view.requestSaveWork()).toBe(true);
-    expect(view.saveWorkConnectedReview.value).toBeNull();
-    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    await view.confirmSaveWork();
     expect(saveSessionWork).toHaveBeenCalledExactlyOnceWith({ destinationReview: destination });
-    expect(view.saveWorkError.value).toBe("Receiving repository access is unavailable. Reconnect and retry.");
-  });
-
-  it("keeps confirmed connected push results visible when a later repository fails", async () => {
-    const completed = [{ repository: "example/library", sessionId: "contribution-1",
-      saveCommit: "b".repeat(40), recorded: true }];
-    const { props, view } = await createViewWithProps({
-      workState: { connectedSaveRequired: true, connectedReview: [], unsaved: false },
-      saveSessionWork: vi.fn(async () => { throw Object.assign(new Error("Other repository refused the push"), {
-        details: { connected: completed, failedRepository: "example/other" }
-      }); })
-    });
-    view.requestSaveWork();
-    await expect(view.confirmSaveWork()).resolves.toBe(false);
-    expect(view.saveWorkConnectedResults.value).toEqual(completed);
-    expect(view.saveWorkError.value).toBe("Other repository refused the push");
+    expect(view.saveWorkConnectedResults.value).toEqual(connected);
     props.session = { ...props.session, sessionId: "different-session" };
     await nextTick();
     expect(view.saveWorkConnectedResults.value).toEqual([]);
-    expect(view.saveWorkConnectedReview.value).toBeNull();
   });
 
   it("shows the Save action only in the active session chat", async () => {

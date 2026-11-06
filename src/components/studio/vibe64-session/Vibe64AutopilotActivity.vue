@@ -80,15 +80,12 @@
     </v-sheet>
     <GitStandInIdentityNotice v-if="saveWorkStandInIdentity" @close="saveWorkStandInIdentity = false" />
     <v-alert v-if="saveWorkConnectedResults.length" type="info" variant="tonal" closable @click:close="saveWorkConnectedResults = []">
-      <p class="mb-2">Connected contributions pushed. The main project was not pushed.</p>
+      <p class="mb-2">Connected repositories saved:</p>
       <ul>
-        <li v-for="result in saveWorkConnectedResults" :key="result.sessionId">
-          {{ result.repository }} · <code>{{ result.saveCommit?.slice(0, 12) }}</code>
-          <span v-if="result.recorded === false"> — retry Save to record this confirmed commit.</span>
-          <span v-else-if="result.reconciled === false"> — open its session to finish reconciliation.</span>
+        <li v-for="result in saveWorkConnectedResults" :key="result.name">
+          {{ result.name }} · <code>{{ result.saveCommit?.slice(0, 12) }}</code>
         </li>
       </ul>
-      <p class="mt-2 mb-0">Review these contributions in the receiving projects’ Incoming changes.</p>
     </v-alert>
     <Vibe64TemporaryActionTerminal
       :active="saveWorkOperationActive || saveWorkSending"

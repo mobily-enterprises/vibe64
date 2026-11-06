@@ -40,8 +40,7 @@
           width="var(--session-action-size, 36px)"
           @click="requestSessionSaveWork"
         >
-          <v-icon v-if="saveConnectedFirst" :icon="mdiSourceBranch" />
-          <v-icon v-else-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
+          <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
           <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
             <v-icon :icon="mdiContentSaveOutline" size="18" class="studio-autopilot__save-symbol-disk" />
             <v-icon :icon="mdiSourceCommit" size="16" class="studio-autopilot__save-symbol-commit" />
@@ -240,7 +239,6 @@ import {
   mdiContentSaveOutline,
   mdiDotsVertical,
   mdiIncognito,
-  mdiSourceBranch,
   mdiSourceBranchSync,
   mdiSourceCommit,
   mdiSourcePull,
@@ -265,7 +263,7 @@ const emit = defineEmits(["chat-attention"]);
 const {
   connectedUpdateActionVisible, createPullRequestOpen, githubProject,
   mainChatApprovals, props, repositoryOperationActive, requestSaveWork, requestSessionRenewal,
-  retryWorkspaceSetup, revealApprovals, saveConnectedFirst, saveWorkActivityLabel, saveWorkDisabled,
+  retryWorkspaceSetup, revealApprovals, saveWorkActivityLabel, saveWorkDisabled,
   saveWorkError, saveWorkHeaderAriaLabel, saveWorkHeaderVisible, saveWorkOperationActive,
   saveWorkRequiresUpdate, saveWorkSending, saveWorkTitle, saveWorkUnsaved, sessionId, sessionPullRequest,
   sessionPullRequestTarget, sessionToolbarVisible, showSaveWorkActivity, sourceOperationsSuspended,
@@ -358,7 +356,6 @@ const saveWorkCheckAvailable = computed(() => Boolean(
   !sourceOperationsSuspended.value && !props.sessionSelectionArchived
 ));
 const saveWorkHeaderHint = computed(() => {
-  if (saveConnectedFirst.value) return saveWorkTitle.value;
   const checkStatus = saveWorkChecking.value ? "Checking for updates…"
     : saveWorkCheckAvailable.value ? `${saveWorkTitle.value}. Click to check for updates.`
       : saveWorkTitle.value;

@@ -59,7 +59,7 @@ function sessionRepositoryWorkState(workState = null) {
     };
   }
   const changedCount = Array.isArray(source.changedPaths) ? source.changedPaths.length : 0;
-  if (source.unsaved === true || source.connectedSaveRequired === true) {
+  if (source.unsaved === true) {
     return {
       changedCount,
       ...freshness,

@@ -881,38 +881,6 @@ describe("Vibe64 direct session view", () => {
     }
   });
 
-  it("renders connected Save with receiving destinations and no main publication or PR action", async () => {
-    const source = readAutopilotViewSource();
-    const template = source.match(/<v-dialog v-model="saveWorkConfirmOpen"[\s\S]*?<\/v-dialog>/u)?.[0];
-    expect(template).toBeTruthy();
-    const compiled = compileTemplate({ source: template, filename: componentPath, id: "connected-save-review" });
-    expect(compiled.errors).toEqual([]);
-    const module = { exports: {} };
-    new Function("require", "module", "exports", transformSync(compiled.code, { format: "cjs" }).code)(
-      name => { expect(name).toBe("vue"); return vue; }, module, module.exports
-    );
-    const state = {
-      saveWorkConfirmOpen: true, saveWorkConnectedReview: [{ destination: {
-        sessionId: "contribution-one", repository: "example/library", branch: "vibe64-incoming/123"
-      } }], saveWorkReview: { mode: "github", repository: "example/app", branch: "main" },
-      saveWorkNeedsPullRequest: false, saveWorkDisabled: false, saveWorkSending: false,
-      githubProject: true, sessionPullRequest: null, publicationLabel: "Push connected contributions",
-      cancelSaveWork() {}, confirmSaveWork() {}, selectSessionTool() {}, props: { workState: {} }
-    };
-    const app = vue.createSSRApp({ setup: () => state, render: module.exports.render });
-    for (const name of ["v-dialog", "v-card", "v-card-title", "v-card-text", "v-card-actions", "v-spacer", "v-sheet", "v-btn"]) {
-      app.component(name, { setup: (_, { slots }) => () => vue.h(name === "v-btn" ? "button" : "div", slots.default?.()) });
-    }
-    const html = await renderToString(app);
-    expect(html).toContain("Save connected first");
-    expect(html).toContain("example/library:vibe64-incoming/123");
-    expect(html).toContain("Push connected contributions");
-    expect(html).toContain("main project’s changes stay local");
-    expect(html).not.toContain("example/app:main");
-    expect(html).not.toContain("Create draft PR");
-    expect(html).not.toContain("disabled");
-  });
-
   it("offers native confirmed Save with temporary action output, not an AI prompt", () => {
     const component = readAutopilotViewSource();
     const composable = composablePaths.map((file) => fs.readFileSync(file, "utf8")).join("\n");
@@ -960,8 +928,7 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain('<v-icon v-if="saveConnectedFirst" :icon="mdiSourceBranch" />');
-    expect(sessionHeader).toContain('<v-icon v-else-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
+    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
     expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');

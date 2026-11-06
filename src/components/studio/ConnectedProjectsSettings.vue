@@ -70,7 +70,7 @@ function setScript(entry, value) {
   else delete entry.script;
 }
 function resetDraft() {
-  draft.value = (props.state.projects || []).map((entry) => ({ ...entry }));
+  draft.value = (props.state.repositories || []).map((entry) => ({ ...entry }));
   baseline.value = JSON.stringify(draft.value);
   revision.value = props.state.revision || "";
 }
@@ -95,7 +95,7 @@ async function save() {
   if (saving.value || stale.value || !props.state.canEdit) return;
   saving.value = true;
   try {
-    const result = await saveCommand.run({ projects: draft.value.map((entry) => ({ ...entry })), revision: revision.value,
+    const result = await saveCommand.run({ repositories: draft.value.map((entry) => ({ ...entry })), revision: revision.value,
       sessionId: props.state.source?.sessionId || "" });
     if (!result) return;
     baseline.value = JSON.stringify(draft.value);

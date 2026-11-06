@@ -368,17 +368,15 @@ function mountedHostFixture() {
 }
 
 describe("mounted Main host", () => {
-  it("forwards the reviewed connected destinations through the existing Save endpoint", async () => {
+  it("forwards the reviewed destination through the existing Save endpoint", async () => {
     const f = mountedHostFixture();
     try {
       const destinationReview = { sessionId: "working-one", mode: "github", repository: "example/app", branch: "main" };
-      const connectedReview = [{ projectSlug: "library", destination: {
-        sessionId: "contribution-one", mode: "github", repository: "example/library", branch: "vibe64-incoming/123"
-      } }];
-      await f.host.saveSessionWork({ destinationReview, connectedReview });
+      await f.host.saveSessionWork({ destinationReview });
       const save = mountedHostMocks.request.mock.calls.find(([url]) => url.endsWith("/working-one/save"));
       expect(save).toBeTruthy();
-      expect(save[1].body).toMatchObject({ destinationReview, connectedReview });
+      expect(save[1].body).toMatchObject({ destinationReview });
+      expect(save[1].body).not.toHaveProperty("connectedReview");
       expect(save[1].method).toBe("POST");
     } finally { f.app.unmount(); }
   });

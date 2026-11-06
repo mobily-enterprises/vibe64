@@ -44,25 +44,15 @@
     </v-card>
   </v-dialog>
 
-  <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" :aria-label="saveWorkConnectedReview ? 'Save connected first' : 'Save changes'" scrollable>
+  <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" aria-label="Save changes" scrollable>
     <v-card rounded="xl">
-      <v-card-title>{{ saveWorkConnectedReview ? 'Save connected first' : 'Save changes' }}</v-card-title>
+      <v-card-title>Save changes</v-card-title>
       <v-card-text>
-        <template v-if="saveWorkConnectedReview">
-          <p>Commit and push changed connected sources to these contribution branches, one repository at a time.</p>
-          <v-sheet
-            v-for="item in saveWorkConnectedReview" :key="item.destination.sessionId"
-            color="surface-light" rounded="lg" class="pa-3 mb-2" style="overflow-wrap: anywhere"
-          >
-            <strong>{{ item.destination.repository }}:{{ item.destination.branch }}</strong>
-          </v-sheet>
-          <p>The main project’s changes stay local. Each receiving project can merge or discard its contribution in Incoming changes.</p>
-        </template>
-        <div v-if="!saveWorkConnectedReview" class="d-flex align-center justify-space-between ga-2 mb-2">
+        <div class="d-flex align-center justify-space-between ga-2 mb-2">
           <span>{{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</span>
           <v-btn height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
         </div>
-        <v-sheet v-if="saveWorkReview && !saveWorkConnectedReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
+        <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
           <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
           <Vibe64SessionSaveTarget v-if="saveWorkTarget" :target="saveWorkTarget" />
           <p v-if="sessionPullRequest" class="text-body-small mt-1 mb-0">PR #{{ sessionPullRequest.number }} · {{ sessionPullRequest.headBranch }} → {{ sessionPullRequest.baseBranch }}</p>
@@ -78,7 +68,7 @@
           Cancel
         </v-btn>
         <v-btn
-          v-if="!saveWorkConnectedReview && githubProject && !sessionPullRequest?.number"
+          v-if="githubProject && !sessionPullRequest?.number"
           color="primary"
           height="48"
           :variant="saveWorkNeedsPullRequest ? 'flat' : 'outlined'"
@@ -120,7 +110,7 @@ const { view } = defineProps({
 const {
   applyResolvedUpdate, cancelSaveWork, confirmSaveWork, contextFullFailure, createPullRequestOpen,
   githubProject, props, resolvedUpdateReview, retryContextFull, saveWorkConfirmOpen,
-  saveWorkConnectedReview, saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
+  saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
   selectSessionTool, sessionPullRequest, sourceOperationsSuspended, updateWorkDisabled
 } = view;
 /** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */
@@ -137,10 +127,9 @@ function confirmResolvedUpdate() {
 }
 // The reviewed destination, said as the session tab's info says it.
 const saveWorkTarget = computed(() => vibe64SessionSaveTarget(saveWorkReview.value, props.projectContext));
-const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value && githubProject.value &&
+const saveWorkNeedsPullRequest = computed(() => githubProject.value &&
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const publicationLabel = computed(() => {
-  if (saveWorkConnectedReview.value) return "Push connected contributions";
   const destination = saveWorkReview.value;
   if (destination?.mode === "github") return "Commit & push";
   return "Save";
