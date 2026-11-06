@@ -63,7 +63,10 @@ coding agent the session project's deployment: whether it is deployed, its
 public addresses, the current release with its commit, deploy time and recorded
 Deployment commands, its production variable names with their source, and what
 is missing before the next deploy. It never shows a value and changes nothing.
-Where the installation does not deploy projects it says so.
+Where the installation does not deploy projects it says so. Changing a
+production value from a session is the host's decision for the person whose
+session it is; when the host refuses, the agent reports the host's message
+instead of retrying.
 
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.

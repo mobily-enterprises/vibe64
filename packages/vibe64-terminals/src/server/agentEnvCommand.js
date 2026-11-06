@@ -176,6 +176,8 @@ function createAgentEnvCommandService({
   // The session binding is the authority for which project an agent may
   // manage. Carry only that validated identity across the host's persistence
   // boundary instead of relying on ambient request context surviving it.
+  // Changes also carry the person whose request prepared the agent, so the
+  // host applies that person's permission to change production values.
   const productionEnvironment = Object.freeze({
     isUserValueRecord(record = null) {
       return productionEnvironmentProvider.isUserValueRecord(record);
@@ -188,23 +190,25 @@ function createAgentEnvCommandService({
       return Array.isArray(result?.records) ? result.records : [];
     },
     async removeVariable({
+      actor = null,
       key = "",
       projectSlug = ""
     } = {}) {
       assertOperationResult(
-        await productionEnvironmentProvider.removeVariable({ key, projectSlug }),
+        await productionEnvironmentProvider.removeVariable({ actor, key, projectSlug }),
         `Production Env ${key} could not be removed.`
       );
     },
     // readable-check: allow setter-seam - not a slot: setVariable saves one production Env variable
     async setVariable({
+      actor = null,
       key = "",
       projectSlug = "",
       secret = false,
       value = ""
     } = {}) {
       assertOperationResult(
-        await productionEnvironmentProvider.setVariable({ key, projectSlug, secret, value }),
+        await productionEnvironmentProvider.setVariable({ actor, key, projectSlug, secret, value }),
         `Production Env ${key} could not be saved.`
       );
     }
@@ -271,7 +275,7 @@ function createAgentEnvCommandService({
     };
   }
 
-  async function setResult(parsed = {}, sessionId = "", stdin = "", projectSlug = "") {
+  async function setResult(parsed = {}, sessionId = "", stdin = "", projectSlug = "", actor = null) {
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
@@ -285,6 +289,7 @@ function createAgentEnvCommandService({
     assertRecordEditable(previous, parsed.scope, key);
     const secret = parsed.secret || previous?.secret === true || runtimeConfigKeyLooksSecret(key);
     await environment.setVariable({
+      actor,
       key,
       projectSlug,
       secret,
@@ -302,7 +307,7 @@ function createAgentEnvCommandService({
     }, parsed);
   }
 
-  async function removeResult(parsed = {}, sessionId = "", projectSlug = "") {
+  async function removeResult(parsed = {}, sessionId = "", projectSlug = "", actor = null) {
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
@@ -316,7 +321,7 @@ function createAgentEnvCommandService({
     assertRecordEditable(previous, parsed.scope, key);
     const stored = environment.isUserValueRecord(previous);
     if (stored) {
-      await environment.removeVariable({ key, projectSlug, sessionId });
+      await environment.removeVariable({ actor, key, projectSlug, sessionId });
     }
     return mutationPayload({
       action: "remove",
@@ -407,9 +412,9 @@ function createAgentEnvCommandService({
       return linkResult(parsed, toText(input.sessionId), binding);
     }
     if (parsed.command === "set") {
-      return setResult(parsed, toText(input.sessionId), String(input.stdin ?? ""), projectSlug);
+      return setResult(parsed, toText(input.sessionId), String(input.stdin ?? ""), projectSlug, binding.actor || null);
     }
-    return removeResult(parsed, toText(input.sessionId), projectSlug);
+    return removeResult(parsed, toText(input.sessionId), projectSlug, binding.actor || null);
   }
 
   async function run(input = {}) {

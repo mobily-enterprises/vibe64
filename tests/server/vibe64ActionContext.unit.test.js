@@ -9,6 +9,7 @@ import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
+  isWorkspaceOwner,
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
   registerVibe64ActionContext,
@@ -217,6 +218,9 @@ test("global owner operations need current owner authority but no project", asyn
   await execute({ text: "hello" });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].project, null);
+  // The same check, exported for a host that changes owner-only things outside an operation.
+  assert.equal(isWorkspaceOwner({ role: "owner" }), true);
+  for (const user of [{ role: "member" }, { role: "Owner" }, null, undefined]) assert.equal(isWorkspaceOwner(user), false);
 });
 
 test("only an action's declared lifecycle scope can enter a deleting project", async () => {

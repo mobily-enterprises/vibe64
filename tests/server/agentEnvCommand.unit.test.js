@@ -15,6 +15,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
+import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const {
@@ -272,6 +273,7 @@ test("agent Env persists and reports empty development and production values", a
     }
   });
   assert.deepEqual(production.state.sets, [{
+    actor: null,
     key: "EMPTY_PLAIN",
     projectSlug: "demo",
     secret: false,
@@ -279,6 +281,7 @@ test("agent Env persists and reports empty development and production values", a
   }]);
   assert.equal(removedProductionPayload.changed, true);
   assert.deepEqual(production.state.removes, [{
+    actor: null,
     key: "EMPTY_PLAIN",
     projectSlug: "demo"
   }]);
@@ -350,7 +353,9 @@ test("agent Env production writes use only the host production provider", async 
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
-  await command.bindSession("production-session");
+  // The person whose request prepared the agent reaches the host with each change.
+  const actor = { role: "member", username: "teammate" };
+  await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("production-session"));
   const secretValue = "private-production-value";
 
   const result = await command.run({
@@ -366,6 +371,7 @@ test("agent Env production writes use only the host production provider", async 
   assert.equal(payload.secret, true);
   assert.equal(Object.hasOwn(payload, "value"), false);
   assert.deepEqual(production.state.sets, [{
+    actor,
     key: "DEPLOY_TOKEN",
     projectSlug: "demo",
     secret: true,
@@ -375,6 +381,22 @@ test("agent Env production writes use only the host production provider", async 
   assert.deepEqual(project.state.contexts, ["demo"]);
   assert.deepEqual(production.state.reads, [{ projectSlug: "demo" }]);
   assert.doesNotMatch(result.stdout, new RegExp(secretValue, "u"));
+
+  const removed = await command.run({ args: ["remove", "production", "DEPLOY_TOKEN"], sessionId: "production-session" });
+  assert.equal(removed.exitCode, 0);
+  assert.deepEqual(production.state.removes, [{ actor, key: "DEPLOY_TOKEN", projectSlug: "demo" }]);
+
+  // A host's refusal of that person reaches the agent as the host worded it.
+  production.setVariable = async () => ({ ok: false, code: "vibe64_owner_required", error: "Only the owner changes production values here." });
+  const refused = await command.run({
+    args: ["set", "production", "DEPLOY_TOKEN"],
+    sessionId: "production-session",
+    stdin: secretValue
+  });
+  assert.equal(refused.exitCode, 1);
+  assert.equal(refused.code, "vibe64_owner_required");
+  assert.equal(refused.stderr, "Only the owner changes production values here.\n");
+  assert.doesNotMatch(`${refused.stdout || ""}${refused.stderr}`, new RegExp(secretValue, "u"));
 });
 
 test("agent Env refuses system-managed values and unavailable production writes", async () => {

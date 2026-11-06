@@ -34,6 +34,16 @@ function ownerRequiredError() {
   });
 }
 
+/**
+ * Whether this person may run an owner-only operation (PROJECT_OWNER_OPERATION,
+ * WORKSPACE_OWNER_OPERATION). A host that changes the same things outside an
+ * operation applies this same check.
+ * @param {object | null} user
+ */
+function isWorkspaceOwner(user) {
+  return user?.role === "owner";
+}
+
 function actionProjectSlug(input, context) {
   const routeSlug = context.requestMeta?.request?.params?.slug;
   const requestedSlug = input.projectSlug;
@@ -121,7 +131,7 @@ async function executeVibe64Action({ definition, input, context, run }, { localh
   const localOwner = ownerRequired && projectScoped && !user && !context.vibe64Action && request &&
     getStudioProjectContext().projectCatalogEnabled === false &&
     isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }), { localhostCheckBypassed });
-  if (ownerRequired && user?.role !== "owner" && !localOwner) {
+  if (ownerRequired && !isWorkspaceOwner(user) && !localOwner) {
     throw ownerRequiredError();
   }
   const operationInput = { ...input };
@@ -231,7 +241,7 @@ function registerVibe64ActionContext(actions, {
       try {
         const user = await measure("user", () => resolveUser({ request: context.requestMeta?.request || null, context }));
         if (!user) throw actionContextError("vibe64_auth_required", "Log in to Vibe64.", 401);
-        if (scope.ownerRequired && user.role !== "owner") {
+        if (scope.ownerRequired && !isWorkspaceOwner(user)) {
           throw ownerRequiredError();
         }
         let project = null;
@@ -281,6 +291,7 @@ export {
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
   createVibe64ActionPolicy,
+  isWorkspaceOwner,
   registerVibe64ActionContext,
   WORKSPACE_OPERATION,
   WORKSPACE_OWNER_OPERATION

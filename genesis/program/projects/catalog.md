@@ -358,8 +358,9 @@ Each Vibe64 action declares its scope as data, `extensions.vibe64`
 action catalogue as `runtime.actions.policy`. At registration the rule removes
 `vibe64User` from the input and gives a project action an optional
 `projectSlug`; at each execution, after JSKIT's checks, it refuses a non-owner
-an owner operation (`vibe64_owner_required`, except a standalone local owner),
-replaces any transport user with the authenticated one, resolves and checks the
+an owner operation (`vibe64_owner_required`, except a standalone local owner;
+`isWorkspaceOwner()` is that check, exported for a host that changes the same
+things outside an operation), replaces any transport user with the authenticated one, resolves and checks the
 project slug (`vibe64_action_project_mismatch` when the input's slug differs
 from the URL's, `vibe64_action_authorized_project_mismatch` when the
 host-resolved project differs), applies the Colleague mode and

@@ -171,7 +171,10 @@ Project agents receive the managed `vibe64-helper env` command. It reads configu
 metadata without exposing values and delegates explicit development mutations
 to the project Env service. A host may provide a production Env provider as the
 optional `vibe64.terminals.production-environment` capability; public/local
-Vibe64 otherwise reports production as unavailable. The same provider's
+Vibe64 otherwise reports production as unavailable. A production `set` or
+`remove` carries the bound session's `actor`, the person whose request prepared
+the agent (as saved-value links do), so the host applies that person's
+permission; a host refusal reaches the agent as the host words it. The same provider's
 `readDeployment()` answers `vibe64-helper deployment status`, which the helper
 dispatches to the Env command: the bound project's deployment state, public
 addresses, current release (id, commit, deploy time, recorded Deployment
