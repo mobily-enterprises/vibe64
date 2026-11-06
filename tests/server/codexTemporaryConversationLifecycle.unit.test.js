@@ -4373,6 +4373,11 @@ for (const throughTerminalService of [false, true]) {
         messageId: "message-steer-original"
       });
       assert.equal(started.ok, true, JSON.stringify(started));
+      // Codex reports the turn it started; until it does, a completed read cannot end the turn.
+      emitCodexNotification(captures.subscribers, turnStarted({
+        threadId: captures.provider.threadId,
+        turnId: captures.provider.turnId
+      }));
 
       captures.onSteerTurn = ({ provider }) => {
         provider.status = "completed";
@@ -5503,6 +5508,7 @@ test("an active chat keeps one composed session context while authored turns sta
         startedThreads: [],
         status: "idle",
         steeredMessages: [],
+        subscribers,
         threadId: "11111111-1111-4111-8111-111111111111",
         turnId: "",
         close() {
@@ -5698,6 +5704,17 @@ test("an active chat keeps one composed session context while authored turns sta
     assert.equal(providers[0].closed, 0);
 
     providers[0].status = "completed";
+    // Codex answers turn/start before it starts the turn, so until it reports the turn a completed read cannot end it.
+    const unreportedReconciliation = await controller.reconcileThreads([{
+      sessionId: "session-1"
+    }]);
+    assert.equal(unreportedReconciliation.ok, true, JSON.stringify(unreportedReconciliation));
+    const unreportedSession = await store.readSession("session-1");
+    assert.equal(unreportedSession.agentRuns.find(({ id }) => id === "codex_app_server")?.state, "active");
+    emitCodexNotification(providers[0].subscribers, turnStarted({
+      threadId: providers[0].threadId,
+      turnId: "turn-1"
+    }));
     const completedReconciliation = await controller.reconcileThreads([{
       sessionId: "session-1"
     }]);

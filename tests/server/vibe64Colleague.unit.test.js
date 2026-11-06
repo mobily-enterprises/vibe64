@@ -1944,7 +1944,10 @@ test("steering received during a model response takes precedence before any tool
   assert.equal(result.messages.at(-1).text, "We will discuss it before doing anything.");
   const steered = f.observations.starts[1].data;
   assert.deepEqual(steered.userMessageIds, ["steer-1"]);
-  const outgoing = f.observations.starts[1].body.messages.findLast(message => message.role === "user").content;
+  // The person's message carries Colleague's application data; the engine's state note follows it.
+  const outgoing = f.observations.starts[1].body.messages.findLast(message => (
+    message.role === "user" && message.content.startsWith("[Application data]")
+  )).content;
   assert.equal(outgoing.split("[End application data]\n")[1], "Wait, discuss it first");
 });
 
@@ -4240,7 +4243,10 @@ test("a DeepSeek text-carried call never runs, and its proper call keeps a large
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(f.observations.mutations, [value], "The independent application argument limit remains in force");
   assert.equal(result.messages.at(-1).text, "The handover is saved.");
-  assert.match(f.observations.starts[1].body.messages.at(-1).content, /^\(Check from the app: your last message contained raw markup/);
+  // The engine's check note is a user message; its state note follows it.
+  assert.ok(f.observations.starts[1].body.messages.some(message => (
+    message.role === "user" && /^\(Check from the app: your last message contained raw markup/u.test(message.content)
+  )), "The markup check reaches the model");
   assert.equal(f.observations.starts.length, 3, "The markup check, one tool response and one final; no extra model work");
   assert.equal(result.messages.some(message => message.text.includes(value)), false);
   assert.equal(f.observations.realtime.some(event => JSON.stringify(event.realtime.payload).includes(value)), false,
