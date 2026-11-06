@@ -882,6 +882,14 @@ For DeepSeek and both GLM billing modes under Codex or Claude, the presentation
 adapter maps recorded commentary to thinking and excludes raw thinking from the chat display entirely.
 Only the latest commentary is previewed while working; saved roles and final
 answers are unchanged. Unknown model attribution retains the ordinary presentation.
+Claude Code's own summarized thinking (`--thinking-display summarized`) joins its
+successive summaries into one thinking block, a paragraph each, where Codex sends
+one summary per message. The same adapter, in Main, temporary chats and AI tasks,
+shows each paragraph of a Claude thinking block as its own progress update, so the
+update count, the working preview and the expanded list read alike for both engines.
+A block holding a code fence stays whole. Saved messages are unchanged; each later
+update of a block carries the block's message ID with a `:N` suffix, so transcript
+keys and narration tell the updates apart.
 Isolated Codex assistants obtain their native hook, feature and MCP restrictions
 from JSKIT's `codexToolFreeConfiguration`. Vibe64 supplies the current inventory
 and verifies that its connection generation did not change while reading it.
@@ -1262,6 +1270,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 
 - `src/lib/vibe64ThinkingPresentation.js`
 - `packages/vibe64-runtime/src/shared/assistantLabels.js`
+- `tests/client/vibe64ThinkingPresentation.vitest.js`
+- `tests/fixtures/claudeSummarizedThinking.js`
 - `src/lib/vibe64ChatDelivery.js`
 - `src/components/studio/vibe64-session/Vibe64ConversationStatus.vue`
 

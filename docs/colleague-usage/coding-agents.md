@@ -105,7 +105,10 @@ When an assistant cannot start, stops by itself or reports a failure, see [When 
    active turn. Use **Stop** when you want to cancel. When the assistant reads your
    message it first answers it in a short reply (a direct question gets a direct
    answer), then continues. Its progress lines show its thinking; they are not
-   that reply.
+   that reply. Each progress update is one short summary. Claude sends several
+   summaries together, one paragraph each, and the chat shows each paragraph as
+   its own update, as it does for Codex's. While the assistant works, Main
+   previews the latest updates; **Show all … progress updates** lists them all.
 3. Use its **Stop** control when you want to stop coding work. Stopping speech or
    Colleague's own turn has a different effect. For Codex, **Stop** targets this
    conversation; other conversations remain available even when they share your

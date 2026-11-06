@@ -26,15 +26,17 @@ test("assistant names share orchestrator, model and saved effort formatting", ()
 });
 
 test("every curated key provider shares one presentation, including GLM pay-as-you-go", () => {
+  const ordinary = { keyUsage: false, commentaryAsThinking: false, thinkingParagraphUpdates: false };
   for (const [engineId, modelProviderId, expected] of [
-    ["codex", "deepseek", { label: "DeepSeek", keyUsage: true, commentaryAsThinking: true }],
-    ["claude", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
-    ["codex", "zai", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
-    ["opencode", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: false }],
-    ["opencode", "openai", { label: "OpenCode", keyUsage: false, commentaryAsThinking: false }],
-    ["codex", "openai", { label: "Codex", keyUsage: false, commentaryAsThinking: false }]
+    ["codex", "deepseek", { label: "DeepSeek", keyUsage: true, commentaryAsThinking: true, thinkingParagraphUpdates: false }],
+    ["claude", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: true, thinkingParagraphUpdates: false }],
+    ["codex", "zai", { label: "GLM", keyUsage: true, commentaryAsThinking: true, thinkingParagraphUpdates: false }],
+    ["opencode", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: false, thinkingParagraphUpdates: false }],
+    ["opencode", "openai", { label: "OpenCode", ...ordinary }],
+    ["codex", "openai", { label: "Codex", ...ordinary }],
+    ["claude", "anthropic", { label: "Claude Code", ...ordinary, thinkingParagraphUpdates: true }]
   ]) assert.deepEqual({ ...vibe64ProviderPresentation({ engineId, modelProviderId }) }, expected);
-  assert.deepEqual({ ...vibe64ProviderPresentation(undefined) }, { label: "", keyUsage: false, commentaryAsThinking: false });
+  assert.deepEqual({ ...vibe64ProviderPresentation(undefined) }, { label: "", ...ordinary });
 });
 
 function capabilities(overrides = {}) {

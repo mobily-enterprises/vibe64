@@ -3,7 +3,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
-import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
+import { thinkingMessagesPresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 
 /**
  * The refusal an AI task request answered with, as an error carrying its code.
@@ -69,12 +69,12 @@ function aiTaskConversationView(value) {
   return conversation;
 }
 
-function presentedMessage(message, turn) {
-  if (!message) return message;
+function presentedMessages(message, turn) {
+  if (!message) return [];
   const selection = message.assistantSelection || message.metadata?.assistantSelection || turn.metadata?.assistantSelection;
-  const displayed = thinkingMessagePresentation(message, selection);
-  return displayed && { ...displayed,
-    ...conversationAttribution(selection, message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting) };
+  const attribution = conversationAttribution(selection,
+    message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting);
+  return thinkingMessagesPresentation(message, selection).map(displayed => ({ ...displayed, ...attribution }));
 }
 
 /**
@@ -90,10 +90,10 @@ function presentedMessage(message, turn) {
 function aiTaskTranscript(adapter, { routingRequest, working, scrollKey, actions }) {
   const presented = (adapter.conversation.turns || []).map(turn => ({ ...turn,
     ...conversationAttribution(turn.metadata?.assistantSelection, turn.metadata?.assistantRouting),
-    assistant: presentedMessage(turn.assistant, turn),
-    thinking: turn.thinking?.map(message => presentedMessage(message, turn)).filter(Boolean),
-    commentary: turn.commentary?.map(message => presentedMessage(message, turn)).filter(Boolean),
-    messages: turn.messages?.map(message => presentedMessage(message, turn)).filter(Boolean)
+    assistant: turn.assistant && presentedMessages(turn.assistant, turn)[0],
+    thinking: turn.thinking?.flatMap(message => presentedMessages(message, turn)),
+    commentary: turn.commentary?.flatMap(message => presentedMessages(message, turn)),
+    messages: turn.messages?.flatMap(message => presentedMessages(message, turn))
   }));
   const turns = chatTurnsWithRouting(adapter.delivery ? adapter.delivery.turns(presented) : presented,
     routingRequest, adapter.delivery?.state.sending === true);

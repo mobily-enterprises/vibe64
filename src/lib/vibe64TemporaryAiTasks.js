@@ -3,7 +3,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
-import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
+import { thinkingMessagesPresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 
 // The task fields a temporary conversation saves as its presentation.
 const TEMPORARY_AI_PRESENTATION_FIELDS = Object.freeze(["title", "draft"]);
@@ -83,18 +83,18 @@ function temporaryAiTranscript(supplied, { routingRequest, working, scrollKey, a
   const turns = (supplied.conversation.turns || []).map(turn => {
     const selection = turn.metadata?.assistantSelection;
     const present = message => {
-      if (!message) return message;
+      if (!message) return [];
       const recordedSelection = message.assistantSelection || message.metadata?.assistantSelection || selection;
-      const displayed = thinkingMessagePresentation(message, recordedSelection);
-      return displayed && { ...displayed,
-        ...conversationAttribution(recordedSelection, message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting) };
+      const attribution = conversationAttribution(recordedSelection,
+        message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting);
+      return thinkingMessagesPresentation(message, recordedSelection).map(displayed => ({ ...displayed, ...attribution }));
     };
     return { ...turn,
       ...conversationAttribution(selection, turn.metadata?.assistantRouting),
-      assistant: present(turn.assistant),
-      thinking: turn.thinking?.map(present).filter(Boolean),
-      commentary: turn.commentary?.map(present).filter(Boolean),
-      messages: turn.messages?.map(present).filter(Boolean)
+      assistant: turn.assistant && present(turn.assistant)[0],
+      thinking: turn.thinking?.flatMap(present),
+      commentary: turn.commentary?.flatMap(present),
+      messages: turn.messages?.flatMap(present)
     };
   });
   const routedTurns = chatTurnsWithRouting(supplied.delivery ? supplied.delivery.turns(turns) : turns,

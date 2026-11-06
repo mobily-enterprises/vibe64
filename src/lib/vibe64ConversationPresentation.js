@@ -2,7 +2,7 @@ import { assistantGoalManagementMessage, assistantGoalObjective, assistantModeLa
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
-import { thinkingMessagePresentation } from "@/lib/vibe64ThinkingPresentation.js";
+import { thinkingMessagesPresentation } from "@/lib/vibe64ThinkingPresentation.js";
 
 // How the main chat shows one conversation turn: who answered and through which
 // mode, project and Learning messages as system rows, goal commands with their
@@ -41,9 +41,9 @@ function conversationTurnPresentation(turn) {
       system: { ...turn.user, role: "system", text: learningGuidancePresentation(turn.user).text }
     } : {}),
     assistant: presentationMessage(turn.assistant, turn),
-    thinking: turn.thinking?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
-    commentary: turn.commentary?.map((message) => thinkingMessagePresentation(presentationMessage(message, turn), selection)).filter(Boolean),
-    messages: turn.messages?.map((message) => thinkingMessagePresentation(presentationMessage(message, turn), selection)).filter(Boolean)
+    thinking: turn.thinking?.flatMap((message) => thinkingMessagesPresentation(message, selection)),
+    commentary: turn.commentary?.flatMap((message) => thinkingMessagesPresentation(presentationMessage(message, turn), selection)),
+    messages: turn.messages?.flatMap((message) => thinkingMessagesPresentation(presentationMessage(message, turn), selection))
   };
 }
 

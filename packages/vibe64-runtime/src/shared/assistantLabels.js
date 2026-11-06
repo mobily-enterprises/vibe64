@@ -13,15 +13,19 @@ function vibe64AssistantSelectionLabel(selection, options = {}) {
 /**
  * How a selection's model provider is shown. Curated key providers report their
  * own key usage and, through Codex or Claude Code, send their reasoning as
- * commentary, so commentary is shown as thinking.
+ * commentary, so commentary is shown as thinking. Claude Code's own summarized
+ * thinking joins its successive summaries into one block, a paragraph each, so
+ * each paragraph is shown as its own progress update, as Codex sends them.
  */
 function vibe64ProviderPresentation(selection) {
   const provider = curatedCodexProvider(selection?.modelProviderId);
+  const commentaryAsThinking = Boolean(provider) &&
+    [VIBE64_ASSISTANT_ENGINE_IDS.CODEX, VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE].includes(selection?.engineId);
   return Object.freeze({
     label: provider?.shortLabel || findVibe64AgentProvider(selection?.engineId)?.label || "",
     keyUsage: Boolean(provider),
-    commentaryAsThinking: Boolean(provider) &&
-      [VIBE64_ASSISTANT_ENGINE_IDS.CODEX, VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE].includes(selection?.engineId)
+    commentaryAsThinking,
+    thinkingParagraphUpdates: !commentaryAsThinking && selection?.engineId === VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE
   });
 }
 
