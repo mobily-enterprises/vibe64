@@ -43,9 +43,11 @@ async function expectNoSidewaysScroll(page: Page) {
   expect(overflow).toEqual({ page: false, window: false });
 }
 
-/** Every visible control in the window is a full touch target. */
+/** Every visible control in the window is a full touch target, measured once the window has finished opening. */
 async function expectTouchTargets(page: Page) {
-  const small = await taskWindow(page).evaluate((root) => {
+  const small = await taskWindow(page).evaluate(async (root) => {
+    // The window scales in as it opens, and a control measured mid-way is a scaled box.
+    await Promise.allSettled((root.closest(".v-overlay__content")?.getAnimations() ?? []).map(animation => animation.finished));
     const controls = [...root.querySelectorAll("button, summary, [role='tab']")] as HTMLElement[];
     return controls.filter(control => control.getClientRects().length > 0).map((control) => {
       const box = control.getBoundingClientRect();
