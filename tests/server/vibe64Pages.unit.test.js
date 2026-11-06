@@ -261,7 +261,10 @@ test("project members' page routes run their actions behind the project access c
     assert.deepEqual(starred.pages.map((entry) => entry.id), [page.id]);
     assert.deepEqual((await call("GET", "/pages/stars")).payload.pages.map((entry) => entry.id), [page.id], "the member's own stars");
     assert.deepEqual((await inProject(() => pages.starredPages({ vibe64User: { username: "dan" } }))).pages, []);
-    await assert.rejects(call("POST", "/pages/:pageId/star", { pageId: page.id }, { starred: "yes" }), { statusCode: 400 });
+    // The shared schema reads "yes", "on" and 1 as true; anything else, or nothing, is refused.
+    for (const body of [{ starred: "perhaps" }, {}]) {
+      await assert.rejects(call("POST", "/pages/:pageId/star", { pageId: page.id }, body), { statusCode: 400, code: "ACTION_VALIDATION_FAILED" });
+    }
     assert.equal((await call("POST", "/pages/:pageId/archive", { pageId: page.id })).payload.page.archived, true);
     assert.equal((await call("POST", "/pages/:pageId/restore", { pageId: page.id })).payload.page.archived, false);
     await assert.rejects(call("DELETE", "/pages/:pageId", { pageId: page.id }), { code: "vibe64_pages_delete_requires_archive" });

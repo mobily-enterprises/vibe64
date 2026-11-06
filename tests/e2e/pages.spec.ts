@@ -370,14 +370,15 @@ test.describe("Vibe64 pages", () => {
       const menu = page.getByRole("dialog", { name: "Starred", exact: true });
       await expect(menu.getByRole("textbox", { name: "Find a starred page or file", exact: true })).toBeFocused();
       const starredPages = menu.getByRole("list", { name: "Starred pages", exact: true });
-      await expect(starredPages.getByRole("button", { name: /Project summary/u })).toBeVisible();
+      const starredSummary = starredPages.locator('[data-test="starred-page-open"]', { hasText: "Project summary" });
+      await expect(starredSummary).toBeVisible();
       await expect(menu.getByText("Star files in Files to keep them handy while chatting.")).toBeVisible();
       await menu.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("nothing like it");
       await expect(menu.getByText("No matching starred pages.")).toBeVisible();
       await menu.getByRole("textbox", { name: "Find a starred page or file", exact: true }).fill("summ");
       await expect.poll(() => viewRequests.length, { message: "the menu asks for the link as it opens" }).toBe(1);
       await page.screenshot({ path: testInfo.outputPath(`starred-menu-${width}.png`) });
-      await starredPages.getByRole("button", { name: /Project summary/u }).click();
+      await starredSummary.click();
       await expect(page).toHaveURL(new RegExp(`${summary.link}$`, "u"));
       await expect(page.locator('[data-test="page-viewer-title"]')).toHaveText("Project summary");
       await expect(pageFrame(page).locator("#version")).toHaveText("First version");
