@@ -15,7 +15,7 @@ const { smAndDown } = useDisplay();
 const {
   addAiOpen,
   aiStatusLoaded,
-  backFromNativeSetup,
+  chooseAnotherProvider,
   canAddConnection,
   catalogPreparationError,
   checkingOpenCode,
@@ -30,7 +30,7 @@ const {
   confirmModelAccessUnlock,
   confirmRemove,
   editorActivator,
-  editorBackLabel,
+  editorLeaveLabel,
   editorCanSave,
   editorEyebrow,
   editorLabel,
@@ -156,7 +156,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <small class="vibe64-dialog-eyebrow">Add {{ nativeSetupDetails.label }} connection</small>
           <strong>Choose a provider</strong>
         </span>
-        <v-btn icon="$arrowBack" aria-label="Back to orchestrators" variant="text" @click="nativeProviderPickerOpen = false; addAiOpen = true" />
+        <v-btn type="button" variant="text" @click="nativeProviderPickerOpen = false; addAiOpen = true">Choose another AI</v-btn>
       </v-card-title>
       <v-card-text>
         <v-list v-if="nativeAvailableProviders.length" lines="two">
@@ -183,13 +183,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <small class="vibe64-dialog-eyebrow">Add OpenCode connection</small>
           <strong>Choose a provider</strong>
         </span>
-        <v-btn
-          icon="$arrowBack"
-          aria-label="Back to AI types"
-          type="button"
-          variant="text"
-          @click="providerPickerOpen = false; addAiOpen = true"
-        />
+        <v-btn type="button" variant="text" @click="providerPickerOpen = false; addAiOpen = true">Choose another AI</v-btn>
       </v-card-title>
       <v-card-text class="vibe64-provider-picker__body">
         <CliInstallNotice
@@ -300,12 +294,12 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           :engine-id="nativeSetupProviderId"
           :select-provider="false"
           :adding="nativeSetupOrigin === 'add'"
-          :show-back="nativeSetupOrigin === 'add'"
+          :show-choose-another="nativeSetupOrigin === 'add'"
           :actions-enabled="isOwner"
           show-close
           @busy="codexProviderSaving = $event"
           @close="nativeSetupOpen = false"
-          @back="backFromNativeSetup"
+          @choose-another="chooseAnotherProvider"
           @changed="codexProviders.resource.reload(); emit('changed')"
         />
         <ProviderAccountsSetup
@@ -314,14 +308,14 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           :actions-enabled="isOwner"
           actions-disabled-message="Only the Vibe64 owner can manage this connection."
           :account-rows="nativeSetupRows"
-          :back-label="nativeSetupOrigin === 'add' ? 'Back' : ''"
+          :choose-another-label="nativeSetupOrigin === 'add' ? 'Choose another provider' : ''"
           :needed-label="nativeSetupToolProblem === 'not_installed' ? 'Not installed'
             : nativeSetupToolProblem ? `Didn't start` : 'Not connected'"
           ready-label="Connected"
           :show-continue="false"
           :status-loaded="aiStatusLoaded"
           :title="nativeSetupDetails.label"
-          @back="backFromNativeSetup"
+          @choose-another="chooseAnotherProvider"
           @connected="nativeConnected"
         >
           <template #close>
@@ -354,13 +348,10 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <strong>{{ editorTitle }}</strong>
         </span>
         <v-btn
-          :icon="editorOrigin === 'direct' ? '$close' : '$arrowBack'"
-          :aria-label="editorOrigin === 'direct' ? 'Close provider setup' : 'Back to AI choices'"
-          :disabled="editorSaving"
-          type="button"
-          variant="text"
-          @click="closeEditor"
+          v-if="editorOrigin === 'direct'" icon="$close" aria-label="Close provider setup" :disabled="editorSaving"
+          type="button" variant="text" @click="closeEditor"
         />
+        <v-btn v-else :disabled="editorSaving" type="button" variant="text" @click="closeEditor">{{ editorLeaveLabel }}</v-btn>
       </v-card-title>
 
       <v-card-text v-if="editorRoutingPending">
@@ -375,7 +366,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           variant="tonal"
         />
         <div class="vibe64-provider-editor__recovery">
-          <v-btn type="button" variant="text" @click="closeEditor">{{ editorBackLabel }}</v-btn>
+          <v-btn type="button" variant="text" @click="closeEditor">{{ editorLeaveLabel }}</v-btn>
           <v-btn color="primary" type="button" variant="tonal" @click="retryPreparedProvider">Try again</v-btn>
         </div>
       </v-card-text>
@@ -383,7 +374,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       <template v-else>
         <AiProviderKeyForm class="vibe64-provider-editor__body" />
         <v-card-actions class="vibe64-provider-editor__actions">
-          <v-btn :disabled="editorSaving" type="button" variant="text" @click="closeEditor">{{ editorBackLabel }}</v-btn>
+          <v-btn :disabled="editorSaving" type="button" variant="text" @click="closeEditor">{{ editorLeaveLabel }}</v-btn>
           <v-btn
             :aria-busy="editorPreparing || editorSaving ? 'true' : undefined"
             color="primary"

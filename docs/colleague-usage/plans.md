@@ -105,7 +105,7 @@ the problem. If the plan changed, refresh the viewer before trying again.
    **No archived plans**.
 2. Select an entry. **History** stays selected, and **Archived · read-only** plus
    the archive date remain above the document while you scroll.
-3. Select **Back to plan history** to return to the list, or **Current plan** to
+3. Select **Plan history** to return to the list, or **Current plan** to
    inspect the current document. **No current plan** means that slot is empty;
    it does not remove your history.
 

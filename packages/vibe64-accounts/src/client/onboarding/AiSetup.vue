@@ -239,7 +239,7 @@ const { openProvider } = useAiSetupProviderLinks({
 });
 
 // The shell's top bar and phone dock follow the stage.
-defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: () => go("choose", true), openProvider, takeTour });
+defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, chooseAnother: () => go("choose", true), openProvider, takeTour });
 </script>
 
 <template>
@@ -313,7 +313,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
       </section>
 
       <section v-else-if="screen === 'connect'" key="connect" class="ai-onboarding__connect">
-        <v-btn v-if="ownButtons" variant="text" class="aio-back" prepend-icon="$arrowBack" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-choose-another" :disabled="busy" @click="go('choose', true)">Choose another AI</v-btn>
         <header class="aio-chosen">
           <AiOnboardingMark :provider="chosen" :size="56" :settle-delay="chosen.crown ? 150 : -1" />
           <div class="aio-chosen__text">
@@ -326,14 +326,14 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
         </header>
         <AiSetupConnectSteps
           v-model:sign-up="signUp" :card="chosen" :missing-tool="missingTool" :checking-tools="checkingTools" :verifying="verifying"
-          :verify-label="verifyLabel" :warning="warning" :not-ready="notReady" :busy="busy" @finish="finish()" @back="go('choose', true)"
+          :verify-label="verifyLabel" :warning="warning" :not-ready="notReady" :busy="busy" @finish="finish()" @choose-another="go('choose', true)"
           @check="checkTools" @busy="setupBusy = $event" @review-routing="reviewRouting"
         />
         <v-btn v-if="xs && skippable" block variant="text" class="mt-6" :disabled="busy" @click="close('later')">Set up later</v-btn>
       </section>
 
       <section v-else-if="screen === 'routing'" key="routing" class="ai-onboarding__routing">
-        <v-btn v-if="ownButtons" variant="text" class="aio-back" prepend-icon="$arrowBack" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-choose-another" :disabled="busy" @click="go('choose', true)">Choose another AI</v-btn>
         <header class="ai-onboarding__intro">
           <AiOnboardingMark v-if="!fullRouting" :provider="chosen" :size="56" class="mb-5" />
           <p class="ai-onboarding__eyebrow">YOUR MAIN AI</p>
@@ -498,7 +498,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
 .ai-onboarding__choose .ai-onboarding__headline { font: var(--v64-type-headline-md); margin-bottom: var(--v64-space-1); }
 .ai-onboarding__choose .ai-onboarding__lede { margin: 0; }
 .ai-onboarding__choose .ai-onboarding__footnote { margin-top: var(--v64-space-4); }
-.aio-back { margin: 0 0 var(--v64-space-4) calc(var(--v64-space-4) * -1); }
+.aio-choose-another { margin: 0 0 var(--v64-space-4) calc(var(--v64-space-4) * -1); }
 
 /* Currently using (redo) */
 .aio-current {

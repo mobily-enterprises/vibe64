@@ -411,7 +411,7 @@ the code and `details`. The owner's `projects.list` adds `teamAi`
 (`available`, `ownerName`, `memberCount`, `ready`). `useProjectSelectionGate`
 exposes `teamAiBlocked`, `teamAiOwnerName` and `teamAiOwnerPrompt`;
 `ProjectSelectionGate.vue` shows `Vibe64TeamAiGate.vue` ("Team AI isn't set up
-yet", Check again re-reads the selection, Back to projects only where the host
+yet", Check again re-reads the selection, All projects only where the host
 names a project list through `projectListPath()` in `vibe64ProjectScope.js`;
 local Vibe64 names none) in place of the project and of a load error, the
 owner prompt "Team members can't open projects yet" with Set up team AI (opens

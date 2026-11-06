@@ -3,13 +3,13 @@ import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64Accounts } from "./useVibe64Accounts.js";
 
-const accountsSetupEmits = ["back", "continue"];
+const accountsSetupEmits = ["choose-another", "continue"];
 const accountsSetupProps = {
   accountsClient: {
     default: () => getHttpWebClient(),
     type: Object
   },
-  backLabel: {
+  chooseAnotherLabel: {
     default: "",
     type: String
   },

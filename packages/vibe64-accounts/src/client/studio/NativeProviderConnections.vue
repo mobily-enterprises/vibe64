@@ -23,11 +23,11 @@ const props = defineProps({
   title: { type: String, default: "" },
   engineId: { type: String, default: "codex" },
   selectProvider: { type: Boolean, default: true },
-  showBack: Boolean,
+  showChooseAnother: Boolean,
   showClose: Boolean
 });
 const providerId = defineModel({ type: String, default: "openai" });
-const emit = defineEmits(["changed", "close", "back", "busy", "check-cli"]);
+const emit = defineEmits(["changed", "close", "choose-another", "busy", "check-cli"]);
 const { connections, resource, busy, change, loadError } = useCodexProviderConnections({
   enabled: computed(() => props.actionsEnabled)
 });
@@ -115,7 +115,7 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
           <h2 class="text-title-large">{{ engineLabel }} - {{ provider.label }}</h2>
           <v-chip v-if="connected" color="success" size="small" prepend-icon="$checkCircle">Connected</v-chip>
           <v-spacer />
-          <v-btn v-if="showBack" icon="$arrowBack" aria-label="Back to providers" variant="text" :disabled="busy" @click="emit('back')" />
+          <v-btn v-if="showChooseAnother" variant="text" :disabled="busy" @click="emit('choose-another')">Choose another provider</v-btn>
           <v-btn v-if="showClose" icon="$close" :aria-label="`Close ${engineLabel} setup`" variant="text" :disabled="busy" @click="emit('close')" />
         </div>
         <p v-if="!embedded" class="text-body-medium mb-3">{{ provider.description }}.</p>

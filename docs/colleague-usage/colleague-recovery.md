@@ -71,7 +71,8 @@ required after the repair. A genuinely missing record opens as a new empty chat
 in memory and is not written merely by viewing it.
 An earlier history read cannot reopen the retained conversation after Start
 fresh succeeds. Return to the current chat; that read never resends its messages.
-Open **Previous conversations** to read the retained messages and pages. Scroll
+Open **Previous conversations** to read the retained messages and pages; while
+reading one, **All previous conversations** returns to their list. Scroll
 up to load older messages; each completed page releases the next page request
 and keeps your place. If a page fails, use **Load older messages** to retry. Its list
 also has **Start fresh**, even when no previous chat exists or a terminal model

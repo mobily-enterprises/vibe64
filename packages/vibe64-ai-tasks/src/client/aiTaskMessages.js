@@ -29,11 +29,11 @@ const AI_TASK_MESSAGES = Object.freeze({
     message: "Message the AI…"
   }),
   outcome: Object.freeze({
-    backToResult: "Back to the result",
     done: "Done",
     notDone: "Not done",
     problem: "The problem",
     seeConversation: "See the conversation",
+    showResult: "Show the result",
     whatHappened: "What happened",
     whatTheAiDid: "What the AI did",
     whatsNext: "What's next"

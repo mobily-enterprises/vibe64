@@ -122,7 +122,7 @@ const go = offset => {
   if (next) learning.selectStep(next.id);
 };
 const partLabel = computed(() => `This step: part ${Math.min(beatIndex.value + 1, beats.value.length)} of ${beats.value.length}`);
-const back = () => beats.value.length ? player.back() : go(-1);
+const previous = () => beats.value.length ? player.previous() : go(-1);
 const atStart = computed(() => beats.value.length ? player.atStart : index.value <= 0);
 const lastStep = computed(() => index.value >= steps.value.length - 1);
 // The one forward button: its label is exactly what it does.
@@ -223,10 +223,10 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
         <v-btn
-          variant="text" rounded="pill" min-height="40" prepend-icon="$chevronLeft" :disabled="atStart"
-          data-test="learning-step-bar-previous" @click="back"
+          variant="text" rounded="pill" min-height="40" :disabled="atStart"
+          data-test="learning-step-bar-previous" @click="previous"
         >
-          Back
+          Previous
         </v-btn>
         <v-btn
           v-if="forwardAction" :variant="final && verdict ? 'text' : 'tonal'" color="primary" rounded="pill" min-height="40"

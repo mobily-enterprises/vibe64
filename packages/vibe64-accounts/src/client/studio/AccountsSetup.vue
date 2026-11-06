@@ -2,7 +2,7 @@
   <ProviderAccountsSetup
     :accounts="accounts"
     :account-rows="accountRows"
-    :back-label="backLabel"
+    :choose-another-label="chooseAnotherLabel"
     :continue-label="continueLabel"
     :lede="lede"
     :needed-label="neededLabel"
@@ -10,7 +10,7 @@
     :show-continue="showContinue"
     :status-loaded="statusLoaded"
     :title="title"
-    @back="emit('back')"
+    @choose-another="emit('choose-another')"
     @continue="emit('continue')"
   />
 </template>

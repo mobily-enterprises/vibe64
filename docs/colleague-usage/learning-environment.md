@@ -10,7 +10,7 @@ exactly the page you last had open in the other mode, also after a reload.
 - Home and project pages: the first button at the left of the header.
 - It is the same size as the other header icon buttons (40px on a phone) and
   the first keyboard stop in the header; Enter or Space presses it.
-- Tooltips: **Switch to Learn** in Develop, **Back to Develop (your projects)**
+- Tooltips: **Switch to Learn** in Develop, **Switch to Develop (your projects)**
   in Learn, where the L is solid yellow.
 - It appears only for a signed-in person.
 
@@ -151,11 +151,11 @@ the Courses overlay above the page: the
 catalogue where you choose, start and manage lessons. It fills the screen, with
 a **Courses** tab, an **In progress** tab and an **Archived** tab, and at the
 right a blue **Continue lesson** button (while a lesson is in progress) and
-a **Back** button. A lesson is not read here: opening
+a **Close Courses** button. A lesson is not read here: opening
 one closes Courses and shows it in the page's
 [Lesson pane](#the-lesson-pane).
 
-- Press **Back** or Escape to close Courses. The page you were on (the
+- Press **Close Courses** or Escape to close Courses. The page you were on (the
   editor, Management or any other page), and Colleague, are visible again,
   exactly as you left them.
 - Press **Continue lesson** to go on with your lesson where it runs: for a
@@ -315,7 +315,7 @@ to try again. You don't need an AI for this. Then choose:
 
 - **Next lesson: <title>** starts the next unfinished lesson of the same course
   (when there is one).
-- **Back to courses** opens the Courses overlay; the Lesson pane goes away, since
+- **All courses** opens the Courses overlay; the Lesson pane goes away, since
   no lesson is in progress.
 
 ## The current step in Colleague

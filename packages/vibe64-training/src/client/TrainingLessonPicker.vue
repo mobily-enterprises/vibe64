@@ -315,7 +315,7 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
       :resume-allowed="!!resumeEnabled"
       :start-feedback="feedbackFor(openCourse.key)"
       :starting-lesson="lesson => startingHere(openCourse.course, lesson)"
-      @back="openCourseKey = ''"
+      @all-courses="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
       @resume="requestResume"
     />

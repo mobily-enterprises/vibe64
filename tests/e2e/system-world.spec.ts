@@ -133,7 +133,7 @@ test("Architecture shows the Engine map, zooms into a subsystem and its Program,
   await expect(program.getByRole("button", { name: /^Main source file src\/catalog\/catalog\.js/u })).toBeVisible();
   await expect(location.getByText("List books", { exact: true })).toBeVisible();
 
-  await location.getByRole("button", { name: "Back to previous view" }).first().click();
+  await location.getByRole("button", { name: "Previous view", exact: true }).click();
   await expect(program).toBeHidden();
   await expect(explanation).toBeVisible();
   await location.getByRole("button", { exact: true, name: "Engine" }).click();

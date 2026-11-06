@@ -115,8 +115,8 @@ A change of viewer resets every part.
   after clamp(5 s + 50 ms per character, 5–12 s), held while paused
   (`beatPaused`), while the pointer or focus is in the bar (`hold`), while
   Courses is open or the document hidden, and never
-  advancing under reduced motion. Back/Next move by beat and cross steps
-  (`selectStep(id, beat)`; Back enters a step at its end). A step ends on its
+  advancing under reduced motion. Previous/Next move by beat and cross steps
+  (`selectStep(id, beat)`; Previous enters a step at its end). A step ends on its
   check beat, else one past its last beat, where the bar shows its own verdict
   control; steps never advance by themselves. `beat` and `beatPaused` are this
   tab's place (`sessionStorage`); nothing of the player is saved on the server.
@@ -128,7 +128,7 @@ A change of viewer resets every part.
   `TRAINING_BEAT_EVENTS`) arrives for the practice project during its step
   after the step's previous do beat was done: the player keeps the step's
   activity in order (in memory, reset with the step), so activity heard while
-  an earlier beat played completes the do beat when it begins (not when Back
+  an earlier beat played completes the do beat when it begins (not when Previous
   returns to an already detected beat). Emitters: the session view's accepted send (`message-sent`), the
   agent turn ending (`agent-finished`), a successful Save (`saved`), Preview
   Reload (`preview-reloaded`), Files opening a file (`file-opened`), the
@@ -316,7 +316,7 @@ step changes and reopening. A
 version 2 lesson whose required steps all passed offers **Lesson finished**,
 which reopens `Vibe64LearningFinished`. That screen finishes the attempt with
 `lesson.finish` (retried while unconfirmed) and offers **Next lesson** and
-**Back to courses**. The step body is `Vibe64LearningStep`, shared
+**All courses**. The step body is `Vibe64LearningStep`, shared
 with Colleague's current-step dialog. A passed choice
 question is not compared again (the server keeps the pass), so the reader says
 so and disables **Check answer**. Links in lesson Markdown to another origin open

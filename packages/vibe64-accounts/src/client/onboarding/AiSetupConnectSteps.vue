@@ -26,7 +26,7 @@ const props = defineProps({
 });
 // finish: the provider is connected; back: choose another AI; check: look for
 // the AI tool again; busy: a connect form is working.
-const emit = defineEmits(["update:signUp", "finish", "back", "check", "busy", "review-routing"]);
+const emit = defineEmits(["update:signUp", "finish", "choose-another", "check", "busy", "review-routing"]);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.connect.modelProviderId));
 </script>
 
@@ -58,10 +58,10 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
         <p class="aio-checklist__body">{{ card.connectStep.body }}</p>
         <AIAccountsSetup
           v-if="nativeLogin" embedded :provider-id="card.connect.engineId"
-          :model-provider-id="card.connect.modelProviderId" @connected="emit('finish')" @back="emit('back')"
+          :model-provider-id="card.connect.modelProviderId" @connected="emit('finish')" @choose-another="emit('choose-another')"
         />
         <CliInstallNotice v-else-if="missingTool" :account="missingTool" :checking="checkingTools" @check="emit('check')">
-          <v-btn variant="text" @click="emit('back')">Choose another AI</v-btn>
+          <v-btn variant="text" @click="emit('choose-another')">Choose another AI</v-btn>
         </CliInstallNotice>
         <AiOnboardingKeyConnect
           v-else-if="card.connect.engineId === 'opencode'" :model-provider-id="card.connect.modelProviderId"

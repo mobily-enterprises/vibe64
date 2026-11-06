@@ -175,11 +175,11 @@ function keydown(event) {
         Continue lesson
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="40" prepend-icon="$arrowBack"
-        class="vibe64-learning__exit" title="Close Courses (your place is kept)"
-        data-test="learning-back" @click="learning.closeCourses()"
+        variant="tonal" rounded="pill" min-height="40"
+        class="vibe64-learning__exit" title="Your place is kept"
+        data-test="learning-close-courses" @click="learning.closeCourses()"
       >
-        Back
+        Close Courses
       </v-btn>
     </header>
     <div class="vibe64-learning__content">

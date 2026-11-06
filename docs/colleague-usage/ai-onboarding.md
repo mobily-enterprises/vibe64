@@ -30,7 +30,7 @@ Open it again at any time from the account menu: select the account button at
 the top right (**Account menu**), then **Redo onboarding**. The same menu holds
 **Account settings**, whose **AI Accounts** tab is this same screen without the
 **Why** step: the provider cards, **Manage** and **Advanced**, with its own
-**Back** and **Done** (Done returns to the overview). While no AI is connected
+**Choose another AI** and **Done** (Done returns to the overview). While no AI is connected
 (an expired sign-in or key that needs reconnecting does not count, and neither does
 a sign-in that could not be checked), AI Accounts
 shows **Pick the AI behind Vibe64**, Colleague shows a small crowned **Set up your AI** note, and the top bar shows a gold crowned
@@ -164,8 +164,8 @@ shows plain text, not a spinner.
 
 DeepSeek connects inside Claude Code (other tools are under **Advanced**), the
 GLM Coding Plan through Codex, and the free GLM-4.7 Flash option through
-OpenCode. Use **Back** (above the header on a
-desktop, the arrow at the top left on a phone) to return to the provider list.
+OpenCode. Use **Choose another AI** (above the header on a
+desktop, at the top left on a phone) to return to the provider list.
 Keys are stored privately outside your projects and never shown again.
 
 ## Success
@@ -196,8 +196,8 @@ Learn mode; **Start building** is the "not now". It is offered only this once;
 
 In Learn mode Colleague's conversation is your teacher's, so setup sends no
 hello there: the card says **Your teacher uses [provider] from your next
-message**, the check appears at once, and the close button reads **Back to the
-lesson** (or **Back to Learn** with no lesson in progress).
+message**, the check appears at once, and the close button reads **Continue the
+lesson** (or **Continue in Learn** with no lesson in progress).
 
 If the provider connected but no model is ready yet, Connect shows **[Provider]
 is connected, but no model is ready for Colleague yet.** with **Review
@@ -281,7 +281,7 @@ with its close button or Escape; focus returns to **Manage**.
 right; on a phone in the bottom bar of the first screen, then below the cards
 and below the connect steps) closes the flow and keeps it from opening by itself in this browser for 24 hours. The
 close button or Escape just closes it. While a sign-in, key check or model
-save runs, closing and **Back** wait for it to finish.
+save runs, closing and **Choose another AI** wait for it to finish.
 
 - **We couldn't check your current AI connections.** Use **Try again**;
   connecting still works, but Connected badges are hidden until status loads.
@@ -299,7 +299,7 @@ On a desktop the choice screen is one column: Claude's card on top, its plan and
 buttons beside its facts, then Codex, DeepSeek and GLM as full-width rows (facts,
 plan, buttons), with the GLM free option across the bottom of its row. On a phone
 everything is one column too: Claude is expanded, the other cards are compact rows you tap to expand, the top
-bar holds only the back arrow or wordmark, the step dots and close, and
+bar holds only **Choose another AI** or the wordmark, the step dots and close, and
 **Choose my AI**, **Set up later** and the "change it any time" note sit in a
 bar at the bottom of the first screen. **Manage** opens as a centred window on a
 desktop and fills the screen on a phone, with its tiles' buttons spread across

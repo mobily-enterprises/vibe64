@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
         <v-btn v-if="historyHasMore" :disabled="historyLoading" @click="loadHistory({ more: true })">More conversations</v-btn>
       </template>
       <template v-else>
-        <v-btn :disabled="historyLoading" @click="loadHistory()">Back to previous conversations</v-btn>
+        <v-btn :disabled="historyLoading" @click="loadHistory()">All previous conversations</v-btn>
         <AssistantTranscript
           :turns="historyTurns"
           :assistant-label="name"

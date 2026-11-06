@@ -103,8 +103,8 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
     nativeSetupOpen.value = true;
   }
 
-  /** Returns from the setup dialog to its provider picker. */
-  function backFromNativeSetup() {
+  /** Leaves the setup dialog for its provider picker. */
+  function reopenNativeProviderPicker() {
     nativeSetupOpen.value = false;
     nativeProviderPickerOpen.value = true;
   }
@@ -123,7 +123,7 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
   });
 
   return {
-    backFromNativeSetup,
+    reopenNativeProviderPicker,
     chooseCustomEndpoint,
     chooseNativeProvider,
     claudeAccount,

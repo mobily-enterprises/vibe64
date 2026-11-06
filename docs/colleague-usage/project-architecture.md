@@ -108,8 +108,8 @@ offer **Show usage** to open it there. See
    Esc also works after generation temporarily releases keyboard focus.
    A compact reminder beneath the breadcrumb shows these scroll, zoom and return rules.
 
-**← Back**, **×** and Esc retrace Program and file links, including links to
-another subsystem. Back restores the previous file and exact declaration, or
+**Previous view**, **×** and Esc retrace Program and file links, including links to
+another subsystem. Previous view restores the previous file and exact declaration, or
 the Program and its source icons. With no nested view history,
 it returns to the enclosing subsystem or map. **×** and Esc always close the
 current level; breadcrumbs jump directly to their named view.
@@ -143,7 +143,7 @@ Hover a group heading for its definition. Short notices keep missing intended
 API and partial import coverage visible beside the signatures.
 
 Expand **Imported by …** beneath a signature to see full paths of its importing
-files. Click a path to open that file inside Architecture; **← Back**, **×** or Esc
+files. Click a path to open that file inside Architecture; **Previous view**, **×** or Esc
 returns to the signature list with the disclosure retained. The same disclosure
 is available under **Other available exports** and **Declared API**. Imports within
 the same subsystem are included; the group still reflects cross-boundary

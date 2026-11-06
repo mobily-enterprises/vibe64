@@ -195,7 +195,8 @@ export function useVibe64ArchitectureCanvas({ props, architecture, usageState, c
     fileRequest.value = { ...fileRequest.value, ...location };
     retainedFileRequest.value = fileRequest.value;
   }
-  async function goBack(event) {
+  /** The view before this one in the reader, or the map once none is left. */
+  async function previousView(event) {
     const previous = viewHistory.value.at(-1);
     if (!previous) return closeDetail(event);
     ++navigationVersion;
@@ -336,7 +337,7 @@ export function useVibe64ArchitectureCanvas({ props, architecture, usageState, c
     const rect = canvas.value.getBoundingClientRect();
     if (outline.value && !outline.value.owner.opaque) {
       if (viewport.zoom < 0.7) {
-        if (fileRequest.value || programId.value) void goBack();
+        if (fileRequest.value || programId.value) void previousView();
         else void closeDetail();
       }
       return;
@@ -433,7 +434,7 @@ export function useVibe64ArchitectureCanvas({ props, architecture, usageState, c
     const pageEscape = event => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.target !== document.body || !props.active || usageState.value.view !== 'map' || !expandedSubsystemId.value) return;
       event.preventDefault();
-      void goBack(event);
+      void previousView(event);
     };
     document.addEventListener('keydown', pageEscape);
     let width = element.clientWidth;
@@ -486,7 +487,7 @@ export function useVibe64ArchitectureCanvas({ props, architecture, usageState, c
     openProgram,
     openFile,
     updateFileLocation,
-    goBack,
+    previousView,
     showSubsystem,
     toggleCalls,
     selectNode,

@@ -224,7 +224,7 @@ watch(() => props.active, (active) => {
       </v-tabs>
       <v-divider />
       <v-sheet v-if="archiveId" color="surface" border="b" class="work-plan-archive-context px-4 py-3">
-        <v-btn icon="$arrowBack" variant="text" aria-label="Back to plan history" title="Back to plan history" @click="archiveId = ''" />
+        <v-btn variant="text" @click="archiveId = ''">Plan history</v-btn>
         <div class="work-plan-archive-copy">
           <v-chip color="primary" variant="tonal" size="small" class="mb-1">Archived · read-only</v-chip>
           <p class="text-body-small text-medium-emphasis">{{ selectedArchive ? `Archived ${selectedArchive.archivedDate}` : 'Saved snapshot' }}</p>

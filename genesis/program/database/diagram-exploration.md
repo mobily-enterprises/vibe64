@@ -45,7 +45,7 @@ requiring every table and field to be read at once.
 Overview exposes **Review N ungrouped tables** directly. It requests an exact
 review of the current Other tables membership, including previously reviewed
 tables, while preserving existing actors and manual choices. Actor details and
-Other tables have a labelled **Back to data overview** header control; Escape
+Other tables have a labelled **Data overview** header control; Escape
 also closes them. MySQL/MariaDB default table SELECTs omit the database prefix;
 PostgreSQL retains schema qualification. Other authored SQL remains unchanged.
 

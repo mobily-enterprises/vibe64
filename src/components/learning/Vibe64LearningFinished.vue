@@ -6,7 +6,7 @@ import { courseProgress } from "@local/vibe64-training/client/course-progress";
 // step result completes the lesson, and again from the reader of a complete
 // lesson. It finishes the attempt once (lesson.finish archives its record,
 // practice project and conversation; Learn mode stays on), then offers the
-// next lesson of the same course and Back to courses.
+// next lesson of the same course and All courses.
 const props = defineProps({
   learning: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Learning>} */ (Object), required: true },
   // The Courses adapter (useVibe64LearningCourses): courses, saved lessons, start.
@@ -102,7 +102,7 @@ async function startNext() {
         variant="tonal" rounded="pill" min-height="48" data-test="learning-finished-courses"
         @click="learning.show({ surface: 'courses' })"
       >
-        Back to courses
+        All courses
       </v-btn>
     </div>
   </section>

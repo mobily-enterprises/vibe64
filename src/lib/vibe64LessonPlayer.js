@@ -133,11 +133,11 @@ function createLessonPlayer({
     if (following) selectStep(following.id, 0);
   }
 
-  function back() {
+  function previous() {
     if (index.value > 0) return moveTo(index.value - 1);
-    const previous = steps.value[stepIndex.value - 1];
-    if (!previous) return;
-    selectStep(previous.id, stepEnd(Array.isArray(previous.beats) ? previous.beats : []));
+    const earlier = steps.value[stepIndex.value - 1];
+    if (!earlier) return;
+    selectStep(earlier.id, stepEnd(Array.isArray(earlier.beats) ? earlier.beats : []));
   }
 
   // Show me on a step with beats: play it from its first beat.
@@ -272,7 +272,7 @@ function createLessonPlayer({
     get atEnd() { return index.value >= end.value && stepIndex.value >= steps.value.length - 1; },
     get confirmed() { return local.confirmed; },
     next,
-    back,
+    previous,
     start,
     togglePause,
     hold,

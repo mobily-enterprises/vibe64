@@ -177,18 +177,18 @@ not passed, else the first step.
 
 The L button switches mode; in Learn it is followed by a Courses button
 (`openCourses`) and the lesson title. The overlay (`aria-label` Courses) has
-surfaces `courses`, `progress`, `archived` and `lesson`, a **Back** button
-(`closeCourses`, also Escape: back onto the page it covers, its place kept)
+surfaces `courses`, `progress`, `archived` and `lesson`, a **Close Courses** button
+(`closeCourses`, also Escape: onto the page it covers, its place kept)
 and, with a lesson in progress, **Continue lesson** (`openLesson`); no bare X. **In progress** and
 **Archived** (`Vibe64LearningAttempts.vue`) show the one current row with Open
 (`openCurrent`: the lesson's place, overlay closed), Restart and Delete (each
 confirmed by a second click), and archived rows with Delete; a loader stands in
 until the first `practice.list` read answers. The **Lesson finished**
 screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
-**Next lesson** (through `startLesson`) and **Back to courses**. The step bar
+**Next lesson** (through `startLesson`) and **All courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's
 step in Learn as **Step N of M**, always in full (it has no collapse toggle),
-with one labelled navigation pair: **Back** and a forward button whose label
+with one labelled navigation pair: **Previous** and a forward button whose label
 is what it does (**Next** within the step's beats, **Next step** on its last
 part, **Finish** (`showFinished`) on a complete lesson's last step). Away from
 the practice project it offers **Open practice project**. The lesson is an

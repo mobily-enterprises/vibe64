@@ -452,7 +452,7 @@ describe("flow", () => {
     expect([state.screen, state.colleagueNote, state.proven]).toEqual(["success", "uses", true]);
     await Promise.resolve();
     expect(mocks.colleague.sayHello).not.toHaveBeenCalled();
-    expect([state.hello.state, state.doneLabel]).toEqual(["", "Back to Learn"]);
+    expect([state.hello.state, state.doneLabel]).toEqual(["", "Continue in Learn"]);
   });
 
   it("names the way back by mode: Start building in Develop", async () => {

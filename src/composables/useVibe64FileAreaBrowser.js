@@ -46,6 +46,7 @@ function useVibe64FileAreaBrowser({
     ...directory.value.split("/").filter(Boolean).map((name, index, parts) => ({ title: name, path: parts.slice(0, index + 1).join("/") }))
   ]);
   const folderLabel = computed(() => breadcrumbs.value.map((crumb) => crumb.title).join(" › "));
+  const folderName = computed(() => breadcrumbs.value.at(-1).title);
   const imageSiblings = computed(() => file.value?.image ? entries.value.filter((entry) => entry.type === "file" && filePreviewImageType(entry.name)) : []);
 
   // A quiet reload refreshes the listing without leaving an open file.
@@ -109,7 +110,7 @@ function useVibe64FileAreaBrowser({
     }
   }
 
-  // Back to the folder, with focus on the file that was open.
+  // Shows the folder again, with focus on the file that was open.
   async function closeFile() {
     const path = file.value?.path || "";
     file.value = null;
@@ -170,6 +171,7 @@ function useVibe64FileAreaBrowser({
     fileEntry,
     fileName,
     folderLabel,
+    folderName,
     hasMore,
     imageSiblings,
     loadDirectory,

@@ -11,7 +11,7 @@ const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning.state.actorKey));
 const learn = computed(() => learning.learnMode);
 const switching = computed(() => learning.state.modeBusy === "set");
-const title = computed(() => learn.value ? "Back to Develop (your projects)" : "Switch to Learn");
+const title = computed(() => learn.value ? "Switch to Develop (your projects)" : "Switch to Learn");
 </script>
 
 <template>

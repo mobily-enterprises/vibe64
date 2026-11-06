@@ -87,9 +87,11 @@ function close(reason, card = null) {
     >
       <header class="ai-onboarding__bar">
         <v-btn
-          v-if="xs && ['connect', 'routing'].includes(screen)" icon="$arrowBack" variant="text" aria-label="Back"
-          :disabled="busy" @click="setup?.back()"
-        />
+          v-if="xs && ['connect', 'routing'].includes(screen)" variant="text" :disabled="busy"
+          @click="setup?.chooseAnother()"
+        >
+          Choose another AI
+        </v-btn>
         <span v-else class="ai-onboarding__wordmark">Vibe<span>64</span></span>
         <div v-if="!wasSetUp && STEP[screen]" class="ai-onboarding__dots" aria-hidden="true">
           <span v-for="step in 3" :key="step" :class="{ 'is-active': STEP[screen] === step, 'is-done': STEP[screen] > step }" />

@@ -1292,10 +1292,10 @@ describe("Courses overlay", () => {
       byTest(root, "learning-archived-tab").props.onClick();
       await flush();
       expect([learning.surface, byTest(root, "attempts").props.archived]).toEqual(["archived", true]);
-      expect(textOf(byTest(root, "learning-back")).trim(), "Back, onto the page Courses covers").toBe("Back");
+      expect(textOf(byTest(root, "learning-close-courses")).trim(), "Close Courses, onto the page Courses covers").toBe("Close Courses");
       expect(byTest(root, "learning-hide"), "no second, unlabelled close").toBeUndefined();
       expect(textOf(byTest(root, "learning-continue-lesson")).trim(), "the way on into the lesson").toBe("Continue lesson");
-      byTest(root, "learning-back").props.onClick();
+      byTest(root, "learning-close-courses").props.onClick();
       await flush();
       expect([learning.open, learning.minimised, learning.hiddenBy], "Back closes Courses").toEqual([false, true, "learner"]);
       await learning.openCourses("lesson");
@@ -1674,7 +1674,7 @@ describe("Lesson finished screen", () => {
     } finally { view.app.unmount(); }
   });
 
-  it("offers Back to courses, which leaves the finished lesson", async () => {
+  it("offers All courses, which leaves the finished lesson", async () => {
     let current = ATTEMPT;
     const { learning } = controller({ mode: () => ({ ...LEARN, currentAttemptId: current }),
       reads: () => lessonResult({ results: passed, attempt: { attemptId: ATTEMPT, ended: false, practiceSlug: "training-1111", pin } }),
@@ -1948,7 +1948,7 @@ describe("Lesson step bar", () => {
       expect(textOf(byTest(root, "learning-step-bar-position"))).toBe("Step 1 of 4");
       expect(byTest(root, "learning-step-bar-dots").props["aria-label"]).toBe("This step: part 1 of 2");
       expect(textOf(byTest(root, "learning-step-bar-next")).trim(), "more parts in this step").toBe("Next");
-      expect(textOf(byTest(root, "learning-step-bar-previous")).trim()).toBe("Back");
+      expect(textOf(byTest(root, "learning-step-bar-previous")).trim()).toBe("Previous");
       expect(byTest(root, "learning-step-bar-pause")).toBeDefined();
       expect(byTest(root, "learning-step-bar-previous").props.disabled).toBe(true);
       byTest(root, "learning-step-bar-next").props.onClick();

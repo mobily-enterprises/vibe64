@@ -40,13 +40,6 @@
 
 .ai-task--ended .ai-task__header { padding-inline-end: 1.25rem; }
 
-.ai-task__back {
-  flex: 0 0 auto;
-  height: 3rem;
-  margin-inline: -0.75rem -0.25rem;
-  width: 3rem;
-}
-
 .ai-task__glyph {
   align-items: center;
   display: inline-flex;

@@ -33,7 +33,7 @@
         </v-menu>
       </div>
     </header>
-    <div v-show="usageState.view === 'map'" ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), goBack($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
+    <div v-show="usageState.view === 'map'" ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), previousView($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
       <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}<details v-if="refreshOutput"><summary>Command output</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ refreshOutput }}</pre></details></v-alert>
       <v-alert v-if="!refreshing && architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Re-scan project</v-btn></v-alert>
       <VueFlow
@@ -57,16 +57,16 @@
           <div class="subsystem-zoom__context">
             <article class="subsystem-zoom nodrag nopan" aria-label="Zoomed subsystem" @wheel="!$event.ctrlKey && $event.stopPropagation()" @touchmove="($event.touches.length !== 2) && $event.stopPropagation()">
               <nav class="subsystem-zoom__breadcrumbs" aria-label="Architecture location">
-                <button type="button" class="subsystem-zoom__back nodrag nopan" aria-label="Back to previous view" @click="goBack">← Back</button>
+                <button type="button" class="subsystem-zoom__previous nodrag nopan" @click="previousView">Previous view</button>
                 <button type="button" class="nodrag nopan" @click="closeDetail">Engine</button><span>›</span>
                 <button v-if="fileRequest || programId" type="button" class="nodrag nopan" @click="showSubsystem">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
                 <template v-if="currentProgram"><span>›</span><strong>{{ currentProgram.title }}</strong></template>
                 <template v-else-if="fileRequest && parentProgram"><span>›</span><button type="button" @click="openProgram(parentProgram.id)">{{ parentProgram.title }}</button></template>
                 <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
                 <button v-if="!data.owner.opaque" type="button" class="subsystem-zoom__usage nodrag nopan" @click="showUsageForDetail(data.owner)">Show usage</button>
-                <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest || programId ? 'Back to previous view' : 'Back to Engine'" title="Close this view (Esc)" @click="goBack($event)">×</button>
+                <button type="button" class="subsystem-zoom__close" aria-label="Close this view" title="Close this view (Esc)" @click="previousView($event)">×</button>
               </nav>
-              <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
+              <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to close this view</p>
               <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :open-file="openFile" :update-location="updateFileLocation" :open-program="openProgram"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
               <Vibe64ProgramInspector v-if="retainedProgram" v-show="programId" :key="retainedProgram.id" :active="props.active && !!programId" :program="retainedProgram" :architecture="architecture" :owner="architecture.subsystems.find(owner => owner.id === retainedProgram.subsystemId)" @inspect="openFile"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64ProgramInspector>
               <div v-show="!fileRequest && !programId" class="subsystem-zoom__body">
@@ -146,7 +146,7 @@ const compact = ref(false);
 const {
   expandedSubsystemId, outline, retainedOutline, layoutPositions, fileRequest, retainedFileRequest, programId, currentProgram, retainedProgram, parentProgram,
   nodes, edges, showCalls, selectedPageId, visibleEdges, uiIds, engineIds, externalCount, contentCount,
-  closeDetail, openProgram, openFile, updateFileLocation, goBack, showSubsystem, toggleCalls, selectNode, clearSelection, startDrag, rearrangeSubsystem, moveSubsystem,
+  closeDetail, openProgram, openFile, updateFileLocation, previousView, showSubsystem, toggleCalls, selectNode, clearSelection, startDrag, rearrangeSubsystem, moveSubsystem,
   zoomWheel, startPinch, movePinch, endPinch, zoomControl, viewportChanged, fit, initialize, fitIfPending, fitWhenMapShown
 } = useVibe64ArchitectureCanvas({ props, architecture, usageState, canvas });
 const coverage = computed(() => architecture.value?.ui?.capabilities?.pages);
@@ -191,7 +191,7 @@ function showUsageForDetail(owner) {
 .subsystem-zoom__breadcrumbs button { color: #367e70; cursor: pointer; border-radius: 4px; padding: 5px 3px; }
 .subsystem-zoom__breadcrumbs button:hover { background: #dcece6; }
 .subsystem-zoom__breadcrumbs button:focus-visible { outline: 2px solid #377dcb; }
-.subsystem-zoom__breadcrumbs .subsystem-zoom__back { min-height: 44px; padding: 5px 8px; }
+.subsystem-zoom__breadcrumbs .subsystem-zoom__previous { min-height: 44px; padding: 5px 8px; }
 .subsystem-zoom__breadcrumbs .subsystem-zoom__close { position: absolute; top: 2px; right: 4px; width: 44px; height: 44px; padding: 0; font-size: 24px; }
 .subsystem-zoom__navigation-hint { flex: none; margin: 0; padding: 3px 18px; font-size: 11px; line-height: 16px; color: #69817d; border-bottom: 1px solid #edf2f0; }
 .subsystem-zoom__file { height: min(720px, 75vh); min-height: 0; overflow: hidden; }

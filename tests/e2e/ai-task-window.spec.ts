@@ -137,10 +137,10 @@ for (const viewport of VIEWPORTS) {
       await expectNoSidewaysScroll(page);
       if (viewport.touch) await expectTouchTargets(page);
       await window.locator("[data-vibe64-ai-task-transcript]").click();
-      await expect(window.getByRole("button", { name: "Back to the result" })).toBeVisible();
+      await expect(window.getByRole("button", { name: "Show the result" })).toBeVisible();
       await expect(window.getByText("This conversation has ended.")).toBeVisible();
       await expect(window.getByRole("textbox")).toHaveCount(0);
-      await window.getByRole("button", { name: "Back to the result" }).click();
+      await window.getByRole("button", { name: "Show the result" }).click();
       await window.locator("[data-vibe64-ai-task-close]").click();
       await expect(window).toHaveCount(0);
       await expect(page.locator("[data-vibe64-ai-task-tray]")).toHaveCount(0);

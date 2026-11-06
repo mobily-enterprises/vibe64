@@ -10,7 +10,7 @@
     :actions-disabled-message="actionsDisabledMessage"
     :actions-enabled="actionsEnabled"
     :account-rows="aiAccountRows"
-    :back-label="backLabel"
+    :choose-another-label="chooseAnotherLabel"
     :continue-label="continueLabel"
     :embedded="embedded"
     :lede="embedded ? '' : lede"
@@ -19,7 +19,7 @@
     :show-continue="showContinue"
     :status-loaded="statusLoaded"
     :title="title"
-    @back="emit('back')"
+    @choose-another="emit('choose-another')"
     @continue="emit('continue')"
     @connected="emit('connected', $event)"
   />
@@ -49,7 +49,7 @@ const props = defineProps({
   // Fixed model provider for a single-purpose setup, such as onboarding.
   modelProviderId: { default: "", type: String },
   embedded: Boolean,
-  backLabel: {
+  chooseAnotherLabel: {
     default: "",
     type: String
   },
@@ -85,7 +85,7 @@ watch(() => [props.providerId, props.modelProviderId], ([id, fixed]) => {
 }, { immediate: true });
 // A native login shows the CLI's install notice in its own account row.
 const nativeLogin = computed(() => ["openai", "anthropic"].includes(selectedModelProviderId.value));
-const emit = defineEmits(["back", "continue", "connected"]);
+const emit = defineEmits(["choose-another", "continue", "connected"]);
 const accounts = useVibe64Accounts({
   client: props.accountsClient
 });

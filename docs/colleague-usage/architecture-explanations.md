@@ -19,7 +19,7 @@ directory boundary. **Exports from externally used files** have file-level bound
 without proven imports of those individual exports. **Other available exports**
 follow the language's visibility rules without deciding intended API membership.
 Expand an import count beneath a signature to see the importing source paths;
-select a path to read it and use Back to return. File-level candidates label their
+select a path to read it and use **Previous view** to return. File-level candidates label their
 evidence **Source file imported by** to avoid claiming a particular export is used.
 Hover the group title for its definition; the Partial badge and File exports heading
 carry their coverage explanation on hover. **Analysis details** shows actual
@@ -55,7 +55,7 @@ Its opening preview stays short; **Read full explanation** opens the complete
 authored text in a separate scrollable dialog, full-screen on phones. **×** or Esc
 closes that dialog without going back or changing the source list.
 **Main source file** opens the anchor through the shared Files viewer/editor.
-**Supporting files** reaches the associated source icons. **← Back**, **×** and
+**Supporting files** reaches the associated source icons. **Previous view**, **×** and
 Esc return through Program and source navigation. File membership links return
 to the Program view. These controls never open raw Genesis documentation files.
 

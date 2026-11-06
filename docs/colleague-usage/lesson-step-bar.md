@@ -1,7 +1,7 @@
 # The lesson step bar
 
 The yellow lesson step bar above the project page plays the current lesson
-step: its position, beats, **Back** and **Next**, and **Courses**. The rest of
+step: its position, beats, **Previous** and **Next**, and **Courses**. The rest of
 Learn mode is in [The Learning environment](learning-environment.md).
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
@@ -11,7 +11,7 @@ lesson's steps) with the step's title and status.
 **Moving through the lesson.** One labelled pair of buttons, with the same
 names for screen readers and the keyboard:
 
-- **Back** goes back one part of this step, or into the previous step from its
+- **Previous** goes back one part of this step, or into the previous step from its
   first part. It is greyed out at the very start of the lesson.
 - The forward button says exactly what it does: **Next** while this step has
   more parts, **Next step** on its last part (and on a step without parts),
@@ -58,7 +58,7 @@ the lesson name, **Step N of M** and a dot per beat, the parts of this step
   it. What you did earlier in this step counts too, in order: a message sent
   while an earlier line played completes the send line, and an agent that
   finished before its line appeared completes the wait line (what happened
-  before the step's previous *do* line was done does not count). Going **Back** onto a line you have
+  before the step's previous *do* line was done does not count). Going **Previous** onto a line you have
   done leaves it waiting.
 - **Do it for me** on a *do* line does it through the page's own controls:
   it opens the place (or the file), reveals and focuses the coding chat, opens
@@ -76,7 +76,7 @@ the lesson name, **Step N of M** and a dot per beat, the parts of this step
   **Set up your AI**; see `learning-mode-ui`.
 - On a step you would finish with **Done**, doing every *do* line of it marks
   the step done by itself.
-- **Back** and **Next** move one beat; on the step's last beat the forward
+- **Previous** and **Next** move one beat; on the step's last beat the forward
   button reads **Next step** and goes into the next step.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
   done**, **Check my work** (an automatic check, or a review; a check that does
@@ -112,6 +112,6 @@ Colleague never runs a review or passes a step for you.
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. On a phone the bar has three tidy rows: the position
 with the icon buttons (**Courses**, **Open practice project** and **Lesson**),
-then the beat's line and its one button, then **Back**
+then the beat's line and its one button, then **Previous**
 at the left and the forward button at the right. A step without beats shows
 its title and status as before, and **Show me** when it can point at a place.

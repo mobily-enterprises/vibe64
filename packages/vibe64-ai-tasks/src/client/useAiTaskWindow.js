@@ -3,8 +3,9 @@ import { computed, ref, toValue, watch } from "vue";
 const WINDOW_QUERY = "aiTask";
 
 /**
- * Which task's window is open. The address holds it, so a reload reopens it and Back hides it;
- * the view the person chose stays theirs and never switches by itself.
+ * Which task's window is open. The address holds it, so a reload reopens it and the browser's Back hides it;
+ * closing it replaces the address with the one without the window, never a step back through history. The view
+ * the person chose stays theirs and never switches by itself.
  * @param {object} options
  * @param {import("vue").MaybeRefOrGetter<import("./types.js").AiTask | null>} options.task
  * @param {import("vue").MaybeRefOrGetter<boolean>} options.loaded
@@ -16,7 +17,6 @@ const WINDOW_QUERY = "aiTask";
 function useAiTaskWindow({ task, loaded, active, opensOn, route, router }) {
   const view = ref("progress");
   const transcriptOpen = ref(false);
-  let pushedStep = false;
   let opener = null;
 
   const wanted = computed(() => String(route.query[WINDOW_QUERY] || ""));
@@ -36,18 +36,11 @@ function useAiTaskWindow({ task, loaded, active, opensOn, route, router }) {
     if (!current) return;
     opener = element;
     if (open.value) return;
-    pushedStep = true;
     await router.push({ path: route.path, query: { ...route.query, [WINDOW_QUERY]: current.id }, hash: route.hash });
   }
 
   function hide() {
-    if (!wanted.value) return;
-    if (pushedStep) {
-      pushedStep = false;
-      router.back();
-      return;
-    }
-    void router.replace(withoutWindow());
+    if (wanted.value) void router.replace(withoutWindow());
   }
 
   function setView(next) {
@@ -64,7 +57,6 @@ function useAiTaskWindow({ task, loaded, active, opensOn, route, router }) {
   // An address naming a task that has gone opens nothing.
   watch(() => [wanted.value, toValue(loaded), toValue(task)?.id, toValue(active)], () => {
     if (wanted.value && toValue(active) && toValue(loaded) && toValue(task)?.id !== wanted.value) {
-      pushedStep = false;
       void router.replace(withoutWindow());
     }
   }, { immediate: true });

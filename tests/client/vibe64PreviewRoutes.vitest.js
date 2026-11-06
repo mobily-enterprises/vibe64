@@ -151,7 +151,7 @@ describe("Training lesson picker prerequisite", () => {
     expect(html).toContain("0 of 2 lessons complete");
     expect(html).toContain("View course");
     const page = await renderCoursePage();
-    expect(page).toContain("Back to courses");
+    expect(page).toContain("All courses");
     expect(page).toContain("Introduction");
     expect(page).toContain(pickerHash);
     expect(page.indexOf("V64-START-00")).toBeLessThan(page.indexOf("V64-START-01"));

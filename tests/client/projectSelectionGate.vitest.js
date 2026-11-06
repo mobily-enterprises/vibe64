@@ -82,7 +82,7 @@ describe("a team member's project before team AI is set up", () => {
     expect(html).toContain("Tony needs to set up AI for team members before you can open projects here.");
     expect(html).toContain("Ask Tony to set up AI for team members.");
     expect(html).toContain("Check again");
-    expect(html).not.toContain("Back to projects");
+    expect(html).not.toContain("All projects");
     expect(html).not.toContain("Project could not load");
     expect(html).not.toContain("Project workspace");
   });
@@ -93,10 +93,10 @@ describe("a team member's project before team AI is set up", () => {
     expect(html).toContain("Ask the workspace owner to set up AI for team members.");
   });
 
-  it("offers Back to projects only where the host has a project list", async () => {
+  it("offers All projects only where the host has a project list", async () => {
     mocks.listPath = "/projects";
     const html = await renderGate({ error: gated() }, { scopeSelectionToCurrentProject: true });
-    expect(text(html)).toContain("Back to projects");
+    expect(text(html)).toContain("All projects");
     expect(mountGate({ error: gated() }).state.projectsPath).toBe("/projects");
   });
 

@@ -76,8 +76,11 @@ async function add() {
   <v-dialog :model-value="modelValue" max-width="760" scrollable @update:model-value="emit('update:modelValue', $event)">
     <v-card class="publish-dialog" rounded="xl">
       <v-card-title class="publish-dialog__title">
-        <v-btn v-if="chosen" icon="$arrowBack" aria-label="Choose another destination" size="small" variant="text" @click="pick('')" />
         {{ chosen ? `Add ${chosen.label}` : "Where should it go?" }}
+        <template v-if="chosen">
+          <v-spacer />
+          <v-btn variant="text" @click="pick('')">Choose another destination</v-btn>
+        </template>
       </v-card-title>
       <v-card-text>
         <div v-if="!chosen" class="publish-destinations" role="list">

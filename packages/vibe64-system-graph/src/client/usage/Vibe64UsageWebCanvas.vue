@@ -48,7 +48,7 @@
 
     <template v-else>
       <header class="usage-web__zoom">
-        <v-btn variant="text" prepend-icon="$arrowBack" @click="emit('zoom', '')">All subsystems</v-btn>
+        <v-btn variant="text" @click="emit('zoom', '')">All subsystems</v-btn>
         <h3 class="usage-web__zoom-title text-title-medium">{{ zoomedTitle }}</h3>
         <slot name="zoom-actions" />
         <!-- Lines are drawn only on the canvas; list rows say it in words. -->

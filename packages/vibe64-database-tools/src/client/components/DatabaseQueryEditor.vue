@@ -2,8 +2,8 @@
   <section class="database-workspace__query">
     <header class="database-workspace__query-toolbar">
       <div class="database-workspace__query-actions">
-        <v-btn v-if="diagramReturn" prepend-icon="$chevronLeft" size="small" variant="text" @click="emit('return-to-diagram')">
-          Back to {{ diagramReturn.label }}
+        <v-btn v-if="diagramReturn" size="small" variant="text" @click="emit('return-to-diagram')">
+          Show {{ diagramReturn.label }}
         </v-btn>
         <v-btn
           ref="runButton"

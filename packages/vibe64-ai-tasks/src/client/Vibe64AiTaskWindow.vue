@@ -21,15 +21,6 @@
       :data-vibe64-ai-task-reason="task.reason"
     >
       <header class="ai-task__header">
-        <v-btn
-          v-if="fit.phone && !projection.ended"
-          :aria-label="WORDS.actions.hide"
-          class="ai-task__back"
-          data-vibe64-ai-task-hide
-          icon="$arrowBack"
-          variant="text"
-          @click="source.hide"
-        />
         <span class="ai-task__glyph" :class="`ai-task__glyph--${projection.glyph}`" aria-hidden="true">
           <v-progress-circular v-if="projection.glyph === 'working'" :indeterminate="!reducedMotion" :model-value="reducedMotion ? 60 : undefined" size="20" width="2" />
           <v-icon v-else :icon="glyphIcons[projection.glyph]" size="22" />
@@ -41,7 +32,7 @@
           </p>
         </div>
         <div v-if="!projection.ended" class="ai-task__commands">
-          <v-btn v-if="!fit.phone" data-vibe64-ai-task-hide variant="text" @click="source.hide">{{ WORDS.actions.hide }}</v-btn>
+          <v-btn data-vibe64-ai-task-hide variant="text" @click="source.hide">{{ WORDS.actions.hide }}</v-btn>
           <v-btn
             :aria-busy="cancelling ? 'true' : undefined"
             data-vibe64-ai-task-cancel
@@ -140,7 +131,7 @@
       </footer>
       <footer v-else-if="projection.ended" class="ai-task__footer">
         <div class="ai-task__actions">
-          <v-btn v-if="source.transcriptOpen" variant="text" @click="source.setTranscript(false)">{{ WORDS.outcome.backToResult }}</v-btn>
+          <v-btn v-if="source.transcriptOpen" variant="text" @click="source.setTranscript(false)">{{ WORDS.outcome.showResult }}</v-btn>
           <v-btn
             :aria-busy="source.closing ? 'true' : undefined"
             color="primary"

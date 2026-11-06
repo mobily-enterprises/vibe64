@@ -131,8 +131,9 @@ function useAiKeyEditor({
     !editorPreparing.value &&
     !editorSaving.value
   ));
-  const editorBackLabel = computed(() => (
-    ["add", "provider-picker"].includes(editorOrigin.value) ? "Back" : "Cancel"
+  // Leaving the editor names where it goes: the provider or AI list it was opened from, else nowhere.
+  const editorLeaveLabel = computed(() => (
+    { add: "Choose another AI", "provider-picker": "Choose another provider" }[editorOrigin.value] || "Cancel"
   ));
   const editorEyebrow = computed(() => {
     return existingEditorConnection.value ? "Manage connection" : "Add connection";
@@ -309,7 +310,7 @@ function useAiKeyEditor({
     editorActivator,
     editorApiKey,
     editorApiKeyVisible,
-    editorBackLabel,
+    editorLeaveLabel,
     editorCanSave,
     editorCatalogModelCount,
     editorConnectionPolicy,

@@ -120,7 +120,7 @@ it("offers only missing pairs, then opens a fixed Add form and returns to its pr
   expect(state.nativeSetupProviderId).toBe("claude");
   expect(state.nativeModelProviderId).toBe("deepseek");
   expect(state.nativeSetupOpen).toBe(true);
-  state.backFromNativeSetup();
+  state.chooseAnotherProvider();
   expect(state.nativeSetupOpen).toBe(false);
   expect(state.nativeProviderPickerOpen).toBe(true);
   expect(mocks.providers.change).not.toHaveBeenCalled();
@@ -266,7 +266,7 @@ it("keeps each orchestrator's custom endpoint out of its provider list, under it
   state.chooseCustomEndpoint("codex");
   expect([state.nativeProviderPickerOpen, state.nativeSetupOpen, state.nativeSetupProviderId, state.nativeModelProviderId])
     .toEqual([false, true, "codex", "custom"]);
-  state.backFromNativeSetup();
+  state.chooseAnotherProvider();
   expect([state.nativeSetupOpen, state.nativeProviderPickerOpen]).toEqual([false, true]);
 });
 
@@ -278,7 +278,7 @@ it("offers OpenCode a custom endpoint from its provider picker until one is save
   expect([state.providerPickerOpen, state.nativeSetupOpen, state.nativeSetupProviderId, state.nativeModelProviderId])
     .toEqual([false, true, "opencode", "custom"]);
   expect(state.nativeSetupDetails.label).toBe("OpenCode");
-  state.backFromNativeSetup();
+  state.chooseAnotherProvider();
   expect([state.nativeSetupOpen, state.providerPickerOpen]).toEqual([false, true]);
   mocks.providers.connections.value = [{ id: "custom", status: "not_connected", connected: false, claudeReady: false,
     configuredEngines: ["opencode"], engineStates: { opencode: { status: "connected", connected: true,

@@ -50,7 +50,7 @@ yet** instead of the project:
 - A highlighted line to pass on: **Ask *owner* to set up AI for team members.**
 - **Check again** re-reads the project once the owner says it is done. It opens
   the project as soon as the team setup is ready.
-- **Back to projects** returns to the project list, where the workspace has one.
+- **All projects** opens the project list, where the workspace has one.
 
 The screen is the same on a phone, with the buttons full width and stacked.
 Nothing about the project changes while a team member waits, and their Account

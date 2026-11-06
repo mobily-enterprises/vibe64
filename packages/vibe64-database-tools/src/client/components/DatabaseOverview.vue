@@ -1,7 +1,7 @@
 <template>
   <section class="database-overview" tabindex="-1" @keydown.esc="closeActor">
     <header class="database-overview__toolbar" aria-label="Data overview controls">
-      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back" prepend-icon="$arrowBack" variant="tonal" @click="closeActor">Back to data overview</v-btn>
+      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__all" variant="tonal" @click="closeActor">Data overview</v-btn>
       <div class="database-overview__title">
         <strong>{{ activeGroup ? activeGroup.name : 'Data overview' }}</strong>
         <span v-if="activeGroup">{{ actorSchema.tables.length }} tables</span>
@@ -316,7 +316,7 @@ async function save() {
 .database-overview__toolbar { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 64px; padding: 8px 10px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), .15); }
 .database-overview__controls { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; min-height: 40px; }
 .database-overview__controls :deep(.database-erd__toolbar) { flex: 1; min-width: 0; padding: 0; border: 0; }
-.database-overview__back { grid-column: 3; grid-row: 1; }
+.database-overview__all { grid-column: 3; grid-row: 1; }
 .database-overview__title { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
 .database-overview__title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .database-overview__title span { flex-shrink: 0; font-size: 12px; white-space: nowrap; }
@@ -347,7 +347,7 @@ async function save() {
   .database-overview__toolbar { grid-template-columns: minmax(0, 1fr) 48px; gap: 4px 8px; }
   .database-overview__title { grid-column: 1; grid-row: 1; min-height: 48px; flex-wrap: wrap; align-content: center; gap: 0 8px; }
   .database-overview__controls { grid-column: 1 / -1; grid-row: 3; min-height: 48px; flex-wrap: wrap; }
-  .database-overview__back { grid-column: 1 / -1; grid-row: 2; justify-self: start; min-height: 48px; }
+  .database-overview__all { grid-column: 1 / -1; grid-row: 2; justify-self: start; min-height: 48px; }
   .database-overview__icon-button, .database-overview__controls :deep(.database-erd__icon-button) { width: 48px; height: 48px; }
   .database-overview__detail { grid-template-columns: 140px minmax(0, 1fr); }
   .database-overview__tables { padding: 6px; }

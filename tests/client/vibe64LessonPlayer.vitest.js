@@ -84,7 +84,7 @@ describe("lesson beat player", () => {
     expect(h.state.beat).toBe(1);
   });
 
-  it("moves by beat with Back and Next, crossing into the neighbouring steps at either end", async () => {
+  it("moves by beat with Previous and Next, crossing into the neighbouring steps at either end", async () => {
     const h = harness();
     await settle();
     expect(h.player.atStart).toBe(true);
@@ -104,11 +104,11 @@ describe("lesson beat player", () => {
     expect(h.player.atEnd).toBe(true);
     h.player.next();
     expect(h.state.stepId).toBe("ask");
-    h.player.back();
-    h.player.back();
+    h.player.previous();
+    h.player.previous();
     expect([h.state.stepId, h.state.beat]).toEqual(["plain", 0]);
-    h.player.back();
-    expect([h.state.stepId, h.state.beat], "Back enters the previous step at its end").toEqual(["intro", 2]);
+    h.player.previous();
+    expect([h.state.stepId, h.state.beat], "Previous enters the previous step at its end").toEqual(["intro", 2]);
   });
 
   it("completes a do beat from its page activity in the practice project after it began, confirms, then moves on", async () => {
@@ -148,7 +148,7 @@ describe("lesson beat player", () => {
     expect([h.state.beat, h.player.final]).toEqual([1, true]);
   });
 
-  it("completes do beats whose activity happened earlier in the step, in order, but not again after Back", async () => {
+  it("completes do beats whose activity happened earlier in the step, in order, but not again after Previous", async () => {
     const steps = [{ id: "wait", beats: [{ kind: "show", target: "chat", text: "This is the chat." },
       { kind: "do", target: "send-message", prompt: "Hi", text: "Ask it: \"Hi\"" },
       { kind: "do", target: "agent-finished", text: "The agent is working." }, { kind: "check", target: "done", text: "Done?" }] }];
@@ -169,9 +169,9 @@ describe("lesson beat player", () => {
     vi.advanceTimersByTime(1600);
     await settle();
     expect(h.state.beat).toBe(3);
-    h.player.back();
+    h.player.previous();
     await settle();
-    expect([h.state.beat, h.player.confirmed], "Back onto a done beat waits").toEqual([2, ""]);
+    expect([h.state.beat, h.player.confirmed], "Previous onto a done beat waits").toEqual([2, ""]);
   });
 
   it("completes the agent-finished beat when the turn finished during the send confirmation or after Next skipped ahead", async () => {
@@ -214,9 +214,9 @@ describe("lesson beat player", () => {
     vi.advanceTimersByTime(1600);
     await settle();
     expect(h.state.beat).toBe(2);
-    // Back onto the place beat while Files shows: already there.
-    h.player.back();
-    h.player.back();
+    // Previous onto the place beat while Files shows: already there.
+    h.player.previous();
+    h.player.previous();
     await settle();
     expect(h.player.confirmed).toBe("✓ You're already here.");
   });

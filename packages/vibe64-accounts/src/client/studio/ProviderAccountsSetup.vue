@@ -21,7 +21,6 @@
               v-if="authorizeStep"
               color="primary"
               :disabled="!accountsReadyForActions"
-              prepend-icon="$arrowBack"
               variant="text"
               @click="setCodexAuthStep(session, 'settings')"
             >
@@ -37,12 +36,12 @@
             </v-btn>
           </template>
           <v-btn
-            v-if="backLabel && !authBusy && !embedded"
+            v-if="chooseAnotherLabel && !authBusy && !embedded"
             color="primary"
             variant="text"
-            @click="emit('back')"
+            @click="emit('choose-another')"
           >
-            {{ backLabel }}
+            {{ chooseAnotherLabel }}
           </v-btn>
           <v-btn
             v-if="!authBusy && !embedded"
@@ -115,7 +114,7 @@
             v-if="!session && cliProblem(account)" :account="account" :checking="accountsLoading" class="mb-4"
             @check="refreshStatus"
           >
-            <v-btn v-if="embedded" variant="text" @click="emit('back')">Choose another AI</v-btn>
+            <v-btn v-if="embedded" variant="text" @click="emit('choose-another')">Choose another AI</v-btn>
           </CliInstallNotice>
           <div v-if="!session && !cliProblem(account) && (!embedded || account.connected)" class="accounts-setup__item-main">
             <v-icon
@@ -472,7 +471,7 @@ const props = defineProps({
     default: () => [],
     type: Array
   },
-  backLabel: {
+  chooseAnotherLabel: {
     default: "",
     type: String
   },
@@ -508,7 +507,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["back", "continue", "connected"]);
+const emit = defineEmits(["choose-another", "continue", "connected"]);
 
 const {
   CHATGPT_SECURITY_SETTINGS_URL,

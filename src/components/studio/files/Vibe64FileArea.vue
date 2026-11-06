@@ -47,8 +47,8 @@
     <template v-else-if="file">
       <div class="vibe64-file-area__file-bar">
         <!-- A disabled button shows no tooltip, so its wrapper explains why. -->
-        <span :title="dirty ? 'Save or discard your changes first' : 'Back to folder'">
-          <v-btn icon="$arrowBack" aria-label="Back to folder" variant="text" :disabled="dirty || busy" @click="closeFile" />
+        <span class="vibe64-file-area__folder" :title="dirty ? 'Save or discard your changes first' : undefined">
+          <v-btn variant="text" :disabled="dirty || busy" @click="closeFile">{{ folderName }}</v-btn>
         </span>
         <div class="vibe64-file-area__file-heading">
           <h3 ref="fileHeading" class="vibe64-file-area__file-name" :title="file.path" tabindex="-1">{{ fileName }}</h3>
@@ -288,6 +288,7 @@ const {
   fileEntry,
   fileName,
   folderLabel,
+  folderName,
   hasMore,
   imageSiblings,
   loadDirectory,
@@ -428,6 +429,11 @@ function barAction(icon, label) {
   min-block-size: 56px;
   padding-inline: var(--v64-space-1);
 }
+
+/* The folder's name, which shows the folder again, stays short beside the file's own name. */
+.vibe64-file-area__folder { flex: none; max-inline-size: 40%; }
+.vibe64-file-area__folder .v-btn { max-inline-size: 100%; }
+.vibe64-file-area__folder :deep(.v-btn__content) { display: block; overflow: hidden; text-overflow: ellipsis; }
 
 /* On a phone the page scrolls, so Save and the other file actions stay in view. */
 .vibe64-file-area--mobile .vibe64-file-area__file-bar {

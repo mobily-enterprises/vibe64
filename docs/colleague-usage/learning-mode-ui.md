@@ -43,7 +43,7 @@ passes) or **Not started** (numbered). **Up next** has one main action,
 **Continue lesson** or **Start next lesson** (with the next lesson named beside
 it). Every available lesson except the one in progress has a **Start lesson**
 button; an archived lesson starts again as a new attempt with a fresh practice
-project. **Back to courses** returns to the list. On a phone the cards stack in
+project. **All courses** returns to the list. On a phone the cards stack in
 one column and the course page scrolls in the same pane.
 
 The lesson card above the course cards is headed "Lesson in progress · code"

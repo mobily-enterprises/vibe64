@@ -203,14 +203,14 @@ the session is archived while the fix is open. Vibe64 never gives up on its own.
 
 The result replaces the views. It shows the problem, what happened, what the AI did
 and, on **Not done**, what's next. **See the conversation** reads the whole chat;
-**Back to the result** returns. **Close** is the only way out, and closing changes
+**Show the result** returns. **Close** is the only way out, and closing changes
 nothing in the session. An ended fix does not get in the way: starting a new task
 closes it.
 
 ## Leave and come back
 
-**Hide** (the back arrow on a phone, **Esc** on a keyboard, or the browser's Back)
-only puts the window away. The fix keeps running on the server, and a chip beside
+**Hide** (**Esc** on a keyboard, or the browser's Back) only puts the window
+away. The fix keeps running on the server, and a chip beside
 the Colleague button shows how it is going: the fix's name, **Needs you**, **Done**
 or **Not done**. On a phone the chip is an icon. Choose the chip, or the button on
 the notice, to return. A reload or another device returns to the same fix, and the

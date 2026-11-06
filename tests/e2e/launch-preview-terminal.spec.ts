@@ -5997,7 +5997,7 @@ for (const width of [390, 768, 1280]) {
       await page.getByRole("tab", { name, exact: true }).click();
       const area = page.getByRole("region", { name: name === "Session" ? "Session files, read only" : "Session Dropzone", exact: true });
       await area.getByText("notes.txt", { exact: true }).click();
-      await expect(area.getByRole("button", { name: "Back to folder", exact: true })).toBeVisible();
+      await expect(area.getByRole("button", { name, exact: true }), "the folder's name shows the folder again").toBeVisible();
       const download = area.getByRole("button", { name: "Download file", exact: true });
       await expect(download).toBeVisible();
       await expect(download.locator("svg")).toBeVisible();

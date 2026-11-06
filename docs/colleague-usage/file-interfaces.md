@@ -40,7 +40,7 @@ coverage; use the project's declared preparation/verification for runtime proof.
 inside Architecture. That view contains a short opening preview, **Read full
 explanation** for the complete text in a separate scrollable dialog, a clearly marked
 **Main source file** and **Supporting files**. Select a source icon to open its
-file interface; **← Back**, **×** or Esc returns to the Program. The browser
+file interface; **Previous view**, **×** or Esc returns to the Program. The browser
 retains its directory navigation. Program membership never links to a raw Genesis
 Markdown document or guesses an entry file.
 
@@ -155,7 +155,7 @@ or Esc goes back one level. The subsystem breadcrumb returns to its retained int
 browsing. A stale, ambiguous or unavailable implementation identity never
 selects a guessed declaration.
 
-After following a cited source to another file, **← Back** restores the previous
+After following a cited source to another file, **Previous view** restores the previous
 file and selected declaration. This history also covers links across subsystems;
 **×**, Esc and the subsystem breadcrumb return to the enclosing browser instead.
 

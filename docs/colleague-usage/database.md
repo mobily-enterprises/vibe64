@@ -23,7 +23,7 @@ still not reviewed goes back to the same conversation. The task ends **Done**
 once the overview is valid, and Overview reloads by itself. Only one AI task
 runs in a session at a time. Colleague can explain these steps; its navigation
 actions do not themselves classify tables.
-After opening an actor or **Other tables**, use **Back to data overview** in the
+After opening an actor or **Other tables**, use **Data overview** in the
 header, or press **Escape**, to return. This labelled control is also available
 on mobile.
 

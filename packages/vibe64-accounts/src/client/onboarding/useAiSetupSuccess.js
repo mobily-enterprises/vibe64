@@ -25,7 +25,7 @@ function useAiSetupSuccess({ setup, learning, screen, chosen, outcome, verifying
     : setup.colleagueAvailable.value ? "switch" : "menu");
   const learn = computed(() => Boolean(unref(learning)?.learnMode));
   const inLesson = computed(() => learn.value && Boolean(unref(learning)?.mode?.currentAttemptId));
-  const doneLabel = computed(() => inLesson.value ? "Back to the lesson" : learn.value ? "Back to Learn" : "Start building");
+  const doneLabel = computed(() => inLesson.value ? "Continue the lesson" : learn.value ? "Continue in Learn" : "Start building");
   // The check waits for Colleague's hello when there is one to wait for.
   const proven = computed(() => colleagueNote.value !== "uses" || learn.value ||
     ["replied", "dismissed"].includes(hello.value.state));

@@ -34,7 +34,7 @@
         :to="projectsPath"
         data-test="team-ai-gate-projects"
       >
-        Back to projects
+        All projects
       </v-btn>
     </div>
   </v-sheet>

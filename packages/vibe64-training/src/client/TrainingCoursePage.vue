@@ -20,7 +20,7 @@ const props = defineProps({
   // Whether the start of this exact lesson is in progress.
   startingLesson: { type: Function, default: () => false }
 });
-const emit = defineEmits(["back", "start", "resume"]);
+const emit = defineEmits(["all-courses", "start", "resume"]);
 
 const complete = computed(() => Boolean(props.progress.total && props.progress.completed === props.progress.total));
 const availability = computed(() => courseStatusLabel(props.course));
@@ -40,11 +40,8 @@ const path = computed(() => {
 
 <template>
   <section class="training-course-page" :aria-label="`Course ${course.title}`">
-    <div class="training-course-page__back">
-      <v-btn variant="text" min-height="48" class="training-course-page__back-btn" @click="emit('back')">
-        <svg class="training-course-page__back-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" /></svg>
-        Back to courses
-      </v-btn>
+    <div class="training-course-page__all">
+      <v-btn variant="text" class="training-course-page__all-btn" @click="emit('all-courses')">All courses</v-btn>
     </div>
 
     <header class="training-course-page__hero" :class="{ 'is-complete': complete }">
@@ -173,9 +170,8 @@ const path = computed(() => {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.training-course-page__back { margin-inline-start: calc(-1 * var(--v64-space-2, 8px)); }
-.training-course-page__back-btn { letter-spacing: 0; text-transform: none; }
-.training-course-page__back-icon { width: 20px; height: 20px; margin-inline-end: 4px; fill: currentColor; }
+.training-course-page__all { margin-inline-start: calc(-1 * var(--v64-space-2, 8px)); }
+.training-course-page__all-btn { letter-spacing: 0; text-transform: none; }
 
 /* Hero: the shared course cover above a tonal summary, matching the course cards. */
 .training-course-page__hero {

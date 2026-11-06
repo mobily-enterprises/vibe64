@@ -107,7 +107,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     reloadRegistry
   });
   const {
-    backFromNativeSetup,
+    reopenNativeProviderPicker,
     chooseCustomEndpoint: chooseNativeCustomEndpoint,
     chooseNativeProvider,
     claudeAccount,
@@ -158,7 +158,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     editorActivator,
     editorApiKey,
     editorApiKeyVisible,
-    editorBackLabel,
+    editorLeaveLabel,
     editorCanSave,
     editorCatalogModelCount,
     editorConnectionPolicy,
@@ -247,10 +247,10 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     chooseNativeCustomEndpoint(engineId);
   }
 
-  /** Back from a setup dialog: OpenCode's returns to its own provider picker. */
-  function backFromSetup() {
+  /** Choose another provider from a setup dialog: OpenCode's returns to its own provider picker. */
+  function chooseAnotherProvider() {
     if (nativeSetupProviderId.value !== "opencode") {
-      backFromNativeSetup();
+      reopenNativeProviderPicker();
       return;
     }
     nativeSetupOpen.value = false;
@@ -308,7 +308,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     applyModelAccess,
     applyZenModelAccess,
     availableProviders,
-    backFromNativeSetup: backFromSetup,
+    chooseAnotherProvider,
     busy,
     canAddConnection,
     catalogEngine,
@@ -339,7 +339,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     editorActivator,
     editorApiKey,
     editorApiKeyVisible,
-    editorBackLabel,
+    editorLeaveLabel,
     editorCanSave,
     editorCatalogModelCount,
     editorConnectionPolicy,

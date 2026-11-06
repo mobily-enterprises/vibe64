@@ -75,7 +75,8 @@ Choose **New file** (on a phone: the **More folder actions** menu), type a name
 without slashes and, if you like, its first contents, then choose **Create**. The
 file is created in the open folder and opens straight away. Opening a text file
 lets you edit it: **Save** (or Ctrl+S, ⌘S on a Mac) keeps the change and
-**Discard** drops it. **Back to folder** waits until you have saved or discarded. **New
+**Discard** drops it. The folder's name, at the left of the file's bar, shows the
+folder again once you have saved or discarded. **New
 folder** creates an empty folder in the open folder. Use an item's **⋮** menu for
 **Rename** or **Delete**; confirm **Delete** to remove a file or a whole folder.
 
@@ -195,7 +196,7 @@ change; Files clears what is left there after 7 days.
 The areas fill the width as tabs. **Upload** stays in the toolbar and the other
 folder actions are in **More folder actions**. Each item's **⋮** menu has
 **Download**, **Move or copy…**, **Rename** and **Delete**. Opening a file fills
-the pane; **Back to folder** returns. The move or copy and new file dialogs open
+the pane; the folder's name at the left of its bar returns. The move or copy and new file dialogs open
 full screen, with **Close** and their action (**Copy here**, **Move here** or
 **Create**) at the top so the keyboard never hides them.
 

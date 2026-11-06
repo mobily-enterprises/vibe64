@@ -296,7 +296,7 @@ for (const width of [390, 1600]) {
       await tables.locator(".database-workspace__table-detail").getByRole("button", { name: "notes text", exact: true }).click();
       await expect(details.locator('[data-id="public.checklists"]')).toContainText("notes");
       await page.screenshot({ path: testInfo.outputPath(`overview-expanded-${width}.png`) });
-      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+      await page.getByRole("button", { name: "Data overview", exact: true }).click();
       await expect(details).toHaveCount(0);
       await expect(camera).toHaveAttribute("style", before!);
       await expect(map).toHaveCSS("opacity", "1");
@@ -397,7 +397,7 @@ test("@data-overview 130-table schema stays collapsed and typing remains respons
       const search = page.getByLabel("Message AI assistant");
       await search.fill(`typing ${index}`, { timeout: 2000 });
       await expect(search).toHaveValue(`typing ${index}`);
-      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+      await page.getByRole("button", { name: "Data overview", exact: true }).click();
       await expect(page.locator(".database-overview .vue-flow__node-table")).toHaveCount(0);
     }
     expect(server.saves).toHaveLength(0);
@@ -418,7 +418,7 @@ test("@data-overview a stale expansion cannot replace a newer collapse", async (
     await worker.hold();
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect.poll(worker.pending).toBe(1);
-    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+    await page.getByRole("button", { name: "Data overview", exact: true }).click();
     await worker.release();
     await expect(page.locator(".database-overview .vue-flow__node-table")).toHaveCount(0);
     await expect(page.locator(".database-overview .vue-flow__node-actor")).toHaveCount(4);
@@ -496,7 +496,7 @@ for (const width of [390, 1600]) {
       expect(saved.actors.find((actor) => actor.table === "public.invoice_groups").tables).toEqual(["public.invoice_groups"]);
       expect(saved.actors.find((actor) => actor.table === "public.bookings").tables).not.toContain("public.invoice_groups");
       await expect(page.getByText("Arranging actors…")).toHaveCount(0);
-      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+      await page.getByRole("button", { name: "Data overview", exact: true }).click();
       await page.getByRole("button", { name: "Fit", exact: true }).click();
       await page.locator('[data-id="actor:public.invoice_groups"] strong').click();
       await diagramAction(page, "Edit or merge actor");
@@ -634,7 +634,7 @@ test("@data-overview actual local database schema and authored grouping remain c
       await expect(camera).toHaveAttribute("style", viewport!);
       if (actor === actors[0]) await page.screenshot({ path: testInfo.outputPath("local-database-actor-erd.png") });
       await testInfo.attach(`actor-${actor.name}-timing`, { body: JSON.stringify({ tables: ids.length, milliseconds: Date.now() - started }), contentType: "application/json" });
-      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+      await page.getByRole("button", { name: "Data overview", exact: true }).click();
     }
     expect(rendered.sort()).toEqual(schema.tables.map(table => table.qualifiedName).sort());
     expect(server.saves).toHaveLength(0);
@@ -1083,7 +1083,7 @@ test("@data-overview defaults to Overview without SQL and keeps the AI-selected 
     actors = await boxes();
     expect(actors).toEqual(originalActors);
     expect(queries).toHaveLength(0);
-    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+    await page.getByRole("button", { name: "Data overview", exact: true }).click();
     await page.getByRole("button", { name: "Data", exact: true }).click();
     await expect.poll(() => queries.length).toBe(1);
   } finally { await context.close(); await server.close(); }
@@ -1194,7 +1194,7 @@ for (const view of ["Overview", "ERD"] as const) {
       if (view === "Overview") {
         await expect(page.locator(".database-overview__map")).toHaveCSS("opacity", "0.12");
         await diagram.locator('[data-id="public.checklists"] strong').click();
-        await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+        await page.getByRole("button", { name: "Data overview", exact: true }).click();
         await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
         await expect.poll(solidTables).toEqual(allTables);
         expect(server.saves).toHaveLength(0);
@@ -1228,7 +1228,7 @@ test("@data-overview main connections reduce clutter while all connections and p
     const details = page.locator(".database-overview__detail");
     await expect(details.locator(".vue-flow__edge")).toHaveCount(3);
     await expect(details.locator(".vue-flow__node-table")).toHaveCount(4);
-    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+    await page.getByRole("button", { name: "Data overview", exact: true }).click();
     await server.setOverview({ ...definition, mainRelationships: ["removed_fk"] });
     await overviewAction(page, "Reload overview");
     await expect(page.getByRole("alert").filter({ hasText: "main connections are missing" })).toBeVisible();
@@ -1263,11 +1263,11 @@ for (const width of [390, 768, 1600]) {
       await expect(overviewToolbar).toBeVisible();
       await expect(overviewToolbar.locator("strong")).toHaveText("Bookings");
       const headerAfter = (await overviewToolbar.boundingBox())!;
-      // Up to 700px the labelled Back to data overview control takes its own header row under the title
+      // Up to 700px the labelled Data overview control takes its own header row under the title
       // (Program: database/diagram-exploration); the header grows by that row and the map below gives it up.
       const grown = headerAfter.height - headerBefore!.height;
       if (width <= 700) {
-        const back = (await overviewToolbar.getByRole("button", { name: "Back to data overview", exact: true }).boundingBox())!;
+        const back = (await overviewToolbar.getByRole("button", { name: "Data overview", exact: true }).boundingBox())!;
         expect(back.y).toBeGreaterThanOrEqual(titleBefore!.y + titleBefore!.height);
         expect(grown).toBeGreaterThanOrEqual(back.height);
       } else expect(grown).toBe(0);
@@ -1313,7 +1313,7 @@ for (const width of [390, 768, 1600]) {
         await expect(overviewToolbar.getByLabel("ERD controls")).toBeVisible();
         expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
       }
-      await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+      await page.getByRole("button", { name: "Data overview", exact: true }).click();
       await expect(overviewToolbar).toBeVisible();
       expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
       expect(await map.boundingBox()).toEqual(mapBefore);
@@ -1402,7 +1402,7 @@ test("@data-overview dragging actors persists positions, reroutes connections an
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect(page.locator(".database-overview__detail .vue-flow__node-table")).toHaveCount(4);
     await expect(page.locator(".database-overview__detail .vue-flow__node-table.draggable")).toHaveCount(4);
-    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+    await page.getByRole("button", { name: "Data overview", exact: true }).click();
     await expect.poll(position).toBe(moved);
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
     await page.getByRole("checkbox", { name: "All connections", exact: true }).check();
@@ -1771,7 +1771,7 @@ test("@overview-transition details fade in at their final positions while the ov
     expect(await overview.boundingBox()).toEqual(before);
     await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
     await page.screenshot({ path: info.outputPath("ready.png") });
-    await page.getByRole("button", { name: "Back to data overview", exact: true }).click();
+    await page.getByRole("button", { name: "Data overview", exact: true }).click();
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect.poll(worker.pending).toBe(1);
     await expect(diagram).toHaveCSS("opacity", "0");
@@ -1890,7 +1890,7 @@ for (const width of [960, 1600]) {
       const viewport = await camera.getAttribute('style');
       await table.evaluate(node => { (window as any).retainedErdTable = node; });
       await details.getByRole('button', { name: 'Open data', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Back to Bookings', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Show Bookings', exact: true })).toBeVisible();
       const navigation = page.locator('.database-workspace__navigator');
       const selected = navigation.locator('.database-workspace__table-button--active');
       await expect(selected).toContainText('transactions');
@@ -1907,7 +1907,7 @@ for (const width of [960, 1600]) {
       await expect(page.getByText('Explanation of public.transactions', { exact: true })).toBeVisible();
       expect((server.assistantRequests[0] as any).messages.at(-1)).toMatchObject({ content: 'Explain this table to me', table: 'public.transactions' });
       await page.getByRole('button', { name: 'Collapse database copilot', exact: true }).click();
-      await page.getByRole('button', { name: 'Back to Bookings', exact: true }).click();
+      await page.getByRole('button', { name: 'Show Bookings', exact: true }).click();
       await expect(details).toBeVisible();
       expect(await table.evaluate(node => node === (window as any).retainedErdTable)).toBe(true);
       await expect(table).toHaveAttribute('style', position!);
@@ -1938,7 +1938,7 @@ test('@erd-continuity agent moves appear with the inspected connection paths and
     await expect(paths.first()).toHaveAttribute('d', expectedPath);
     await node.locator('header').click();
     await erd.getByRole('button', { name: 'Open data', exact: true }).click();
-    await page.getByRole('button', { name: 'Back to ERD', exact: true }).click();
+    await page.getByRole('button', { name: 'Show ERD', exact: true }).click();
     await expect(node).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 750, 180)');
     await expect(paths.first()).toHaveAttribute('d', expectedPath);
   } finally { await context.close(); await server.close(); }

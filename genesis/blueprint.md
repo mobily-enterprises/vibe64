@@ -930,7 +930,7 @@ without covering the diagram area in flashing placeholders. Real tables start fu
 keeps it and its direct neighbours solid while dimming unrelated tables. Hovering
 connections does not change which tables are dimmed. The shared table/field sidebar follows selection.
 Scoped tables can be dragged by their headers, with their arrangement retained
-while exploring. **Back to data overview** closes the detail layer and restores
+while exploring. **Data overview** closes the detail layer and restores
 the unchanged overview. **Review N ungrouped tables** asks the coding agent to
 classify Other tables while preserving existing groups and manual choices.
 Opening Data retains the originating diagram, and a labelled Back action restores

@@ -192,7 +192,7 @@ async function renderLearningShell(environment = { actorKey: "local" }, learnMod
 describe("controlled Learning shell", () => {
   it.each([
     [false, "false", "Switch to Learn"],
-    [true, "true", "Back to Develop (your projects)"]
+    [true, "true", "Switch to Develop (your projects)"]
   ])("renders the actual L button with truthful mode (Learn %s)", async (learn, pressed, title) => {
     const html = await renderLearningShell({ actorKey: "local" }, learn);
     expect(html.match(/aria-label="Learn mode"/gu)).toHaveLength(1);

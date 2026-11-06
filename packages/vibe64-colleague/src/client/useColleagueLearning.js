@@ -67,9 +67,9 @@ function useColleagueLearning({ learningController, xs, shown, toggleConversatio
     // On a phone, Colleague's dialog comes back when the learner closes the
     // Courses it gave way to.
     if (learningOpen || !wasOpen) return;
-    const back = returnFromLearning && learningController.value.hiddenBy === "learner";
+    const reopen = returnFromLearning && learningController.value.hiddenBy === "learner";
     returnFromLearning = false;
-    if (back && xs.value) reopenConversation();
+    if (reopen && xs.value) reopenConversation();
   });
   return { learningStep, stepButton, showLearningStep, leaveForLearning };
 }

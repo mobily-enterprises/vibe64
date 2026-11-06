@@ -2,7 +2,7 @@
   <section class="subsystem-inspector" :class="{ 'subsystem-inspector--embedded': embedded }" :aria-label="outline.owner.opaque ? 'External package interface' : 'Subsystem interface'" @click.capture="preserveTextSelection">
     <header class="subsystem-inspector__header">
       <div><small>{{ outline.owner.opaque ? 'EXTERNAL DEPENDENCY' : outline.owner.placementKind === 'libraries' ? 'SHARED LIBRARY' : 'SUBSYSTEM' }}</small><h2>{{ outline.owner.title }}</h2><p>{{ outline.owner.root }}</p></div>
-      <button v-if="!embedded" type="button" class="subsystem-inspector__close" aria-label="Back to architecture map" @click="$emit('close')">×</button>
+      <button v-if="!embedded" type="button" class="subsystem-inspector__close" aria-label="Close subsystem" @click="$emit('close')">×</button>
     </header>
     <nav v-if="!outline.owner.opaque" class="subsystem-inspector__navigation nodrag nopan" aria-label="In this subsystem">
       <button type="button" @click="programElement?.scrollIntoView({ block: 'start' })">Explanation</button>

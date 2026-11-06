@@ -131,7 +131,7 @@ projects.
 When every required step has passed, the lesson's **Lesson finished** screen,
 in the page's **Lesson** sheet, finishes it: the lesson counts as completed for good, and the attempt is
 archived as one bundle (its record, practice project and conversation). The
-screen then offers **Next lesson** and **Back to courses**. **Start lesson** on
+screen then offers **Next lesson** and **All courses**. **Start lesson** on
 the course page starts a new attempt with a fresh project, teacher and results; the
 course list still shows the lesson as completed.
 
