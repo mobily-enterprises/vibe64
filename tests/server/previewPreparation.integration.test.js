@@ -13,6 +13,7 @@ import {
   thawTerminalNamespaceAdmission
 } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import { outputTargetTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
+import { previewLogPath } from "../../packages/vibe64-terminals/src/server/previewDiagnosticFiles.js";
 import { workspaceSetupState, writeWorkspaceSetupState } from "../../packages/vibe64-runtime/src/server/workspaceSetupState.js";
 
 process.env.VIBE64_RUNTIME_NAMESPACE = "preview-preparation-test";
@@ -42,10 +43,22 @@ async function assertServes(terminal, value = "initial") {
   });
 }
 
-function runningPreviewIds(sessionId) {
+function runningPreviews(sessionId) {
   return listTerminalSessions({ namespace: outputTargetTerminalNamespace(sessionId) })
-    .filter(({ status }) => status === "running")
-    .map(({ id }) => id);
+    .filter(({ status }) => status === "running");
+}
+
+function runningPreviewIds(sessionId) {
+  return runningPreviews(sessionId).map(({ id }) => id);
+}
+
+/** Every Preview process the session's launches started, oldest first, from its launch log. */
+async function startedPreviewIds(f) {
+  const session = await f.runtime.getSessionWithoutSource(f.sessionId);
+  const log = await readFile(previewLogPath(session), "utf8");
+  return [...new Set(log.split("\n").filter(Boolean).map((line) => JSON.parse(line))
+    .filter(({ reason }) => reason === "terminal_started")
+    .map(({ terminalSessionId }) => terminalSessionId))];
 }
 
 /** What setup had installed when the Preview's server started. */
@@ -205,18 +218,20 @@ for (const [rerun, runSetupAgain] of Object.entries(setupReruns)) {
     assert.equal(await installedFor(first), "install 1");
     await runSetupAgain(f);
     assert.equal(await f.setupRuns(), 2);
-    const restartedId = await eventually(async () => {
-      const [runningId, ...others] = runningPreviewIds(f.sessionId);
-      assert.deepEqual(others, []);
-      assert.notEqual(runningId, first.id, "The Preview still runs the process started before setup ran again.");
-      return runningId;
+    // A restart closes the old process before it starts the new one, so for a
+    // moment no Preview runs at all; only one running process that is not the
+    // first counts.
+    const restarted = await eventually(async () => {
+      const running = runningPreviews(f.sessionId);
+      assert.equal(running.length, 1, `Expected one running Preview, found ${running.length}.`);
+      assert.notEqual(running[0].id, first.id, "The Preview still runs the process started before setup ran again.");
+      return running[0];
     }, 300);
-    const restarted = listTerminalSessions({ namespace: outputTargetTerminalNamespace(f.sessionId) })
-      .find(({ id }) => id === restartedId);
     await assertServes(restarted);
     assert.equal(await installedFor(restarted), "install 2");
     await settlePreview(f);
-    assert.deepEqual(runningPreviewIds(f.sessionId), [restartedId]);
+    assert.deepEqual(runningPreviewIds(f.sessionId), [restarted.id]);
+    assert.deepEqual(await startedPreviewIds(f), [first.id, restarted.id], "Setup restarted the Preview more than once.");
   });
 }
 
@@ -226,6 +241,7 @@ test("a Preview whose own start ran setup is not restarted again after it", { ti
   await assertServes(started);
   await settlePreview(f);
   assert.deepEqual(runningPreviewIds(f.sessionId), [started.id]);
+  assert.deepEqual(await startedPreviewIds(f), [started.id]);
   assert.equal(await installedFor(started), "install 1");
   assert.equal(await f.setupRuns(), 1);
 });
@@ -241,6 +257,7 @@ test("a stopped Preview stays stopped when setup runs again", { timeout: 15_000 
   assert.equal(await f.setupRuns(), 2);
   await settlePreview(f);
   assert.deepEqual(runningPreviewIds(f.sessionId), []);
+  assert.deepEqual(await startedPreviewIds(f), [started.id]);
 });
 
 test("a failed setup run leaves the running Preview as it is", { timeout: 15_000 }, async (t) => {
@@ -253,5 +270,6 @@ test("a failed setup run leaves the running Preview as it is", { timeout: 15_000
   assert.equal((await f.runtime.getSessionWithoutSource(f.sessionId)).workspaceSetup.status, "failed");
   await settlePreview(f);
   assert.deepEqual(runningPreviewIds(f.sessionId), [started.id]);
+  assert.deepEqual(await startedPreviewIds(f), [started.id]);
   assert.equal(await installedFor(started), "install 1");
 });
