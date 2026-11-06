@@ -18,6 +18,8 @@ const VIBE64_APPLICATION_DEPLOYMENT_SECTION = "Deployment";
 const ERROR_CODE = "VIBE64_DEPLOYMENT_INVALID";
 const STEP_LINE = /^- (Prepare|Build|Migrate|Serve) `([^`\r\n]+)`:[ \t]+(.+)$/u;
 const RESTORE_PATHS_PREFIX = "- Recreate on restore: ";
+const GENERATED_SECRETS_PREFIX = "- Generated secrets: ";
+const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,
   build: 1,
@@ -30,6 +32,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   "- Workdir: `path`",
   "- Runtimes: `runtime`...",
   `${RESTORE_PATHS_PREFIX}\`glob\`...`,
+  `${GENERATED_SECRETS_PREFIX}\`NAME\`...`,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -65,6 +68,23 @@ function disposablePaths(source, deploymentPath, line) {
   return values;
 }
 
+function generatedSecrets(source, deploymentPath, line) {
+  const values = backtickedArguments(
+    source.slice(GENERATED_SECRETS_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Generated secrets",
+    line
+  );
+  if (values.some((value) => !ENVIRONMENT_NAME.test(value))) {
+    invalid(deploymentPath, "Deployment Generated secrets must be uppercase environment variable names.", line);
+  }
+  if (new Set(values).size !== values.length) {
+    invalid(deploymentPath, "Deployment contains a duplicate Generated secrets name.", line);
+  }
+  return values;
+}
+
 function deploymentStep(match, deploymentPath, line) {
   const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
   if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
@@ -87,6 +107,7 @@ function emptyDeployment() {
     artifact: { disposablePaths: [] },
     workdir: ".",
     runtimeRequirements: [],
+    generatedSecrets: [],
     readiness: null,
     steps: []
   };
@@ -145,6 +166,14 @@ function parseVibe64DeploymentLines(lines, options = {}) {
       }
       seen.add("restore-paths");
       result.artifact.disposablePaths = disposablePaths(source, deploymentPath, line);
+      continue;
+    }
+    if (source.startsWith(GENERATED_SECRETS_PREFIX)) {
+      if (seen.has("generated-secrets")) {
+        invalid(deploymentPath, "Duplicate Deployment Generated secrets entry.", line);
+      }
+      seen.add("generated-secrets");
+      result.generatedSecrets = generatedSecrets(source, deploymentPath, line);
       continue;
     }
     if (source.startsWith("- Ready when: ")) {
@@ -207,6 +236,7 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     artifact: parsed.artifact,
     workdir: parsed.workdir,
     runtimeRequirements: parsed.runtimeRequirements,
+    generatedSecrets: parsed.generatedSecrets,
     readiness: parsed.readiness,
     steps: parsed.steps
   };

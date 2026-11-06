@@ -2341,10 +2341,11 @@ Product account/routing and pinned-goal invalidations refresh that same goal own
 
 The shared command environment installs `vibe64-helper` beside the existing
 session executables for Codex and OpenCode. Its fixed groups are `preview`,
-`playwright`, `env`, `database`, `github` and `session`; `--help` lists them, and group help
+`playwright`, `env`, `deployment`, `database`, `github` and `session`; `--help` lists them, and group help
 comes from the existing command owner. The dispatcher replaces itself with
 the matching sibling executable, preserving stdin, argv, environment, cwd,
-exit status and signal handling. Missing groups fail without searching PATH
+exit status and signal handling; `deployment` is the Env executable asked for
+`deployment`, the read-only deployment status of the session's project. Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
 authorization. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.

@@ -58,6 +58,13 @@ ordinary empty row. Env shows a linked row as one line with a link icon and
 the host's provenance label; on a phone each variable becomes a small card. A
 managed resource of the same name still wins.
 
+When the host deploys projects, `vibe64-helper deployment status` shows the
+coding agent the session project's deployment: whether it is deployed, its
+public addresses, the current release with its commit, deploy time and recorded
+Deployment commands, its production variable names with their source, and what
+is missing before the next deploy. It never shows a value and changes nothing.
+Where the installation does not deploy projects it says so.
+
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.
 The agent can use ordinary application commands; it does not need to copy managed

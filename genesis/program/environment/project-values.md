@@ -25,6 +25,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
+- `packages/vibe64-terminals/src/server/agentDeploymentStatus.js`
 - `packages/vibe64-terminals/src/server/productionEnvironment.js`
 - `packages/vibe64-terminals/src/server/savedEnvValueLinks.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
@@ -170,7 +171,14 @@ Project agents receive the managed `vibe64-helper env` command. It reads configu
 metadata without exposing values and delegates explicit development mutations
 to the project Env service. A host may provide a production Env provider as the
 optional `vibe64.terminals.production-environment` capability; public/local
-Vibe64 otherwise reports production as unavailable. A host that keeps saved
+Vibe64 otherwise reports production as unavailable. The same provider's
+`readDeployment()` answers `vibe64-helper deployment status`, which the helper
+dispatches to the Env command: the bound project's deployment state, public
+addresses, current release (id, commit, deploy time, recorded Deployment
+commands, the host's Serve defaults), production variable names with their
+source and generated mark, and missing-value messages. The command copies only
+those named fields, so a value a host might return never reaches the agent;
+without a provider it says the installation does not deploy projects. A host that keeps saved
 values provides the values linked into the Development Env as the optional
 `vibe64.project.saved-env-values` capability, and the helper's `saved`, `link`
 and `unlink` as the optional `vibe64.terminals.saved-env-value-links`

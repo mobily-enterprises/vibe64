@@ -59,6 +59,20 @@ test("helper help lists its fixed groups and invalid groups cannot select anothe
   const missing = await run(helper, ["env", "status"], { env: { ...process.env, PATH: root } });
   assert.equal(missing.code, 127);
   assert.match(missing.stderr, /env is unavailable in this session/u);
+  assert.match((await run(helper, ["--help"])).stdout.toString(), / {2}deployment +Project deployment status/u);
+  const deployment = await run(helper, ["deployment", "status"], { env: { ...process.env, PATH: root } });
+  assert.equal(deployment.code, 127);
+  assert.match(deployment.stderr, /deployment is unavailable in this session/u);
+});
+
+test("the deployment group is the session's Env command asked for deployment, with every argument kept", async (t) => {
+  const { root, helper } = await fixture(t);
+  await writeFile(path.join(root, "vibe64-env"), `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ args: process.argv.slice(2), command: require("node:path").basename(process.argv[1]) }));
+`, { mode: 0o755 });
+  const result = await run(helper, ["deployment", "status", "--json"]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.toString()), { args: ["deployment", "status", "--json"], command: "vibe64-env" });
 });
 
 test("helper spec prints Vibe64 contracts and training help points to its content format", async (t) => {

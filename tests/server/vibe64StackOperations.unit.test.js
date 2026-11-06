@@ -239,6 +239,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     },
     workdir: ".",
     runtimeRequirements: ["nodejs"],
+    generatedSecrets: [],
     readiness: {
       kind: "http",
       method: "GET",
@@ -257,9 +258,14 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     artifact: { disposablePaths: [] },
     workdir: ".",
     runtimeRequirements: [],
+    generatedSecrets: [],
     readiness: null,
     steps: []
   });
+  assert.deepEqual(parseVibe64DeploymentLines([
+    "- Generated secrets: `AUTH_LOCAL_SESSION_SECRET` `OIDC_HUB_SECRET`",
+    ...deploymentLines()
+  ]).generatedSecrets, ["AUTH_LOCAL_SESSION_SECRET", "OIDC_HUB_SECRET"]);
 });
 
 test("Deployment rejects unsafe paths, shell strings, placeholders, missing proof, and phase reordering", () => {
@@ -282,6 +288,10 @@ test("Deployment rejects unsafe paths, shell strings, placeholders, missing proo
       "- Build `Late build`: `npm` `run` `build`"
     ] }),
     deploymentLines({ steps: ["- Serve `Start`: `npm start`"] }),
+    ["- Generated secrets: `session_secret`", ...deploymentLines()],
+    ["- Generated secrets: `A` `A`", ...deploymentLines()],
+    ["- Generated secrets: `A`", "- Generated secrets: `B`", ...deploymentLines()],
+    ["- Generated secrets: SESSION_SECRET", ...deploymentLines()],
     deploymentLines({ steps: ["- Serve `Start`: `php` `artisan` `serve` `--port={port}`"] })
   ];
   for (const lines of invalid) {

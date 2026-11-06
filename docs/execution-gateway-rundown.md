@@ -260,8 +260,10 @@ For example, project commands receive project config and database env:
 ```
 
 Deployment commands use deployment-specific env, the project's production
-values exactly. The gateway adds no framework mode such as `NODE_ENV`; a
-project that needs one declares it on its Deployment Serve step.
+values exactly. The gateway adds no framework mode such as `NODE_ENV`; a host
+may give the Serve step alone its runtime's conventional production setting,
+and a project that needs a specific mode declares it on its Deployment Serve
+step, which wins.
 
 ```js
 {

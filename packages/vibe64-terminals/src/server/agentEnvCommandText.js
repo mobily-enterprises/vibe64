@@ -4,6 +4,7 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
+import { deploymentUsageText } from "./agentDeploymentStatus.js";
 
 const ENV_SCOPE_DEVELOPMENT = "development";
 const ENV_SCOPE_PRODUCTION = "production";
@@ -18,6 +19,7 @@ function usageText() {
     "  vibe64-helper env saved [--json]",
     "  vibe64-helper env link <development|production> <KEY> <saved-id> <field-id> [--json]",
     "  vibe64-helper env unlink <development|production> <KEY> [--json]",
+    "  vibe64-helper deployment status [--json]   this project's deployment, names only",
     "",
     "Values are accepted only on stdin and are never printed by this command.",
     "Zero-length stdin stores an empty value; whitespace is preserved as an exact value.",
@@ -99,8 +101,17 @@ function validateParsedCommand(parsed = {}) {
     return {
       exitCode: 0,
       ok: true,
-      stdout: usageText()
+      stdout: parsed.command === "deployment" ? deploymentUsageText() : usageText()
     };
+  }
+  if (parsed.command === "deployment") {
+    if (parsed.positionals.length > 2 || !["", "status"].includes(toText(parsed.positionals[1])) || parsed.secret) {
+      return commandLineFailure("deployment accepts only status and --json.", "vibe64_agent_env_command_usage", {
+        exitCode: 2,
+        stderr: `deployment accepts only status and --json.\n\n${deploymentUsageText()}`
+      });
+    }
+    return null;
   }
   if (parsed.command === "status") {
     if (!parsed.scope || parsed.positionals.length > 2 || parsed.secret) {

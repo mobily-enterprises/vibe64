@@ -16,13 +16,20 @@ named `Deployment`, validates it under the Vibe64-owned
 `vibe64.application-deployment.v1` contract, and combines it with the Stack's
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
-release-recreation paths, and success condition. Invalid, absent, and competing
+release-recreation paths, generated secret names, and success condition. Invalid, absent, and competing
 declarations remain explicit states.
 
 Commands are exact argument arrays with no placeholder expansion; `{host}` and
 `{port}` are rejected. The executor starts the single, last Serve step with its
 listen address in the `HOST` and `PORT` environment variables and probes the
-Ready when path there.
+Ready when path there. A host may also give Serve, and only Serve, its
+runtime's conventional production setting such as `NODE_ENV=production`; a
+value the project sets on the Serve step or in its production environment wins.
+
+`- Generated secrets:` names production secrets the application needs as a
+stable random value. The host stores one strong random value per name once,
+when its production environment has no entry with that name; it never replaces
+a value someone set.
 
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns

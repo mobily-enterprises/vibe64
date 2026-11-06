@@ -127,11 +127,15 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   assert.match(identities, /Never create application accounts or change roles/u);
 });
 
-test("the Deployment spec leaves production mode to the Serve step the project declares", async () => {
+test("the Deployment spec gives a host's production mode to Serve only and lets the project's own value win", async () => {
   const deployment = (await cli(["deployment"])).stdout;
-  assert.match(deployment, /Vibe64 never sets a framework's production mode/u);
-  assert.match(deployment, /Declare it on the Serve step/u);
+  assert.match(deployment, /A host may also give Serve, and only Serve, its runtime's conventional production setting/u);
+  assert.match(deployment, /a value the project sets itself, on the Serve step or in the production environment, wins/u);
+  assert.match(deployment, /declare it on the Serve step/u);
   assert.match(deployment, /skip the build tools/u);
+  assert.match(deployment, /- Generated secrets: `NAME`\.\.\./u);
+  assert.match(deployment, /never replaces a value someone set/u);
+  assert.doesNotMatch(deployment, /Vibe64 Online|hosted/u, "the public spec names no hosted product");
   const [example] = fencedBlocks(deployment, "markdown");
   const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);
   assert.deepEqual(serve.argv, ["env", "NODE_ENV=production", "node", "server.js"]);

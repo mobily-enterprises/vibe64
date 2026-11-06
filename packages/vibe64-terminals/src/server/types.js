@@ -18,6 +18,9 @@
  * @typedef {object} ProductionEnvironmentProvider
  * @property {(record: object | null) => boolean} isUserValueRecord
  * @property {(input: { projectSlug: string }) => Promise<object>} readRecords
+ * @property {(input: { projectSlug: string }) => Promise<object>} readDeployment the project's deployment
+ *   for its coding assistant, never a value: { ok, deployment: { state, addresses, release, latestDeploy,
+ *   records, blockers, notes } } (agentDeploymentStatus.js)
  * @property {(input: { key: string, projectSlug: string }) => Promise<object>} removeVariable
  * @property {(input: { key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable
  */

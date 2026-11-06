@@ -235,7 +235,8 @@ Entries:
 ${list(DEPLOYMENT_ENTRY_FORMS)}
 
 - Steps are ordered ${DEPLOYMENT_STEP_ROLES.join(", ")}; exactly one Serve step comes last. Serve starts the long-running application, which listens on the address given by the \`HOST\` and \`PORT\` environment variables. Arguments are passed literally (no \`{host}\` or \`{port}\` placeholders), so a server that takes its address only as arguments needs a committed project script that reads them.
-- Every step runs exactly as declared with the project's production environment. Vibe64 never sets a framework's production mode, such as \`NODE_ENV=production\`. Declare it on the Serve step, for example \`env\` \`NODE_ENV=production\` \`node\` \`server.js\`, not in the production environment or Prepare, where it can make package installation skip the build tools a later step needs.
+- Every step runs exactly as declared with the project's production environment. A host may also give Serve, and only Serve, its runtime's conventional production setting, such as \`NODE_ENV=production\` for Node; a value the project sets itself, on the Serve step or in the production environment, wins. To be sure of a mode, declare it on the Serve step, for example \`env\` \`NODE_ENV=production\` \`node\` \`server.js\`, never in the production environment or Prepare, where it can make package installation skip the build tools a later step needs.
+- Generated secrets names production secrets the application needs as a stable random value, such as a session-signing key. When a deploy finds no production environment entry with that name, the host stores a strong random value there once, as a secret: it is kept across releases, never printed, and never replaces a value someone set. Replacing it is an ordinary production value change.
 - One Ready when entry is required (status 200 through 399). Workdir defaults to \`.\`. Each other entry appears at most once.
 - Recreate on restore lists project-relative globs (only \`*\` and \`**\`) that a restored deployment rebuilds with its Prepare step, such as installed dependencies. It requires a Prepare step.
 - Migrate applies pending migrations without destroying data.
@@ -243,6 +244,7 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
     example: `
 - Runtimes: \`nodejs\`
 - Recreate on restore: \`node_modules\`
+- Generated secrets: \`SESSION_SECRET\`
 - Prepare \`Install\`: \`npm\` \`ci\`
 - Build \`Build\`: \`npm\` \`run\` \`build\`
 - Migrate \`Migrate\`: \`npm\` \`run\` \`db:migrate\`

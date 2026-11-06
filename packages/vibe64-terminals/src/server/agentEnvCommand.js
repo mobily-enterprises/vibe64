@@ -24,6 +24,7 @@ import {
 } from "./writeExecutableFileIfChanged.js";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import { offersProductionEnvironment } from "./productionEnvironment.js";
+import { deploymentStatusPayload, humanDeploymentStatus } from "./agentDeploymentStatus.js";
 import { offersSavedValueLinks } from "./savedEnvValueLinks.js";
 import {
   createSessionCommandServers,
@@ -252,6 +253,24 @@ function createAgentEnvCommandService({
     };
   }
 
+  // Read-only and names-only: the host answers for the bound project, and
+  // only the fields deploymentStatusPayload copies reach the agent.
+  async function deploymentResult(parsed = {}, projectSlug = "") {
+    const result = await productionEnvironmentProvider.readDeployment({ projectSlug });
+    if (result?.ok === false) {
+      return commandLineFailure(
+        toText(result.error) || "The deployment could not be read.",
+        toText(result.code) || "vibe64_agent_deployment_read_failed"
+      );
+    }
+    const payload = deploymentStatusPayload(result?.deployment);
+    return {
+      exitCode: 0,
+      ok: true,
+      stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : humanDeploymentStatus(payload)
+    };
+  }
+
   async function setResult(parsed = {}, sessionId = "", stdin = "", projectSlug = "") {
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
@@ -377,6 +396,9 @@ function createAgentEnvCommandService({
     const projectSlug = toText(binding.projectSlug);
     if (parsed.command === "status") {
       return statusResult(parsed, toText(input.sessionId), projectSlug);
+    }
+    if (parsed.command === "deployment") {
+      return deploymentResult(parsed, projectSlug);
     }
     if (parsed.command === "saved") {
       return savedResult(parsed, toText(input.sessionId), binding);

@@ -51,6 +51,7 @@ Groups:
   preview      Preview lifecycle, browser inspection, screenshots and logs
   playwright   Managed project browser test suites
   env          Project environment settings
+  deployment   Project deployment status: addresses, live release and Production Env names
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
   session      Session status, setup retry, rename, and listing and messaging project sessions
@@ -62,7 +63,7 @@ Use vibe64-helper <group> --help for that group.
 Commands use the current managed session and its access checks.'
     exit 0
     ;;
-  preview|playwright|env|database|github|session|plan|training|spec)
+  preview|playwright|env|deployment|database|github|session|plan|training|spec)
     command_group=$1
     shift
     ;;
@@ -76,6 +77,10 @@ case "$0" in
   *) wrapper_dir=. ;;
 esac
 command_path="$wrapper_dir/vibe64-$command_group"
+if [ "$command_group" = deployment ]; then
+  command_path="$wrapper_dir/vibe64-env"
+  set -- deployment "$@"
+fi
 if [ "$command_group" = training ] || [ "$command_group" = spec ]; then
   exec "$wrapper_dir/vibe64" "$command_group" "$@"
 fi
