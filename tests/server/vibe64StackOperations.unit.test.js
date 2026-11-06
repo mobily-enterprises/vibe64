@@ -240,6 +240,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     workdir: ".",
     runtimeRequirements: ["nodejs"],
     generatedSecrets: [],
+    setupCode: "",
     readiness: {
       kind: "http",
       method: "GET",
@@ -259,6 +260,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     workdir: ".",
     runtimeRequirements: [],
     generatedSecrets: [],
+    setupCode: "",
     readiness: null,
     steps: []
   });
@@ -266,6 +268,15 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     "- Generated secrets: `AUTH_LOCAL_SESSION_SECRET` `OIDC_HUB_SECRET`",
     ...deploymentLines()
   ]).generatedSecrets, ["AUTH_LOCAL_SESSION_SECRET", "OIDC_HUB_SECRET"]);
+  assert.deepEqual(parseVibe64DeploymentLines([
+    "- Generated secrets: `SESSION_SECRET`",
+    "- Setup code: `FIRST_ACCOUNT_SETUP_CODE`",
+    ...deploymentLines()
+  ]), {
+    ...parseVibe64DeploymentLines(deploymentLines()),
+    generatedSecrets: ["SESSION_SECRET"],
+    setupCode: "FIRST_ACCOUNT_SETUP_CODE"
+  });
 });
 
 test("Deployment rejects unsafe paths, shell strings, placeholders, missing proof, and phase reordering", () => {
@@ -292,6 +303,11 @@ test("Deployment rejects unsafe paths, shell strings, placeholders, missing proo
     ["- Generated secrets: `A` `A`", ...deploymentLines()],
     ["- Generated secrets: `A`", "- Generated secrets: `B`", ...deploymentLines()],
     ["- Generated secrets: SESSION_SECRET", ...deploymentLines()],
+    ["- Setup code: `setup_code`", ...deploymentLines()],
+    ["- Setup code: `A` `B`", ...deploymentLines()],
+    ["- Setup code: `A`", "- Setup code: `B`", ...deploymentLines()],
+    ["- Setup code: SETUP_CODE", ...deploymentLines()],
+    ["- Generated secrets: `SESSION_SECRET` `SETUP_CODE`", "- Setup code: `SETUP_CODE`", ...deploymentLines()],
     deploymentLines({ steps: ["- Serve `Start`: `php` `artisan` `serve` `--port={port}`"] })
   ];
   for (const lines of invalid) {

@@ -19,6 +19,7 @@ const ERROR_CODE = "VIBE64_DEPLOYMENT_INVALID";
 const STEP_LINE = /^- (Prepare|Build|Migrate|Serve) `([^`\r\n]+)`:[ \t]+(.+)$/u;
 const RESTORE_PATHS_PREFIX = "- Recreate on restore: ";
 const GENERATED_SECRETS_PREFIX = "- Generated secrets: ";
+const SETUP_CODE_PREFIX = "- Setup code: ";
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,
@@ -33,6 +34,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   "- Runtimes: `runtime`...",
   `${RESTORE_PATHS_PREFIX}\`glob\`...`,
   `${GENERATED_SECRETS_PREFIX}\`NAME\`...`,
+  `${SETUP_CODE_PREFIX}\`NAME\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -85,6 +87,21 @@ function generatedSecrets(source, deploymentPath, line) {
   return values;
 }
 
+function setupCode(source, deploymentPath, line) {
+  const [name] = backtickedArguments(
+    source.slice(SETUP_CODE_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Setup code",
+    line,
+    { count: 1 }
+  );
+  if (!ENVIRONMENT_NAME.test(name)) {
+    invalid(deploymentPath, "Deployment Setup code must be an uppercase environment variable name.", line);
+  }
+  return name;
+}
+
 function deploymentStep(match, deploymentPath, line) {
   const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
   if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
@@ -108,6 +125,7 @@ function emptyDeployment() {
     workdir: ".",
     runtimeRequirements: [],
     generatedSecrets: [],
+    setupCode: "",
     readiness: null,
     steps: []
   };
@@ -176,6 +194,12 @@ function parseVibe64DeploymentLines(lines, options = {}) {
       result.generatedSecrets = generatedSecrets(source, deploymentPath, line);
       continue;
     }
+    if (source.startsWith(SETUP_CODE_PREFIX)) {
+      if (seen.has("setup-code")) invalid(deploymentPath, "Duplicate Deployment Setup code.", line);
+      seen.add("setup-code");
+      result.setupCode = setupCode(source, deploymentPath, line);
+      continue;
+    }
     if (source.startsWith("- Ready when: ")) {
       if (seen.has("readiness")) invalid(deploymentPath, "Duplicate Deployment Ready when.", line);
       seen.add("readiness");
@@ -211,6 +235,9 @@ function parseVibe64DeploymentLines(lines, options = {}) {
     }
   }
   if (!result.readiness) invalid(deploymentPath, "Deployment needs one Ready when entry.");
+  if (result.generatedSecrets.includes(result.setupCode)) {
+    invalid(deploymentPath, "Deployment Setup code is generated already; leave it out of Generated secrets.");
+  }
   if (
     result.artifact.disposablePaths.length > 0
     && !result.steps.some(({ role }) => role === "prepare")
@@ -237,6 +264,7 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     workdir: parsed.workdir,
     runtimeRequirements: parsed.runtimeRequirements,
     generatedSecrets: parsed.generatedSecrets,
+    setupCode: parsed.setupCode,
     readiness: parsed.readiness,
     steps: parsed.steps
   };

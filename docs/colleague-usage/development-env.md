@@ -58,6 +58,13 @@ ordinary empty row. Env shows a linked row as one line with a link icon and
 the host's provenance label; on a phone each variable becomes a small card. A
 managed resource of the same name still wins.
 
+An application whose first account becomes its owner can name, in its Stack's
+`## Deployment`, the production variable holding the one-time code that first
+registration needs (``- Setup code: `NAME` ``). A host that deploys projects
+generates that code and shows it to the project owner alone; deployment status
+lists the name, never the code, so the coding agent sends the person to the
+host's deployment page for it.
+
 When the host deploys projects, `vibe64-helper deployment status` shows the
 coding agent the session project's deployment: whether it is deployed, its
 public addresses, the current release with its commit, deploy time and recorded

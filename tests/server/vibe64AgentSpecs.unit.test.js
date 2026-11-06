@@ -135,6 +135,9 @@ test("the Deployment spec gives a host's production mode to Serve only and lets 
   assert.match(deployment, /skip the build tools/u);
   assert.match(deployment, /- Generated secrets: `NAME`\.\.\./u);
   assert.match(deployment, /never replaces a value someone set/u);
+  assert.match(deployment, /- Setup code: `NAME`\n/u);
+  assert.match(deployment, /Setup code names the one production secret the application asks for when its first account registers/u);
+  assert.match(deployment, /shows its value only to the project owner; it is never printed, logged or given to an assistant/u);
   assert.doesNotMatch(deployment, /Vibe64 Online|hosted/u, "the public spec names no hosted product");
   const [example] = fencedBlocks(deployment, "markdown");
   const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);
