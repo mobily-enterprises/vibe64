@@ -7,8 +7,8 @@ import path from "node:path";
 
 const [phase, sourcesFile] = process.argv.slice(2);
 const sources = JSON.parse(readFileSync(sourcesFile, "utf8"));
-if (sources.contract !== "vibe64.connected-sources.v1") throw new Error("Unexpected sources map contract.");
-const connected = sources.projects.filter(project => project.type === "npm" && project.relationship === "dependency");
+if (sources.schema !== "vibe64.connected-sources.v2") throw new Error("Unexpected sources map schema.");
+const connected = sources.repositories.filter(project => project.type === "npm" && project.relationship === "dependency");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
 if (phase === "prepare") {

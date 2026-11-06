@@ -34,7 +34,7 @@ async function withSettingsTools(run) {
       profile: { id: "focused.v1", name: "Focused", description: "Small changes.", path: "/private/profile" },
       profiles: [{ id: "focused.v1", name: "Focused", description: "Small changes." }, { id: "durable.v1", name: "Durable", description: "Durable changes." }] };
     state.connectedProjects = { available: true, canEdit: true, exists: true, revision: "a".repeat(64), source,
-      projects: [{ name: "Library", repository: "https://github.com/example/library", relationship: "dependency" }], privatePath: "/private/source" };
+      repositories: [{ name: "Library", repository: "https://github.com/example/library", relationship: "dependency" }], privatePath: "/private/source" };
     const calls = [];
     const events = [];
     const record = (operation, input) => calls.push({ operation, input, context: currentProjectRequestContext() });
@@ -50,7 +50,7 @@ async function withSettingsTools(run) {
       },
       async saveConnectedProjects(input) {
         record("connections.save", input);
-        state.connectedProjects.projects = input.projects;
+        state.connectedProjects.repositories = input.repositories;
         return { ok: true, connectedProjects: state.connectedProjects };
       },
       async readEngineeringSettings(input) { record("engineering.read", input); return { ok: true, engineering: state.engineering }; },
@@ -172,7 +172,7 @@ test("settings tools recheck owner and project authority and reject malformed in
   await withSettingsTools(async ({ calls, execute, state }) => {
     const valid = {
       "settings.read": {}, "engineering.read": {},
-      "connections.save": { projects: state.connectedProjects.projects, revision: state.connectedProjects.revision },
+      "connections.save": { repositories: state.connectedProjects.repositories, revision: state.connectedProjects.revision },
       "collaboration.save": { ...preferences, requirements: "" },
       "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
       "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" },
@@ -389,7 +389,7 @@ test("connection tools preserve source/revision and expose no private binding st
   await withSettingsTools(async ({ calls, execute, state }) => {
     const read = await execute("settings.read");
     assert.equal(read.ok, true, JSON.stringify(read));
-    assert.deepEqual(read.result.connectedProjects.projects, state.connectedProjects.projects);
+    assert.deepEqual(read.result.connectedProjects.repositories, state.connectedProjects.repositories);
     assert.equal(JSON.stringify(read.result.connectedProjects).includes("private"), false);
     const projects = [
       { name: "Library", repository: "https://github.com/example/library", relationship: "dependency", type: "custom", script: "tooling/prepare-native-worker.mjs" },
@@ -400,21 +400,21 @@ test("connection tools preserve source/revision and expose no private binding st
         name: `${type} library`, repository: `https://github.com/example/${type}-library`, relationship: "dependency", type
       }))
     ];
-    const typed = await execute("connections.save", { projects, revision: "" });
+    const typed = await execute("connections.save", { repositories: projects, revision: "" });
     assert.equal(typed.ok, true, JSON.stringify(typed));
-    assert.deepEqual(calls.at(-1).input.projects, projects);
-    assert.deepEqual(typed.result.connectedProjects.projects, projects);
-    assert.deepEqual((await execute("settings.read")).result.connectedProjects.projects, projects);
-    assert.equal(Object.hasOwn(typed.result.connectedProjects.projects[2], "type"), false);
+    assert.deepEqual(calls.at(-1).input.repositories, projects);
+    assert.deepEqual(typed.result.connectedProjects.repositories, projects);
+    assert.deepEqual((await execute("settings.read")).result.connectedProjects.repositories, projects);
+    assert.equal(Object.hasOwn(typed.result.connectedProjects.repositories[2], "type"), false);
     const beforeRejected = calls.length;
     for (const type of ["", "Composer", "yarn", null]) {
-      assert.equal((await execute("connections.save", { projects: [{ ...projects[0], type }], revision: "" })).ok, false);
+      assert.equal((await execute("connections.save", { repositories: [{ ...projects[0], type }], revision: "" })).ok, false);
     }
     assert.equal(calls.length, beforeRejected, "invalid types must not reach the Settings write owner");
-    const saved = await execute("connections.save", { projects: [], revision: "" });
+    const saved = await execute("connections.save", { repositories: [], revision: "" });
     assert.equal(saved.ok, true, JSON.stringify(saved));
     assert.equal(saved.result.ok, true);
-    assert.deepEqual(saved.result.connectedProjects.projects, []);
+    assert.deepEqual(saved.result.connectedProjects.repositories, []);
     assert.equal(calls.at(-1).input.sessionId, "session-a");
     assert.equal(calls.at(-1).input.revision, "");
   });

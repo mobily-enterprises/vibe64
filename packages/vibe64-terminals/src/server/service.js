@@ -26,6 +26,7 @@ import { createServiceAssistant } from "./serviceAssistant.js";
 import { createServiceMainConversationHost } from "./serviceMainConversationHost.js";
 import { createServiceAgentConversations } from "./serviceAgentConversations.js";
 import { createServiceSessionWork } from "./serviceSessionWork.js";
+import { prepareConnectedRepositories } from "./serviceSessionConnectedCopies.js";
 import { createServiceSessionWorkInspection } from "./serviceSessionWorkInspection.js";
 import { createServiceProjectRuntime } from "./serviceProjectRuntime.js";
 import { createServiceShutdown } from "./serviceShutdown.js";
@@ -140,10 +141,7 @@ function createService({
 
   const workspaceSetup = createWorkspaceSetupRunner({
     project,
-    connectedPreparation: options => {
-      if (!state.slots.connectedPreparation) throw new Error("Connected workspace preparation is unavailable.");
-      return state.slots.connectedPreparation(options);
-    }
+    connectedPreparation: options => prepareConnectedRepositories({ ...options, env, project })
   });
   const sessionAccess = createServiceSessionAccess({
     logger,
@@ -422,6 +420,7 @@ function createService({
     sessionAccess,
     sessionWork,
     codexGitCommand,
+    env,
     project
   });
   const projectRuntime = createServiceProjectRuntime({
@@ -496,8 +495,6 @@ function createService({
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     setSourceEditorProvider: hostSlots.setSourceEditorProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
-    setConnectedPreparation: hostSlots.setConnectedPreparation,
-    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted: hostSlots.setPlanCompleted,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
@@ -525,8 +522,6 @@ function createService({
     thawSessionTerminalAdmissionForRenewal: terminals.thawSessionTerminalAdmissionForRenewal,
     recordSessionGitCommandActor: sessionWork.recordSessionGitCommandActor,
     saveSessionWork: sessionWork.saveSessionWork,
-    runConnectedSessionSave: sessionWork.runConnectedSessionSave,
-    runConnectedSourcePreparation: sessionWork.runConnectedSourcePreparation,
     runSessionSourceReadExclusive: sessionWork.runSessionSourceReadExclusive,
     createSessionPullRequest: sessionWork.createSessionPullRequest,
     checkSessionUpdates: workInspection.checkSessionUpdates,
@@ -537,8 +532,6 @@ function createService({
     retireSessionWorkSave: sessionWork.retireSessionWorkSave,
     inspectSessionWork: workInspection.inspectSessionWork,
     inspectSessionUpdateFailure: workInspection.inspectSessionUpdateFailure,
-    inspectIncomingContributions: workInspection.inspectIncomingContributions,
-    changeIncomingContribution: sessionWork.changeIncomingContribution,
     inspectSessionChanges: workInspection.inspectSessionChanges,
     inspectSessionChangeDiff: workInspection.inspectSessionChangeDiff,
     inspectRepositoryHistory: workInspection.inspectRepositoryHistory,

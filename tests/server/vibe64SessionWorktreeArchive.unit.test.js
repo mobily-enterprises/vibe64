@@ -289,108 +289,80 @@ branch refs/heads/main`);
   });
 });
 
-test("archives connected session clone commits and bindings without changing its child source", async () => {
+test("archive saves each connected copy's commits and unsaved work, removes the copies and each restores from its recovery", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
-    const githubMirrorPath = path.join(path.dirname(targetRoot), "github-mirror", "repository.git");
-    await mkdir(path.dirname(githubMirrorPath), {
-      recursive: true
-    });
-    await git(path.dirname(targetRoot), ["clone", "--bare", targetRoot, githubMirrorPath]);
     const runtime = new Vibe64SessionRuntime({
       projectContextRoot: targetRoot,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
     });
-    const sessionId = "session_clone_bundle";
+    const sessionId = "session_clone_copies";
     const worktreePath = testSessionSourcePath(targetRoot, sessionId);
-    const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      repository: "example/library", integrationBranch: "main", baseCommit };
-    const childContribution = { ...contribution, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", repository: "example/child" };
-    const connectedMetadata = {
-      connected_contribution: JSON.stringify(contribution),
-      connected_sources: JSON.stringify({ schemaVersion: 1, sources: [
-        { projectSlug: "child", contribution: childContribution }
-      ] }),
-      connected_submissions: JSON.stringify({ schemaVersion: 1, submissions: [
-        { contribution: childContribution, submittedCommit: baseCommit }
-      ] })
-    };
+    const connectedRoot = path.join(path.dirname(worktreePath), "connected");
+    const copy = (name) => ({ repository: `example/${name}`, branch: "main", path: path.join(connectedRoot, name),
+      baseCommit, canonicalCommit: baseCommit });
     await runtime.createSession({
       metadata: {
-        ...connectedMetadata,
         base_branch: "main",
         base_commit: baseCommit,
-        branch: "vibe64/session_clone_bundle",
-        github_mirror_path: githubMirrorPath,
+        branch: `vibe64/${sessionId}`,
+        connected_copies: JSON.stringify({ library: copy("library"), tools: copy("tools") }),
         source_default_branch: "main",
         source_remote_url: targetRoot,
         ...sourceMetadata(targetRoot, sessionId)
       },
       sessionId
     });
-    await mkdir(path.dirname(worktreePath), {
-      recursive: true
-    });
-    await git(path.dirname(worktreePath), ["clone", targetRoot, worktreePath]);
-    await git(worktreePath, ["config", "user.email", "vibe64@example.test"]);
-    await git(worktreePath, ["config", "user.name", "Vibe64 Test"]);
-    await git(worktreePath, ["checkout", "-B", "vibe64/session_clone_bundle", baseCommit]);
-    await writeProjectFile(worktreePath, "app.txt", "committed clone change\n");
-    await git(worktreePath, ["add", "app.txt"]);
-    await git(worktreePath, ["commit", "-m", "clone commit"]);
-    const publishedHead = await git(worktreePath, ["rev-parse", "HEAD"]);
-    const incomingRef = `refs/heads/vibe64-incoming/${contribution.id}`;
-    await git(worktreePath, ["push", githubMirrorPath, `HEAD:${incomingRef}`]);
-    await writeProjectFile(worktreePath, "app.txt", "uncommitted clone change\n");
-    await writeProjectFile(worktreePath, "notes.md", "recover me\n");
+    await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: worktreePath, targetRoot });
+    await writeProjectFile(worktreePath, "app.txt", "own unsaved change\n");
+    // The library copy has a commit, a changed file and an untracked file; the tools copy is untouched.
+    const library = path.join(connectedRoot, "library");
+    await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: library, targetRoot });
+    await writeProjectFile(library, "app.txt", "library commit\n");
+    await git(library, ["commit", "-am", "library commit"]);
+    const libraryHead = await git(library, ["rev-parse", "HEAD"]);
+    await writeProjectFile(library, "app.txt", "library unsaved change\n");
+    await writeProjectFile(library, "notes.md", "library notes\n");
+    await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: path.join(connectedRoot, "tools"), targetRoot });
 
-    const childPath = testSessionSourcePath(targetRoot, childContribution.id);
-    await runtime.createSession({ sessionId: childContribution.id, metadata: {
-      ...sourceMetadata(targetRoot, childContribution.id), base_commit: baseCommit,
-      connected_contribution: JSON.stringify(childContribution)
-    } });
-    await createSessionClone({ baseCommit, branch: "vibe64/child", sourcePath: childPath, targetRoot });
-    await writeProjectFile(childPath, "app.txt", "staged child change\n");
-    await git(childPath, ["add", "app.txt"]);
-    await writeProjectFile(childPath, "notes.md", "untracked child work\n");
-    const childStatus = await git(childPath, ["status", "--porcelain"]);
-    const childIndex = await readFile(path.join(childPath, ".git/index"));
-
-    const archiveSession = await runtime.getSession("session_clone_bundle");
-    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
-      reason: "archived"
-    });
+    const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
     assert.equal(archiveResult.removed, true);
+    assert.equal(archiveResult.dirty, true);
     assert.equal(await pathExists(worktreePath), false);
+    assert.equal(await pathExists(connectedRoot), false);
 
-    const archivedMetadata = await runtime.store.readMetadata("session_clone_bundle");
-    assert.equal(archivedMetadata.source_recovery_kind, "session_clone");
-    assert.equal(archivedMetadata.source_recovery_bundle_artifact, "recovery/branch.bundle");
-    assert.equal(archivedMetadata.source_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
-    assert.equal(archivedMetadata.source_recovery_patch_artifact, "recovery/worktree.patch");
+    const metadata = await runtime.store.readMetadata(sessionId);
+    const recovery = JSON.parse(metadata.connected_copies_recovery);
+    assert.deepEqual(Object.keys(recovery).sort(), ["library", "tools"]);
+    assert.deepEqual(recovery.library, {
+      baseCommit, branch: `vibe64/${sessionId}`, branchBundleArtifact: "recovery/connected/library/branch.bundle",
+      checkpointBundleArtifact: "", dirty: true, head: libraryHead, patchArtifact: "recovery/connected/library/worktree.patch",
+      repository: "example/library", sourcePath: library, untrackedArtifact: "recovery/connected/library/untracked-files.tar.gz",
+      untrackedCount: 1
+    });
+    assert.equal(recovery.tools.dirty, false);
+    assert.equal(recovery.tools.branchBundleArtifact, "");
+    assert.equal(recovery.tools.head, baseCommit);
 
-    // Publish the normal archive after source recovery, then read it through the
-    // existing archive owner rather than relying on its limited list index.
     const archived = await runtime.archiveSession(sessionId);
     assert.equal(archived.status, "archived");
-    for (const [key, value] of Object.entries(connectedMetadata)) assert.equal(archived.metadata[key], value);
     await runtime.store.withArchivedSession(sessionId, async (saved) => {
-      const restoredPath = path.join(targetRoot, "restore-proof");
-      await git(targetRoot, ["clone", targetRoot, restoredPath]);
-      await git(restoredPath, ["fetch", path.join(saved.artifactsRoot, "recovery/branch.bundle"), "HEAD"]);
-      await git(restoredPath, ["checkout", "--detach", "FETCH_HEAD"]);
-      assert.equal(await git(restoredPath, ["rev-parse", "HEAD"]), publishedHead);
-      await git(restoredPath, ["apply", path.join(saved.artifactsRoot, "recovery/worktree.patch")]);
-      await execFileAsync("tar", ["-xzf", path.join(saved.artifactsRoot, "recovery/untracked-files.tar.gz"), "-C", restoredPath]);
-      assert.equal(await readFile(path.join(restoredPath, "app.txt"), "utf8"), "uncommitted clone change\n");
-      assert.equal(await readFile(path.join(restoredPath, "notes.md"), "utf8"), "recover me\n");
+      const artifact = (name) => path.join(saved.artifactsRoot, name);
+      const restored = path.join(targetRoot, "restore-library");
+      await git(targetRoot, ["clone", targetRoot, restored]);
+      await git(restored, ["fetch", artifact(recovery.library.branchBundleArtifact), "HEAD"]);
+      await git(restored, ["checkout", "--detach", "FETCH_HEAD"]);
+      assert.equal(await git(restored, ["rev-parse", "HEAD"]), libraryHead);
+      await git(restored, ["apply", artifact(recovery.library.patchArtifact)]);
+      await execFileAsync("tar", ["-xzf", artifact(recovery.library.untrackedArtifact), "-C", restored]);
+      assert.equal(await readFile(path.join(restored, "app.txt"), "utf8"), "library unsaved change\n");
+      assert.equal(await readFile(path.join(restored, "notes.md"), "utf8"), "library notes\n");
+      // The session's own source keeps its own recovery beside the copies'.
+      const own = path.join(targetRoot, "restore-own");
+      await git(targetRoot, ["clone", targetRoot, own]);
+      await git(own, ["apply", artifact("recovery/worktree.patch")]);
+      assert.equal(await readFile(path.join(own, "app.txt"), "utf8"), "own unsaved change\n");
     });
-    assert.equal(await git(githubMirrorPath, ["rev-parse", incomingRef]), publishedHead);
-    assert.equal(await git(childPath, ["rev-parse", "HEAD"]), baseCommit);
-    assert.equal(await git(childPath, ["status", "--porcelain"]), childStatus);
-    assert.deepEqual(await readFile(path.join(childPath, ".git/index")), childIndex);
-    assert.equal(await readFile(path.join(childPath, "app.txt"), "utf8"), "staged child change\n");
-    assert.equal(await readFile(path.join(childPath, "notes.md"), "utf8"), "untracked child work\n");
   });
 });
 

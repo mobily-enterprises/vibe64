@@ -210,19 +210,18 @@ test("a requested connected preparation returns at once and records each progres
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
     let preparations = 0;
+    const people = [];
+    const lines = ["[Connected] jskit copied at abcdef012345.", "[Connected] genesis ready at 111111111111."];
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
       async finishWorkflow() {},
-      async connectedPreparation({ mode, onProgress }) {
+      async connectedPreparation({ mode, onProgress, vibe64User }) {
         if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
         preparations += 1;
-        await onProgress("Preparing connected projects: library (1 of 2 ready)");
+        people.push(vibe64User);
+        await onProgress("Copying connected repository jskit");
         await gate;
-        return { ok: true, prepared: [
-          { repository: "example/jskit", update: { status: "updated", commit: "abcdef0123456789" } },
-          { repository: "example/genesis", update: { status: "current", commit: "1".repeat(40) } },
-          { repository: "example/vibe64", update: { status: "skipped", reason: "It has changes that are not on main yet." } }
-        ] };
+        return { inputsHash: "sha256:connected", lines };
       },
       project: {
         inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
@@ -232,13 +231,14 @@ test("a requested connected preparation returns at once and records each progres
       async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
     });
 
-    const started = await runner.start({ retry: true, runtime, session });
+    const person = { username: "ada" };
+    const started = await runner.start({ retry: true, runtime, session, vibe64User: person });
     assert.equal(started.state.status, "running");
-    assert.equal(started.state.currentLabel, "Preparing connected projects");
+    assert.equal(started.state.currentLabel, "Preparing connected repositories");
     assert.equal(runner.isRunning(session.sessionId), true);
     const again = await runner.start({ retry: true, runtime, session });
     assert.equal(again.completion, started.completion, "a repeated start joins the running preparation");
-    while ((await stored()).currentLabel !== "Preparing connected projects: library (1 of 2 ready)") {
+    while ((await stored()).currentLabel !== "Copying connected repository jskit") {
       await new Promise((resolve) => setImmediate(resolve));
     }
     assert.equal((await stored()).status, "running");
@@ -247,19 +247,17 @@ test("a requested connected preparation returns at once and records each progres
     const finished = await started.completion;
     assert.equal(finished.status, "succeeded");
     assert.equal(preparations, 1);
-    assert.ok(labels.indexOf("Checking connected sources") > labels.indexOf("Preparing connected projects: library (1 of 2 ready)"),
-      "the label names the access recheck after linking");
+    assert.deepEqual(people, [person], "the person who asked copies with their own access");
+    assert.ok(labels.indexOf("Checking connected repositories") > labels.indexOf("Copying connected repository jskit"),
+      "the label names the access recheck after copying");
     const transcript = (await stored()).transcript;
-    for (const line of ["[Connected] jskit updated to abcdef0.", "[Connected] genesis is up to date.",
-      "[Connected] vibe64 was not updated: It has changes that are not on main yet."]) {
-      assert.ok(transcript.includes(line), `transcript reports: ${line}`);
-    }
+    for (const line of lines) assert.ok(transcript.includes(line), `transcript reports: ${line}`);
     assert.equal(runner.isRunning(session.sessionId), false);
     assert.equal((await stored()).status, "succeeded");
   });
 });
 
-test("a failed connected preparation names its project and reason, and its retry never shows that failure as progress", async () => {
+test("a failed connected preparation names its repository and reason, and its retry never shows that failure as progress", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);
     const stored = async () => workspaceSetupStateFromMetadata(
@@ -275,16 +273,12 @@ test("a failed connected preparation names its project and reason, and its retry
       async connectedPreparation({ mode, onProgress }) {
         if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
         if (unavailable) {
-          return { ok: false, code: "vibe64_connected_source_unavailable", prepared: [],
-            error: "This contribution's current session is unavailable.",
-            failedRepository: "https://github.com/example/vibe64" };
+          throw Object.assign(new Error("Connected repository vibe64: GitHub refused the clone."),
+            { code: "vibe64_connected_copy_failed" });
         }
-        await onProgress("Preparing connected projects: vibe64 (1 of 2 ready)");
+        await onProgress("Copying connected repository vibe64");
         await gate;
-        return { ok: true, prepared: [
-          { repository: "example/jskit", update: { status: "current", commit: "1".repeat(40) } },
-          { repository: "example/vibe64", update: { status: "current", commit: "2".repeat(40) } }
-        ] };
+        return { inputsHash: "sha256:connected", lines: ["[Connected] jskit ready at 111111111111."] };
       },
       project: {
         inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
@@ -296,11 +290,11 @@ test("a failed connected preparation names its project and reason, and its retry
 
     const failed = await (await runner.start({ retry: true, runtime, session })).completion;
     assert.equal(failed.status, "failed");
-    assert.equal(failed.diagnostic, "Connected project vibe64: This contribution's current session is unavailable.",
-      "the diagnostic names the connected project that failed");
-    assert.match(failed.transcript, /\nConnected project vibe64: This contribution's current session is unavailable\.\n/u,
+    assert.equal(failed.diagnostic, "Connected repository vibe64: GitHub refused the clone.",
+      "the diagnostic names the connected repository that failed");
+    assert.match(failed.transcript, /\nConnected repository vibe64: GitHub refused the clone\.\n/u,
       "the output keeps the reason, not only the failed step");
-    assert.equal(lastLine(failed.transcript), "[Prepare connected sources] Failed.");
+    assert.equal(lastLine(failed.transcript), "[Prepare connected repositories] Failed.");
 
     unavailable = false;
     const retried = await runner.start({
@@ -308,70 +302,18 @@ test("a failed connected preparation names its project and reason, and its retry
       runtime,
       session: await runtime.getSessionWithoutSource(session.sessionId)
     });
-    assert.equal(lastLine(retried.state.transcript), "[Preparing connected projects] Running.",
+    assert.equal(lastLine(retried.state.transcript), "[Preparing connected repositories] Running.",
       "a retry's first progress is its own, never the earlier attempt's failure");
-    while ((await stored()).currentLabel !== "Preparing connected projects: vibe64 (1 of 2 ready)") {
+    while ((await stored()).currentLabel !== "Copying connected repository vibe64") {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    assert.equal(lastLine((await stored()).transcript), "[Preparing connected projects] Running.");
+    assert.equal(lastLine((await stored()).transcript), "[Preparing connected repositories] Running.");
     release();
     const succeeded = await retried.completion;
     assert.equal(succeeded.status, "succeeded");
     assert.equal(succeeded.transcript.match(/Workspace preparation retry started\./gu)?.length, 1,
       "the retry is recorded once");
-    assert.ok(succeeded.transcript.includes("[Connected] jskit is up to date."));
-  });
-});
-
-test("a connected project with no usable link stops preparation for a person's choice, not as a failure", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const { runtime, session } = await workspaceSession(targetRoot);
-    let linked = false;
-    const automaticLinks = [];
-    const runner = createWorkspaceSetupRunner({
-      async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
-      async finishWorkflow() {},
-      async connectedPreparation({ automaticLink, mode }) {
-        if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
-        automaticLinks.push(automaticLink);
-        return linked ? { ok: true, prepared: [], linked: [{ repository: "example/vibe64", sessionName: "Payments" }] }
-          : { ok: false, code: "vibe64_connected_link_required", prepared: [],
-            linked: [{ repository: "example/genesis", sessionName: "Tooling" }],
-            error: "vibe64 needs a connected session. Choose in the workspace preparation notice to continue." };
-      },
-      project: {
-        inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
-        ...readyProject(),
-        async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
-      },
-      async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
-    });
-
-    const stopped = await (await runner.start({ retry: true, runtime, session })).completion;
-    assert.equal(stopped.status, "ambiguous");
-    assert.equal(stopped.connectedChoiceRequired, true);
-    assert.equal(stopped.diagnostic, "vibe64 needs a connected session. Choose in the workspace preparation notice to continue.");
-    assert.equal(stopped.transcript.trim().split("\n").at(-1), "[Prepare connected sources] Needs a choice.");
-    assert.ok(stopped.transcript.includes("[Connected] genesis is now linked to Tooling, its only free session, which has no work in it and is used as it stands."),
-      "a stop still says what preparation linked by itself");
-    const reread = workspaceSetupStateFromMetadata((await runtime.store.readSession(session.sessionId)).metadata);
-    assert.equal(reread.connectedChoiceRequired, true, "the state survives a reload");
-
-    linked = true;
-    const retried = await (await runner.start({
-      retry: true,
-      runtime,
-      session: await runtime.getSessionWithoutSource(session.sessionId)
-    })).completion;
-    assert.equal(retried.status, "succeeded");
-    assert.equal(retried.connectedChoiceRequired, undefined, "the next attempt clears the choice");
-    assert.ok(retried.transcript.includes("[Connected] vibe64 is now linked to Payments, its only free session, which has no work in it and is used as it stands."),
-      "an automatic link is never silent");
-
-    const current = () => runtime.getSessionWithoutSource(session.sessionId);
-    await (await runner.start({ agentRequested: true, retry: true, runtime, session: await current() })).completion;
-    await (await runner.start({ renewal: true, retry: true, runtime, session: await current() })).completion;
-    assert.deepEqual(automaticLinks, [true, true, false, false], "an AI's request and a renewal never link by themselves");
+    assert.ok(succeeded.transcript.includes("[Connected] jskit ready at 111111111111."));
   });
 });
 

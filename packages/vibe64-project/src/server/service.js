@@ -55,7 +55,6 @@ function catalogUnavailable() {
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
  * @param {(fullName: string, input: object) => Promise<object>} [dependencies.inspectConnectedRepository]
- * @param {(fullName: string, branch: string, input: object) => Promise<object>} [dependencies.inspectConnectedBranch]
  * @param {typeof inspectGenesisCollaboration} [dependencies.inspectCollaboration]
  * @param {typeof inspectGenesisEngineering} [dependencies.inspectEngineering]
  * @param {typeof inspectGenesisEnvironment} [dependencies.inspectEnvironment]
@@ -74,14 +73,9 @@ function createService({
   logger,
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
     env,
-    feature: "Connected projects",
+    feature: "Connected repositories",
     failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}`, undefined, "GET"),
-  inspectConnectedBranch = (fullName, branch, input) => githubApi(input, {
-    env,
-    feature: "Connected projects",
-    failureCode: "vibe64_connections_access_failed"
-  })(`repos/${fullName}/branches/${encodeURI(branch)}`, undefined, "GET", { allowNotFound: true }),
   inspectCollaboration = inspectGenesisCollaboration,
   inspectEngineering = inspectGenesisEngineering,
   inspectEnvironment = inspectGenesisEnvironment,
@@ -140,11 +134,8 @@ function createService({
   });
   const repositories = createProjectRepositories({
     env,
-    inspectConnectedBranch,
-    inspectConnectedRepository,
     logger,
     publishProjectChanged,
-    projectSettings,
     selection
   });
 
@@ -454,15 +445,13 @@ function createService({
     repositoryRemote: repositories.repositoryRemote,
     repositoryBranches: repositories.repositoryBranches,
     resolveSessionBranch: repositories.resolveSessionBranch,
-    connectedProjectTargets: repositories.connectedProjectTargets,
     inspectWorkspaceSetup: repositories.inspectWorkspaceSetup,
     inspectConnectedDevelopmentInputs: repositories.inspectConnectedDevelopmentInputs,
     prepareConnectedDevelopmentInputs: repositories.prepareConnectedDevelopmentInputs,
-    connectedContributionSource: repositories.connectedContributionSource,
+    readSessionConnectedRepositories: repositories.readSessionConnectedRepositories,
     readRepositoryWorkflow: repositories.readRepositoryWorkflow,
     saveRepositoryWorkflow: repositories.saveRepositoryWorkflow,
     refreshGithub: repositories.refreshGithub,
-    incomingRepository: repositories.incomingRepository,
     listGithubIssues: repositories.listGithubIssues,
     readGithubIssue: repositories.readGithubIssue,
     createGithubIssue: repositories.createGithubIssue,

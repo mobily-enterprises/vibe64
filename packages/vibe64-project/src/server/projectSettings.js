@@ -81,10 +81,10 @@ function createProjectSettings({
       }
       await assertProjectDirectoryUsable(source.sourceRoot);
       return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(), async () => {
-        const normalized = normalizeConnectedProjects({ projects: input.projects });
+        const normalized = normalizeConnectedProjects({ repositories: input.repositories });
         // Configuration declares intent; actual write access comes from the actor's account.
-        if (normalized.projects.length) {
-          for (const entry of normalized.projects) {
+        if (normalized.repositories.length) {
+          for (const entry of normalized.repositories) {
             const fullName = githubRepositoryFullName(entry.repository);
             const repository = await inspectConnectedRepository(fullName, input);
             if (!repository.permissions?.push || repository.archived || repository.disabled) {

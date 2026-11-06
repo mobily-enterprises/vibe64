@@ -1,7 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
-  connectedWorkReviewSchema,
-  incomingReviewSchema,
   sessionHistoryReviewSchema,
   sessionRepositoryReviewSchema
 } from "./inputSchemas.js";
@@ -61,8 +59,6 @@ const sessionOutput = {
  * below that shape the tool's result.
  */
 const ASSISTANT_TOOL_DESCRIPTIONS = Object.freeze({
-  inspectConnectedReplacement: "Review a discarded connected contribution for replacement from its originating session. Returns the exact discarded commit and review. This does not copy, push or modify work. Explain that replacement starts at the discarded commit and leaves unsaved edits in the old receiving session.",
-  replaceConnectedSource: "Only on a request to replace a discarded contribution, pass the exact review from connected.replacement.inspect. Reserve and prepare a new contribution from the discarded commit; preserve the old source, branch and integration requirements. No repository is pushed. Retry the same review after an uncertain result. Prepare the originating workspace before testing the new source.",
   pinSession: "Pin or unpin the explicitly requested project session as its server-selected source. One pin per project; unpin the existing session before pinning another. Browsing other tabs does not move the pinned source. A pinned session cannot be archived or renewed and its project cannot close. This does not Save, push or deploy.",
   renameSession: "Rename the exact requested session's display label. Supply the agreed name; this preserves its identity, code and conversations.",
   listSessions: "List open sessions in the specified project. Follow nextSessionOffset with sessionOffset for sixty-item pages; live lists can change between reads. Status describes session lifecycle, not necessarily whether its agent is coding. Inspect the selected session for current agent status.",
@@ -76,12 +72,10 @@ const ASSISTANT_TOOL_DESCRIPTIONS = Object.freeze({
   cancelSessionRenewal: "Cancel this session's renewal, only when the user requests cancellation: a handover awaiting review, or a renewal that failed. For a review supply the current operationKey, draftHash as expectedHash and draftRevision as expectedRevision; stale review must be inspected again. For a failed renewal supply only its operationKey: the fresh session it created is discarded and the original session stays in use, after which it can be archived. This cancels renewal, not the coding agent or Colleague. Inspect until the renewal reports cancelled.",
   confirmSessionRenewal: "Confirm renewal only after the user approves the exact current handover draft and successor model. Supply its operationKey, draftHash as expectedHash and draftRevision as expectedRevision; omit assistantSelection to keep main chat on the owner's AI setup. The service rechecks source, conversation, access and draft guards before starting a successor. If it returns review again, obtain approval for the refreshed draft instead of confirming automatically. Admission/running is not completion: inspect until the successor is actually available.",
   retrySessionRenewal: "Retry the user's requested failed renewal using its existing operationKey. The saved service workflow owns recovery and preserves the approved draft; do not create a second renewal or guess a successor. If source/conversation changes return it to review, read and seek approval for the current draft. Inspect the returned stage and successor availability before reporting completion.",
-  inspectSessionWork: "Inspect the exact session's saved-work status, changed-file names, repository destination and any Save/Update operation. This reads no file contents or diffs; delegate code analysis to a coding conversation. It may reconcile an already interrupted repository operation through normal recovery. destination is the exact Save confirmation identity: describe the repository/branch to the user and pass it unchanged as destinationReview only when saving is requested. For local-source projects its repository value is a path used solely as that equality guard. When connectedSaveRequired is true, review connectedReview as well: those repositories will be saved first, without saving this main project. Fresh remote update checks use updates.check; an inspection alone is not a remote fetch. repositoryProblem is the stored failed Save or Update behind the editor's Repository needs help: report its message and nextStep instead of guessing a cause.",
-  saveSessionWork: "Save this session's work only when the user requests Save. First inspect work and review its exact destination; pass the complete returned destination unchanged as destinationReview. GitHub Save pushes to that repository branch; managed/local Save updates the configured canonical project. When inspection reports connectedSaveRequired, also pass its complete connectedReview unchanged: Save commits and pushes each connected repository in sequence, records each confirmed commit, stops on failure and never saves the main project in that action. Retry after inspection; completed repositories without new work are skipped. Otherwise omit connectedReview for ordinary Main Save, which requires submitted connected revisions to be integrated. This saves all current work, not selected files, and does not deploy the application. The existing service blocks active agents, changed destinations, stale canonical bases and required PR workflows. Do not automatically apply updates or discard work to make Save pass. Inspect after an uncertain result before retrying; published_needs_reconcile means the push happened but local reconciliation is incomplete.",
-  inspectIncoming: "List or inspect Git-derived Incoming contributions in the selected receiving project. sessionId supplies an existing checkout; it does not select a different target branch. Returns bounded summaries and exact review identities, never source diffs. Use state=pending for waiting work, unresolved for interrupted discards, or merged/discarded/all for history. A read does not authorize Merge or Discard.",
-  changeIncoming: "Merge or discard one exact Incoming contribution only when the person explicitly requests that action. First inspect it, explain its receiving repository, target and exact head, and pass the complete returned review unchanged. Merge preserves commit ancestry; discard renames the branch and does not satisfy dependent work. Respect permission, policy, conflict and stale-review errors. After an uncertain result refresh before retrying; do not automatically resolve conflicts or change repository policy.",
+  inspectSessionWork: "Inspect the exact session's saved-work status, changed-file names, repository destination and any Save/Update operation. This reads no file contents or diffs; delegate code analysis to a coding conversation. It may reconcile an already interrupted repository operation through normal recovery. destination is the exact Save confirmation identity: describe the repository/branch to the user and pass it unchanged as destinationReview only when saving is requested. For local-source projects its repository value is a path used solely as that equality guard. connected lists this session's connected repositories, its own copies beside its source: each one's name, path, unsaved and behind. Save and Update cover them too. Fresh remote update checks use updates.check; an inspection alone is not a remote fetch. repositoryProblem is the stored failed Save or Update behind the editor's Repository needs help: report its message and nextStep instead of guessing a cause.",
+  saveSessionWork: "Save this session's work only when the user requests Save. First inspect work and review its exact destination; pass the complete returned destination unchanged as destinationReview. GitHub Save pushes to that repository branch; managed/local Save updates the configured canonical project. Save also covers this session's connected repositories: each changed one is pushed to its own main first, in order, then this session's repository. If any connected repository is behind its main, Save stops with Update first before pushing anything; a refusal stops before this session's own push, and a retry skips repositories already saved. This saves all current work, not selected files, and does not deploy the application. The existing service blocks active agents, changed destinations, stale canonical bases and required PR workflows. Do not automatically apply updates or discard work to make Save pass. Inspect after an uncertain result before retrying; published_needs_reconcile means the push happened but local reconciliation is incomplete.",
   checkSessionUpdates: "Check the exact session against its canonical project version. force=true refreshes authority instead of using the short-lived cached check; this fetches repository state but does not update session files. Report updateAvailable and ahead/behind. A returned historyReview means local-source history was rewritten: explain it and obtain the user's instruction to reconcile that exact reviewed state before passing it to updates.apply. Do not invent or alter the review identities.",
-  updateSessionWork: "Update/rebase this session onto its current saved project version only when the user requests it. It preserves local work, checks active agents and existing source locks, and may rerun the project's declared workspace preparation. It does not push. Ordinary updates need only sessionId. For rewritten local history, pass the exact historyReview from a fresh check only after the user agrees to reconcile it. For a coding-agent-resolved conflict, use the saved updateOperation.conflictReviewId as reviewedConflictId only after the requested repair is done. On conflicts, report and delegate repair rather than resolving or discarding code yourself. Inspect work and workspace setup after completion; preparation may still be running.",
+  updateSessionWork: "Update/rebase this session onto its current saved project version, and each connected repository onto its own main, only when the user requests it. A conflict leaves that repository unchanged. It preserves local work, checks active agents and existing source locks, and may rerun the project's declared workspace preparation. It does not push. Ordinary updates need only sessionId. For rewritten local history, pass the exact historyReview from a fresh check only after the user agrees to reconcile it. For a coding-agent-resolved conflict, use the saved updateOperation.conflictReviewId as reviewedConflictId only after the requested repair is done. On conflicts, report and delegate repair rather than resolving or discarding code yourself. Inspect work and workspace setup after completion; preparation may still be running.",
   retryWorkspaceSetup: "Run or rerun the existing workspace preparation for the exact requested session, including after an earlier success. Use only when the user requests preparation or retry; the existing service rejects running or unavailable retries. This runs the complete declared recipe and can start installation and managed work. Inspect the returned setup status afterward; accepted preparation is not proof that it finished. Do not invent or edit setup commands. In a session with connected repositories this also updates each connected checkout to its branch when safe; report the [Connected] transcript lines. When you run it, it never links a connected session by itself, because that cannot be undone; when it stops because a connected project needs a session, tell the person to choose one in the workspace preparation notice: that choice is theirs.",
   archiveSession: "Archive/close the exact session requested by the user. This stops its active work, removes its working workspace and temporary conversations, and retains the ordinary read-only archive history. Archiving never Saves: unsaved work, such as an added starter, stays only in the archive, which cannot restore it to the project, and new sessions start from saved source. So first inspect the session with vibe64.sessions.work.inspect. When it is unsaved or its status is unavailable, tell the user how many unsaved changes it has (or that saved status is unconfirmed) and offer Save, and archive only after the user confirms archiving without saving. Do not interpret stopping an agent or ending Colleague as an archive request. Pending chat routing is cancelled through its existing cleanup owner; a cleanup failure preserves the session for retry. Pin, renewal, preparation and resource guards still apply. Inspect current sessions and archive state before retrying an uncertain result.",
   sendAgentMessage: "Send an agreed request or steering to Main chat in the exact selected project/session. For new work, supply a unique messageId and reuse it unchanged on a delivery retry. When the person explicitly asks to continue a waiting Auto workflow or check its uncertain delivery, read the saved routing request and use reviewAction=retry with that request's original messageId and message; do not invent a new message identity. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work. For a team member this queues the message for the owner's approval; it is not delivered until approved. In the member's own lesson (practice project) it is sent to the lesson's team AI without approval.",
@@ -203,63 +197,11 @@ function sessionTool(description) {
   });
 }
 
-function incomingContributionTool(description) {
-  const fields = stringFields(limits(["id", "branch", "head", "status", "title"], 512));
-  const strings = resultStrings(["code", "repository", "targetBranch", "targetHead", "head", "status"]);
-  const counts = ["pendingCount", "unresolvedCount", "totalCount"];
-  return Object.freeze({
-    description,
-    output: {
-      mode: "replace",
-      schema: createSchema({
-        ok: { type: "boolean", required: true },
-        ...stringFields(strings),
-        ...integerFields(counts),
-        nextOffset: { type: "integer", nullable: true, required: false },
-        actions: {
-          type: "object",
-          required: false,
-          schema: createSchema({ merge: { ...shortText, maxLength: 512 }, discard: { ...shortText, maxLength: 512 } })
-        },
-        contributions: {
-          type: "array",
-          required: false,
-          items: createSchema({
-            ...fields,
-            fileCount: { type: "integer", required: false },
-            review: { type: "object", required: true, schema: incomingReviewSchema }
-          })
-        }
-      })
-    },
-    transformResult(result) {
-      const output = { ok: result.ok === true, ...pickStrings(result, strings), ...pickIntegers(result, counts) };
-      if (Number.isSafeInteger(result.nextOffset) || result.nextOffset === null) output.nextOffset = result.nextOffset;
-      if (result.actions) {
-        output.actions = {
-          merge: String(result.actions.merge || "").slice(0, 512),
-          discard: String(result.actions.discard || "").slice(0, 512)
-        };
-      }
-      if (Array.isArray(result.contributions)) {
-        output.contributions = result.contributions.slice(0, 50).map(entry => ({
-          ...Object.fromEntries(Object.keys(fields).map(key => [key, String(entry[key] || "").slice(0, 512)])),
-          fileCount: entry.fileCount,
-          review: Object.fromEntries(
-            ["repository", "targetBranch", "targetHead", "id", "activeHead", "discardedHead"].map(key => [key, entry.review?.[key]])
-          )
-        }));
-      }
-      return output;
-    }
-  });
-}
-
 function sessionWorkTool(description) {
   const strings = resultStrings(["sessionId", "repositoryMode", "mode", "branch", "relationship", "updateStrategy", "status", "operationId",
-    "baseCommit", "canonicalCommit", "sessionHead", "saveCommit", "verifiedCommit", "code", "connectedInspectionError"]);
+    "baseCommit", "canonicalCommit", "sessionHead", "saveCommit", "verifiedCommit", "code"]);
   const booleans = ["unsaved", "dirty", "worktreeClean", "updateAvailable", "sessionCurrent", "sessionMatchesCanonical",
-    "publicationRequiresPullRequest", "reconciled", "recovered", "cached", "connectedSaveRequired", "connectedRequirementsPresent"];
+    "publicationRequiresPullRequest", "reconciled", "recovered", "cached"];
   const operationStrings = limits(["operationId", "kind", "status", "stage", "code", "error", "conflictReviewId"], 512);
   const operationSchema = createSchema(stringFields(operationStrings));
   const problemStrings = { ...limits(["label", "operation", "status", "code", "failedAt"]), message: 512, nextStep: 512 };
@@ -277,20 +219,19 @@ function sessionWorkTool(description) {
         changedPathCount: { type: "integer", required: false },
         changedPathsTruncated: { type: "boolean", required: false },
         destination: { type: "object", schema: sessionRepositoryReviewSchema, required: false },
-        connectedReview: { type: "array", items: connectedWorkReviewSchema, maxItems: 64, required: false },
         connected: {
           type: "array",
           maxItems: 64,
           required: false,
           items: createSchema({
-            projectSlug: shortText,
+            name: shortText,
             repository: shortText,
-            sessionId: shortText,
+            path: { type: "string", required: false, maxLength: 4096, noTrim: true },
+            unsaved: { type: "boolean", required: false },
+            behind: { type: "integer", required: false },
+            changedPathCount: { type: "integer", required: false },
             saveCommit: shortText,
-            status: shortText,
-            needsSave: { type: "boolean", required: false },
-            recorded: { type: "boolean", required: false },
-            reconciled: { type: "boolean", required: false }
+            status: shortText
           })
         },
         failedRepository: shortText,
@@ -329,21 +270,12 @@ function sessionWorkTool(description) {
         // These are exact confirmation identities, not display excerpts.
         if (record) output[name] = Object.fromEntries(fields.map((key) => [key, record[key]]));
       }
-      if (Array.isArray(result.connectedReview)) {
-        output.connectedReview = result.connectedReview.map(item => ({
-          projectSlug: item.projectSlug,
-          destination: Object.fromEntries(["sessionId", "mode", "repository", "branch"].map(key => [key, item.destination[key]]))
-        }));
-      }
       const connected = result.connected || result.details?.connected;
       if (Array.isArray(connected)) {
-        output.connected = connected.slice(0, 64).map(item => ({
-          projectSlug: item.projectSlug,
-          repository: item.repository || item.contribution?.repository,
-          sessionId: item.sessionId || item.contribution?.id,
-          ...Object.fromEntries(["saveCommit", "status", "needsSave", "recorded", "reconciled"]
-            .flatMap(key => item[key] === undefined ? [] : [[key, item[key]]]))
-        }));
+        output.connected = connected.slice(0, 64).map(item => Object.fromEntries(
+          ["name", "repository", "path", "unsaved", "behind", "changedPathCount", "saveCommit", "status"]
+            .flatMap(key => item[key] === undefined ? [] : [[key, item[key]]])
+        ));
       }
       if (result.details?.failedRepository) output.failedRepository = result.details.failedRepository;
       for (const name of ["operation", "updateOperation", "activeOperation"]) {
@@ -651,6 +583,5 @@ export {
   renewalTool,
   sessionTool,
   sessionWorkTool,
-  sessionPullRequestTool,
-  incomingContributionTool
+  sessionPullRequestTool
 };

@@ -23,7 +23,7 @@ import subprocess
 import sys
 import tomllib
 
-CONTRACT = "vibe64.connected-sources.v1"
+CONTRACT = "vibe64.connected-sources.v2"
 TYPES = {"pip", "uv", "python"}
 VENV = ".venv"
 VENV_PYTHON = os.path.join(VENV, "bin", "python")
@@ -56,10 +56,10 @@ def connected_sources(sources_file):
             sources = json.load(handle)
     except (OSError, ValueError) as error:
         fail(f"cannot read {sources_file}: {error}")
-    if sources.get("contract") != CONTRACT:
+    if sources.get("schema") != CONTRACT:
         fail(f"{sources_file} is not a {CONTRACT} sources map")
     found = []
-    for project in sources.get("projects", []):
+    for project in sources.get("repositories", []):
         if project.get("type", "pip") not in TYPES:
             continue
         root = os.path.realpath(project.get("sourceRoot", ""))

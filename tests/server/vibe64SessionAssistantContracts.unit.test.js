@@ -27,7 +27,6 @@ oversized.sessions = [oversized];
 const tools = {
   session: contracts.sessionTool("inspect"),
   assistantAccess: contracts.assistantAccessTool(),
-  incomingContribution: contracts.incomingContributionTool("inspect"),
   sessionWork: contracts.sessionWorkTool("inspect"),
   sessionPullRequest: contracts.sessionPullRequestTool(),
   conversationOperation: contracts.conversationOperationTool("send"),

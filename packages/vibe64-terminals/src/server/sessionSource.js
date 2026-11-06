@@ -13,7 +13,6 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeRepositoryMode,
-  sessionConnectedContribution,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -432,7 +431,6 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
  * @param {string} [dependencies.expectedCommit]
- * @param {string} [dependencies.expectedSourceRef]
  * @param {object} [dependencies.project] the current project's record
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {Vibe64SessionRuntime} dependencies.runtime
@@ -443,7 +441,6 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
 async function createSessionSource({
   env,
   expectedCommit = "",
-  expectedSourceRef = "",
   project = {},
   runCommand = runVibe64Command,
   runtime,
@@ -451,39 +448,7 @@ async function createSessionSource({
   store,
   vibe64User = null
 }) {
-  const contribution = sessionConnectedContribution(session);
-  if (contribution && !session.metadata?.renewed_from) {
-    if (expectedCommit && toText(expectedCommit).toLowerCase() !== contribution.baseCommit) {
-      throw sourceError("Contribution source must start at its reserved base commit.", "vibe64_contribution_base_changed");
-    }
-    expectedCommit = contribution.baseCommit;
-  }
-  project = sessionRepositoryProject(project, session, { sourcePreparation: true });
-  if (contribution && session.metadata?.renewed_from) {
-    const allowedRefs = new Set([
-      `refs/heads/${contribution.integrationBranch}`,
-      `refs/heads/vibe64-incoming/${contribution.id}`,
-      ...(contribution.replaces ? [`refs/heads/vibe64-incoming/${contribution.replaces}_discarded`] : [])
-    ]);
-    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(expectedCommit) || !allowedRefs.has(expectedSourceRef)) {
-      throw sourceError(
-        "Contribution renewal requires its exact confirmed source commit and owned ref.",
-        "vibe64_contribution_renewal_source_invalid"
-      );
-    }
-    project = {
-      ...project,
-      repository: {
-        ...project.repository,
-        defaultBranch: expectedSourceRef.slice("refs/heads/".length)
-      }
-    };
-  } else if (contribution && expectedSourceRef) {
-    throw sourceError(
-      "Only a confirmed renewal can select a contribution source ref.",
-      "vibe64_contribution_renewal_source_unconfirmed"
-    );
-  }
+  project = sessionRepositoryProject(project, session);
   const sessionId = toText(session.sessionId);
   const projectContextRoot = toText(runtime?.projectContextRoot);
   const managedSessionSourceRoot = toText(runtime?.projectSessionSourceRoot);
@@ -673,11 +638,15 @@ async function createSessionSource({
 }
 
 export {
+  SESSION_BRANCH_PREFIX,
   canonicalProjectSource,
+  cloneCanonicalSource,
   clonedDefaultBranchProof,
   createSessionSource,
   deleteClonedDefaultBranch,
+  githubMirrorCanReference,
   githubSourceCommandOptions,
   prepareGithubMirrorReference,
+  removeClonedDefaultBranch,
   runGit
 };

@@ -147,7 +147,6 @@ function createServiceCommandServices({
 
   const agentSessionCommand = createAgentSessionCommandService({
     retryWorkspaceSetup: sessionId => workspacePreparation.prepareWorkspaceSetup(sessionId, {
-      agentRequested: true,
       publish: true,
       retry: true
     }),

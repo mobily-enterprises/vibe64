@@ -197,7 +197,6 @@ test("project and sessions register routes and captured actions during setup", a
     } },
     terminals: {
       openBrowserConversation() { throw new Error("Feature setup must not open a native conversation."); },
-      setConnectedPreparation() {},
       setPlanCompleted() {},
       waitForWorkspaceSetup: () => null,
       workspaceSetupIsRunning: () => false,
@@ -222,9 +221,6 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.repository.history.diff.inspect",
     "vibe64.repository.history.files.inspect",
     "vibe64.repository.history.inspect",
-    "vibe64.repository.incoming.change",
-    "vibe64.repository.incoming.inspect",
-    "vibe64.repository.incoming.review",
     "vibe64.sessions.agent-message.send",
     "vibe64.sessions.agent-turn.interrupt",
     "vibe64.sessions.archive",
@@ -233,23 +229,6 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.assistant-selection.update",
     "vibe64.sessions.changes.diff.inspect",
     "vibe64.sessions.changes.inspect",
-    "vibe64.sessions.connected.choices",
-    "vibe64.sessions.connected.inputs.inspect",
-    "vibe64.sessions.connected.link",
-    "vibe64.sessions.connected.prepare",
-    "vibe64.sessions.connected.replace",
-    "vibe64.sessions.connected.replacement.create",
-    "vibe64.sessions.connected.replacement.inspect",
-    "vibe64.sessions.connected.resolve",
-    "vibe64.sessions.connected.sessions",
-    "vibe64.sessions.connected.sessions.bind",
-    "vibe64.sessions.connected.source",
-    "vibe64.sessions.connected.work.check",
-    "vibe64.sessions.connected.work.incoming",
-    "vibe64.sessions.connected.work.inputs",
-    "vibe64.sessions.connected.work.inspect",
-    "vibe64.sessions.connected.work.save",
-    "vibe64.sessions.connected.work.update",
     "vibe64.sessions.conversation-log.read",
     "vibe64.sessions.conversation.context.read",
     "vibe64.sessions.create",
@@ -281,18 +260,6 @@ test("project and sessions register routes and captured actions during setup", a
   assert.equal(contextRead.extensions.assistant.exclude, true);
   const internalActionIds = sessionActions[0].actions.filter(action => action.channels?.join() === "internal").map(({ id }) => id).sort();
   assert.deepEqual(internalActionIds, [
-    "vibe64.sessions.connected.inputs.inspect",
-    "vibe64.sessions.connected.replacement.create",
-    "vibe64.sessions.connected.resolve",
-    "vibe64.sessions.connected.sessions",
-    "vibe64.sessions.connected.sessions.bind",
-    "vibe64.sessions.connected.source",
-    "vibe64.sessions.connected.work.check",
-    "vibe64.sessions.connected.work.incoming",
-    "vibe64.sessions.connected.work.inputs",
-    "vibe64.sessions.connected.work.inspect",
-    "vibe64.sessions.connected.work.save",
-    "vibe64.sessions.connected.work.update",
     "vibe64.sessions.conversation.context.read"
   ]);
   assert.equal(sessionRoutes.length, sessionActions[0].actions.length - internalActionIds.length,
@@ -311,12 +278,11 @@ test("project and sessions register routes and captured actions during setup", a
     project: { setTemplateApplicationObserver(observer) { cleared.push(["templateApplicationObserver", observer]); } },
     terminals: {
       async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; },
-      setConnectedPreparation(prepare) { cleared.push(["connectedPreparation", prepare]); },
       setPlanCompleted(handler) { cleared.push(["planCompleted", handler]); }
     }
   }, { outputs: sessionOutputs });
   assert.deepEqual(invalidations, [{ reason: "server-shutdown" }]);
-  assert.deepEqual(cleared, [["templateApplicationObserver", null], ["planCompleted", null], ["connectedPreparation", null]]);
+  assert.deepEqual(cleared, [["templateApplicationObserver", null], ["planCompleted", null]]);
 });
 
 test("sessions start standalone renewal recovery without blocking Feature boot", async () => {

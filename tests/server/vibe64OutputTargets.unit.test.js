@@ -464,8 +464,8 @@ test("workspace setup disables outputs only for a failed current recipe", () => 
 test("a stop recorded before any recipe holds Preview back even when inspection says ready", () => {
   const ready = { recipeHash: "sha256:recipe", status: "ready" };
   assert.equal(workspaceSetupLaunchDisabledReason({
-    workspaceSetup: { connectedChoiceRequired: true, diagnostic: "vibe64 needs a connected session.", recipeHash: "", status: "ambiguous" }
-  }, ready), "vibe64 needs a connected session.");
+    workspaceSetup: { diagnostic: "Two workspace recipes match.", recipeHash: "", status: "ambiguous" }
+  }, ready), "Two workspace recipes match.");
   assert.equal(workspaceSetupLaunchDisabledReason({
     workspaceSetup: { diagnostic: "Connected project vibe64: not ready", recipeHash: "", status: "failed" }
   }, ready), "Connected project vibe64: not ready");

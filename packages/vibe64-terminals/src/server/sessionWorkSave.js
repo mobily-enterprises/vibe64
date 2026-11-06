@@ -22,12 +22,7 @@ import {
   sessionWorkComparison,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
-import {
-  assertConnectedSubmissionsIntegrated,
-  assertConnectedWorkSnapshotsUnchanged,
-  connectedWorkSnapshots,
-  readCanonical
-} from "./sessionWorkAuthority.js";
+import { readCanonical } from "./sessionWorkAuthority.js";
 import {
   inspectSessionChangeDiff,
   inspectSessionChangeDiffDirect,
@@ -50,17 +45,14 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 async function prepareSessionPullRequestBranch({
   project,
   session,
-  connectedWorkSnapshots: suppliedSnapshots = [],
   commandOptions = {},
   runCommand = runVibe64Command
 }) {
   const context = repositoryContext(session, project);
   const ref = `refs/heads/${context.branch}`;
-  const options = { commandOptions, project, connectedWorkSnapshots: connectedWorkSnapshots(suppliedSnapshots) };
+  const options = { commandOptions, project };
   const existing = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ref], options);
   if (!existing) {
-    await assertConnectedSubmissionsIntegrated(runCommand, context, options);
-    await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots, options);
     // An empty lease creates only an absent ref, including for locally committed baselines.
     await git(runCommand, context, ["push", `--force-with-lease=${ref}:`, context.remoteUrl, `${context.baseCommit}:${ref}`], options);
   }
@@ -106,7 +98,6 @@ async function captureSessionWorkSaveCheckpoint(runCommand, context, options = {
 
 async function prepareSessionWorkSaveMessageDirect({
   commandOptions = {},
-  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   derivedArtifactPaths = [],
   limit = 40,
   operationId = crypto.randomUUID(),
@@ -135,11 +126,6 @@ async function prepareSessionWorkSaveMessageDirect({
     worktreeTree: checkpoint.checkpointTree
   });
   if (!changes.totalCount) {
-    await assertConnectedSubmissionsIntegrated(runCommand, context, {
-      commandOptions,
-      connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots),
-      project
-    });
     throw saveError(
       "This session has no work to save.",
       "vibe64_session_save_no_changes"
@@ -202,7 +188,6 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
   const {
     checkpoint = {},
     commandOptions = {},
-    connectedWorkSnapshots: workSnapshots = [],
     derivedArtifactPaths = [],
     message = "",
     operationId,
@@ -252,7 +237,6 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
   const derivedPathSet = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   if (!changedPaths.length) {
-    await assertConnectedSubmissionsIntegrated(runCommand, context, { commandOptions, connectedWorkSnapshots: workSnapshots, project });
     throw saveError(
       "This session has no work to save.",
       "vibe64_session_save_no_changes"
@@ -297,7 +281,6 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
     canonicalCommit,
     changeBaseCommit: comparison.changeBaseCommit,
     changedPaths,
-    contributionAuthority: canonical.contribution,
     mergedTree,
     preparedRef,
     saveCommit,
@@ -308,7 +291,6 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
 async function publishPreparedSessionWorkSave(runCommand, context, options = {}) {
   const {
     commandOptions = {},
-    connectedWorkSnapshots: workSnapshots = [],
     onPublicationAttempt,
     prepared = {},
     project = {}
@@ -318,10 +300,9 @@ async function publishPreparedSessionWorkSave(runCommand, context, options = {})
     context,
     {
       canonicalCommit: normalizeText(prepared.canonicalCommit),
-      contributionAuthority: prepared.contributionAuthority,
       saveCommit: normalizeText(prepared.saveCommit)
     },
-    { commandOptions, connectedWorkSnapshots: workSnapshots, onPublicationAttempt, project }
+    { commandOptions, onPublicationAttempt, project }
   );
 }
 
@@ -412,8 +393,7 @@ async function deletePreparedSaveRef(runCommand, context, operationId, options =
 /**
  * Called once the caller has durably recorded a completed or recovered Save.
  * Its prepared ref is then no longer recovery evidence. Left behind, it would
- * pin its commit and make a later absent contribution branch look like a lost
- * publication.
+ * pin its commit.
  */
 async function retireSessionWorkSave({
   commandOptions = {},
@@ -433,7 +413,6 @@ async function retireSessionWorkSave({
 async function saveSessionWorkDirect({
   checkpoint: suppliedCheckpoint = null,
   commandOptions = {},
-  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   deferCacheMaintenance = false,
   derivedArtifactPaths = [],
   message = "",
@@ -446,7 +425,6 @@ async function saveSessionWorkDirect({
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);
-  const snapshots = connectedWorkSnapshots(suppliedConnectedSnapshots);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Saving session work",
     operationId
@@ -492,7 +470,6 @@ async function saveSessionWorkDirect({
     const prepared = await prepareSessionWorkSave(runCommand, context, {
       checkpoint,
       commandOptions,
-      connectedWorkSnapshots: snapshots,
       derivedArtifactPaths,
       message,
       operationId,
@@ -519,7 +496,6 @@ async function saveSessionWorkDirect({
       await onProgress({ kind: "publish", message: "Pushing the Save commit.", stage: "publishing" });
       verifiedCommit = await publishPreparedSessionWorkSave(runCommand, context, {
         commandOptions,
-        connectedWorkSnapshots: snapshots,
         onPublicationAttempt() {
           publicationAttempted = true;
         },
@@ -529,8 +505,8 @@ async function saveSessionWorkDirect({
     } catch (error) {
       if (!publicationAttempted) {
         // No publication command ran. Retire only this prepared proposal;
-        // leaving it behind would make a first contribution's absent ref look
-        // like a lost publication forever. The source checkpoint remains.
+        // a later recovery must not read it as a possible publication. The
+        // source checkpoint remains.
         await git(runCommand, context, ["update-ref", "-d", prepared.preparedRef, prepared.saveCommit], {
           commandOptions,
           project
@@ -594,7 +570,6 @@ async function saveSessionWorkDirect({
 
 async function prepareSessionWorkSaveMessage({
   commandOptions = {},
-  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   derivedArtifactPaths = [],
   limit = 40,
   operationId = crypto.randomUUID(),
@@ -606,7 +581,7 @@ async function prepareSessionWorkSaveMessage({
   return runSessionWorkOperation({
     commandOptions,
     context,
-    input: { connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots), derivedArtifactPaths, limit },
+    input: { derivedArtifactPaths, limit },
     label: "Capturing work for Save",
     operation: "save-message",
     operationId,
@@ -623,7 +598,6 @@ async function saveSessionWork({
   onCacheMaintenance = doNothing,
   operationId = crypto.randomUUID(),
   project = {},
-  readConnectedWorkSnapshots,
   runCommand = runVibe64Command,
   runProjectSourceExclusive = async (operation) => operation(),
   onProgress = doNothing,
@@ -640,14 +614,11 @@ async function saveSessionWork({
       sessionHead: normalizeText(checkpoint.sessionHead),
       stage: "publishing"
     });
-    const snapshots = connectedWorkSnapshots(await readConnectedWorkSnapshots());
     return runSessionWorkOperation({
-      additionalAllowedRoots: snapshots.map(snapshot => snapshot.worktreePath),
       commandOptions,
       context,
       input: {
         checkpoint,
-        connectedWorkSnapshots: snapshots,
         derivedArtifactPaths,
         message
       },

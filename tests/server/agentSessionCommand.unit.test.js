@@ -71,8 +71,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
           async readBackgroundTask() {
             return null;
           },
-          async readMetadataValue() {
-            return JSON.stringify({ status: "succeeded" });
+          async readMetadataValue(_sessionId, name) {
+            return name === "connected_copies" ? "" : JSON.stringify({ status: "succeeded" });
           }
         };
       },
@@ -284,6 +284,7 @@ test("session status gives the assistant the stored reason a repository needs he
         return { async readSessionSourceDescriptor() { return descriptor; },
           async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); return tasks.get(taskId) || null; },
           async readMetadataValue(_sessionId, name) {
+            if (name === "connected_copies" || name === "source_path") return "";
             return JSON.stringify(name === "repository_update_check" ? updateCheck : { status: "succeeded", recipeHash: "earlier" });
           } };
       },
@@ -325,6 +326,53 @@ test("session status gives the assistant the stored reason a repository needs he
   assert.deepEqual((await service.sessionStatus("session-1")).repository, { needsHelp: false });
 });
 
+test("session status lists this session's connected copies with whether each is behind or holds unsaved work", async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-status-connected-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const git = async (cwd, args) => String((await promisify(execFile)("git", args, { cwd, env: { ...process.env,
+    GIT_AUTHOR_EMAIL: "vibe64@example.test", GIT_AUTHOR_NAME: "Vibe64 Test",
+    GIT_COMMITTER_EMAIL: "vibe64@example.test", GIT_COMMITTER_NAME: "Vibe64 Test" } })).stdout).trim();
+  const sourceRoot = path.join(temporaryRoot, "sessions", "active", "session-1", "source");
+  const copy = path.join(temporaryRoot, "sessions", "active", "session-1", "connected", "library");
+  await mkdir(sourceRoot, { recursive: true });
+  await mkdir(copy, { recursive: true });
+  await git(copy, ["init", "--initial-branch=vibe64/session-1"]);
+  await writeFile(path.join(copy, "library.txt"), "initial\n");
+  await git(copy, ["add", "."]);
+  await git(copy, ["commit", "-m", "initial"]);
+  const head = await git(copy, ["rev-parse", "HEAD"]);
+  const metadata = {
+    connected_copies: JSON.stringify({ library: { repository: "example/library", branch: "main", path: copy, baseCommit: head, canonicalCommit: head } }),
+    source_path: sourceRoot,
+    workspace_setup: JSON.stringify({ status: "succeeded", recipeHash: "earlier" })
+  };
+  const descriptor = { metadata: { source_kind: "session_clone", source_path: sourceRoot,
+    source_path_authority: "managed_session_source" }, sessionId: "session-1" };
+  const service = createAgentSessionCommandService({ logger: silentLogger,
+    project: {
+      async createSessionStore() {
+        return { async readSessionSourceDescriptor() { return descriptor; },
+          async readBackgroundTask() { return null; },
+          async readMetadataValue(_sessionId, name) { return metadata[name] || ""; } };
+      },
+      async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+      async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
+      async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
+      async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
+      async runInProjectContext(_slug, operation) { return operation(); }
+    }
+  });
+  await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
+  assert.deepEqual((await service.sessionStatus("session-1")).repository, {
+    needsHelp: false,
+    connected: [{ name: "library", path: copy, behind: 0, unsaved: false }]
+  });
+  await writeFile(path.join(copy, "notes.md"), "unsaved\n");
+  assert.deepEqual((await service.sessionStatus("session-1")).repository.connected,
+    [{ name: "library", path: copy, behind: 0, unsaved: true }]);
+});
+
 test("project contract decisions are one shared predicate and keep agent status available", async (t) => {
   for (const code of ["STACK_SECTION_AMBIGUOUS", "STACK_PROJECT_CONTRACTS_INCOMPLETE"]) {
     assert.equal(genesisProjectContractNeedsAttention({ code }), true, code);
@@ -344,7 +392,9 @@ test("project contract decisions are one shared predicate and keep agent status 
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
           async readBackgroundTask() { return null; },
-          async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
+          async readMetadataValue(_sessionId, name) {
+            return name === "connected_copies" ? "" : JSON.stringify({ status: "succeeded", recipeHash: "earlier" });
+          } };
       },
       async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },

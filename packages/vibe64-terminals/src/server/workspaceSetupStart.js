@@ -1,17 +1,14 @@
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { CONNECTED_LINK_REQUIRED } from "@local/vibe64-core/server/projectRepository";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { GENESIS_STACK_SECTION_AMBIGUOUS } from "@local/vibe64-genesis/server";
 import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { loadProjectExecutionEnvRecords, projectExecutionEnvFromRecords } from "./projectExecutionEnv.js";
-import { connectedChoiceRequired, failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
+import { failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
 import {
   CONNECTED_PREPARATION_LABEL,
   appendWorkspaceSetupTranscript,
-  connectedLinkLine,
-  connectedUpdateLine,
   diagnosticText,
   diagnosticsInclude,
   inProjectContext,
@@ -31,7 +28,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * Starts a session's workspace setup: inspects its recipe, migrates a retried
- * outdated project, prepares connected sources, reuses a run that still
+ * outdated project, prepares connected repositories, reuses a run that still
  * matches, and otherwise records the new run and starts it.
  * @param {object} dependencies
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
@@ -52,12 +49,12 @@ function createWorkspaceSetupStart({
   /**
    * `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
    * runs a failed recipe again instead of reporting the stored failure.
-   * `agentRequested` marks a start an AI asked for: linking a connected session
-   * cannot be undone, so that one stops for a person instead. `signal` stops
-   * the run this start begins (an AI task's Cancel).
+   * `vibe64User` is the person whose GitHub access copies a connected
+   * repository this session does not have yet. `signal` stops the run this
+   * start begins (an AI task's Cancel).
    */
   async function start({
-    agentRequested = false, renewal = false, rerunFailed = false, retry = false, runtime, session, signal = null
+    renewal = false, rerunFailed = false, retry = false, runtime, session, signal = null, vibe64User = null
   } = {}) {
     const sessionId = toText(session?.sessionId);
     if (!sessionId || !runtime?.store) {
@@ -138,7 +135,6 @@ function createWorkspaceSetupStart({
     }
 
     const run = {
-      agentRequested,
       migrationStartedAt,
       migrationTranscript,
       projectContext,
@@ -152,10 +148,11 @@ function createWorkspaceSetupStart({
       setup,
       signal,
       sourcePath,
-      stateBase
+      stateBase,
+      vibe64User
     };
     if (runtime.learningScope || !setup?.connectedDevelopment || retry !== true) return startRecipe(run);
-    // A requested run prepares connected projects in the background: they
+    // A requested run prepares connected repositories in the background: they
     // can take minutes, and the session shows each step while it runs.
     const startedAt = migrationStartedAt || new Date().toISOString();
     const currentLabel = CONNECTED_PREPARATION_LABEL;
@@ -205,7 +202,6 @@ function createWorkspaceSetupStart({
   }
 
   async function startRecipe({
-    agentRequested,
     attemptStarted = false,
     migrationStartedAt,
     migrationTranscript,
@@ -221,46 +217,27 @@ function createWorkspaceSetupStart({
     setup,
     signal,
     sourcePath,
-    stateBase
+    stateBase,
+    vibe64User = null
   }) {
-    let connectedLinks = [];
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
-        const prepared = await connectedPreparation({
-          automaticLink: !renewal && !agentRequested,
-          mode: "prepare",
-          onProgress,
-          renewal,
-          runtime,
-          session
-        });
-        connectedLinks = (prepared?.linked || []).map(connectedLinkLine);
-        if (prepared?.ok === false) {
-          // Name the connected project that failed: its own message often cannot.
-          const failedProject = toText(prepared.failedRepository).split("/").pop();
-          throw Object.assign(
-            new Error(failedProject ? `Connected project ${failedProject}: ${toText(prepared.error)}` : prepared.error),
-            { code: prepared.code }
-          );
-        }
-        connectedUpdates = [...connectedLinks, ...(prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean)];
-        await onProgress("Checking connected sources");
+        const prepared = await connectedPreparation({ mode: "prepare", onProgress, runtime, session, vibe64User });
+        connectedUpdates = prepared?.lines || [];
+        await onProgress("Checking connected repositories");
         session = await runtime.getSessionWithoutSource(sessionId);
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {
-        const stopped = {
-          currentLabel: "Prepare connected sources",
+        const state = await failed(runtime, sessionId, {
+          currentLabel: "Prepare connected repositories",
           diagnostic: toText(error?.message),
           renewal,
           // The output keeps the reason, so Expand and the next attempt's
           // history show why, not only that this step stopped.
-          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", ...connectedLinks, toText(error?.message))
-        };
-        const state = error?.code === CONNECTED_LINK_REQUIRED
-          ? await connectedChoiceRequired(runtime, sessionId, stopped)
-          : await failed(runtime, sessionId, stopped);
+          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message))
+        });
         return { completion: null, state };
       }
     }

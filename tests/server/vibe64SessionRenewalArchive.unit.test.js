@@ -83,6 +83,7 @@ async function createGitProject(root, {
 }
 
 async function createRenewalFixture(targetRoot, {
+  connectedCopies = [],
   onRenewalArchiveCommitStep,
   renewalId = "renewal-archive-1",
   sourceSessionId = "renewal-source",
@@ -104,11 +105,19 @@ async function createRenewalFixture(targetRoot, {
     store
   });
   const sourcePath = sessionSourcePath(targetRoot, sourceSessionId);
+  const copyPath = (name) => path.join(path.dirname(sourcePath), "connected", name);
   await runtime.createSession({
     metadata: {
       base_branch: "main",
       base_commit: baseCommit,
       branch: `vibe64/${sourceSessionId}`,
+      ...(connectedCopies.length
+        ? {
+            connected_copies: JSON.stringify(Object.fromEntries(connectedCopies.map((name) => [name, {
+              repository: `example/${name}`, branch: "main", path: copyPath(name), baseCommit, canonicalCommit: baseCommit
+            }])))
+          }
+        : {}),
       source_default_branch: "main",
       source_remote_url: targetRoot,
       ...sourceMetadata(targetRoot, sourceSessionId)
@@ -122,6 +131,11 @@ async function createRenewalFixture(targetRoot, {
   await git(sourcePath, ["config", "user.email", "vibe64@example.test"]);
   await git(sourcePath, ["config", "user.name", "Vibe64 Test"]);
   await git(sourcePath, ["checkout", "-B", `vibe64/${sourceSessionId}`, baseCommit]);
+  for (const name of connectedCopies) {
+    await mkdir(path.dirname(copyPath(name)), { recursive: true });
+    await git(path.dirname(copyPath(name)), ["clone", targetRoot, copyPath(name)]);
+    await git(copyPath(name), ["checkout", "-B", `vibe64/${sourceSessionId}`, baseCommit]);
+  }
   if (withSubmodule) {
     await git(sourcePath, [
       "-c",
@@ -292,6 +306,48 @@ test("renewal stages a clean source reversibly before committing removal", async
       fixture.sourceSessionId,
       { renewalId: fixture.renewalId }
     )).changed, false);
+  });
+});
+
+test("renewal stages the connected copies with the source, restores them on failure and removes them once committed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const fixture = await createRenewalFixture(targetRoot, { connectedCopies: ["library", "tools"] });
+    const options = { renewalId: fixture.renewalId };
+    const connectedRoot = path.join(path.dirname(fixture.sourcePath), "connected");
+    const stagedRoot = `${connectedRoot}.renewal-${fixture.renewalId}`;
+    const libraryHead = await git(path.join(connectedRoot, "library"), ["rev-parse", "HEAD"]);
+
+    // A copy with unsaved work refuses renewal, like the session's own source.
+    await writeProjectFile(path.join(connectedRoot, "library"), "notes.md", "unsaved\n");
+    await assert.rejects(
+      () => fixture.runtime.prepareSessionSourceForRenewal(fixture.sourceSessionId, options),
+      (error) => error.code === "vibe64_session_renewal_source_dirty" && /library has unsaved work/u.test(error.message)
+    );
+    await rm(path.join(connectedRoot, "library", "notes.md"));
+
+    await fixture.runtime.prepareSessionSourceForRenewal(fixture.sourceSessionId, options);
+    const recovery = JSON.parse((await fixture.runtime.store.readMetadata(fixture.sourceSessionId)).connected_copies_recovery);
+    assert.deepEqual(Object.keys(recovery).sort(), ["library", "tools"]);
+    assert.equal(recovery.library.head, libraryHead);
+
+    await fixture.runtime.stagePreparedSessionSourceForRenewal(fixture.sourceSessionId, options);
+    assert.equal(await pathExists(connectedRoot), false);
+    assert.equal(await git(path.join(stagedRoot, "library"), ["rev-parse", "HEAD"]), libraryHead);
+
+    await fixture.runtime.restoreSessionSourceAfterRenewalFailure(fixture.sourceSessionId, options);
+    assert.equal(await pathExists(stagedRoot), false);
+    assert.equal(await git(path.join(connectedRoot, "library"), ["rev-parse", "HEAD"]), libraryHead);
+    assert.equal(await pathExists(path.join(connectedRoot, "tools", ".git")), true);
+
+    await fixture.runtime.prepareSessionSourceForRenewal(fixture.sourceSessionId, options);
+    await fixture.runtime.stagePreparedSessionSourceForRenewal(fixture.sourceSessionId, options);
+    await handoffAndFinalize(fixture);
+    await fixture.runtime.store.prepareRenewalSessionArchive(fixture);
+    await activateSuccessor(fixture);
+    await commitPreparedRenewal(fixture);
+    await fixture.runtime.commitRenewalSessionSourceRemoval(fixture.sourceSessionId, options);
+    assert.equal(await pathExists(stagedRoot), false);
+    assert.equal(await pathExists(connectedRoot), false);
   });
 });
 

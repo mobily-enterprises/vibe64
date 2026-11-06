@@ -99,8 +99,8 @@ async function recoverSessionWorkSave({
         { messageCode: "vibe64_session_save_publication_still_unknown", messageParams: { reason: normalizeText(error.message) } }
       );
     }
-    let authorityCommit = canonical.commit;
-    if (authorityCommit === expectedCanonicalCommit && canonical.contribution?.publishedCommit !== proposedCommit) {
+    const authorityCommit = canonical.commit;
+    if (authorityCommit === expectedCanonicalCommit) {
       throw saveError(
         "The interrupted Save did not push your changes. Retry Save when ready.",
         "vibe64_session_save_interrupted_retryable",
@@ -108,7 +108,6 @@ async function recoverSessionWorkSave({
         { messageCode: "vibe64_session_save_interrupted_unpushed" }
       );
     }
-    if (context.contribution) authorityCommit = canonical.contribution.publishedCommit;
     if (authorityCommit !== proposedCommit) {
       throw saveError(
         "Canonical history advanced while the interrupted Save was being recovered.",

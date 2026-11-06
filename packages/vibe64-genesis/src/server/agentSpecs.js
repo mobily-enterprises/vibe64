@@ -335,14 +335,14 @@ ${list([...VIBE64_RESOURCE_ESTIMATE_FIELDS.keys()].map((field) => `- ${field}: \
     title: "Connected development",
     section: VIBE64_CONNECTED_DEVELOPMENT_SECTION,
     contract: VIBE64_CONNECTED_DEVELOPMENT_CONTRACT,
-    summary: "How this project consumes the working source of connected projects (its own dependencies under development) in a session.",
+    summary: "How this project consumes the working source of its connected repositories (its own dependencies under development) in a session.",
     body: `
 Entries:
 ${list(CONNECTED_DEVELOPMENT_ENTRY_FORMS)}
 
 - Declare a Default package type alone, or a Sources file with Verify entries or a Custom runner (keeping any Default package type). All Prepare entries precede Verify entries. Steps run unconditionally (no \`when\`/\`if\`); at most one Custom runner.
 - Package types: ${CONNECTED_PACKAGE_TYPES.map(({ value }) => `\`${value}\``).join(", ")}. A type is a declared label: Vibe64 never runs a package manager for it. This project's own Prepare/Verify commands give each connected source its ecosystem's treatment, and Verify must prove that the source is consumed.
-- The Sources file is a development-only path outside \`.git\`, never tracked; Vibe64 writes it when it prepares connected sources and excludes it from Git. Its JSON: \`{"contract":"${CONNECTED_SOURCES_CONTRACT}","sessionId":"…","projects":[{"name":"…","repository":"https://github.com/owner/repo","relationship":"dependency|composition","type":"npm","sourceRoot":"/absolute/receiving/source","contributionId":"…"}]}\`; a custom connection also carries \`"script"\`.
+- The Sources file is a development-only path outside \`.git\`, never tracked; Vibe64 writes it when it prepares the session's connected repositories and excludes it from Git. Its JSON: \`{"schema":"${CONNECTED_SOURCES_CONTRACT}","sessionId":"…","repositories":[{"name":"…","repository":"https://github.com/owner/repo","relationship":"dependency|composition","type":"npm","sourceRoot":"/absolute/session/connected/repo"}]}\`; each \`sourceRoot\` is this session's own copy of that repository, and a custom connection also carries \`"script"\`.
 - Custom connections: ${CONNECTED_CUSTOM_RUNNER_CONTRACT}
 `,
     example: `

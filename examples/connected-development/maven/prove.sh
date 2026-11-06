@@ -63,8 +63,8 @@ grep -q "$MARK1" "$LIB/src/main/java/com/example/library/Library.java"
 step "write the sources map"
 mkdir -p "$APP/.development"
 cat > "$APP/.development/connected.json" <<EOF
-{"contract":"vibe64.connected-sources.v1","sessionId":"proof-session","projects":[
-  {"name":"Library","repository":"https://github.com/acme/library","relationship":"dependency","type":"maven","sourceRoot":"$LIB","contributionId":"proof-contribution"}
+{"schema":"vibe64.connected-sources.v2","sessionId":"proof-session","repositories":[
+  {"name":"Library","repository":"https://github.com/acme/library","relationship":"dependency","type":"maven","sourceRoot":"$LIB"}
 ]}
 EOF
 

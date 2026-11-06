@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { appendFile, cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -34,8 +33,8 @@ const prepareScript = `import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 const map = JSON.parse(readFileSync('.development/connected.json', 'utf8'));
-assert.equal(map.contract, 'vibe64.connected-sources.v1');
-const selected = map.projects.find(project => project.repository === '${repository}');
+assert.equal(map.schema, 'vibe64.connected-sources.v2');
+const selected = map.repositories.find(project => project.repository === '${repository}');
 assert.ok(selected);
 execFileSync('npm', ['install', '--no-save', '--package-lock=false', '--install-links=false',
   '--ignore-scripts', '--offline', '--no-audit', '--no-fund', selected.sourceRoot], { stdio: 'inherit' });
@@ -46,7 +45,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { message } from '${packageName}';
 const map = JSON.parse(readFileSync('.development/connected.json', 'utf8'));
-const selected = map.projects.find(project => project.repository === '${repository}');
+const selected = map.repositories.find(project => project.repository === '${repository}');
 assert.equal(realpathSync(fileURLToPath(import.meta.resolve('${packageName}'))),
   realpathSync(path.join(selected.sourceRoot, 'index.js')));
 console.log(message());
@@ -63,9 +62,7 @@ async function writeLibrary(root, message) {
 
 async function createTask(target, name, releaseRoot, env) {
   const root = sourcePath(target, name);
-  const id = randomUUID();
-  const receiverTarget = path.join(target, "library");
-  const receiverRoot = sourcePath(receiverTarget, id);
+  const copyRoot = path.join(path.dirname(root), "connected", "library");
   await mkdir(root, { recursive: true });
   await cp(releaseRoot, root, { recursive: true, filter: source => path.basename(source) !== "node_modules" });
   await exec("git", ["init", "--initial-branch=main"], { cwd: root, env });
@@ -83,28 +80,23 @@ async function createTask(target, name, releaseRoot, env) {
     "- Verify `Import selected library` with `nodejs`: `node` `verify-connected.mjs`", ""
   ].join("\n"));
   const connection = { name: "Library", repository, relationship: "dependency" };
-  await writeFile(path.join(root, "vibe64.connections.json"), JSON.stringify({ projects: [connection] }));
-  await writeLibrary(receiverRoot, `${name} original source`);
-  const contribution = { schemaVersion: 1, id, repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) };
+  await writeFile(path.join(root, "vibe64.connections.json"), JSON.stringify({ repositories: [connection] }));
+  await writeLibrary(copyRoot, `${name} original source`);
+  const copy = { repository: "example/library", branch: "main", path: copyRoot, baseCommit: "a".repeat(40), canonicalCommit: "a".repeat(40) };
   const runtime = new Vibe64SessionRuntime({
     promptEnvironment: env, projectContextRoot: target, projectRuntimeRoot: projectRuntimeRoot(target)
   });
   await runtime.store.createSession({ sessionId: name, runtimeKind: "genesis", metadata: {
     ...sourceMetadata(target, name),
-    connected_sources: JSON.stringify({ schemaVersion: 1, sources: [{ projectSlug: "library", contribution }] })
+    connected_copies: JSON.stringify({ library: copy })
   } });
   const session = await runtime.store.readSession(name);
-  const projects = [{ ...connection, projectSlug: "library", session: {
-    sessionId: id, sourceReady: true, metadata: {
-      ...sourceMetadata(receiverTarget, id), connected_contribution: JSON.stringify(contribution)
-    }
-  } }];
   const inspection = await inspectVibe64ConnectedDevelopment({ projectRoot: root });
   assert.equal(inspection.status, "ready");
-  const inputs = { session, projects, inspection, env };
+  const inputs = { session, inspection, env };
   await materializeConnectedDevelopmentInputs(inputs);
   await exec("git", ["add", "--all"], { cwd: root, env });
-  return { root, receiverRoot, runtime, session, inputs };
+  return { root, copyRoot, runtime, session, inputs };
 }
 
 function connectedWorkspaceRunner(tasks) {
@@ -160,18 +152,18 @@ test("Stack preparation imports connected Node packages through task-local node_
     const state = await started.completion;
     assert.equal(state?.status, "succeeded", JSON.stringify(state || started.state));
     assert.match(state.transcript, new RegExp(`${task.session.sessionId} original source`, "u"));
-    assert.equal(await realpath(path.join(task.root, "node_modules", packageName)), await realpath(task.receiverRoot));
+    assert.equal(await realpath(path.join(task.root, "node_modules", packageName)), await realpath(task.copyRoot));
   }
   const consume = async task => {
     const result = await runVibe64Command({ actor: "app", command: "node", args: ["verify-connected.mjs"],
-      cwd: task.root, allowedRoots: [task.root, task.receiverRoot], baseEnv: env,
+      cwd: task.root, allowedRoots: [task.root, task.copyRoot], baseEnv: env,
       envPolicy: "session", mode: "capture", purpose: "source",
       runtimes: vibe64RuntimePacks(["nodejs"]).runtimes, timeout: 30_000 });
     assert.equal(result.ok, true, result.output);
     return result.stdout.trim();
   };
   assert.equal(await consume(first), "task-a original source");
-  await writeLibrary(first.receiverRoot, "task-a changed source");
+  await writeLibrary(first.copyRoot, "task-a changed source");
   assert.equal(await consume(first), "task-a changed source", "A fresh ordinary package import observes the selected source edit.");
   assert.equal(await consume(second), "task-b original source", "Another task retains its own selected checkout.");
   for (const task of [first, second]) {
@@ -203,7 +195,7 @@ test("custom connected scripts run prepare and verify through the Stack runner w
   const task = await createTask(path.join(tempRoot, "project with spaces"), "custom-task", releaseRoot, env);
   const script = "tooling/custom handler.mjs";
   const connection = { name: "Library", repository, relationship: "dependency", type: "custom", script };
-  await writeFile(path.join(task.root, "vibe64.connections.json"), JSON.stringify({ projects: [connection] }));
+  await writeFile(path.join(task.root, "vibe64.connections.json"), JSON.stringify({ repositories: [connection] }));
   await writeFile(path.join(task.root, "genesis/stack.md"), [
     "# Stack", "", "## Components", "", "## Workspace setup", "", "- Nothing.",
     "", "## Connected development", "", "- Default package type: `npm`",
@@ -217,7 +209,7 @@ import { parseArgs } from 'node:util';
 const { values } = parseArgs({ options: Object.fromEntries(
   ['phase', 'source-root', 'project-root', 'sources-file', 'repository'].map(name => [name, { type: 'string' }])) });
 const map = JSON.parse(readFileSync(values['sources-file'], 'utf8'));
-const selected = map.projects.find(project => project.repository === values.repository);
+const selected = map.repositories.find(project => project.repository === values.repository);
 assert.equal(selected.type, 'custom');
 assert.equal(selected.sourceRoot, values['source-root']);
 assert.equal(process.cwd(), values['project-root']);
@@ -233,11 +225,10 @@ else {
 }
 console.log('Custom fixture ' + values.phase + ' consumed selected source.');
 `);
-  await writeFile(path.join(task.receiverRoot, "payload.txt"), "selected custom source");
-  task.inputs.projects = [{ ...task.inputs.projects[0], ...connection }];
+  await writeFile(path.join(task.copyRoot, "payload.txt"), "selected custom source");
   task.inputs.inspection = await inspectVibe64ConnectedDevelopment({ projectRoot: task.root });
   await materializeConnectedDevelopmentInputs(task.inputs);
-  const sourceManifest = await readFile(path.join(task.receiverRoot, "package.json"), "utf8");
+  const sourceManifest = await readFile(path.join(task.copyRoot, "package.json"), "utf8");
   const runner = connectedWorkspaceRunner([task]);
   const started = await runner.start({ runtime: task.runtime, session: task.session });
   const result = await started.completion;
@@ -246,12 +237,12 @@ console.log('Custom fixture ' + values.phase + ' consumed selected source.');
   const calls = () => readFile(path.join(task.root, ".development/custom-calls.jsonl"), "utf8")
     .then(content => content.trim().split("\n").map(line => JSON.parse(line)));
   assert.deepEqual(await calls(), ["prepare", "verify"].map(phase => ({
-    phase, "source-root": task.receiverRoot, "project-root": task.root,
+    phase, "source-root": task.copyRoot, "project-root": task.root,
     "sources-file": path.join(task.root, ".development/connected.json"), repository
   })));
-  assert.equal(await readFile(path.join(task.receiverRoot, "package.json"), "utf8"), sourceManifest);
+  assert.equal(await readFile(path.join(task.copyRoot, "package.json"), "utf8"), sourceManifest);
 
-  await writeFile(path.join(task.receiverRoot, "payload.txt"), "changed custom source");
+  await writeFile(path.join(task.copyRoot, "payload.txt"), "changed custom source");
   await writeFile(path.join(task.root, ".development/reject-verification"), "reject");
   const retried = await runner.start({ runtime: task.runtime, session: task.session, retry: true });
   const failed = await retried.completion;

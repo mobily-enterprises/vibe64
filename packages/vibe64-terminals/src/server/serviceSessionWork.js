@@ -4,14 +4,17 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { REPOSITORY_UPDATE_CHECK_METADATA } from "@local/vibe64-core/shared";
 import {
   assertSessionRepositoryReview,
-  sessionConnectedContribution,
+  sessionConnectedCopies,
   sessionRepositoryDestination
 } from "@local/vibe64-core/server/projectRepository";
 import { requireCompletedConversationRewind } from "./assistantChangeover.js";
-import { changeIncomingContribution as changeManagedIncomingContribution } from "./sessionIncomingContributions.js";
+import { recoverConnectedCopySaves, saveConnectedCopies, updateConnectedCopies } from "./sessionConnectedCopies.js";
+import { connectedCopyOperations, refuseBehindSessionSave } from "./serviceSessionConnectedCopies.js";
+import { saveError } from "./sessionWorkCommands.js";
 import { throwIfUpdateCancelled, updateSessionWork as updateManagedSessionWork } from "./sessionWorkUpdate.js";
 import { recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
 import {
+  inspectSessionWork as inspectManagedSessionWork,
   prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage as prepareManagedSessionWorkSaveMessage,
   recoverSessionWorkSave as recoverManagedSessionWorkSave,
@@ -41,9 +44,9 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
- * A session's work in its repository: the work execution, saving and its recovery, updates and
- * incoming contributions, pull requests, the session source and its exclusive reads, and the Git
- * command actor.
+ * A session's work in its repository and its connected copies: the work execution, saving and its
+ * recovery, updates, pull requests, the session source and its exclusive reads, and the Git command
+ * actor.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  * @param {ServiceSessionAccess} dependencies.sessionAccess
@@ -68,8 +71,57 @@ function createServiceSessionWork({
   sessionAgent,
   workspaceSetup
 }) {
+  /**
+   * The version name for one Save: the assistant's, or a checkpoint-based one when naming is unavailable.
+   */
+  async function nameSave(prepared, { agentContext, onProgress = doNothing, operationId, sessionId }) {
+    try {
+      return await generateSessionSaveCommitMessage({
+        agent: sessionAgent,
+        agentContext,
+        changes: prepared.changes
+      });
+    } catch (error) {
+      // Naming is optional. Leave failed thread ownership intact and let the
+      // repository owner enforce the normal checkpoint and publish checks.
+      logOperationalEvent(logger, "warn", {
+        code: error.code || "vibe64_session_save_message_failed",
+        component: "vibe64.session_save",
+        event: "vibe64.session_save.message_fallback",
+        operationId,
+        sessionId
+      }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
+      await onProgress({
+        code: error.code || "vibe64_session_save_message_failed",
+        kind: "message",
+        message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
+        stage: "message-fallback"
+      });
+      return {
+        executionProfile: null,
+        subject: `Save work ${prepared.checkpoint.checkpointTree.slice(0, 12)}`
+      };
+    }
+  }
+
+  function logCacheMaintenance(operationId, sessionId) {
+    return (cacheMaintenance = {}) => {
+      if (cacheMaintenance.retryable !== true) {
+        return;
+      }
+      logOperationalEvent(logger, "warn", {
+        code: cacheMaintenance.code,
+        component: "vibe64.session_save",
+        event: "vibe64.session_save.cache_maintenance_failed",
+        operationId,
+        reason: cacheMaintenance.reason,
+        sessionId
+      }, cacheMaintenance.message || "Vibe64 Save cache maintenance failed.");
+    };
+  }
+
   async function saveSessionWorkInsideWrite(sessionId, input, context) {
-    const { assertConnectedWorkSaved = doNothing, onProgress = doNothing } = input;
+    const { onProgress = doNothing } = input;
     const { execution, normalizedSessionId, runtime, session } = await sessionWorkExecution(
       sessionId,
       context,
@@ -81,7 +133,7 @@ function createServiceSessionWork({
     const assertWorkflow = async () => {
       if (destination.mode !== "github") return;
       const workflow = await project.readRepositoryWorkflow();
-      if (workflow.requirePullRequest && !sessionConnectedContribution(session) && !context.creatingPullRequest &&
+      if (workflow.requirePullRequest && !context.creatingPullRequest &&
           !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
         throw vibe64Error(
           "This project requires a pull request. Create or open a pull request before saving this session.",
@@ -90,11 +142,57 @@ function createServiceSessionWork({
         );
       }
     };
-    await assertWorkflow();
-    const connectedWorkSnapshots = await assertConnectedWorkSaved();
+    const agentContext = {
+      runtime,
+      session,
+      vibe64User: input.vibe64User || null
+    };
+    const copies = sessionConnectedCopies(session);
+    // Copies push first, so the session's own work is checked before any push.
+    const ownUnsaved = !copies.length || (await inspectManagedSessionWork({
+      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+      project: projectRecord,
+      session
+    })).unsaved === true;
+    if (ownUnsaved) await assertWorkflow();
+    const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
+    const connected = copies.length ? await saveConnectedCopies({
+      beforePush: () => ownUnsaved && refuseBehindSessionSave({
+        commandOptions: execution.commandOptions,
+        operationId: input.operationId,
+        project: projectRecord,
+        runCommand: execution.runCommand,
+        runProjectSourceExclusive,
+        session
+      }),
+      copies,
+      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+      ...connectedCopyOperations({ codexGitCommand, env, runtime, session }, {
+        createsCommits: true,
+        reason: "session-save",
+        runtime,
+        vibe64User: input.vibe64User || null
+      }),
+      nameSave: async (prepared) => (await nameSave(prepared, {
+        agentContext,
+        operationId: input.operationId,
+        sessionId: normalizedSessionId
+      })).subject,
+      onCacheMaintenance: logCacheMaintenance(input.operationId, normalizedSessionId),
+      onProgress,
+      operationId: input.operationId,
+      project: projectRecord,
+      runProjectSourceExclusive,
+      session
+    }) : [];
+    if (!ownUnsaved) {
+      if (!connected.length) {
+        throw saveError("This session has no work to save.", "vibe64_session_save_no_changes");
+      }
+      return { connected, ok: true, operationId: input.operationId, reconciled: true, status: "saved" };
+    }
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
-      connectedWorkSnapshots,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       limit: 40,
       operationId: input.operationId,
@@ -109,39 +207,12 @@ function createServiceSessionWork({
       message: "Writing a concise name for this work.",
       stage: "message-writing"
     });
-    const agentContext = {
-      runtime,
-      session,
-      vibe64User: input.vibe64User || null
-    };
-    let commitTitle;
-    try {
-      commitTitle = await generateSessionSaveCommitMessage({
-        agent: sessionAgent,
-        agentContext,
-        changes: saveMessageInput.changes
-      });
-    } catch (error) {
-      // Naming is optional. Leave failed thread ownership intact and let the
-      // repository owner enforce the normal checkpoint and publish checks.
-      commitTitle = {
-        executionProfile: null,
-        subject: `Save work ${saveMessageInput.checkpoint.checkpointTree.slice(0, 12)}`
-      };
-      logOperationalEvent(logger, "warn", {
-        code: error.code || "vibe64_session_save_message_failed",
-        component: "vibe64.session_save",
-        event: "vibe64.session_save.message_fallback",
-        operationId: input.operationId,
-        sessionId: normalizedSessionId
-      }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
-      await onProgress({
-        code: error.code || "vibe64_session_save_message_failed",
-        kind: "message",
-        message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
-        stage: "message-fallback"
-      });
-    }
+    const commitTitle = await nameSave(saveMessageInput, {
+      agentContext,
+      onProgress,
+      operationId: input.operationId,
+      sessionId: normalizedSessionId
+    });
     await onProgress({
       executionProfile: commitTitle.executionProfile,
       kind: "message",
@@ -153,23 +224,10 @@ function createServiceSessionWork({
       commandOptions: execution.commandOptions,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       message: commitTitle.subject,
-      onCacheMaintenance(cacheMaintenance = {}) {
-        if (cacheMaintenance.retryable !== true) {
-          return;
-        }
-        logOperationalEvent(logger, "warn", {
-          code: cacheMaintenance.code,
-          component: "vibe64.session_save",
-          event: "vibe64.session_save.cache_maintenance_failed",
-          operationId: input.operationId,
-          reason: cacheMaintenance.reason,
-          sessionId: normalizedSessionId
-        }, cacheMaintenance.message || "Vibe64 Save cache maintenance failed.");
-      },
+      onCacheMaintenance: logCacheMaintenance(input.operationId, normalizedSessionId),
       onProgress: input.onProgress,
       operationId: input.operationId,
       project: projectRecord,
-      readConnectedWorkSnapshots: assertConnectedWorkSaved,
       runCommand: execution.runCommand,
       runProjectSourceExclusive: (operation, options) => project.runProjectSourceExclusive(async () => {
         assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);
@@ -180,7 +238,8 @@ function createServiceSessionWork({
     });
     return {
       ...saved,
-      commitTitleExecutionProfile: commitTitle.executionProfile
+      commitTitleExecutionProfile: commitTitle.executionProfile,
+      ...(connected.length ? { connected } : {})
     };
   }
 
@@ -229,7 +288,7 @@ function createServiceSessionWork({
   }
 
   /**
-   * A write that records commits (Save, Update, Merge contribution) passes
+   * A write that records commits (Save, Update) passes
    * `createsCommits`, so its commands carry the author's own Git name and email.
    */
   async function sessionWorkExecution(sessionId, input = {}, reason = "session-work", options = {}) {
@@ -280,15 +339,13 @@ function createServiceSessionWork({
         env,
         project: await project.readCurrentProject()
       });
-      if (input.session?.metadata?.github_pull_request || input.session?.metadata?.connected_contribution) {
+      if (input.session?.metadata?.github_pull_request) {
         const session = input.session.metadata.renewed_from
           ? await input.store.readSessionForRenewal(input.session.sessionId)
           : await input.store.readSession(input.session.sessionId);
         const recorded = await writeSessionGitCommandActor({
           env,
-          reason: input.session.metadata.connected_contribution
-            ? "connected-contribution-session"
-            : "pull-request-session",
+          reason: "pull-request-session",
           runtime: input.runtime,
           session,
           sourceRoot: source.sourcePath,
@@ -341,22 +398,6 @@ function createServiceSessionWork({
     }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
   }
 
-  async function runConnectedSessionSave(sessionId, input, operation) {
-    return runSessionRepositoryWrite(sessionId, input, {
-      operation: "save-connected-work",
-      activeCode: "vibe64_session_save_agent_active",
-      activeMessage: "Wait for the assistant turn to finish before saving connected work."
-    }, operation);
-  }
-
-  /**
-   * Internal server facility: callbacks are never accepted by an action or
-   * model. Snapshot validation/installation remains with its content owner.
-   */
-  async function runConnectedSourcePreparation(sessionId, input, operation) {
-    return runSessionRepositoryWrite(sessionId, input, { operation: "prepare-connected-sources" }, operation);
-  }
-
   async function runSessionSourceReadExclusive(sessionId, operation) {
     const id = assertValidVibe64SessionId(sessionId);
     return runSessionRepositoryWrite(id, {}, {
@@ -388,7 +429,6 @@ function createServiceSessionWork({
   }
 
   async function createSessionPullRequest(sessionId, input = {}) {
-    const { assertConnectedWorkSaved = doNothing } = input;
     if (
       typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)) ||
@@ -435,7 +475,6 @@ function createServiceSessionWork({
       session = recorded?.session || await runtime.getSessionWithoutSource(sessionId);
       const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
       await prepareSessionPullRequestBranch({
-        connectedWorkSnapshots: await assertConnectedWorkSaved(),
         project: await project.readCurrentProject(),
         session,
         commandOptions: execution.commandOptions,
@@ -476,22 +515,47 @@ function createServiceSessionWork({
       activeCode: "vibe64_session_update_agent_active",
       activeMessage: "Wait for the assistant turn to finish before updating this session."
     }, async (context) => {
-      const { execution, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
-      return updateManagedSessionWork({
-        beforeSourceChange: () => workspacePreparation.invalidateWorkspaceSetup(context),
+      const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
+      const projectRecord = await project.readCurrentProject();
+      const beforeSourceChange = () => workspacePreparation.invalidateWorkspaceSetup(context);
+      const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
+      const copies = sessionConnectedCopies(session);
+      if (copies.length) {
+        await (input.onProgress || doNothing)({ kind: "connected", message: "Updating connected repositories.", stage: "connected-updating" });
+      }
+      // Each copy updates on its own: one that cannot leaves the others and this session's own update to proceed.
+      const connected = await updateConnectedCopies({
+        beforeSourceChange,
+        copies,
+        derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+        ...connectedCopyOperations({ codexGitCommand, env, runtime, session }, {
+          createsCommits: true,
+          reason: "session-update",
+          runtime,
+          vibe64User: input.vibe64User || null
+        }),
+        operationId: input.operationId,
+        project: projectRecord,
+        runProjectSourceExclusive,
+        session,
+        signal
+      });
+      const updated = await updateManagedSessionWork({
+        beforeSourceChange,
         commandOptions: execution.commandOptions,
         historyReview: input.historyReview,
         conflictRecovery: input.conflictRecovery,
         reviewedConflictId: input.reviewedConflictId,
         onProgress: input.onProgress,
         operationId: input.operationId,
-        project: await project.readCurrentProject(),
+        project: projectRecord,
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         runCommand: execution.runCommand,
-        runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
+        runProjectSourceExclusive,
         session,
         signal
       });
+      return connected.length ? { ...updated, connected } : updated;
     });
   }
 
@@ -515,17 +579,32 @@ function createServiceSessionWork({
     });
   }
 
+  /**
+   * Recovers an interrupted Save: first each copy it pushed but did not record, then the session's own
+   * repository.
+   */
   async function recoverSessionWorkSave(sessionId, input = {}) {
-    return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-save" }, async ({ session }) => {
-      const execution = await saveExecution(session, sessionId, "Save recovery");
-      return recoverManagedSessionWorkSave({
-        commandOptions: execution.commandOptions,
-        project: await project.readCurrentProject(),
-        recovery: input.recovery || {},
-        runCommand: execution.runCommand,
-        runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
+    return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-save" }, async ({ runtime, session }) => {
+      const projectRecord = await project.readCurrentProject();
+      const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
+      const connected = await recoverConnectedCopySaves({
+        copies: sessionConnectedCopies(session),
+        ...connectedCopyOperations({ codexGitCommand, env, runtime, session }),
+        operationId: input.recovery?.operationId,
+        project: projectRecord,
+        runProjectSourceExclusive,
         session
       });
+      const execution = await saveExecution(session, sessionId, "Save recovery");
+      const recovered = await recoverManagedSessionWorkSave({
+        commandOptions: execution.commandOptions,
+        project: projectRecord,
+        recovery: input.recovery || {},
+        runCommand: execution.runCommand,
+        runProjectSourceExclusive,
+        session
+      });
+      return connected.length ? { ...recovered, connected } : recovered;
     });
   }
 
@@ -553,52 +632,13 @@ function createServiceSessionWork({
     return result;
   }
 
-  async function changeIncomingContribution(sessionId, input = {}) {
-    return runSessionRepositoryWrite(sessionId, input, { operation: "incoming-contribution" }, context =>
-      project.runProjectSourceExclusive(async () => {
-        const { project: projectRecord } = await project.incomingRepository({
-          ...input,
-          action: input.action === "review-repair" ? "merge" : input.action
-        });
-        // A receiving action belongs to its current actor, not the person
-        // whose previous coding turn recorded this session's Git identity.
-        const recorded = await recordSessionGitCommandActor(sessionId, {
-          ...context,
-          vibe64User: input.vibe64User,
-          reason: "incoming-contribution"
-        });
-        if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
-        const session = await context.runtime.getSessionWithoutSource(sessionId);
-        const { execution } = await sessionWorkExecution(
-          sessionId,
-          { ...context, session },
-          "incoming-contribution",
-          { createsCommits: input.action !== "discard" }
-        );
-        return changeManagedIncomingContribution({
-          project: projectRecord,
-          session,
-          action: input.action,
-          derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-          id: input.id,
-          review: input.review,
-          repairReview: input.repairReview,
-          commandOptions: execution.commandOptions,
-          runCommand: execution.runCommand
-        });
-      }, { operation: `incoming-${input.action}` }));
-  }
-
   return Object.freeze({
-    changeIncomingContribution,
     createSessionPullRequest,
     createSessionSource,
     recordSessionGitCommandActor,
     recoverSessionWorkSave,
     recoverSessionWorkUpdate,
     retireSessionWorkSave,
-    runConnectedSessionSave,
-    runConnectedSourcePreparation,
     runSessionSourceReadExclusive,
     saveSessionWork,
     sessionWorkExecution,

@@ -10,6 +10,8 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
+import { inspectConnectedCopies } from "./sessionConnectedCopies.js";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionWorkProblem } from "../shared/sessionWorkProblem.js";
 import { REPOSITORY_UPDATE_CHECK_METADATA, sessionUpdateFirst } from "@local/vibe64-core/shared";
 import {
@@ -36,6 +38,7 @@ import {
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
 import {
+  GENESIS_DERIVED_ARTIFACT_PATHS,
   genesisParserEnvironment,
   genesisProjectContractNeedsAttention,
   withGenesisCommandShim
@@ -360,6 +363,17 @@ function createAgentSessionCommandService({
         updateCheck: await store.readMetadataValue(sessionId, REPOSITORY_UPDATE_CHECK_METADATA),
         updateOperation
       });
+      // This session's own copies of its connected repositories, with whether each has unsaved work or is behind its main.
+      const [connectedCopies, recordedSourcePath] = await Promise.all([
+        store.readMetadataValue(sessionId, "connected_copies"),
+        store.readMetadataValue(sessionId, "source_path")
+      ]);
+      const connected = (await inspectConnectedCopies({
+        copies: sessionConnectedCopies({ metadata: { connected_copies: connectedCopies, source_path: recordedSourcePath } }),
+        derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+        project: projectRecord,
+        session: { sessionId }
+      })).map(({ behind, name, path: copyPath, unsaved }) => ({ name, path: copyPath, behind, unsaved }));
       return {
         ok: true,
         sessionId,
@@ -367,7 +381,8 @@ function createAgentSessionCommandService({
         environment,
         repository: {
           ...(repositoryProblem ? { needsHelp: true, ...repositoryProblem } : { needsHelp: false }),
-          ...(updateFirst ? { updateFirst } : {})
+          ...(updateFirst ? { updateFirst } : {}),
+          ...(connected.length ? { connected } : {})
         },
         workspaceSetup: {
           status: state.status,

@@ -19,7 +19,6 @@ import {
   ACTION_ARCHIVE_SESSION,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CANCEL_SESSION_RENEWAL,
-  ACTION_CHANGE_INCOMING,
   ACTION_CHECK_SESSION_UPDATES,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_CREATE_PULL_REQUEST,
@@ -27,7 +26,6 @@ import {
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
   ACTION_EDIT_MAIN_CHAT_APPROVAL,
   ACTION_INSPECT_ASSISTANT_ACCESS,
-  ACTION_INSPECT_INCOMING,
   ACTION_INSPECT_REPOSITORY_HISTORY,
   ACTION_INSPECT_REPOSITORY_VERSION_FILES,
   ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
@@ -48,7 +46,6 @@ import {
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,
-  ACTION_REVIEW_INCOMING,
   ACTION_SAVE_SESSION_WORK,
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_SKIP_INTEGRATION_SETUP,
@@ -60,13 +57,6 @@ import {
   ACTION_UPDATE_SESSION_WORK,
   ACTION_WITHDRAW_MAIN_CHAT_APPROVAL
 } from "./sessionActions.js";
-import {
-  ACTION_INSPECT_CONNECTED_CHOICES,
-  ACTION_INSPECT_CONNECTED_REPLACEMENT,
-  ACTION_LINK_CONNECTED_SESSION,
-  ACTION_PREPARE_CONNECTED_SOURCES,
-  ACTION_REPLACE_CONNECTED_SOURCE
-} from "./connectedContributionActions.js";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
   VIBE64_PROJECT_ROUTE_BASE,
@@ -239,50 +229,6 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     actionId: ACTION_INSPECT_SESSION_WORK,
     buildInput: sessionIdInput,
     summary: "Inspect whether a Vibe64 session has work to save."
-  });
-
-  routes.actionRoute("POST", "/sessions/:sessionId/connected/prepare", {
-    actionId: ACTION_PREPARE_CONNECTED_SOURCES,
-    buildInput: sessionIdInput,
-    summary: "Prepare the linked contribution sources of the session's configured connected projects."
-  });
-
-  routes.actionRoute("GET", "/sessions/:sessionId/connected/choices", {
-    actionId: ACTION_INSPECT_CONNECTED_CHOICES,
-    buildInput: sessionIdInput,
-    summary: "List the connected projects that need a session chosen, with their free sessions."
-  });
-  routes.actionRoute("POST", "/sessions/:sessionId/connected/link", {
-    actionId: ACTION_LINK_CONNECTED_SESSION,
-    buildInput: sessionBodyWithoutUserInput,
-    summary: "Link an existing free session of a connected project to this session."
-  });
-
-  routes.actionRoute("GET", "/sessions/:sessionId/connected/replacement", {
-    actionId: ACTION_INSPECT_CONNECTED_REPLACEMENT,
-    buildInput: connectedReplacementInput,
-    summary: "Review a discarded contribution before creating its replacement."
-  });
-  routes.actionRoute("POST", "/sessions/:sessionId/connected/replacement", {
-    actionId: ACTION_REPLACE_CONNECTED_SOURCE,
-    buildInput: sessionBodyWithoutUserInput,
-    summary: "Prepare a replacement contribution without saving either project."
-  });
-
-  routes.actionRoute("GET", "/incoming", {
-    actionId: ACTION_INSPECT_INCOMING,
-    buildInput: incomingListInput,
-    summary: "List Git-derived contributions to the receiving project."
-  });
-  routes.actionRoute("GET", "/incoming/:id", {
-    actionId: ACTION_REVIEW_INCOMING,
-    buildInput: incomingReviewInput,
-    summary: "Review the exact contribution and integration heads with a bounded diff."
-  });
-  routes.actionRoute("POST", "/incoming/:id", {
-    actionId: ACTION_CHANGE_INCOMING,
-    buildInput: incomingChangeInput,
-    summary: "Merge or discard an exact reviewed contribution."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/changes", {
@@ -489,27 +435,6 @@ function assistantCapabilitiesInput(request) {
     modelProviderId: firstValue(query.modelProviderId),
     search: firstValue(query.search)
   };
-}
-
-function connectedReplacementInput(request) {
-  return {
-    sessionId: request.params.sessionId,
-    repository: firstValue(requestQuery(request).repository)
-  };
-}
-
-function incomingListInput(request) {
-  const query = requestQuery(request);
-  return Object.fromEntries(["sessionId", "id", "state", "offset", "limit"]
-    .filter(key => query[key] !== undefined).map(key => [key, firstValue(query[key])]));
-}
-
-function incomingReviewInput(request) {
-  return { sessionId: firstValue(requestQuery(request).sessionId), id: request.params.id };
-}
-
-function incomingChangeInput(request) {
-  return { ...withoutVibe64User(requestBody(request)), id: request.params.id };
 }
 
 function sessionChangesInput(request) {

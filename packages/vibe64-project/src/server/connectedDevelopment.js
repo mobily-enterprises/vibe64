@@ -4,7 +4,7 @@ import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { sessionConnectedContribution, sessionConnectedSources } from "@local/vibe64-core/server/projectRepository";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
@@ -42,12 +42,21 @@ function connectedPackageType(connection, inspection) {
 }
 
 /**
- * The caller holds the originating session/source admission and supplies only
- * freshly authorized receiving sessions. This projection grants no access.
+ * This session's own copy of one listed connected repository, if Prepare made it.
+ * @param {object} session
+ * @param {{ repository: string }} connection
+ */
+function connectedCopyFor(session, connection) {
+  const repository = githubRepositoryFullName(connection.repository);
+  return sessionConnectedCopies(session).find(copy => copy.repository === repository) || null;
+}
+
+/**
+ * The Sources file value for this session: every listed connected repository
+ * with its effective package type and this session's own copy as its source.
  */
 async function readConnectedDevelopmentInputs({
   session,
-  projects,
   inspection,
   env,
   runCommand = runVibe64Command
@@ -55,44 +64,25 @@ async function readConnectedDevelopmentInputs({
   const sourceRoot = sessionSourcePath(session);
   if (!sourceRoot || inspection?.status !== "ready") {
     throw vibe64Error(
-      "Declare Connected development in this project's Stack before preparing its connected source inputs.",
+      "Declare Connected development in this project's Stack before preparing its connected repositories.",
       "vibe64_connected_development_required"
     );
   }
   const configured = await readConnectedProjects(sourceRoot);
-  const bindings = sessionConnectedSources(session);
-  if (!Array.isArray(projects) || projects.length !== configured.projects.length) throw vibe64Error("The connected project list changed. Prepare its current sources again.", "vibe64_connected_sources_changed");
   const resolved = [];
-  for (const connection of configured.projects) {
-    const receiving = projects.find(project => project.repository === connection.repository);
-    const binding = bindings.find(item => item.contribution.repository === githubRepositoryFullName(connection.repository));
-    const contribution = sessionConnectedContribution(receiving?.session);
-    const receivingRoot = sessionSourcePath(receiving?.session);
-    if (!binding || !receiving || receiving.projectSlug !== binding.projectSlug ||
-        !isDeepStrictEqual(contribution, binding.contribution) || !receivingRoot ||
-        receiving.session.sourceReady !== true) {
+  for (const connection of configured.repositories) {
+    const copy = connectedCopyFor(session, connection);
+    if (!copy || !(await lstat(copy.path).catch(() => null))?.isDirectory()) {
       throw vibe64Error(
-        `The authorized source for ${connection.repository} no longer matches this task. Prepare it again.`,
-        "vibe64_connected_source_authorization_changed",
-        {
-          params: {
-            repository: connection.repository
-          }
-        }
-      );
-    }
-    if (!(await lstat(receivingRoot)).isDirectory()) {
-      throw vibe64Error(
-        `The receiving source for ${connection.repository} must be an ordinary directory.`,
-        "vibe64_connected_receiving_source_not_directory",
+        `This session has no copy of ${connection.repository} yet. Prepare the workspace again.`,
+        "vibe64_connected_copy_missing",
         { params: { repository: connection.repository } }
       );
     }
     resolved.push({
       ...connection,
       type: connectedPackageType(connection, inspection),
-      sourceRoot: receivingRoot,
-      contributionId: contribution.id
+      sourceRoot: copy.path
     });
   }
   const relativePath = inspection.sourcesFile;
@@ -103,7 +93,7 @@ async function readConnectedDevelopmentInputs({
     env,
     runCommand
   });
-  const value = { contract: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, projects: resolved };
+  const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: resolved };
   return {
     sourceRoot,
     relativePath,
@@ -116,7 +106,7 @@ async function readConnectedDevelopmentInputs({
 
 /**
  * Reading a projection never grants access to its paths. Execution separately
- * resolves each receiving session through the original authenticated action.
+ * checks them against this session's own connected copies.
  */
 async function readConnectedSourceProjection({
   sourceRoot,
@@ -169,7 +159,7 @@ async function readConnectedSourceProjection({
     const stat = await file.stat();
     if (!stat.isFile() || stat.size > 256 * 1024) throw new Error("Not an ordinary bounded source input file.");
     existing = JSON.parse(await file.readFile("utf8"));
-    if (existing.contract !== CONNECTED_SOURCES_CONTRACT || existing.sessionId !== sessionId) {
+    if (existing.schema !== CONNECTED_SOURCES_CONTRACT || existing.sessionId !== sessionId) {
       throw new Error("The file does not belong to this session.");
     }
   } catch (error) {
@@ -194,12 +184,12 @@ async function inspectConnectedWorkspaceSetup({
 } = {}) {
   const sourceRoot = sessionSourcePath(session);
   const configured = await readConnectedProjects(sourceRoot);
-  if (configured.projects.length === 0 && inspection.status === "unconfigured") return setup;
+  if (configured.repositories.length === 0 && inspection.status === "unconfigured") return setup;
   if (!["ready", "unconfigured"].includes(setup.status)) return setup;
   try {
     if (inspection.status !== "ready") {
       throw vibe64Error(
-        "Declare Connected development in Stack to prepare this task's connected sources.",
+        "Declare Connected development in Stack to prepare this session's connected repositories.",
         "vibe64_connected_development_setup_required"
       );
     }
@@ -210,20 +200,12 @@ async function inspectConnectedWorkspaceSetup({
       env,
       runCommand
     });
-    const bindings = sessionConnectedSources(session);
-    const expected = configured.projects.map(connection => {
-      const binding = bindings.find(item => item.contribution.repository === githubRepositoryFullName(connection.repository));
-      const entry = existing?.projects?.find(item => item.repository === connection.repository);
-      if (!binding || typeof entry?.sourceRoot !== "string" || !path.isAbsolute(entry.sourceRoot)) return null;
-      return {
-        ...connection,
-        type: connectedPackageType(connection, inspection),
-        contributionId: binding.contribution.id,
-        sourceRoot: entry.sourceRoot
-      };
+    const expected = configured.repositories.map(connection => {
+      const copy = connectedCopyFor(session, connection);
+      return copy ? { ...connection, type: connectedPackageType(connection, inspection), sourceRoot: copy.path } : null;
     });
-    if (!existing || expected.some(entry => entry === null) || !isDeepStrictEqual(existing.projects, expected)) {
-      throw vibe64Error("Prepare connected sources for this task's current connection list.", "vibe64_connected_inputs_required");
+    if (!existing || expected.some(entry => entry === null) || !isDeepStrictEqual(existing.repositories, expected)) {
+      throw vibe64Error("Prepare this session's connected repositories for its current list.", "vibe64_connected_inputs_required");
     }
     const inputsHash = connectedDevelopmentHash(existing);
     const custom = expected.filter(connection => connection.type === "custom");
@@ -311,14 +293,14 @@ async function inspectConnectedDevelopmentInputs(input = {}) {
   const { existing, value, result } = await readConnectedDevelopmentInputs(input);
   if (!isDeepStrictEqual(existing, value)) {
     throw vibe64Error(
-      "The connected source map is missing or no longer matches this task. Prepare connected sources again before running development commands.",
+      "The connected source map is missing or no longer matches this session. Prepare the workspace again before running development commands.",
       "vibe64_connected_source_map_stale"
     );
   }
   return {
     ...result,
     inputsHash: connectedDevelopmentHash(value),
-    sourceRoots: input.projects.map(project => sessionSourcePath(project.session))
+    sourceRoots: value.repositories.map(entry => entry.sourceRoot)
   };
 }
 

@@ -9,6 +9,7 @@
 /** @typedef {ReturnType<typeof import("./agent/sessionAgentConversationOperations.js").createSessionAgentConversationOperations>} SessionAgentConversationOperations */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
 /** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
+/** @typedef {ReturnType<typeof import("./serviceSessionWork.js").createServiceSessionWork>} ServiceSessionWork */
 /** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
 /** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
 /** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */

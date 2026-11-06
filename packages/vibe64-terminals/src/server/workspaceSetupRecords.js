@@ -1,6 +1,6 @@
 // The workspace setup state written to a session: each update stamped with
 // the time it is written, unchanged inspections left as they are, and failures
-// and connected choices recorded with their label, diagnostic and transcript.
+// recorded with their label, diagnostic and transcript.
 
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import {
@@ -83,29 +83,7 @@ async function failed(runtime, sessionId, options = {}) {
   }, renewal);
 }
 
-/**
- * Connected preparation stopped because a person must choose a session for a
- * connected project. It is the "needs a choice" state, not a failure: nothing
- * went wrong and only that person can settle it.
- * @param {Vibe64SessionRuntime} runtime
- * @param {string} sessionId
- * @param {{ currentLabel: string, diagnostic: string, renewal?: boolean, transcript: string }} options
- */
-async function connectedChoiceRequired(runtime, sessionId, { currentLabel, diagnostic, renewal = false, transcript }) {
-  return persist(runtime, sessionId, {
-    connectedChoiceRequired: true,
-    currentLabel: safeSetupLabel(currentLabel),
-    diagnostic,
-    finishedAt: new Date().toISOString(),
-    recipeHash: "",
-    startedAt: "",
-    status: "ambiguous",
-    transcript: appendWorkspaceSetupTranscript(transcript, stepStatus(currentLabel, "Needs a choice"))
-  }, renewal);
-}
-
 export {
-  connectedChoiceRequired,
   failed,
   persist,
   persistInspectedState

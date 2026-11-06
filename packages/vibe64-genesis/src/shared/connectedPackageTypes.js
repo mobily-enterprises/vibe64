@@ -1,11 +1,11 @@
-// The one Vibe64-owned vocabulary of connected-project package types. A type is
-// a declared label recorded in vibe64.connections.json, the Stack default and
-// the prepared vibe64.connected-sources.v1 map. Vibe64 never derives or runs a
+// The one Vibe64-owned vocabulary of connected-repository package types. A type
+// is a declared label recorded in vibe64.connections.json, the Stack default and
+// the prepared vibe64.connected-sources.v2 map. Vibe64 never derives or runs a
 // package-manager command from it: the consuming project's own Connected
 // development Prepare/Verify commands give the source that ecosystem's native
 // treatment. Only `custom` selects a per-connection project script.
 const CONNECTED_CUSTOM_PACKAGE_TYPE = "custom";
-const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v1";
+const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v2";
 
 const CONNECTED_PACKAGE_TYPES = Object.freeze([
   Object.freeze({ value: "npm", label: "npm (Node.js)" }),
@@ -21,7 +21,7 @@ const CONNECTED_PACKAGE_TYPES = Object.freeze([
 ]);
 
 // How a declared Custom runner receives each custom connection; read by Colleague and the agent spec.
-const CONNECTED_CUSTOM_RUNNER_CONTRACT = "Vibe64's preparer appends the absolute script path and --phase prepare|verify, --source-root <receiving source>, --project-root <consuming project>, --sources-file <absolute Sources file> and --repository <GitHub URL> arguments to the Stack's Custom runner command, once per phase; execution checks the script remains inside the consuming project.";
+const CONNECTED_CUSTOM_RUNNER_CONTRACT = "Vibe64's preparer appends the absolute script path and --phase prepare|verify, --source-root <the session's copy of the repository>, --project-root <consuming project>, --sources-file <absolute Sources file> and --repository <GitHub URL> arguments to the Stack's Custom runner command, once per phase; execution checks the script remains inside the consuming project.";
 
 const CONNECTED_PACKAGE_TYPE_VALUES = Object.freeze(CONNECTED_PACKAGE_TYPES.map(type => type.value));
 

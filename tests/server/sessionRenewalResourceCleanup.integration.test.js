@@ -543,7 +543,6 @@ async function renewalHarness(targetRoot, {
     }
   };
   const controller = createSessionRenewalController({
-    connectedLinkProblem: async () => "",
     prepareArchive: async () => undefined,
     project: {
       async createRuntime() {

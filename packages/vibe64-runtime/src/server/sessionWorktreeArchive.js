@@ -2,6 +2,7 @@ import { rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
@@ -22,12 +23,62 @@ import {
 } from "./sessionWorktreeGit.js";
 import {
   recoveryDetailsFromSession,
+  saveConnectedCopiesRecovery,
   saveSessionSourceRecovery,
   validateRecoveryBundle
 } from "./sessionSourceRecovery.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
+
+/**
+ * The folder of a session's connected copies, beside its source.
+ * @param {string} sourcePath
+ */
+function connectedCopiesRoot(sourcePath = "") {
+  return sourcePath ? path.join(path.dirname(path.resolve(sourcePath)), "connected") : "";
+}
+
+/**
+ * Where renewal stages the connected copies with the source, until the successor exists.
+ * @param {object} session
+ * @param {string} renewalId
+ */
+function connectedCopiesStagePath(session, renewalId) {
+  return `${connectedCopiesRoot(sessionSourcePath(session))}.renewal-${assertSessionRenewalId(renewalId)}`;
+}
+
+/**
+ * Renewal needs every connected copy saved, like the source: the successor copies them again from
+ * their mains. Their checkpoints are kept as recovery evidence first.
+ * @param {{ session: object, store: Vibe64SessionStore }} request
+ */
+async function prepareRenewalConnectedCopies({ session, store }) {
+  for (const copy of sessionConnectedCopies(session)) {
+    if (await pathExists(copy.path) && await inspectWorktreeDirty(copy.path)) {
+      throw vibe64Error(
+        `Renewal requires a clean, saved session source. Connected repository ${copy.name} has unsaved work.`,
+        "vibe64_session_renewal_source_dirty"
+      );
+    }
+  }
+  await saveConnectedCopiesRecovery({ session, store });
+}
+
+/**
+ * Moves the connected copies folder, when it exists, from one place to another that must not exist.
+ */
+async function moveConnectedCopies(from, to) {
+  if (!from || !await pathExists(from)) return false;
+  if (await pathExists(to)) {
+    throw vibe64Error(
+      `Connected repositories exist in both active and staged locations: ${to}`,
+      "vibe64_session_renewal_connected_stage_conflict"
+    );
+  }
+  await rename(from, to);
+  return true;
+}
 
 async function validateCleanRenewalRecovery({
   details = {},
@@ -118,6 +169,7 @@ async function prepareRenewalSessionSource({
     readWorktreeGitFact(sourcePath, ["rev-parse", "--verify", "HEAD"]),
     readWorktreeGitFact(sourcePath, ["branch", "--show-current"])
   ]);
+  await prepareRenewalConnectedCopies({ session, store });
   if (
     existingDetails.recoverySaved === true &&
     sameResolvedPath(existingDetails.recoverySourcePath, sourcePath) &&
@@ -223,6 +275,7 @@ async function stagePreparedRenewalSessionSource({
     }
     await rename(sourcePath, stagePath);
   }
+  await moveConnectedCopies(connectedCopiesRoot(sourcePath), connectedCopiesStagePath(session, renewalId));
   return {
     changed: sourceExists,
     renewalId: assertSessionRenewalId(renewalId),
@@ -269,6 +322,7 @@ async function restoreRenewalSessionSourceStage({
   if (stageExists) {
     await rename(stagePath, sourcePath);
   }
+  await moveConnectedCopies(connectedCopiesStagePath(session, renewalId), connectedCopiesRoot(sourcePath));
   if (!await isExactGitWorktree(sourcePath)) {
     throw new Error(`Restored renewal source is not the exact session Git worktree: ${sourcePath}`);
   }
@@ -338,6 +392,13 @@ async function commitRenewalSessionSourceStage({
       retryDelay: 100
     });
   }
+  // The copies' recovery evidence is in the published archive; the successor copies them again.
+  await rm(connectedCopiesStagePath(session, renewalId), {
+    force: true,
+    maxRetries: 20,
+    recursive: true,
+    retryDelay: 100
+  });
   return {
     changed: stageExists || deletionExists,
     deletionPath,
@@ -391,11 +452,20 @@ async function archiveSessionSource({
     worktreeIsGitWorktree,
     worktreePath
   });
+  const connected = await saveConnectedCopiesRecovery({ session, store });
 
   const removal = await removeSessionOwnedWorktreeDirectory({
     session,
     worktreePath
   });
+  if (sessionOwnsWorktreePath(session, worktreePath)) {
+    await rm(connectedCopiesRoot(worktreePath), {
+      force: true,
+      maxRetries: 20,
+      recursive: true,
+      retryDelay: 100
+    });
+  }
   await writeMetadataValues(store, sessionId, {
     source_removed: "yes",
     source_removed_at: new Date().toISOString(),
@@ -403,7 +473,7 @@ async function archiveSessionSource({
   });
   return {
     ...removal,
-    dirty: recovery.dirty,
+    dirty: recovery.dirty || Object.values(connected).some(copy => copy.dirty),
     worktreePath
   };
 }

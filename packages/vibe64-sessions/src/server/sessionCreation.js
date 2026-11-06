@@ -1,8 +1,4 @@
 import {
-  parseSessionConnectedContribution,
-  sessionRepositoryProject
-} from "@local/vibe64-core/server/projectRepository";
-import {
   assertProjectEffectAdmission,
   currentProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -66,8 +62,7 @@ function createSessionCreation({
   async function createSession(input, options = {}) {
     const {
       sessionId,
-      expectedCommit,
-      connectedContribution
+      expectedCommit
     } = options;
     return sessionResult(async () => {
       assertProjectEffectAdmission();
@@ -80,17 +75,6 @@ function createSessionCreation({
         if (input.repositoryBranch != null || input.pullRequestNumber != null) {
           throw new TypeError("An internal source commit cannot be combined with a branch or pull request selection.");
         }
-      }
-      let contribution = null;
-      if (connectedContribution !== undefined) {
-        contribution = parseSessionConnectedContribution(connectedContribution);
-        if (!sessionId || !expectedCommit || contribution.baseCommit !== expectedCommit.toLowerCase() ||
-            currentProjectRequestContext()?.learningScope) {
-          throw new TypeError("Contribution creation requires a reserved working session and its exact source commit.");
-        }
-        sessionRepositoryProject(await project.readCurrentProject(), {
-          metadata: { connected_contribution: JSON.stringify(contribution) }
-        }, { sourcePreparation: true });
       }
       const vibe64User = trustedAssistantUser(input);
       let learningRuntime = null;
@@ -129,7 +113,6 @@ function createSessionCreation({
       const createAdmittedSession = ({ repositoryBranch = null } = {}) => runtime.createSession({
         ...(sessionId === undefined ? {} : { sessionId }),
         metadata: {
-          ...(contribution ? { connected_contribution: JSON.stringify(contribution) } : {}),
           ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
           ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
           [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
@@ -182,14 +165,12 @@ function createSessionCreation({
       }
       let setup = null;
       try {
-        // Allocation prepares a receiving checkout only. The originating
-        // recipe treats its direct sources; starting the receiver's setup
-        // here would recursively allocate its connections (including cycles).
-        if (!contribution && !runtime.learningScope?.noExercise) {
+        if (!runtime.learningScope?.noExercise) {
           setup = await setupRunner.start({
             retry: true,
             runtime,
-            session: created.session
+            session: created.session,
+            vibe64User
           });
         }
       } catch (error) {

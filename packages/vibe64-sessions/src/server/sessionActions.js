@@ -1,5 +1,4 @@
 import { NOT_A_TOOL, PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
-import { createConnectedContributionActions } from "./connectedContributionActions.js";
 import { PROJECT_WATCH_ACTION } from "./projectWatch.js";
 import {
   ASSISTANT_TOOL_DESCRIPTIONS,
@@ -12,12 +11,9 @@ import {
   renewalTool,
   sessionTool,
   sessionWorkTool,
-  sessionPullRequestTool,
-  incomingContributionTool
+  sessionPullRequestTool
 } from "./assistantContracts.js";
 import {
-  incomingInspectionInputValidator,
-  incomingChangeInputValidator,
   sessionRenameActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
@@ -71,9 +67,6 @@ const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.u
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
 const ACTION_INSPECT_SESSION_WORK = "vibe64.sessions.work.inspect";
 const ACTION_SAVE_SESSION_WORK = "vibe64.sessions.work.save";
-const ACTION_INSPECT_INCOMING = "vibe64.repository.incoming.inspect";
-const ACTION_REVIEW_INCOMING = "vibe64.repository.incoming.review";
-const ACTION_CHANGE_INCOMING = "vibe64.repository.incoming.change";
 const ACTION_CHECK_SESSION_UPDATES = "vibe64.sessions.updates.check";
 const ACTION_UPDATE_SESSION_WORK = "vibe64.sessions.updates.apply";
 const ACTION_INSPECT_SESSION = "vibe64.sessions.inspect";
@@ -113,7 +106,6 @@ const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.d
  */
 function createSessionActions({ sessions }) {
   return Object.freeze([
-    ...createConnectedContributionActions({ sessions }),
     Object.freeze({
       ...VIBE64_QUERY,
       id: ACTION_READ_CONVERSATION_CONTEXT,
@@ -359,33 +351,6 @@ function createSessionActions({ sessions }) {
       execute: (input, context) => sessions.saveSessionWork(input.sessionId, input, context)
     }),
     Object.freeze({
-      ...VIBE64_QUERY,
-      id: ACTION_INSPECT_INCOMING,
-      input: { ...incomingInspectionInputValidator, mode: "create" },
-      extensions: {
-        assistant: incomingContributionTool(ASSISTANT_TOOL_DESCRIPTIONS.inspectIncoming),
-        vibe64: PROJECT_OPERATION
-      },
-      execute: (input) => sessions.inspectIncomingContributions(input.sessionId, input)
-    }),
-    Object.freeze({
-      ...VIBE64_QUERY,
-      id: ACTION_REVIEW_INCOMING,
-      input: { ...incomingInspectionInputValidator, mode: "create" },
-      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sessions.reviewIncomingContribution(input.sessionId, input)
-    }),
-    Object.freeze({
-      ...VIBE64_COMMAND,
-      id: ACTION_CHANGE_INCOMING,
-      input: { ...incomingChangeInputValidator, mode: "create" },
-      extensions: {
-        assistant: incomingContributionTool(ASSISTANT_TOOL_DESCRIPTIONS.changeIncoming),
-        vibe64: PROJECT_OPERATION
-      },
-      execute: (input) => sessions.changeIncomingContribution(input.sessionId, input)
-    }),
-    Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_CHECK_SESSION_UPDATES,
       input: { ...sessionUpdateInputValidator, mode: "create" },
@@ -420,7 +385,7 @@ function createSessionActions({ sessions }) {
         assistant: sessionTool(ASSISTANT_TOOL_DESCRIPTIONS.retryWorkspaceSetup),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input, context) => sessions.retryWorkspaceSetup(input.sessionId, input, context)
+      execute: (input) => sessions.retryWorkspaceSetup(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -541,9 +506,6 @@ export {
   ACTION_EDIT_MAIN_CHAT_APPROVAL,
   ACTION_READ_MAIN_CHAT_APPROVALS,
   ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
-  ACTION_INSPECT_INCOMING,
-  ACTION_REVIEW_INCOMING,
-  ACTION_CHANGE_INCOMING,
   ACTION_RENAME_SESSION,
   ACTION_PIN_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,

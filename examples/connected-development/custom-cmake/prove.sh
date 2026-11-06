@@ -47,8 +47,8 @@ step "write the sources map"
 mkdir -p "$app/.development"
 sources="$app/.development/connected.json"
 cat > "$sources" <<JSON
-{"contract":"vibe64.connected-sources.v1","sessionId":"proof-session","projects":[
-  {"name":"Example Library","repository":"$repository","relationship":"dependency","type":"custom","sourceRoot":"$work/library","contributionId":"proof-contribution"}
+{"schema":"vibe64.connected-sources.v2","sessionId":"proof-session","repositories":[
+  {"name":"Example Library","repository":"$repository","relationship":"dependency","type":"custom","sourceRoot":"$work/library"}
 ]}
 JSON
 

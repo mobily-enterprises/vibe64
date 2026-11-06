@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { sessionConnectedSubmissions } from "@local/vibe64-core/server/projectRepository";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
@@ -14,14 +13,12 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionWorkRecovery.js").createSessionWorkRecovery>} SessionWorkRecovery */
 /** @typedef {import("./types.js").SessionUpdateChecks} SessionUpdateChecks */
-/** @typedef {ReturnType<typeof import("./connectedContributions.js").createConnectedContributions>} ConnectedContributions */
 
 /**
- * A session's own work: its current changes, the Save that publishes them,
- * the Update that rebases them onto the saved project version, and a pull
- * request for them.
+ * A session's work, in its own repository and its connected copies: its
+ * current changes, the Save that publishes them, the Update that rebases them
+ * onto the saved versions, and a pull request for them.
  * @param {object} dependencies
- * @param {ConnectedContributions} dependencies.connectedContributions
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {SessionWorkRecovery} dependencies.recovery
@@ -31,7 +28,6 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
 function createSessionWork({
-  connectedContributions,
   project,
   publishSessionChanged,
   recovery,
@@ -43,41 +39,35 @@ function createSessionWork({
   const activeWorkInspections = new Map();
 
   /**
-   * One read of a session's work, shared by the three public reads below.
+   * The session's work, with each connected copy's in `connected`, after
+   * recovering a Save or Update an earlier server left running.
    * @param {string} sessionId
-   * @param {object} requestContext
-   * @param {{ includeConnected: boolean, inspectContributionPublication: boolean, knownSubmittedCommit: string }} scope
    */
-  async function inspectWork(sessionId, requestContext, { includeConnected, inspectContributionPublication, knownSubmittedCommit }) {
+  async function inspectSessionWork(sessionId) {
     return sessionResult(async () => {
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(sessionId);
       const existingTask = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       const operation = await recovery.recoverInterruptedSave(runtime, session, existingTask);
-      const confirmedContributionCommit = normalizeText(operation?.verifiedCommit) || knownSubmittedCommit;
       const updateTask = await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID);
       const recoveredUpdateOperation = await recovery.recoverInterruptedUpdate(runtime, session, updateTask);
       const updateOperation = recoveredUpdateOperation?.status === "failed"
         ? await recovery.resolveSupersededUpdateFailure(runtime, sessionId, operation)
         : recoveredUpdateOperation;
+      const current = await runtime.getSessionWithoutSource(sessionId);
       const inspectionKey = JSON.stringify([
         runtime.stateRoot,
         sessionId,
-        session.metadata?.source_path,
-        session.metadata?.base_commit,
-        session.metadata?.canonical_commit,
-        inspectContributionPublication,
-        confirmedContributionCommit
+        current.metadata?.source_path,
+        current.metadata?.base_commit,
+        current.metadata?.canonical_commit,
+        current.metadata?.connected_copies
       ]);
       let inspection = activeWorkInspections.get(inspectionKey);
       if (!inspection) {
         inspection = Promise.resolve().then(() => terminals.inspectSessionWork(sessionId, {
           runtime,
-          session,
-          ...(inspectContributionPublication ? {
-            inspectContributionPublication: true,
-            knownSubmittedCommit: confirmedContributionCommit
-          } : {})
+          session: current
         }));
         activeWorkInspections.set(inspectionKey, inspection);
       }
@@ -98,25 +88,8 @@ function createSessionWork({
       ]);
       const activeSaveOperationId = normalizeText(workOperations.operationId("save", sessionId));
       const activeUpdateOperationId = normalizeText(workOperations.operationId("update", sessionId));
-      let connected = [];
-      let connectedInspectionError = "";
-      if (includeConnected) {
-        try {
-          connected = await connectedContributions.inspectConnectedWork(session, requestContext);
-        } catch (error) {
-          // Receiving status must not hide Main Save. Its separate publication
-          // preflight repeats the authorized inspection and refuses unknowns.
-          connectedInspectionError = normalizeText(error?.message) ||
-            "Connected repository status is unavailable. Retry Save to check it again.";
-        }
-      }
       return {
         ...work,
-        connected,
-        connectedInspectionError,
-        connectedSaveRequired: connected.some(item => item.needsSave),
-        connectedRequirementsPresent: sessionConnectedSubmissions(session).length > 0,
-        connectedReview: connected.map(({ projectSlug, destination }) => ({ projectSlug, destination })),
         activeOperation: activeSaveOperationId
           ? { kind: "save", operationId: activeSaveOperationId }
           : activeUpdateOperationId
@@ -127,47 +100,6 @@ function createSessionWork({
         ok: true
       };
     }, "Vibe64 could not inspect this session's work.");
-  }
-
-  /**
-   * A session's work with each connected contribution's status, read through
-   * the person's request to each receiving project.
-   * @param {string} sessionId
-   * @param {object} requestContext
-   */
-  function inspectSessionWork(sessionId, requestContext) {
-    return inspectWork(sessionId, requestContext, {
-      includeConnected: true,
-      inspectContributionPublication: false,
-      knownSubmittedCommit: ""
-    });
-  }
-
-  /**
-   * A session's own work, without its connected contributions.
-   * @param {string} sessionId
-   */
-  function inspectOwnWork(sessionId) {
-    return inspectWork(sessionId, {}, {
-      includeConnected: false,
-      inspectContributionPublication: false,
-      knownSubmittedCommit: ""
-    });
-  }
-
-  /**
-   * A receiving session's work as the contribution it holds: its own work and
-   * whether its Save was pushed, knowing the commit the originating session
-   * recorded, if any.
-   * @param {string} sessionId
-   * @param {string} knownSubmittedCommit
-   */
-  function inspectContributedWork(sessionId, knownSubmittedCommit) {
-    return inspectWork(sessionId, {}, {
-      includeConnected: false,
-      inspectContributionPublication: true,
-      knownSubmittedCommit
-    });
   }
 
   async function inspectSessionChanges(sessionId, input) {
@@ -194,14 +126,13 @@ function createSessionWork({
     }, "Vibe64 could not inspect this changed file.");
   }
 
-  async function createSessionPullRequest(sessionId, input, requestContext) {
+  async function createSessionPullRequest(sessionId, input) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
       const runtime = await project.createRuntimeWithoutSource();
       const session = await runtime.getSessionWithoutSource(sessionId);
       try {
         return await terminals.createSessionPullRequest(sessionId, {
-          assertConnectedWorkSaved: () => connectedContributions.assertConnectedWorkSaved(runtime, sessionId, requestContext),
           destinationReview: input.destinationReview,
           title: input.title,
           body: input.body,
@@ -222,8 +153,7 @@ function createSessionWork({
     }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
   }
 
-  async function saveSessionWork(sessionId, input, requestContext = {}) {
-    if (input.connectedReview !== undefined) return connectedContributions.saveConnectedWork(sessionId, input, requestContext);
+  async function saveSessionWork(sessionId, input) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
       const runtime = await project.createRuntimeWithoutSource();
@@ -247,7 +177,6 @@ function createSessionWork({
       try {
         const result = await terminals.saveSessionWork(sessionId, {
           destinationReview: input.destinationReview,
-          assertConnectedWorkSaved: () => connectedContributions.assertConnectedWorkSaved(runtime, sessionId, requestContext),
           onRepositoryWriteAcquired: async () => {
             operationStarted = true;
             workOperations.start("save", sessionId, operationId);
@@ -297,18 +226,23 @@ function createSessionWork({
           session,
           vibe64User
         });
-        await runtime.store.writeMetadataValue(sessionId, "canonical_commit", result.saveCommit);
-        if (result.reconciled === true) {
-          await runtime.store.writeMetadataValue(sessionId, "base_commit", result.saveCommit);
+        // A Save of connected copies alone has no commit of the session's own.
+        if (result.saveCommit) {
+          await runtime.store.writeMetadataValue(sessionId, "canonical_commit", result.saveCommit);
+          if (result.reconciled === true) {
+            await runtime.store.writeMetadataValue(sessionId, "base_commit", result.saveCommit);
+          }
         }
+        const savedMessage = result.cacheMaintenance?.retryable === true
+          ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
+          : result.reconciled === true
+            ? "Session work was saved."
+            : "Session work was pushed and needs local reconciliation.";
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
           event: {
             kind: result.status,
-            message: result.cacheMaintenance?.retryable === true
-              ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
-              : result.reconciled === true
-                ? "Session work was saved."
-                : "Session work was pushed and needs local reconciliation.",
+            message: [savedMessage, ...(result.connected || []).map(copy => `[Connected] ${copy.name} saved at ${copy.saveCommit.slice(0, 12)}.`)]
+              .join("\n"),
             status: "ready"
           },
           patch: {
@@ -317,17 +251,21 @@ function createSessionWork({
             status: "ready"
           }
         });
-        await recovery.retireRecordedSave(sessionId, operationId, { runtime });
-        await recovery.resolveSupersededUpdateFailure(runtime, sessionId, result, { knownNewer: true });
+        if (result.saveCommit) {
+          await recovery.retireRecordedSave(sessionId, operationId, { runtime });
+          await recovery.resolveSupersededUpdateFailure(runtime, sessionId, result, { knownNewer: true });
+        }
         await publishSessionChanged(sessionId, {
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: "session-save-completed",
           session: await runtime.getSessionWithoutSource(sessionId)
         });
-        await repositoryUpdates.publishCanonicalChanged(runtime, sessionId, result.saveCommit, {
-          originId: input.originId
-        });
+        if (result.saveCommit) {
+          await repositoryUpdates.publishCanonicalChanged(runtime, sessionId, result.saveCommit, {
+            originId: input.originId
+          });
+        }
         return {
           ...result,
           operation: task,
@@ -368,14 +306,13 @@ function createSessionWork({
   }
 
   /**
-   * One Update, shared by the person's Update and a connected refresh. A
-   * connected refresh waits for the updated workspace's preparation and
-   * leaves an already current session's setup alone.
+   * Update: each connected copy, then the session's own repository, onto
+   * their saved versions. A copy that cannot be updated stays unchanged and
+   * its line says why; the others still update.
    * @param {string} sessionId
    * @param {object} input
-   * @param {boolean} connectedRefresh
    */
-  async function updateWork(sessionId, input, connectedRefresh) {
+  async function updateSessionWork(sessionId, input) {
     return sessionResult(async () => {
       const runtime = await project.createRuntimeWithoutSource();
       await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
@@ -443,17 +380,16 @@ function createSessionWork({
         const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, refreshedWork);
         // Keep the update active while automatic preparation is starting so
         // invalidation is presented as pending, not a manual setup failure.
-        // A connected refresh that changed nothing leaves its setup alone.
-        if (!(connectedRefresh && result.status === "already_current")) {
-          await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
-            originId: input.originId,
-            wait: connectedRefresh
-          });
-        }
+        await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
+          originId: input.originId
+        });
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
             kind: result.status,
-            message: result.status === "already_current" ? "This session was already current." : "This session was updated.",
+            message: [
+              result.status === "already_current" ? "This session was already current." : "This session was updated.",
+              ...(result.connected || []).map(copy => copy.line)
+            ].join("\n"),
             status: "ready"
           },
           patch: {
@@ -515,31 +451,11 @@ function createSessionWork({
     }, "Vibe64 could not update this session.");
   }
 
-  /**
-   * @param {string} sessionId
-   * @param {object} input
-   */
-  function updateSessionWork(sessionId, input) {
-    return updateWork(sessionId, input, false);
-  }
-
-  /**
-   * Brings a receiving session up to its integration branch for the session
-   * it serves.
-   * @param {string} sessionId
-   */
-  function refreshContributedWork(sessionId) {
-    return updateWork(sessionId, {}, true);
-  }
-
   return Object.freeze({
     createSessionPullRequest,
-    inspectContributedWork,
-    inspectOwnWork,
     inspectSessionChangeDiff,
     inspectSessionChanges,
     inspectSessionWork,
-    refreshContributedWork,
     saveSessionWork,
     updateSessionWork
   });

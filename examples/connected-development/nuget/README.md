@@ -25,7 +25,7 @@ default `nuget` applies.
 
 `prepare` (`app/tooling/Connected/Program.cs`):
 
-1. Reads the `vibe64.connected-sources.v1` map and, for each `nuget` project,
+1. Reads the `vibe64.connected-sources.v2` map and, for each `nuget` project,
    evaluates every `.csproj` under its `sourceRoot` with
    `dotnet msbuild -getProperty:PackageId -getProperty:IsPackable` to learn
    which package ids that checkout produces.

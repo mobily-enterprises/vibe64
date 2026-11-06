@@ -80,6 +80,34 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
   assert.match(changes.at(-1).error, /Disk reserve/u);
 });
 
+test("a turn checkpoint also checkpoints each connected copy in its own repository", async () => {
+  const source = "/tmp/vibe64-turn/sessions/active/session-1/source";
+  const copy = (name) => ({ repository: `example/${name}`, branch: "main", path: `/tmp/vibe64-turn/sessions/active/session-1/connected/${name}`,
+    baseCommit: "b".repeat(40), canonicalCommit: "b".repeat(40) });
+  const session = { sessionId: "session-1", metadata: {
+    connected_copies: JSON.stringify({ library: copy("library"), tools: copy("tools") }),
+    source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source"
+  } };
+  const runtime = {
+    getSession: async () => session,
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => patch }
+  };
+  const received = [];
+  const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
+    outerTurnId: "claude:conversation:turn", publishSessionChanged: async () => {},
+    createCheckpoint: async (value) => {
+      received.push([value.worktreePath, value.outerTurnId]);
+      return { created: true, commit: "a".repeat(40) };
+    } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(received, [
+    [source, "claude:conversation:turn"],
+    [copy("library").path, "claude:conversation:turn"],
+    [copy("tools").path, "claude:conversation:turn"]
+  ]);
+});
+
 test("original Codex context restoration preserves Working and unscoped callback behavior", async () => {
   const { runWithCodexAppServerProjectContext } = await import("../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js");
   const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");

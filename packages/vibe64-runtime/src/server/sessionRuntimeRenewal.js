@@ -67,13 +67,7 @@ async function createRenewalSession(runtime, {
       ...(predecessor.metadata?.repository_branch
         ? { repository_branch: predecessor.metadata.repository_branch } : {}),
       ...(predecessor.metadata?.github_pull_request
-        ? { github_pull_request: predecessor.metadata.github_pull_request } : {}),
-      ...(predecessor.metadata?.connected_contribution
-        ? { connected_contribution: predecessor.metadata.connected_contribution } : {}),
-      ...(predecessor.metadata?.connected_submissions !== undefined
-        ? { connected_submissions: predecessor.metadata.connected_submissions } : {}),
-      ...(predecessor.metadata?.connected_sources !== undefined
-        ? { connected_sources: predecessor.metadata.connected_sources } : {})
+        ? { github_pull_request: predecessor.metadata.github_pull_request } : {})
     },
     renewalId,
     renewedFrom,

@@ -19,14 +19,14 @@ export async function composePublicDevelopment({ publicRoot, appRoot, env = proc
     ? await readConnectedDevelopmentSources(connectedSourcesFile, { projectRoot: publicRoot }) : null;
   // Public Vibe64's own Stack gives only npm dependencies a Node treatment;
   // other declared ecosystems would otherwise be silently left unconsumed.
-  const untreated = connected?.projects.find(project => !["npm", "custom"].includes(project.type));
+  const untreated = connected?.repositories.find(project => !["npm", "custom"].includes(project.type));
   if (untreated) {
     throw new Error(`Public Vibe64 source development treats only npm dependencies and custom connections; it has no treatment for ${untreated.type} connections. Use npm, or a project-owned custom treatment.`);
   }
-  if (connected?.projects.some(project => project.relationship === "composition" && project.type === "npm")) {
+  if (connected?.repositories.some(project => project.relationship === "composition" && project.type === "npm")) {
     throw new Error("Public Vibe64 source development supports npm dependencies, not npm composition projects. Declare a project-owned custom treatment for this composition.");
   }
-  const dependencyRoots = connected?.projects.filter(project => project.relationship === "dependency" && project.type === "npm")
+  const dependencyRoots = connected?.repositories.filter(project => project.relationship === "dependency" && project.type === "npm")
     .map(project => project.sourceRoot) || [];
   if (dependencyRoots.includes(publicRoot)) throw new Error("The development application cannot be its own connected dependency.");
   // A prepared task selection is authoritative over older standalone Env pins.
@@ -82,7 +82,7 @@ export async function composePublicDevelopment({ publicRoot, appRoot, env = proc
   const graph = await tools.checkInstalledGraph({ catalog, manifestPaths: [path.join(appRoot, "package.json")], sourcePackages: installed });
   if (graph.issues.length) throw new Error(`Composed development dependencies are inconsistent:\n${graph.issues.join("\n")}`);
   return { appRoot, localPackages,
-    sourceRoots: [...new Set([publicRoot, ...(connected?.projects.map(project => project.sourceRoot) || []),
+    sourceRoots: [...new Set([publicRoot, ...(connected?.repositories.map(project => project.sourceRoot) || []),
       jskit?.sourceRoot, genesis?.sourceRoot].filter(Boolean))],
     connectedSourcesFile: connected?.file || "" };
 }

@@ -59,8 +59,6 @@ GET /api/app/:slug/vibe64/codex-terminal/:terminalSessionId/control/snapshot pub
 GET /api/app/:slug/vibe64/database/sessions/:sessionId public app - vibe64.database.state.read
 GET /api/app/:slug/vibe64/database/sessions/:sessionId/server public app - vibe64.database.server.check
 GET /api/app/:slug/vibe64/env public app - vibe64.project.env.read
-GET /api/app/:slug/vibe64/incoming public app - vibe64.repository.incoming.inspect
-GET /api/app/:slug/vibe64/incoming/:id public app - vibe64.repository.incoming.review
 GET /api/app/:slug/vibe64/issue-labels public app - vibe64.project.issues.labels
 GET /api/app/:slug/vibe64/issue-mentions public app - vibe64.project.issues.mentions
 GET /api/app/:slug/vibe64/issues public app - vibe64.project.issues.list
@@ -102,8 +100,6 @@ GET /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId public app - vibe
 GET /api/app/:slug/vibe64/sessions/:sessionId/assistant-access public app - vibe64.sessions.assistant-access.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/changes public app - vibe64.sessions.changes.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/changes/diff public app - vibe64.sessions.changes.diff.inspect
-GET /api/app/:slug/vibe64/sessions/:sessionId/connected/choices public app - vibe64.sessions.connected.choices
-GET /api/app/:slug/vibe64/sessions/:sessionId/connected/replacement public app - vibe64.sessions.connected.replacement.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/conversation-log public app - vibe64.sessions.conversation-log.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/files public app - vibe64.source-editor.file-areas.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/files/:area/archive public app - -
@@ -201,7 +197,6 @@ POST /api/app/:slug/vibe64/database/sessions/:sessionId/rows/delete public app 2
 POST /api/app/:slug/vibe64/database/sessions/:sessionId/schema/refresh public app 16384 vibe64.database.schema.refresh
 POST /api/app/:slug/vibe64/env/download public app - -
 POST /api/app/:slug/vibe64/env/reveal public app - -
-POST /api/app/:slug/vibe64/incoming/:id public app - vibe64.repository.incoming.change
 POST /api/app/:slug/vibe64/issue-labels public app - vibe64.project.issues.create-label
 POST /api/app/:slug/vibe64/issues public app 300000 vibe64.project.issues.create
 POST /api/app/:slug/vibe64/issues/:number/comments public app 300000 vibe64.project.issues.comment
@@ -259,9 +254,6 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/check public app
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/continue public app - vibe64.ai-tasks.continue
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/finish public app - vibe64.ai-tasks.finish
 POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive
-POST /api/app/:slug/vibe64/sessions/:sessionId/connected/link public app - vibe64.sessions.connected.link
-POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare public app - vibe64.sessions.connected.prepare
-POST /api/app/:slug/vibe64/sessions/:sessionId/connected/replacement public app - vibe64.sessions.connected.replace
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.create

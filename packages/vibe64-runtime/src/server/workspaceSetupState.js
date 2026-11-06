@@ -46,8 +46,6 @@ function workspaceSetupState(value = {}) {
   const status = toText(source.status);
   const resourceAdmissionId = toText(source.resourceAdmissionId);
   return {
-    // The choice this "needs a choice" state asks for is a connected session.
-    ...(status === "ambiguous" && source.connectedChoiceRequired === true ? { connectedChoiceRequired: true } : {}),
     currentLabel: boundedText(source.currentLabel, 160),
     diagnostic: boundedText(source.diagnostic, WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH),
     finishedAt: toText(source.finishedAt),

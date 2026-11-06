@@ -56,8 +56,8 @@ grep -q "$modified" "$work/library/Marker.cs" || fail "marker edit failed"
 step "write the sources map"
 mkdir -p "$app/.development"
 cat > "$app/.development/connected.json" <<JSON
-{"contract":"vibe64.connected-sources.v1","sessionId":"proof-session","projects":[
-  {"name":"Example Library","repository":"https://github.com/acme/example-library","relationship":"dependency","type":"nuget","sourceRoot":"$work/library","contributionId":"proof-contribution"}
+{"schema":"vibe64.connected-sources.v2","sessionId":"proof-session","repositories":[
+  {"name":"Example Library","repository":"https://github.com/acme/example-library","relationship":"dependency","type":"nuget","sourceRoot":"$work/library"}
 ]}
 JSON
 

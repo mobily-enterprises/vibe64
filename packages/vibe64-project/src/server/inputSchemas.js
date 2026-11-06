@@ -59,7 +59,7 @@ const projectSettingsReadInputValidator = inputSchema({
 const projectConnectedProjectsInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false },
   revision: { type: "string", required: true, maxLength: 64 },
-  projects: {
+  repositories: {
     type: "array",
     required: true,
     maxItems: 64,

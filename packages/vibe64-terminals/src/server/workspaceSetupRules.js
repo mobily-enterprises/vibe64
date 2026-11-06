@@ -11,7 +11,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
-const CONNECTED_PREPARATION_LABEL = "Preparing connected projects";
+const CONNECTED_PREPARATION_LABEL = "Preparing connected repositories";
 const WORKSPACE_SETUP_DIAGNOSTIC_LENGTH = 1600;
 const DIAGNOSTIC_OMISSION_MARKER = "\n[…]\n";
 
@@ -105,27 +105,6 @@ function appendWorkspaceSetupTranscript(transcript = "", ...entries) {
   ].map((entry) => String(entry ?? "").trim()).filter(Boolean).join("\n"));
 }
 
-/**
- * One transcript line per connected checkout: updated, current or why not.
- */
-function connectedUpdateLine({ repository = "", update = null } = {}) {
-  const name = `[Connected] ${toText(repository).split("/").pop()}`;
-  if (update?.status === "updated") return `${name} updated to ${toText(update.commit).slice(0, 7)}.`;
-  if (update?.status === "current") return `${name} is up to date.`;
-  if (update?.status === "skipped") return `${name} was not updated: ${toText(update.reason)}`;
-  return "";
-}
-
-/**
- * The output line that keeps an automatic link from being silent.
- * @param {{ repository: string, sessionName: string }} link
- */
-function connectedLinkLine({ reason, repository, sessionName }) {
-  const name = repository.split("/").pop();
-  return `${reason ? `[Connected] ${name}'s earlier link no longer holds: ${reason}\n` : ""}` +
-    `[Connected] ${name} is now linked to ${sessionName}, its only free session, which has no work in it and is used as it stands.`;
-}
-
 function stepStatus(label = "", status = "", secrets = []) {
   return `[${safeSetupLabel(label, secrets) || "Workspace preparation"}] ${status}.`;
 }
@@ -188,8 +167,6 @@ export {
   appendWorkspaceSetupTranscript,
   capturedCommandOutput,
   commandDiagnostic,
-  connectedLinkLine,
-  connectedUpdateLine,
   diagnosticText,
   diagnosticsInclude,
   inProjectContext,

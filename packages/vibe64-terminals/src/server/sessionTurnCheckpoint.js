@@ -3,6 +3,7 @@ import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-t
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -39,14 +40,19 @@ async function checkpointSessionTurn({
   let checkpoint;
   let failure = "";
   try {
+    const currentProject = await project.readCurrentProject();
     checkpoint = await createCheckpoint({
       outerTurnId,
       outcome,
       timestamp,
       sessionId,
-      project: await project.readCurrentProject(),
+      project: currentProject,
       worktreePath: sessionSourcePath(session)
     });
+    // Each connected copy keeps the same turn's checkpoint in its own repository.
+    for (const copy of sessionConnectedCopies(session)) {
+      await createCheckpoint({ outerTurnId, outcome, timestamp, sessionId, project: currentProject, worktreePath: copy.path });
+    }
   } catch (error) {
     failure = error.message || "A recovery checkpoint could not be created.";
   }

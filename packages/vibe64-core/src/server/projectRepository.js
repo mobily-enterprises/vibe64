@@ -216,158 +216,105 @@ function projectRepositoryMetadataFromInput(input = {}, options = {}) {
   };
 }
 
-/** A connected project needs a person to choose its session; nothing else can settle it. */
-const CONNECTED_LINK_REQUIRED = "vibe64_connected_link_required";
-const CONTRIBUTION_KEYS = Object.freeze([
-  "schemaVersion",
-  "id",
-  "sessionId",
-  "repository",
-  "integrationBranch",
-  "baseCommit",
-  "replaces",
-  "replacesSessionId"
-]);
-const CONTRIBUTION_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
-
 function projectRepositoryMetadataError(code = "", message = "") {
   const error = new Error(message);
   error.code = code;
   return error;
 }
 
-/**
- * The receiving session a contribution lives in: the session a person linked
- * it to, or the replacement session created under the contribution's own ID.
- * @param {{ id: string, sessionId?: string }} contribution
- */
-function contributionSessionId(contribution) {
-  return contribution.sessionId || contribution.id;
-}
+const CONNECTED_COPY_KEYS = Object.freeze(["repository", "branch", "path", "baseCommit", "canonicalCommit"]);
+const GIT_OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
 
-function sessionConnectedContribution(session) {
-  const serialized = session?.metadata?.connected_contribution;
-  if (serialized === undefined) return null;
-  let value;
-  try {
-    value = JSON.parse(serialized);
-  } catch { /* Invalid authority must not fall back to main. */ }
-  if (!isPlainObject(value) || value.schemaVersion !== 1 ||
-      Object.keys(value).some(key => !CONTRIBUTION_KEYS.includes(key)) ||
-      !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.id || "") ||
-      (Object.hasOwn(value, "replaces") && (typeof value.replaces !== "string" || value.replaces === value.id ||
-        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.replaces || ""))) ||
-      ["sessionId", "replacesSessionId"].some(key => Object.hasOwn(value, key) && !CONTRIBUTION_SESSION_ID.test(value[key])) ||
-      typeof value.repository !== "string" || !/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/u.test(value.repository) ||
-      !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
-      typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
-    throw projectRepositoryMetadataError(
-      "vibe64_contribution_authority_invalid",
-      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before saving."
-    );
-  }
-  return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
+/**
+ * The folder a connected repository is copied into: its GitHub repository's
+ * name, lowercased. Settings refuse two connected repositories with one name.
+ * @param {string} repository owner/name
+ */
+function connectedRepositoryName(repository = "") {
+  return toText(repository).split("/").pop().toLowerCase();
 }
 
 /**
- * Validates an in-memory contribution binding exactly as its saved metadata.
+ * A session's copy of a connected repository lives beside its source, outside
+ * the source's own Git worktree.
+ * @param {string} sourcePath the session's source
+ * @param {string} name the connected repository's name
  */
-function parseSessionConnectedContribution(value) {
-  return sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(value) } });
+function sessionConnectedCopyPath(sourcePath = "", name = "") {
+  return path.join(path.dirname(path.resolve(sourcePath)), "connected", name);
 }
 
-function sessionConnectedSubmissions(session = {}) {
-  const serialized = session.metadata?.connected_submissions;
-  if (serialized === undefined) return [];
+/**
+ * This session's own copies of its connected repositories, in Save order:
+ * each `{ name, repository, branch, path, baseCommit, canonicalCommit }`.
+ * Invalid records throw rather than hide a copy's work.
+ * @param {object} session
+ */
+function sessionConnectedCopies(session = {}) {
+  const serialized = session.metadata?.connected_copies;
+  if (!toText(serialized)) return [];
   let value;
   try {
     value = JSON.parse(serialized);
-  } catch { /* Never silently drop a publication requirement. */ }
+  } catch { /* Reported below: an unreadable record must not hide a copy. */ }
   const invalid = () => projectRepositoryMetadataError(
-    "vibe64_connected_submissions_invalid",
-    "This session's connected Save bindings are invalid. Preserve the session and inspect its bindings before saving."
+    "vibe64_connected_copies_invalid",
+    "This session's connected repository records are invalid. Preserve its connected folder and inspect them before saving or updating."
   );
-  if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.submissions) ||
-      Object.keys(value).some(key => !["schemaVersion", "submissions"].includes(key))) throw invalid();
-  const identities = new Set();
-  return value.submissions.map(entry => {
-    if (!isPlainObject(entry) || Object.keys(entry).some(key => !["contribution", "submittedCommit"].includes(key)) ||
-        typeof entry.submittedCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(entry.submittedCommit)) throw invalid();
-    const contribution = parseSessionConnectedContribution(entry.contribution);
-    if (!contribution || identities.has(contribution.id)) throw invalid();
-    identities.add(contribution.id);
-    return { contribution, submittedCommit: entry.submittedCommit.toLowerCase() };
-  });
-}
-
-function sessionConnectedSources(session = {}) {
-  const serialized = session.metadata?.connected_sources;
-  if (serialized === undefined) return [];
-  let value;
-  try {
-    value = JSON.parse(serialized);
-  } catch { /* Preserve invalid source ownership for repair. */ }
-  const invalid = () => projectRepositoryMetadataError(
-    "vibe64_connected_sources_invalid",
-    "This session's connected source bindings are invalid. Preserve its sources and inspect the saved bindings before preparing them."
-  );
-  if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources) ||
-      Object.keys(value).some(key => !["schemaVersion", "sources"].includes(key))) throw invalid();
-  const repositories = new Set();
-  return value.sources.map(entry => {
-    if (!isPlainObject(entry) || Object.keys(entry).some(key => !["projectSlug", "contribution"].includes(key)) ||
-        typeof entry.projectSlug !== "string" || !/^[a-z0-9][a-z0-9_-]{0,47}$/u.test(entry.projectSlug)) throw invalid();
-    const contribution = parseSessionConnectedContribution(entry.contribution);
-    if (!contribution || repositories.has(contribution.repository)) throw invalid();
-    repositories.add(contribution.repository);
-    return { projectSlug: entry.projectSlug, contribution };
-  });
-}
-
-/**
- * The saved connected_submissions text, validated before it is written.
- */
-function serializeSessionConnectedSubmissions(submissions) {
-  const serialized = JSON.stringify({ schemaVersion: 1, submissions });
-  sessionConnectedSubmissions({ metadata: { connected_submissions: serialized } });
-  return serialized;
-}
-
-/**
- * The saved connected_sources text, validated before it is written.
- */
-function serializeSessionConnectedSources(sources) {
-  const serialized = JSON.stringify({ schemaVersion: 1, sources });
-  sessionConnectedSources({ metadata: { connected_sources: serialized } });
-  return serialized;
-}
-
-function sessionRepositoryProject(project, session, options = {}) {
-  const { sourcePreparation = false } = options;
-  const contribution = sessionConnectedContribution(session);
-  if (contribution) {
-    const repository = toText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();
-    if (session.metadata.github_pull_request || session.metadata.repository_branch ||
-        normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_GITHUB ||
-        repository !== contribution.repository || project.repository?.defaultBranch !== contribution.integrationBranch) {
-      throw projectRepositoryMetadataError(
-        "vibe64_contribution_authority_changed",
-        "This contribution's repository or integration branch changed. Review its source binding before saving."
-      );
+  if (!isPlainObject(value)) throw invalid();
+  const sourcePath = toText(session.metadata?.source_path);
+  return Object.entries(value).map(([name, entry]) => {
+    if (!/^[a-z0-9_.-]{1,100}$/u.test(name) || [".", ".."].includes(name) || !isPlainObject(entry) ||
+        Object.keys(entry).length !== CONNECTED_COPY_KEYS.length ||
+        CONNECTED_COPY_KEYS.some(key => typeof entry[key] !== "string") ||
+        !/^[a-z0-9_-]+\/[a-z0-9_.-]+$/u.test(entry.repository) || connectedRepositoryName(entry.repository) !== name ||
+        !validRepositoryBranch(entry.branch) || !path.isAbsolute(entry.path) ||
+        path.basename(entry.path) !== name || path.basename(path.dirname(entry.path)) !== "connected" ||
+        (sourcePath && path.resolve(entry.path) !== sessionConnectedCopyPath(sourcePath, name)) ||
+        !GIT_OBJECT_ID.test(entry.baseCommit) || !GIT_OBJECT_ID.test(entry.canonicalCommit)) {
+      throw invalid();
     }
-    return {
-      ...project,
-      githubMirrorOptional: true,
-      repository: {
-        ...project.repository,
-        defaultBranch: sourcePreparation
-          ? contribution.replaces && !session.metadata.renewed_from
-            ? `vibe64-incoming/${contribution.replaces}_discarded`
-            : contribution.integrationBranch
-          : `vibe64-incoming/${contribution.id}`
-      }
-    };
-  }
+    return { name, ...Object.fromEntries(CONNECTED_COPY_KEYS.map(key => [key, entry[key]])) };
+  });
+}
+
+/**
+ * The saved connected_copies text for these copies, validated before it is written.
+ * @param {Array<{ name: string, repository: string, branch: string, path: string, baseCommit: string, canonicalCommit: string }>} copies
+ */
+function serializeSessionConnectedCopies(copies = []) {
+  const serialized = JSON.stringify(Object.fromEntries(copies.map(copy => [
+    copy.name,
+    Object.fromEntries(CONNECTED_COPY_KEYS.map(key => [key, copy[key]]))
+  ])));
+  sessionConnectedCopies({ metadata: { connected_copies: serialized } });
+  return serialized;
+}
+
+/**
+ * Records new commits for some of a session's copies, `{ [name]: { baseCommit?, canonicalCommit? } }`.
+ * It rereads the record under the session's lock, so writers of different copies never drop each other's.
+ * @param {{ mutateSession: Function, readMetadataValue: Function, writeMetadataValue: Function }} store
+ * @param {string} sessionId
+ * @param {Record<string, { baseCommit?: string, canonicalCommit?: string }>} commits
+ */
+function recordSessionConnectedCopyCommits(store, sessionId, commits = {}) {
+  return store.mutateSession(sessionId, async () => {
+    const [serialized, sourcePath] = await Promise.all([
+      store.readMetadataValue(sessionId, "connected_copies"),
+      store.readMetadataValue(sessionId, "source_path")
+    ]);
+    const copies = sessionConnectedCopies({ metadata: { connected_copies: serialized, source_path: sourcePath } });
+    await store.writeMetadataValue(sessionId, "connected_copies", serializeSessionConnectedCopies(copies.map(copy => ({
+      ...copy,
+      ...Object.fromEntries(["baseCommit", "canonicalCommit"]
+        .filter(key => commits[copy.name]?.[key])
+        .map(key => [key, commits[copy.name][key]]))
+    }))));
+  });
+}
+
+function sessionRepositoryProject(project, session) {
   const serialized = session?.metadata?.github_pull_request;
   if (!serialized) {
     const branch = session?.metadata?.repository_branch;
@@ -451,8 +398,7 @@ export {
   saveProjectRepositoryWorkflow,
   validRepositoryBranch,
   assertSessionRepositoryReview,
-  CONNECTED_LINK_REQUIRED,
-  contributionSessionId,
+  connectedRepositoryName,
   sessionRepositoryDestination,
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
@@ -462,12 +408,10 @@ export {
   projectRepositoryStorageRole,
   projectRequiresGithubConnection,
   projectRepositoryMetadataFromInput,
+  recordSessionConnectedCopyCommits,
   sessionRepositoryProject,
-  parseSessionConnectedContribution,
-  serializeSessionConnectedSources,
-  serializeSessionConnectedSubmissions,
-  sessionConnectedContribution,
-  sessionConnectedSubmissions,
-  sessionConnectedSources,
+  serializeSessionConnectedCopies,
+  sessionConnectedCopies,
+  sessionConnectedCopyPath,
   projectRepositoryView
 };

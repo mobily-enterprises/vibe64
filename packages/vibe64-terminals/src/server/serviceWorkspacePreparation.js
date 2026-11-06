@@ -88,26 +88,26 @@ function createServiceWorkspacePreparation({
 
   async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", options = {}) {
     const {
-      agentRequested = false,
       publish = false,
       renewal = false,
       rerunFailed = false,
       retry = false,
       runtime: existingRuntime = null,
       session: existingSession = null,
-      signal = null
+      signal = null,
+      vibe64User = null
     } = options;
     const requestContext = captureProjectRequestContext();
     const runtime = existingRuntime || await project.createRuntimeWithoutSource();
     const session = existingSession || await runtime.getSessionWithoutSource(sessionId);
     const setup = await workspaceSetup.start({
-      agentRequested,
       renewal,
       rerunFailed,
       retry,
       runtime,
       session,
-      signal
+      signal,
+      vibe64User
     });
     const setupChanged = String(setup.state?.updatedAt || "") !==
       String(session.workspaceSetup?.updatedAt || "");

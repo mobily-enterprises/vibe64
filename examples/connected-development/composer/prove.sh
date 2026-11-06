@@ -14,7 +14,7 @@ before="$(sha256sum composer.json composer.lock)"
 # Simulate an unpublished local change in the connected checkout.
 sed -i "s/'library 1.0.0'/'library 1.0.0 + local change'/" "$work/library/src/Marker.php"
 mkdir -p .development
-printf '{"contract":"vibe64.connected-sources.v1","sessionId":"proof","projects":[{"name":"Library","repository":"https://github.com/example/library","relationship":"dependency","type":"composer","sourceRoot":"%s","contributionId":"proof"}]}\n' "$work/library" > .development/connected.json
+printf '{"schema":"vibe64.connected-sources.v2","sessionId":"proof","repositories":[{"name":"Library","repository":"https://github.com/example/library","relationship":"dependency","type":"composer","sourceRoot":"%s"}]}\n' "$work/library" > .development/connected.json
 php tooling/connected.php prepare .development/connected.json
 php tooling/connected.php prepare .development/connected.json
 php tooling/connected.php verify .development/connected.json

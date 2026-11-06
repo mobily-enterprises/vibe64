@@ -163,8 +163,6 @@ const Vibe64SessionsFeature = defineFeature({
     } finally {
       // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
       terminals.setPlanCompleted(null);
-      // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
-      terminals.setConnectedPreparation(null);
     }
   }
 });

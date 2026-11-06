@@ -144,8 +144,8 @@ export async function inspectVibe64ConnectedDevelopment() {
   await file(f.publicRoot, "server.js", "import { value as kernel } from '@jskit-ai/kernel'; import { value, same } from 'new-library'; console.log(JSON.stringify({kernel,value,same}));\n");
   const releaseManifest = await readFile(path.join(f.publicRoot, "package.json"), "utf8");
   const sourcesFile = ".development/connected.json";
-  await file(f.publicRoot, sourcesFile, JSON.stringify({ contract: "vibe64.connected-sources.v1", sessionId: "task",
-    projects: [jskitRoot, libraryRoot, cRoot].map(sourceRoot => ({ relationship: "dependency", sourceRoot,
+  await file(f.publicRoot, sourcesFile, JSON.stringify({ schema: "vibe64.connected-sources.v2", sessionId: "task",
+    repositories: [jskitRoot, libraryRoot, cRoot].map(sourceRoot => ({ relationship: "dependency", sourceRoot,
       type: sourceRoot === cRoot ? "custom" : "npm" })) }));
   const env = { VIBE64_CONNECTED_SOURCES_FILE: sourcesFile,
     VIBE64_JSKIT_SOURCE_ROOT: "/stale/other-task", VIBE64_GENESIS_SOURCE_ROOT: "/stale/other-task" };
@@ -173,16 +173,16 @@ export async function inspectVibe64ConnectedDevelopment() {
   assert.equal(await readFile(path.join(cRoot, "package.json"), "utf8"), cManifest);
   assert.deepEqual(await readdir(cRoot), ["main.c", "package.json"], "Node treatment leaves custom source for its declared Stack commands, even with npm-looking metadata.");
   const invalidMap = JSON.parse(await readFile(path.join(f.publicRoot, sourcesFile), "utf8"));
-  delete invalidMap.projects[0].type;
+  delete invalidMap.repositories[0].type;
   await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }),
     /effective package type \(npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget or custom\)/u);
-  invalidMap.projects[0].type = "pip";
+  invalidMap.repositories[0].type = "pip";
   await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }),
     /has no treatment for pip connections/u, "Vibe64's own Node consumer never silently ignores another declared ecosystem");
-  invalidMap.projects[0].type = "npm";
-  invalidMap.projects[0].relationship = "composition";
+  invalidMap.repositories[0].type = "npm";
+  invalidMap.repositories[0].relationship = "composition";
   await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }), /not npm composition projects/u);
   await rm(path.join(f.publicRoot, sourcesFile));
@@ -225,8 +225,8 @@ test("custom-only connections retain the normal npm graph and remain watched", a
   const customRoot = path.join(f.root, "custom");
   await file(customRoot, "main.c", "int main(void) { return 0; }\n");
   await file(f.publicRoot, ".development/connected.json", JSON.stringify({
-    contract: "vibe64.connected-sources.v1", sessionId: "custom-only",
-    projects: [{ relationship: "dependency", type: "custom", sourceRoot: customRoot }]
+    schema: "vibe64.connected-sources.v2", sessionId: "custom-only",
+    repositories: [{ relationship: "dependency", type: "custom", sourceRoot: customRoot }]
   }));
   const composed = await composePublicDevelopment({ publicRoot: f.publicRoot,
     appRoot: path.join(f.root, "custom-app"), connectedSourcesFile: ".development/connected.json" });
@@ -251,8 +251,8 @@ for (const selection of ["legacy source", "connected library"]) test(`${selectio
     await manifest(f.publicRoot, consumer);
     selectionEnv.VIBE64_CONNECTED_SOURCES_FILE = ".development/connected.json";
     await file(f.publicRoot, selectionEnv.VIBE64_CONNECTED_SOURCES_FILE, JSON.stringify({
-      contract: "vibe64.connected-sources.v1", sessionId: "watching",
-      projects: [source, library].map(sourceRoot => ({ relationship: "dependency", type: "npm", sourceRoot }))
+      schema: "vibe64.connected-sources.v2", sessionId: "watching",
+      repositories: [source, library].map(sourceRoot => ({ relationship: "dependency", type: "npm", sourceRoot }))
     }));
     changedSource = path.join(library, "index.js");
     importedPackage = "new-library";

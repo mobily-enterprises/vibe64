@@ -5,6 +5,7 @@ import {
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { publicSession, refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
+import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -24,9 +25,9 @@ const STARTER_PREPARATION_WAIT_MS = 60_000;
 function createTerminalsSetupRunner({ terminals }) {
   const isRunning = (sessionId) => terminals.workspaceSetupIsRunning(sessionId);
 
-  const start = ({ agentRequested = false, retry = false, runtime, session, signal = null, waitMs }) => terminals.prepareWorkspaceSetup(
+  const start = ({ retry = false, runtime, session, signal = null, vibe64User = null, waitMs }) => terminals.prepareWorkspaceSetup(
     session.sessionId,
-    { agentRequested, retry, runtime, session, signal, waitMs }
+    { retry, runtime, session, signal, vibe64User, waitMs }
   );
 
   const startRenewal = ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
@@ -110,9 +111,8 @@ function createSessionWorkspaceSetup({
   /**
    * @param {string} sessionId
    * @param {object} input
-   * @param {{ channel?: string }} [context] only a person's own page request is a person
    */
-  async function retryWorkspaceSetup(sessionId, input, context = {}) {
+  async function retryWorkspaceSetup(sessionId, input) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         throw vibe64Error("Workspace preparation is already running.", "vibe64_workspace_setup_running", {
@@ -130,12 +130,12 @@ function createSessionWorkspaceSetup({
         );
       }
       const setup = await setupRunner.start({
-        agentRequested: context.channel !== "api",
         retry: true,
         runtime,
         session,
         // An AI task's Cancel stops the run it started.
-        signal: input.signal || null
+        signal: input.signal || null,
+        vibe64User: trustedAssistantUser(input)
       });
       if (setup?.ok === false) {
         return setup;

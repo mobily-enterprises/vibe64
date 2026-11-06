@@ -1,7 +1,7 @@
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 
 /**
- * What other owners fill after construction: the source editor, connected preparation, plan
+ * What other owners fill after construction: the source editor, plan
  * completion and database tools providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
@@ -48,17 +48,6 @@ function createServiceHostSlots({ state }) {
   }
 
   /**
-   * Fills or, at its owner's shutdown, clears connected workspace preparation.
-   * @param {Function | null} prepare
-   */
-  function setConnectedPreparation(prepare) {
-    if (prepare !== null && typeof prepare !== "function") {
-      throw new TypeError("Connected workspace preparation must be a function or null.");
-    }
-    state.slots.connectedPreparation = prepare;
-  }
-
-  /**
    * Fills or, at its owner's shutdown, clears what follows a completed plan.
    * @param {Function | null} handler
    */
@@ -95,7 +84,6 @@ function createServiceHostSlots({ state }) {
     // readable-check: allow setter-seam - cycle: vibe64.accounts requires vibe64.terminals, and a composing host's auth setup fills it too
     configureAssistantRuntime,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
-    setConnectedPreparation,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider,
     // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals

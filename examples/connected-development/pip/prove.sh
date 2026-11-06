@@ -13,7 +13,7 @@ git init -q && git add -A && git -c user.name=proof -c user.email=proof@example.
 # Simulate an unpublished local change in the connected checkout.
 sed -i 's/"library 1.0.0"/"library 1.0.0 + local change"/' "$work/library/src/acme_library/__init__.py"
 mkdir -p .development
-printf '{"contract":"vibe64.connected-sources.v1","sessionId":"proof","projects":[{"name":"Library","repository":"https://github.com/example/library","relationship":"dependency","type":"pip","sourceRoot":"%s","contributionId":"proof"}]}\n' "$work/library" > .development/connected.json
+printf '{"schema":"vibe64.connected-sources.v2","sessionId":"proof","repositories":[{"name":"Library","repository":"https://github.com/example/library","relationship":"dependency","type":"pip","sourceRoot":"%s"}]}\n' "$work/library" > .development/connected.json
 
 installers=(pip)
 if command -v uv >/dev/null; then installers+=(uv); else echo "uv not installed: skipping the uv variant"; fi

@@ -4,7 +4,7 @@ import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
-import { BROWSER_KEY_PATTERN, UUID_V4_PATTERN } from "./inputPatterns.js";
+import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
 // Every action names its session the same way; an optional one may be empty.
 const sessionIdField = { type: "string", noTrim: false, minLength: 1, maxLength: 256, required: true };
@@ -255,10 +255,6 @@ const sessionRepositoryReviewSchema = createSchema({
   repository: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true },
   branch: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true }
 });
-const connectedWorkReviewSchema = createSchema({
-  projectSlug: { type: "string", pattern: /^[a-z0-9][a-z0-9_-]{0,47}$/u, required: true },
-  destination: { type: "object", schema: sessionRepositoryReviewSchema, required: true }
-});
 const sessionHistoryReviewSchema = createSchema({
   ...Object.fromEntries(["baseCommit", "canonicalCommit", "sessionHead", "worktreeTree"].map((key) =>
     [key, { type: "string", minLength: 1, maxLength: 128, required: true }])),
@@ -272,79 +268,6 @@ const sessionPullRequestInputValidator = actionInput({
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
   ...optionalOrigin
-});
-
-const incomingReviewSchema = createSchema({
-  repository: { type: "string", required: true, minLength: 1, maxLength: 256 },
-  targetBranch: { type: "string", required: true, minLength: 1, maxLength: 255, noTrim: true },
-  id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
-  ...Object.fromEntries(["targetHead", "activeHead", "discardedHead"].map(key => [key, {
-    type: "string",
-    required: true,
-    pattern: key === "targetHead" ? /^[a-f0-9]{40,64}$/u : /^(?:[a-f0-9]{40,64})?$/u
-  }]))
-});
-const incomingInspectionInputValidator = actionInput({
-  sessionId: sessionIdField,
-  id: { type: "string", required: false, pattern: UUID_V4_PATTERN },
-  state: { type: "string", required: false, enum: ["pending", "merged", "discarded", "unresolved", "all"] },
-  offset: { type: "integer", required: false, min: 0 },
-  limit: { type: "integer", required: false, min: 1, max: 50 }
-});
-const incomingChangeInputValidator = actionInput({
-  sessionId: sessionIdField,
-  id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
-  action: { type: "string", required: true, enum: ["merge", "discard", "review-repair"] },
-  review: { type: "object", required: true, schema: incomingReviewSchema },
-  repairReview: {
-    type: "object",
-    required: false,
-    schema: createSchema(Object.fromEntries(
-      ["tree", "worktreeTree", "head", "indexTree"].map(key => [key, {
-        type: "string",
-        required: true,
-        pattern: /^[a-f0-9]{40,64}$/u
-      }])
-    ) )
-  }
-});
-
-const connectedSourceInputValidator = actionInput({
-  contribution: { type: "object", additionalProperties: true, required: true },
-  sessionName: { type: "string", required: false, minLength: 1, maxLength: 120 }
-});
-
-const connectedSessionsInputValidator = actionInput({
-  contribution: { type: "object", additionalProperties: true, required: false },
-  originIsContribution: { type: "boolean", required: true }
-});
-
-const connectedSessionBindInputValidator = actionInput({
-  contribution: { type: "object", additionalProperties: true, required: true },
-  onlyIfUntouched: { type: "boolean", required: true },
-  originIsContribution: { type: "boolean", required: true }
-});
-
-const connectedSessionLinkInputValidator = actionInput({
-  sessionId: sessionIdField,
-  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u },
-  connectedSessionId: sessionIdField
-});
-
-const connectedReplacementInspectionInputValidator = actionInput({
-  sessionId: sessionIdField,
-  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u }
-});
-const connectedReplacementInputValidator = actionInput({
-  sessionId: sessionIdField,
-  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u },
-  review: { type: "object", required: true, schema: incomingReviewSchema }
-});
-
-const connectedWorkInputValidator = actionInput({
-  contribution: { type: "object", additionalProperties: true, required: true },
-  submittedCommit: { type: "string", pattern: /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u, required: false },
-  destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: false }
 });
 
 const sessionCreateInputValidator = actionInput({
@@ -471,7 +394,6 @@ const sessionIdInputValidator = actionInput(withSessionId(optionalOrigin));
 
 const sessionSaveInputValidator = actionInput({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
-  connectedReview: { type: "array", maxItems: 64, items: connectedWorkReviewSchema, required: false },
   ...optionalOrigin,
   sessionId: sessionIdField
 });
@@ -584,17 +506,6 @@ const integrationSetupRequestInputValidator = requiredInputSchema(integrationSet
 const integrationSetupRequestActionInputValidator = actionInput(withSessionId(integrationSetupRequestFields));
 
 export {
-  incomingReviewSchema,
-  incomingInspectionInputValidator,
-  incomingChangeInputValidator,
-  connectedSessionBindInputValidator,
-  connectedSessionLinkInputValidator,
-  connectedSessionsInputValidator,
-  connectedSourceInputValidator,
-  connectedReplacementInspectionInputValidator,
-  connectedReplacementInputValidator,
-  connectedWorkInputValidator,
-  connectedWorkReviewSchema,
   sessionRepositoryReviewSchema,
   sessionHistoryReviewSchema,
   sessionRenameInputValidator,

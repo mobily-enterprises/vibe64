@@ -15,11 +15,9 @@ import {
 } from "./gitRecords.js";
 import {
   commandProject,
-  commitIsAncestor,
   countCommitsBetween,
   git,
   gitOutput,
-  isGitObjectId,
   observedCanonicalCommit,
   repositoryContext,
   runSessionWorkOperation,
@@ -27,7 +25,6 @@ import {
   scopedSessionWorkCommand,
   sessionWorkComparison
 } from "./sessionWorkGit.js";
-import { readContributionHead } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function sessionChangeFiles(runCommand, context, canonicalCommit, worktreeTree, options = {}) {
@@ -171,8 +168,6 @@ async function inspectSessionChangeDiffDirect({
 async function inspectSessionWorkDirect({
   commandOptions = {},
   derivedArtifactPaths = [],
-  inspectContributionPublication = false,
-  knownSubmittedCommit = "",
   project = {},
   runCommand = runVibe64Command,
   session = {},
@@ -245,49 +240,6 @@ async function inspectSessionWorkDirect({
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   const relationship = repositoryUpdateRelationship(ahead, behind);
   const worktreeClean = worktreePorcelain.length === 0;
-  let publishedCommit;
-  if (inspectContributionPublication) {
-    if (!context.contribution) {
-      throw saveError(
-        "Publication inspection requires a bound contribution.",
-        "vibe64_contribution_binding_required"
-      );
-    }
-    const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);
-    publishedCommit = published.head;
-    if (!publishedCommit && knownSubmittedCommit) {
-      if (!isGitObjectId(knownSubmittedCommit)) throw saveError("The saved contribution evidence is invalid.", "vibe64_connected_integration_evidence_invalid");
-      publishedCommit = knownSubmittedCommit;
-    }
-    if (published.discarded || (publishedCommit && published.remoteAbsent)) {
-      const target = `refs/heads/${context.contribution.integrationBranch}`;
-      const observed = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, target], {
-        commandOptions,
-        project
-      });
-      const [accepted, ref, extra] = observed.split(/\s+/u);
-      if (ref !== target || extra || !isGitObjectId(accepted) ||
-          !await commitIsAncestor(runCommand, context, publishedCommit, accepted, { commandOptions, project })) {
-        throw saveError(
-          "The removed contribution has not been proved integrated in this source. Check its receiving target and explicitly Update the connected session.",
-          published.discarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing"
-        );
-      }
-    }
-    if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) {
-      throw saveError(
-        "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
-        "vibe64_contribution_revision_unretained"
-      );
-    }
-    if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {
-      throw saveError(
-        "The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",
-        "vibe64_connected_source_update_required",
-        { repository: context.contribution.repository, sessionId: context.sessionId }
-      );
-    }
-  }
   return {
     ahead,
     baseCommit: context.baseCommit,
@@ -302,7 +254,6 @@ async function inspectSessionWorkDirect({
     dirty: tree !== headTree || !worktreeClean,
     mode: context.mode,
     ok: true,
-    ...(inspectContributionPublication ? { publishedCommit } : {}),
     repositoryMode: context.mode,
     relationship,
     sessionMatchesCanonical: changedPaths.length === 0,
@@ -322,8 +273,6 @@ async function inspectSessionWorkDirect({
 async function inspectSessionWork({
   commandOptions = {},
   derivedArtifactPaths = [],
-  inspectContributionPublication = false,
-  knownSubmittedCommit = "",
   project = {},
   runCommand = runVibe64Command,
   session = {}
@@ -332,7 +281,7 @@ async function inspectSessionWork({
   return runSessionWorkOperation({
     commandOptions,
     context,
-    input: { derivedArtifactPaths, inspectContributionPublication, knownSubmittedCommit },
+    input: { derivedArtifactPaths },
     label: "Inspecting session work",
     operation: "work",
     project,

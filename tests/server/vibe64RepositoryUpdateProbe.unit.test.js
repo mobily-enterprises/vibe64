@@ -23,8 +23,6 @@ import { checkSessionUpdates, readSessionAuthorityHeads } from "../../packages/v
 
 const H0 = "0".repeat(40);
 const H1 = "1".repeat(40);
-const H2 = "2".repeat(40);
-const CONTRIBUTION_ID = "6f1c2b9e-0d4a-4c3e-9b7a-1f2e3d4c5b6a";
 
 async function settle() {
   for (let round = 0; round < 5; round += 1) await new Promise((resolve) => setImmediate(resolve));
@@ -72,7 +70,8 @@ function checkedMetadata(commit) {
 
 // The real sessions service and the real grouped head read, with Git, the
 // clock and the ordinary update check (its fetch) faked at their boundaries.
-function harness(t, projects = { alpha: 3 }) {
+// connected holds each connected copy's main head, as the copies' own reads return it.
+function harness(t, projects = { alpha: 3 }, { connected = null } = {}) {
   const clock = fakeClock();
   const context = new AsyncLocalStorage();
   const state = new Map(Object.entries(projects).map(([slug, count]) => [slug, {
@@ -115,6 +114,8 @@ function harness(t, projects = { alpha: 3 }) {
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readSessionRenewalStateRecord() { return ""; },
+      async mutateSession(sessionId, operation) { return operation(); },
+      async readMetadataValue(sessionId, name) { return current().sessions.get(sessionId).metadata[name] || ""; },
       async writeMetadataValue(sessionId, name, value) {
         const session = current().sessions.get(sessionId);
         session.metadata = { ...session.metadata, [name]: value };
@@ -132,16 +133,21 @@ function harness(t, projects = { alpha: 3 }) {
       publications.push({ projectSlug: context.getStore(), sessionId, ...event });
     },
     terminals: {
-      readRepositoryAuthorityHeads: ({ sessions: open }) => readSessionAuthorityHeads({
-        executionFor: async () => ({ commandOptions: {}, ok: true, runCommand }),
-        project: projectRecord(context.getStore()),
-        sessions: open
-      }),
+      async readRepositoryAuthorityHeads({ sessions: open }) {
+        const reads = await readSessionAuthorityHeads({
+          executionFor: async () => ({ commandOptions: {}, ok: true, runCommand }),
+          project: projectRecord(context.getStore()),
+          sessions: open
+        });
+        if (connected) for (const [id, read] of reads) if (read.head) reads.set(id, { ...read, connected: { ...connected } });
+        return reads;
+      },
       async checkSessionUpdates() {
         const project = current();
         project.fetches += 1;
         return { ahead: 0, behind: 1, canonicalCommit: project.branches.main, incomingVersions: [],
-          reconciled: false, sessionHead: H0, updateAvailable: true };
+          reconciled: false, sessionHead: H0, updateAvailable: true,
+          ...(connected ? { connected: Object.entries(connected).map(([name, canonicalCommit]) => ({ name, behind: 1, canonicalCommit })) } : {}) };
       }
     }
   });
@@ -195,26 +201,27 @@ test("a session is fetched and rechecked only when its authority head moved", as
   assert.equal(alpha.fetches, 3);
 });
 
-test("a connected contribution is rechecked when its published or integration branch moves", async (t) => {
-  const h = harness(t, { alpha: 1 });
+test("a session is rechecked when a connected copy's main moves while its own head stays put", async (t) => {
+  const connected = { library: H0 };
+  const h = harness(t, { alpha: 1 }, { connected });
   const alpha = h.state.get("alpha");
-  const published = `vibe64-incoming/${CONTRIBUTION_ID}`;
-  alpha.branches[published] = H1;
-  alpha.sessions.set("contribution", {
-    agentRuns: [], sessionId: "contribution", sourcePath: "/sessions/contribution", status: "active",
-    metadata: { ...checkedMetadata(H1), connected_contribution: JSON.stringify({
-      schemaVersion: 1, id: CONTRIBUTION_ID, repository: "acme/alpha", integrationBranch: "main", baseCommit: H0
-    }) }
-  });
+  const session = alpha.sessions.get("alpha-1");
+  session.metadata.connected_copies = JSON.stringify({ library: { repository: "acme/library", branch: "main",
+    path: "/sessions/connected/library", baseCommit: H0, canonicalCommit: H0 } });
+  session.metadata.repository_update_check = JSON.stringify(normalizeRepositoryUpdateCheck({
+    ahead: 0, behind: 0, canonicalCommit: H0, sessionHead: H0, connected: [{ name: "library", behind: 0, canonicalCommit: H0 }]
+  }, "2026-10-29T00:00:00.000Z"));
   h.probe.watch("alpha");
   await h.clock.advance(0);
-  assert.equal(alpha.lsRemote, 1, "the contribution's branches share the project's one listing");
-  assert.equal(alpha.fetches, 1, "a contribution is checked once when the probe first sees it");
+  assert.equal(alpha.fetches, 0, "nothing moved");
+  connected.library = H1;
   await h.clock.advance(30_000);
-  assert.equal(alpha.fetches, 1);
-  alpha.branches.main = H2;
+  assert.equal(alpha.lsRemote, 2);
+  assert.equal(alpha.fetches, 1, "the copy's main moved, so the session is checked");
+  assert.equal(JSON.parse(session.metadata.connected_copies).library.canonicalCommit, H1, "the copy records the main it saw");
+  assert.deepEqual(JSON.parse(session.metadata.repository_update_check).connected, [{ name: "library", behind: 1, canonicalCommit: H1 }]);
   await h.clock.advance(30_000);
-  assert.equal(alpha.fetches, 3, "the integration branch moved for both sessions");
+  assert.equal(alpha.fetches, 1, "an unchanged copy head is not checked again");
 });
 
 test("a project that nobody watches and no agent turn uses is not probed and keeps no timer", async (t) => {

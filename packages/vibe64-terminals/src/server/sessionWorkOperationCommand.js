@@ -3,10 +3,6 @@ import path from "node:path";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
 import {
-  changeIncomingContributionDirect,
-  inspectIncomingContributionsDirect
-} from "./sessionIncomingContributions.js";
-import {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,
   checkSessionUpdatesDirect,
@@ -25,11 +21,6 @@ import {
 
 const MAX_INPUT_BYTES = 1024 * 1024;
 const OPERATION_IMPLEMENTATIONS = {
-  "incoming": inspectIncomingContributionsDirect,
-  "incoming-change": async (input) => {
-    const { refreshGenesisCities } = await import("@local/vibe64-genesis/server");
-    return changeIncomingContributionDirect({ ...input, refreshDerivedArtifacts: refreshGenesisCities });
-  },
   "change-diff": inspectSessionChangeDiffDirect,
   "changes": inspectSessionChangesDirect,
   "check-updates": checkSessionUpdatesDirect,

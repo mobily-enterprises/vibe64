@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { checkpointRefRoot } from "@local/vibe64-execution/server";
 
 import {
@@ -25,6 +26,27 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
+const SESSION_RECOVERY_ARTIFACTS = Object.freeze({
+  branchBundle: RECOVERY_BRANCH_BUNDLE_ARTIFACT,
+  checkpointBundle: RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
+  patch: RECOVERY_PATCH_ARTIFACT,
+  root: RECOVERY_ARTIFACT_ROOT,
+  untracked: RECOVERY_UNTRACKED_ARTIFACT,
+  untrackedList: RECOVERY_UNTRACKED_LIST_ARTIFACT
+});
+
+/**
+ * The same recovery artifacts for one connected copy, below recovery/connected/<name>/.
+ * @param {string} name
+ */
+function connectedCopyRecoveryArtifacts(name) {
+  const root = `${RECOVERY_ARTIFACT_ROOT}/connected/${name}`;
+  return Object.freeze(Object.fromEntries(Object.entries(SESSION_RECOVERY_ARTIFACTS).map(([key, artifact]) => [
+    key,
+    key === "root" ? root : `${root}/${path.posix.basename(artifact)}`
+  ])));
+}
+
 /**
  * Recovery of a session's source before it is archived: its uncommitted work,
  * branch and checkpoints as bundles and artifacts, and the details saved for
@@ -34,8 +56,10 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {object} [request.session]
  * @param {Vibe64SessionStore} request.store
  * @param {string} [request.worktreePath]
+ * @param {typeof SESSION_RECOVERY_ARTIFACTS} [request.artifacts] where in the session's artifacts they go
  */
 async function writeDirtyRecoveryArtifacts({
+  artifacts = SESSION_RECOVERY_ARTIFACTS,
   artifactsRoot = "",
   session = {},
   store,
@@ -51,7 +75,7 @@ async function writeDirtyRecoveryArtifacts({
     };
   }
 
-  const recoveryRoot = path.join(artifactsRoot, RECOVERY_ARTIFACT_ROOT);
+  const recoveryRoot = path.join(artifactsRoot, artifacts.root);
   await mkdir(recoveryRoot, {
     recursive: true
   });
@@ -67,7 +91,7 @@ async function writeDirtyRecoveryArtifacts({
   }
   const patchText = String(patchResult.stdout || "");
   const patchArtifact = toText(patchText)
-    ? RECOVERY_PATCH_ARTIFACT
+    ? artifacts.patch
     : "";
   if (patchArtifact) {
     await store.writeArtifact(session.sessionId, patchArtifact, patchText);
@@ -97,8 +121,8 @@ async function writeDirtyRecoveryArtifacts({
     };
   }
 
-  const listPath = path.join(artifactsRoot, RECOVERY_UNTRACKED_LIST_ARTIFACT);
-  const tarPath = path.join(artifactsRoot, RECOVERY_UNTRACKED_ARTIFACT);
+  const listPath = path.join(artifactsRoot, artifacts.untrackedList);
+  const tarPath = path.join(artifactsRoot, artifacts.untracked);
   await mkdir(path.dirname(listPath), {
     recursive: true
   });
@@ -127,7 +151,7 @@ async function writeDirtyRecoveryArtifacts({
   return {
     dirty: true,
     patchArtifact,
-    untrackedArtifact: RECOVERY_UNTRACKED_ARTIFACT,
+    untrackedArtifact: artifacts.untracked,
     untrackedCount: untrackedPaths.length
   };
 }
@@ -140,13 +164,24 @@ async function writeBranchRecoveryBundle({
   if (metadataValue(session, "source_kind") !== "session_clone") {
     return metadataValue(session, "source_recovery_bundle_artifact");
   }
+  return writeBranchBundle({
+    artifact: RECOVERY_BRANCH_BUNDLE_ARTIFACT,
+    artifactsRoot,
+    baseCommit: metadataValue(session, "base_commit"),
+    worktreePath
+  });
+}
+
+/**
+ * The worktree's commits since `baseCommit` as a bundle, or "" when it has none.
+ */
+async function writeBranchBundle({ artifact, artifactsRoot, baseCommit, worktreePath }) {
   const headResult = await runGit(worktreePath, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
   });
   if (!headResult.ok) {
     return "";
   }
-  const baseCommit = metadataValue(session, "base_commit");
   let bundleRef = "HEAD";
   if (baseCommit) {
     const aheadResult = await runGit(worktreePath, ["rev-list", "--count", `${baseCommit}..HEAD`], {
@@ -161,7 +196,7 @@ async function writeBranchRecoveryBundle({
     }
   }
 
-  const bundlePath = path.join(artifactsRoot, RECOVERY_BRANCH_BUNDLE_ARTIFACT);
+  const bundlePath = path.join(artifactsRoot, artifact);
   await mkdir(path.dirname(bundlePath), {
     recursive: true
   });
@@ -174,7 +209,7 @@ async function writeBranchRecoveryBundle({
       "vibe64_worktree_archive_bundle_failed"
     );
   }
-  return RECOVERY_BRANCH_BUNDLE_ARTIFACT;
+  return artifact;
 }
 
 async function writeCheckpointRecoveryBundle({
@@ -185,7 +220,14 @@ async function writeCheckpointRecoveryBundle({
   if (metadataValue(session, "source_kind") !== "session_clone") {
     return metadataValue(session, "source_recovery_checkpoint_bundle_artifact");
   }
-  const refRoot = checkpointRefRoot(session.sessionId);
+  return writeCheckpointBundle({ artifacts: SESSION_RECOVERY_ARTIFACTS, artifactsRoot, sessionId: session.sessionId, worktreePath });
+}
+
+/**
+ * The worktree's turn checkpoints as a bundle proven to restore them exactly, or "" when it has none.
+ */
+async function writeCheckpointBundle({ artifacts, artifactsRoot, sessionId, worktreePath }) {
+  const refRoot = checkpointRefRoot(sessionId);
   const refsResult = await runGit(worktreePath, [
     "for-each-ref",
     "--format=%(objectname) %(refname)",
@@ -220,8 +262,8 @@ async function writeCheckpointRecoveryBundle({
     );
   }
 
-  const recoveryRoot = path.join(artifactsRoot, RECOVERY_ARTIFACT_ROOT);
-  const bundlePath = path.join(artifactsRoot, RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT);
+  const recoveryRoot = path.join(artifactsRoot, artifacts.root);
+  const bundlePath = path.join(artifactsRoot, artifacts.checkpointBundle);
   await mkdir(recoveryRoot, {
     recursive: true
   });
@@ -313,7 +355,7 @@ async function writeCheckpointRecoveryBundle({
       recursive: true
     });
   }
-  return RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT;
+  return artifacts.checkpointBundle;
 }
 
 function recoveryDetailsFromSession(session = {}) {
@@ -408,6 +450,61 @@ async function saveSessionSourceRecovery({
   return details;
 }
 
+/**
+ * Recovery of each connected copy before the session's source goes: its
+ * uncommitted work, commits since its recorded base and its checkpoints, below
+ * recovery/connected/<name>/, recorded in connected_copies_recovery. A copy
+ * whose folder is gone keeps its earlier record.
+ * @param {{ session: object, store: Vibe64SessionStore }} request
+ */
+async function saveConnectedCopiesRecovery({ session = {}, store } = {}) {
+  const copies = sessionConnectedCopies(session);
+  if (!copies.length) return {};
+  let recorded = {};
+  try {
+    recorded = JSON.parse(metadataValue(session, "connected_copies_recovery") || "{}");
+  } catch { /* An unreadable earlier record is replaced by this one. */ }
+  const details = {};
+  for (const copy of copies) {
+    const isWorktree = await pathExists(copy.path) &&
+      toText((await runGit(copy.path, ["rev-parse", "--show-toplevel"], { timeout: 15_000 })).stdout) === path.resolve(copy.path);
+    if (!isWorktree) {
+      if (recorded[copy.name]) details[copy.name] = recorded[copy.name];
+      continue;
+    }
+    const artifacts = connectedCopyRecoveryArtifacts(copy.name);
+    await rm(path.join(session.artifactsRoot, artifacts.root), { force: true, recursive: true });
+    const dirty = await writeDirtyRecoveryArtifacts({
+      artifacts, artifactsRoot: session.artifactsRoot, session, store, worktreePath: copy.path
+    });
+    details[copy.name] = {
+      baseCommit: copy.baseCommit,
+      branch: await readWorktreeGitFact(copy.path, ["branch", "--show-current"]),
+      branchBundleArtifact: await writeBranchBundle({
+        artifact: artifacts.branchBundle,
+        artifactsRoot: session.artifactsRoot,
+        baseCommit: copy.baseCommit,
+        worktreePath: copy.path
+      }),
+      checkpointBundleArtifact: await writeCheckpointBundle({
+        artifacts,
+        artifactsRoot: session.artifactsRoot,
+        sessionId: session.sessionId,
+        worktreePath: copy.path
+      }),
+      dirty: dirty.dirty,
+      head: await readWorktreeGitFact(copy.path, ["rev-parse", "--verify", "HEAD"]),
+      patchArtifact: dirty.patchArtifact,
+      repository: copy.repository,
+      sourcePath: copy.path,
+      untrackedArtifact: dirty.untrackedArtifact,
+      untrackedCount: dirty.untrackedCount || 0
+    };
+  }
+  await store.writeMetadataValue(session.sessionId, "connected_copies_recovery", JSON.stringify(details));
+  return details;
+}
+
 async function validateRecoveryBundle({
   artifact = "",
   expectedArtifact = "",
@@ -446,7 +543,9 @@ async function validateRecoveryBundle({
 }
 
 export {
+  connectedCopyRecoveryArtifacts,
   recoveryDetailsFromSession,
+  saveConnectedCopiesRecovery,
   saveSessionSourceRecovery,
   validateRecoveryBundle
 };

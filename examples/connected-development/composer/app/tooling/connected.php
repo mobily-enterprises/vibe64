@@ -17,7 +17,7 @@
  * manifest and lock are unmodified.
  */
 
-const CONTRACT = 'vibe64.connected-sources.v1';
+const CONTRACT = 'vibe64.connected-sources.v2';
 const DERIVED_MANIFEST = 'composer.connected.json';
 const DERIVED_LOCK = 'composer.connected.lock';
 
@@ -43,7 +43,7 @@ function readJson(string $path): array
 function connectedPackages(string $sourcesFile): array
 {
     $map = readJson($sourcesFile);
-    if (($map['contract'] ?? null) !== CONTRACT) {
+    if (($map['schema'] ?? null) !== CONTRACT) {
         fail("$sourcesFile is not a " . CONTRACT . ' sources map');
     }
     $lockedVersions = [];
@@ -54,7 +54,7 @@ function connectedPackages(string $sourcesFile): array
         }
     }
     $packages = [];
-    foreach ($map['projects'] ?? [] as $project) {
+    foreach ($map['repositories'] ?? [] as $project) {
         if (($project['type'] ?? 'composer') !== 'composer') {
             continue;
         }

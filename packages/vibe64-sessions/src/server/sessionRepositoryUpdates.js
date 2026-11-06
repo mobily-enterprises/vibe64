@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
-import { sessionConnectedContribution, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
+import { recordSessionConnectedCopyCommits, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import {
   normalizeRepositoryUpdateCheck,
   REPOSITORY_UPDATE_CHECK_METADATA,
@@ -19,6 +18,19 @@ import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/
 /** @typedef {import("./types.js").SessionWorkOperations} SessionWorkOperations */
 
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
+
+/**
+ * Whether a probe's head read differs from the session's last check: its own
+ * head, or any connected copy's main head.
+ * @param {object | null} cached
+ * @param {{ head?: string, connected?: Record<string, string> }} read
+ */
+function headsMoved(cached, read) {
+  if (cached?.canonicalCommit !== read.head) return true;
+  return Object.entries(read.connected || {}).some(([name, head]) => (
+    cached.connected?.find(copy => copy.name === name)?.canonicalCommit !== head
+  ));
+}
 
 function repositoryUpdateCheckIsFresh(value, now = Date.now()) {
   const checkedAt = Date.parse(normalizeText(value?.checkedAt));
@@ -88,25 +100,23 @@ function createSessionRepositoryUpdates({
   const activeRepositoryUpdateChecks = new Map();
 
   /**
-   * Records a canonical commit read earlier, unless the session was linked to
-   * a contribution since that read: a linked session's canonical source is its
-   * contribution until it is pushed, and a commit from its former branch would
-   * read as a contribution that was removed. The link writes under this same
-   * lock, so neither can slip past the other.
+   * Records a canonical commit read earlier, and each connected copy's main
+   * commit from the same check; a check that also found a repository's work
+   * in its saved version moves its base there too.
    * @param {Vibe64SessionRuntime} runtime
-   * @param {object} observed the session as that read saw it
-   * @param {string} canonicalCommit
-   * @param {boolean} [reconciled] the check also moved the session's base here
-   * @returns {Promise<boolean>} whether the commit still applied
+   * @param {string} sessionId
+   * @param {{ canonicalCommit: string, reconciled?: boolean, connected?: object[] }} check
    */
-  function recordObservedCanonical(runtime, observed, canonicalCommit, reconciled = false) {
-    const { sessionId } = observed;
+  function recordObservedCanonical(runtime, sessionId, { canonicalCommit, connected = [], reconciled = false }) {
     return project.runProjectSourceExclusive(async () => {
-      const current = await runtime.getSessionWithoutSource(sessionId);
-      if (!isDeepStrictEqual(sessionConnectedContribution(current), sessionConnectedContribution(observed))) return false;
       await runtime.store.writeMetadataValue(sessionId, "canonical_commit", canonicalCommit);
       if (reconciled) await runtime.store.writeMetadataValue(sessionId, "base_commit", canonicalCommit);
-      return true;
+      if (connected.length) {
+        await recordSessionConnectedCopyCommits(runtime.store, sessionId, Object.fromEntries(connected.map(copy => [
+          copy.name,
+          { canonicalCommit: copy.canonicalCommit, ...(copy.reconciled ? { baseCommit: copy.canonicalCommit } : {}) }
+        ])));
+      }
     });
   }
 
@@ -135,7 +145,7 @@ function createSessionRepositoryUpdates({
         return;
       }
       if (authorityKey(candidate) !== sourceAuthority) return;
-      if (!await recordObservedCanonical(runtime, candidate, canonicalCommit)) return;
+      await recordObservedCanonical(runtime, candidateId, { canonicalCommit });
       await publishSessionChanged(candidateId, {
         operation: "updated",
         originId: normalizeText(originId),
@@ -185,9 +195,11 @@ function createSessionRepositoryUpdates({
           runtime,
           session
         });
-        // A link that landed during the check leaves its answer about a branch
-        // the session no longer follows, so it is returned but not kept.
-        if (!await recordObservedCanonical(runtime, session, result.canonicalCommit, result.reconciled === true)) return result;
+        await recordObservedCanonical(runtime, sessionId, {
+          canonicalCommit: result.canonicalCommit,
+          connected: result.connected || [],
+          reconciled: result.reconciled === true
+        });
         const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, result);
         await publishSessionChanged(sessionId, {
           operation: "updated",
@@ -219,12 +231,12 @@ function createSessionRepositoryUpdates({
 
   /**
    * One tick of a project's update probe (repositoryUpdateProbe.js). It reads
-   * every open session's authority head with one `ls-remote` per authority
-   * repository, then runs the ordinary forced check above (its fetch, under
-   * the project source lock) only for a session whose head moved. `memory`
-   * holds, per session, a connected contribution's authority heads and the
-   * last failure published. A project nobody watches and no agent turn uses
-   * is not read at all.
+   * every open session's authority head, and each connected copy's main head,
+   * with one `ls-remote` per repository, then runs the ordinary forced check
+   * above (its fetch, under the project source lock) only for a session whose
+   * own or copy's head moved. `memory` holds, per session, the last failure
+   * published. A project nobody watches and no agent turn uses is not read at
+   * all.
    * @param {string} slug
    * @param {{ memory: Map<string, object>, watched: boolean }} state
    */
@@ -252,13 +264,11 @@ function createSessionRepositoryUpdates({
         let failure = read.error ? { code: read.code, message: read.error } : null;
         try {
           // A session whose last check failed is checked again until it succeeds.
-          let moved = Boolean(remembered.error) || (read.head
-            ? cachedRepositoryUpdateCheck(listed)?.canonicalCommit !== read.head
-            : remembered.authority !== read.authority);
+          let moved = Boolean(remembered.error) || headsMoved(cachedRepositoryUpdateCheck(listed), read);
           if (!failure && moved && read.head && !remembered.error) {
             // An earlier session's check or a browser's may have caught up.
             const session = await runtime.getSessionWithoutSource(sessionId);
-            moved = cachedRepositoryUpdateCheck(session)?.canonicalCommit !== read.head;
+            moved = headsMoved(cachedRepositoryUpdateCheck(session), read);
           }
           const renewal = !failure && moved ? await readSessionRenewalState(runtime, sessionId) : null;
           const renewing = [SESSION_RENEWAL_STATUS.RUNNING, SESSION_RENEWAL_STATUS.COMPLETED].includes(renewal?.status) ||
@@ -280,8 +290,7 @@ function createSessionRepositoryUpdates({
           };
         }
         if (!failure) {
-          if (read.authority) memory.set(sessionId, { authority: read.authority });
-          else memory.delete(sessionId);
+          memory.delete(sessionId);
           continue;
         }
         failed = true;

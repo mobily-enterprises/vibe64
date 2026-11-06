@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 
 import {
@@ -40,9 +39,6 @@ import {
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_INTERRUPT_AGENT_TURN,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
-  ACTION_INSPECT_INCOMING,
-  ACTION_REVIEW_INCOMING,
-  ACTION_CHANGE_INCOMING,
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
@@ -246,23 +242,6 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: withMainChatOperations({}) }).map((action) => action.id), [
-    "vibe64.sessions.connected.prepare",
-    "vibe64.sessions.connected.source",
-    "vibe64.sessions.connected.inputs.inspect",
-    "vibe64.sessions.connected.replacement.inspect",
-    "vibe64.sessions.connected.replace",
-    "vibe64.sessions.connected.work.inspect",
-    "vibe64.sessions.connected.work.inputs",
-    "vibe64.sessions.connected.work.incoming",
-    "vibe64.sessions.connected.work.save",
-    "vibe64.sessions.connected.work.update",
-    "vibe64.sessions.connected.work.check",
-    "vibe64.sessions.connected.resolve",
-    "vibe64.sessions.connected.replacement.create",
-    "vibe64.sessions.connected.choices",
-    "vibe64.sessions.connected.link",
-    "vibe64.sessions.connected.sessions",
-    "vibe64.sessions.connected.sessions.bind",
     ACTION_READ_CONVERSATION_CONTEXT,
     ACTION_PIN_SESSION,
   ACTION_RENAME_SESSION,
@@ -290,9 +269,6 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_INSPECT_SESSION_WORK,
     ACTION_CREATE_PULL_REQUEST,
     ACTION_SAVE_SESSION_WORK,
-    ACTION_INSPECT_INCOMING,
-    ACTION_REVIEW_INCOMING,
-    ACTION_CHANGE_INCOMING,
     ACTION_CHECK_SESSION_UPDATES,
     ACTION_UPDATE_SESSION_WORK,
     ACTION_READ_SESSION_CONVERSATION_LOG,
@@ -4093,45 +4069,6 @@ test("internal commit validation refuses missing identity, incomplete objects an
   });
 });
 
-test("internal contribution creation retains normal admission and cannot select main for Save", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) };
-    let contributionSetupStarts = 0;
-    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot),
-      startWorkspaceSetup: async () => { contributionSetupStarts++; return { completion: null }; } });
-    harness.project.readCurrentProject = async () => ({ repositoryMode: "github",
-      repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/library" } } });
-    const options = { sessionId: "contribution-session", expectedCommit: contribution.baseCommit, connectedContribution: contribution };
-    for (const changed of [{ ...options, sessionId: undefined }, { ...options, expectedCommit: undefined },
-      { ...options, expectedCommit: "b".repeat(40) },
-      { ...options, connectedContribution: { ...contribution, repository: "other/library" } }]) {
-      assert.equal((await harness.service.createSession({}, changed)).ok, false);
-      assert.equal(harness.creationInputs.length, 0);
-    }
-    const created = await harness.service.createSession({ vibe64User: { username: "ada" } }, options);
-    assert.equal(created.ok, true, created.error);
-    assert.equal(created.sessionId, options.sessionId);
-    assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.connected_contribution), contribution);
-    assert.equal(harness.creationInputs[0].metadata.repository_branch, undefined);
-    assert.equal(harness.creationInputs[0].sourceContext.expectedCommit, contribution.baseCommit);
-    assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
-    assert.equal(contributionSetupStarts, 0,
-      "receiving allocation cannot recursively start setup for its own connections or cycles");
-    let ordinarySetupStarts = 0;
-    const ordinary = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "ordinary"),
-      startWorkspaceSetup: async () => { ordinarySetupStarts++; return { completion: null }; } });
-    assert.equal((await ordinary.service.createSession({ connectedContribution: contribution })).ok, true);
-    assert.equal(ordinary.creationInputs[0].metadata.connected_contribution, undefined, "Client input grants no contribution authority.");
-    assert.equal(ordinarySetupStarts, 1, "ordinary creation retains automatic setup; browser input cannot suppress it");
-    const full = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "full"),
-      scope: "project", initialSessions: [{ sessionId: "existing" }] });
-    full.project.readCurrentProject = harness.project.readCurrentProject;
-    assert.equal((await full.service.createSession({}, options)).ok, false);
-    assert.equal(full.creationInputs.length, 0, "Contribution allocation retains the receiving project's session policy.");
-  });
-});
-
 test("reserved creation refuses original durable session evidence before runtime writes", async () => {
   await withTemporaryRoot(async targetRoot => {
     const runtimeRoot = projectRuntimeRoot(targetRoot);
@@ -5020,35 +4957,6 @@ test("source pin works during assistant preparation and retains closing and rene
     assert.equal((await service.pinSession("source", { pinned: true })).code, "vibe64_session_pin_renewal_unfinished");
     assert.equal(await store.readPinnedSessionId(), "");
   });
-});
-
-test("incoming change facades require a session before reaching Git", async () => {
-  const calls = [];
-  const service = createService({
-    // A session with no AI task open.
-    project: { createRuntimeWithoutSource: async () => ({ store: { listSessionConversations: async () => [] } }) },
-    terminals: {
-      async inspectIncomingContributions(sessionId) {
-        calls.push(["inspect", sessionId]);
-        return { ok: true };
-      },
-      async changeIncomingContribution(sessionId) {
-        calls.push(["change", sessionId]);
-        return { ok: true, status: "repair-review" };
-      }
-    }
-  });
-
-  for (const operation of ["inspectIncomingContributions", "changeIncomingContribution"]) {
-    const missing = await service[operation]("", {});
-    assert.equal(missing.ok, false);
-    assert.equal(missing.code, "vibe64_incoming_changes_session_required");
-  }
-  assert.deepEqual(calls, []);
-
-  assert.equal((await service.inspectIncomingContributions("session-a", {})).ok, true);
-  assert.equal((await service.changeIncomingContribution("session-a", {})).ok, true);
-  assert.deepEqual(calls, [["inspect", "session-a"], ["change", "session-a"]]);
 });
 
 test("session actions hide people's approvals and undescribed actions from Colleague; exposed ones are described", () => {

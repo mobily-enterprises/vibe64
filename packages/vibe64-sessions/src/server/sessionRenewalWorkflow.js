@@ -497,7 +497,6 @@ function createRenewalWorkflow({
         sessionId: nextSessionId,
         sourceContext: {
           expectedCommit: state.basis.source.commit,
-          expectedSourceRef: state.basis.source.ref,
           vibe64User: input.vibe64User || null
         },
         startedAt: state.createdAt

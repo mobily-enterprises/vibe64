@@ -39,7 +39,7 @@ async function readSetupProblem({ runtime, sessionId }) {
   ]);
   const setup = session.workspaceSetup || {};
   const status = normalizeText(setup.status);
-  if (!NEEDS_ATTENTION.includes(status) || setup.connectedChoiceRequired === true) {
+  if (!NEEDS_ATTENTION.includes(status)) {
     throw new AppError(409, "Workspace preparation has no problem to fix right now.", { code: "vibe64_ai_task_no_problem" });
   }
   if (update?.status === "failed") {
@@ -117,7 +117,7 @@ function createWorkspaceSetupKind({ sessions }) {
       output: "Preparation output",
       // Cancel stops the preparation step that is running.
       async run({ sessionId, signal, taskId }) {
-        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, { aiTaskId: taskId, signal }, { channel: "api" }));
+        return setupCheckResult(await sessions.retryWorkspaceSetup(sessionId, { aiTaskId: taskId, signal }));
       },
       retry: {
         limit: 3,

@@ -4,6 +4,7 @@ import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { connectedRepositoryName } from "@local/vibe64-core/server/projectRepository";
 import {
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,
@@ -21,20 +22,21 @@ function invalid(message) {
 }
 
 function normalizeConnectedProjects(value) {
-  if (!isPlainObject(value) || Object.keys(value).some((key) => key !== "projects") ||
-      !Array.isArray(value.projects) || value.projects.length > CONNECTED_PROJECTS_LIMIT) {
-    invalid(`Expected a projects array with at most ${CONNECTED_PROJECTS_LIMIT} entries.`);
+  if (!isPlainObject(value) || Object.keys(value).some((key) => key !== "repositories") ||
+      !Array.isArray(value.repositories) || value.repositories.length > CONNECTED_PROJECTS_LIMIT) {
+    invalid(`Expected a repositories array with at most ${CONNECTED_PROJECTS_LIMIT} entries.`);
   }
   const repositories = new Set();
+  const names = new Set();
   return {
-    projects: value.projects.map((entry) => {
+    repositories: value.repositories.map((entry) => {
       if (!isPlainObject(entry) ||
         Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
-        invalid("Each project must contain name, repository and relationship, with optional type and script.");
+        invalid("Each repository must contain name, repository and relationship, with optional type and script.");
       }
       // eslint-disable-next-line no-control-regex -- Display names must stay on one line without ASCII control characters.
       if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 100 || /[\x00-\x1f\x7f]/u.test(entry.name)) {
-        invalid("Each project needs a name of 1–100 characters on one line.");
+        invalid("Each repository needs a name of 1–100 characters on one line.");
       }
       const match = typeof entry.repository === "string" && entry.repository.length <= 512 &&
       entry.repository.match(/^https:\/\/github\.com\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/iu);
@@ -44,6 +46,10 @@ function normalizeConnectedProjects(value) {
       const repository = `${GITHUB_REPOSITORY_URL_PREFIX}${match[1]}/${match[2]}`.toLowerCase();
       if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
       repositories.add(repository);
+      // Each session copies a connected repository into a folder named after it.
+      const copyName = connectedRepositoryName(repository);
+      if (names.has(copyName)) invalid(`Two connected repositories are both named ${copyName}. Keep only one of them.`);
+      names.add(copyName);
       if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
       if (entry.type !== undefined && !isConnectedPackageType(entry.type)) {
         invalid(`Type must be ${connectedPackageTypeListText()}, or omitted to use the consuming Stack default.`);
@@ -89,7 +95,7 @@ async function readConnectedProjects(sourceRoot) {
     const value = normalizeConnectedProjects(JSON.parse(text));
     return { ...value, exists: true, revision: createHash("sha256").update(text).digest("hex") };
   } catch (error) {
-    if (error.code === "ENOENT") return { projects: [], exists: false, revision: "" };
+    if (error.code === "ENOENT") return { repositories: [], exists: false, revision: "" };
     if (error instanceof SyntaxError) invalid("Invalid JSON. Repair the file before saving settings.");
     if (error.code === "ELOOP") invalid("The connection file must not be a symbolic link.");
     throw error;
@@ -105,7 +111,7 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   const normalized = normalizeConnectedProjects(value);
   const current = await readConnectedProjects(sourceRoot);
   if (typeof expectedRevision !== "string" || current.revision !== expectedRevision) {
-    throw vibe64Error("Connected projects changed. Refresh and review the current list before saving.", "vibe64_connections_changed");
+    throw vibe64Error("Connected repositories changed. Refresh and review the current list before saving.", "vibe64_connections_changed");
   }
   // Match the shared atomic writer's formatted UTF-8 JSON before replacing a
   // readable file with content that this owner's reader would reject.

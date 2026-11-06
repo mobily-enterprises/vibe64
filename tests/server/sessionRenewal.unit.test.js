@@ -1210,7 +1210,6 @@ function fixture({
     }
   };
   const newController = (overrides = {}) => createSessionRenewalController({
-    connectedLinkProblem: async () => "",
     prepareArchive: async () => undefined,
     project,
     publishSessionChanged: async (_sessionId, event) => events.push(event),
@@ -1721,7 +1720,6 @@ test("same-named sessions in two catalogue projects schedule by durable renewal 
     }
   });
   const controller = createSessionRenewalController({
-    connectedLinkProblem: async () => "",
     prepareArchive: async () => undefined,
     project,
     publishSessionChanged: async () => null,
@@ -3295,25 +3293,8 @@ test("successor setup failure leaves the predecessor open and a new controller r
   assert.equal(context.calls.discard, 0);
 });
 
-test("a connected link that no longer holds keeps the renewal in review, with nothing frozen", async () => {
-  const context = fixture();
-  const reviewed = await reviewedRenewal(context);
-  const problem = "library needs a connected session. Its connected session Work in example/library was archived. " +
-    "Use Prepare workspace here, choose in its notice, then confirm this renewal again.";
-  const controller = context.newController({ connectedLinkProblem: async () => problem });
-  await assert.rejects(controller.confirmSessionRenewal(OLD_SESSION_ID, {
-    expectedHash: reviewed.draft.hash,
-    expectedRevision: reviewed.draft.revision,
-    operationKey: reviewed.operationKey
-  }), { code: "vibe64_session_renewal_connected_link_required", message: problem });
-  assert.equal((await readSessionRenewalState(context.runtime, OLD_SESSION_ID)).status, SESSION_RENEWAL_STATUS.REVIEW);
-  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
-  assert.equal(context.calls.ordering.includes("freeze"), false);
-});
-
-test("a connected choice the hidden successor cannot ask for fails the renewal with its project and reason", async () => {
-  const diagnostic = "library needs a connected session. Its connected session Work in example/library was archived. " +
-    "Cancel this renewal, choose in this session's workspace preparation notice, then renew it again.";
+test("a workspace choice the hidden successor cannot ask for fails the renewal with its reason", async () => {
+  const diagnostic = "The Stack has two Setup sections. Cancel this renewal, keep one of them, then renew it again.";
   const context = fixture({ setupDiagnostic: diagnostic, setupStatus: "ambiguous" });
   const reviewed = await reviewedRenewal(context);
   await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {

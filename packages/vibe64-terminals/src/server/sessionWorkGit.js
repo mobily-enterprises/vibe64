@@ -1,5 +1,5 @@
 // Session repository context, the managed Git command bridge, operation refs
-// and the tree helpers shared by Save, Update and Incoming changes.
+// and the tree helpers shared by Save and Update.
 import crypto from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -9,8 +9,6 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeRepositoryMode,
-  sessionConnectedContribution,
-  sessionConnectedSubmissions,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import { checkpointRefs, vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
@@ -106,8 +104,6 @@ function repositoryContext(session = {}, project = {}) {
   return Object.freeze({
     baseCommit,
     branch,
-    contribution: sessionConnectedContribution(session),
-    connectedSubmissions: sessionConnectedSubmissions(session),
     lastCanonicalCommit,
     mode,
     githubMirrorPath: normalizeText(project.githubMirrorPath),
@@ -139,7 +135,7 @@ function sessionWorkOperationProject(context, project = {}) {
     ownerUserKey: normalizeText(project.ownerUserKey || project.githubRepository?.owner),
     projectSlug,
     repository: {
-      defaultBranch: context.contribution?.integrationBranch || context.branch,
+      defaultBranch: context.branch,
       mode: context.mode,
       ...(context.mode === PROJECT_REPOSITORY_MODE_GITHUB
         ? { github: { cloneUrl: context.remoteUrl, fullName: context.repositoryFullName } }
@@ -153,13 +149,6 @@ function sessionWorkOperationProject(context, project = {}) {
 function sessionWorkOperationSession(context) {
   return {
     metadata: {
-      ...(context.contribution ? { connected_contribution: JSON.stringify(context.contribution) } : {}),
-      ...(context.connectedSubmissions.length ? {
-        connected_submissions: JSON.stringify({
-          schemaVersion: 1,
-          submissions: context.connectedSubmissions
-        })
-      } : {}),
       base_branch: context.branch,
       base_commit: context.baseCommit,
       canonical_commit: context.lastCanonicalCommit,

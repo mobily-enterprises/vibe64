@@ -46,7 +46,7 @@ test("all project HTTP operations share canonical actions and current authority 
       ["POST", "/env/download", "env.download", "downloadEnv", { environment: "dev", sessionId: "session-1" }],
       ["PUT", "/env/user-values", "env.user-values.save", "saveEnvUserValues", { values: { ACCEPTANCE: { value: "test", secret: false } }, sessionId: "session-1" }],
       ["GET", "/settings", "settings.read", "readSettings", { sessionId: "session-1" }],
-      ["PUT", "/settings/connections", "connections.save", "saveConnectedProjects", { projects: [], revision: "revision-1", sessionId: "session-1" }],
+      ["PUT", "/settings/connections", "connections.save", "saveConnectedProjects", { repositories: [], revision: "revision-1", sessionId: "session-1" }],
       ["PUT", "/settings/collaboration", "collaboration.save", "saveCollaborationSettings", { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "direct", requirements: "", sessionId: "session-1" }],
       ["PUT", "/settings/prompt-hints", "prompt-hints.save", "savePromptHints", { promptHints: false }],
       ["PUT", "/settings/development-database", "development-database.scope.save", "saveDevelopmentDatabaseScope", { scope: "project" }],

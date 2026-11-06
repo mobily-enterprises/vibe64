@@ -76,7 +76,6 @@ function renewalFailedBeforeAcknowledgement(state) {
  */
 function createSessionRenewalController({
   clearTimeoutFn = clearTimeout,
-  connectedLinkProblem,
   prepareArchive,
   project,
   publishSessionChanged,
@@ -232,10 +231,6 @@ function createSessionRenewalController({
           );
         }
         const idleSession = await predecessorSession.assertPredecessorIdle(runtime, sessionId);
-        const connectedProblem = await connectedLinkProblem(sessionId, input);
-        if (connectedProblem) {
-          throw renewalError(connectedProblem, "vibe64_session_renewal_connected_link_required", { retryable: true });
-        }
         const successorAssistant = await resolveSuccessorAssistant(
           { assistantSelection: input.assistantSelection },
           {

@@ -18,12 +18,7 @@ import {
   saveCommand,
   saveError
 } from "./sessionWorkGit.js";
-import {
-  assertConnectedSubmissionsIntegrated,
-  assertConnectedWorkSnapshotsUnchanged,
-  assertLocalAuthority,
-  readContributionHead
-} from "./sessionWorkAuthority.js";
+import { assertLocalAuthority } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
@@ -55,9 +50,8 @@ async function createSaveCommit(runCommand, context, {
   });
 }
 
-async function publishSaveCommit(runCommand, context, { canonicalCommit, contributionAuthority, saveCommit }, options) {
+async function publishSaveCommit(runCommand, context, { canonicalCommit, saveCommit }, options) {
   const { onPublicationAttempt = doNothing } = options;
-  await assertConnectedSubmissionsIntegrated(runCommand, context, options);
   if (context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     const current = await assertLocalAuthority(runCommand, context, options);
     if (current !== canonicalCommit) {
@@ -70,7 +64,6 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
       ...options,
       cwd: context.standaloneSourceRoot
     });
-    await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
     onPublicationAttempt();
     await git(runCommand, context, ["merge", "--ff-only", saveCommit], {
       ...options,
@@ -84,37 +77,11 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     return verified;
   }
   const pushArgs = ["push"];
-  const expectedRemoteCommit = context.contribution
-    ? contributionAuthority.publishedCommit
-    : canonicalCommit;
-  if (context.contribution) {
-    if (contributionAuthority.missingPublished) {
-      throw saveError(
-        "This contribution branch was removed after it was pushed. Preserve its source and submit further work as a new contribution.",
-        "vibe64_contribution_branch_missing"
-      );
-    }
-    const expected = contributionAuthority.remoteAbsent ? "" : contributionAuthority.publishedCommit;
-    if ((await readContributionHead(runCommand, context, options)).head !== expected) {
-      throw saveError(
-        "The contribution branch changed while Save was preparing. Inspect it before trying again.",
-        "vibe64_session_save_update_required",
-        {},
-        { messageCode: "vibe64_session_save_contribution_changed_during_preparation" }
-      );
-    }
-    // The prepared commit descends from the observed head. The exact lease also
-    // prevents ordinary push from recreating a ref removed by a racing discard.
-    pushArgs.push(`--force-with-lease=refs/heads/${context.branch}:${expected}`);
-  }
   if (context.mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
     pushArgs.push("--push-option=vibe64-atomic");
   }
   pushArgs.push("origin", `${saveCommit}:refs/heads/${context.branch}`);
   let pushed;
-  // This is a final read, not a lock on receiving repositories. It catches
-  // changes during preparation without claiming exclusion after this check.
-  await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
   onPublicationAttempt();
   try {
     pushed = await git(runCommand, context, pushArgs, { ...options, required: false });
@@ -124,10 +91,9 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   }
   let verified;
   try {
-    const remote = context.contribution ? (await readContributionHead(runCommand, context, options)).head : await gitOutput(runCommand, context, ["ls-remote", "--heads", "origin", `refs/heads/${context.branch}`], options);
+    const remote = await gitOutput(runCommand, context, ["ls-remote", "--heads", "origin", `refs/heads/${context.branch}`], options);
     verified = remote.split(/\s+/u)[0] || "";
   } catch (error) {
-    if (["vibe64_contribution_discarded", "vibe64_contribution_discard_incomplete"].includes(error.code)) throw error;
     throw saveError(
       `Save publication could not be confirmed. Inspect work to recover the prepared commit before retrying. ${normalizeText(error.message)}`,
       "vibe64_session_save_publication_unknown",
@@ -142,7 +108,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
     return verified;
   }
   if (pushed?.ok !== true) {
-    if (verified && verified !== expectedRemoteCommit) {
+    if (verified && verified !== canonicalCommit) {
       throw saveError(
         "The saved branch changed while Save was pushing your changes. Update this session, then save again.",
         "vibe64_session_save_update_required",

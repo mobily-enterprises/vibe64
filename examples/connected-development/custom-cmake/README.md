@@ -19,7 +19,7 @@ and nothing is downloaded.
 `app/vibe64.connections.json` names the script for this connection:
 
 ```json
-{"projects":[{"name":"Example Library","repository":"https://github.com/acme/example-library",
+{"repositories":[{"name":"Example Library","repository":"https://github.com/acme/example-library",
   "relationship":"dependency","type":"custom","script":"tooling/connected-cmake.sh"}]}
 ```
 

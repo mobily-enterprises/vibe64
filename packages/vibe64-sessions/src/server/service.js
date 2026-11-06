@@ -1,10 +1,6 @@
-import { sessionConnectedSources } from "@local/vibe64-core/server/projectRepository";
-import { currentProjectActionRequestMeta } from "@local/vibe64-core/server/projectRequestContext";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { createConnectedContributions } from "./connectedContributions.js";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { createMainConversationAuthority } from "./mainConversationAuthority.js";
-import { createReceivingContributions } from "./receivingContributions.js";
 import { createSessionArchive } from "./sessionArchive.js";
 import { createSessionAssistant } from "./sessionAssistant.js";
 import { createSessionCatalogue } from "./sessionCatalogue.js";
@@ -92,16 +88,7 @@ function createService({
     setupRunner,
     publishSessionChanged
   });
-  const connected = createConnectedContributions({
-    actions,
-    logger,
-    project,
-    setupRunner,
-    terminals,
-    workspaceSetup
-  });
   const work = createSessionWork({
-    connectedContributions: connected,
     project,
     publishSessionChanged,
     recovery,
@@ -141,20 +128,7 @@ function createService({
     terminals
   });
   const repositoryReads = createSessionRepositoryReads({ project, terminals });
-  const receiving = createReceivingContributions({
-    creation,
-    project,
-    publishSessionChanged,
-    repositoryReads,
-    repositoryUpdates,
-    terminals,
-    work,
-    workOperations
-  });
   const renewal = createSessionRenewalController({
-    connectedLinkProblem: (sessionId, input) => connected.connectedLinkProblem(sessionId, input, {
-      requestMeta: currentProjectActionRequestMeta()
-    }),
     prepareArchive: archive.prepareArchive,
     project,
     publishSessionChanged,
@@ -184,46 +158,13 @@ function createService({
     const preferences = assistantRoutingFromMetadata(session.metadata);
     if (preferences?.mode !== "auto" || !preferences.autoSave) return "";
     const skipped = reason => `Automatic save didn't run: ${reason}`;
-    // Connected Save needs the person's authenticated request to each project.
-    if (sessionConnectedSources(session).length) return skipped("this session has connected repositories. Choose Save yourself.");
-    const inspection = await work.inspectOwnWork(sessionId);
+    const inspection = await work.inspectSessionWork(sessionId);
     if (inspection?.ok === false) return skipped(normalizeText(inspection.error) || "this session's work could not be inspected.");
     if (!inspection.unsaved) return "Automatic save: nothing new to save.";
     const saved = await work.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: details.submittedBy });
     return saved?.ok === false
       ? skipped(normalizeText(saved.error) || "Save was refused.")
       : "Saved automatically after completing the plan.";
-  }
-
-  /**
-   * Workspace setup prepares or inspects a session's connected sources
-   * through this. Each progress label is saved by workspace setup, then
-   * published so the open session shows which connected projects are still
-   * being prepared.
-   * @param {object} preparation
-   * @param {"inspect" | "prepare"} preparation.mode
-   * @param {Vibe64SessionRuntime} preparation.runtime
-   * @param {{ sessionId: string }} preparation.session
-   * @param {((label: string) => Promise<void>) | null} [preparation.onProgress]
-   */
-  async function prepareConnectedSources({ automaticLink, mode, onProgress, renewal, runtime, session }) {
-    const requestContext = { requestMeta: currentProjectActionRequestMeta() };
-    if (mode !== "prepare") return connected.inspectConnectedDevelopmentInputs(session.sessionId, {}, requestContext);
-    const progress = onProgress ? {
-      onProgress: async (label) => {
-        await onProgress(label);
-        await publishSessionChanged(session.sessionId, {
-          operation: "updated",
-          reason: "workspace-setup-progress",
-          session: await runtime.getSessionWithoutSource(session.sessionId)
-        });
-      }
-    } : {};
-    return connected.prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext, {
-      ...progress,
-      automaticLink,
-      renewal
-    });
   }
 
   const service = Object.freeze({
@@ -244,26 +185,6 @@ function createService({
     resumeSessionRenewals: renewal.resumeSessionRenewals,
     retrySessionRenewal: renewal.retrySessionRenewal,
     updateSessionRenewalDraft: renewal.updateSessionRenewalDraft,
-
-    connectedLinkProblem: connected.connectedLinkProblem,
-    inspectConnectedChoices: connected.inspectConnectedChoices,
-    inspectConnectedDevelopmentInputs: connected.inspectConnectedDevelopmentInputs,
-    linkConnectedSession: connected.linkConnectedSession,
-    prepareConnectedSources: connected.prepareConnectedSources,
-    replaceConnectedSource: connected.replaceConnectedSource,
-    reviewConnectedReplacement: connected.reviewConnectedReplacement,
-
-    bindConnectedSession: receiving.bindConnectedSession,
-    checkContributionUpdates: receiving.checkContributionUpdates,
-    createConnectedReplacement: receiving.createConnectedReplacement,
-    inspectConnectedContributionSource: receiving.inspectConnectedContributionSource,
-    inspectConnectedSessions: receiving.inspectConnectedSessions,
-    inspectContributionIncoming: receiving.inspectContributionIncoming,
-    inspectContributionInputs: receiving.inspectContributionInputs,
-    inspectContributionWork: receiving.inspectContributionWork,
-    resolveConnectedSource: receiving.resolveConnectedSource,
-    saveContributionWork: receiving.saveContributionWork,
-    updateContributionWork: receiving.updateContributionWork,
 
     broadcastSessionPreviewState: catalogue.broadcastSessionPreviewState,
     closeSessionPresence: catalogue.closeSessionPresence,
@@ -308,18 +229,13 @@ function createService({
     skipIntegrationSetupRequest: messages.skipIntegrationSetupRequest,
     withdrawMainChatApproval: messages.withdrawMainChatApproval,
 
-    changeIncomingContribution: repositoryReads.changeIncomingContribution,
-    inspectIncomingContributions: repositoryReads.inspectIncomingContributions,
     inspectRepositoryHistory: repositoryReads.inspectRepositoryHistory,
     inspectRepositoryVersionFileDiff: repositoryReads.inspectRepositoryVersionFileDiff,
-    inspectRepositoryVersionFiles: repositoryReads.inspectRepositoryVersionFiles,
-    reviewIncomingContribution: repositoryReads.reviewIncomingContribution
+    inspectRepositoryVersionFiles: repositoryReads.inspectRepositoryVersionFiles
   });
-  // The sessions feature's shutdown clears both.
+  // The sessions feature's shutdown clears it.
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
   terminals.setPlanCompleted(saveAfterCompletedPlan);
-  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
-  terminals.setConnectedPreparation(prepareConnectedSources);
   return service;
 }
 

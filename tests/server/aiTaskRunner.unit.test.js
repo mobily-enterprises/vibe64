@@ -162,8 +162,8 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
           return server.save(input);
         },
         inspectSessionWork: () => server.inspect(),
-        async retryWorkspaceSetup(sessionId, input, context) {
-          setups.push({ input, context });
+        async retryWorkspaceSetup(sessionId, input) {
+          setups.push({ input });
           return server.setup(input);
         },
         async changeIncomingContribution(sessionId, input) {
@@ -283,7 +283,6 @@ test("a completed preparation repair runs preparation on the server as a person'
   assert.equal(saved.message, "Workspace preparation succeeded.");
   assert.equal(f.setups.length, 1);
   assert.equal(f.setups[0].input.aiTaskId, task.id);
-  assert.equal(f.setups[0].context.channel, "api");
 }, { updateFailure: null, setupFailed: setupFailure }));
 
 test("a preparation fix waits for Update's own fix, which prepares the workspace again", () => withFixture(async (f) => {

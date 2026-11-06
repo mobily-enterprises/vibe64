@@ -62,6 +62,14 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
   const incomingVersions = Array.isArray(value.incomingVersions)
     ? value.incomingVersions.map(normalizeIncomingVersion).filter(Boolean).slice(0, 5)
     : [];
+  // Each connected copy's position against its own main; one behind makes the session's Update available.
+  const connected = Array.isArray(value.connected)
+    ? value.connected.filter(copy => normalizeText(copy?.name)).map(copy => ({
+      behind: nonnegativeInteger(copy.behind),
+      canonicalCommit: normalizeText(copy.canonicalCommit),
+      name: normalizeText(copy.name)
+    }))
+    : [];
   return {
     ahead,
     behind,
@@ -73,7 +81,8 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
     relationship,
     sessionHead: normalizeText(value.sessionHead),
     ...(value.historyReview ? { historyReview: value.historyReview } : {}),
-    updateAvailable: Boolean(value.historyReview) || behind > 0,
+    ...(connected.length ? { connected } : {}),
+    updateAvailable: Boolean(value.historyReview) || behind > 0 || connected.some(copy => copy.behind > 0),
     updateStrategy: repositoryUpdateStrategy(relationship)
   };
 }

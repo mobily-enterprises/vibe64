@@ -64,14 +64,13 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 48);
+  assert.equal(toolSet.tools.length, 44);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.pin"), true);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.conversation.rewind"), false);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment")), false);
-  // Incoming contributions are reviewed and changed only through their guarded inspect/change pair;
-  // saved history is read as commits and file names, never diff text.
+  // Saved history is read as commits and file names, never diff text.
   assert.deepEqual(toolSet.tools.filter((tool) => tool.actionId.startsWith("vibe64.repository.")).map((tool) => tool.actionId).sort(),
-    ["vibe64.repository.history.files.inspect", "vibe64.repository.history.inspect", "vibe64.repository.incoming.change", "vibe64.repository.incoming.inspect"]);
+    ["vibe64.repository.history.files.inspect", "vibe64.repository.history.inspect"]);
   for (const actionId of ["vibe64.terminals.agent-plan-usage.read", "vibe64.terminals.work-plan.archive", "vibe64.terminals.work-plan.restore"]) {
     assert.equal(toolSet.tools.some(tool => tool.actionId === actionId), true, actionId);
   }

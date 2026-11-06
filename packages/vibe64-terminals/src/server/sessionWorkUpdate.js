@@ -267,23 +267,11 @@ async function checkSessionUpdates({
 const AUTHORITY_HEAD_READ_TIMEOUT_MS = 20_000;
 
 /**
- * The branches whose heads decide a session's canonical commit: its branch, or
- * for a connected contribution its published, discarded and integration
- * branches (readRemoteCanonical in sessionWorkAuthority.js).
- */
-function authorityBranches(context) {
-  return context.contribution
-    ? [context.branch, `${context.branch}_discarded`, context.contribution.integrationBranch]
-    : [context.branch];
-}
-
-/**
  * The update probe's read, with one head read per authority repository
  * however many sessions share it, made as the first of those sessions whose
  * recorded Git actor can read it: an in-process ls-refs request to GitHub, or
  * `git ls-remote` for a managed or local authority. Each session gets its
- * canonical branch `head`, or for a connected contribution an opaque
- * `authority` of its branch heads, or `{ code, error }`. A session absent from
+ * canonical branch `head`, or `{ code, error }`. A session absent from
  * the result was not read: its authority has no recorded Git actor yet (a
  * person's first check of the session records one).
  */
@@ -327,18 +315,11 @@ async function readSessionAuthorityHeads({
             label: "Checking repository for updates"
           }),
           executor.context,
-          members.flatMap(({ context }) => authorityBranches(context)),
+          members.map(({ context }) => context.branch),
           { commandOptions: { ...execution.commandOptions, timeout: AUTHORITY_HEAD_READ_TIMEOUT_MS }, project },
           execution.readRemoteHeads
         );
         for (const { context } of members) {
-          if (context.contribution) {
-            // A contribution's published branch may not exist yet; its check decides.
-            results.set(context.sessionId, {
-              authority: JSON.stringify(authorityBranches(context).map((branch) => heads.get(branch) || ""))
-            });
-            continue;
-          }
           const head = heads.get(context.branch);
           results.set(context.sessionId, head ? { head } : {
             code: "vibe64_session_update_branch_missing",

@@ -20,7 +20,7 @@
 require "json"
 require "open3"
 
-CONTRACT = "vibe64.connected-sources.v1"
+CONTRACT = "vibe64.connected-sources.v2"
 TYPES = %w[bundler gem ruby].freeze
 GEMFILE = "Gemfile"
 DERIVED = "Gemfile.connected"
@@ -33,8 +33,8 @@ end
 
 def connected_gems(sources_file)
   sources = JSON.parse(File.read(sources_file))
-  fail! "#{sources_file} is not a #{CONTRACT} sources map" unless sources["contract"] == CONTRACT
-  gems = sources.fetch("projects", []).filter_map do |project|
+  fail! "#{sources_file} is not a #{CONTRACT} sources map" unless sources["schema"] == CONTRACT
+  gems = sources.fetch("repositories", []).filter_map do |project|
     next unless TYPES.include?(project.fetch("type", "bundler"))
     root = File.realpath(project.fetch("sourceRoot", ""))
     gemspecs = Dir[File.join(root, "*.gemspec")]

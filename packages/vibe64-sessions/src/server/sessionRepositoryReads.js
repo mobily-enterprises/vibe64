@@ -1,19 +1,9 @@
-import { vibe64Error } from "@local/vibe64-core/server/core";
 import { cachedRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
-import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
-import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { sessionResult } from "./sessionResults.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-
-function requiredIncomingSessionId(value = "") {
-  const sessionId = normalizeText(value);
-  if (!sessionId) {
-    throw vibe64Error("Select a session before reviewing incoming changes.", "vibe64_incoming_changes_session_required");
-  }
-  return sessionId;
-}
 
 /**
  * Project history is readable without a session; a given session pins it to that session's base.
@@ -31,8 +21,7 @@ async function optionalRepositorySession(project, value = "") {
 
 /**
  * Reads of the project repository's history beside a session: its versions
- * and their files, and the Incoming contributions waiting to merge, with the
- * Merge or Discard of one.
+ * and their files.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
@@ -64,46 +53,10 @@ function createSessionRepositoryReads({ project, terminals }) {
     }, "Vibe64 could not read this version's file change.");
   }
 
-  async function inspectIncomingContributions(sessionId, input) {
-    return sessionResult(() => terminals.inspectIncomingContributions(requiredIncomingSessionId(sessionId), {
-      ...input,
-      vibe64User: trustedAssistantUser(input)
-    }), "Incoming changes could not be read. Refresh before acting.");
-  }
-
-  /**
-   * A review reads the same contributions with their diffs.
-   */
-  async function reviewIncomingContribution(sessionId, input) {
-    return inspectIncomingContributions(sessionId, { ...input, includeDiff: true });
-  }
-
-  async function changeIncomingContribution(sessionId, input) {
-    return sessionResult(async () => {
-      const incomingSessionId = requiredIncomingSessionId(sessionId);
-      await refuseDuringRepositoryAiTask(await project.createRuntimeWithoutSource(), incomingSessionId, input.aiTaskId);
-      const result = await terminals.changeIncomingContribution(incomingSessionId, {
-        ...input,
-        vibe64User: trustedAssistantUser(input)
-      });
-      // The Git result is confirmed. A failed UI notification must not turn
-      // that success into a retry of a remote write.
-      if (result.status !== "repair-review") {
-        try {
-          await project.refreshGithub();
-        } catch { /* The next read reconstructs state from Git. */ }
-      }
-      return result;
-    }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");
-  }
-
   return Object.freeze({
-    changeIncomingContribution,
-    inspectIncomingContributions,
     inspectRepositoryHistory,
     inspectRepositoryVersionFileDiff,
-    inspectRepositoryVersionFiles,
-    reviewIncomingContribution
+    inspectRepositoryVersionFiles
   });
 }
 

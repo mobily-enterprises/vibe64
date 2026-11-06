@@ -260,8 +260,8 @@ function createCodexGitCommandService({
   }
 
   /**
-   * `createsCommits` marks a write that records commits (Save, Update, Merge
-   * contribution), whose options then carry their author: a GitHub session's
+   * `createsCommits` marks a write that records commits (Save, Update), whose
+   * options then carry their author: a GitHub session's
    * Git actor, whose credential publishes them, or for any other session
    * `vibe64User`, the person asking. Checks and probes read nobody's identity.
    */

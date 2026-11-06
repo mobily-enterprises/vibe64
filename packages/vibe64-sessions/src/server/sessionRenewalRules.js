@@ -179,9 +179,10 @@ function assertCanonicalClean(check = {}, work = {}) {
   const canonicalCommit = toText(check.canonicalCommit || work.canonicalCommit).toLowerCase();
   const sessionHead = toText(work.sessionHead).toLowerCase();
   const changedPaths = Array.isArray(work.changedPaths) ? work.changedPaths : [];
-  const current = check.sessionCurrent === true || (
+  // Each connected copy must be current too: the successor copies them again from their mains.
+  const current = (check.sessionCurrent === true || (
     toText(check.relationship) === "current" && check.updateAvailable !== true
-  );
+  )) && !(check.connected || []).some(copy => copy.updateAvailable === true);
   if (
     !canonicalCommit ||
     !sessionHead ||

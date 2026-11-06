@@ -1053,25 +1053,6 @@ test("publication rejects missing reviews and enforces the project's PR workflow
   }), { code: "vibe64_pull_request_required" });
 });
 
-test("a bound contribution reaches ordinary Save preparation without requiring a pull request", async (t) => {
-  const { service, session, project } = await terminalServiceFixture(t, { store: {} });
-  project.readCurrentProject = async () => ({
-    repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } }
-  });
-  project.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
-  const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  session.metadata.connected_contribution = JSON.stringify({ schemaVersion: 1, id,
-    repository: "example/project", integrationBranch: "main", baseCommit: "a".repeat(40) });
-  const destinationReview = { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: `vibe64-incoming/${id}` };
-  await assert.rejects(service.saveSessionWork(session.sessionId, {
-    destinationReview: { ...destinationReview, branch: "main" }
-  }), { code: "vibe64_session_repository_review_changed" });
-  // This fixture has no Git base: reaching the original preparation guard proves
-  // the PR preference did not grant a bypass of Save's source requirements.
-  await assert.rejects(service.saveSessionWork(session.sessionId, { destinationReview }),
-    { code: "vibe64_session_save_context_incomplete" });
-});
-
 test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
   const contended = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
@@ -1718,32 +1699,6 @@ for (const personalMember of [false, true]) {
       repository: { mode: "local_source", defaultBranch: "main" }
     });
     project.runProjectSourceExclusive = async (operation) => operation();
-    if (!personalMember) {
-      const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        repository: "example/accepted-library", integrationBranch: "main", baseCommit };
-      const receiver = path.join(root, "accepted-library");
-      await git(root, ["clone", baseline, receiver]);
-      await git(source, ["config", `url.${baseline}.insteadOf`, "https://github.com/example/accepted-library.git"]);
-      session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1,
-        submissions: [{ contribution, submittedCommit: baseCommit }] });
-      const snapshots = [{ contribution, sessionId: contribution.id, worktreePath: receiver,
-        baseCommit, canonicalCommit: baseCommit, sessionHead: baseCommit,
-        worktreeTree: await git(receiver, ["rev-parse", "HEAD^{tree}"]) }];
-      const destinationReview = { sessionId: session.sessionId, mode: "local_source", repository: baseline, branch: "main" };
-      let admitted = 0;
-      await assert.rejects(service.saveSessionWork(session.sessionId, {
-        destinationReview, operationId: "clean-accepted-connected-work",
-        assertConnectedWorkSaved: async () => { admitted += 1; return snapshots; }
-      }), { code: "vibe64_session_save_no_changes" });
-      assert.equal(admitted, 1, "Save preparation uses the already-authorized source snapshots");
-      await assert.rejects(service.saveSessionWork(session.sessionId, {
-        destinationReview, operationId: "clean-missing-connected-snapshot",
-        assertConnectedWorkSaved: async () => []
-      }), { code: "vibe64_connected_integration_source_update_required" });
-      assert.equal(await git(baseline, ["rev-parse", "HEAD"]), baseCommit);
-      assert.equal(await git(source, ["status", "--porcelain"]), "");
-      delete session.metadata.connected_submissions;
-    }
     await writeFile(path.join(source, "app.txt"), "important work\n");
     const saved = await service.saveSessionWork(session.sessionId, {
       destinationReview: { sessionId: session.sessionId, mode: "local_source", repository: baseline, branch: "main" },
@@ -1880,58 +1835,6 @@ test("retiring a recorded Save deletes its prepared ref while an assistant turn 
   assert.equal(lock.attempts.at(-1).operationName, "agent-write-mode");
   assert.equal(lock.held, false);
 });
-
-for (const replacement of [false, true]) {
-  test(`${replacement ? "replacement" : "fresh"} contribution records its Git actor before any AI interaction`, async (t) => {
-    const { service, session, runtime, project, root } = await terminalServiceFixture(t, { store: {} }, {
-      env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" }
-    });
-    const publisher = path.join(root, "publisher");
-    await mkdir(publisher);
-    const git = async (cwd, args) => (await execFileAsync("git", args, { cwd })).stdout.trim();
-    await git(publisher, ["init", "--initial-branch=main"]);
-    await git(publisher, ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-      "commit", "--allow-empty", "-m", "base"]);
-    const baseCommit = await git(publisher, ["rev-parse", "HEAD"]);
-    const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      repository: "example/library", integrationBranch: "main", baseCommit,
-      ...(replacement ? { replaces: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } : {}) };
-    if (replacement) await git(publisher, ["branch", `vibe64-incoming/${contribution.replaces}_discarded`]);
-    for (const [name, value] of Object.entries({ github_repository: "example/library",
-      connected_contribution: JSON.stringify(contribution) })) {
-      await runtime.store.writeMetadataValue(session.sessionId, name, value);
-    }
-    await rm(session.metadata.source_path, { recursive: true }); // Empty fixture destination; creation owns it next.
-    runtime.projectSessionSourceRoot = path.join(root, "managed");
-    project.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "github",
-      githubRepository: { fullName: "example/library", cloneUrl: publisher },
-      repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/library", cloneUrl: publisher } } });
-    project.runProjectSourceExclusive = async operation => operation();
-    const user = { username: "developer", home: root, uid: process.getuid(), gid: process.getgid() };
-    const source = await service.createSessionSource({ runtime, store: runtime.store, session, vibe64User: user,
-      runCommand: async request => {
-        if (request.command === "gh") {
-          assert.deepEqual(request.args, ["auth", "token"]);
-          assert.equal(request.userKey, user.username);
-          return { ok: true, stdout: "fixture-only-token" };
-        }
-        try {
-          const result = await execFileAsync(request.command, request.args, { cwd: request.cwd });
-          return { ok: true, ...result };
-        } catch (error) {
-          return { ok: false, stdout: error.stdout || "", stderr: error.stderr || error.message };
-        }
-      }
-    });
-    const saved = await runtime.store.readSession(session.sessionId);
-    assert.equal(saved.metadata.session_git_command_actor_scope, "user");
-    assert.equal(saved.metadata.session_git_command_actor_user_key, user.username);
-    assert.equal(saved.metadata.session_git_command_actor_session_id, session.sessionId);
-    assert.equal(saved.metadata.session_git_command_actor_source_root, source.sourcePath);
-    assert.equal(saved.metadata.session_git_command_actor_workdir, source.sourcePath);
-    assert.equal(saved.metadata.session_git_command_actor_reason, "connected-contribution-session");
-  });
-}
 
 test("workspace readiness reloads the exact session without setup admission or writes", async (t) => {
   const lock = agentWriteLockHarness();

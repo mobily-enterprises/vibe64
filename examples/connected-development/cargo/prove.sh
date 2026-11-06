@@ -71,8 +71,8 @@ grep -q "$MODIFIED" "$WORK/library/src/lib.rs" || fail "marker edit did not appl
 
 mkdir -p .development
 cat > .development/connected.json <<JSON
-{"contract":"vibe64.connected-sources.v1","sessionId":"proof-session","projects":[
-  {"name":"Library","repository":"https://github.com/acme/library","relationship":"dependency","type":"cargo","sourceRoot":"$WORK/library","contributionId":"proof-contribution"}
+{"schema":"vibe64.connected-sources.v2","sessionId":"proof-session","repositories":[
+  {"name":"Library","repository":"https://github.com/acme/library","relationship":"dependency","type":"cargo","sourceRoot":"$WORK/library"}
 ]}
 JSON
 
