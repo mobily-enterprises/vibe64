@@ -88,37 +88,42 @@ useShellPageTitle(() => projectTitle.value || "Project");
       >
         <div class="studio-home-shell-title-area">
           <div class="studio-home-shell-project-name">
-            <!-- The project's name is the page's title, the bar's one h1; the arrow beside it switches projects. -->
-            <ShellPageTitle class="studio-home-shell-project-title" />
-            <v-menu location="bottom start">
-              <template #activator="{ props: menuProps }">
-                <v-btn
-                  class="studio-home-shell-project-selector"
-                  :disabled="!projectSlug && !learnMode"
-                  icon="$expand"
-                  variant="text"
-                  v-bind="menuProps"
-                  aria-label="Switch project"
-                  :title="projectSlug && projectTitle !== projectSlug ? `Switch project: ${projectTitle} (${projectSlug})` : 'Switch project'"
-                />
+            <!-- The project's name is the page's title, the bar's one h1, and also the Switch project menu's button. -->
+            <ShellPageTitle class="studio-home-shell-project-title">
+              <template #default="{ title }">
+                <v-menu location="bottom start">
+                  <template #activator="{ props: menuProps }">
+                    <v-btn
+                      class="studio-home-shell-project-selector"
+                      :disabled="!projectSlug && !learnMode"
+                      append-icon="$expand"
+                      color="on-surface"
+                      variant="text"
+                      v-bind="menuProps"
+                      :title="projectSlug && projectTitle !== projectSlug ? `Switch project: ${projectTitle} (${projectSlug})` : 'Switch project'"
+                    >
+                      {{ title }}
+                    </v-btn>
+                  </template>
+                  <v-list density="compact" min-width="240">
+                    <Vibe64LearningCoursesItem />
+                    <v-list-item
+                      v-for="project in switcherProjects"
+                      :key="project.slug"
+                      :active="project.slug === projectSlug"
+                      :title="projectDisplayName(project)"
+                      :subtitle="projectSubtitle(project)"
+                      @click="openProject(project)"
+                    />
+                    <v-list-item
+                      v-if="switcherProjects.length === 0 && !learnMode"
+                      :subtitle="projectLoadError || 'No open projects found.'"
+                      title="Projects"
+                    />
+                  </v-list>
+                </v-menu>
               </template>
-              <v-list density="compact" min-width="240">
-                <Vibe64LearningCoursesItem />
-                <v-list-item
-                  v-for="project in switcherProjects"
-                  :key="project.slug"
-                  :active="project.slug === projectSlug"
-                  :title="projectDisplayName(project)"
-                  :subtitle="projectSubtitle(project)"
-                  @click="openProject(project)"
-                />
-                <v-list-item
-                  v-if="switcherProjects.length === 0 && !learnMode"
-                  :subtitle="projectLoadError || 'No open projects found.'"
-                  title="Projects"
-                />
-              </v-list>
-            </v-menu>
+            </ShellPageTitle>
           </div>
           <div
             id="studio-home-shell-create-session"
@@ -347,12 +352,18 @@ useShellPageTitle(() => projectTitle.value || "Project");
 .studio-home-shell-project-title {
   flex: 0 1 auto;
   min-width: 0;
-  padding-inline-start: var(--v64-space-3);
 }
 
+/* The title's own text, as a text button: it keeps the title's type and shrinks, ending in an ellipsis. */
 .studio-home-shell-project-selector {
+  font: inherit;
+  letter-spacing: inherit;
+  max-width: 100%;
+  text-transform: none;
+}
+
+.studio-home-shell-project-selector :deep(.v-btn__append) {
   color: rgb(var(--v-theme-on-surface-variant));
-  flex: 0 0 auto;
 }
 
 .studio-home-shell-github-actor-host {
@@ -493,11 +504,10 @@ useShellPageTitle(() => projectTitle.value || "Project");
 }
 
 /* Too little room for a readable name (a narrow phone showing Preview's
-   controls): hide the title and its Switch project arrow rather than show a
-   sliver of them. The chat pane shows them again. */
-@container (max-width: 6.5rem) {
-  .studio-home-shell-project-title,
-  .studio-home-shell-project-selector {
+   controls): hide the title, which is also the Switch project menu, rather
+   than show a sliver of it. The chat pane shows it again. */
+@container (max-width: 4rem) {
+  .studio-home-shell-project-title {
     visibility: hidden;
   }
 }

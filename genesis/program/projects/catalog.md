@@ -432,8 +432,10 @@ page heading takes only the room the header actions leave: the pane controls
 and the session controls teleported into the title area (new session, local Git
 branch, GitHub actor) keep their size and are never clipped; only the
 `.studio-home-shell-project-name` wrapper around the project's title (the bar's
-h1, JSKIT's `ShellPageTitle`) and its **Switch project** arrow is clipped, and
-is the `@container` that hides both below 6.5rem rather than show a sliver. The GitHub actor
+h1, JSKIT's `ShellPageTitle`, whose slot holds the **Switch project** menu's
+text button, so the name and its arrow are one control in the h1) is clipped,
+and is the `@container` that hides it below 4rem rather than show a sliver;
+the name itself ends in JSKIT's button ellipsis. The GitHub actor
 shows its icon (account kept in its title and accessible name), the session
 controls leave the bar while the project pane is shown, and at ≤480px the
 next-pane button becomes a pane icon that keeps its "Go to …" name.

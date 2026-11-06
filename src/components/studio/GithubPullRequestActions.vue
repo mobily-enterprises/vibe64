@@ -100,19 +100,19 @@ async function submit() {
           v-if="pullRequest.isDraft" color="primary" variant="tonal" max-width="100%" prepend-icon="$check"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.ready)" @click="open('ready')"
         >
-          <span class="text-truncate">Ready for review</span>
+          Ready for review
         </v-btn>
         <v-btn
           v-if="pullRequest.actions?.['update-branch'] === ''" variant="tonal" max-width="100%" prepend-icon="$syncAlt"
           :disabled="actionDisabled" @click="open('update-branch')"
         >
-          <span class="text-truncate">Update branch from {{ pullRequest.baseRefName }}</span>
+          Update branch from {{ pullRequest.baseRefName }}
         </v-btn>
         <v-btn
           v-if="!pullRequest.isDraft" color="primary" variant="flat" max-width="100%" prepend-icon="$merge"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.merge)" @click="open('merge')"
         >
-          <span class="text-truncate">Merge into {{ pullRequest.baseRefName }}</span>
+          Merge into {{ pullRequest.baseRefName }}
         </v-btn>
       </div>
       <p v-if="pullRequest.isDraft && pullRequest.actions?.ready" class="text-body-small ma-0">{{ pullRequest.actions.ready }}</p>
