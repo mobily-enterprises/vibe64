@@ -30,9 +30,17 @@ async function showFiles(editor: Locator, width: number) {
   if (compact(width)) await editor.getByRole("button", { name: "Show files", exact: true }).click();
 }
 
+// Vuetify ignores a menu button's click for 50 ms after its menu closes, so the
+// file actions open only once the menu that just closed has left the screen; a
+// click sooner, as a slow runner made, is dropped and the menu stays shut.
+async function openFileActions(page: Page, editor: Locator) {
+  await expect(page.locator(".v-menu > .v-overlay__content:visible")).toHaveCount(0);
+  await editor.getByRole("button", { name: "File actions", exact: true }).click();
+}
+
 async function fileAction(page: Page, editor: Locator, name: string, width: number) {
   if (!compact(width)) return editor.locator("header").getByRole("button", { name, exact: true }).click();
-  await editor.getByRole("button", { name: "File actions", exact: true }).click();
+  await openFileActions(page, editor);
   await fileMenuItem(page, name).click();
 }
 
@@ -216,7 +224,7 @@ for (const width of [390, 900, 1600]) {
     await expect(editor.locator(".cm-content")).not.toBeVisible();
     if (compact(width)) {
       await expect(editor.getByRole("button", { name: "Save now", exact: true })).toBeDisabled();
-      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await openFileActions(page, editor);
       for (const name of ["Undo", "Redo", "Explain file or selection"]) await expect(fileMenuItem(page, name)).toHaveClass(/v-list-item--disabled/u);
       await page.keyboard.press("Escape");
       await expect(fileMenuItem(page, "Undo")).toHaveCount(0);
@@ -238,7 +246,7 @@ for (const width of [390, 900, 1600]) {
     }
     await fileAction(page, editor, "Star file", width);
     if (compact(width)) {
-      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await openFileActions(page, editor);
       await expect(fileMenuItem(page, "Unstar file")).toBeVisible();
       await page.keyboard.press("Escape");
     } else {
@@ -424,7 +432,7 @@ for (const width of [390, 900, 1600]) {
     await expect(editor.locator(".cm-content")).toContainText("# Hello");
     await fileAction(page, editor, "Star file", width);
     if (compact(width)) {
-      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await openFileActions(page, editor);
       await expect(fileMenuItem(page, "Unstar file")).toBeVisible();
       await page.keyboard.press("Escape");
       await showFiles(editor, width);
