@@ -391,6 +391,8 @@ test.describe("Vibe64 pages", () => {
       await expect(page.locator('[data-test="page-viewer-title"]')).toBeVisible();
 
       await page.goto(`${world.origin}${DASHBOARD_PATH}/pages`);
+      // A phone opens a Dashboard link with the chat in front.
+      if (width < 600) await page.getByRole("button", { name: "Show project", exact: true }).click();
       const rows = page.locator('[data-test="pages-list"] tbody tr');
       await expect(rows).toHaveCount(2);
       await expect(rows.nth(0)).toHaveAttribute("data-page-id", summary.pageId);
