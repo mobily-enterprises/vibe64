@@ -61,7 +61,7 @@
               <v-btn
                 aria-label="Attach files"
                 :disabled="conversation.inputDisabled.value || !attachmentState.canAddFiles"
-                :icon="mdiPaperclip"
+                icon="$attachFile"
                 size="small"
                 title="Attach files"
                 type="button"
@@ -73,7 +73,7 @@
                 aria-label="Attach preview screenshot"
                 :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
                 :disabled="conversation.inputDisabled.value || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
-                :icon="mdiCameraOutline"
+                icon="$photoCamera"
                 size="small"
                 title="Attach preview screenshot"
                 variant="text"
@@ -84,7 +84,7 @@
                 aria-label="Attach console and network diagnostics"
                 :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
                 :disabled="conversation.inputDisabled.value || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
-                :icon="mdiConsoleNetworkOutline"
+                icon="$lan"
                 size="small"
                 title="Attach console and network diagnostics"
                 variant="text"
@@ -130,7 +130,6 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { mdiCameraOutline, mdiConsoleNetworkOutline, mdiPaperclip } from "@mdi/js";
 import { AssistantComposerSupport, AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { aiTaskTranscript } from "@/lib/vibe64AiTaskConversation.js";
 import Vibe64AgentSettingsMenu from "./Vibe64AgentSettingsMenu.vue";

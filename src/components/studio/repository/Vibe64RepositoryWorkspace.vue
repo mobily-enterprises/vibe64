@@ -5,7 +5,7 @@
   >
     <Vibe64DashboardPageHeader
       :description="pageDescription"
-      :icon="view === 'history' ? mdiSourceRepository : mdiFileCompare"
+      :icon="view === 'history' ? '$book' : '$difference'"
       :title="pageTitle"
     >
       <template #actions>
@@ -13,7 +13,7 @@
           <v-btn
             :disabled="repositoryOperationBusy"
             :loading="updates.checking"
-            :prepend-icon="mdiCloudRefreshOutline"
+            prepend-icon="$cloudSync"
             size="small"
             type="button"
             variant="tonal"
@@ -25,7 +25,7 @@
             v-if="view === 'history' && (repositoryStatus?.updateAvailable || updates.canonicalChangePending)"
             :disabled="repositoryOperationBusy"
             :loading="updates.applying"
-            :prepend-icon="mdiSourceBranchSync"
+            prepend-icon="$syncAlt"
             size="small"
             type="button"
             variant="tonal"
@@ -73,7 +73,7 @@
           <li v-for="version in repositoryIncomingVersions" :key="version.commit">
             <v-icon
               aria-hidden="true"
-              :icon="version.isMerge ? mdiSourceMerge : mdiSourceCommit"
+              :icon="version.isMerge ? '$merge' : '$commit'"
               size="15"
             />
             <span>{{ version.message || "Saved work" }}</span>
@@ -101,7 +101,7 @@
             v-if="repositoryStatus?.updateAvailable || updates.canonicalChangePending"
             :disabled="repositoryOperationBusy"
             :loading="updates.applying"
-            :prepend-icon="mdiSourceBranchSync"
+            prepend-icon="$syncAlt"
             size="small"
             type="button"
             variant="tonal"
@@ -113,7 +113,7 @@
             :color="changes.payload?.unsaved === true ? 'error' : undefined"
             :disabled="saveWorkBlocked"
             :loading="saving"
-            :prepend-icon="mdiSourceCommit"
+            prepend-icon="$commit"
             size="small"
             type="button"
             :title="saveWorkTitle"
@@ -237,14 +237,6 @@
 <script setup>
 // A session's current changes or the project's saved versions, with checking for, applying and saving updates.
 import { computed, ref, watch } from "vue";
-import {
-  mdiCloudRefreshOutline,
-  mdiFileCompare,
-  mdiSourceRepository,
-  mdiSourceCommit,
-  mdiSourceMerge,
-  mdiSourceBranchSync
-} from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";

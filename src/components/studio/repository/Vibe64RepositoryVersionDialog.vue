@@ -11,7 +11,7 @@
       <v-card-title class="vibe64-repository-version-dialog__header">
         <span aria-hidden="true" class="vibe64-repository-version-dialog__icon">
           <v-icon
-            :icon="selectedVersion?.isMerge ? mdiSourceMerge : mdiSourceCommit"
+            :icon="selectedVersion?.isMerge ? '$merge' : '$commit'"
             size="22"
           />
         </span>
@@ -22,11 +22,11 @@
           <h2>{{ selectedVersion?.message || "Saved version" }}</h2>
           <div v-if="selectedVersion" class="vibe64-repository-version-dialog__meta">
             <span>
-              <v-icon :icon="mdiAccountOutline" size="16" />
+              <v-icon icon="$person" size="16" />
               {{ selectedVersion.author || "Unknown author" }}
             </span>
             <span>
-              <v-icon :icon="mdiClockOutline" size="16" />
+              <v-icon icon="$schedule" size="16" />
               {{ formatVersionDate(selectedVersion.committedAt) }}
             </span>
             <code>{{ selectedVersion.shortCommit }}</code>
@@ -37,7 +37,7 @@
         </div>
         <v-btn
           aria-label="Close version details"
-          :icon="mdiClose"
+          icon="$close"
           size="small"
           type="button"
           variant="text"
@@ -94,13 +94,6 @@
 <script setup>
 // One saved version full screen: its author, time and commit, its files and the selected file's difference.
 import { computed } from "vue";
-import {
-  mdiAccountOutline,
-  mdiClockOutline,
-  mdiClose,
-  mdiSourceCommit,
-  mdiSourceMerge
-} from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
 import { formatVersionDate } from "@/lib/vibe64RepositoryVersionLabels.js";

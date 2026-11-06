@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import { expectSteady, openMenu } from "./support/settled-ui";
-import { mdiContentSaveOutline, mdiSourceCommit } from "@mdi/js";
+import { materialSymbols } from "@jskit-ai/material-web/client/symbols";
+import { icons } from "../../src/theme/icons.js";
 
 import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 
@@ -850,8 +851,8 @@ test.describe("direct chat", () => {
       }));
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
       const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
-      await expect(save.locator(`path[d="${mdiContentSaveOutline}"]`)).toBeVisible();
-      await expect(save.locator(`path[d="${mdiSourceCommit}"]`)).toHaveCount(scenario.mode === "github" ? 1 : 0);
+      await expect(save.locator(`path[d="${materialSymbols.save.replace(/^svg:/u, "")}"]`)).toBeVisible();
+      await expect(save.locator(`path[d="${icons.commit}"]`)).toHaveCount(scenario.mode === "github" ? 1 : 0);
       await page.screenshot({ path: testInfo.outputPath(`save-icon-${scenario.mode}-${scenario.width}.png`), animations: "disabled" });
       await save.click();
       const review = page.getByRole("dialog");

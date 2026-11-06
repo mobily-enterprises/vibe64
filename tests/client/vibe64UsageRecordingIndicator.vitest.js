@@ -5,7 +5,6 @@ import * as VueRuntime from "vue";
 import { createRenderer, defineComponent, h, markRaw, ssrContextKey } from "vue";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { configureHttpWebClient, getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { mdiStop } from "@mdi/js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import current from "../fixtures/usage-map/recording/api/current.json" with { type: "json" };
@@ -206,7 +205,7 @@ it.each([
   // The word is always there, even when the visible text is short.
   expect(textOf(view.host)).toContain("Recording");
   if (state === "recording") {
-    expect(view.button("Stop recording").props["prepend-icon"]).toBe(mdiStop);
+    expect(view.button("Stop recording").props["prepend-icon"]).toBe("$stop");
     expect(view.button("Stop recording").props.variant).toBe("tonal");
     // The Stop inside the round pill is round too.
     expect(view.button("Stop recording").props.rounded).toBe("pill");
@@ -234,7 +233,7 @@ it("switches between wide and compact by the width of its header host", async ()
   expect(observers.at(-1).target === view.host.children[0]).toBe(true);
   await view.resize(339);
   expect(view.pill()).toBe("2:14 · 37");
-  expect(view.button("Stop recording").props.icon).toBe(mdiStop);
+  expect(view.button("Stop recording").props.icon).toBe("$stop");
   expect(textOf(view.button("Stop recording"))).toBe("");
   expect(textOf(view.host)).toContain("Recording");
   await view.resize(340);

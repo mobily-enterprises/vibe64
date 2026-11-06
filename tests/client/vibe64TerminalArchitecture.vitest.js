@@ -64,7 +64,7 @@ describe("Vibe64 terminal architecture", () => {
     expect(errorToggle).toContain(":aria-controls=\"errorDetailsId\"");
     expect(errorToggle).toContain(":aria-expanded=\"String(errorDetailsOpen)\"");
     expect(errorToggle).toContain(":aria-label=\"errorDetailsToggleLabel\"");
-    expect(errorToggle).toContain(":icon=\"mdiAlertCircleOutline\"");
+    expect(errorToggle).toContain("icon=\"$error\"");
     expect(errorToggle).toContain("color=\"error\"");
     expect(errorDetails).toContain(":id=\"errorDetailsId\"");
     expect(errorDetails).toContain("<StudioErrorNotice");

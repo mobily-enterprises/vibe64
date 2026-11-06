@@ -34,7 +34,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiCheckCircle, mdiCircleOutline, mdiCloseCircle, mdiRecordCircleOutline } from "@mdi/js";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskTime } from "./aiTaskProjection.js";
 
@@ -59,10 +58,10 @@ const props = defineProps({
 });
 
 const stepIcons = {
-  active: mdiRecordCircleOutline,
-  done: mdiCheckCircle,
-  failed: mdiCloseCircle,
-  pending: mdiCircleOutline
+  active: "$radioOn",
+  done: "$checkCircleFilled",
+  failed: "$cancel",
+  pending: "$circle"
 };
 // The newest line sits at the bottom, where the eye is when watching a run.
 const activity = computed(() => [...props.task.log, ...props.commentary].sort((a, b) => a.at.localeCompare(b.at)));

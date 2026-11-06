@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiClose, mdiCogOutline, mdiTuneVariant, mdiWrenchOutline } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm } from "@local/vibe64-accounts/client";
@@ -50,7 +49,7 @@ function openAccountConnections(request) {
 }
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
-const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix, fix: mdiWrenchOutline };
+const modeIcons = { custom: "$tune", senior: "$workspacePremium", junior: "$person", auto: "$autoFix", fix: "$build" };
 // Temporary chats add Fix it with AI; modes reserved for the owner are not listed.
 const modes = computed(() => (props.temporary ? [...ASSISTANT_MODES.filter(({ id }) => id !== "auto"), ASSISTANT_FIX_MODE] : ASSISTANT_MODES)
   .filter(({ id }) => (!props.requiredMode || id === "custom" || id === props.requiredMode) && !decisions.value[id]?.approvalRequired));
@@ -159,7 +158,7 @@ function configure() {
     <template #activator="{ props: activatorProps }">
       <v-btn
         v-bind="activatorProps" class="chat-modes__trigger" variant="text" size="small"
-        :icon="modeIcons[mode] || mdiTuneVariant" :aria-label="triggerLabel" :title="triggerLabel"
+        :icon="modeIcons[mode] || '$tune'" :aria-label="triggerLabel" :title="triggerLabel"
         :aria-busy="saving ? 'true' : undefined"
       />
     </template>
@@ -169,10 +168,10 @@ function configure() {
         <div class="d-flex">
           <v-btn
             v-if="canConfigure"
-            :icon="mdiCogOutline" variant="text" width="48" height="48"
+            icon="$settings" variant="text" width="48" height="48"
             aria-label="Models" title="Models" @click="configure"
           />
-          <v-btn :icon="mdiClose" variant="text" width="48" height="48" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
+          <v-btn icon="$close" variant="text" width="48" height="48" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
         </div>
       </div>
       <div class="chat-modes__details-body">
@@ -187,7 +186,7 @@ function configure() {
             @click="openCustom"
           >
             <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
-            <template #append><v-icon v-if="mode === 'custom'" :icon="mdiCheck" size="18" aria-label="Selected" /></template>
+            <template #append><v-icon v-if="mode === 'custom'" icon="$check" size="18" aria-label="Selected" /></template>
           </v-list-item>
         </v-list>
         <v-alert v-if="loadError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ loadError }} <v-btn variant="text" @click="emit('reload')">Retry</v-btn></v-alert>
@@ -206,7 +205,7 @@ function configure() {
                 <span class="chat-modes__model">{{ mode === choice.id ? description : choice.id === 'auto' ? autoDescription : roleLabel(choice.id) }}</span>
               </template>
               <template #append>
-                <v-icon v-if="mode === choice.id" :icon="mdiCheck" size="18" aria-label="Selected" />
+                <v-icon v-if="mode === choice.id" icon="$check" size="18" aria-label="Selected" />
               </template>
             </v-list-item>
           </v-list>

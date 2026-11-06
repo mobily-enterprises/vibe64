@@ -2,7 +2,6 @@
 // Every release and dry run: what was planned, each step, each target's
 // outcome with its proof, and the log. A running release updates live.
 import { computed, nextTick, ref } from "vue";
-import { mdiChevronDown, mdiDownload, mdiQrcode, mdiTestTube, mdiRocketLaunchOutline, mdiReplay } from "@mdi/js";
 import { apkDownloadUrl } from "./usePublishing.js";
 import { destinationIcon, packageLabeller, proofLine, relativeTime, shortCommit, statusInfo, stepLabel } from "./publishFormat.js";
 
@@ -98,14 +97,14 @@ function isApk(release, targetId) {
         <button class="publish-history__row" type="button" :aria-expanded="open === release.id" @click="toggle(release.id)">
           <v-icon
             :color="statusInfo(release.status).color"
-            :icon="release.status === 'running' ? (release.kind === 'dry-run' ? mdiTestTube : mdiRocketLaunchOutline) : statusInfo(release.status).icon"
+            :icon="release.status === 'running' ? (release.kind === 'dry-run' ? '$science' : '$rocketLaunch') : statusInfo(release.status).icon"
             size="22"
           />
           <span class="publish-history__what">
             <strong>{{ release.kind === "dry-run" ? "Dry run" : "Release" }} · {{ versionsLine(release) }}</strong>
             <span>{{ outcomeLabel(release) }} · {{ relativeTime(release.finishedAt || release.createdAt) }} · plan {{ release.planId }}</span>
           </span>
-          <v-icon :icon="mdiChevronDown" class="publish-history__chevron" size="20" />
+          <v-icon icon="$expand" class="publish-history__chevron" size="20" />
         </button>
         <v-progress-linear v-if="release.status === 'running'" :model-value="progress(release)" color="primary" height="3" />
 
@@ -123,8 +122,8 @@ function isApk(release, targetId) {
               <span v-if="outcome.error" class="publish-history__error">{{ outcome.error.message }}</span>
               <span v-else class="publish-history__proof">{{ outcome.alreadyPublished ? "already published · " : "" }}{{ proofLine({ checksum: outcome.checksum, ...outcome.proof }) || statusInfo(outcome.status).label }}</span>
               <span v-if="release.kind === 'release' && outcome.status === 'proven' && isApk(release, targetId)" class="publish-history__apk">
-                <v-btn :href="apkDownloadUrl(release.id, targetId)" :prepend-icon="mdiDownload" rounded="pill" size="small" variant="text">APK</v-btn>
-                <v-btn :prepend-icon="mdiQrcode" rounded="pill" size="small" variant="text" @click="emit('install', { releaseId: release.id, targetId })">QR</v-btn>
+                <v-btn :href="apkDownloadUrl(release.id, targetId)" prepend-icon="$download" rounded="pill" size="small" variant="text">APK</v-btn>
+                <v-btn prepend-icon="$qrCode" rounded="pill" size="small" variant="text" @click="emit('install', { releaseId: release.id, targetId })">QR</v-btn>
               </span>
             </li>
           </ul>
@@ -132,10 +131,10 @@ function isApk(release, targetId) {
           <pre v-if="FAILED.includes(release.status) && failureOutput(release.id) && !showFull[release.id]" class="publish-history__log publish-history__log--failure">{{ failureOutput(release.id) }}</pre>
           <div class="publish-history__tools">
             <template v-if="release.kind === 'release' && FAILED.includes(release.status) && release.id === latestFailedRelease">
-              <v-btn v-if="!savedCommit || savedCommit === release.savedCommit" :prepend-icon="mdiReplay" rounded="pill" size="small" variant="tonal" @click="emit('resume', release)">
+              <v-btn v-if="!savedCommit || savedCommit === release.savedCommit" prepend-icon="$replay" rounded="pill" size="small" variant="tonal" @click="emit('resume', release)">
                 Finish this release
               </v-btn>
-              <v-btn v-else :prepend-icon="mdiRocketLaunchOutline" rounded="pill" size="small" variant="tonal" @click="emit('release')">
+              <v-btn v-else prepend-icon="$rocketLaunch" rounded="pill" size="small" variant="tonal" @click="emit('release')">
                 Release the new saved work
               </v-btn>
             </template>

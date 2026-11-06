@@ -2,7 +2,7 @@
   <section class="database-workspace__query">
     <header class="database-workspace__query-toolbar">
       <div class="database-workspace__query-actions">
-        <v-btn v-if="diagramReturn" :prepend-icon="mdiChevronLeft" size="small" variant="text" @click="emit('return-to-diagram')">
+        <v-btn v-if="diagramReturn" prepend-icon="$chevronLeft" size="small" variant="text" @click="emit('return-to-diagram')">
           Back to {{ diagramReturn.label }}
         </v-btn>
         <v-btn
@@ -11,7 +11,7 @@
           aria-keyshortcuts="Control+Enter Meta+Enter"
           color="primary"
           :disabled="running || !sqlText.trim()"
-          :prepend-icon="mdiPlay"
+          prepend-icon="$play"
           size="small"
           title="Run SQL, including write statements (Ctrl/Cmd+Enter, or Tab then Enter from the editor)"
           type="button"
@@ -23,7 +23,7 @@
         <v-btn
           :aria-busy="cancelling ? 'true' : undefined"
           :disabled="!running || cancelling || !activeQueryId"
-          :prepend-icon="mdiStop"
+          prepend-icon="$stop"
           size="small"
           type="button"
           variant="tonal"
@@ -33,7 +33,7 @@
         </v-btn>
         <v-btn
           :disabled="!selectedTable"
-          :prepend-icon="mdiFilterPlusOutline"
+          prepend-icon="$filterList"
           size="small"
           type="button"
           variant="text"
@@ -43,7 +43,7 @@
         </v-btn>
         <v-btn
           :disabled="running || !selectedTable"
-          :prepend-icon="mdiRestore"
+          prepend-icon="$restartAlt"
           size="small"
           title="Restore and run this table’s default SELECT * query"
           type="button"
@@ -66,7 +66,7 @@
       <div class="database-workspace__query-options">
         <v-btn
           :disabled="!sqlText.trim()"
-          :prepend-icon="mdiBookmarkPlusOutline"
+          prepend-icon="$bookmarkAdd"
           size="small"
           type="button"
           variant="text"
@@ -92,14 +92,6 @@
 
 <script setup>
 import { ref } from "vue";
-import {
-  mdiBookmarkPlusOutline,
-  mdiChevronLeft,
-  mdiFilterPlusOutline,
-  mdiPlay,
-  mdiRestore,
-  mdiStop
-} from "@mdi/js";
 
 import DatabaseSqlEditor from "./DatabaseSqlEditor.vue";
 

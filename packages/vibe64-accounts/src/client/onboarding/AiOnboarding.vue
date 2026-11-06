@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiArrowLeft, mdiArrowRight, mdiBugCheckOutline, mdiClose, mdiFileTreeOutline, mdiSitemapOutline } from "@mdi/js";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import AiSetup from "./AiSetup.vue";
 import { useStageTitleFocus } from "./useStageTitleFocus.js";
@@ -26,9 +25,9 @@ const emit = defineEmits(["close"]);
 const { xs } = useDisplay();
 
 const DIFFERENCES = [
-  { icon: mdiSitemapOutline, label: "Plans before it codes" },
-  { icon: mdiBugCheckOutline, label: "Fixes its own bugs" },
-  { icon: mdiFileTreeOutline, label: "Understands your whole app" }
+  { icon: "$accountTree", label: "Plans before it codes" },
+  { icon: "$bugReport", label: "Fixes its own bugs" },
+  { icon: "$accountTree", label: "Understands your whole app" }
 ];
 const STEP = { why: 1, choose: 2, connect: 3, routing: 3, success: 3 };
 
@@ -88,7 +87,7 @@ function close(reason, card = null) {
     >
       <header class="ai-onboarding__bar">
         <v-btn
-          v-if="xs && ['connect', 'routing'].includes(screen)" :icon="mdiArrowLeft" variant="text" aria-label="Back"
+          v-if="xs && ['connect', 'routing'].includes(screen)" icon="$arrowBack" variant="text" aria-label="Back"
           :disabled="busy" @click="setup?.back()"
         />
         <span v-else class="ai-onboarding__wordmark">Vibe<span>64</span></span>
@@ -100,7 +99,7 @@ function close(reason, card = null) {
             <template #activator="{ props: tip }">
               <span v-bind="tip" class="d-inline-flex align-center">
                 <v-btn v-if="skippable && screen !== 'why' && !xs" variant="text" :disabled="busy" @click="close('later')">Set up later</v-btn>
-                <v-btn :icon="mdiClose" variant="text" aria-label="Close" :disabled="busy" @click="close('dismiss')" />
+                <v-btn icon="$close" variant="text" aria-label="Close" :disabled="busy" @click="close('dismiss')" />
               </span>
             </template>
           </v-tooltip>
@@ -138,7 +137,7 @@ function close(reason, card = null) {
                 </li>
               </ul>
               <div v-if="!xs" class="ai-onboarding__actions">
-                <v-btn color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="chooseMyAi">Choose my AI</v-btn>
+                <v-btn color="primary" variant="flat" size="large" append-icon="$arrowForward" @click="chooseMyAi">Choose my AI</v-btn>
                 <v-btn variant="text" size="large" @click="close('later')">Set up later</v-btn>
               </div>
               <p v-if="!xs" class="ai-onboarding__footnote">You can change this any time in {{ changeWhere }}.</p>
@@ -155,12 +154,12 @@ function close(reason, card = null) {
 
       <footer v-if="dock" class="ai-onboarding__dock">
         <template v-if="screen === 'why'">
-          <v-btn block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="chooseMyAi">Choose my AI</v-btn>
+          <v-btn block color="primary" variant="flat" size="large" append-icon="$arrowForward" @click="chooseMyAi">Choose my AI</v-btn>
           <v-btn block variant="text" @click="close('later')">Set up later</v-btn>
           <p class="ai-onboarding__dock-note">You can change this any time in {{ changeWhere }}.</p>
         </template>
         <template v-else>
-          <v-btn block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
+          <v-btn block color="primary" variant="flat" size="large" append-icon="$arrowForward" @click="close('done')">{{ doneLabel }}</v-btn>
           <v-btn v-if="tourOffered" block color="primary" variant="tonal" size="large" data-test="ai-setup-take-tour" @click="setup?.takeTour()">Take a 5-minute tour</v-btn>
         </template>
       </footer>

@@ -1,6 +1,5 @@
 <script setup>
 // Colleague's recent operation receipts, each with the recovery its status allows.
-import { mdiClose } from "@mdi/js";
 
 defineProps({
   activator: { type: Object, default: undefined },
@@ -16,7 +15,7 @@ const open = defineModel({ type: Boolean, default: false });
     <v-card>
       <v-card-title class="d-flex align-center text-title-large">
         <span class="flex-grow-1">Recent operations</span>
-        <v-btn :icon="mdiClose" variant="text" aria-label="Close recent operations" title="Close recent operations" @click="open = false" />
+        <v-btn icon="$close" variant="text" aria-label="Close recent operations" title="Close recent operations" @click="open = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__operation-details">
         <p>These receipts report what Vibe64 actually recorded. An uncertain receipt is not safe to repeat until its target is inspected.</p>

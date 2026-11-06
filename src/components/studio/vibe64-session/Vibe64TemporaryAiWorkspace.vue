@@ -121,7 +121,7 @@
                 <v-btn
                   aria-label="Attach files"
                   :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"
-                  :icon="mdiPaperclip"
+                  icon="$attachFile"
                   size="small"
                   title="Attach files"
                   type="button"
@@ -133,7 +133,7 @@
                   aria-label="Attach preview screenshot"
                   :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
                   :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
-                  :icon="mdiCameraOutline"
+                  icon="$photoCamera"
                   size="small"
                   title="Attach preview screenshot"
                   variant="text"
@@ -144,7 +144,7 @@
                   aria-label="Attach console and network diagnostics"
                   :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
                   :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
-                  :icon="mdiConsoleNetworkOutline"
+                  icon="$lan"
                   size="small"
                   title="Attach console and network diagnostics"
                   variant="text"
@@ -224,11 +224,6 @@ import Vibe64TemporaryAiRecoveryRow from "./Vibe64TemporaryAiRecoveryRow.vue";
 import Vibe64TemporaryAiTabs from "./Vibe64TemporaryAiTabs.vue";
 import { computed, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import {
-  mdiCameraOutline,
-  mdiConsoleNetworkOutline,
-  mdiPaperclip,
-} from "@mdi/js";
 
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";

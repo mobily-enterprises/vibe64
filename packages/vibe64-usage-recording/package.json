@@ -82,7 +82,6 @@
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
-    "@mdi/js": "^7.4.47",
     "@tanstack/vue-query": "^5.90.5",
     "vue": "^3.5.13",
     "vuetify": "^4.0.0"

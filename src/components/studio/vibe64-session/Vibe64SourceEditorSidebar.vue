@@ -10,7 +10,7 @@
     <Vibe64SourceEditorSideRail
       v-if="collapsed"
       aria-label="Show files"
-      :icon="mdiChevronRight"
+      icon="$chevronRight"
       label="Files"
       title="Show files"
       @click="emit('expand')"
@@ -24,7 +24,7 @@
             v-if="filesActions"
             :aria-label="`Upload files to ${uploadFolderLabel}`"
             :disabled="!editor.tree.value"
-            :icon="mdiUpload"
+            icon="$uploadArrow"
             size="x-small"
             :title="`Upload files to ${uploadFolderLabel}`"
             type="button"
@@ -34,7 +34,7 @@
           <v-btn
             aria-label="New file at source root"
             :disabled="editor.creatingFile.value || !editor.tree.value"
-            :icon="mdiFilePlusOutline"
+            icon="$noteAdd"
             size="x-small"
             title="New file at source root"
             type="button"
@@ -44,7 +44,7 @@
           <v-btn
             class="vibe64-source-editor__collapse-files-button"
             aria-label="Collapse file list"
-            :icon="mdiChevronLeft"
+            icon="$chevronLeft"
             size="small"
             title="Collapse file list"
             type="button"
@@ -54,7 +54,7 @@
           <v-btn
             aria-label="Close all folders"
             :disabled="!editor.tree.value || !expandedPaths.length"
-            :icon="mdiCollapseAllOutline"
+            icon="$unfoldLess"
             size="x-small"
             title="Close all folders"
             type="button"
@@ -165,13 +165,6 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import {
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiCollapseAllOutline,
-  mdiFilePlusOutline,
-  mdiUpload
-} from "@mdi/js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import Vibe64SourceEditorSideRail from "@/components/studio/vibe64-session/Vibe64SourceEditorSideRail.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";

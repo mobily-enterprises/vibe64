@@ -16,7 +16,7 @@
           type="button"
           @click="emit('select-table', table)"
         >
-          <v-icon :icon="table.kind.includes('view') ? mdiTableEye : mdiTable" size="15" />
+          <v-icon :icon="table.kind.includes('view') ? '$tableView' : '$table'" size="15" />
           <span>
             <strong>{{ table.name }}</strong>
             <small>{{ table.kind }} · {{ table.columns.length }} fields</small>
@@ -51,7 +51,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiTable, mdiTableEye, mdiKeyVariant, mdiLinkVariant } from "@mdi/js";
 const props = defineProps({
   active: { type: Boolean, default: true },
   schema: { type: Object, required: true },
@@ -85,9 +84,9 @@ watch([() => props.selectedTableName, () => props.active, filteredSchemas, table
 
 function columnKeyIcon(column = {}) {
   const primary = selectedTable.value?.keys?.some((key) => key.primary && key.columns.includes(column.name));
-  if (primary) return mdiKeyVariant;
+  if (primary) return "$key";
   const foreign = props.schema.relationships?.some((relationship) => relationship.sourceTable === selectedTable.value?.qualifiedName && relationship.columns.includes(column.name));
-  return foreign ? mdiLinkVariant : mdiTable;
+  return foreign ? "$link" : "$table";
 }
 </script>
 

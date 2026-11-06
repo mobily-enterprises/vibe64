@@ -12,14 +12,14 @@
     <v-card v-if="item" class="vibe64-transfer-dialog v64-focus-rings">
       <!-- A full-screen dialog on a phone keeps its action at the top, clear of the keyboard. -->
       <v-toolbar v-if="mobile" class="vibe64-transfer-dialog__bar" color="surface">
-        <v-btn :icon="mdiClose" aria-label="Close" :disabled="busy" @click="close" />
+        <v-btn icon="$close" aria-label="Close" :disabled="busy" @click="close" />
         <v-toolbar-title :id="titleId" class="vibe64-transfer-dialog__title">{{ title }}</v-toolbar-title>
         <v-btn class="vibe64-transfer-dialog__bar-action me-2" color="primary" variant="text" :disabled="actionDisabled" :loading="busy" @click="confirm">{{ actionLabel }}</v-btn>
       </v-toolbar>
       <v-card-item>
         <v-card-title v-if="!mobile" :id="titleId" class="vibe64-transfer-dialog__title">{{ title }}</v-card-title>
         <v-card-subtitle class="vibe64-transfer-dialog__subtitle">
-          <v-icon :icon="item.type === 'directory' ? mdiFolderOutline : mdiFileOutline" size="18" aria-hidden="true" />
+          <v-icon :icon="item.type === 'directory' ? '$folder' : '$draft'" size="18" aria-hidden="true" />
           <span>{{ item.name }} · from {{ sourceLabel }}</span>
         </v-card-subtitle>
       </v-card-item>
@@ -36,8 +36,8 @@
           variant="outlined"
           aria-label="Move or copy"
         >
-          <v-btn value="copy" :prepend-icon="mdiContentCopy" role="radio" :aria-checked="String(mode === 'copy')">Copy</v-btn>
-          <v-btn value="move" :prepend-icon="mdiFileMoveOutline" role="radio" :aria-checked="String(mode === 'move')">Move</v-btn>
+          <v-btn value="copy" prepend-icon="$contentCopy" role="radio" :aria-checked="String(mode === 'copy')">Copy</v-btn>
+          <v-btn value="move" prepend-icon="$driveFileMove" role="radio" :aria-checked="String(mode === 'move')">Move</v-btn>
         </v-btn-toggle>
 
         <h3 class="vibe64-transfer-dialog__label">Destination</h3>
@@ -59,7 +59,7 @@
 
         <nav class="vibe64-transfer-dialog__crumbs" aria-label="Destination folder">
           <template v-for="(crumb, index) in crumbs" :key="crumb.path">
-            <v-icon v-if="index" :icon="mdiChevronRight" size="18" aria-hidden="true" />
+            <v-icon v-if="index" icon="$chevronRight" size="18" aria-hidden="true" />
             <span v-if="index === crumbs.length - 1" class="vibe64-transfer-dialog__crumb-current" aria-current="location">{{ crumb.title }}</span>
             <v-btn v-else :disabled="loading || busy" variant="text" @click="browse(crumb.path)">{{ crumb.title }}</v-btn>
           </template>
@@ -77,9 +77,9 @@
             :key="entry.path"
             role="button"
             :disabled="busy || insideItself(entry.path)"
-            :prepend-icon="mdiFolderOutline"
+            prepend-icon="$folder"
             :title="entry.name"
-            :append-icon="mdiChevronRight"
+            append-icon="$chevronRight"
             @click="browse(entry.path)"
           />
         </v-list>
@@ -104,7 +104,6 @@
 <script setup>
 import { computed, ref, useId, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiChevronRight, mdiClose, mdiContentCopy, mdiFileMoveOutline, mdiFileOutline, mdiFolderOutline } from "@mdi/js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";

@@ -2,13 +2,13 @@
   <section class="vibe64-session-info-page">
     <Vibe64DashboardPageHeader
       description="Paths, branch and agent identifiers for this session."
-      :icon="mdiInformationOutline"
+      icon="$info"
       title="Session info"
     >
       <template #actions>
         <v-btn
           v-if="copyContext"
-          :prepend-icon="copied ? mdiCheck : mdiContentCopy"
+          :prepend-icon="copied ? '$check' : '$contentCopy'"
           rounded="pill"
           type="button"
           variant="tonal"
@@ -39,11 +39,6 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from "vue";
-import {
-  mdiCheck,
-  mdiContentCopy,
-  mdiInformationOutline
-} from "@mdi/js";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import Vibe64SessionFacts from "@/components/studio/vibe64-session/Vibe64SessionFacts.vue";
 import {

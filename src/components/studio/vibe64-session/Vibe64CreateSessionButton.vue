@@ -11,13 +11,13 @@
     ]"
     :disabled="createSessionRunning"
     :icon="iconOnly ? true : undefined"
-    :prepend-icon="iconOnly ? undefined : mdiPlus"
+    :prepend-icon="iconOnly ? undefined : '$add'"
     :size="size"
     :title="buttonTitle"
     :variant="variant"
     @click="requestCreateSession"
   >
-    <v-icon v-if="iconOnly" :icon="mdiPlus" />
+    <v-icon v-if="iconOnly" icon="$add" />
     <template v-if="!iconOnly">{{ buttonLabel }}</template>
   </v-btn>
 
@@ -30,7 +30,6 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import { mdiPlus } from "@mdi/js";
 
 import Vibe64AssistantSessionDialog from "@/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue";
 import {

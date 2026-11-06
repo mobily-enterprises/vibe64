@@ -16,15 +16,14 @@
 
 <script setup>
 import { inject } from "vue";
-import { mdiAlertCircle, mdiCheckCircle, mdiCircleOutline, mdiCloseCircle } from "@mdi/js";
 import { VIBE64_AI_TASKS_KEY } from "./aiTaskKey.js";
 
 const tasks = /** @type {import("./useAiTaskHost.js").AiTaskHost} */ (inject(VIBE64_AI_TASKS_KEY));
 const glyphIcons = {
-  attention: mdiAlertCircle,
-  done: mdiCheckCircle,
-  "not-done": mdiCloseCircle,
-  turn: mdiCircleOutline
+  attention: "$errorFilled",
+  done: "$checkCircleFilled",
+  "not-done": "$cancel",
+  turn: "$circle"
 };
 </script>
 

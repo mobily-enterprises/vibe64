@@ -4,7 +4,6 @@ import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import * as vue from "vue";
 import { renderToString } from "@vue/server-renderer";
-import * as mdi from "@mdi/js";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VoiceConversationControls } from "@jskit-ai/assistant-voice/client";
@@ -86,7 +85,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   };
   let voiceParts = null;
   const imports = {
-    vue, "@mdi/js": mdi,
+    vue,
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
     "@local/vibe64-pages/client": { Vibe64PageLinkCards: {} },
     // The one catalogue read that decides whether a lesson may speak unprompted.
@@ -699,7 +698,7 @@ describe("Vibe64 direct session view", () => {
       expect(session.toggleHandsFree).not.toHaveBeenCalled();
       const log = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue"), "utf8");
       expect(log.match(/v-if="!voiceSession \|\| holdingVoice"/gu)).toHaveLength(3);
-      expect(log).toContain(':icon="readAloud ? mdiVolumeHigh : mdiVolumeOff"');
+      expect(log).toContain(":icon=\"readAloud ? '$volumeHigh' : '$volumeOff'\"");
     } finally { main.app.unmount(); }
   });
 
@@ -746,19 +745,19 @@ describe("Vibe64 direct session view", () => {
       }
     };
     try {
-      expect(microphoneIcon()).toBe(mdi.mdiMicrophoneOff);
+      expect(microphoneIcon()).toBe("$micOff");
       main.state.voiceGesture.pointerDown(pointer);
       await vi.advanceTimersByTimeAsync(350);
       const session = main.voice.controller.state.session;
       expect(main.state.holdingVoice.value).toBe(true);
       expect(session.startPushToTalk).toHaveBeenCalledTimes(1);
-      expect(microphoneIcon()).toBe(mdi.mdiMicrophoneOff);
+      expect(microphoneIcon()).toBe("$micOff");
       session.voice.listening.value = true;
       await vue.nextTick();
-      expect(microphoneIcon()).toBe(mdi.mdiMicrophone);
+      expect(microphoneIcon()).toBe("$mic");
       session.microphoneMuted.value = true;
       await vue.nextTick();
-      expect(microphoneIcon()).toBe(mdi.mdiMicrophoneOff);
+      expect(microphoneIcon()).toBe("$micOff");
       main.state.voiceGesture.pointerUp(pointer);
       await vi.advanceTimersByTimeAsync(0);
       expect(session.finishPushToTalk).toHaveBeenCalledTimes(1);
@@ -893,7 +892,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain("saveWorkTeleportTarget");
     expect(component).toContain(':aria-busy="saveWorkSending ? \'true\' : undefined"');
     expect(component).not.toContain(':loading="saveWorkSending"');
-    expect(component).toContain(":icon=\"mdiIncognito\"");
+    expect(component).toContain("icon=\"$dominoMask\"");
     expect(component).toContain("@click=\"confirmSaveWork\"");
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(
@@ -928,10 +927,10 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
+    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" icon="$commit" />');
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
-    expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');
+    expect(sessionHeader).toContain('<v-icon v-else icon="$save" />');
     expect(sessionHeader).toContain('height="var(--session-action-size, 36px)"');
     expect(sessionHeader).toContain('width="var(--session-action-size, 36px)"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
@@ -1003,7 +1002,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain("<Vibe64OutputControls");
     expect(component).toContain("name=\"ai-terminal\"");
     expect(component).not.toContain("Session tools");
-    expect(component).not.toContain("mdiDotsHorizontal");
+    expect(component).not.toContain("$moreHoriz");
   });
 
   it("offers preview attachments as ordinary direct-chat controls", () => {

@@ -1,5 +1,4 @@
 <script setup>
-import { mdiAlertCircleOutline, mdiRobotHappyOutline } from "@mdi/js";
 
 // Success's proof that Colleague answers on the chosen provider: its reply to a
 // hello, the typing dots while it waits, or why it failed with Retry, Check
@@ -21,7 +20,7 @@ const emit = defineEmits(["retry", "check-connection", "dismiss"]);
     :aria-busy="hello.state === 'waiting' ? 'true' : undefined"
   >
     <span class="aio-proof__avatar" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path :d="hello.state === 'failed' ? mdiAlertCircleOutline : mdiRobotHappyOutline" /></svg>
+      <v-icon :icon="hello.state === 'failed' ? '$error' : '$smartToy'" size="20" />
     </span>
     <div class="aio-proof__body">
       <template v-if="hello.state === 'failed'">
@@ -72,9 +71,9 @@ const emit = defineEmits(["retry", "check-connection", "dismiss"]);
   justify-content: center;
   width: 36px;
 }
-.aio-proof__avatar svg { fill: var(--v64-on-primary-container); height: 20px; width: 20px; }
+.aio-proof__avatar .v-icon { color: var(--v64-on-primary-container); }
 .aio-proof--failed .aio-proof__avatar { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, var(--v64-surface)); }
-.aio-proof--failed .aio-proof__avatar svg { fill: rgb(var(--v-theme-warning)); }
+.aio-proof--failed .aio-proof__avatar .v-icon { color: rgb(var(--v-theme-warning)); }
 .aio-proof__body { display: grid; gap: 2px; min-width: 0; }
 .aio-proof__name { font: var(--v64-type-label-lg); }
 .aio-proof__reply { font: var(--v64-type-body-lg); margin: 0; overflow-wrap: anywhere; }

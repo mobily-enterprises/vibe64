@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiClose, mdiLockOutline, mdiOpenInNew } from "@mdi/js";
 import AiConnectionRow from "./AiConnectionRow.vue";
 import AiOnboardingMark from "../onboarding/AiOnboardingMark.vue";
 import { aiOnboardingRows } from "../onboarding/useAiOnboarding.js";
@@ -64,10 +63,10 @@ function connectAgain() {
           <h2 class="ai-manage__title">{{ card.name }}</h2>
           <p class="ai-manage__summary">{{ summary }}</p>
         </div>
-        <v-btn :icon="mdiClose" variant="text" :aria-label="`Close ${card.name} settings`" :disabled="busy" @click="close" />
+        <v-btn icon="$close" variant="text" :aria-label="`Close ${card.name} settings`" :disabled="busy" @click="close" />
         <v-btn
           v-if="billingUrl" class="ai-manage__billing" :href="billingUrl" target="_blank" rel="noopener noreferrer"
-          :append-icon="mdiOpenInNew" variant="text" color="primary" size="small"
+          append-icon="$openInNew" variant="text" color="primary" size="small"
         >
           Billing &amp; usage<span class="d-sr-only"> (opens in a new tab)</span>
         </v-btn>
@@ -92,7 +91,7 @@ function connectAgain() {
           <v-btn color="primary" variant="flat" @click="connectAgain">Connect {{ card.name }}</v-btn>
         </div>
         <p class="ai-manage__note">
-          <v-icon :icon="mdiLockOutline" size="18" aria-hidden="true" />
+          <v-icon icon="$lock" size="18" aria-hidden="true" />
           <span>Provider keys are redacted after saving. Only the Vibe64 owner can change sign-ins and keys.</span>
         </p>
       </v-card-text>

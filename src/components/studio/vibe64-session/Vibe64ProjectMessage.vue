@@ -1,7 +1,7 @@
 <template>
   <article class="vibe64-project-message" :class="{ 'vibe64-project-message--sent': sent }" :aria-label="sent ? 'Sent agent message' : 'Received agent message'">
     <span class="vibe64-project-message__avatar" aria-hidden="true">
-      <v-icon :icon="mdiRobotOutline" size="20" />
+      <v-icon icon="$smartToy" size="20" />
     </span>
     <div class="vibe64-project-message__bubble">
       <header>
@@ -29,7 +29,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiRobotOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";

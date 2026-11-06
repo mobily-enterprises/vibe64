@@ -2,14 +2,14 @@
   <section class="studio-health">
     <Vibe64DashboardPageHeader
       description="What this computer has, and what Vibe64 needs from it."
-      :icon="mdiHeartPulse"
+      icon="$monitorHeart"
       title="Studio Health"
     >
       <template #actions>
         <v-btn
           :disabled="isFetching"
           :loading="isFetching"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           rounded="pill"
           type="button"
           variant="tonal"
@@ -37,7 +37,7 @@
 
     <template v-else>
       <div class="studio-health__summary" :class="health.healthy ? 'studio-health__summary--ok' : 'studio-health__summary--attention'">
-        <v-icon :icon="health.healthy ? mdiCheckCircle : mdiAlertCircleOutline" size="28" />
+        <v-icon :icon="health.healthy ? '$checkCircleFilled' : '$error'" size="28" />
         <div>
           <strong>{{ summaryText }}</strong>
           <p v-if="optionalText">{{ optionalText }}</p>
@@ -61,7 +61,7 @@
               @check="reload"
             />
             <article v-else class="studio-health__check" :class="{ 'studio-health__check--open': check.status !== 'pass' }">
-              <v-icon :color="iconColor(check)" :icon="check.status === 'pass' ? mdiCheckCircle : mdiAlertCircleOutline" size="20" />
+              <v-icon :color="iconColor(check)" :icon="check.status === 'pass' ? '$checkCircleFilled' : '$error'" size="20" />
               <div class="studio-health__check-copy">
                 <div class="studio-health__check-heading">
                   <strong>{{ check.label }}</strong>
@@ -93,12 +93,6 @@
 import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import {
-  mdiAlertCircleOutline,
-  mdiCheckCircle,
-  mdiHeartPulse,
-  mdiRefresh
-} from "@mdi/js";
 import { requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 import ToolInstallRow from "@/components/studio/ToolInstallRow.vue";

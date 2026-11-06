@@ -1,14 +1,6 @@
 <script setup>
 import { computed } from "vue";
 import { useDisplay } from "vuetify";
-import {
-  mdiAccountCircleOutline,
-  mdiArrowLeft,
-  mdiClose,
-  mdiCreditCardOutline,
-  mdiMagnify,
-  mdiRobotOutline
-} from "@mdi/js";
 import AiProviderKeyForm from "./AiProviderKeyForm.vue";
 import CliInstallNotice from "./CliInstallNotice.vue";
 import CustomEndpointAdvanced from "./CustomEndpointAdvanced.vue";
@@ -104,7 +96,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <small class="vibe64-dialog-eyebrow">Add connection</small>
           <strong>Choose an orchestrator</strong>
         </span>
-        <v-btn :icon="mdiClose" aria-label="Close Add connection" type="button" variant="text" @click="addAiOpen = false" />
+        <v-btn icon="$close" aria-label="Close Add connection" type="button" variant="text" @click="addAiOpen = false" />
       </v-card-title>
       <v-card-text class="vibe64-add-ai__body">
         <v-row align="stretch">
@@ -113,7 +105,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
               <v-card-item>
                 <template #prepend>
                   <v-avatar color="secondary" rounded="lg" size="52" variant="tonal">
-                    <v-icon :icon="mdiAccountCircleOutline" size="28" />
+                    <v-icon icon="$accountCircle" size="28" />
                   </v-avatar>
                 </template>
                 <v-card-title>{{ choice.label }}</v-card-title>
@@ -135,7 +127,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
               <v-card-item>
                 <template #prepend>
                   <v-avatar color="secondary" rounded="lg" size="52" variant="tonal">
-                    <v-icon :icon="mdiRobotOutline" size="28" />
+                    <v-icon icon="$smartToy" size="28" />
                   </v-avatar>
                 </template>
                 <v-card-title>OpenCode</v-card-title>
@@ -164,7 +156,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <small class="vibe64-dialog-eyebrow">Add {{ nativeSetupDetails.label }} connection</small>
           <strong>Choose a provider</strong>
         </span>
-        <v-btn :icon="mdiArrowLeft" aria-label="Back to orchestrators" variant="text" @click="nativeProviderPickerOpen = false; addAiOpen = true" />
+        <v-btn icon="$arrowBack" aria-label="Back to orchestrators" variant="text" @click="nativeProviderPickerOpen = false; addAiOpen = true" />
       </v-card-title>
       <v-card-text>
         <v-list v-if="nativeAvailableProviders.length" lines="two">
@@ -192,7 +184,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <strong>Choose a provider</strong>
         </span>
         <v-btn
-          :icon="mdiArrowLeft"
+          icon="$arrowBack"
           aria-label="Back to AI types"
           type="button"
           variant="text"
@@ -211,7 +203,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
             clearable
             :disabled="providerPickerLoading"
             hide-details
-            :prepend-inner-icon="mdiMagnify"
+            prepend-inner-icon="$search"
             label="Search OpenCode providers"
             placeholder="Try OpenAI, Anthropic, GLM…"
             variant="outlined"
@@ -256,7 +248,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
               >
                 <template #prepend>
                   <v-avatar color="primary" size="44" variant="tonal">
-                    <v-icon :icon="mdiRobotOutline" size="22" />
+                    <v-icon icon="$smartToy" size="22" />
                   </v-avatar>
                 </template>
                 <template #append>
@@ -270,7 +262,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           </v-sheet>
 
           <v-sheet v-else class="vibe64-provider-picker__empty" color="surface-container-low" rounded="xl">
-            <v-icon :icon="mdiRobotOutline" color="primary" size="36" />
+            <v-icon icon="$smartToy" color="primary" size="36" />
             <strong>
               {{ providerSearch.trim()
                 ? `No providers match “${providerSearch.trim()}”`
@@ -334,7 +326,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
         >
           <template #close>
             <v-btn
-              :icon="mdiClose"
+              icon="$close"
               :aria-label="`Close ${nativeSetupDetails.label} setup`"
               type="button"
               variant="text"
@@ -362,7 +354,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <strong>{{ editorTitle }}</strong>
         </span>
         <v-btn
-          :icon="editorOrigin === 'direct' ? mdiClose : mdiArrowLeft"
+          :icon="editorOrigin === 'direct' ? '$close' : '$arrowBack'"
           :aria-label="editorOrigin === 'direct' ? 'Close provider setup' : 'Back to AI choices'"
           :disabled="editorSaving"
           type="button"
@@ -425,7 +417,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       <v-card-item class="vibe64-ai-connections__confirm-header">
         <template #prepend>
           <v-avatar color="warning" size="44" variant="tonal">
-            <v-icon :icon="mdiCreditCardOutline" size="23" />
+            <v-icon icon="$creditCard" size="23" />
           </v-avatar>
         </template>
         <v-card-title>{{ modelAccessTarget?.modelAccess?.label || "Unlock provider models" }}?</v-card-title>

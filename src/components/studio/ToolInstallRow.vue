@@ -22,7 +22,7 @@
           class="tool-row__toggle"
           color="primary"
           density="comfortable"
-          :append-icon="open ? mdiChevronUp : mdiChevronDown"
+          :append-icon="open ? '$collapse' : '$expand'"
           variant="text"
           @click="open = !open"
         >
@@ -36,7 +36,7 @@
 
           <Vibe64CopyCommand v-if="command" :command="command" :label="`Copy the command that installs ${tool.name}`" />
           <p v-if="tool.install?.note" class="tool-row__note">
-            <v-icon :icon="mdiLockOutline" size="14" />
+            <v-icon icon="$lock" size="14" />
             {{ tool.install.note }}
           </p>
 
@@ -45,7 +45,7 @@
               class="tool-row__check"
               color="primary"
               :loading="checking"
-              :prepend-icon="mdiRefresh"
+              prepend-icon="$refresh"
               rounded="pill"
               variant="tonal"
               @click="check"
@@ -56,7 +56,7 @@
               v-if="tool.guideUrl"
               class="tool-row__other"
               color="primary"
-              :append-icon="mdiOpenInNew"
+              append-icon="$openInNew"
               :href="tool.guideUrl"
               rel="noopener"
               rounded="pill"
@@ -77,16 +77,6 @@
 // that installs it here, and Check again. Rows only appear where a step needs
 // the tool; nothing here runs an installer.
 import { computed, ref, useId, watch } from "vue";
-import {
-  mdiAlertCircleOutline,
-  mdiCheckCircle,
-  mdiChevronDown,
-  mdiChevronUp,
-  mdiLockOutline,
-  mdiMinusCircleOutline,
-  mdiOpenInNew,
-  mdiRefresh
-} from "@mdi/js";
 import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 
 const props = defineProps({
@@ -126,8 +116,8 @@ const sentence = computed(() => {
   return [lead, how].filter(Boolean).join(" ");
 });
 const icon = computed(() => {
-  if (state.value === "ready") return mdiCheckCircle;
-  return props.optional && state.value === "missing" ? mdiMinusCircleOutline : mdiAlertCircleOutline;
+  if (state.value === "ready") return "$checkCircleFilled";
+  return props.optional && state.value === "missing" ? "$doNotDisturbOn" : "$error";
 });
 
 // "Check again" always answers: either the row turns ready, or it says so here.

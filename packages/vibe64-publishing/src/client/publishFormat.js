@@ -1,22 +1,10 @@
 // How the Publish page names and colours things, in one place.
-import {
-  mdiAlertCircle,
-  mdiCellphoneArrowDown,
-  mdiCheckCircle,
-  mdiCircleOutline,
-  mdiCloseCircle,
-  mdiGithub,
-  mdiLanguagePython,
-  mdiMinusCircleOutline,
-  mdiNpm,
-  mdiProgressClock
-} from "@mdi/js";
 
 const DESTINATION_ICONS = Object.freeze({
-  "android-sideload": mdiCellphoneArrowDown,
-  "github-releases": mdiGithub,
-  npm: mdiNpm,
-  pypi: mdiLanguagePython
+  "android-sideload": "$installMobile",
+  "github-releases": "$github",
+  npm: "$npm",
+  pypi: "$languagePython"
 });
 
 // Each destination keeps one accent so a target reads the same everywhere.
@@ -28,26 +16,26 @@ const DESTINATION_ACCENTS = Object.freeze({
 });
 
 const STATUS = Object.freeze({
-  succeeded: { label: "Published", color: "success", icon: mdiCheckCircle },
-  proven: { label: "Published", color: "success", icon: mdiCheckCircle },
-  checked: { label: "Would publish", color: "success", icon: mdiCheckCircle },
-  done: { label: "Done", color: "success", icon: mdiCheckCircle },
-  passed: { label: "Checks passed", color: "success", icon: mdiCheckCircle },
-  partial: { label: "Partly published", color: "warning", icon: mdiAlertCircle },
-  interrupted: { label: "Interrupted", color: "warning", icon: mdiAlertCircle },
-  unconfigured: { label: "No checks", color: "warning", icon: mdiAlertCircle },
-  failed: { label: "Failed", color: "error", icon: mdiCloseCircle },
-  running: { label: "Running", color: "primary", icon: mdiProgressClock },
-  pending: { label: "Waiting", color: "default", icon: mdiCircleOutline },
-  skipped: { label: "Skipped", color: "default", icon: mdiMinusCircleOutline }
+  succeeded: { label: "Published", color: "success", icon: "$checkCircleFilled" },
+  proven: { label: "Published", color: "success", icon: "$checkCircleFilled" },
+  checked: { label: "Would publish", color: "success", icon: "$checkCircleFilled" },
+  done: { label: "Done", color: "success", icon: "$checkCircleFilled" },
+  passed: { label: "Checks passed", color: "success", icon: "$checkCircleFilled" },
+  partial: { label: "Partly published", color: "warning", icon: "$errorFilled" },
+  interrupted: { label: "Interrupted", color: "warning", icon: "$errorFilled" },
+  unconfigured: { label: "No checks", color: "warning", icon: "$errorFilled" },
+  failed: { label: "Failed", color: "error", icon: "$cancel" },
+  running: { label: "Running", color: "primary", icon: "$clockLoader" },
+  pending: { label: "Waiting", color: "default", icon: "$circle" },
+  skipped: { label: "Skipped", color: "default", icon: "$doNotDisturbOn" }
 });
 
 function statusInfo(status) {
-  return STATUS[status] || { label: String(status || "Unknown"), color: "default", icon: mdiCircleOutline };
+  return STATUS[status] || { label: String(status || "Unknown"), color: "default", icon: "$circle" };
 }
 
 function destinationIcon(id) {
-  return DESTINATION_ICONS[id] || mdiCircleOutline;
+  return DESTINATION_ICONS[id] || "$circle";
 }
 
 function destinationAccent(id) {

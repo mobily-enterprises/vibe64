@@ -9,7 +9,7 @@
       <div class="cli-install-notice__command">
         <code>{{ account.install.command }}</code>
         <v-btn
-          :aria-label="`Copy the ${name} install command`" :icon="copied ? mdiCheck : mdiContentCopy"
+          :aria-label="`Copy the ${name} install command`" :icon="copied ? '$check' : '$contentCopy'"
           size="40" variant="text" @click="copy"
         />
       </div>
@@ -22,7 +22,7 @@
       <pre>{{ account.observed }}</pre>
     </details>
     <div class="d-flex flex-wrap ga-2 mt-3">
-      <v-btn variant="flat" color="warning" :loading="checking" :prepend-icon="mdiRefresh" @click="emit('check')">
+      <v-btn variant="flat" color="warning" :loading="checking" prepend-icon="$refresh" @click="emit('check')">
         Check again
       </v-btn>
       <slot />
@@ -43,7 +43,6 @@ export function cliProblem(account) {
 <script setup>
 // Say which AI tool is missing or did not start, how to fix it, then check again.
 import { computed, ref, watch } from "vue";
-import { mdiCheck, mdiContentCopy, mdiRefresh } from "@mdi/js";
 
 const props = defineProps({
   // An account or connection status: { label, status, title, detail, install?, observed? }.

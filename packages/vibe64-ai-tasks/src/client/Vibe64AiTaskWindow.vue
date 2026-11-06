@@ -26,7 +26,7 @@
           :aria-label="WORDS.actions.hide"
           class="ai-task__back"
           data-vibe64-ai-task-hide
-          :icon="mdiArrowLeft"
+          icon="$arrowBack"
           variant="text"
           @click="source.hide"
         />
@@ -66,7 +66,7 @@
             @click="detailsOpen = !detailsOpen"
           >
             <span class="ai-task__details-word">{{ WORDS.actions.details }}</span>
-            <v-icon :icon="detailsOpen ? mdiChevronUp : mdiChevronDown" size="18" aria-hidden="true" />
+            <v-icon :icon="detailsOpen ? '$collapse' : '$expand'" size="18" aria-hidden="true" />
           </button>
         </div>
         <pre v-if="detailsOpen" class="ai-task__details" data-vibe64-ai-task-details-text tabindex="0">{{ task.problem.details }}</pre>
@@ -173,15 +173,6 @@
 <script setup>
 import { computed, nextTick, ref, useId, watch } from "vue";
 import { useDisplay } from "vuetify";
-import {
-  mdiAlertCircle,
-  mdiArrowLeft,
-  mdiCheckCircle,
-  mdiChevronDown,
-  mdiChevronUp,
-  mdiCircleOutline,
-  mdiCloseCircle
-} from "@mdi/js";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskFit } from "./aiTaskFit.js";
 import { aiTaskFooterActions } from "./aiTaskProjection.js";
@@ -206,10 +197,10 @@ const props = defineProps({
 });
 
 const glyphIcons = {
-  attention: mdiAlertCircle,
-  done: mdiCheckCircle,
-  "not-done": mdiCloseCircle,
-  turn: mdiCircleOutline
+  attention: "$errorFilled",
+  done: "$checkCircleFilled",
+  "not-done": "$cancel",
+  turn: "$circle"
 };
 const titleId = useId();
 const title = ref(null);

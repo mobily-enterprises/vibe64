@@ -2,7 +2,6 @@
 // Google's Android SDK licence, shown in full before Vibe64 downloads the SDK.
 // The person's acceptance is recorded on this computer with the licence hash.
 import { computed, ref, watch } from "vue";
-import { mdiAndroid, mdiDownload, mdiOpenInNew } from "@mdi/js";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -55,7 +54,7 @@ async function install() {
 <template>
   <v-dialog :model-value="modelValue" max-width="680" scrollable @update:model-value="emit('update:modelValue', $event)">
     <v-card rounded="xl">
-      <v-card-title class="publish-dialog__title"><v-icon :icon="mdiAndroid" class="mr-2" color="success" />Android build tools</v-card-title>
+      <v-card-title class="publish-dialog__title"><v-icon icon="$android" class="mr-2" color="success" />Android build tools</v-card-title>
       <v-card-text class="publish-licence">
         <p class="publish-licence__lead">
           Vibe64 downloads Java 21 and Google's Android SDK (about 1.9 GB, once) into your user cache. Google requires you to accept its licence first.
@@ -64,7 +63,7 @@ async function install() {
         <template v-else-if="licence">
           <div class="publish-licence__meta">
             <span>{{ licence.id }}</span>
-            <a :href="licence.termsUrl" rel="noopener" target="_blank">Google's terms <v-icon :icon="mdiOpenInNew" size="14" /></a>
+            <a :href="licence.termsUrl" rel="noopener" target="_blank">Google's terms <v-icon icon="$openInNew" size="14" /></a>
           </div>
           <pre class="publish-licence__text" tabindex="0">{{ licence.text }}</pre>
           <p class="publish-licence__packages">Downloads: {{ licence.packages.join(", ") }}</p>
@@ -76,7 +75,7 @@ async function install() {
       <v-card-actions class="publish-dialog__actions">
         <v-spacer />
         <v-btn rounded="pill" variant="text" @click="emit('update:modelValue', false)">Cancel</v-btn>
-        <v-btn :disabled="!licence || !(accepted || agreed)" :loading="busy && Boolean(licence)" :prepend-icon="mdiDownload" color="primary" rounded="pill" variant="flat" @click="install">
+        <v-btn :disabled="!licence || !(accepted || agreed)" :loading="busy && Boolean(licence)" prepend-icon="$download" color="primary" rounded="pill" variant="flat" @click="install">
           {{ accepted ? "Download tools" : "Accept and download" }}
         </v-btn>
       </v-card-actions>

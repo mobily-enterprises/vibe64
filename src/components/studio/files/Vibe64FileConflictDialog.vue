@@ -40,7 +40,6 @@
 
 <script setup>
 import { computed, useId } from "vue";
-import { mdiContentDuplicate, mdiFileReplaceOutline, mdiSkipNext } from "@mdi/js";
 
 // Asked once for a whole upload or move/copy when names are already taken.
 // It emits "replace", "keep-both", "skip", or "" when the person cancels.
@@ -61,9 +60,9 @@ function numberedName(name = "") {
 const choices = computed(() => {
   const one = props.names.length === 1;
   return [
-    { value: "replace", icon: mdiFileReplaceOutline, title: "Replace", subtitle: one ? "Overwrite the item that is there" : "Overwrite the items that are there" },
-    { value: "keep-both", icon: mdiContentDuplicate, title: "Keep both", subtitle: `Add a number to the new name, like “${numberedName(props.names[0])}”` },
-    { value: "skip", icon: mdiSkipNext, title: "Skip", subtitle: one ? "Leave the item that is there" : "Leave those items and do the rest" }
+    { value: "replace", icon: "$findReplace", title: "Replace", subtitle: one ? "Overwrite the item that is there" : "Overwrite the items that are there" },
+    { value: "keep-both", icon: "$fileCopy", title: "Keep both", subtitle: `Add a number to the new name, like “${numberedName(props.names[0])}”` },
+    { value: "skip", icon: "$skipNext", title: "Skip", subtitle: one ? "Leave the item that is there" : "Leave those items and do the rest" }
   ];
 });
 </script>

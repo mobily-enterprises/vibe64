@@ -12,7 +12,7 @@
 
     <template v-else-if="error && !state">
       <div class="database-workspace__load-error" role="alert">
-        <v-icon :icon="mdiDatabaseAlertOutline" size="38" />
+        <v-icon icon="$databaseOff" size="38" />
         <strong>Session database could not open.</strong>
         <span>{{ error }}</span>
         <v-btn color="primary" type="button" variant="tonal" @click="reload">Retry</v-btn>
@@ -23,7 +23,7 @@
       <header class="database-workspace__header">
         <div class="database-workspace__identity">
           <span class="database-workspace__mark" aria-hidden="true">
-            <v-icon :icon="mdiDatabaseOutline" size="20" />
+            <v-icon icon="$database" size="20" />
           </span>
           <div>
             <strong>{{ connection.database || "Session database" }}</strong>
@@ -32,17 +32,17 @@
         </div>
 
         <v-btn-toggle v-model="activeView" mandatory density="compact" variant="outlined">
-          <v-btn value="overview" data-vibe64-guide="database-overview" :prepend-icon="mdiGraphOutline" size="small">Overview</v-btn>
-          <v-btn value="erd" data-vibe64-guide="database-erd" :prepend-icon="mdiGraphOutline" size="small">ERD</v-btn>
-          <v-btn value="data" data-vibe64-guide="database-data" :prepend-icon="mdiTableSearch" size="small">Data</v-btn>
+          <v-btn value="overview" data-vibe64-guide="database-overview" prepend-icon="$hub" size="small">Overview</v-btn>
+          <v-btn value="erd" data-vibe64-guide="database-erd" prepend-icon="$hub" size="small">ERD</v-btn>
+          <v-btn value="data" data-vibe64-guide="database-data" prepend-icon="$manageSearch" size="small">Data</v-btn>
         </v-btn-toggle>
 
         <div class="database-workspace__header-actions">
           <v-btn
-            :append-icon="copilotOpen ? mdiChevronRight : mdiChevronLeft"
+            :append-icon="copilotOpen ? '$chevronRight' : '$chevronLeft'"
             :aria-expanded="copilotOpen"
             aria-controls="database-copilot-panel"
-            :prepend-icon="mdiCreationOutline"
+            prepend-icon="$autoAwesome"
             size="small"
             :title="copilotOpen ? 'Collapse database copilot' : 'Open database copilot'"
             type="button"
@@ -54,7 +54,7 @@
           <v-btn
             :aria-busy="refreshing ? 'true' : undefined"
             :disabled="refreshing || running"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             size="small"
             type="button"
             variant="tonal"
@@ -202,7 +202,6 @@
 <script setup>
 import { computed, nextTick, reactive, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { mdiChevronLeft, mdiChevronRight, mdiCreationOutline, mdiDatabaseAlertOutline, mdiDatabaseOutline, mdiGraphOutline, mdiRefresh, mdiTableSearch } from "@mdi/js";
 
 import { useDatabaseColleagueView } from "../composables/useDatabaseColleagueView.js";
 import { useDatabaseCopilot } from "../composables/useDatabaseCopilot.js";

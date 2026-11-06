@@ -12,7 +12,7 @@
         class="studio-ai-session-archive-dialog__title"
       >
         <v-icon
-          :icon="mdiArchiveOutline"
+          icon="$inventory2"
           color="primary"
         />
         Archive session?
@@ -70,7 +70,6 @@
 
 <script setup>
 import { computed, ref, useId, watch } from "vue";
-import { mdiArchiveOutline } from "@mdi/js";
 import { sessionArchiveWorkNotice } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";

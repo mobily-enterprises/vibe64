@@ -33,7 +33,7 @@
           v-if="modelAccess.configurable && !modelAccess.managementOnly && !modelAccessUnlocked"
           class="vibe64-session-assistant-menu__locked-note"
         >
-          <v-icon :icon="mdiLockOutline" size="14" />
+          <v-icon icon="$lock" size="14" />
           Additional paid models are hidden until they are enabled.
         </small>
 
@@ -50,7 +50,7 @@
           >
             <div class="vibe64-session-assistant-menu__access-summary">
               <v-avatar :color="modelAccessUnlocked ? 'warning' : 'success'" size="36" variant="tonal">
-                <v-icon :icon="modelAccessUnlocked ? mdiCreditCardOutline : mdiShieldCheckOutline" size="19" />
+                <v-icon :icon="modelAccessUnlocked ? '$creditCard' : '$verifiedUser'" size="19" />
               </v-avatar>
               <span>
                 <strong>{{ modelAccessUnlocked ? "Paid models unlocked" : "Free-only mode" }}</strong>
@@ -98,7 +98,7 @@
       <v-card-item class="vibe64-session-assistant-menu__confirm-header">
         <template #prepend>
           <v-avatar color="warning" size="44" variant="tonal">
-            <v-icon :icon="mdiCreditCardOutline" size="23" />
+            <v-icon icon="$creditCard" size="23" />
           </v-avatar>
         </template>
         <v-card-title>{{ modelAccess.label || "Unlock provider models" }}?</v-card-title>
@@ -129,11 +129,6 @@
 
 <script setup>
 import { watch } from "vue";
-import {
-  mdiCreditCardOutline,
-  mdiLockOutline,
-  mdiShieldCheckOutline
-} from "@mdi/js";
 
 import { useVibe64SessionAssistantApply } from "@/composables/useVibe64SessionAssistantApply.js";
 import { useVibe64SessionAssistantChoice } from "@/composables/useVibe64SessionAssistantChoice.js";

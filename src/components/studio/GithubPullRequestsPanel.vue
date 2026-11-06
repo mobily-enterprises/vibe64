@@ -4,8 +4,6 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { mdiArrowRight, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
-  mdiSourceBranch, mdiSourceMerge, mdiSourcePull, mdiCloseCircleOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import Vibe64AssistantSessionDialog from "@/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue";
@@ -87,8 +85,8 @@ function color(item) {
   return item.isDraft ? undefined : "success";
 }
 function icon(item) {
-  if (item.state === "MERGED") return mdiSourceMerge;
-  return item.state === "CLOSED" ? mdiCloseCircleOutline : mdiSourcePull;
+  if (item.state === "MERGED") return "$merge";
+  return item.state === "CLOSED" ? "$cancelOutline" : "$callMerge";
 }
 function date(value) {
   return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
@@ -123,13 +121,13 @@ async function actionFinished({ apiPath }) {
       </Vibe64DashboardBackButton>
       <v-spacer />
       <v-btn
-        v-if="available" :prepend-icon="mdiRefresh" variant="text" size="small" height="48" :disabled="resource.isFetching.value"
+        v-if="available" prepend-icon="$refresh" variant="text" size="small" height="48" :disabled="resource.isFetching.value"
         @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
       <v-btn
-        v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" height="48" :prepend-icon="mdiPlus"
+        v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" height="48" prepend-icon="$add"
         :disabled="dashboardContext.sourceOperationsSuspended" @click="createDialog = true"
       >
         Create from session
@@ -146,10 +144,10 @@ async function actionFinished({ apiPath }) {
           <v-btn v-for="value in ['open', 'closed', 'merged', 'all']" :key="value" :value="value" height="48">{{ value[0].toUpperCase() + value.slice(1) }}</v-btn>
         </v-btn-toggle>
         <v-text-field
-          v-model="search" class="pull-requests__search" label="Search pull requests" :prepend-inner-icon="mdiMagnify"
+          v-model="search" class="pull-requests__search" label="Search pull requests" prepend-inner-icon="$search"
           variant="outlined" rounded="pill" hide-details maxlength="200" clearable @keydown.enter.prevent="filter()" @click:clear="search = ''; filter()"
         >
-          <template #append-inner><v-btn :icon="mdiArrowRight" variant="text" size="48" aria-label="Search pull requests" @click="filter()" /></template>
+          <template #append-inner><v-btn icon="$arrowForward" variant="text" size="48" aria-label="Search pull requests" @click="filter()" /></template>
         </v-text-field>
       </form>
       <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" border class="pa-4" aria-label="Loading pull requests" aria-busy="true">
@@ -177,14 +175,14 @@ async function actionFinished({ apiPath }) {
           </template>
         </v-list>
         <v-sheet v-else rounded="xl" color="surface-light" class="pa-8 text-center">
-          <v-icon :icon="mdiSourcePull" size="40" class="mb-3" />
+          <v-icon icon="$callMerge" size="40" class="mb-3" />
           <h2 class="text-title-large mb-2">No pull requests here</h2>
           <p class="text-body-medium text-medium-emphasis">Try another filter, or turn your session into a pull request.</p>
         </v-sheet>
         <div class="d-flex justify-end ga-2">
           <v-btn v-if="$route.query.prCursor" variant="text" height="48" @click="navigate({ prCursor: undefined })">First page</v-btn>
           <v-btn
-            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" :append-icon="mdiArrowRight"
+            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" append-icon="$arrowForward"
             @click="navigate({ prCursor: list.data.value.pageInfo.endCursor })"
           >
             Next page
@@ -204,7 +202,7 @@ async function actionFinished({ apiPath }) {
         </div>
         <v-sheet rounded="xl" color="surface-light" class="pa-5 d-flex flex-column ga-4">
           <div class="d-flex align-start ga-3">
-            <v-icon :icon="mdiSourceBranch" color="primary" class="mt-1" />
+            <v-icon icon="$forkRight" color="primary" class="mt-1" />
             <div class="pull-requests__branch">
               <div class="text-label-large">Session source · Save destination</div>
               <div class="text-body-medium mt-1">{{ pr.headRepository?.nameWithOwner || 'Deleted repository' }}:{{ pr.headRefName }}</div>
@@ -216,13 +214,13 @@ async function actionFinished({ apiPath }) {
           <p v-else-if="pr.state === 'OPEN' && !toolbar.canCreateSession" class="text-body-medium ma-0">{{ toolbar.createSessionTitle }}</p>
           <div class="d-flex flex-wrap ga-2">
             <v-btn
-              v-if="pr.state === 'OPEN'" color="primary" rounded="pill" height="48" :prepend-icon="mdiSourcePull"
+              v-if="pr.state === 'OPEN'" color="primary" rounded="pill" height="48" prepend-icon="$callMerge"
               :disabled="Boolean(pr.unavailableReason) || !toolbar.canCreateSession || toolbar.createSessionRunning"
               @click="assistantDialog = true"
             >
               Open as session
             </v-btn>
-            <v-btn :href="pr.url" target="_blank" rel="noopener noreferrer" variant="text" height="48" :append-icon="mdiOpenInNew">View on GitHub</v-btn>
+            <v-btn :href="pr.url" target="_blank" rel="noopener noreferrer" variant="text" height="48" append-icon="$openInNew">View on GitHub</v-btn>
           </div>
         </v-sheet>
         <GithubPullRequestActions

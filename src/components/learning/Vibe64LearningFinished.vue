@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, toValue, watch } from "vue";
-import { mdiCheckCircle } from "@mdi/js";
 import { courseProgress } from "@local/vibe64-training/client/course-progress";
 
 // The "Lesson finished" screen (in the Lesson pane): shown when the learner's own
@@ -78,7 +77,7 @@ async function startNext() {
 
 <template>
   <section class="vibe64-learning-finished" aria-labelledby="vibe64-learning-finished-title" data-test="learning-finished">
-    <v-icon :icon="mdiCheckCircle" size="56" class="vibe64-learning-finished__mark" aria-hidden="true" />
+    <v-icon icon="$checkCircleFilled" size="56" class="vibe64-learning-finished__mark" aria-hidden="true" />
     <p class="vibe64-learning-finished__eyebrow">Lesson finished</p>
     <h2 id="vibe64-learning-finished-title">{{ lesson?.title || lesson?.code }}</h2>
     <p>You completed every required step: {{ passedCount }} of {{ steps.length }} steps passed.</p>

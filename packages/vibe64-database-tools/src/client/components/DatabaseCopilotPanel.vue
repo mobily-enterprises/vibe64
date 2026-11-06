@@ -1,10 +1,10 @@
 <template>
   <aside class="database-workspace__copilot">
     <header>
-      <span class="database-workspace__copilot-mark"><v-icon :icon="mdiCreationOutline" size="18" /></span>
+      <span class="database-workspace__copilot-mark"><v-icon icon="$autoAwesome" size="18" /></span>
       <div><strong>Database copilot</strong><small>{{ statusLabel }}</small></div>
       <v-btn
-        :icon="mdiClose"
+        icon="$close"
         size="small"
         title="Collapse database copilot"
         type="button"
@@ -21,7 +21,7 @@
           <small v-if="message.table">{{ message.table }}</small>
           <v-btn
             v-if="message.sql"
-            :prepend-icon="mdiCodeTags"
+            prepend-icon="$code"
             size="x-small"
             type="button"
             variant="tonal"
@@ -41,7 +41,7 @@
       </AssistantConversationElement>
     </div>
     <div v-else class="database-workspace__copilot-unavailable">
-      <v-icon :icon="mdiInformationOutline" size="26" />
+      <v-icon icon="$info" size="26" />
       <strong>Copilot is unavailable</strong>
       <span>{{ unavailableCopy }}</span>
     </div>
@@ -50,7 +50,6 @@
 
 <script setup>
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
-import { mdiClose, mdiCodeTags, mdiCreationOutline, mdiInformationOutline } from "@mdi/js";
 
 defineProps({
   adapter: { type: Object, required: true },

@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiCheck, mdiSourceBranchSync, mdiSourceMerge } from "@mdi/js";
 
 const props = defineProps({
   pullRequest: { type: Object, required: true },
@@ -98,19 +97,19 @@ async function submit() {
       <p v-if="pullRequest.actions?.merge" class="text-body-medium ma-0">{{ pullRequest.actions.merge }}</p>
       <div class="d-flex flex-wrap ga-2">
         <v-btn
-          v-if="pullRequest.isDraft" color="primary" variant="tonal" min-height="48" height="auto" max-width="100%" :prepend-icon="mdiCheck"
+          v-if="pullRequest.isDraft" color="primary" variant="tonal" min-height="48" height="auto" max-width="100%" prepend-icon="$check"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.ready)" @click="open('ready')"
         >
           <span class="text-wrap">Ready for review</span>
         </v-btn>
         <v-btn
-          v-if="pullRequest.actions?.['update-branch'] === ''" variant="tonal" min-height="48" height="auto" max-width="100%" :prepend-icon="mdiSourceBranchSync"
+          v-if="pullRequest.actions?.['update-branch'] === ''" variant="tonal" min-height="48" height="auto" max-width="100%" prepend-icon="$syncAlt"
           :disabled="actionDisabled" @click="open('update-branch')"
         >
           <span class="text-wrap">Update branch from {{ pullRequest.baseRefName }}</span>
         </v-btn>
         <v-btn
-          v-if="!pullRequest.isDraft" color="primary" variant="flat" min-height="48" height="auto" max-width="100%" :prepend-icon="mdiSourceMerge"
+          v-if="!pullRequest.isDraft" color="primary" variant="flat" min-height="48" height="auto" max-width="100%" prepend-icon="$merge"
           :disabled="actionDisabled || Boolean(pullRequest.actions?.merge)" @click="open('merge')"
         >
           <span class="text-wrap">Merge into {{ pullRequest.baseRefName }}</span>

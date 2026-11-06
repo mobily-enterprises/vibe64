@@ -13,7 +13,7 @@
         v-if="showRefresh"
         class="studio-archived-sessions__refresh"
         :disabled="loading"
-        :prepend-icon="mdiRefresh"
+        prepend-icon="$refresh"
         size="small"
         variant="tonal"
         @click="loadSessions"
@@ -70,7 +70,7 @@
         <v-card-text class="studio-archived-sessions__card-body">
           <div class="studio-archived-sessions__card-heading">
             <div class="studio-archived-sessions__icon">
-              <v-icon :icon="mdiArchiveOutline" size="22" />
+              <v-icon icon="$inventory2" size="22" />
             </div>
             <div class="studio-archived-sessions__identity">
               <div class="studio-archived-sessions__session-id">
@@ -93,7 +93,7 @@
             </div>
             <v-btn
               class="studio-archived-sessions__view"
-              :prepend-icon="mdiEyeOutline"
+              prepend-icon="$visibility"
               size="small"
               :to="sessionRoute(session)"
               variant="tonal"
@@ -108,11 +108,6 @@
 </template>
 
 <script setup>
-import {
-  mdiArchiveOutline,
-  mdiEyeOutline,
-  mdiRefresh
-} from "@mdi/js";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {
   vibe64SessionDisplayTitle,

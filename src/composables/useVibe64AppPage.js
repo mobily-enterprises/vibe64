@@ -1,12 +1,5 @@
 import { computed, inject, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
-import {
-  mdiApplicationOutline,
-  mdiChevronDown,
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiViewDashboardOutline
-} from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
@@ -61,8 +54,8 @@ const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 // is selected, which stays mounted under it. A lesson without a practice
 // project is the lesson alone: no switch.
 const PROJECT_PANES = Object.freeze({
-  preview: Object.freeze({ id: "preview", label: "Preview", name: "Preview", icon: mdiApplicationOutline }),
-  dashboard: Object.freeze({ id: "dashboard", label: "Dash", name: "Dashboard", icon: mdiViewDashboardOutline })
+  preview: Object.freeze({ id: "preview", label: "Preview", name: "Preview", icon: "$webAsset" }),
+  dashboard: Object.freeze({ id: "dashboard", label: "Dash", name: "Dashboard", icon: "$dashboard" })
 });
 
 // A practice project is named by its lesson (the current lesson, or the read
@@ -172,9 +165,9 @@ function useVibe64AppPage() {
   });
   const chatToggleIcon = computed(() => {
     if (mobilePaneLayout.value) {
-      return chatCollapsed.value ? mdiChevronLeft : mdiChevronRight;
+      return chatCollapsed.value ? "$chevronLeft" : "$chevronRight";
     }
-    return chatCollapsed.value ? mdiChevronRight : mdiChevronLeft;
+    return chatCollapsed.value ? "$chevronRight" : "$chevronLeft";
   });
   const chatToggleTitle = computed(() => {
     if (mobilePaneLayout.value) {
@@ -343,8 +336,6 @@ function useVibe64AppPage() {
     handleProjectSelectionError,
     handleProjectSelectionMissing,
     handleProjectSelectionReady,
-    mdiChevronDown,
-    mdiChevronRight,
     mobilePaneSwipeEnabled,
     mobileProjectAction,
     mobileProjectActionVisible,

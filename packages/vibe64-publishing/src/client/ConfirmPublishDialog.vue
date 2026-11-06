@@ -3,7 +3,6 @@
 // where, unlocks their keys if needed, and presses Publish. Chat can ask for
 // this dialog but cannot press it.
 import { computed, ref, watch } from "vue";
-import { mdiLockOutline, mdiRocketLaunchOutline, mdiSourceCommit, mdiTagOutline } from "@mdi/js";
 import { destinationAccent, destinationIcon, packageLabeller, shortCommit } from "./publishFormat.js";
 
 const props = defineProps({
@@ -62,15 +61,15 @@ async function publish() {
   <v-dialog :model-value="modelValue" max-width="560" persistent @update:model-value="emit('update:modelValue', $event)">
     <v-card v-if="plan" class="publish-confirm" rounded="xl">
       <div class="publish-confirm__hero">
-        <span class="publish-confirm__badge"><v-icon :icon="mdiRocketLaunchOutline" size="28" /></span>
+        <span class="publish-confirm__badge"><v-icon icon="$rocketLaunch" size="28" /></span>
         <h2>Publish to {{ count }} {{ count === 1 ? "place" : "places" }}?</h2>
         <p v-if="requestedBy === 'assistant'">Your Colleague asked for this release. Nothing goes out until you press Publish.</p>
         <p v-else>People will be able to install these versions. Published versions cannot be taken back.</p>
       </div>
       <v-card-text class="publish-confirm__body">
         <div class="publish-confirm__meta">
-          <span><v-icon :icon="mdiSourceCommit" size="16" /> {{ shortCommit(plan.savedCommit) }}</span>
-          <span v-for="tag in plan.tags" :key="tag"><v-icon :icon="mdiTagOutline" size="16" /> {{ tag }}</span>
+          <span><v-icon icon="$commit" size="16" /> {{ shortCommit(plan.savedCommit) }}</span>
+          <span v-for="tag in plan.tags" :key="tag"><v-icon icon="$sell" size="16" /> {{ tag }}</span>
           <span class="publish-confirm__plan">Plan {{ plan.planId }}</span>
         </div>
         <ul class="publish-confirm__targets">
@@ -86,7 +85,7 @@ async function publish() {
         <v-text-field
           v-if="needsKeys && locked"
           v-model="passphrase"
-          :prepend-inner-icon="mdiLockOutline"
+          prepend-inner-icon="$lock"
           autocomplete="current-password"
           class="mt-4"
           hide-details="auto"
@@ -105,7 +104,7 @@ async function publish() {
         <v-btn
           :disabled="needsKeys && locked && passphrase.length < 12"
           :loading="working"
-          :prepend-icon="mdiRocketLaunchOutline"
+          prepend-icon="$rocketLaunch"
           color="primary"
           data-test="confirm-publish"
           rounded="pill"

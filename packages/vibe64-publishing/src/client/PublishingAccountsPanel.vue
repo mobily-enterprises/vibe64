@@ -3,19 +3,6 @@
 // holding their registry sign-ins and phone install keys, plus its recovery
 // kit. Nothing secret ever comes back to the page.
 import { computed, ref, watch } from "vue";
-import {
-  mdiAccountKeyOutline,
-  mdiGithub,
-  mdiLanguagePython,
-  mdiLifebuoy,
-  mdiLockOpenVariantOutline,
-  mdiLockOutline,
-  mdiNpm,
-  mdiKeyChange,
-  mdiPlus,
-  mdiShieldKeyOutline,
-  mdiTrashCanOutline
-} from "@mdi/js";
 import { relativeTime } from "./publishFormat.js";
 
 const props = defineProps({
@@ -26,7 +13,7 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue", "recovery-kit"]);
 
-const KIND_ICONS = { npm: mdiNpm, pypi: mdiLanguagePython, github: mdiGithub };
+const KIND_ICONS = { npm: "$npm", pypi: "$languagePython", github: "$github" };
 const passphrase = ref("");
 const repeat = ref("");
 const adding = ref(false);
@@ -111,14 +98,14 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
       <v-card-title class="publish-dialog__title">Accounts &amp; keys</v-card-title>
       <v-card-text class="publish-keys">
         <section class="publish-keys__vault" :class="{ 'is-open': keys.unlocked }">
-          <span class="publish-keys__vault-icon"><v-icon :icon="keys.unlocked ? mdiLockOpenVariantOutline : mdiShieldKeyOutline" size="26" /></span>
+          <span class="publish-keys__vault-icon"><v-icon :icon="keys.unlocked ? '$lockOpen' : '$encrypted'" size="26" /></span>
           <div class="publish-keys__vault-copy">
             <strong>Publishing keys</strong>
             <span v-if="!keys.exists">One passphrase protects every sign-in and install key Vibe64 keeps for publishing. It stays on this computer, encrypted.</span>
             <span v-else-if="keys.unlocked">Unlocked until {{ until }}. Locks by itself.</span>
             <span v-else>Locked. Unlock to add accounts or publish.</span>
           </div>
-          <v-btn v-if="keys.unlocked" :loading="busy === 'lock'" :prepend-icon="mdiLockOutline" rounded="pill" variant="tonal" @click="lock">Lock</v-btn>
+          <v-btn v-if="keys.unlocked" :loading="busy === 'lock'" prepend-icon="$lock" rounded="pill" variant="tonal" @click="lock">Lock</v-btn>
         </section>
 
         <div v-if="!keys.exists" class="publish-keys__form">
@@ -128,24 +115,24 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
           <v-btn :disabled="passphrase.length < 12 || !repeat" :loading="busy === 'create'" color="primary" rounded="pill" variant="flat" @click="create">Create publishing keys</v-btn>
         </div>
         <div v-else-if="!keys.unlocked" class="publish-keys__inline">
-          <v-text-field v-model="passphrase" :prepend-inner-icon="mdiLockOutline" autocomplete="current-password" density="comfortable" hide-details label="Passphrase" type="password" variant="outlined" @keydown.enter="unlock" />
+          <v-text-field v-model="passphrase" prepend-inner-icon="$lock" autocomplete="current-password" density="comfortable" hide-details label="Passphrase" type="password" variant="outlined" @keydown.enter="unlock" />
           <v-btn :disabled="passphrase.length < 12" :loading="busy === 'unlock'" color="primary" rounded="pill" variant="flat" @click="unlock">Unlock</v-btn>
         </div>
 
         <template v-if="keys.exists">
           <h3 class="publish-keys__heading">
             Accounts
-            <v-btn v-if="!adding" :disabled="!keys.unlocked" :prepend-icon="mdiPlus" class="ml-auto" rounded="pill" size="small" variant="tonal" @click="startAdding()">Add account</v-btn>
+            <v-btn v-if="!adding" :disabled="!keys.unlocked" prepend-icon="$add" class="ml-auto" rounded="pill" size="small" variant="tonal" @click="startAdding()">Add account</v-btn>
           </h3>
           <ul v-if="accounts.length" class="publish-keys__list">
             <li v-for="account in accounts" :key="account.id">
-              <v-icon :icon="KIND_ICONS[account.kind] || mdiAccountKeyOutline" size="22" />
+              <v-icon :icon="KIND_ICONS[account.kind] || '$passkey'" size="22" />
               <div>
                 <strong>{{ account.label }}</strong>
                 <span>{{ account.source === "github-cli" ? "From your GitHub CLI sign-in" : account.address || "Token" }} · added {{ relativeTime(account.createdAt) }}</span>
               </div>
-              <v-btn :aria-label="`Replace the token of ${account.label}`" :disabled="!keys.unlocked" :icon="mdiKeyChange" size="small" title="Replace token" variant="text" @click="startReplacing(account)" />
-              <v-btn :aria-label="`Remove ${account.label}`" :disabled="!keys.unlocked" :icon="mdiTrashCanOutline" :loading="busy === `remove:${account.id}`" size="small" variant="text" @click="removeAccount(account.id)" />
+              <v-btn :aria-label="`Replace the token of ${account.label}`" :disabled="!keys.unlocked" icon="$syncLock" size="small" title="Replace token" variant="text" @click="startReplacing(account)" />
+              <v-btn :aria-label="`Remove ${account.label}`" :disabled="!keys.unlocked" icon="$delete" :loading="busy === `remove:${account.id}`" size="small" variant="text" @click="removeAccount(account.id)" />
             </li>
           </ul>
           <p v-else-if="!adding" class="publish-keys__note">No accounts yet. Install on my phone needs none; npm, PyPI and GitHub each need one.</p>
@@ -170,7 +157,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
 
           <h3 class="publish-keys__heading">Recovery kit</h3>
           <div class="publish-keys__kit" :class="{ 'is-stale': kitStale }">
-            <v-icon :icon="mdiLifebuoy" size="22" />
+            <v-icon icon="$support" size="22" />
             <div>
               <strong>{{ !kitDate ? "No recovery kit yet" : kitStale ? "Your recovery kit is out of date" : `Saved ${relativeTime(kitDate)}` }}</strong>
               <span v-if="kitStale && installKeys.length">Save a new kit: an install key is not in it yet.</span>

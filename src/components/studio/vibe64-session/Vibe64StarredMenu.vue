@@ -17,7 +17,7 @@
         aria-haspopup="dialog"
         :aria-label="`Starred (${pageStars.pages.value.length + bookmarks.files.value.length})`"
         class="starred-menu__trigger"
-        :icon="mdiStarOutline"
+        icon="$star"
         size="small"
         title="Your starred pages and files"
         variant="text"
@@ -34,11 +34,11 @@
           density="compact"
           hide-details
           placeholder="Search"
-          :prepend-inner-icon="mdiMagnify"
+          prepend-inner-icon="$search"
           variant="outlined"
           @keydown.enter.prevent="openFirstMatch"
         />
-        <v-btn aria-label="Close starred" :icon="mdiClose" size="small" variant="text" @click="dismiss" />
+        <v-btn aria-label="Close starred" icon="$close" size="small" variant="text" @click="dismiss" />
       </div>
       <div class="starred-menu__list">
         <section aria-labelledby="starred-menu-pages">
@@ -60,7 +60,6 @@
 import { computed, nextTick, ref } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
-import { mdiClose, mdiMagnify, mdiStarOutline } from "@mdi/js";
 import { usePageStars, Vibe64StarredPagesList } from "@local/vibe64-pages/client";
 import Vibe64StarredFilesList from "./Vibe64StarredFilesList.vue";
 

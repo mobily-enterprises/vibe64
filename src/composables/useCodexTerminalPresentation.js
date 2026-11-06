@@ -1,9 +1,5 @@
 import { computed } from "vue";
 import {
-  mdiPlayCircleOutline,
-  mdiRestart
-} from "@mdi/js";
-import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
 
@@ -63,7 +59,7 @@ function useCodexTerminalPresentation({
   });
   const terminalStartActionVisible = computed(() => !sessionSourcePending.value);
   const terminalStartIcon = computed(() => (
-    terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value ? mdiRestart : mdiPlayCircleOutline
+    terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value ? "$restartAlt" : "$playCircle"
   ));
   const terminalStartPanelTitle = computed(() => {
     if (sessionSourcePending.value) {

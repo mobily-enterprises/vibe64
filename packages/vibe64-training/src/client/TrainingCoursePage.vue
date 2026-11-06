@@ -123,8 +123,8 @@ const path = computed(() => {
             class="training-course-page__lesson" :class="[`is-${status}`, { 'is-next': next && !progress.activeHere }]"
           >
             <span class="training-course-page__node" aria-hidden="true">
-              <svg v-if="status === 'completed'" viewBox="0 0 24 24"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 11-11-1.4-1.4z" /></svg>
-              <svg v-else-if="status === 'in-progress'" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" /></svg>
+              <v-icon v-if="status === 'completed'" icon="$check" size="22" />
+              <v-icon v-else-if="status === 'in-progress'" icon="$play" size="22" />
               <span v-else>{{ step }}</span>
             </span>
             <div class="training-course-page__card">
@@ -307,7 +307,6 @@ const path = computed(() => {
   font-variant-numeric: tabular-nums;
   transition: transform var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
 }
-.training-course-page__node svg { width: 22px; height: 22px; fill: currentColor; }
 .is-completed > .training-course-page__node { border-color: transparent; background: var(--tcp-done); color: rgb(var(--v-theme-on-success)); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-done) 60%, #000); }
 .is-in-progress > .training-course-page__node { border-color: transparent; background: var(--tcp-progress); color: var(--v64-on-learning, #2b2100); box-shadow: 0 3px 0 color-mix(in srgb, var(--tcp-progress) 60%, #000); }
 .is-next > .training-course-page__node { border-color: rgb(var(--v-theme-primary)); color: rgb(var(--v-theme-primary)); }

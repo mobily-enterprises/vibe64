@@ -9,7 +9,7 @@
         v-bind="menuProps"
         class="vibe64-launch-controls__attention-button"
         color="warning"
-        :icon="mdiAlertCircleOutline"
+        icon="$error"
         size="small"
         :title="previewIssue.title"
         variant="text"
@@ -20,7 +20,7 @@
       <v-card-text class="vibe64-launch-controls__attention-body">
         <v-icon
           class="vibe64-launch-controls__attention-icon"
-          :icon="mdiAlertCircleOutline"
+          icon="$error"
           size="28"
         />
         <div>
@@ -32,7 +32,7 @@
       <v-card-actions class="vibe64-launch-controls__attention-actions">
         <v-btn
           v-if="previewCanShowLog"
-          :prepend-icon="mdiConsoleLine"
+          prepend-icon="$terminal"
           size="small"
           variant="tonal"
           @click="showLaunchLog"
@@ -42,7 +42,7 @@
         <v-btn
           v-if="previewCanRestart && embeddedStartTarget"
           :disabled="operationBusy"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           size="small"
           variant="tonal"
           @click="recoverEmbeddedPreview"
@@ -52,7 +52,7 @@
         <v-btn
           v-if="terminalCanRetry && !(previewCanRestart && embeddedStartTarget)"
           :disabled="operationBusy"
-          :icon="mdiRefresh"
+          icon="$refresh"
           size="small"
           title="Retry preview"
           variant="text"
@@ -65,11 +65,6 @@
 
 <script setup>
 // The Preview's current problem, with the log, restart and retry it allows.
-import {
-  mdiAlertCircleOutline,
-  mdiConsoleLine,
-  mdiRefresh
-} from "@mdi/js";
 
 const props = defineProps({
   surface: {

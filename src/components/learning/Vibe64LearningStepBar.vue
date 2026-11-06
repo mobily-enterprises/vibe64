@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { mdiApplicationOutline, mdiBookOpenPageVariantOutline, mdiChevronLeft, mdiChevronRight, mdiPause, mdiPlay } from "@mdi/js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { STEP_STATUS_LABELS, checkNote, reviewRunNote } from "@/lib/vibe64Learning.js";
@@ -220,32 +219,32 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
       </div>
       <nav class="vibe64-learning-step-bar__controls" aria-label="Lesson navigation">
         <v-btn
-          v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
+          v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? '$play' : '$pause'" variant="text" size="small" min-width="40" min-height="40"
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
         <v-btn
-          variant="text" rounded="pill" min-height="40" :prepend-icon="mdiChevronLeft" :disabled="atStart"
+          variant="text" rounded="pill" min-height="40" prepend-icon="$chevronLeft" :disabled="atStart"
           data-test="learning-step-bar-previous" @click="back"
         >
           Back
         </v-btn>
         <v-btn
           v-if="forwardAction" :variant="final && verdict ? 'text' : 'tonal'" color="primary" rounded="pill" min-height="40"
-          :append-icon="mdiChevronRight" data-test="learning-step-bar-next" @click="forwardAction.run()"
+          append-icon="$chevronRight" data-test="learning-step-bar-next" @click="forwardAction.run()"
         >
           {{ forwardAction.label }}
         </v-btn>
       </nav>
       <span v-if="learning.lessonSwitchable" class="vibe64-learning-step-bar__lesson-toggle"><Vibe64LessonToggle /></span>
       <v-btn
-        v-if="practiceAway" variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiApplicationOutline"
+        v-if="practiceAway" variant="tonal" rounded="pill" min-height="40" min-width="40" prepend-icon="$webAsset"
         class="vibe64-learning-step-bar__practice" aria-label="Open practice project" data-test="learning-step-bar-practice"
         @click="openPractice"
       >
         <span class="vibe64-learning-step-bar__practice-label">Open practice project</span>
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
+        variant="tonal" rounded="pill" min-height="40" min-width="40" prepend-icon="$menuBook"
         class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses" data-vibe64-guide="courses"
         @click="learning.openCourses('courses')"
       >

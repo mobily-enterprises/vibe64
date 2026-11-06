@@ -27,7 +27,7 @@
     >
       <span class="studio-session-renewal__step-icon" aria-hidden="true">
         <v-icon
-          :icon="step.state === 'complete' ? mdiCheck : step.state === 'active' ? mdiCircleSlice4 : mdiCircleOutline"
+          :icon="step.state === 'complete' ? '$check' : step.state === 'active' ? '$clockLoaderHalf' : '$circle'"
           size="18"
         />
       </span>
@@ -40,11 +40,6 @@
 <script setup>
 // A running renewal's stage and steps. A stale snapshot shows a fixed progress bar instead of motion.
 import { computed } from "vue";
-import {
-  mdiCheck,
-  mdiCircleOutline,
-  mdiCircleSlice4
-} from "@mdi/js";
 
 const props = defineProps({
   refreshError: {

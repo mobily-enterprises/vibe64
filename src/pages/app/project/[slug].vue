@@ -38,7 +38,6 @@ const {
   handleProjectSelectionReady,
   learnMode,
   lessonToggleVisible,
-  mdiChevronDown,
   mobilePaneSwipeEnabled,
   mobileProjectAction,
   mobileProjectActionVisible,
@@ -94,7 +93,7 @@ const {
                   :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
                 >
                   <span>{{ projectTitle || "Project" }}</span>
-                  <v-icon :icon="mdiChevronDown" size="18" />
+                  <v-icon icon="$expand" size="18" />
                 </v-btn>
               </template>
               <v-list density="compact" min-width="240">

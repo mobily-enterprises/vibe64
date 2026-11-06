@@ -1,14 +1,13 @@
 <template>
   <div class="vibe64-agent-terminal-drop-overlay" aria-live="polite" role="status">
     <v-sheet class="vibe64-agent-terminal-drop-overlay__card" elevation="4" rounded="lg">
-      <v-icon :icon="mdiPaperclip" size="28" />
+      <v-icon icon="$attachFile" size="28" />
       <span>{{ label }}</span>
     </v-sheet>
   </div>
 </template>
 
 <script setup>
-import { mdiPaperclip } from "@mdi/js";
 
 // Shown over an agent terminal while files are dragged onto it.
 defineProps({

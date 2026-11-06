@@ -2,7 +2,6 @@
 // Install on my phone: a signed APK from a QR code. The card walks through the
 // three one-time tasks (Android tools, install key, recovery kit) in order.
 import { computed } from "vue";
-import { mdiCheckCircle, mdiCircleOutline, mdiProgressClock, mdiQrcode } from "@mdi/js";
 import TargetCard from "./TargetCard.vue";
 
 const props = defineProps({
@@ -61,7 +60,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
         <li v-for="task in tasks" :key="task.id" :class="{ 'is-done': task.done }">
           <v-icon
             :color="task.done ? 'success' : task.running ? 'primary' : undefined"
-            :icon="task.done ? mdiCheckCircle : task.running ? mdiProgressClock : mdiCircleOutline"
+            :icon="task.done ? '$checkCircleFilled' : task.running ? '$clockLoader' : '$circle'"
             size="20"
           />
           <div>
@@ -85,7 +84,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
     </template>
 
     <template v-if="target.latest?.downloadable" #actions>
-      <v-btn :prepend-icon="mdiQrcode" color="success" rounded="pill" variant="flat" @click="emit('install')">Install on phone</v-btn>
+      <v-btn prepend-icon="$qrCode" color="success" rounded="pill" variant="flat" @click="emit('install')">Install on phone</v-btn>
     </template>
   </TargetCard>
 </template>

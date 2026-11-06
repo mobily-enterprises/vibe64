@@ -49,7 +49,7 @@
             :aria-label="errorDetailsToggleLabel"
             class="vibe64-terminal-surface__error-toggle"
             color="error"
-            :icon="mdiAlertCircleOutline"
+            icon="$error"
             size="small"
             :title="errorDetailsToggleLabel"
             variant="tonal"
@@ -207,7 +207,6 @@
 
 <script setup>
 import { computed, ref, useId, watch } from "vue";
-import { mdiAlertCircleOutline } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useVibe64TerminalMobileTakeover } from "@/composables/useVibe64TerminalMobileTakeover.js";
 import { terminalLastMeaningfulLine } from "@/lib/codexOutput.js";

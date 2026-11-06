@@ -46,7 +46,7 @@
         @select="selectPromptHint"
       >
         <template v-if="reasoningActive && composerAssistantLabel === 'Assistant is working...'" #activity>
-          <v-icon :icon="mdiCircle" size="7" color="primary" />
+          <v-icon icon="$circleFilled" size="7" color="primary" />
           <span>Assistant is working<span class="studio-autopilot__reasoning-dots">...</span></span>
         </template>
       </AssistantComposerSupport>
@@ -139,7 +139,7 @@
                 <template #activator="{ props: menuProps }">
                   <v-btn
                     v-bind="menuProps" aria-label="Add to message" title="Add to message"
-                    :icon="mdiPlus" size="small" variant="text" class="studio-autopilot__composer-action"
+                    icon="$add" size="small" variant="text" class="studio-autopilot__composer-action"
                   />
                 </template>
                 <v-card class="studio-autopilot__composer-menu pa-2" aria-label="Add to message">
@@ -148,7 +148,7 @@
                     aria-label="Attach files"
                     class="studio-autopilot__composer-action justify-start"
                     :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles"
-                    :prepend-icon="mdiPaperclip"
+                    prepend-icon="$attachFile"
                     size="small"
                     title="Attach files"
                     type="button"
@@ -163,7 +163,7 @@
                     class="studio-autopilot__composer-action justify-start"
                     :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
                     :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
-                    :prepend-icon="mdiEyePlusOutline"
+                    prepend-icon="$preview"
                     size="small"
                     title="Attach visible preview"
                     type="button"
@@ -178,7 +178,7 @@
                     class="studio-autopilot__composer-action justify-start"
                     :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
                     :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
-                    :prepend-icon="mdiConsoleNetworkOutline"
+                    prepend-icon="$lan"
                     size="small"
                     title="Attach console and network diagnostics"
                     type="button"
@@ -213,7 +213,7 @@
                 :aria-label="composerSubmitAriaLabel" :title="composerSubmitTitle"
                 :disabled="!composerCanSubmit || composerBlocked"
                 :loading="composerSubmitMode === 'approval-sending'"
-                :append-icon="mdiSend"
+                append-icon="$send"
                 @click="sendComposerMessage"
               >
                 Send for approval
@@ -258,14 +258,6 @@
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
-import {
-  mdiCircle,
-  mdiConsoleNetworkOutline,
-  mdiEyePlusOutline,
-  mdiPaperclip,
-  mdiPlus,
-  mdiSend
-} from "@mdi/js";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";

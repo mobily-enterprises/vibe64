@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from "vue";
-import { mdiCheck, mdiOpenInNew, mdiShieldLockOutline } from "@mdi/js";
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import AiWaitStatus from "../studio/AiWaitStatus.vue";
 import CliInstallNotice from "../studio/CliInstallNotice.vue";
@@ -35,7 +34,7 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
   <ol class="aio-checklist">
     <li :class="{ 'is-done': signUp === 'opened' }">
       <span class="aio-checklist__marker" aria-hidden="true">
-        <v-icon v-if="signUp === 'opened'" :icon="mdiCheck" size="18" /><template v-else>1</template>
+        <v-icon v-if="signUp === 'opened'" icon="$check" size="18" /><template v-else>1</template>
       </span>
       <div>
         <h2 class="aio-checklist__title">
@@ -46,7 +45,7 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
         </p>
         <v-btn
           variant="tonal" color="primary" :href="card.signUp.url" target="_blank" rel="noopener noreferrer"
-          :append-icon="mdiOpenInNew" @click="emit('update:signUp', 'opened')"
+          append-icon="$openInNew" @click="emit('update:signUp', 'opened')"
         >
           {{ card.signUp.label }}<span class="d-sr-only"> (opens in a new tab)</span>
         </v-btn>
@@ -82,7 +81,7 @@ const nativeLogin = computed(() => ["anthropic", "openai"].includes(props.card.c
           <template #append><v-btn variant="text" @click="emit('review-routing')">Review models</v-btn></template>
         </v-alert>
         <p v-if="nativeLogin" class="ai-onboarding__security">
-          <v-icon :icon="mdiShieldLockOutline" size="18" aria-hidden="true" />
+          <v-icon icon="$shieldLock" size="18" aria-hidden="true" />
           Your sign-in is stored privately, outside your projects.
         </p>
       </div>

@@ -1,23 +1,16 @@
-import {
-  mdiAlertCircleOutline,
-  mdiCheckCircleOutline,
-  mdiCloudDownloadOutline,
-  mdiContentSaveAlertOutline,
-  mdiDotsHorizontalCircleOutline
-} from "@mdi/js";
 import { SESSION_WORK_PROBLEM_LABEL, sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkProblem";
 
 // One owner for a session's repository work state: the derivation from the
 // session work snapshot, and the label and icon each state is shown with.
 const REPOSITORY_WORK_STATE_PRESENTATION = Object.freeze({
-  checking: Object.freeze({ icon: mdiDotsHorizontalCircleOutline, label: "Checking whether work is saved" }),
-  needs_help: Object.freeze({ icon: mdiAlertCircleOutline, label: SESSION_WORK_PROBLEM_LABEL }),
-  saved: Object.freeze({ icon: mdiCheckCircleOutline, label: "All work is saved" }),
-  saving: Object.freeze({ icon: mdiDotsHorizontalCircleOutline, label: "Saving work" }),
-  unavailable: Object.freeze({ icon: mdiAlertCircleOutline, label: "Save status is unavailable" }),
-  unsaved: Object.freeze({ icon: mdiContentSaveAlertOutline, label: "" }),
-  update_available: Object.freeze({ icon: mdiCloudDownloadOutline, label: "Update available" }),
-  updating: Object.freeze({ icon: mdiDotsHorizontalCircleOutline, label: "Updating session" })
+  checking: Object.freeze({ icon: "$pending", label: "Checking whether work is saved" }),
+  needs_help: Object.freeze({ icon: "$error", label: SESSION_WORK_PROBLEM_LABEL }),
+  saved: Object.freeze({ icon: "$checkCircle", label: "All work is saved" }),
+  saving: Object.freeze({ icon: "$pending", label: "Saving work" }),
+  unavailable: Object.freeze({ icon: "$error", label: "Save status is unavailable" }),
+  unsaved: Object.freeze({ icon: "$saveAs", label: "" }),
+  update_available: Object.freeze({ icon: "$cloudDownload", label: "Update available" }),
+  updating: Object.freeze({ icon: "$pending", label: "Updating session" })
 });
 
 function sessionRepositoryWorkState(workState = null) {

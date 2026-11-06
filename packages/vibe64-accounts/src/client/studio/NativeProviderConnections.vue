@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiArrowLeft, mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
 import { CURATED_CODEX_PROVIDERS, CUSTOM_AI_PROVIDER_ID, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
@@ -114,10 +113,10 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
         <h2 v-if="embedded" class="text-title-large mt-0 mb-3">{{ title }}</h2>
         <div v-else class="d-flex align-center flex-wrap ga-2 mb-2">
           <h2 class="text-title-large">{{ engineLabel }} - {{ provider.label }}</h2>
-          <v-chip v-if="connected" color="success" size="small" :prepend-icon="mdiCheckCircleOutline">Connected</v-chip>
+          <v-chip v-if="connected" color="success" size="small" prepend-icon="$checkCircle">Connected</v-chip>
           <v-spacer />
-          <v-btn v-if="showBack" :icon="mdiArrowLeft" aria-label="Back to providers" variant="text" :disabled="busy" @click="emit('back')" />
-          <v-btn v-if="showClose" :icon="mdiClose" :aria-label="`Close ${engineLabel} setup`" variant="text" :disabled="busy" @click="emit('close')" />
+          <v-btn v-if="showBack" icon="$arrowBack" aria-label="Back to providers" variant="text" :disabled="busy" @click="emit('back')" />
+          <v-btn v-if="showClose" icon="$close" :aria-label="`Close ${engineLabel} setup`" variant="text" :disabled="busy" @click="emit('close')" />
         </div>
         <p v-if="!embedded" class="text-body-medium mb-3">{{ provider.description }}.</p>
         <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
@@ -149,7 +148,7 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
           <v-text-field
             v-if="!useExistingKey"
             v-model="apiKey" :label="connectionStatus === 'connected' ? 'Replace API key' : 'API key'" :type="visible ? 'text' : 'password'"
-            :append-inner-icon="visible ? mdiEyeOffOutline : mdiEyeOutline" autocomplete="off" spellcheck="false"
+            :append-inner-icon="visible ? '$visibilityOff' : '$visibility'" autocomplete="off" spellcheck="false"
             variant="outlined" hint="Stored privately outside your projects. Existing keys are never shown." persistent-hint
             @click:append-inner="visible = !visible"
           />
@@ -162,7 +161,7 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
               {{ useExistingKey || connectionStatus !== 'connected' ? 'Check and connect' : 'Check and replace key' }}
             </v-btn>
             <v-btn v-if="!adding && connectionStatus === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
-            <v-btn v-if="!embedded" :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
+            <v-btn v-if="!embedded" :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" append-icon="$openInNew">Get API key</v-btn>
             <v-btn
               v-if="!adding && !embedded && connectionStatus !== 'not_connected'" variant="text"
               :disabled="!actionsEnabled || busy" @click="confirmRemove = true"

@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref } from "vue";
-import { mdiChevronDown, mdiPlus, mdiRefresh, mdiTune } from "@mdi/js";
 import AiConnectionRow from "./AiConnectionRow.vue";
 import { injectAiConnectionManager } from "../composables/useAiConnectionManager.js";
 
@@ -30,26 +29,26 @@ const summary = computed(() => {
       type="button" class="ai-advanced__toggle" :aria-expanded="String(open)" aria-controls="ai-advanced-body"
       @click="open = !open"
     >
-      <span class="ai-advanced__icon" aria-hidden="true"><v-icon :icon="mdiTune" size="20" /></span>
+      <span class="ai-advanced__icon" aria-hidden="true"><v-icon icon="$tune" size="20" /></span>
       <span class="ai-advanced__heading">
         <span id="ai-advanced-title" class="ai-advanced__title">Advanced</span>
         <span class="ai-advanced__summary">{{ summary }}</span>
       </span>
-      <v-icon :icon="mdiChevronDown" class="ai-advanced__chevron" aria-hidden="true" />
+      <v-icon icon="$expand" class="ai-advanced__chevron" aria-hidden="true" />
     </button>
 
     <v-expand-transition>
       <div v-show="open" id="ai-advanced-body" class="ai-advanced__body">
         <div class="ai-advanced__actions">
           <v-btn
-            color="primary" variant="tonal" :prepend-icon="mdiPlus"
+            color="primary" variant="tonal" prepend-icon="$add"
             :disabled="busy || accountsInitialLoading || Boolean(loadError) || Boolean(nativeLoadError) || !canAddConnection"
             @click="addAiOpen = true"
           >
             Add a connection
           </v-btn>
           <v-btn
-            variant="text" :prepend-icon="mdiRefresh" :loading="refreshingAll" :disabled="accountsInitialLoading || refreshingAll"
+            variant="text" prepend-icon="$refresh" :loading="refreshingAll" :disabled="accountsInitialLoading || refreshingAll"
             aria-label="Refresh AI accounts" @click="refreshAllAccounts"
           >
             Refresh
@@ -61,7 +60,7 @@ const summary = computed(() => {
         </div>
         <v-alert v-else-if="loadError" title="AI accounts could not load" type="error" variant="tonal" class="ai-advanced__error">
           <p>{{ loadError }}</p>
-          <v-btn variant="tonal" color="error" :prepend-icon="mdiRefresh" @click="refreshAllAccounts">Try again</v-btn>
+          <v-btn variant="tonal" color="error" prepend-icon="$refresh" @click="refreshAllAccounts">Try again</v-btn>
         </v-alert>
         <template v-else>
           <v-alert v-if="nativeLoadError" :text="nativeLoadError" title="AI account status could not load" type="warning" variant="tonal" />

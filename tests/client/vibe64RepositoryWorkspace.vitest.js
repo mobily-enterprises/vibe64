@@ -703,7 +703,7 @@ describe("Vibe64 Repository workspace", () => {
     expect(repositoryWorkspace).toContain('role="status"');
     expect(repositoryWorkspace.match(/Check for updates/gu)).toHaveLength(3);
     expect(repositoryWorkspace).not.toContain(">\n          Refresh\n");
-    expect(repositoryWorkspace).not.toContain("mdiRefresh");
+    expect(repositoryWorkspace).not.toContain("$refresh");
   });
 
   it("renders saved versions as an accessible Git log and opens details in a full-screen dialog", async () => {
@@ -714,7 +714,7 @@ describe("Vibe64 Repository workspace", () => {
 
     expect(repositoryWorkspace).toContain("Saved versions");
     expect(repositoryWorkspace).toContain("vibe64-repository-workspace__commit-marker");
-    expect(repositoryWorkspace).toContain("version.isMerge ? mdiSourceMerge : mdiSourceCommit");
+    expect(repositoryWorkspace).toContain("version.isMerge ? '$merge' : '$commit'");
     expect(repositoryWorkspace).toContain("Latest");
     expect(repositoryWorkspace).toContain(":aria-label=\"versionButtonLabel(version, index)\"");
     expect(repositoryWorkspace).toContain("@click=\"openVersion(version)\"");

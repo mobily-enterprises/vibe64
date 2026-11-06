@@ -9,7 +9,7 @@
         v-bind="menuProps"
         :aria-label="outputResultsLabel"
         :disabled="outputResults.length < 1 && !outputExecution.error"
-        :icon="mdiDownloadOutline"
+        icon="$download"
         size="small"
         :title="outputResultsLabel"
         variant="text"
@@ -18,7 +18,7 @@
 
     <v-card class="vibe64-launch-controls__results-card">
       <v-card-item
-        :prepend-icon="mdiDownloadOutline"
+        prepend-icon="$download"
         subtitle="Immutable snapshots from this session"
         title="Build results"
       />
@@ -38,7 +38,7 @@
           v-for="result in outputResults"
           :key="result.id"
           :href="result.href"
-          :prepend-icon="mdiDownloadOutline"
+          prepend-icon="$download"
           :subtitle="outputResultSubtitle(result)"
           :title="result.name"
         />
@@ -50,9 +50,6 @@
 <script setup>
 // The output's downloadable build results and the error of a failed build.
 import { computed } from "vue";
-import {
-  mdiDownloadOutline
-} from "@mdi/js";
 
 const props = defineProps({
   surface: {

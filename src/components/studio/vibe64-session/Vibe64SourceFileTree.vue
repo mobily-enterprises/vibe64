@@ -16,11 +16,11 @@
           @click="emit('open-file', child.path)"
         >
           <v-icon
-            :icon="mdiFileDocumentOutline"
+            icon="$description"
             size="15"
           />
           <span>{{ child.name }}</span>
-          <v-icon v-if="starredPaths.includes(child.path)" :icon="mdiStar" size="14" aria-label="Starred" />
+          <v-icon v-if="starredPaths.includes(child.path)" icon="$starFilled" size="14" aria-label="Starred" />
         </button>
 
         <button
@@ -34,7 +34,7 @@
             v-if="directoryExpandable(child)"
             class="vibe64-source-tree__chevron"
             :class="{ 'vibe64-source-tree__chevron--open': directoryOpen(child) }"
-            :icon="mdiChevronRight"
+            icon="$chevronRight"
             size="14"
           />
           <span
@@ -43,7 +43,7 @@
             aria-hidden="true"
           />
           <v-icon
-            :icon="mdiFolderOutline"
+            icon="$folder"
             size="15"
           />
           <span>{{ child.name || "source" }}</span>
@@ -57,7 +57,7 @@
               v-bind="activatorProps"
               :aria-label="`Actions for ${child.path || child.name || 'source'}`"
               class="vibe64-source-tree__menu-button"
-              :icon="mdiDotsVertical"
+              icon="$moreVert"
               size="x-small"
               :title="`Actions for ${child.path || child.name || 'source'}`"
               type="button"
@@ -71,42 +71,42 @@
           >
             <v-list-item
               v-if="child.type === 'file'"
-              :prepend-icon="starredPaths.includes(child.path) ? mdiStar : mdiStarOutline"
+              :prepend-icon="starredPaths.includes(child.path) ? '$starFilled' : '$star'"
               :title="starredPaths.includes(child.path) ? 'Unstar file' : 'Star file'"
               @click="emit('toggle-star', child.path)"
             />
             <v-list-item
               v-if="child.type === 'file'"
-              :prepend-icon="mdiDownload"
+              prepend-icon="$download"
               title="Download file"
               @click="emit('download-file', child.path)"
             />
             <v-list-item
               v-if="child.type === 'directory'"
-              :prepend-icon="mdiFilePlusOutline"
+              prepend-icon="$noteAdd"
               title="New file here"
               @click="emit('new-file', child.path || '')"
             />
             <v-list-item
               v-if="filesActions && child.type === 'directory'"
-              :prepend-icon="mdiUpload"
+              prepend-icon="$uploadArrow"
               title="Upload here"
               @click="emit('upload', child.path || '')"
             />
             <v-list-item
               v-if="filesActions && child.path"
-              :prepend-icon="mdiFileMoveOutline"
+              prepend-icon="$driveFileMove"
               title="Move or copy…"
               @click="emit('transfer', { name: child.name, path: child.path, type: child.type })"
             />
             <v-list-item
-              :prepend-icon="mdiContentCopy"
+              prepend-icon="$contentCopy"
               title="Copy path"
               @click="emit('copy-path', child.path || child.name || '')"
             />
             <v-list-item
               v-if="child.type === 'file' && assistantDraftAvailable"
-              :prepend-icon="mdiRobotOutline"
+              prepend-icon="$smartToy"
               title="Ask the AI assistant about this file"
               @click="emit('ask-assistant', child.path || '')"
             />
@@ -170,7 +170,7 @@
         @click="showMore"
       >
         <v-icon
-          :icon="mdiDotsHorizontal"
+          icon="$moreHoriz"
           size="15"
         />
         <span v-if="currentNodeLoading">Loading...</span>
@@ -182,21 +182,6 @@
 
 <script setup>
 import { computed } from "vue";
-import {
-  mdiChevronRight,
-  mdiContentCopy,
-  mdiDotsHorizontal,
-  mdiDotsVertical,
-  mdiDownload,
-  mdiFileDocumentOutline,
-  mdiFileMoveOutline,
-  mdiFilePlusOutline,
-  mdiFolderOutline,
-  mdiRobotOutline,
-  mdiStar,
-  mdiStarOutline,
-  mdiUpload
-} from "@mdi/js";
 import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 
 const props = defineProps({

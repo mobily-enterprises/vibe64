@@ -26,7 +26,7 @@
         <v-btn
           :aria-label="`Unstar ${file.path}`"
           :disabled="bookmarks.pendingPaths.value.includes(file.path)"
-          :icon="mdiStar"
+          icon="$starFilled"
           size="small"
           title="Unstar file"
           variant="text"
@@ -39,7 +39,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiStar } from "@mdi/js";
 
 const props = defineProps({
   bookmarks: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64StarredFiles>} */ (Object), required: true },

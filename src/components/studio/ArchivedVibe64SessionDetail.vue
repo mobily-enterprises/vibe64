@@ -16,7 +16,7 @@
       <v-btn
         v-if="backTo"
         class="studio-archived-session-detail__back"
-        :prepend-icon="mdiArrowLeft"
+        prepend-icon="$arrowBack"
         size="small"
         :to="backTo"
         variant="tonal"
@@ -83,10 +83,6 @@
 <script setup>
 import { computed } from "vue";
 import Vibe64SessionFiles from "./vibe64-session/Vibe64SessionFiles.vue";
-import {
-  mdiArchiveCancelOutline,
-  mdiArrowLeft
-} from "@mdi/js";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import { archiveFactRows } from "@/composables/useArchivedVibe64Sessions.js";
 import { shortVibe64SessionId } from "@/lib/vibe64SessionViewModel.js";
@@ -108,7 +104,7 @@ const props = defineProps({
   }
 });
 
-const archiveIcon = mdiArchiveCancelOutline;
+const archiveIcon = "$cancel";
 const conversationTurns = computed(() => (
   Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []
 ));

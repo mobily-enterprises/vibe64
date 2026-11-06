@@ -1,8 +1,5 @@
 <script setup>
 import { computed } from "vue";
-import {
-  mdiAlertCircleOutline, mdiCheck, mdiCreditCardOutline, mdiRefresh, mdiShieldCheckOutline, mdiStopCircleOutline
-} from "@mdi/js";
 import { injectAiConnectionManager } from "../composables/useAiConnectionManager.js";
 
 // One configured connection: who it is, whether it works, and what can be done
@@ -44,7 +41,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
   <article class="ai-row" :class="{ 'ai-row--attention': !working }" :aria-label="`${title}: ${working ? 'connected' : 'reconnect required'}`">
     <div class="ai-row__main">
       <span class="ai-row__status" :class="working ? 'ai-row__status--ok' : 'ai-row__status--warn'" aria-hidden="true">
-        <v-icon :icon="working ? mdiCheck : mdiAlertCircleOutline" size="20" />
+        <v-icon :icon="working ? '$check' : '$error'" size="20" />
       </span>
       <div class="ai-row__identity">
         <span class="ai-row__title">
@@ -64,7 +61,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
 
     <div v-if="details && account.id === 'opencode' && account.modelAccess" class="ai-row__panel" aria-live="polite">
       <div class="ai-row__panel-copy">
-        <v-icon :icon="zenCheckIsRunning(account) ? mdiRefresh : mdiShieldCheckOutline" size="20" class="ai-row__panel-icon" />
+        <v-icon :icon="zenCheckIsRunning(account) ? '$refresh' : '$verifiedUser'" size="20" class="ai-row__panel-icon" />
         <span>
           <strong>{{ zenAccessTitle(account) }}</strong>
           <small>
@@ -99,7 +96,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
           Use the recommended model only
         </v-btn>
         <v-btn
-          v-if="zenCheckIsRunning(account)" color="error" :prepend-icon="mdiStopCircleOutline" variant="text"
+          v-if="zenCheckIsRunning(account)" color="error" prepend-icon="$stopCircle" variant="text"
           :disabled="updatingModelAccessProviderId === account.id || zenCheck(account).status === 'cancelling'"
           @click="applyZenModelAccess(account, 'cancel-check')"
         >
@@ -114,7 +111,7 @@ const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ?
     >
       <div class="ai-row__panel-copy">
         <v-icon
-          :icon="account.modelAccess.mode === 'all' ? mdiCreditCardOutline : mdiShieldCheckOutline" size="20"
+          :icon="account.modelAccess.mode === 'all' ? '$creditCard' : '$verifiedUser'" size="20"
           class="ai-row__panel-icon"
         />
         <span>

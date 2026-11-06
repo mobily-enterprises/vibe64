@@ -1,7 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, toRef, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheckCircle, mdiChevronDown, mdiMapMarkerPath } from "@mdi/js";
 import { cliProblem } from "../studio/CliInstallNotice.vue";
 import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import AiConnectionDialogs from "../studio/AiConnectionDialogs.vue";
@@ -275,7 +274,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
             Keep using {{ mainCard.name }}
           </v-btn>
           <span v-else class="aio-current__hint">
-            <v-icon :icon="mdiArrowDown" size="18" aria-hidden="true" />Choose a main AI below. We recommend Claude.
+            <v-icon icon="$arrowdown" size="18" aria-hidden="true" />Choose a main AI below. We recommend Claude.
           </span>
         </div>
         <AiTeamSetupCard
@@ -288,12 +287,12 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
         </v-alert>
         <AiWaitStatus :active="verifying" :label="verifyLabel" class="mb-6" />
         <div v-if="readyHere" class="aio-current aio-ready-here" role="group" aria-label="Ready on this computer">
-          <v-icon :icon="mdiCheckCircle" class="aio-ready-here__icon" aria-hidden="true" />
+          <v-icon icon="$checkCircleFilled" class="aio-ready-here__icon" aria-hidden="true" />
           <span class="aio-current__text">
             <span class="aio-current__label">Ready on this computer</span>
             <span class="aio-current__value">{{ cardTool(readyHere).name }}</span>
           </span>
-          <v-btn color="primary" variant="tonal" size="large" :append-icon="mdiArrowRight" class="aio-current__keep" @click="connect(readyHere)">
+          <v-btn color="primary" variant="tonal" size="large" append-icon="$arrowForward" class="aio-current__keep" @click="connect(readyHere)">
             Use {{ readyHere.name }}
           </v-btn>
         </div>
@@ -314,7 +313,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
       </section>
 
       <section v-else-if="screen === 'connect'" key="connect" class="ai-onboarding__connect">
-        <v-btn v-if="ownButtons" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-back" prepend-icon="$arrowBack" :disabled="busy" @click="go('choose', true)">Back</v-btn>
         <header class="aio-chosen">
           <AiOnboardingMark :provider="chosen" :size="56" :settle-delay="chosen.crown ? 150 : -1" />
           <div class="aio-chosen__text">
@@ -334,7 +333,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
       </section>
 
       <section v-else-if="screen === 'routing'" key="routing" class="ai-onboarding__routing">
-        <v-btn v-if="ownButtons" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-back" prepend-icon="$arrowBack" :disabled="busy" @click="go('choose', true)">Back</v-btn>
         <header class="ai-onboarding__intro">
           <AiOnboardingMark v-if="!fullRouting" :provider="chosen" :size="56" class="mb-5" />
           <p class="ai-onboarding__eyebrow">YOUR MAIN AI</p>
@@ -351,7 +350,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
           @use="useAsMain" @keep="routingDone"
         />
         <v-btn
-          v-if="!fullRouting && !autoRouting" variant="text" class="aio-details-toggle" :append-icon="mdiChevronDown"
+          v-if="!fullRouting && !autoRouting" variant="text" class="aio-details-toggle" append-icon="$expand"
           :class="{ 'is-open': routingDetails }" :aria-expanded="String(routingDetails)" @click="routingDetails = !routingDetails"
         >
           {{ routingDetails ? "Hide details" : "Show details" }}
@@ -398,9 +397,9 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
         </p>
         <slot name="connection-access" :card="chosen" place="success" />
         <div v-if="ownButtons" class="aio-success-actions">
-          <v-btn color="primary" variant="flat" size="large" :block="xs" :append-icon="mdiArrowRight" @click="close('done')">{{ inline ? "Done" : doneLabel }}</v-btn>
+          <v-btn color="primary" variant="flat" size="large" :block="xs" append-icon="$arrowForward" @click="close('done')">{{ inline ? "Done" : doneLabel }}</v-btn>
           <v-btn
-            v-if="tourOffered" color="primary" variant="tonal" size="large" :block="xs" :prepend-icon="mdiMapMarkerPath"
+            v-if="tourOffered" color="primary" variant="tonal" size="large" :block="xs" prepend-icon="$route"
             data-test="ai-setup-take-tour" @click="takeTour"
           >
             Take a 5-minute tour
@@ -409,7 +408,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
       </section>
 
       <section v-else key="owner" class="ai-onboarding__success">
-        <v-icon :icon="mdiAlertCircleOutline" size="48" color="primary" aria-hidden="true" />
+        <v-icon icon="$error" size="48" color="primary" aria-hidden="true" />
         <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ ownerNotice }}</h1>
         <v-btn variant="tonal" color="primary" size="large" @click="openModels('nonOwner')">See team members' models</v-btn>
         <v-btn color="primary" variant="flat" size="large" @click="close('dismiss')">Close</v-btn>

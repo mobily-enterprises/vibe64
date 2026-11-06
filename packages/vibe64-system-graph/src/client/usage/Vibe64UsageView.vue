@@ -13,7 +13,7 @@
             <Vibe64UsageRecordingResults v-if="mode === 'recording'" v-bind="recordingBindings" v-on="recordingHandlers" />
             <Vibe64UsageEntryRail v-else v-bind="railBindings" v-on="railHandlers" />
           </Vibe64UsageEntryPicker>
-          <v-btn class="usage-view__record usage-view__record--icon" variant="tonal" color="primary" :icon="mdiRecordCircleOutline" aria-label="Record" title="Record" @click="recordOpen = true" />
+          <v-btn class="usage-view__record usage-view__record--icon" variant="tonal" color="primary" icon="$radioOn" aria-label="Record" title="Record" @click="recordOpen = true" />
         </div>
         <div v-if="!compact" class="usage-view__title">
           <h3 class="usage-view__entry text-title-medium" :class="{ 'usage-view__entry--none': !chosen }"><template v-for="(part, position) in pathParts(pickerLabel)" :key="position">{{ part }}<wbr></template></h3>
@@ -45,14 +45,14 @@
           <v-chip
             v-if="mode === 'calls'"
             :variant="exactOnly ? 'tonal' : 'outlined'"
-            :prepend-icon="exactOnly ? mdiCheck : undefined"
+            :prepend-icon="exactOnly ? '$check' : undefined"
             role="switch"
             :aria-checked="exactOnly"
             @click="exactOnly = !exactOnly"
           >
             Exact only
           </v-chip>
-          <v-btn v-if="!compact" class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
+          <v-btn v-if="!compact" class="usage-view__record" variant="tonal" color="primary" prepend-icon="$radioOn" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
         </div>
       </header>
       <v-progress-linear :active="busy" indeterminate color="primary" height="2" class="usage-view__progress" />
@@ -68,7 +68,7 @@
             <template v-if="noEntries">
               <h3 class="text-title-medium">No entry points found yet</h3>
               <p class="text-body-medium">No entry points found yet. Refresh the architecture scan.</p>
-              <v-btn variant="tonal" :loading="refreshing" :prepend-icon="mdiRefresh" @click="emit('refresh')">Refresh</v-btn>
+              <v-btn variant="tonal" :loading="refreshing" prepend-icon="$refresh" @click="emit('refresh')">Refresh</v-btn>
             </template>
             <template v-else>
               <h3 class="text-title-medium">Pick an entry point</h3>
@@ -129,7 +129,7 @@
           <div v-else-if="notScanned" class="usage-view__state" role="status">
             <h3 class="text-title-medium">Not scanned yet</h3>
             <p class="text-body-medium">Refresh the architecture scan to see the subsystems and functions this request ran.</p>
-            <v-btn variant="tonal" :loading="refreshing" :prepend-icon="mdiRefresh" @click="emit('refresh')">Refresh</v-btn>
+            <v-btn variant="tonal" :loading="refreshing" prepend-icon="$refresh" @click="emit('refresh')">Refresh</v-btn>
           </div>
           <v-alert v-else-if="usage.result.error.value" type="error" variant="tonal" class="usage-view__banner">
             {{ usage.result.error.value }}
@@ -151,7 +151,7 @@
                   v-if="webView.plumbing"
                   size="small"
                   :variant="showPlumbing ? 'tonal' : 'outlined'"
-                  :prepend-icon="showPlumbing ? mdiCheck : undefined"
+                  :prepend-icon="showPlumbing ? '$check' : undefined"
                   role="switch"
                   :aria-checked="showPlumbing"
                   @click="showPlumbing = !showPlumbing"
@@ -180,7 +180,6 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, shallowRef, toRef, watch } from "vue";
-import { mdiCheck, mdiRecordCircleOutline, mdiRefresh } from "@mdi/js";
 import { Vibe64UsageRecordDialog } from "@local/vibe64-usage-recording/client";
 
 import Vibe64UsageEntryPicker from "./Vibe64UsageEntryPicker.vue";

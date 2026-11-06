@@ -5,14 +5,6 @@
 // and archive or restore. A page opened from the Starred menu shows at once:
 // its title from the starred list and the viewing link the menu asked for.
 import { computed, ref, watch } from "vue";
-import {
-  mdiArchiveArrowDownOutline,
-  mdiArchiveArrowUpOutline,
-  mdiArrowLeft,
-  mdiHistory,
-  mdiOpenInNew,
-  mdiRefresh
-} from "@mdi/js";
 import { pageAppPath } from "../shared/pageLinks.js";
 import { pageLinkAnswers } from "./pageLinkAnswers.js";
 import { starredPageSummary, takePreparedPageView, usePageViewTheme } from "./pageStars.js";
@@ -113,7 +105,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
 <template>
   <section class="vibe64-page-viewer" data-test="page-viewer" :data-page-id="pageId">
     <header class="vibe64-page-viewer__toolbar">
-      <v-btn :prepend-icon="mdiArrowLeft" :to="pagesPath" color="primary" rounded="pill" variant="text">All pages</v-btn>
+      <v-btn prepend-icon="$arrowBack" :to="pagesPath" color="primary" rounded="pill" variant="text">All pages</v-btn>
       <div class="vibe64-page-viewer__heading">
         <h1 class="vibe64-page-viewer__title text-title-medium" data-test="page-viewer-title">{{ page?.title || "Page" }}</h1>
         <span v-if="page" class="vibe64-page-viewer__meta text-body-small">
@@ -132,10 +124,10 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
       <Vibe64PageStarButton v-if="page && !page.archived" :page="page" :project-slug="projectSlug" />
       <v-chip v-if="page?.archived" size="small" variant="tonal" data-test="page-viewer-archived">Archived</v-chip>
       <div class="vibe64-page-viewer__actions">
-        <v-btn :icon="mdiRefresh" aria-label="Reload page" title="Reload" variant="text" @click="open" />
+        <v-btn icon="$refresh" aria-label="Reload page" title="Reload" variant="text" @click="open" />
         <v-menu v-if="versions.length > 1" location="bottom end">
           <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" :disabled="busy" :prepend-icon="mdiHistory" variant="text" data-test="page-versions">Versions</v-btn>
+            <v-btn v-bind="menuProps" :disabled="busy" prepend-icon="$history" variant="text" data-test="page-versions">Versions</v-btn>
           </template>
           <v-list density="compact" min-width="260">
             <v-list-subheader>Kept versions</v-list-subheader>
@@ -156,7 +148,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
         <v-btn
           v-if="page && !page.archived"
           :disabled="busy"
-          :prepend-icon="mdiArchiveArrowDownOutline"
+          prepend-icon="$archive"
           variant="text"
           @click="change(() => archivePage(projectSlug, pageId))"
         >
@@ -165,13 +157,13 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
         <v-btn
           v-if="page?.archived"
           :disabled="busy"
-          :prepend-icon="mdiArchiveArrowUpOutline"
+          prepend-icon="$unarchive"
           variant="text"
           @click="change(() => restorePage(projectSlug, pageId))"
         >
           Restore
         </v-btn>
-        <v-btn :disabled="!page" :prepend-icon="mdiOpenInNew" variant="tonal" data-test="page-open-new-tab" @click="openInNewTab">
+        <v-btn :disabled="!page" prepend-icon="$openInNew" variant="tonal" data-test="page-open-new-tab" @click="openInNewTab">
           Open in new tab
         </v-btn>
       </div>

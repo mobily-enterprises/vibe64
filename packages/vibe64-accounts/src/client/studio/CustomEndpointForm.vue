@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiEyeOffOutline, mdiEyeOutline } from "@mdi/js";
 
 // One engine's custom model endpoint: the address of a model server the owner
 // already runs or reaches, its exact model name, the context it loads and an
@@ -65,7 +64,7 @@ function submit() {
     />
     <v-text-field
       v-model="apiKey" :label="endpoint?.keySaved ? 'Replace key (optional)' : 'Key (optional)'" :type="visible ? 'text' : 'password'"
-      :append-inner-icon="visible ? mdiEyeOffOutline : mdiEyeOutline" autocomplete="off" spellcheck="false" variant="outlined"
+      :append-inner-icon="visible ? '$visibilityOff' : '$visibility'" autocomplete="off" spellcheck="false" variant="outlined"
       :hint="endpoint?.keySaved ? 'Leave empty to keep the saved key. Keys are never shown again.'
         : 'Only if your server asks for one. Stored privately outside your projects.'"
       persistent-hint @click:append-inner="visible = !visible"

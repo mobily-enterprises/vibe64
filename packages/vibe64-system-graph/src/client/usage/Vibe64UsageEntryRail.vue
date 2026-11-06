@@ -4,7 +4,7 @@
       :model-value="search"
       class="usage-entry-rail__search"
       label="Search entries"
-      :prepend-inner-icon="mdiMagnify"
+      prepend-inner-icon="$search"
       variant="outlined"
       density="comfortable"
       maxlength="80"
@@ -40,7 +40,7 @@
         </template>
         <template v-else>
           <p class="text-body-medium">No entry points found yet. Refresh the architecture scan.</p>
-          <v-btn variant="tonal" :loading="refreshing" :prepend-icon="mdiRefresh" @click="emit('refresh')">Refresh</v-btn>
+          <v-btn variant="tonal" :loading="refreshing" prepend-icon="$refresh" @click="emit('refresh')">Refresh</v-btn>
         </template>
       </div>
       <v-virtual-scroll v-else :items="rows" item-key="id" class="usage-entry-rail__list" role="listbox" aria-label="Entry points">
@@ -70,7 +70,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiMagnify, mdiRefresh } from "@mdi/js";
 
 import { entryKind, pathParts } from "./usageModel.js";
 

@@ -1803,7 +1803,7 @@ and leaves a newer draft and its attachments intact.
 Temporary chats and AI tasks show who is typing in that same conversation, using the main
 chat's indicator. Switching chats, sending, or leaving clears that presence.
 New Temporary AI replies received while that conversation is hidden mark its
-tab and the top incognito icon, or the session-actions menu when collapsed.
+tab and the top mask icon, or the session-actions menu when collapsed.
 The indicator clears for each conversation when it is viewed; opening the menu
 alone does not clear it or any session-renewal reminder.
 While the AI task window is hidden, its tray chip shows when the task needs the

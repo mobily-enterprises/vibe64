@@ -82,7 +82,7 @@ describe("Preview address bar groups", () => {
   const server = toolbar.slice(serverStart, toolbar.indexOf("embeddedManualStartButtonVisible", serverStart));
 
   it("keeps back, address, reload, pause, copy and open in a new tab in the client group", () => {
-    for (const marker of ["Go back in preview", 'aria-label="Preview URL"', "Reload preview", "Suspend preview", "Copy preview URL", "mdiOpenInNew"]) {
+    for (const marker of ["Go back in preview", 'aria-label="Preview URL"', "Reload preview", "Suspend preview", "Copy preview URL", "$openInNew"]) {
       expect(client).toContain(marker);
     }
     for (const marker of ["status-dot", "Show run output", "Stop preview", "Restart"]) {
@@ -99,8 +99,8 @@ describe("Preview address bar groups", () => {
   });
 
   it("uses light outline icons in the address bar", () => {
-    expect(controls).not.toMatch(/mdiPauseCircleOutline|mdiPowerCycle|:icon="mdiStop"/u);
-    expect(controls).toContain(":icon=\"previewSuspended ? mdiPlay : mdiPause\"");
-    expect(controls).toContain(':icon="mdiStopCircleOutline"');
+    expect(controls).not.toMatch(/\$pauseCircle|\$powerSettingsNew|icon="\$stop"/u);
+    expect(controls).toContain(":icon=\"previewSuspended ? '$play' : '$pause'\"");
+    expect(controls).toContain('icon="$stopCircle"');
   });
 });

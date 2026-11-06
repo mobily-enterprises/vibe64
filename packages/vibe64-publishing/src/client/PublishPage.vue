@@ -3,23 +3,6 @@
 // a release would use, and the history of releases. Every irreversible step
 // ends in the person's own confirmation.
 import { computed, ref, watch } from "vue";
-import {
-  mdiAccountKeyOutline,
-  mdiAlertOutline,
-  mdiCheckCircle,
-  mdiClockOutline,
-  mdiGithub,
-  mdiLockOpenVariantOutline,
-  mdiPackageVariantClosed,
-  mdiPlay,
-  mdiPlus,
-  mdiProgressClock,
-  mdiRobotOutline,
-  mdiRocketLaunchOutline,
-  mdiShieldKeyOutline,
-  mdiSourceBranch,
-  mdiSourceCommit
-} from "@mdi/js";
 import Vibe64DashboardPageHeader from "/src/components/studio/Vibe64DashboardPageHeader.vue";
 import AddTargetDialog from "./AddTargetDialog.vue";
 import AndroidSdkLicenceDialog from "./AndroidSdkLicenceDialog.vue";
@@ -72,7 +55,7 @@ const packagingReady = computed(() => state.value?.packaging?.status === "ready"
 const running = computed(() => (state.value?.releases || []).find((release) => release.id === state.value?.activeRelease) ||
   (state.value?.releases || []).find((release) => release.status === "running") || null);
 const pending = computed(() => state.value?.pendingConfirmation || null);
-const keysIcon = computed(() => state.value?.keys?.unlocked ? mdiLockOpenVariantOutline : mdiShieldKeyOutline);
+const keysIcon = computed(() => state.value?.keys?.unlocked ? "$lockOpen" : "$encrypted");
 const history = ref(null);
 
 function availability(entry) {
@@ -193,7 +176,7 @@ function openInstall({ releaseId, targetId }) {
 <template>
   <section class="publish-page">
     <Vibe64DashboardPageHeader
-      :icon="mdiPackageVariantClosed"
+      icon="$package2"
       description="Release your project as an app on your phone or a package people can install."
       title="Publish"
     >
@@ -201,7 +184,7 @@ function openInstall({ releaseId, targetId }) {
         <v-btn :prepend-icon="keysIcon" data-test="open-keys" rounded="pill" variant="tonal" @click="openKeys()">Accounts &amp; keys</v-btn>
         <v-btn
           :disabled="!targets.length || !packagingReady || Boolean(running)"
-          :prepend-icon="mdiRocketLaunchOutline"
+          prepend-icon="$rocketLaunch"
           color="primary"
           data-test="open-release"
           rounded="pill"
@@ -218,7 +201,7 @@ function openInstall({ releaseId, targetId }) {
 
     <template v-if="state">
       <div v-if="pending" class="publish-banner publish-banner--ask" role="status">
-        <v-icon :icon="mdiRobotOutline" size="22" />
+        <v-icon icon="$smartToy" size="22" />
         <div>
           <strong>Your Colleague asked to publish plan {{ pending.planId }}</strong>
           <span>Nothing is published until you review and confirm it here.</span>
@@ -228,7 +211,7 @@ function openInstall({ releaseId, targetId }) {
       </div>
 
       <div v-if="running" class="publish-banner publish-banner--running" role="status">
-        <v-icon :icon="mdiProgressClock" class="publish-banner__spin" size="22" />
+        <v-icon icon="$clockLoader" class="publish-banner__spin" size="22" />
         <div>
           <strong>{{ running.kind === "dry-run" ? "Dry run" : "Releasing" }} {{ Object.entries(running.versions || {}).map(([id, version]) => `${packageById[id]?.label || id} ${version}`).join(" · ") }}</strong>
           <span>{{ (running.steps || []).filter((entry) => entry.status === "done").length }} of {{ (running.steps || []).length }} steps done. You can leave this page; it carries on.</span>
@@ -241,9 +224,9 @@ function openInstall({ releaseId, targetId }) {
         <div>
           <span class="publish-saved__label">Releases use your saved work</span>
           <span class="publish-saved__line">
-            <v-icon :icon="mdiSourceCommit" size="18" />
+            <v-icon icon="$commit" size="18" />
             <code>{{ shortCommit(baseline.commit) || "—" }}</code>
-            <v-icon :icon="mdiSourceBranch" class="ml-2" size="18" />
+            <v-icon icon="$forkRight" class="ml-2" size="18" />
             {{ baseline.branch || "—" }}
             <v-chip :color="baseline.pushed ? 'success' : 'warning'" class="ml-1" size="x-small" variant="tonal">{{ baseline.pushed ? "pushed" : "not pushed" }}</v-chip>
           </span>
@@ -251,12 +234,12 @@ function openInstall({ releaseId, targetId }) {
         <div>
           <span class="publish-saved__label">Checks</span>
           <span class="publish-saved__line">
-            <v-icon :class="{ 'publish-banner__spin': checks?.status === 'running' }" :color="statusInfo(checks?.status).color" :icon="checks ? statusInfo(checks.status).icon : mdiClockOutline" size="18" />
+            <v-icon :class="{ 'publish-banner__spin': checks?.status === 'running' }" :color="statusInfo(checks?.status).color" :icon="checks ? statusInfo(checks.status).icon : '$schedule'" size="18" />
             {{ checks ? (checks.status === "failed" ? `${checks.failedCommand || "Checks"} failed` : statusInfo(checks.status).label) : "Not run on this commit" }}
             <v-btn
               v-if="packagingReady && (!checks || checks.status === 'failed')"
               :loading="working === 'checks'"
-              :prepend-icon="mdiPlay"
+              prepend-icon="$play"
               class="ml-1"
               rounded="pill"
               size="x-small"
@@ -283,7 +266,7 @@ function openInstall({ releaseId, targetId }) {
       </section>
 
       <div v-if="!packagingReady" class="publish-empty">
-        <v-icon :icon="mdiAlertOutline" color="warning" size="40" />
+        <v-icon icon="$warning" color="warning" size="40" />
         <h2>Tell Vibe64 what to build</h2>
         <p>
           Publishing starts from the project's Packaging section, which says what each package is and how it is built.
@@ -318,7 +301,7 @@ function openInstall({ releaseId, targetId }) {
             @show-release="history?.reveal($event)"
           />
           <button class="publish-targets__add" data-test="add-target" type="button" @click="openAdd()">
-            <span class="publish-targets__add-icon"><v-icon :icon="mdiPlus" size="22" /></span>
+            <span class="publish-targets__add-icon"><v-icon icon="$add" size="22" /></span>
             <strong>Add target</strong>
             <span>Publish {{ packages.length === 1 ? packages[0].label : "a package" }} somewhere else too.</span>
           </button>
@@ -339,11 +322,11 @@ function openInstall({ releaseId, targetId }) {
               <strong>{{ entry.label }}</strong>
               <span>{{ entry.summary }}</span>
               <span v-if="!entry.availability.ok" class="publish-start__meta publish-start__meta--missing">
-                <v-icon :icon="mdiAlertOutline" size="14" />
+                <v-icon icon="$warning" size="14" />
                 {{ entry.availability.reason }}
               </span>
               <span v-else class="publish-start__meta">
-                <v-icon :icon="entry.id === 'github-releases' ? mdiGithub : entry.zeroAccount ? mdiCheckCircle : mdiAccountKeyOutline" size="14" />
+                <v-icon :icon="entry.id === 'github-releases' ? '$github' : entry.zeroAccount ? '$checkCircleFilled' : '$passkey'" size="14" />
                 {{ entry.id === "github-releases" ? "Your GitHub sign-in" : entry.zeroAccount ? "No account" : "Needs an account" }} · {{ entry.cost }}
               </span>
             </button>

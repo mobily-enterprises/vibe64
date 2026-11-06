@@ -18,7 +18,6 @@ export function personalUsePlan(providerId = "") {
 
 <script setup>
 import { computed, ref } from "vue";
-import { mdiAccountLock } from "@mdi/js";
 
 const props = defineProps({
   // The connection's model provider, such as anthropic, openai or zai-coding-plan.
@@ -36,19 +35,19 @@ const plan = computed(() => personalUsePlan(props.providerId));
   <span class="ai-personal-use" :class="`ai-personal-use--${variant}`">
     <v-chip
       v-if="variant === 'chip' || variant === 'badge'" color="warning" variant="flat" size="small"
-      :prepend-icon="mdiAccountLock" class="ai-personal-use__chip"
+      prepend-icon="$lockPerson" class="ai-personal-use__chip"
     >
       Personal use
     </v-chip>
     <span v-else-if="variant === 'note'" class="ai-personal-use__note">
-      <v-icon :icon="mdiAccountLock" size="18" color="warning" aria-hidden="true" />
+      <v-icon icon="$lockPerson" size="18" color="warning" aria-hidden="true" />
       <span><strong>Personal use:</strong> only the workspace owner can use this {{ plan.plan }}.</span>
     </span>
     <button v-if="variant !== 'badge'" type="button" class="ai-personal-use__link" @click.stop="open = true">What does this mean?</button>
     <v-dialog v-if="variant !== 'badge'" v-model="open" max-width="30rem" aria-labelledby="ai-personal-use-title">
       <v-card rounded="xl">
         <v-card-title id="ai-personal-use-title" class="d-flex align-center ga-2 text-wrap">
-          <v-icon :icon="mdiAccountLock" color="warning" aria-hidden="true" />Personal use: only the owner can use it
+          <v-icon icon="$lockPerson" color="warning" aria-hidden="true" />Personal use: only the owner can use it
         </v-card-title>
         <v-card-text>
           <p class="mb-3">{{ plan.reason || `This ${plan.plan} is a personal plan. Under ${plan.provider}'s terms only the person who subscribed may use it, so Vibe64 lets only the workspace owner work with it.` }}</p>

@@ -1,12 +1,11 @@
 <script setup>
-import { mdiArrowLeft } from "@mdi/js";
 </script>
 
 <template>
   <v-btn
     class="dashboard-back"
     color="primary"
-    :prepend-icon="mdiArrowLeft"
+    prepend-icon="$arrowBack"
     rounded="pill"
     type="button"
     variant="text"

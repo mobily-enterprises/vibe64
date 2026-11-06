@@ -4,14 +4,14 @@
       v-if="!singleFile && mobile && !codeFocusMode"
       :aria-expanded="!fileListCollapsed"
       :aria-label="fileListCollapsed ? 'Show files' : 'Hide files'"
-      :icon="fileListCollapsed ? mdiFolderOutline : mdiClose"
+      :icon="fileListCollapsed ? '$folder' : '$close'"
       variant="text"
       @click="fileListCollapsed = !fileListCollapsed"
     />
     <div class="vibe64-source-editor__title">
       <v-icon
         v-if="!mobile"
-        :icon="mdiFileCodeOutline"
+        icon="$codeBlocks"
         size="19"
       />
       <h2 :title="editor.loadingPath.value || displayedPath || 'Choose a source file'">
@@ -25,13 +25,13 @@
       <v-btn
         :disabled="!editor.dirty.value || editor.saving.value"
         :aria-label="editor.saving.value ? 'Saving file' : 'Save now'"
-        :icon="mdiContentSaveOutline"
+        icon="$save"
         variant="tonal"
         @click="editor.saveNow"
       />
       <v-menu>
         <template #activator="{ props: menuProps }">
-          <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="File actions" variant="text" />
+          <v-btn v-bind="menuProps" icon="$moreVert" aria-label="File actions" variant="text" />
         </template>
         <v-list density="compact">
           <v-list-item
@@ -42,38 +42,38 @@
           <v-list-item
             v-if="fileBookmarks"
             :title="selectedStarred ? 'Unstar file' : 'Star file'"
-            :prepend-icon="selectedStarred ? mdiStar : mdiStarOutline"
+            :prepend-icon="selectedStarred ? '$starFilled' : '$star'"
             :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
             @click="fileBookmarks.toggle(displayedPath)"
           />
           <v-list-item
             title="Download file"
-            :prepend-icon="mdiDownload"
+            prepend-icon="$download"
             :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
             @click="emit('download', displayedPath)"
           />
           <v-list-item
             title="Undo"
-            :prepend-icon="mdiUndoVariant"
+            prepend-icon="$undo"
             :disabled="!editor.selectedPath.value"
             @click="emit('command', 'undo')"
           />
           <v-list-item
             title="Redo"
-            :prepend-icon="mdiRedoVariant"
+            prepend-icon="$redo"
             :disabled="!editor.selectedPath.value"
             @click="emit('command', 'redo')"
           />
           <v-list-item
             v-if="!singleFile"
             title="Explain file or selection"
-            :prepend-icon="mdiRobotOutline"
+            prepend-icon="$smartToy"
             :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
             @click="emit('explain')"
           />
           <v-list-item
             title="Refresh files"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             :disabled="editor.loadingTree.value"
             @click="emit('refresh')"
           />
@@ -86,7 +86,7 @@
         :aria-label="selectedStarred ? 'Unstar file' : 'Star file'"
         :aria-pressed="selectedStarred"
         :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
-        :icon="selectedStarred ? mdiStar : mdiStarOutline"
+        :icon="selectedStarred ? '$starFilled' : '$star'"
         size="small"
         :title="selectedStarred ? 'Unstar file' : 'Star file'"
         variant="text"
@@ -95,7 +95,7 @@
       <v-btn
         aria-label="Download file"
         :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
-        :icon="mdiDownload"
+        icon="$download"
         size="small"
         :title="downloadingPath ? 'Downloading file…' : 'Download file'"
         variant="text"
@@ -110,7 +110,7 @@
       </span>
       <v-btn
         :disabled="!editor.selectedPath.value"
-        :icon="mdiUndoVariant"
+        icon="$undo"
         size="small"
         title="Undo"
         type="button"
@@ -119,7 +119,7 @@
       />
       <v-btn
         :disabled="!editor.selectedPath.value"
-        :icon="mdiRedoVariant"
+        icon="$redo"
         size="small"
         title="Redo"
         type="button"
@@ -128,7 +128,7 @@
       />
       <v-btn
         :disabled="!editor.dirty.value || editor.saving.value"
-        :icon="mdiContentSaveOutline"
+        icon="$save"
         :loading="editor.saving.value"
         size="small"
         title="Save now"
@@ -142,7 +142,7 @@
         :aria-busy="editor.explanationBusy.value || editor.explanationClosing.value ? 'true' : 'false'"
         color="primary"
         :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
-        :prepend-icon="mdiRobotOutline"
+        prepend-icon="$smartToy"
         size="small"
         :title="!assistantAvailable
           ? assistantUnavailableMessage
@@ -157,7 +157,7 @@
       <v-btn
         v-if="!singleFile"
         :disabled="editor.loadingTree.value"
-        :icon="mdiRefresh"
+        icon="$refresh"
         :aria-busy="editor.loadingTree.value"
         size="small"
         title="Refresh files"
@@ -171,20 +171,6 @@
 
 <script setup>
 import { computed } from "vue";
-import {
-  mdiClose,
-  mdiContentSaveOutline,
-  mdiDotsVertical,
-  mdiDownload,
-  mdiFileCodeOutline,
-  mdiFolderOutline,
-  mdiRedoVariant,
-  mdiRefresh,
-  mdiRobotOutline,
-  mdiStar,
-  mdiStarOutline,
-  mdiUndoVariant
-} from "@mdi/js";
 
 // The source editor's header: the open file's name, how it is shown, and its
 // actions (star, download, undo and redo, save, explain, refresh). A phone

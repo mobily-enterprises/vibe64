@@ -21,7 +21,7 @@
               v-if="authorizeStep"
               color="primary"
               :disabled="!accountsReadyForActions"
-              :prepend-icon="mdiArrowLeft"
+              prepend-icon="$arrowBack"
               variant="text"
               @click="setCodexAuthStep(session, 'settings')"
             >
@@ -50,7 +50,7 @@
             color="primary"
             :disabled="accountsLoading"
             variant="text"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             @click="refreshStatus"
           >
             {{ accountsLoading ? "Refreshing…" : "Refresh" }}
@@ -119,7 +119,7 @@
           </CliInstallNotice>
           <div v-if="!session && !cliProblem(account) && (!embedded || account.connected)" class="accounts-setup__item-main">
             <v-icon
-              :icon="account.connected ? mdiCheckCircle : mdiAccountCircleOutline"
+              :icon="account.connected ? '$checkCircleFilled' : '$accountCircle'"
               :color="account.connected ? 'success' : 'primary'"
               size="30"
             />
@@ -257,7 +257,7 @@
                   class="accounts-setup__settings-action"
                   color="primary"
                   :href="CHATGPT_SECURITY_SETTINGS_URL"
-                  :append-icon="mdiOpenInNew"
+                  append-icon="$openInNew"
                   rel="noopener"
                   target="_blank"
                   variant="tonal"
@@ -293,7 +293,7 @@
                   class="accounts-setup__authorize-action"
                   color="primary"
                   :disabled="!accountsReadyForActions"
-                  :append-icon="mdiOpenInNew"
+                  append-icon="$openInNew"
                   :loading="!session.authUrl"
                   variant="flat"
                   @click="openAuthUrl(session)"
@@ -370,7 +370,7 @@
                     aria-label="Copy one-time code"
                     color="primary"
                     :disabled="!accountsReadyForActions || !userCode"
-                    :icon="mdiContentCopy"
+                    icon="$contentCopy"
                     size="48"
                     title="Copy one-time code"
                     variant="tonal"
@@ -389,7 +389,7 @@
                 class="accounts-setup__authorize-action"
                 color="primary"
                 :disabled="!accountsReadyForActions || (!sessionWaiting(session) && (!session?.authUrl || (authorizeStep && !userCode)))"
-                :append-icon="mdiOpenInNew"
+                append-icon="$openInNew"
                 :loading="sessionWaiting(session)"
                 variant="flat"
                 @click="openAuthUrl(session)"
@@ -444,14 +444,6 @@
 
 <script setup>
 import { computed } from "vue";
-import {
-  mdiAccountCircleOutline,
-  mdiArrowLeft,
-  mdiCheckCircle,
-  mdiContentCopy,
-  mdiOpenInNew,
-  mdiRefresh
-} from "@mdi/js";
 import codexDeviceAuthorizeImage from "/src/assets/codex-device-code-authorize.png";
 import codexDeviceSettingsImage from "/src/assets/codex-device-code-settings.png";
 import Vibe64Terminal from "/src/components/studio/Vibe64Terminal.vue";

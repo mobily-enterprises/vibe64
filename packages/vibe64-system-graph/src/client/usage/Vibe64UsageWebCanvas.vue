@@ -37,7 +37,7 @@
         v-if="layout.untouched"
         class="usage-web__untouched"
         :variant="showUntouched ? 'tonal' : 'outlined'"
-        :prepend-icon="showUntouched ? mdiCheck : undefined"
+        :prepend-icon="showUntouched ? '$check' : undefined"
         role="switch"
         :aria-checked="showUntouched"
         @click="emit('update:showUntouched', !showUntouched)"
@@ -48,7 +48,7 @@
 
     <template v-else>
       <header class="usage-web__zoom">
-        <v-btn variant="text" :prepend-icon="mdiArrowLeft" @click="emit('zoom', '')">All subsystems</v-btn>
+        <v-btn variant="text" prepend-icon="$arrowBack" @click="emit('zoom', '')">All subsystems</v-btn>
         <h3 class="usage-web__zoom-title text-title-medium">{{ zoomedTitle }}</h3>
         <slot name="zoom-actions" />
         <!-- Lines are drawn only on the canvas; list rows say it in words. -->
@@ -136,7 +136,6 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
-import { mdiArrowLeft, mdiCheck } from "@mdi/js";
 
 import { hasWindowFunction } from "../browser.js";
 

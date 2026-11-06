@@ -3,7 +3,7 @@
     <div class="vibe64-repository-workspace__history-intro">
       <div class="vibe64-repository-workspace__history-heading">
         <span aria-hidden="true" class="vibe64-repository-workspace__history-icon">
-          <v-icon :icon="mdiSourceCommit" size="18" />
+          <v-icon icon="$commit" size="18" />
         </span>
         <div>
           <strong>Saved versions</strong>
@@ -32,7 +32,7 @@
             class="vibe64-repository-workspace__commit-node"
             :class="{ 'vibe64-repository-workspace__commit-node--latest': index === 0 }"
           >
-            <v-icon :icon="version.isMerge ? mdiSourceMerge : mdiSourceCommit" size="15" />
+            <v-icon :icon="version.isMerge ? '$merge' : '$commit'" size="15" />
           </span>
         </span>
         <button
@@ -54,17 +54,17 @@
             </span>
             <span class="vibe64-repository-workspace__version-meta">
               <span>
-                <v-icon :icon="mdiAccountOutline" size="15" />
+                <v-icon icon="$person" size="15" />
                 {{ version.author || "Unknown author" }}
               </span>
               <span>
-                <v-icon :icon="mdiClockOutline" size="15" />
+                <v-icon icon="$schedule" size="15" />
                 {{ formatVersionDate(version.committedAt) }}
               </span>
               <code>{{ version.shortCommit }}</code>
             </span>
           </span>
-          <v-icon aria-hidden="true" :icon="mdiChevronRight" size="20" />
+          <v-icon aria-hidden="true" icon="$chevronRight" size="20" />
         </button>
       </li>
       <li v-if="history.nextCursor" class="vibe64-repository-workspace__load-more">
@@ -84,13 +84,6 @@
 
 <script setup>
 // The project's saved versions as a Git log, newest first. Opening a version is left to the workspace.
-import {
-  mdiAccountOutline,
-  mdiChevronRight,
-  mdiClockOutline,
-  mdiSourceCommit,
-  mdiSourceMerge
-} from "@mdi/js";
 import {
   formatVersionDate,
   versionButtonLabel

@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from "vue";
-import { mdiSchoolOutline } from "@mdi/js";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import Vibe64EmptySessionLayout from "@/components/studio/Vibe64EmptySessionLayout.vue";
 import Vibe64SessionFrame from "@/components/studio/Vibe64SessionFrame.vue";
@@ -67,7 +66,7 @@ const lesson = computed(() => Boolean(learning.learnMode && learning.lessonAttem
               v-if="noLesson"
               class="studio-screen__choose-lesson"
               data-test="choose-lesson"
-              :prepend-icon="mdiSchoolOutline"
+              prepend-icon="$school"
               variant="tonal"
               @click="learning.openCourses('courses')"
             >

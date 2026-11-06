@@ -4,17 +4,20 @@ import { createSSRApp } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createVuetify } from "vuetify";
 import { describe, expect, it } from "vitest";
-import { mdiCogOutline } from "@mdi/js";
+import { createMaterialVuetifyOptions } from "@jskit-ai/material-web/client";
+import { theme as vibe64Theme } from "../../src/theme/index.js";
 
 import Vibe64UsageRecordingResults from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue";
 import recordingList from "../fixtures/usage-map/recording/api/list.json" with { type: "json" };
 import requests from "../fixtures/usage-map/recording/api/requests.json" with { type: "json" };
 
 const [recording] = recordingList.recordings;
+const vuetifyOptions = createMaterialVuetifyOptions(vibe64Theme);
+const glyph = name => vuetifyOptions.icons.aliases[name].replace(/^svg:/u, "");
 
 async function render(props) {
   const app = createSSRApp(Vibe64UsageRecordingResults, { recordings: [recording], recordingId: recording.id, ...props });
-  app.use(createVuetify({ ssr: true }));
+  app.use(createVuetify({ ...vuetifyOptions, ssr: true }));
   return (await renderToString(app)).replace(/<!--[\s\S]*?-->/gu, "").replace(/ data-v-[0-9a-f]+/gu, "");
 }
 
@@ -41,7 +44,7 @@ describe("Recording requests list", () => {
     const html = await render({ requests: requests.requests, interactions: requests.interactions });
     expect(html).toContain("/<wbr>api/<wbr>sessions<wbr>");
     expect(html).not.toContain(">ALL<");
-    expect(html).toMatch(new RegExp(`usage-recordings__method[^>]*>(?:<[^>]*>)*<i class="${mdiCogOutline.slice(0, 24)}`, "u"));
+    expect(html).toMatch(new RegExp(`usage-recordings__method[^>]*>(?:<[^>]*>)*<i [^>]*><svg[^>]*><path d="${glyph("settings").slice(0, 24)}`, "u"));
     expect(html).toContain("Click: button &quot;Add&quot; (SessionList.vue)");
   });
 });

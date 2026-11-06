@@ -45,7 +45,7 @@
             :aria-label="`Session info: ${sessionTabLabel(sessionItem)}`"
             :aria-expanded="infoSessionId === sessionItem.sessionId"
             :aria-describedby="`${infoId}-${sessionItem.sessionId}`"
-            :icon="mdiInformationOutline"
+            icon="$info"
             size="x-small"
             variant="text"
             @click.stop="toggleSessionInfo(sessionItem.sessionId)"
@@ -59,7 +59,7 @@
             class="studio-ai-sessions__tab-archive"
             density="comfortable"
             :disabled="selectionArchived || archive.command.isRunning || sessionItem.pinnedSessionId === sessionItem.sessionId"
-            :icon="mdiArchiveOutline"
+            icon="$inventory2"
             size="small"
             :title="sessionItem.pinnedSessionId === sessionItem.sessionId ? 'Unpin this session before archiving it' : 'Archive session'"
             variant="text"
@@ -93,13 +93,13 @@
             </dl>
             <v-btn
               v-if="repositoryWorkStateProblem(sessionItem) && sessionItem.sessionId === selectedSessionId && showRepositoryProblem"
-              variant="text" height="48" :prepend-icon="mdiAlertCircleOutline"
+              variant="text" height="48" prepend-icon="$error"
               @click.stop="showProblemNotice(sessionItem)"
             >
               Show {{ repositoryWorkStateProblem(sessionItem).operation === "update" ? "Update" : "Save" }} notice
             </v-btn>
             <v-btn
-              v-if="toolbar.sessionsApiPath" variant="text" height="48" :prepend-icon="mdiPencilOutline"
+              v-if="toolbar.sessionsApiPath" variant="text" height="48" prepend-icon="$edit"
               :disabled="sessionItem.archiving || selectionArchived" @click.stop="renameSession(sessionItem)"
             >
               Rename session
@@ -147,12 +147,6 @@
 
 <script setup>
 import { computed, inject, onMounted, ref, useId, watch } from "vue";
-import {
-  mdiAlertCircleOutline,
-  mdiArchiveOutline,
-  mdiPencilOutline,
-  mdiInformationOutline
-} from "@mdi/js";
 import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64SessionSaveTarget from "./Vibe64SessionSaveTarget.vue";

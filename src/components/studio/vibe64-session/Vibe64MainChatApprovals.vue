@@ -7,9 +7,9 @@
       :aria-label="`${barLabel}. Open messages for approval`"
       @click="sheetOpen = true"
     >
-      <v-icon :icon="mdiClockOutline" size="20" color="secondary" />
+      <v-icon icon="$schedule" size="20" color="secondary" />
       <span class="vibe64-approvals__bar-label">{{ barLabel }}</span>
-      <v-icon :icon="mdiChevronUp" size="20" />
+      <v-icon icon="$collapse" size="20" />
     </button>
     <component
       :is="phone ? VBottomSheet : 'section'"
@@ -20,7 +20,7 @@
       <v-card :variant="phone ? 'elevated' : 'flat'" class="vibe64-approvals__panel" :class="{ 'vibe64-approvals__panel--sheet': phone }">
         <div v-if="phone" class="vibe64-approvals__sheet-header">
           <h2 class="text-title-medium">Messages for approval</h2>
-          <v-btn :icon="mdiClose" variant="text" aria-label="Close messages for approval" @click="sheetOpen = false" />
+          <v-btn icon="$close" variant="text" aria-label="Close messages for approval" @click="sheetOpen = false" />
         </div>
         <div class="vibe64-approvals__list">
           <v-card
@@ -44,7 +44,7 @@
               </div>
               <v-chip size="small" variant="tonal" :color="sending(entry) ? 'primary' : 'secondary'" class="flex-shrink-0">
                 <v-progress-circular v-if="sending(entry)" indeterminate size="12" width="2" class="me-1" />
-                <v-icon v-else :icon="mdiClockOutline" size="14" start />
+                <v-icon v-else icon="$schedule" size="14" start />
                 {{ sending(entry) ? "Sending…" : "Waiting" }}
               </v-chip>
             </div>
@@ -108,12 +108,12 @@
             <div v-else-if="draft.id !== entry.id && approvals.isOwner" class="vibe64-approvals__actions vibe64-approvals__actions--owner">
               <v-btn
                 color="primary" variant="flat" :block="phone" :disabled="busy(entry)"
-                :loading="approvals.pending[entry.id] === 'approve'" :prepend-icon="mdiSend" @click="approvals.approve(entry)"
+                :loading="approvals.pending[entry.id] === 'approve'" prepend-icon="$send" @click="approvals.approve(entry)"
               >
                 {{ entry.status === "sending" && !approvals.pending[entry.id] ? "Send again" : "Approve & send" }}
               </v-btn>
               <v-btn
-                variant="tonal" :block="phone" :disabled="busy(entry) || entry.status === 'sending'" :prepend-icon="mdiPencilOutline"
+                variant="tonal" :block="phone" :disabled="busy(entry) || entry.status === 'sending'" prepend-icon="$edit"
                 @click="openDraft(entry, 'approve')"
               >
                 Edit then send
@@ -123,11 +123,11 @@
               </v-btn>
             </div>
             <div v-else-if="draft.id !== entry.id && approvals.own(entry)" class="vibe64-approvals__actions">
-              <v-btn variant="text" :block="phone" :disabled="busy(entry)" :prepend-icon="mdiPencilOutline" @click="openDraft(entry, 'edit')">
+              <v-btn variant="text" :block="phone" :disabled="busy(entry)" prepend-icon="$edit" @click="openDraft(entry, 'edit')">
                 Edit
               </v-btn>
               <v-btn
-                variant="text" :block="phone" :disabled="busy(entry)" :prepend-icon="mdiUndoVariant"
+                variant="text" :block="phone" :disabled="busy(entry)" prepend-icon="$undo"
                 :loading="approvals.pending[entry.id] === 'withdraw'" @click="approvals.withdraw(entry)"
               >
                 Withdraw
@@ -171,7 +171,6 @@
 <script setup>
 import { computed, reactive, ref } from "vue";
 import { VBottomSheet } from "vuetify/components";
-import { mdiCheck, mdiChevronUp, mdiClockOutline, mdiClose, mdiPencilOutline, mdiSend, mdiUndoVariant } from "@mdi/js";
 
 const RECENT_ROWS = 3;
 
@@ -224,11 +223,11 @@ function decision(entry) {
   const subject = props.approvals.own(entry) ? "" : `${entry.sender.displayName} · `;
   const at = time(entry.decidedAt || entry.updatedAt);
   if (entry.status === "sent") {
-    return { icon: mdiCheck, color: "success",
+    return { icon: "$check", color: "success",
       text: `${subject}Sent by ${by} · ${at}${entry.originalText ? ` · Edited by ${by}` : ""}` };
   }
-  if (entry.status === "declined") return { icon: mdiClose, color: "error", text: `${subject}Declined by ${by} · ${at}` };
-  return { icon: mdiUndoVariant, color: undefined, text: `${subject}Withdrawn by ${by} · ${at}` };
+  if (entry.status === "declined") return { icon: "$close", color: "error", text: `${subject}Declined by ${by} · ${at}` };
+  return { icon: "$undo", color: undefined, text: `${subject}Withdrawn by ${by} · ${at}` };
 }
 
 function openDraft(entry, mode) {

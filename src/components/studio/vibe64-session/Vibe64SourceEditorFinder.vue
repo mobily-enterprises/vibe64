@@ -8,7 +8,7 @@
         hide-details
         label="Open file"
         :model-value="editor.fileQuery.value"
-        :prepend-inner-icon="mdiFileSearchOutline"
+        prepend-inner-icon="$findInPage"
         variant="outlined"
         @keydown.enter.prevent="editor.openFirstFileMatch"
         @update:model-value="editor.updateFileQuery"
@@ -65,7 +65,7 @@
         hide-details
         label="Find in files"
         :model-value="editor.searchQuery.value"
-        :prepend-inner-icon="mdiMagnify"
+        prepend-inner-icon="$search"
         variant="outlined"
         @keydown.enter.prevent="editor.openSearchResult(editor.searchResults.value[0])"
         @update:model-value="editor.updateSearchQuery"
@@ -76,7 +76,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiFileSearchOutline, mdiMagnify } from "@mdi/js";
 import { basename } from "@/lib/vibe64SourceFilePaths.js";
 
 // Open file, with its list of matching paths, and Find in files, whose

@@ -14,7 +14,7 @@
     <template v-else>
       <div class="vibe64-async-module-state__icon">
         <v-icon
-          :icon="mdiAlertCircleOutline"
+          icon="$error"
           color="warning"
           size="30"
         />
@@ -51,7 +51,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiAlertCircleOutline } from "@mdi/js";
 
 const props = defineProps({
   label: {

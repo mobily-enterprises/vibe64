@@ -4,7 +4,7 @@
     class="vibe64-ai-task-button"
     data-vibe64-ai-task-button
     :disabled="disabled"
-    :prepend-icon="mdiRobotOutline"
+    prepend-icon="$smartToy"
     size="small"
     :title="title"
     type="button"
@@ -12,13 +12,12 @@
     @click="activate"
   >
     {{ label }}
-    <template v-if="linked" #append><v-icon :icon="mdiArrowRight" size="16" aria-hidden="true" /></template>
+    <template v-if="linked" #append><v-icon icon="$arrowForward" size="16" aria-hidden="true" /></template>
   </v-btn>
 </template>
 
 <script setup>
 import { computed, inject, watch } from "vue";
-import { mdiArrowRight, mdiRobotOutline } from "@mdi/js";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { VIBE64_AI_TASKS_KEY } from "./aiTaskKey.js";
 import { AI_TASK_PHASES } from "../shared/aiTaskPhases.js";

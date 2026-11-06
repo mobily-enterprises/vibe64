@@ -507,7 +507,7 @@ runtime reader and show an unreadable value as none; server guards use the
 strict reader and refuse to act on it.
 While mounted, each task tracks unread assistant text in browser-local state.
 New or streamed reply text received outside the active visible conversation
-marks that task's tab, the expanded incognito button and the compact session
+marks that task's tab, the expanded mask button and the compact session
 actions trigger/menu entry. Viewing a task clears only its own indicator;
 opening the actions menu does not mark messages read. Unchanged snapshots, user
 messages and reasoning-only updates do not create unread replies. The compact

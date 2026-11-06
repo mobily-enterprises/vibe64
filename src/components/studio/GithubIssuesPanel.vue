@@ -2,8 +2,6 @@
 import Vibe64DashboardBackButton from "./Vibe64DashboardBackButton.vue";
 import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
-import { mdiArrowRight, mdiCheck, mdiCommentOutline,
-  mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline, mdiPencilOutline } from "@mdi/js";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
 import { GITHUB_BODY_MAX_LENGTH } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
@@ -63,13 +61,13 @@ function date(value) {
       <v-spacer />
       <v-btn
         v-if="available" class="issues-panel__refresh"
-        :prepend-icon="mdiRefresh" variant="text" size="small" height="48"
+        prepend-icon="$refresh" variant="text" size="small" height="48"
         :disabled="resource.isFetching.value || Boolean(pending)" @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
       <v-btn
-        v-if="available" class="issues-panel__new" :prepend-icon="mdiPlus" color="primary" variant="tonal"
+        v-if="available" class="issues-panel__new" prepend-icon="$add" color="primary" variant="tonal"
         rounded="pill" size="small" height="48" @click="openEditor()"
       >
         New issue
@@ -92,11 +90,11 @@ function date(value) {
           </v-btn-toggle>
           <v-text-field
             v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Number, text, label:new or label:&quot;some label&quot;"
-            :prepend-inner-icon="mdiMagnify" variant="outlined" rounded="pill" hide-details maxlength="200" clearable
+            prepend-inner-icon="$search" variant="outlined" rounded="pill" hide-details maxlength="200" clearable
             @keydown.enter.prevent="filter()"
             @click:clear="searchDraft = ''; filter()"
           >
-            <template #append-inner><v-btn :icon="mdiArrowRight" variant="text" size="48" aria-label="Search issues" @click="filter()" /></template>
+            <template #append-inner><v-btn icon="$arrowForward" variant="text" size="48" aria-label="Search issues" @click="filter()" /></template>
           </v-text-field>
         </form>
         <div class="issues-panel__labels d-flex flex-wrap align-start ga-2">
@@ -108,7 +106,7 @@ function date(value) {
           <v-autocomplete
             v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []" class="issues-panel__label-filter"
             item-title="name" item-value="name" multiple chips closable-chips clearable
-            label="Filter by labels" :prepend-inner-icon="mdiLabelOutline" variant="outlined" rounded="lg"
+            label="Filter by labels" prepend-inner-icon="$label" variant="outlined" rounded="lg"
             :menu-props="{ maxHeight: 320 }" hint="Match all selected labels." persistent-hint
             no-data-text="No matching labels" @update:model-value="filter(state, $event)"
           >
@@ -163,7 +161,7 @@ function date(value) {
               <v-list-item class="py-2 flex-grow-1" :active="false">
                 <template #prepend>
                   <v-icon
-                    :icon="item.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck"
+                    :icon="item.state === 'OPEN' ? '$radioOn' : '$check'"
                     :color="item.state === 'OPEN' ? 'success' : 'primary'" :aria-label="item.state === 'OPEN' ? 'Open' : 'Closed'"
                   />
                 </template>
@@ -184,14 +182,14 @@ function date(value) {
                   <span
                     class="d-flex align-center ga-1 ml-3 text-label-medium text-medium-emphasis"
                     :aria-label="`${item.comments.totalCount} comments`"
-                  ><v-icon :icon="mdiCommentOutline" size="18" />{{ item.comments.totalCount }}</span>
+                  ><v-icon icon="$comment" size="18" />{{ item.comments.totalCount }}</span>
                 </template>
               </v-list-item>
             </div>
           </template>
         </v-list>
         <v-sheet v-else rounded="xl" color="surface-light" class="pa-8 text-center">
-          <v-icon :icon="mdiRecordCircleOutline" size="40" class="mb-3" />
+          <v-icon icon="$radioOn" size="40" class="mb-3" />
           <p class="text-title-medium mb-1">No issues here</p>
           <p class="text-body-medium text-medium-emphasis ma-0">Try a different filter or search.</p>
         </v-sheet>
@@ -199,7 +197,7 @@ function date(value) {
           <v-btn v-if="$route.query.issueCursor" variant="text" height="48" @click="navigate({ issueCursor: undefined })">First page</v-btn>
           <v-spacer />
           <v-btn
-            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" :append-icon="mdiArrowRight"
+            v-if="list.data.value?.pageInfo?.hasNextPage" variant="tonal" height="48" append-icon="$arrowForward"
             @click="navigate({ issueCursor: list.data.value.pageInfo.endCursor })"
           >
             Next page
@@ -214,13 +212,13 @@ function date(value) {
         </v-alert>
         <div>
           <div class="d-flex align-center flex-wrap ga-2 mb-3">
-            <v-chip :prepend-icon="issue.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck" :color="issue.state === 'OPEN' ? 'success' : 'primary'" variant="tonal">
+            <v-chip :prepend-icon="issue.state === 'OPEN' ? '$radioOn' : '$check'" :color="issue.state === 'OPEN' ? 'success' : 'primary'" variant="tonal">
               {{ issue.state === 'OPEN' ? 'Open' : 'Closed' }}
             </v-chip>
             <span class="text-label-large text-medium-emphasis">#{{ issue.number }}</span>
             <v-spacer />
-            <v-btn v-if="issue.viewerCanUpdate" :prepend-icon="mdiPencilOutline" variant="text" height="48" @click="openEditor(issue, 'content')">Edit issue</v-btn>
-            <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" :append-icon="mdiOpenInNew" variant="text" height="48">GitHub</v-btn>
+            <v-btn v-if="issue.viewerCanUpdate" prepend-icon="$edit" variant="text" height="48" @click="openEditor(issue, 'content')">Edit issue</v-btn>
+            <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" append-icon="$openInNew" variant="text" height="48">GitHub</v-btn>
           </div>
           <h2 class="text-title-large mb-2 issues-panel__title">{{ issue.title }}</h2>
           <p class="text-body-small text-medium-emphasis mb-0">{{ issue.author?.login || 'Deleted user' }} opened this on {{ date(issue.createdAt) }}</p>
@@ -230,7 +228,7 @@ function date(value) {
               tag="button" type="button" :aria-label="`Filter by label ${label.name}`" @click="filterLabel(label.name)"
             />
             <span v-if="!issue.labels?.nodes?.length" class="text-body-small text-medium-emphasis">No labels</span>
-            <v-btn v-if="issue.canEditLabels" :prepend-icon="mdiLabelOutline" variant="text" height="48" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
+            <v-btn v-if="issue.canEditLabels" prepend-icon="$label" variant="text" height="48" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
           </div>
         </div>
 
@@ -283,7 +281,7 @@ function date(value) {
           />
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">
             <v-btn
-              variant="tonal" height="48" :prepend-icon="issue.state === 'OPEN' ? mdiCheck : mdiRestore"
+              variant="tonal" height="48" :prepend-icon="issue.state === 'OPEN' ? '$check' : '$restartAlt'"
               :disabled="!canChangeState || Boolean(pending)" :title="canChangeState ? '' : 'Your GitHub account cannot change this issue’s state.'"
               @click="mutate('state')"
             >

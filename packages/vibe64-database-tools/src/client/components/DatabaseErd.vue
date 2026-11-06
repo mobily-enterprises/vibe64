@@ -16,14 +16,14 @@
           label="Find table or column"
           :menu-props="{ attach: erdRoot }"
           no-filter
-          :prepend-inner-icon="mdiMagnify"
+          prepend-inner-icon="$search"
           return-object
           variant="outlined"
           @update:model-value="locate"
         />
-        <v-btn class="database-erd__icon-button" :disabled="layoutPending || !nodes.length" :icon="mdiImageFilterCenterFocus" aria-label="Fit" title="Fit diagram" size="small" variant="text" @click="fitDiagram" />
+        <v-btn class="database-erd__icon-button" :disabled="layoutPending || !nodes.length" icon="$filterCenterFocus" aria-label="Fit" title="Fit diagram" size="small" variant="text" @click="fitDiagram" />
         <v-menu v-model="optionsOpen" :attach="erdRoot" :close-on-content-click="false">
-          <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-erd__icon-button" :icon="mdiTuneVariant" aria-label="Diagram options" title="Diagram options" size="small" variant="text" /></template>
+          <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-erd__icon-button" icon="$tune" aria-label="Diagram options" title="Diagram options" size="small" variant="text" /></template>
           <v-sheet class="database-erd__options" rounded="lg" elevation="2" aria-label="Diagram options">
             <strong>Display</strong>
             <v-btn-toggle :model-value="columnMode" mandatory density="compact" @update:model-value="changeColumnMode">
@@ -39,9 +39,9 @@
             <v-divider />
             <strong>Arrangement</strong>
             <div class="database-erd__option-actions">
-              <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiRestore" size="small" title="Arrange relationships while preserving pinned tables" variant="text" @click="resetPositions">Reset positions</v-btn>
-              <v-btn :disabled="layoutPending || !undoStack.length" :icon="mdiUndo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
-              <v-btn :disabled="layoutPending || !redoStack.length" :icon="mdiRedo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
+              <v-btn :disabled="layoutPending || !nodes.length" prepend-icon="$restartAlt" size="small" title="Arrange relationships while preserving pinned tables" variant="text" @click="resetPositions">Reset positions</v-btn>
+              <v-btn :disabled="layoutPending || !undoStack.length" icon="$undo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
+              <v-btn :disabled="layoutPending || !redoStack.length" icon="$redo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
             </div>
             <v-divider />
             <div class="database-erd__option-actions">
@@ -50,12 +50,12 @@
                 <v-list density="compact">
                   <v-list-item title="Save view…" @click="optionsOpen = false; viewName = ''; viewDialog = true" />
                   <v-list-item v-for="view in views" :key="view.id" :title="view.name" @click="loadView(view)">
-                    <template #append><v-btn :icon="mdiClose" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
+                    <template #append><v-btn icon="$close" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
                   </v-list-item>
                 </v-list>
               </v-menu>
               <v-btn size="small" variant="text" @click="editGroup()">Edit table groups</v-btn>
-              <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? mdiFullscreenExit : mdiFullscreen" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
+              <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? '$fullscreenExit' : '$fullscreen'" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
             </div>
             <slot name="options" :close="() => optionsOpen = false" />
           </v-sheet>
@@ -119,7 +119,7 @@
       <v-sheet v-if="selectedRelationship || selectedNode" class="database-erd__inspector" rounded="lg" elevation="2">
         <div class="database-erd__inspector-heading">
           <strong>{{ selectedRelationship ? 'Relationship' : selectedNode.data.table.name }}</strong>
-          <v-btn :icon="mdiClose" aria-label="Close diagram details" size="x-small" variant="text" @click="clearSelection" />
+          <v-btn icon="$close" aria-label="Close diagram details" size="x-small" variant="text" @click="clearSelection" />
         </div>
         <template v-if="selectedRelationship">
           <div class="database-erd__constraint">{{ selectedRelationship.constraintName }}</div>
@@ -137,7 +137,7 @@
           <div class="database-erd__inspector-actions">
             <v-btn size="small" variant="tonal" @click="setFocus(selectedNode.id)">Focus on this table</v-btn>
             <v-btn size="small" variant="text" @click="emit('select-table', selectedNode.data.table)">Open data</v-btn>
-            <v-btn size="small" :prepend-icon="selectedNode.data.pinned ? mdiPin : mdiPinOutline" variant="text" @click="togglePin(selectedNode.id)">{{ selectedNode.data.pinned ? 'Unpin' : 'Pin position' }}</v-btn>
+            <v-btn size="small" :prepend-icon="selectedNode.data.pinned ? '$keepFilled' : '$keep'" variant="text" @click="togglePin(selectedNode.id)">{{ selectedNode.data.pinned ? 'Unpin' : 'Pin position' }}</v-btn>
             <v-btn size="small" variant="text" @click="editGroup(selectedNode.data.group)">Edit group</v-btn>
           </div>
         </template>
@@ -165,7 +165,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiClose, mdiFullscreen, mdiFullscreenExit, mdiImageFilterCenterFocus, mdiMagnify, mdiPin, mdiPinOutline, mdiRedo, mdiRestore, mdiTuneVariant, mdiUndo } from "@mdi/js";
 import { MarkerType, VueFlow } from "@vue-flow/core";
 import { MiniMap } from "@vue-flow/minimap";
 import DatabaseErdEdge from "./DatabaseErdEdge.vue";

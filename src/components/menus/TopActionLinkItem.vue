@@ -1,9 +1,6 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import {
-  mdiLinkVariant
-} from "@mdi/js";
 
 const props = defineProps({
   disabled: {
@@ -33,7 +30,7 @@ const props = defineProps({
 });
 
 const route = useRoute();
-const resolvedIcon = computed(() => mdiLinkVariant);
+const resolvedIcon = computed(() => "$link");
 const active = computed(() => {
   const target = String(props.to || "").trim();
   const path = String(route.path || "").trim();

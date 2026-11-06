@@ -68,7 +68,7 @@
           <v-btn
             v-if="previewTerminalRecoveryVisible"
             :disabled="operationBusy"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             size="small"
             title="Restart preview"
             variant="tonal"
@@ -149,7 +149,6 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { SYSTEM_GRAPH_API_SUFFIX } from "@local/vibe64-system-graph/client";
 import { useVibe64UsageRecording } from "@local/vibe64-usage-recording/client";
-import { mdiRefresh } from "@mdi/js";
 import Vibe64LongRunningTerminal from "@/components/studio/Vibe64LongRunningTerminal.vue";
 import Vibe64OutputOptionsDialog from "@/components/studio/Vibe64OutputOptionsDialog.vue";
 import Vibe64OutputToolbar from "@/components/studio/Vibe64OutputToolbar.vue";

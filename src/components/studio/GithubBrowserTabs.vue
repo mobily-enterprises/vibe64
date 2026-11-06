@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { mdiRecordCircleOutline, mdiSourcePull } from "@mdi/js";
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 
 const route = useRoute();
@@ -12,13 +11,13 @@ const selected = computed(() => route.path.endsWith('/pull-requests') ? 'pull-re
 <template>
   <v-tabs :model-value="selected" color="primary" density="compact" aria-label="Issues and pull requests">
     <v-tab
-      value="issues" :prepend-icon="mdiRecordCircleOutline"
+      value="issues" prepend-icon="$radioOn"
       :to="{ path: projectAppPath(projectSlug, '/dashboard/issues'), query: { ...route.query, issue: undefined } }"
     >
       Issues
     </v-tab>
     <v-tab
-      value="pull-requests" :prepend-icon="mdiSourcePull"
+      value="pull-requests" prepend-icon="$callMerge"
       :to="{ path: projectAppPath(projectSlug, '/dashboard/pull-requests'), query: { ...route.query, pr: undefined, createPullRequest: undefined } }"
     >
       Pull requests

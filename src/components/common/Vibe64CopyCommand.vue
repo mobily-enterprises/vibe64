@@ -7,7 +7,7 @@
           v-bind="tooltipProps"
           :aria-label="copied ? 'Copied' : label"
           :color="copied ? 'success' : undefined"
-          :icon="copied ? mdiCheck : mdiContentCopy"
+          :icon="copied ? '$check' : '$contentCopy'"
           class="v64-copy-command__button"
           density="comfortable"
           size="small"
@@ -23,7 +23,6 @@
 <script setup>
 // One command the person runs in their own terminal, with a copy button.
 import { onScopeDispose, ref } from "vue";
-import { mdiCheck, mdiContentCopy } from "@mdi/js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
 const props = defineProps({

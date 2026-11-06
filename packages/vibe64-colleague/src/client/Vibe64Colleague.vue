@@ -6,7 +6,6 @@ import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
-import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
@@ -253,12 +252,12 @@ onBeforeUnmount(() => {
       @click.capture="avatarClick" @click="toggleConversation($event).catch(reportFailure)" @contextmenu.prevent
     >
       <span class="vibe64-colleague__launcher-avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-      <span v-if="minimizedVoice" class="vibe64-colleague__voice-badge" :class="{ 'vibe64-colleague__voice-badge--listening': listeningVoice }" aria-hidden="true"><v-icon :icon="listeningVoice ? mdiMicrophone : mdiHeadset" size="14" /></span>
+      <span v-if="minimizedVoice" class="vibe64-colleague__voice-badge" :class="{ 'vibe64-colleague__voice-badge--listening': listeningVoice }" aria-hidden="true"><v-icon :icon="listeningVoice ? '$mic' : '$headphones'" size="14" /></span>
       <span v-if="working" class="vibe64-colleague__working" :aria-label="`${name} is working`" />
     </v-btn>
     <v-btn
       v-if="minimizedVoice" class="vibe64-colleague__voice-stop" :class="{ 'vibe64-colleague__voice-stop--floating': !launcherTarget }"
-      :icon="mdiClose" variant="text" width="48" height="48" aria-label="Stop voice chat" title="Stop voice chat" @click="closeText"
+      icon="$close" variant="text" width="48" height="48" aria-label="Stop voice chat" title="Stop voice chat" @click="closeText"
     />
   </Teleport>
   <VNavigationDrawer
@@ -270,10 +269,10 @@ onBeforeUnmount(() => {
       <header class="vibe64-colleague__drawer-header">
         <span class="text-title-large">{{ name }}</span>
         <v-btn v-if="learningStep && !xs" v-bind="stepButton" @click="showLearningStep">
-          <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
+          <v-icon :icon="learningStep.passed ? '$check' : '$school'" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
         </v-btn>
-        <v-btn :icon="mdiMinus" variant="text" aria-label="Minimize conversation" title="Minimize conversation" @click="toggleConversation($event).catch(reportFailure)" />
-        <v-btn :icon="mdiClose" variant="text" :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="closeText" />
+        <v-btn icon="$minus" variant="text" aria-label="Minimize conversation" title="Minimize conversation" @click="toggleConversation($event).catch(reportFailure)" />
+        <v-btn icon="$close" variant="text" :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="closeText" />
       </header>
       <ConversationDialog presentation="inline" :title="name" class="vibe64-colleague__inline">
         <div ref="desktopPanelTarget" class="vibe64-colleague__panel" />
@@ -287,7 +286,7 @@ onBeforeUnmount(() => {
   >
     <template v-if="learningStep && xs" #header-actions>
       <v-btn v-bind="stepButton" @click="showLearningStep">
-        <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
+        <v-icon :icon="learningStep.passed ? '$check' : '$school'" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
       </v-btn>
     </template>
     <div ref="panelTarget" class="vibe64-colleague__panel" />
@@ -315,10 +314,10 @@ onBeforeUnmount(() => {
           </template>
           <template #avatar-control>
             <span v-if="avatarSize === 'hidden' && voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value" role="img" aria-label="Listening" title="Listening" class="d-inline-flex align-center text-primary">
-              <v-icon size="20" :icon="mdiMicrophone" />
+              <v-icon size="20" icon="$mic" />
             </span>
             <span v-if="avatarSize === 'hidden' && voiceSession?.voice.speaking.value" role="img" aria-label="Speaking" title="Speaking" class="d-inline-flex align-center text-primary">
-              <v-icon size="20" :icon="mdiVolumeHigh" />
+              <v-icon size="20" icon="$volumeHigh" />
             </span>
           </template>
           <template #system-message="{ message }">
@@ -341,11 +340,11 @@ onBeforeUnmount(() => {
                 <template #footer>
                   <div class="vibe64-colleague__composer-actions">
                     <v-btn
-                      ref="modelButton" :icon="mdiTuneVariant" size="small" variant="text"
+                      ref="modelButton" icon="$tune" size="small" variant="text"
                       :aria-label="`Choose ${name} model`" :title="product.assistantSelection?.modelId || 'Choose model'"
                       :disabled="working || sending || Boolean(freshOperation)" @click="modelMenu = true"
                     />
-                    <v-btn :icon="mdiHistory" size="small" variant="text" aria-label="Previous conversations" title="Previous conversations" @click="loadHistory()" />
+                    <v-btn icon="$history" size="small" variant="text" aria-label="Previous conversations" title="Previous conversations" @click="loadHistory()" />
                     <v-btn
                       v-if="operations.length" ref="operationButton" size="small" min-height="48" variant="text"
                       :aria-label="`Recent operations (${operations.length})`" title="Recent operations"
@@ -358,13 +357,13 @@ onBeforeUnmount(() => {
                       :aria-label="`Watches and assignments (${watchControlCount})`" title="Watches and assignments"
                       aria-haspopup="dialog" :aria-expanded="watchDetails" @click="watchDetails = true"
                     >
-                      <v-icon :icon="mdiEyeOutline" /><span class="ms-1">{{ watchControlCount }}</span>
+                      <v-icon icon="$visibility" /><span class="ms-1">{{ watchControlCount }}</span>
                     </v-btn>
                     <v-btn v-if="freshOperation" variant="text" :disabled="freshBusy" @click="showFreshConfirmation">Resume fresh operation</v-btn>
                     <div class="vibe64-colleague__delivery">
-                      <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
+                      <v-btn v-if="composer.canStop" icon="$stop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
                       <v-btn
-                        ref="sendButton" :icon="working ? mdiArrowTopRight : mdiSend" size="small" variant="flat" color="primary"
+                        ref="sendButton" :icon="working ? '$arrowOutward' : '$send'" size="small" variant="flat" color="primary"
                         :aria-label="composer.submitAriaLabel" :title="composer.submitLabel"
                         :disabled="!composer.canSend" @click="submit"
                       />

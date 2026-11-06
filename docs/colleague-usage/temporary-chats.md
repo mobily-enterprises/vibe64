@@ -14,7 +14,7 @@ also after a reload.
 
 ## Open a temporary chat
 
-Open **Temporary AI** (the incognito icon, **Open temporary AI**) from the session
+Open **Temporary AI** (the mask icon, **Open temporary AI**) from the session
 header, or from **Session actions** (three dots) when the header is too narrow
 for it. If the session already has temporary chats, it shows them and creates
 nothing; it starts a new chat only when there are none. Just after a session

@@ -5,7 +5,6 @@
 // click only has to show the page.
 import { computed } from "vue";
 import { loadRouteLocation, useRouter } from "vue-router";
-import { mdiFileDocumentOutline, mdiStar } from "@mdi/js";
 import { pageAppPath } from "../shared/pageLinks.js";
 import { preparePageView, usePageStars, usePageViewTheme } from "./pageStars.js";
 import { pageTime } from "./pagesRequests.js";
@@ -72,7 +71,7 @@ defineExpose({ openFirst, prepareFirst });
           @focus="prepare(page)"
           @pointerenter="prepare(page)"
         >
-          <v-icon :icon="mdiFileDocumentOutline" color="primary" size="18" />
+          <v-icon icon="$description" color="primary" size="18" />
           <span class="vibe64-starred-pages__copy">
             <strong>{{ page.title }}</strong>
             <span>Updated {{ pageTime(page.updatedAt) }}</span>
@@ -81,7 +80,7 @@ defineExpose({ openFirst, prepareFirst });
         <v-btn
           :aria-label="`Unstar ${page.title}`"
           :disabled="stars.pendingIds.value.includes(page.id)"
-          :icon="mdiStar"
+          icon="$starFilled"
           size="small"
           title="Unstar page"
           variant="text"

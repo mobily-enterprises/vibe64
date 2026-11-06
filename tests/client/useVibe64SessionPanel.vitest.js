@@ -384,7 +384,7 @@ describe("repository work state presentation", () => {
       repositoryWorkState: { changedCount: 0, state: "unsaved", updateAvailable: true }
     })).toBe("Unsaved changes; update available");
     for (const state of ["checking", "needs_help", "saved", "saving", "unavailable", "unsaved", "update_available", "updating"]) {
-      expect(repositoryWorkStateIcon({ repositoryWorkState: { state } })).toMatch(/^M/u);
+      expect(repositoryWorkStateIcon({ repositoryWorkState: { state } })).toMatch(/^\$[a-z][A-Za-z0-9]*$/u);
     }
   });
 

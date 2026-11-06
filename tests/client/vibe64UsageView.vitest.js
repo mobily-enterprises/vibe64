@@ -8,7 +8,8 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { createVuetify } from "vuetify";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mdiHeartPulse } from "@mdi/js";
+import { createMaterialVuetifyOptions } from "@jskit-ai/material-web/client";
+import { theme as vibe64Theme } from "../../src/theme/index.js";
 
 const fake = vi.hoisted(() => ({ usage: null, graph: null }));
 vi.mock("../../packages/vibe64-system-graph/src/client/usage/useVibe64UsageWeb.js", () => ({ useVibe64UsageWeb: () => fake.usage }));
@@ -75,7 +76,9 @@ function usageReads({ entries = readEntries(index, {}), snapshot = index.snapsho
   };
 }
 
-const vuetify = () => createVuetify({ ssr: true });
+const vuetifyOptions = createMaterialVuetifyOptions(vibe64Theme);
+const glyph = name => vuetifyOptions.icons.aliases[name].replace(/^svg:/u, "");
+const vuetify = () => createVuetify({ ...vuetifyOptions, ssr: true });
 async function render(component, props) {
   const app = createSSRApp(component, props);
   app.use(vuetify());
@@ -206,7 +209,7 @@ describe("Recording states", () => {
     expect(html).toContain("Launch readiness check");
     expect(html).toContain("Vibe64 checking that the launch started · 1 file · 2 functions");
     // Rows without a method carry a labelled icon in the method column.
-    expect(html).toMatch(new RegExp(`usage-recordings__request--secondary[\\s\\S]*?title="Readiness check"[^>]*>(?:<[^>]*>)*<i class="${mdiHeartPulse.slice(0, 24)}[\\s\\S]*?<span class="d-sr-only">Readiness check</span>`, "u"));
+    expect(html).toMatch(new RegExp(`usage-recordings__request--secondary[\\s\\S]*?title="Readiness check"[^>]*>(?:<[^>]*>)*<i [^>]*><svg[^>]*><path d="${glyph("monitorHeart").slice(0, 24)}[\\s\\S]*?<span class="d-sr-only">Readiness check</span>`, "u"));
     expect(html).toContain('<span class="d-sr-only">Start-up</span>');
     expect(html).not.toContain(">CHECK<");
     expect(html).not.toContain("Request not in the request log");

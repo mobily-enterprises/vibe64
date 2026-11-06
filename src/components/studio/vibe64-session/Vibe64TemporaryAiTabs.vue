@@ -41,7 +41,7 @@
           data-temporary-ai-rename
           :disabled="task.state === 'closing'"
           height="32"
-          :icon="mdiPencilOutline"
+          icon="$edit"
           min-width="32"
           size="x-small"
           :title="`Rename ${task.label}`"
@@ -54,7 +54,7 @@
           class="vibe64-temporary-ai__tab-close"
           :disabled="props.repositoryBusy || props.closingTask || props.stoppingTaskId === task.id"
           height="32"
-          :icon="mdiClose"
+          icon="$close"
           min-width="32"
           size="x-small"
           :title="`Close ${task.label}`"
@@ -68,7 +68,7 @@
         aria-label="New temporary AI task"
         class="vibe64-temporary-ai__new-task"
         height="32"
-        :icon="mdiPlus"
+        icon="$add"
         min-width="32"
         size="x-small"
         title="New temporary AI task"
@@ -82,7 +82,6 @@
 </template>
 
 <script setup>
-import { mdiClose, mdiPencilOutline, mdiPlus } from "@mdi/js";
 
 // The temporary AI workspace's conversation tabs: Main chat and one tab per
 // temporary chat. The selected tab is Material 3's selected chip; Main chat is

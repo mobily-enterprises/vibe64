@@ -62,7 +62,7 @@
     >
       <v-icon class="studio-home-shell-project-mobile-action__icon" :icon="mobileProjectAction.icon" size="18" />
       <span class="studio-home-shell-project-mobile-action__label">{{ mobileProjectAction.label }}</span>
-      <v-icon class="studio-home-shell-project-mobile-action__chevron" :icon="mdiChevronRight" size="15" />
+      <v-icon class="studio-home-shell-project-mobile-action__chevron" icon="$chevronRight" size="15" />
     </button>
   </div>
 </template>
@@ -70,7 +70,6 @@
 <script setup>
 // The project bar's pane controls: the chat toggle, the Preview | Dash switch (one next-pane button on a
 // phone), the lesson toggle, and the hosts that the recording indicator and Preview's toolbar fill.
-import { mdiChevronRight } from "@mdi/js";
 import Vibe64LessonToggle from "@/components/learning/Vibe64LessonToggle.vue";
 
 defineProps({

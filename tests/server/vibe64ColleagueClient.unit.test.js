@@ -7,7 +7,6 @@ import * as vue from "vue";
 import { createColleagueNavigation, navigateColleagueBrowser } from "../../packages/vibe64-colleague/src/client/colleagueNavigation.js";
 import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { routeLocationKey } from "vue-router";
-import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
@@ -70,7 +69,6 @@ const elementDisplay = await import(new URL("./conversationDisplay.js", elementF
 const elementModule = { exports: {} };
 new Function("require", "module", "exports", elementCode)(name => {
   if (name === "vue") return vue;
-  if (name === "@mdi/js") return mdi;
   if (name === "../i18n.js" && elementI18n) return elementI18n;
   if (name === "./conversationDisplay.js") return elementDisplay;
   assert.ok(name.endsWith(".vue"), name);
@@ -1029,7 +1027,6 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {},
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
-    "@mdi/js": mdi,
     "/src/lib/vibe64AssistantHost.js": assistantHostKeys,
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },

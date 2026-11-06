@@ -3,7 +3,7 @@
     class="usage-picker"
     variant="outlined"
     block
-    :append-icon="mdiMenuDown"
+    append-icon="$dropdown"
     :aria-label="label"
     @click="emit('update:modelValue', true)"
   >
@@ -12,7 +12,7 @@
   <v-dialog :model-value="modelValue" fullscreen transition="dialog-bottom-transition" @update:model-value="emit('update:modelValue', $event)">
     <v-card class="usage-picker__dialog">
       <v-toolbar density="comfortable" color="surface">
-        <v-btn :icon="mdiClose" aria-label="Close" @click="emit('update:modelValue', false)" />
+        <v-btn icon="$close" aria-label="Close" @click="emit('update:modelValue', false)" />
         <v-toolbar-title class="text-title-large">{{ title }}</v-toolbar-title>
       </v-toolbar>
       <div class="usage-picker__body"><slot /></div>
@@ -21,7 +21,6 @@
 </template>
 
 <script setup>
-import { mdiClose, mdiMenuDown } from "@mdi/js";
 
 // Phone layout: the rail's content behind a full-width button.
 defineProps({

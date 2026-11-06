@@ -4,7 +4,7 @@
       <v-icon
         class="vibe64-upload-queue__header-icon"
         :color="active ? 'primary' : summary.failed ? 'error' : 'success'"
-        :icon="active ? mdiUpload : summary.failed ? mdiAlertCircle : mdiCheckCircle"
+        :icon="active ? '$uploadArrow' : summary.failed ? '$errorFilled' : '$checkCircleFilled'"
         aria-hidden="true"
       />
       <div class="vibe64-upload-queue__heading">
@@ -13,14 +13,14 @@
       </div>
       <v-btn v-if="active" variant="text" @click="$emit('cancel-all')">Cancel all</v-btn>
       <v-btn
-        :icon="expanded ? mdiChevronDown : mdiChevronUp"
+        :icon="expanded ? '$expand' : '$collapse'"
         :aria-label="expanded ? 'Hide upload list' : 'Show upload list'"
         :aria-expanded="expanded ? 'true' : 'false'"
         :aria-controls="listId"
         variant="text"
         @click="expanded = !expanded"
       />
-      <v-btn v-if="!active" :icon="mdiClose" aria-label="Close uploads" variant="text" @click="$emit('clear')" />
+      <v-btn v-if="!active" icon="$close" aria-label="Close uploads" variant="text" @click="$emit('clear')" />
     </header>
     <v-progress-linear v-if="active" :model-value="summary.percent" :aria-label="`Uploads ${summary.percent}% complete`" color="primary" height="4" />
     <ol v-show="expanded" :id="listId" class="vibe64-upload-queue__items">
@@ -39,10 +39,10 @@
             rounded
           />
         </div>
-        <v-btn v-if="ACTIVE.includes(item.phase)" :icon="mdiClose" :aria-label="`Cancel ${item.fileName}`" :title="`Cancel ${item.fileName}`" variant="text" @click="$emit('cancel', item)" />
+        <v-btn v-if="ACTIVE.includes(item.phase)" icon="$close" :aria-label="`Cancel ${item.fileName}`" :title="`Cancel ${item.fileName}`" variant="text" @click="$emit('cancel', item)" />
         <template v-else>
-          <v-btn v-if="item.phase === 'failed' || item.phase === 'cancelled'" :icon="mdiRefresh" :aria-label="`Try ${item.fileName} again`" :title="`Try ${item.fileName} again`" variant="text" @click="$emit('retry', item)" />
-          <v-btn :icon="mdiClose" :aria-label="`Remove ${item.fileName} from the list`" :title="`Remove ${item.fileName} from the list`" variant="text" @click="$emit('remove', item)" />
+          <v-btn v-if="item.phase === 'failed' || item.phase === 'cancelled'" icon="$refresh" :aria-label="`Try ${item.fileName} again`" :title="`Try ${item.fileName} again`" variant="text" @click="$emit('retry', item)" />
+          <v-btn icon="$close" :aria-label="`Remove ${item.fileName} from the list`" :title="`Remove ${item.fileName} from the list`" variant="text" @click="$emit('remove', item)" />
         </template>
       </li>
     </ol>
@@ -59,17 +59,6 @@ function noUploadNote() {
 
 <script setup>
 import { computed, ref, useId } from "vue";
-import {
-  mdiAlertCircle,
-  mdiCancel,
-  mdiCheckCircle,
-  mdiChevronDown,
-  mdiChevronUp,
-  mdiClockOutline,
-  mdiClose,
-  mdiRefresh,
-  mdiUpload
-} from "@mdi/js";
 import { formatFileSize } from "@/lib/vibe64FileSize.js";
 
 // The upload list docked under a Files area: one row per file with its own
@@ -127,7 +116,7 @@ function statusText(item) {
 }
 
 function statusIcon(item) {
-  return { ready: mdiCheckCircle, failed: mdiAlertCircle, cancelled: mdiCancel, uploading: mdiUpload, delivering: mdiUpload }[item.phase] || mdiClockOutline;
+  return { ready: "$checkCircleFilled", failed: "$errorFilled", cancelled: "$block", uploading: "$uploadArrow", delivering: "$uploadArrow" }[item.phase] || "$schedule";
 }
 
 function statusColor(item) {

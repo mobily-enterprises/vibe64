@@ -3,21 +3,20 @@
     <v-btn
       v-if="stopVisible" aria-label="Stop" title="Stop assistant"
       :disabled="!stopEnabled" :aria-busy="stopping ? 'true' : undefined"
-      :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
+      icon="$stop" size="small" variant="text" class="studio-autopilot__composer-action"
       @click="$emit('stop')"
     />
     <v-btn
       ref="sendButton" :aria-label="submitAriaLabel" :title="submitTitle"
       :disabled="!canSubmit" :aria-busy="sending && !canSubmit ? 'true' : undefined"
       color="primary" size="small" variant="flat"
-      :icon="submitMode === 'send' ? mdiSend : mdiArrowTopRight"
+      :icon="submitMode === 'send' ? '$send' : '$arrowOutward'"
       class="studio-autopilot__composer-action" @click="$emit('submit')"
     />
   </div>
 </template>
 <script setup>
 import { ref } from "vue";
-import { mdiArrowTopRight, mdiSend, mdiStop } from "@mdi/js";
 defineProps({
   stopVisible: Boolean, stopEnabled: Boolean, stopping: Boolean,
   canSubmit: Boolean, sending: Boolean,

@@ -7,7 +7,7 @@
       <template #title>
         <Vibe64DashboardPageHeader
           description="Archived chats and their conversations."
-          :icon="mdiHistory"
+          icon="$history"
           title="Session history"
         />
       </template>
@@ -16,7 +16,6 @@
 </template>
 
 <script setup>
-import { mdiHistory } from "@mdi/js";
 import ArchivedVibe64Sessions from "@/components/studio/ArchivedVibe64Sessions.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 </script>

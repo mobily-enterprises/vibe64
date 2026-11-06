@@ -2,7 +2,6 @@
 // Add a target: choose where it goes (with what it needs, how long it takes
 // and what it costs), then which package and which account.
 import { computed, ref, watch } from "vue";
-import { mdiAlertOutline, mdiArrowLeft, mdiCheckCircle, mdiCircleOutline, mdiClockOutline, mdiCurrencyUsd, mdiPlus } from "@mdi/js";
 import { destinationAccent, destinationGap, destinationIcon } from "./publishFormat.js";
 
 const props = defineProps({
@@ -77,7 +76,7 @@ async function add() {
   <v-dialog :model-value="modelValue" max-width="760" scrollable @update:model-value="emit('update:modelValue', $event)">
     <v-card class="publish-dialog" rounded="xl">
       <v-card-title class="publish-dialog__title">
-        <v-btn v-if="chosen" :icon="mdiArrowLeft" aria-label="Choose another destination" size="small" variant="text" @click="pick('')" />
+        <v-btn v-if="chosen" icon="$arrowBack" aria-label="Choose another destination" size="small" variant="text" @click="pick('')" />
         {{ chosen ? `Add ${chosen.label}` : "Where should it go?" }}
       </v-card-title>
       <v-card-text>
@@ -97,10 +96,10 @@ async function add() {
               <strong>{{ entry.label }} <v-chip v-if="entry.zeroAccount && entry.id !== 'github-releases'" class="ml-1" color="success" size="x-small" variant="tonal">No account</v-chip></strong>
               <span>{{ entry.summary }}</span>
               <span class="publish-destination__meta">
-                <span><v-icon :icon="mdiClockOutline" size="14" /> {{ entry.repeat }} after setup</span>
-                <span><v-icon :icon="mdiCurrencyUsd" size="14" /> {{ entry.cost }}</span>
+                <span><v-icon icon="$schedule" size="14" /> {{ entry.repeat }} after setup</span>
+                <span><v-icon icon="$attachMoney" size="14" /> {{ entry.cost }}</span>
               </span>
-              <span v-if="missing(entry)" class="publish-destination__missing"><v-icon :icon="mdiAlertOutline" size="14" /> {{ missing(entry) }}.</span>
+              <span v-if="missing(entry)" class="publish-destination__missing"><v-icon icon="$warning" size="14" /> {{ missing(entry) }}.</span>
             </span>
           </button>
         </div>
@@ -110,7 +109,7 @@ async function add() {
             <h3>What it needs</h3>
             <ul>
               <li v-for="need in needs" :key="need.text" :class="{ 'is-done': need.done }">
-                <v-icon :icon="need.done ? mdiCheckCircle : mdiCircleOutline" size="16" /> {{ need.text }}
+                <v-icon :icon="need.done ? '$checkCircleFilled' : '$circle'" size="16" /> {{ need.text }}
               </li>
             </ul>
             <p>First time: {{ chosen.firstTime }}. Later: {{ chosen.repeat }}. {{ chosen.cost }}.</p>
@@ -140,7 +139,7 @@ async function add() {
             <v-alert v-else class="mb-4" type="info" variant="tonal">
               Add your {{ chosen.accountKind.label }} account to your publishing keys first.
               <template #append>
-                <v-btn :prepend-icon="mdiPlus" rounded="pill" size="small" variant="flat" color="primary" @click="emit('add-account', chosen.accountKind.id)">Add account</v-btn>
+                <v-btn prepend-icon="$add" rounded="pill" size="small" variant="flat" color="primary" @click="emit('add-account', chosen.accountKind.id)">Add account</v-btn>
               </template>
             </v-alert>
           </template>

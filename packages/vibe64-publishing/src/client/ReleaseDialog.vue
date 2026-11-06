@@ -3,23 +3,6 @@
 // 2) review the exact plan for the saved commit with its preflight, then dry
 // run or Publish (which opens the person's confirmation).
 import { computed, ref, watch } from "vue";
-import {
-  mdiAccountKeyOutline,
-  mdiAlertCircle,
-  mdiArrowRight,
-  mdiCheckCircle,
-  mdiCloseCircle,
-  mdiContentSaveOutline,
-  mdiInformationOutline,
-  mdiLockOutline,
-  mdiPencilOutline,
-  mdiRefresh,
-  mdiRocketLaunchOutline,
-  mdiSourceCommit,
-  mdiTagOutline,
-  mdiTestTube,
-  mdiWrenchOutline
-} from "@mdi/js";
 import { destinationIcon, hostOf, packageLabeller, shortCommit } from "./publishFormat.js";
 
 const props = defineProps({
@@ -89,8 +72,8 @@ const planSteps = computed(() => {
   if (!plan.value) return [];
   const versionOf = (id) => plan.value.packages?.find((entry) => entry.id === id)?.version || shortCommit(plan.value.savedCommit);
   return (plan.value.steps || []).map((entry) => {
-    if (entry.kind === "build") return { id: `build:${entry.package}`, icon: mdiWrenchOutline, text: `Build ${packageLabel.value(entry.package)} ${versionOf(entry.package)} once` };
-    if (entry.kind === "tag") return { id: `tag:${entry.tag}`, icon: mdiTagOutline, text: `Tag the saved commit ${entry.tag}` };
+    if (entry.kind === "build") return { id: `build:${entry.package}`, icon: "$build", text: `Build ${packageLabel.value(entry.package)} ${versionOf(entry.package)} once` };
+    if (entry.kind === "tag") return { id: `tag:${entry.tag}`, icon: "$sell", text: `Tag the saved commit ${entry.tag}` };
     const target = plan.value.targets.find((candidate) => candidate.id === entry.target);
     const account = accountsById.value[target.account];
     const where = hostOf(target.settings?.registry || target.settings?.repository || "");
@@ -187,8 +170,8 @@ function publish() {
 }
 
 function checkIcon(check) {
-  if (check.ok) return { icon: mdiCheckCircle, color: "success" };
-  return check.severity === "block" ? { icon: mdiCloseCircle, color: "error" } : { icon: mdiAlertCircle, color: "warning" };
+  if (check.ok) return { icon: "$checkCircleFilled", color: "success" };
+  return check.severity === "block" ? { icon: "$cancel", color: "error" } : { icon: "$errorFilled", color: "warning" };
 }
 </script>
 
@@ -235,7 +218,7 @@ function checkIcon(check) {
               variant="outlined"
             />
             <div v-if="needsWriting && !sessionId" class="publish-release__note" role="note">
-              <v-icon :icon="mdiInformationOutline" size="18" />
+              <v-icon icon="$info" size="18" />
               <span v-if="unreleasedSaved">Writing a new version needs a session. Start one with <strong>+</strong> and open Publish from it, or release what is saved as it is.</span>
               <span v-else>The saved version is already published. Writing a new one needs a session: start one with <strong>+</strong> and open Publish from it.</span>
             </div>
@@ -249,7 +232,7 @@ function checkIcon(check) {
 
         <template v-else>
           <div class="publish-release__baseline">
-            <v-icon :icon="mdiSourceCommit" size="18" />
+            <v-icon icon="$commit" size="18" />
             <span>Saved commit <code>{{ shortCommit(baseline.commit) }}</code> on {{ baseline.branch }}</span>
             <v-chip :color="baseline.pushed ? 'success' : 'warning'" size="x-small" variant="tonal">{{ baseline.pushed ? "pushed" : "not pushed" }}</v-chip>
           </div>
@@ -275,7 +258,7 @@ function checkIcon(check) {
           <div v-if="keys.exists && !keys.unlocked" class="publish-release__unlock">
             <v-text-field
               v-model="passphrase"
-              :prepend-inner-icon="mdiLockOutline"
+              prepend-inner-icon="$lock"
               autocomplete="current-password"
               density="comfortable"
               hide-details
@@ -289,7 +272,7 @@ function checkIcon(check) {
 
           <h3 class="publish-release__heading">
             Before publishing
-            <v-btn :icon="mdiRefresh" :loading="busy === 'plan'" aria-label="Check again" class="ml-auto" size="small" variant="text" @click="review" />
+            <v-btn icon="$refresh" :loading="busy === 'plan'" aria-label="Check again" class="ml-auto" size="small" variant="text" @click="review" />
           </h3>
           <v-skeleton-loader v-if="busy === 'plan' && !plan" type="list-item, list-item, list-item" />
           <ul v-else-if="plan" class="publish-release__checks">
@@ -325,7 +308,7 @@ function checkIcon(check) {
               </v-btn>
               <v-btn
                 v-else-if="check.id === 'credentials-valid' && !check.ok"
-                :prepend-icon="mdiAccountKeyOutline"
+                prepend-icon="$passkey"
                 rounded="pill"
                 size="small"
                 variant="tonal"
@@ -344,7 +327,7 @@ function checkIcon(check) {
             </li>
             <li v-if="passedChecks.length" class="publish-release__passed">
               <button type="button" @click="showPassed = !showPassed">
-                <v-icon :icon="mdiCheckCircle" color="success" size="20" />
+                <v-icon icon="$checkCircleFilled" color="success" size="20" />
                 <span v-if="passedChecks.length === (plan.preflight?.checks || []).length">All {{ passedChecks.length }} checks passed<em>{{ showPassed ? "Hide" : "Show" }}</em></span>
                 <span v-else>{{ showPassed ? "Hide" : "Show" }} {{ passedChecks.length }} passed {{ passedChecks.length === 1 ? "check" : "checks" }}</span>
               </button>
@@ -375,7 +358,7 @@ function checkIcon(check) {
             <v-btn
               :disabled="!sessionId"
               :loading="busy === 'prepare'"
-              :prepend-icon="mdiPencilOutline"
+              prepend-icon="$edit"
               color="primary"
               rounded="pill"
               variant="flat"
@@ -385,16 +368,16 @@ function checkIcon(check) {
             </v-btn>
           </template>
           <template v-else>
-            <v-btn v-if="prepared && canSave" :prepend-icon="mdiContentSaveOutline" rounded="pill" variant="tonal" @click="save">Save</v-btn>
-            <v-btn :append-icon="mdiArrowRight" color="primary" data-test="release-continue" rounded="pill" variant="flat" @click="review">Continue</v-btn>
+            <v-btn v-if="prepared && canSave" prepend-icon="$save" rounded="pill" variant="tonal" @click="save">Save</v-btn>
+            <v-btn append-icon="$arrowForward" color="primary" data-test="release-continue" rounded="pill" variant="flat" @click="review">Continue</v-btn>
           </template>
         </template>
         <template v-else>
           <v-btn rounded="pill" variant="text" @click="emit('update:modelValue', false)">Close</v-btn>
           <v-spacer />
           <span v-if="blockedHint" class="publish-release__blocked">{{ blockedHint }}</span>
-          <v-btn :disabled="!ready" :loading="busy === 'dry-run'" :prepend-icon="mdiTestTube" rounded="pill" variant="tonal" @click="dryRun">Dry run</v-btn>
-          <v-btn :disabled="!ready" :prepend-icon="mdiRocketLaunchOutline" color="primary" rounded="pill" variant="flat" @click="publish">Publish…</v-btn>
+          <v-btn :disabled="!ready" :loading="busy === 'dry-run'" prepend-icon="$science" rounded="pill" variant="tonal" @click="dryRun">Dry run</v-btn>
+          <v-btn :disabled="!ready" prepend-icon="$rocketLaunch" color="primary" rounded="pill" variant="flat" @click="publish">Publish…</v-btn>
         </template>
       </v-card-actions>
     </v-card>

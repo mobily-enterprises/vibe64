@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiCheck, mdiClose, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import { githubIssueLabelsPath } from "@/lib/vibe64GithubProject.js";
 
@@ -82,12 +81,12 @@ async function submit() {
 </script>
 
 <template>
-  <v-btn :prepend-icon="mdiPlus" color="primary" variant="text" height="48" :disabled="disabled || pending" @click="open = true">New label</v-btn>
+  <v-btn prepend-icon="$add" color="primary" variant="text" height="48" :disabled="disabled || pending" @click="open = true">New label</v-btn>
   <v-dialog v-model="open" max-width="30rem" scrollable :persistent="pending" aria-label="New label">
     <v-card tag="form" rounded="xl" @submit.prevent.stop="submit">
       <div class="d-flex align-center justify-space-between ga-3 pa-5 pb-2">
         <h2 class="text-title-large">New label</h2>
-        <v-btn :icon="mdiClose" variant="text" size="48" aria-label="Close new label" :disabled="pending" @click="open = false" />
+        <v-btn icon="$close" variant="text" size="48" aria-label="Close new label" :disabled="pending" @click="open = false" />
       </div>
       <v-card-text class="d-flex flex-column ga-4">
         <v-sheet color="surface-light" rounded="lg" class="pa-4 d-flex flex-column align-center ga-2">
@@ -106,7 +105,7 @@ async function submit() {
               :aria-label="swatch.name" :aria-pressed="normalizedColor === swatch.color" :disabled="pending"
               @click="color = swatch.color"
             >
-              <v-icon v-if="normalizedColor === swatch.color" :icon="mdiCheck" />
+              <v-icon v-if="normalizedColor === swatch.color" icon="$check" />
             </v-btn>
           </div>
         </fieldset>

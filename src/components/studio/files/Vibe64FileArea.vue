@@ -11,7 +11,7 @@
     @keydown="previewKey"
   >
     <div v-if="dragDepth > 0 && canWrite" class="vibe64-file-area__drop-target" role="status">
-      <v-icon :icon="mdiTrayArrowDown" size="40" aria-hidden="true" />
+      <v-icon icon="$download" size="40" aria-hidden="true" />
       <span>Drop to upload to {{ folderLabel }}</span>
     </div>
 
@@ -48,7 +48,7 @@
       <div class="vibe64-file-area__file-bar">
         <!-- A disabled button shows no tooltip, so its wrapper explains why. -->
         <span :title="dirty ? 'Save or discard your changes first' : 'Back to folder'">
-          <v-btn :icon="mdiArrowLeft" aria-label="Back to folder" variant="text" :disabled="dirty || busy" @click="closeFile" />
+          <v-btn icon="$arrowBack" aria-label="Back to folder" variant="text" :disabled="dirty || busy" @click="closeFile" />
         </span>
         <div class="vibe64-file-area__file-heading">
           <h3 ref="fileHeading" class="vibe64-file-area__file-name" :title="file.path" tabindex="-1">{{ fileName }}</h3>
@@ -61,12 +61,12 @@
           </template>
           <template v-else>
             <template v-if="imageSiblings.length > 1">
-              <v-btn :icon="mdiChevronLeft" aria-label="Previous image" title="Previous image (←)" variant="text" @click="stepImage(-1)" />
-              <v-btn :icon="mdiChevronRight" aria-label="Next image" title="Next image (→)" variant="text" @click="stepImage(1)" />
+              <v-btn icon="$chevronLeft" aria-label="Previous image" title="Previous image (←)" variant="text" @click="stepImage(-1)" />
+              <v-btn icon="$chevronRight" aria-label="Next image" title="Next image (→)" variant="text" @click="stepImage(1)" />
             </template>
-            <v-btn v-bind="barAction(mdiDownload, 'Download')" aria-label="Download file" :loading="downloading.includes(file.path)" @click="download(file.path)" />
-            <v-btn v-if="destinations.length" v-bind="barAction(mdiFileMoveOutline, readOnly ? 'Copy to…' : 'Move or copy…')" :disabled="busy" @click="openTransfer(fileEntry)" />
-            <v-btn v-if="canWrite" :icon="mdiDeleteOutline" aria-label="Delete file" title="Delete" variant="text" :disabled="busy" @click="openDialog('delete', fileEntry)" />
+            <v-btn v-bind="barAction('$download', 'Download')" aria-label="Download file" :loading="downloading.includes(file.path)" @click="download(file.path)" />
+            <v-btn v-if="destinations.length" v-bind="barAction('$driveFileMove', readOnly ? 'Copy to…' : 'Move or copy…')" :disabled="busy" @click="openTransfer(fileEntry)" />
+            <v-btn v-if="canWrite" icon="$delete" aria-label="Delete file" title="Delete" variant="text" :disabled="busy" @click="openDialog('delete', fileEntry)" />
           </template>
         </div>
       </div>
@@ -85,9 +85,9 @@
       />
       <pre v-else-if="typeof file.text === 'string'" class="vibe64-file-area__preview" tabindex="0" :aria-label="`Contents of ${fileName}`">{{ file.text }}</pre>
       <div v-else class="vibe64-file-area__empty">
-        <v-icon :icon="mdiFileOutline" size="40" aria-hidden="true" />
+        <v-icon icon="$draft" size="40" aria-hidden="true" />
         <p>{{ file.message }}</p>
-        <v-btn :prepend-icon="mdiDownload" variant="tonal" :loading="downloading.includes(file.path)" @click="download(file.path)">Download</v-btn>
+        <v-btn prepend-icon="$download" variant="tonal" :loading="downloading.includes(file.path)" @click="download(file.path)">Download</v-btn>
       </div>
     </template>
 
@@ -114,8 +114,8 @@
         <h3 tabindex="-1">{{ expired ? "This Session Dropzone has expired" : directory ? "This folder is empty" : `${areaInfo.label} is empty` }}</h3>
         <p v-if="canWrite">Drop files here, upload them, or create a text file.<template v-if="location"> The AI can use this folder too.</template></p>
         <div v-if="canWrite" class="vibe64-file-area__empty-actions">
-          <v-btn :prepend-icon="mdiUpload" color="primary" variant="flat" @click="chooseFiles">Upload</v-btn>
-          <v-btn :prepend-icon="mdiFilePlusOutline" variant="tonal" @click="openNewFile">New file</v-btn>
+          <v-btn prepend-icon="$uploadArrow" color="primary" variant="flat" @click="chooseFiles">Upload</v-btn>
+          <v-btn prepend-icon="$noteAdd" variant="tonal" @click="openNewFile">New file</v-btn>
         </div>
       </div>
     </template>
@@ -180,7 +180,7 @@
       <v-card class="vibe64-file-area__new-file v64-focus-rings">
         <!-- A full-screen dialog on a phone keeps Create at the top, clear of the keyboard. -->
         <v-toolbar v-if="mobile" color="surface">
-          <v-btn :icon="mdiClose" aria-label="Close" :disabled="busy" @click="newFileOpen = false" />
+          <v-btn icon="$close" aria-label="Close" :disabled="busy" @click="newFileOpen = false" />
           <v-toolbar-title :id="newFileTitleId" class="vibe64-file-area__bar-title">New text file</v-toolbar-title>
           <v-btn class="vibe64-file-area__bar-action me-2" color="primary" variant="text" :loading="busy" @click="createFile">Create</v-btn>
         </v-toolbar>
@@ -227,19 +227,6 @@
 <script setup>
 import { computed, ref, useId } from "vue";
 import { useDisplay } from "vuetify";
-import {
-  mdiArrowLeft,
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiClose,
-  mdiDeleteOutline,
-  mdiDownload,
-  mdiFileMoveOutline,
-  mdiFileOutline,
-  mdiFilePlusOutline,
-  mdiTrayArrowDown,
-  mdiUpload
-} from "@mdi/js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { useVibe64FileAreaBrowser } from "@/composables/useVibe64FileAreaBrowser.js";
 import { useVibe64FileAreaCommands } from "@/composables/useVibe64FileAreaCommands.js";

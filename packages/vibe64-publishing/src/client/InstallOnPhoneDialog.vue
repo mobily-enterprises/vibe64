@@ -3,7 +3,6 @@
 // network for ten minutes at an unguessable address; the phone scans the QR.
 // Opened on an Android phone itself, the page downloads it directly instead.
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { mdiCellphoneArrowDown, mdiDownload, mdiQrcode, mdiWifi } from "@mdi/js";
 import { qrSvg } from "@local/vibe64-packaging/shared/qr";
 import { apkDownloadUrl } from "./usePublishing.js";
 
@@ -68,7 +67,7 @@ onBeforeUnmount(stop);
   <v-dialog :model-value="modelValue" max-width="520" @update:model-value="emit('update:modelValue', $event)">
     <v-card class="publish-install" rounded="xl">
       <v-card-title class="publish-dialog__title publish-install__title">
-        <span class="publish-install__badge"><v-icon :icon="mdiCellphoneArrowDown" size="22" /></span>
+        <span class="publish-install__badge"><v-icon icon="$installMobile" size="22" /></span>
         <span>
           {{ title ? `Install ${title}` : "Install on your phone" }}
           <small v-if="version">Version {{ version }} · signed with your install key</small>
@@ -76,21 +75,21 @@ onBeforeUnmount(stop);
       </v-card-title>
       <v-card-text>
         <div v-if="onThisPhone" class="publish-install__here">
-          <v-btn :href="apkDownloadUrl(releaseId, targetId)" :prepend-icon="mdiDownload" block color="success" rounded="pill" size="large" variant="flat">
+          <v-btn :href="apkDownloadUrl(releaseId, targetId)" prepend-icon="$download" block color="success" rounded="pill" size="large" variant="flat">
             Download {{ title || "the app" }}
           </v-btn>
           <ol class="publish-install__steps">
             <li><strong>Download</strong> it here. Android asks once to allow installs from your browser.</li>
             <li><strong>Install.</strong> Later versions install over it and keep its data.</li>
           </ol>
-          <v-btn v-if="!showQr" :prepend-icon="mdiQrcode" rounded="pill" variant="text" @click="revealQr">Show a QR code for another phone</v-btn>
+          <v-btn v-if="!showQr" prepend-icon="$qrCode" rounded="pill" variant="text" @click="revealQr">Show a QR code for another phone</v-btn>
         </div>
         <div v-if="showQr" class="publish-install__layout">
           <div class="publish-install__qr" :class="{ 'is-waiting': !qr }">
             <!-- eslint-disable-next-line vue/no-v-html -- qrSvg escapes its only text -->
             <div v-if="qr" class="publish-install__code" v-html="qr" />
             <v-progress-circular v-else-if="busy" color="primary" indeterminate />
-            <v-btn v-else :prepend-icon="mdiWifi" rounded="pill" variant="tonal" @click="start">Share again</v-btn>
+            <v-btn v-else prepend-icon="$wifi" rounded="pill" variant="tonal" @click="start">Share again</v-btn>
           </div>
           <ol class="publish-install__steps">
             <li><strong>Scan</strong> with your Android phone's camera, on the same Wi-Fi as this computer.</li>
@@ -99,12 +98,12 @@ onBeforeUnmount(stop);
           </ol>
         </div>
         <p v-if="share && showQr" class="publish-install__expiry">
-          <v-icon :icon="mdiWifi" size="16" /> Shared on your network for {{ minutes }}. Closing this stops it.
+          <v-icon icon="$wifi" size="16" /> Shared on your network for {{ minutes }}. Closing this stops it.
         </p>
         <v-alert v-if="error" class="mt-3" type="warning" variant="tonal">{{ error }}</v-alert>
       </v-card-text>
       <v-card-actions class="publish-dialog__actions">
-        <v-btn v-if="!onThisPhone" :href="apkDownloadUrl(releaseId, targetId)" :prepend-icon="mdiDownload" rounded="pill" variant="text">Download APK</v-btn>
+        <v-btn v-if="!onThisPhone" :href="apkDownloadUrl(releaseId, targetId)" prepend-icon="$download" rounded="pill" variant="text">Download APK</v-btn>
         <v-spacer />
         <v-btn color="primary" rounded="pill" variant="flat" @click="emit('update:modelValue', false)">Done</v-btn>
       </v-card-actions>

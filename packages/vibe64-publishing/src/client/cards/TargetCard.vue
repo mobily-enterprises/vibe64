@@ -3,7 +3,6 @@
 // version people can get now (verified by reading it back), what is happening
 // to it, and the destination's own facts and actions.
 import { computed } from "vue";
-import { mdiAlertCircleOutline, mdiCheckDecagram, mdiDotsVertical, mdiOpenInNew, mdiTrashCanOutline, mdiAccountKeyOutline } from "@mdi/js";
 import { destinationAccent, destinationIcon, proofLine, publicPageUrl, relativeTime } from "../publishFormat.js";
 
 const props = defineProps({
@@ -53,18 +52,18 @@ const failure = computed(() => props.activity?.failure || null);
       </div>
       <v-menu location="bottom end">
         <template #activator="{ props: menu }">
-          <v-btn v-bind="menu" :aria-label="`More for ${target.id}`" :disabled="busy" :icon="mdiDotsVertical" size="small" variant="text" />
+          <v-btn v-bind="menu" :aria-label="`More for ${target.id}`" :disabled="busy" icon="$moreVert" size="small" variant="text" />
         </template>
         <v-list density="compact" min-width="220">
           <v-list-item
             v-for="choice in accountChoices"
             :key="choice.id"
             :active="choice.id === target.account"
-            :prepend-icon="mdiAccountKeyOutline"
+            prepend-icon="$passkey"
             :title="`Use ${choice.label}`"
             @click="emit('change-account', choice.id)"
           />
-          <v-list-item :prepend-icon="mdiTrashCanOutline" base-color="error" title="Remove target" @click="emit('remove')" />
+          <v-list-item prepend-icon="$delete" base-color="error" title="Remove target" @click="emit('remove')" />
         </v-list>
       </v-menu>
     </header>
@@ -85,7 +84,7 @@ const failure = computed(() => props.activity?.failure || null);
     </div>
 
     <button v-if="failure && !activity.running" class="publish-target__failure" type="button" @click="emit('show-release', failure.release.id)">
-      <v-icon :icon="mdiAlertCircleOutline" size="18" />
+      <v-icon icon="$error" size="18" />
       <span><strong>Last release failed.</strong> {{ failure.message }}</span>
     </button>
 
@@ -100,7 +99,7 @@ const failure = computed(() => props.activity?.failure || null);
             class="publish-target__verified publish-target__verified--file"
             :title="`Read back from ${destination?.label || 'the destination'} after publishing: ${file.name} sha256 ${file.sha256}`"
           >
-            <v-icon :icon="mdiCheckDecagram" color="success" size="16" />
+            <v-icon icon="$verified" color="success" size="16" />
             <span class="publish-target__file-lines">
               <span class="publish-target__file">{{ file.name }}</span>
               <span class="publish-target__mono">sha256 {{ file.sha256.slice(0, 12) }}…</span>
@@ -111,7 +110,7 @@ const failure = computed(() => props.activity?.failure || null);
       <div v-else-if="proof && !activity.running">
         <dt>Verified</dt>
         <dd class="publish-target__verified" :title="`Read back from ${destination?.label || 'the destination'} after publishing: ${proof}`">
-          <v-icon :icon="mdiCheckDecagram" color="success" size="16" />
+          <v-icon icon="$verified" color="success" size="16" />
           <span class="publish-target__mono">{{ proof }}</span>
         </dd>
       </div>
@@ -121,7 +120,7 @@ const failure = computed(() => props.activity?.failure || null);
 
     <footer v-if="$slots.actions || pageUrl" class="publish-target__actions">
       <slot name="actions" />
-      <v-btn v-if="pageUrl" :append-icon="mdiOpenInNew" :href="pageUrl" rel="noopener" rounded="pill" size="small" target="_blank" variant="tonal">
+      <v-btn v-if="pageUrl" append-icon="$openInNew" :href="pageUrl" rel="noopener" rounded="pill" size="small" target="_blank" variant="tonal">
         View {{ latest.version }}
       </v-btn>
     </footer>

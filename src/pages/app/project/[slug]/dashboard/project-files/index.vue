@@ -2,7 +2,7 @@
   <section class="vibe64-dashboard-page">
     <Vibe64DashboardPageHeader
       description="Files every session in this project can use: drop files here to share them, and keep backups."
-      :icon="mdiFolderMultipleOutline"
+      icon="$folderCopy"
       title="Project files"
     />
     <Vibe64ProjectFiles :project-slug="projectSlug" />
@@ -12,7 +12,6 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { mdiFolderMultipleOutline } from "@mdi/js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import Vibe64ProjectFiles from "@/components/studio/files/Vibe64ProjectFiles.vue";

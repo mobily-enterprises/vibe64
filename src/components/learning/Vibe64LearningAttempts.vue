@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { mdiDeleteOutline } from "@mdi/js";
 
 // Courses → In progress (the one lesson in progress: Open, Restart, Delete)
 // and Courses → Archived (finished and archived lessons: Delete). The rows
@@ -114,7 +113,7 @@ async function confirmThen(key, action) {
             Delete for good
           </v-btn>
           <v-btn
-            v-else variant="text" :icon="mdiDeleteOutline" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
+            v-else variant="text" icon="$delete" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
             :title="`Delete archived ${entry.name}`" :disabled="Boolean(busy)" :loading="busy === `archive-delete:${entry.attemptId}`"
             data-test="learning-archived-delete" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))"
           />

@@ -2,6 +2,8 @@ import { renderToString } from '@vue/server-renderer';
 import * as Vue from 'vue';
 import { createVuetify } from 'vuetify';
 import { expect, it, vi } from 'vitest';
+import { createMaterialVuetifyOptions } from '@jskit-ai/material-web/client';
+import { theme as vibe64Theme } from '../../src/theme/index.js';
 
 vi.mock('vuetify/components/VBtn', () => ({ VBtn: {
   inheritAttrs: false, setup: (_, { attrs, slots }) => () => Vue.h('button', attrs, slots.default?.()),
@@ -13,6 +15,13 @@ import Interface from '../../src/components/studio/vibe64-session/Vibe64SourceIn
 import Inspector from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue';
 import ProgramInspector from '../../packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue';
 import TreeBranch from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue';
+
+// The file tree and the inspector draw their icons with v-icon, so they render with the app's own Vuetify.
+function withVuetify(component, props) {
+  const app = Vue.createSSRApp(component, props);
+  app.use(createVuetify(createMaterialVuetifyOptions(vibe64Theme)));
+  return app;
+}
 
 async function renderInterface(overrides = {}) {
   const app = Vue.createSSRApp(Interface, {
@@ -140,7 +149,7 @@ it('saved file overviews remain accessible without a Helper, separate from funct
 it('file icons distinguish the explicit main source from same-named and shared supporting files', async () => {
   const program = { id: 'run', title: 'Run work', mainSource: 'app/run.py' };
   const items = ['app/run.py', 'shared/run.py', 'shared/math.rs'].map(path => ({ id: path, kind: 'file', name: path.split('/').pop(), file: { path, sourceLines: 10 }, reasons: [], volume: .5, programs: [program] }));
-  const html = await renderToString(Vue.createSSRApp(TreeBranch, { items, folderState: new Map() }));
+  const html = await renderToString(withVuetify(TreeBranch, { items, folderState: new Map() }));
   expect(html.match(/subsystem-tree__file--main/gu)).toHaveLength(1);
   expect(html).toContain('Main ·');
   expect(html.match(/Part of ·/gu)).toHaveLength(2);
@@ -155,7 +164,7 @@ it('many memberships cannot bury the main marker or repeat capability bodies', a
   expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Other capability'));
   expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Another capability'));
   expect(html).not.toContain('Long repeated body.');
-  const icons = await renderToString(Vue.createSSRApp(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }], folderState: new Map() }));
+  const icons = await renderToString(withVuetify(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }], folderState: new Map() }));
   expect(icons.indexOf('Main ·')).toBeLessThan(icons.indexOf('Part of ·'));
   expect(icons).toContain('2 Programs');
 });
@@ -180,7 +189,7 @@ it('the file document has one explanation field and never hides saved text behin
 it('subsystem reading offers Files immediately and omits an empty Program section', async () => {
   const file = { id: 'file:app.py', path: 'app.py', sourceLines: 42 };
   const outline = { owner: { id: 'directory:app', title: 'Application', root: 'app', description: 'Runs the application.' }, files: [file], programs: [], programStatus: 'valid', operations: [], publicEntries: [], publicSymbols: [], boundarySymbols: [], observedSymbols: [], availableSymbols: [], tree: [{ kind: 'file', id: file.id, name: 'app.py', file, reasons: [], volume: 1 }] };
-  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  const html = await renderToString(withVuetify(Inspector, { outline, embedded: true }));
   expect(html).toContain('aria-label="In this subsystem"');
   expect(html).toMatch(/<button[^>]*>Files <small[^>]*>1<\/small><\/button>/u);
   expect(html).toContain('data-file-path="app.py"');
@@ -194,7 +203,7 @@ it('subsystem reading offers Files immediately and omits an empty Program sectio
 
 it('invalid Programs retain responsibility without raw document navigation', async () => {
   const outline = { owner: { id: 'directory:app', title: 'Application', root: 'app', description: 'Coordinates application requests.' }, files: [], programs: [], programStatus: 'invalid', programDiagnostics: [{ code: 'PROGRAM_SOURCE_MISSING', details: { path: 'genesis/program/app/run.md', sourcePath: 'app/missing.go' }, message: 'Missing source citation.' }], operations: [], publicEntries: [], publicSymbols: [], boundarySymbols: [], observedSymbols: [], availableSymbols: [], tree: [] };
-  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  const html = await renderToString(withVuetify(Inspector, { outline, embedded: true }));
   expect(html).toContain('Coordinates application requests.');
   expect(html).toContain('Program descriptions need refresh.');
   expect(html).toContain('Missing source citation.');
@@ -209,13 +218,13 @@ it('subsystem import evidence exposes importing file paths without claiming indi
   const outline = { owner: { id: 'directory:engine', title: 'Engine', root: 'engine' }, files: [], programs: [], programStatus: 'valid', dependencyCoverage: 'complete', operations: [], publicEntries: [], publicSymbols: [], availableSymbols: [], tree: [],
     observedSymbols: [{ id: 'run', name: 'Run', kind: 'function', source, consumers: [consumer] }],
     boundarySymbols: [{ id: 'other', name: 'Other', kind: 'value', source: { ...source, symbolId: 'other' }, consumers: [consumer] }] };
-  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  const html = await renderToString(withVuetify(Inspector, { outline, embedded: true }));
   expect(html).toContain('Imported by 1 subsystem · 1 file');
   expect(html).toContain('Show files that import this declaration.');
   expect(html).toContain('ui/view.go');
   expect(html).toContain('Exports from externally used files');
   expect(html).not.toContain('API review candidates');
-  const candidates = await renderToString(Vue.createSSRApp(Inspector, { outline: { ...outline, observedSymbols: [] }, embedded: true }));
+  const candidates = await renderToString(withVuetify(Inspector, { outline: { ...outline, observedSymbols: [] }, embedded: true }));
   expect(candidates).toContain('Source file imported by 1 subsystem · 1 file');
   expect(candidates).toContain('use of this particular export is unproven.');
   expect(candidates).toContain('ui/view.go');

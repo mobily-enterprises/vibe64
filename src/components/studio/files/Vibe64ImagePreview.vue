@@ -9,9 +9,9 @@
       tabindex="0"
     >
       <div v-if="status === 'failed'" class="vibe64-image-preview__failed" role="alert">
-        <v-icon :icon="mdiImageBrokenVariant" size="40" aria-hidden="true" />
+        <v-icon icon="$brokenImage" size="40" aria-hidden="true" />
         <p>This image could not be shown. Try again or download it.</p>
-        <v-btn :prepend-icon="mdiRefresh" variant="tonal" @click="retry">Try again</v-btn>
+        <v-btn prepend-icon="$refresh" variant="tonal" @click="retry">Try again</v-btn>
       </div>
       <template v-else>
         <v-skeleton-loader v-if="status === 'loading'" class="vibe64-image-preview__loading" type="image" />
@@ -30,7 +30,7 @@
       <span class="vibe64-image-preview__details">{{ details }}</span>
       <v-btn
         :disabled="status !== 'loaded'"
-        :prepend-icon="actualSize ? mdiFitToScreenOutline : mdiMagnifyPlusOutline"
+        :prepend-icon="actualSize ? '$fitScreen' : '$zoomIn'"
         :aria-pressed="actualSize ? 'true' : 'false'"
         variant="text"
         @click="actualSize = !actualSize"
@@ -43,7 +43,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiFitToScreenOutline, mdiImageBrokenVariant, mdiMagnifyPlusOutline, mdiRefresh } from "@mdi/js";
 import { formatFileSize } from "@/lib/vibe64FileSize.js";
 
 // One image shown in place: fitted to the pane, or at its actual size on

@@ -9,7 +9,7 @@
         :aria-label="previewIdentityTitle"
         :color="previewIdentityError ? 'error' : undefined"
         :disabled="previewIdentityBusy"
-        :icon="mdiAccountSwitchOutline"
+        icon="$switchAccount"
         size="small"
         :title="previewIdentityTitle"
         variant="text"
@@ -18,7 +18,7 @@
 
     <v-card class="vibe64-launch-controls__identity-menu">
       <v-card-item
-        :prepend-icon="mdiAccountCircleOutline"
+        prepend-icon="$accountCircle"
         subtitle="Application preview identity"
         :title="previewIdentityLabel"
       />
@@ -31,7 +31,7 @@
           :key="identity.name"
           :active="previewIdentityCurrent?.mode === 'identity' && previewIdentityCurrent?.name === identity.name"
           :disabled="previewIdentitySelectionDisabled"
-          :prepend-icon="mdiAccountCircleOutline"
+          prepend-icon="$accountCircle"
           :subtitle="`${previewIdentityTypeLabel(identity.type)}: ${identity.value}`"
           :title="identity.name"
           @click="selectPreviewIdentityFromMenu(identity)"
@@ -39,7 +39,7 @@
         <v-list-item
           :active="previewIdentityCurrent?.mode === 'guest'"
           :disabled="previewIdentitySelectionDisabled"
-          :prepend-icon="mdiAccountOffOutline"
+          prepend-icon="$personOff"
           subtitle="Use the app signed out"
           title="Guest"
           @click="selectPreviewGuest"
@@ -74,11 +74,6 @@
 // The Preview's signed-in application identity, and the AI fix offered when
 // selecting a configured identity fails.
 import { computed, ref, watch } from "vue";
-import {
-  mdiAccountCircleOutline,
-  mdiAccountOffOutline,
-  mdiAccountSwitchOutline
-} from "@mdi/js";
 import { Vibe64AiTaskButton } from "@local/vibe64-ai-tasks/client";
 
 const props = defineProps({

@@ -1,7 +1,6 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { mdiArrowLeft, mdiArrowRight } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
@@ -170,13 +169,13 @@ function keydown(event) {
            covers (your place there is kept); Continue lesson goes on with the
            current lesson where it runs (its practice project for a project lesson). -->
       <v-btn
-        v-if="continueOffered" color="primary" variant="flat" rounded="pill" min-height="40" :append-icon="mdiArrowRight"
+        v-if="continueOffered" color="primary" variant="flat" rounded="pill" min-height="40" append-icon="$arrowForward"
         class="vibe64-learning__exit" data-test="learning-continue-lesson" @click="continueLesson"
       >
         Continue lesson
       </v-btn>
       <v-btn
-        variant="tonal" rounded="pill" min-height="40" :prepend-icon="mdiArrowLeft"
+        variant="tonal" rounded="pill" min-height="40" prepend-icon="$arrowBack"
         class="vibe64-learning__exit" title="Close Courses (your place is kept)"
         data-test="learning-back" @click="learning.closeCourses()"
       >

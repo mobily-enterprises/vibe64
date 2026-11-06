@@ -17,7 +17,7 @@
         <v-btn
           aria-label="Close AI session dialog"
           :disabled="submitting"
-          :icon="mdiClose"
+          icon="$close"
           title="Close"
           variant="text"
           @click="close"
@@ -42,7 +42,7 @@
             <v-btn v-if="sessionAi" :disabled="submitting" size="small" variant="text" @click="useMainAi">Use main AI</v-btn>
           </p>
           <v-btn
-            class="vibe64-assistant-dialog__main-ai" :disabled="submitting" :prepend-icon="mdiCogOutline" size="small"
+            class="vibe64-assistant-dialog__main-ai" :disabled="submitting" prepend-icon="$settings" size="small"
             variant="text" @click="openConnectionSettings"
           >
             Change main AI for all sessions
@@ -132,7 +132,6 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { VIBE64_SESSIONS_API_SUFFIX, vibe64RepositoryApiPath } from "@/lib/vibe64SessionRequestConfig.js";
-import { mdiClose, mdiCogOutline } from "@mdi/js";
 import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accounts/client";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";

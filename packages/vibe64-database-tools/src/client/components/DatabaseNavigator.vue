@@ -7,7 +7,7 @@
       clearable
       density="compact"
       hide-details
-      :prepend-inner-icon="mdiMagnify"
+      prepend-inner-icon="$search"
       placeholder="Find tables…"
       variant="outlined"
     />
@@ -24,7 +24,7 @@
       :database="database" :running="running" @select-table="emit('select-table', $event)"
     >
       <template #table-actions>
-        <v-btn v-if="writeAvailable" :prepend-icon="mdiPlus" size="x-small" title="Insert a row into this table" variant="text" @click="emit('add-row')">Add row</v-btn>
+        <v-btn v-if="writeAvailable" prepend-icon="$add" size="x-small" title="Insert a row into this table" variant="text" @click="emit('add-row')">Add row</v-btn>
       </template>
     </DatabaseTableList>
     <div v-else-if="tab === 'saved'" class="database-workspace__nav-scroll">
@@ -35,10 +35,10 @@
         type="button"
         @click="emit('load-sql', snippet.sql)"
       >
-        <v-icon :icon="mdiBookmarkOutline" size="15" />
+        <v-icon icon="$bookmark" size="15" />
         <span><strong>{{ snippet.name }}</strong><small>{{ shortDate(snippet.updatedAt) }}</small></span>
         <v-btn
-          :icon="mdiDeleteOutline"
+          icon="$delete"
           size="x-small"
           title="Delete snippet"
           type="button"
@@ -57,7 +57,7 @@
         type="button"
         @click="emit('load-sql', entry.sql)"
       >
-        <v-icon :color="entry.ok ? undefined : 'error'" :icon="entry.ok ? mdiHistory : mdiAlertCircleOutline" size="15" />
+        <v-icon :color="entry.ok ? undefined : 'error'" :icon="entry.ok ? '$history' : '$error'" size="15" />
         <span>
           <strong>{{ firstSqlLine(entry.sql) }}</strong>
           <small>{{ shortDate(entry.at) }} · {{ entry.durationMs }} ms</small>
@@ -69,14 +69,6 @@
 </template>
 
 <script setup>
-import {
-  mdiAlertCircleOutline,
-  mdiBookmarkOutline,
-  mdiDeleteOutline,
-  mdiHistory,
-  mdiMagnify,
-  mdiPlus
-} from "@mdi/js";
 
 import { firstSqlLine, shortDate } from "../databaseText.js";
 import DatabaseTableList from "./DatabaseTableList.vue";

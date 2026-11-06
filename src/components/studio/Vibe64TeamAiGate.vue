@@ -7,7 +7,7 @@
     data-test="team-ai-gate"
   >
     <div class="vibe64-team-ai-gate__icon">
-      <v-icon :icon="mdiAccountGroupOutline" size="28" />
+      <v-icon icon="$group" size="28" />
     </div>
     <h2 class="vibe64-team-ai-gate__title">Team AI isn't set up yet</h2>
     <p class="vibe64-team-ai-gate__text">
@@ -42,7 +42,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiAccountGroupOutline } from "@mdi/js";
 
 const props = defineProps({
   checking: { type: Boolean, default: false },

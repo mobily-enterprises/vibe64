@@ -40,14 +40,14 @@
       <p>Session {{ sessionId || "unknown" }} could not be loaded.</p>
       <div class="vibe64-dashboard-page__empty-actions">
         <v-btn
-          :prepend-icon="mdiArrowLeft"
+          prepend-icon="$arrowBack"
           :to="backTo"
           variant="tonal"
         >
           Back to sessions
         </v-btn>
         <v-btn
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           variant="text"
           @click="reload"
         >
@@ -59,10 +59,6 @@
 </template>
 
 <script setup>
-import {
-  mdiArrowLeft,
-  mdiRefresh
-} from "@mdi/js";
 import ArchivedVibe64SessionDetail from "@/components/studio/ArchivedVibe64SessionDetail.vue";
 import {
   useArchivedVibe64SessionDetail

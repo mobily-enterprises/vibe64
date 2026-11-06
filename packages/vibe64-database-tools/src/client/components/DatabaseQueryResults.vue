@@ -12,7 +12,7 @@
         clearable
         density="compact"
         hide-details
-        :prepend-inner-icon="mdiMagnify"
+        prepend-inner-icon="$search"
         placeholder="Find in results…"
         variant="outlined"
       />
@@ -51,14 +51,14 @@
                 @click="emit('edit-cell', entry.index, columnIndex)"
               >
                 <span :class="{ 'database-workspace__null': value === null }">{{ displayValue(value) }}</span>
-                <v-icon :icon="mdiPencilOutline" size="15" />
+                <v-icon icon="$edit" size="15" />
               </button>
               <span v-else :class="{ 'database-workspace__null': value === null }">{{ displayValue(value) }}</span>
             </td>
             <td class="database-workspace__row-actions">
               <v-btn
                 :disabled="!rowDeleteIdentity(queryResult, entry.index)"
-                :icon="mdiDeleteOutline"
+                icon="$delete"
                 size="x-small"
                 title="Delete source row"
                 type="button"
@@ -73,14 +73,14 @@
     </div>
 
     <div v-else-if="queryResult?.kind === 'command'" class="database-workspace__command-result">
-      <v-icon :icon="mdiCheckCircleOutline" color="success" size="32" />
+      <v-icon icon="$checkCircle" color="success" size="32" />
       <strong>{{ queryResult.command || "Statement" }} completed</strong>
       <span>{{ queryResult.affectedRows }} affected rows · {{ queryResult.durationMs }} ms</span>
       <p v-for="warning in queryResult.warnings" :key="warning">{{ warning }}</p>
       <v-btn
         :aria-busy="refreshing ? 'true' : undefined"
         :disabled="refreshing || running"
-        :prepend-icon="mdiRefresh"
+        prepend-icon="$refresh"
         size="small"
         title="Refresh tables, constraints, and ERD relationships after schema-changing SQL"
         type="button"
@@ -92,7 +92,7 @@
     </div>
 
     <div v-else class="database-workspace__empty-result">
-      <v-icon :icon="mdiTableSearch" size="34" />
+      <v-icon icon="$manageSearch" size="34" />
       <strong>Run the editable SQL above.</strong>
       <span>Direct physical fields remain editable whenever this result includes a complete primary or unique key.</span>
     </div>
@@ -101,14 +101,6 @@
 
 <script setup>
 import { computed } from "vue";
-import {
-  mdiCheckCircleOutline,
-  mdiDeleteOutline,
-  mdiMagnify,
-  mdiPencilOutline,
-  mdiRefresh,
-  mdiTableSearch
-} from "@mdi/js";
 
 import { displayValue } from "../databaseText.js";
 import { cellMetadata, rowDeleteIdentity } from "../queryResultCells.js";

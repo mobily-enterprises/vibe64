@@ -1,17 +1,5 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  mdiAccountKeyOutline,
-  mdiCogOutline,
-  mdiConnection,
-  mdiFileCogOutline,
-  mdiFileDocumentMultipleOutline,
-  mdiFolderMultipleOutline,
-  mdiHeartPulse,
-  mdiHistory,
-  mdiGithub,
-  mdiPackageVariantClosed
-} from "@mdi/js";
 
 import getPlacements, {
   uniqueDashboardSectionPlacements
@@ -61,16 +49,16 @@ describe("Vibe64 dashboard placements", () => {
     expect(labels).not.toContain("Run");
     expect(labels).not.toContain("Session info");
     expect(dashboardLinks.map((placement) => [placement.props.label, placement.props.icon])).toEqual(expect.arrayContaining([
-      ["App access", mdiAccountKeyOutline],
-      ["Env", mdiFileCogOutline],
-      ["Health", mdiHeartPulse],
-      ["Integrations", mdiConnection],
-      ["Project settings", mdiCogOutline],
-      ["Pages", mdiFileDocumentMultipleOutline],
-      ["Project files", mdiFolderMultipleOutline],
-      ["Session History", mdiHistory],
-      ["Issues/PR", mdiGithub],
-      ["Publish", mdiPackageVariantClosed]
+      ["App access", "$passkey"],
+      ["Env", "$settingsApplications"],
+      ["Health", "$monitorHeart"],
+      ["Integrations", "$cable"],
+      ["Project settings", "$settings"],
+      ["Pages", "$fileCopy"],
+      ["Project files", "$folderCopy"],
+      ["Session History", "$history"],
+      ["Issues/PR", "$github"],
+      ["Publish", "$package2"]
     ]));
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);

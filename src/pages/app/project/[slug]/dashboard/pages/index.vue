@@ -2,7 +2,7 @@
   <section class="vibe64-dashboard-page">
     <Vibe64DashboardPageHeader
       description="Pages the AI made for this project. Everyone with access to the project can open them."
-      :icon="mdiFileDocumentMultipleOutline"
+      icon="$fileCopy"
       title="Pages"
     />
     <Vibe64PagesList :project-slug="projectSlug" />
@@ -12,7 +12,6 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { mdiFileDocumentMultipleOutline } from "@mdi/js";
 import { Vibe64PagesList } from "@local/vibe64-pages/client";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";

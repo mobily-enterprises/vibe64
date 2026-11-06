@@ -1,13 +1,3 @@
-import {
-  mdiCalendarClockOutline,
-  mdiFolderHomeOutline,
-  mdiFolderOutline,
-  mdiGithub,
-  mdiIdentifier,
-  mdiRobotOutline,
-  mdiSourceBranch,
-  mdiSourceCommit
-} from "@mdi/js";
 import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   vibe64SessionPullRequest,
@@ -56,7 +46,7 @@ function repositoryFact(session = {}, project = {}) {
     copyValue: remote || fullName,
     detail: remote && fullName ? remote : "Canonical Git remote",
     href,
-    icon: mdiGithub,
+    icon: "$github",
     key: "repository",
     label: "Repository",
     value: fullName || remote
@@ -87,16 +77,16 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
   return [
     ...(pullRequest ? [{
       key: "pull-request", label: pullRequest.number ? `PR #${pullRequest.number}` : "Pull request branch",
-      value: pullRequest.title || pullRequest.headBranch, href: pullRequest.url, icon: mdiGithub,
+      value: pullRequest.title || pullRequest.headBranch, href: pullRequest.url, icon: "$github",
       detail: `Save to ${pullRequest.headRepository}:${pullRequest.headBranch}`
     }, {
       key: "save-destination", label: "Save destination", value: `${pullRequest.headRepository}:${pullRequest.headBranch}`,
-      icon: mdiSourceBranch, detail: "Save updates this pull request branch"
+      icon: "$forkRight", detail: "Save updates this pull request branch"
     }] : []),
     {
       copyValue: sessionId,
       detail: "Vibe64 session identifier",
-      icon: mdiIdentifier,
+      icon: "$badge",
       key: "session",
       label: "Session",
       value: shortVibe64SessionId(sessionId),
@@ -105,7 +95,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: sourcePath,
       detail: session.sourceReady === false ? "Session source is not ready" : "Session source",
-      icon: mdiFolderOutline,
+      icon: "$folder",
       key: "source",
       label: "Source",
       value: sourcePath,
@@ -114,7 +104,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: projectSource,
       detail: "Project checkout used as the session baseline",
-      icon: mdiFolderHomeOutline,
+      icon: "$folderSpecial",
       key: "project-source",
       label: "Project baseline",
       value: projectSource,
@@ -123,7 +113,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: sessionRoot,
       detail: "Vibe64 conversation and runtime state",
-      icon: mdiFolderOutline,
+      icon: "$folder",
       key: "session-state",
       label: "Session state",
       value: sessionRoot,
@@ -132,7 +122,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: branch,
       detail: "Session branch remains recoverable in Git",
-      icon: mdiSourceBranch,
+      icon: "$forkRight",
       key: "branch",
       label: "Session branch",
       value: branch,
@@ -141,7 +131,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: baseBranch,
       detail: baseCommit ? `Based on ${baseCommit.slice(0, 12)}` : "Project branch cloned for this session",
-      icon: mdiSourceBranch,
+      icon: "$forkRight",
       key: "base-branch",
       label: "Base branch",
       value: baseBranch,
@@ -150,7 +140,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: baseCommit,
       detail: "Exact project baseline commit",
-      icon: mdiSourceCommit,
+      icon: "$commit",
       key: "base-commit",
       label: "Base commit",
       value: baseCommit.slice(0, 12),
@@ -160,7 +150,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: threadId,
       detail: "Provider thread used to continue this conversation",
-      icon: mdiRobotOutline,
+      icon: "$smartToy",
       key: "agent-thread",
       label: "Agent thread",
       value: threadId,
@@ -169,7 +159,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: turnId,
       detail: "Most recently observed provider turn",
-      icon: mdiRobotOutline,
+      icon: "$smartToy",
       key: "agent-turn",
       label: "Agent turn",
       value: turnId,
@@ -178,7 +168,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
     {
       copyValue: createdAt,
       detail: "Session creation time",
-      icon: mdiCalendarClockOutline,
+      icon: "$calendarClock",
       key: "created-at",
       label: "Created",
       value: createdAt,

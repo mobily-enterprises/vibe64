@@ -13,7 +13,7 @@
       <template #append>
         <v-btn
           v-if="entry.type === 'file' && !mobile"
-          :icon="mdiDownload"
+          icon="$download"
           :aria-label="`Download ${entry.name}`"
           :loading="downloading.includes(entry.path)"
           title="Download"
@@ -22,13 +22,13 @@
         />
         <v-menu v-if="canWrite || canTransfer || mobile">
           <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" :icon="mdiDotsVertical" :aria-label="`Actions for ${entry.name}`" variant="text" @click.stop />
+            <v-btn v-bind="menuProps" icon="$moreVert" :aria-label="`Actions for ${entry.name}`" variant="text" @click.stop />
           </template>
           <v-list class="v64-focus-rings">
-            <v-list-item v-if="entry.type === 'file' && mobile" :prepend-icon="mdiDownload" title="Download" @click="emit('download', entry.path)" />
-            <v-list-item v-if="canTransfer" :prepend-icon="mdiFileMoveOutline" :title="readOnly ? 'Copy to…' : 'Move or copy…'" @click="emit('transfer', entry)" />
-            <v-list-item v-if="canWrite" :prepend-icon="mdiPencilOutline" title="Rename" @click="emit('rename', entry)" />
-            <v-list-item v-if="canWrite" :prepend-icon="mdiDeleteOutline" title="Delete" @click="emit('delete', entry)" />
+            <v-list-item v-if="entry.type === 'file' && mobile" prepend-icon="$download" title="Download" @click="emit('download', entry.path)" />
+            <v-list-item v-if="canTransfer" prepend-icon="$driveFileMove" :title="readOnly ? 'Copy to…' : 'Move or copy…'" @click="emit('transfer', entry)" />
+            <v-list-item v-if="canWrite" prepend-icon="$edit" title="Rename" @click="emit('rename', entry)" />
+            <v-list-item v-if="canWrite" prepend-icon="$delete" title="Delete" @click="emit('delete', entry)" />
           </v-list>
         </v-menu>
       </template>
@@ -38,16 +38,6 @@
 </template>
 
 <script setup>
-import {
-  mdiDeleteOutline,
-  mdiDotsVertical,
-  mdiDownload,
-  mdiFileImageOutline,
-  mdiFileMoveOutline,
-  mdiFileOutline,
-  mdiFolderOutline,
-  mdiPencilOutline
-} from "@mdi/js";
 import { filePreviewImageType } from "@local/vibe64-source-editor/shared/fileTypes";
 import { formatFileSize } from "@/lib/vibe64FileSize.js";
 
@@ -68,8 +58,8 @@ defineProps({
 const emit = defineEmits(["delete", "download", "open", "rename", "show-more", "transfer"]);
 
 function entryIcon(entry) {
-  if (entry.type === "directory") return mdiFolderOutline;
-  return filePreviewImageType(entry.name) ? mdiFileImageOutline : mdiFileOutline;
+  if (entry.type === "directory") return "$folder";
+  return filePreviewImageType(entry.name) ? "$image" : "$draft";
 }
 
 function entrySubtitle(entry) {

@@ -9,7 +9,7 @@
     <v-btn
       aria-label="Go back in preview"
       :disabled="!previewBackAvailable"
-      :icon="mdiArrowLeft"
+      icon="$arrowBack"
       size="small"
       title="Go back in preview"
       type="button"
@@ -24,7 +24,7 @@
         <v-btn
           v-bind="menuProps"
           aria-label="Preview pages"
-          :icon="mdiRoutes"
+          icon="$route"
           size="small"
           title="Preview pages"
           type="button"
@@ -61,7 +61,7 @@
       @keydown.esc.prevent="resetPreviewAddressDraft"
     >
     <v-btn
-      :icon="mdiRefresh"
+      icon="$refresh"
       size="small"
       :disabled="previewSuspended"
       title="Reload preview"
@@ -75,7 +75,7 @@
       aria-label="Pick element"
       :color="previewPicking ? 'primary' : undefined"
       :disabled="previewPickBusy || (!previewPicking && !previewPickAvailable)"
-      :icon="mdiCursorDefaultClickOutline"
+      icon="$adsClick"
       :loading="previewPickBusy"
       size="small"
       title="Show what this element uses"
@@ -85,7 +85,7 @@
     />
     <v-btn
       :aria-label="previewSuspended ? 'Resume preview' : 'Suspend preview'"
-      :icon="previewSuspended ? mdiPlay : mdiPause"
+      :icon="previewSuspended ? '$play' : '$pause'"
       size="small"
       :title="previewSuspended ? 'Resume preview' : 'Suspend preview — unload this page; unsaved page changes may be lost'"
       type="button"
@@ -94,7 +94,7 @@
     />
     <v-btn
       :disabled="!previewDisplayedAddress"
-      :icon="mdiContentCopy"
+      icon="$contentCopy"
       size="small"
       title="Copy preview URL"
       type="button"
@@ -105,7 +105,7 @@
       v-for="action in launchActions"
       :key="action.id || action.href"
       :aria-label="action.label || 'Open in new tab'"
-      :icon="mdiOpenInNew"
+      icon="$openInNew"
       size="small"
       :title="action.label || action.href"
       type="button"
@@ -118,16 +118,6 @@
 <script setup>
 // The Preview's client group: the page shown in this browser, its address,
 // history, routes and the actions on that page.
-import {
-  mdiArrowLeft,
-  mdiContentCopy,
-  mdiCursorDefaultClickOutline,
-  mdiOpenInNew,
-  mdiPause,
-  mdiPlay,
-  mdiRefresh,
-  mdiRoutes
-} from "@mdi/js";
 
 const props = defineProps({
   surface: {

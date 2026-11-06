@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from "vue";
-import { mdiCheck, mdiSchoolOutline } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // The Lesson toggle: the lesson's own on/off switch, apart from the project's
@@ -29,10 +28,10 @@ const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");
         data-vibe64-guide="lesson"
         @click="learning.toggleLesson()"
       >
-        <v-icon class="vibe64-lesson-toggle__icon" :icon="mdiSchoolOutline" size="18" />
+        <v-icon class="vibe64-lesson-toggle__icon" icon="$school" size="18" />
         <span class="vibe64-lesson-toggle__label">Lesson</span>
         <span class="vibe64-lesson-toggle__switch" aria-hidden="true">
-          <span class="vibe64-lesson-toggle__thumb"><v-icon v-if="shown" :icon="mdiCheck" size="10" /></span>
+          <span class="vibe64-lesson-toggle__thumb"><v-icon v-if="shown" icon="$check" size="10" /></span>
         </span>
       </button>
     </template>

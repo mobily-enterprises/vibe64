@@ -317,7 +317,7 @@ test("runtime release relocates, runs native and browser services, and packs wit
       assert.ok(!manifest.bundleDependencies.includes(driver));
     }
     assert.ok(!manifest.bundleDependencies.includes("node-pty"));
-    for (const dependency of ["three", "elkjs", "@mdi/js", "vite", "typescript", "openai", "stripe"]) {
+    for (const dependency of ["three", "elkjs", "vite", "typescript", "openai", "stripe"]) {
       assert.ok(!manifest.dependencies[dependency] || manifest.bundleDependencies.includes(dependency),
         `${dependency} must not be installed as a complete package`);
     }

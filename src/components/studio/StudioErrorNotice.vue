@@ -10,7 +10,7 @@
     }"
   >
     <div class="studio-error-notice__icon">
-      <v-icon :icon="mdiAlertCircleOutline" size="22" />
+      <v-icon icon="$error" size="22" />
     </div>
 
     <div class="studio-error-notice__body">
@@ -26,7 +26,7 @@
         </v-chip>
         <v-btn
           v-if="dismissible"
-          :icon="mdiClose"
+          icon="$close"
           aria-label="Dismiss"
           class="studio-error-notice__dismiss"
           density="comfortable"
@@ -50,7 +50,7 @@
       <div v-if="displayRepairCommand" class="studio-error-notice__repair">
         <code>{{ displayRepairCommand }}</code>
         <v-btn
-          :icon="mdiContentCopy"
+          icon="$contentCopy"
           aria-label="Copy repair command"
           size="x-small"
           variant="text"
@@ -63,7 +63,7 @@
         class="studio-error-notice__details"
       >
         <v-btn
-          :append-icon="detailsOpen ? mdiChevronUp : mdiChevronDown"
+          :append-icon="detailsOpen ? '$collapse' : '$expand'"
           color="error"
           size="small"
           variant="text"
@@ -85,13 +85,6 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import {
-  mdiAlertCircleOutline,
-  mdiChevronDown,
-  mdiChevronUp,
-  mdiClose,
-  mdiContentCopy
-} from "@mdi/js";
 
 defineEmits(["dismiss"]);
 

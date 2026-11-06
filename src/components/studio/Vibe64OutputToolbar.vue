@@ -17,7 +17,7 @@
       <v-btn
         class="vibe64-launch-controls__position-button"
         :disabled="previewToolbarPosition === 'left'"
-        :icon="mdiChevronLeft"
+        icon="$chevronLeft"
         size="small"
         title="Move controls left"
         variant="text"
@@ -37,13 +37,13 @@
           :aria-label="terminalIndicatorLabel"
           :title="terminalIndicatorLabel"
         />
-        <v-icon :icon="mdiDotsHorizontal" size="18" />
+        <v-icon icon="$moreHoriz" size="18" />
       </button>
 
       <v-btn
         class="vibe64-launch-controls__position-button"
         :disabled="previewToolbarPosition === 'right'"
-        :icon="mdiChevronRight"
+        icon="$chevronRight"
         size="small"
         title="Move controls right"
         variant="text"
@@ -56,7 +56,7 @@
         v-if="embeddedPreview"
         class="vibe64-launch-controls__position-button"
         :disabled="previewToolbarPosition === 'left'"
-        :icon="mdiChevronLeft"
+        icon="$chevronLeft"
         size="small"
         title="Move controls left"
         variant="text"
@@ -66,7 +66,7 @@
       <v-btn
         v-if="embeddedPreview"
         class="vibe64-launch-controls__mobile-collapse-button"
-        :icon="mdiChevronUp"
+        icon="$collapse"
         size="small"
         title="Collapse preview controls"
         variant="text"
@@ -78,7 +78,7 @@
       <v-btn
         v-else-if="embeddedPreview"
         :disabled="loading"
-        :icon="mdiRefresh"
+        icon="$refresh"
         aria-label="Refresh output status"
         title="Refresh output status"
         variant="text"
@@ -110,7 +110,7 @@
           <v-btn
             v-for="action in previewNavVisible ? [] : launchActions"
             :key="action.id || action.href"
-            :icon="mdiOpenInNew"
+            icon="$openInNew"
             size="small"
             :title="action.label || action.href"
             variant="text"
@@ -120,7 +120,7 @@
           <v-btn
             v-if="terminalVisible"
             aria-label="Show run output"
-            :icon="mdiConsoleLine"
+            icon="$terminal"
             size="small"
             title="Show run output"
             variant="text"
@@ -131,7 +131,7 @@
             v-if="terminalCanStop"
             aria-label="Stop preview"
             :disabled="operationBusy"
-            :icon="mdiStopCircleOutline"
+            icon="$stopCircle"
             size="small"
             title="Stop preview"
             variant="text"
@@ -142,7 +142,7 @@
             v-if="previewToolbarRecoveryVisible"
             aria-label="Restart preview"
             :disabled="operationBusy"
-            :icon="mdiRestart"
+            icon="$restartAlt"
             size="small"
             title="Restart preview"
             variant="text"
@@ -153,7 +153,7 @@
             v-if="terminalCanRetry && !previewToolbarRecoveryVisible"
             aria-label="Retry preview"
             :disabled="operationBusy"
-            :icon="mdiRestart"
+            icon="$restartAlt"
             size="small"
             title="Retry"
             variant="text"
@@ -164,7 +164,7 @@
             v-if="terminalCanRestart && !previewToolbarRecoveryVisible"
             aria-label="Restart preview server"
             :disabled="operationBusy"
-            :icon="mdiRestart"
+            icon="$restartAlt"
             size="small"
             title="Restart"
             variant="text"
@@ -180,7 +180,7 @@
             aria-label="Start preview"
             class="vibe64-launch-controls__auto-start-button"
             :disabled="embeddedManualStartButtonDisabled"
-            :icon="mdiPlayCircleOutline"
+            icon="$playCircle"
             size="small"
             title="Start preview"
             variant="text"
@@ -192,7 +192,7 @@
           v-if="outputOptionsAvailable"
           aria-label="Preview options"
           :disabled="operationBusy"
-          :icon="mdiCogOutline"
+          icon="$settings"
           size="small"
           title="Preview options"
           variant="text"
@@ -208,7 +208,7 @@
               class="vibe64-launch-controls__run-button"
               color="primary"
               :disabled="runMenuDisabled"
-              :prepend-icon="mdiPlayCircleOutline"
+              prepend-icon="$playCircle"
               :size="buttonSize"
               title="Run target"
               :variant="buttonVariant"
@@ -222,7 +222,7 @@
               v-for="outputTarget in outputTargets"
               :key="outputTarget.id"
               :disabled="launchButtonsDisabled || outputTarget.available === false"
-              :prepend-icon="mdiPlayCircleOutline"
+              prepend-icon="$playCircle"
               :subtitle="outputTarget.disabledReason || ''"
               :title="outputTarget.label"
               @click="runWithOptions(outputTarget)"
@@ -243,7 +243,7 @@
         <v-btn
           v-if="launchStatusRetryVisible"
           :disabled="loading"
-          :icon="mdiRefresh"
+          icon="$refresh"
           size="small"
           title="Retry preview status"
           variant="text"
@@ -254,7 +254,7 @@
           v-if="embeddedPreview"
           class="vibe64-launch-controls__position-button"
           :disabled="previewToolbarPosition === 'right'"
-          :icon="mdiChevronRight"
+          icon="$chevronRight"
           size="small"
           title="Move controls right"
           variant="text"
@@ -272,19 +272,6 @@
 // (status dot, run output, stop and restart) and the run, results, identity
 // and issue controls, with its own collapsed form on narrow screens.
 import { computed } from "vue";
-import {
-  mdiChevronLeft,
-  mdiChevronRight,
-  mdiChevronUp,
-  mdiCogOutline,
-  mdiConsoleLine,
-  mdiDotsHorizontal,
-  mdiOpenInNew,
-  mdiPlayCircleOutline,
-  mdiRefresh,
-  mdiRestart,
-  mdiStopCircleOutline
-} from "@mdi/js";
 import Vibe64OutputResultsMenu from "@/components/studio/Vibe64OutputResultsMenu.vue";
 import Vibe64PreviewAddressBar from "@/components/studio/Vibe64PreviewAddressBar.vue";
 import Vibe64PreviewIdentityMenu from "@/components/studio/Vibe64PreviewIdentityMenu.vue";

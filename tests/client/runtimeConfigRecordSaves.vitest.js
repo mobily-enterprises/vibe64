@@ -161,7 +161,7 @@ describe("saving one Env row", () => {
     expect(script).toContain("const envInitialLoading = computed(() => envResource.isInitialLoading.value === true);");
     expect(script).not.toContain("isLoading.value");
     expect(markup).toMatch(/:disabled="!newValue\.key \|\| \(saveBusy && !addBusy\)"\s+:loading="addBusy"/u);
-    expect(markup).toMatch(/<v-btn\s+:loading="refreshBusy"\s+:prepend-icon="mdiRefresh"/u);
+    expect(markup).toMatch(/<v-btn\s+:loading="refreshBusy"\s+prepend-icon="\$refresh"/u);
     expect(markup).toContain('@save-record="saveRecord"');
     expect(markup).toContain('@remove-record="requestRemoveRecord"');
   });

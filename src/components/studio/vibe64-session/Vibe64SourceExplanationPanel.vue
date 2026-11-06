@@ -46,7 +46,7 @@
       <v-btn
         class="vibe64-source-explanation__action-target"
         aria-label="Collapse explanation"
-        :icon="mdiChevronRight"
+        icon="$chevronRight"
         size="small"
         title="Collapse explanation"
         type="button"
@@ -58,7 +58,7 @@
         :aria-busy="closing ? 'true' : undefined"
         aria-label="Close explanation"
         :disabled="closing"
-        :prepend-icon="mdiClose"
+        prepend-icon="$close"
         size="x-small"
         :title="closing ? 'Closing explanation' : 'Close explanation'"
         type="button"
@@ -159,7 +159,7 @@
           class="vibe64-source-explanation__action-target"
           aria-label="Stop explanation"
           color="error"
-          :icon="mdiStop"
+          icon="$stop"
           size="small"
           title="Stop explanation"
           type="button"
@@ -171,7 +171,7 @@
           class="vibe64-source-explanation__action-target"
           color="primary"
           :disabled="closing || !assistantAvailable"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           size="small"
           :title="assistantAvailable ? 'Retry explanation' : assistantUnavailableMessage"
           type="button"
@@ -206,7 +206,7 @@
               class="vibe64-source-explanation__action-target"
               aria-label="Stop explanation"
               color="error"
-              :icon="mdiStop"
+              icon="$stop"
               size="small"
               title="Stop explanation"
               type="button"
@@ -218,7 +218,7 @@
               aria-label="Send follow-up"
               color="primary"
               :disabled="!followup.trim() || busy || closing || !assistantAvailable"
-              :icon="mdiSend"
+              icon="$send"
               size="small"
               :title="assistantAvailable ? 'Send follow-up' : assistantUnavailableMessage"
               type="submit"
@@ -234,13 +234,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import {
-  mdiChevronRight,
-  mdiClose,
-  mdiRefresh,
-  mdiSend,
-  mdiStop
-} from "@mdi/js";
 
 import { useScrollToBottom } from "@jskit-ai/assistant-core/client/conversation-scroll";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";

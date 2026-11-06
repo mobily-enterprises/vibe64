@@ -10,7 +10,7 @@
             credentialsNeedAttention ? 'vibe64-auth-settings__button--needs-attention' : ''
           ]"
           density="comfortable"
-          :icon="mdiAccountCogOutline"
+          icon="$manageAccounts"
           size="large"
           title="Account"
           type="button"
@@ -21,21 +21,21 @@
       </template>
       <v-list class="vibe64-auth-settings__menu" density="comfortable">
         <v-list-item
-          :prepend-icon="mdiAccountCogOutline"
+          prepend-icon="$manageAccounts"
           title="Account settings"
           data-vibe64-guide="account-settings"
           @click="openDialog()"
         />
         <v-list-item
           v-if="aiOnboardingAvailable"
-          :prepend-icon="mdiAutoFix"
+          prepend-icon="$autoFix"
           subtitle="Choose or switch your AI"
           title="Redo onboarding"
           data-vibe64-guide="ai-setup"
           @click="redoOnboarding"
         />
         <v-list-item
-          :prepend-icon="mdiMapMarkerPath"
+          prepend-icon="$route"
           subtitle="A short lesson on the screens around you"
           title="Take the tour"
           data-test="take-the-tour"
@@ -62,7 +62,7 @@
           </div>
           <v-btn
             density="comfortable"
-            :icon="mdiClose"
+            icon="$close"
             title="Close account settings"
             :disabled="aiConnectionsBusy"
             type="button"
@@ -194,18 +194,6 @@ import { useDisplay, useTheme } from "vuetify";
 import { readAppearance, writeAppearance } from "@/lib/appearance.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
-  mdiAccountOutline,
-  mdiAccountCogOutline,
-  mdiAutoFix,
-  mdiClose,
-  mdiMonitor,
-  mdiWeatherNight,
-  mdiWeatherSunny,
-  mdiGithub,
-  mdiMapMarkerPath,
-  mdiRobotOutline
-} from "@mdi/js";
-import {
   accountRowsForStatus,
   ProviderAccountsSetup,
   AiSetup,
@@ -226,19 +214,19 @@ import {
 
 const accountProviderOptions = Object.freeze([
   {
-    icon: mdiRobotOutline,
+    icon: "$smartToy",
     id: "ai",
     label: "AI Accounts"
   },
   {
-    icon: mdiGithub,
+    icon: "$github",
     id: "github",
     label: "GitHub"
   }
 ]);
 const providerOptions = computed(() => [
   ...(personalProfileAvailable.value ? [{
-    icon: mdiAccountOutline,
+    icon: "$person",
     id: "profile",
     label: "You"
   }] : []),
@@ -254,9 +242,9 @@ const theme = useTheme();
 const { smAndDown, xs } = useDisplay();
 const appearance = ref(readAppearance());
 const appearanceChoices = Object.freeze([
-  { icon: mdiWeatherSunny, label: "Light", value: "light" },
-  { icon: mdiWeatherNight, label: "Dark", value: "dark" },
-  { icon: mdiMonitor, label: "System", value: "system" }
+  { icon: "$lightMode", label: "Light", value: "light" },
+  { icon: "$darkMode", label: "Dark", value: "dark" },
+  { icon: "$desktopWindows", label: "System", value: "system" }
 ]);
 
 function chooseAppearance(value) {

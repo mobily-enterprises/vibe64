@@ -79,7 +79,7 @@
           <v-btn
             color="primary"
             :disabled="Boolean(downloadingPath)"
-            :prepend-icon="mdiDownload"
+            prepend-icon="$download"
             @click="requestDownload(editor.downloadOnlyFile.value.path)"
           >
             {{ downloadingPath ? "Downloading…" : "Download file" }}
@@ -207,7 +207,7 @@
               v-show="explanationCollapsed"
               aria-label="Show explanation"
               class="vibe64-source-editor__side-rail--right"
-              :icon="mdiChevronLeft"
+              icon="$chevronLeft"
               label="AI"
               title="Show explanation"
               @click="expandExplanation"
@@ -242,7 +242,6 @@
 <script setup>
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { mdiChevronLeft, mdiDownload } from "@mdi/js";
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
 import GithubMarkdown from "@/components/studio/GithubMarkdown.vue";
 import Vibe64SourceEditorFinder from "@/components/studio/vibe64-session/Vibe64SourceEditorFinder.vue";

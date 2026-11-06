@@ -1,6 +1,5 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watch, watchEffect } from "vue";
-import { mdiArchiveArrowDownOutline, mdiArchiveOutline, mdiArrowLeft, mdiCheckCircleOutline, mdiChevronRight, mdiClose, mdiFileDocumentOutline, mdiHistory, mdiRestore } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
@@ -191,7 +190,7 @@ watch(() => props.active, (active) => {
 <template>
   <div v-if="visible" class="work-plan-control">
     <v-btn
-      :icon="mdiFileDocumentOutline" :variant="currentActive ? 'tonal' : 'text'" :color="currentActive ? 'warning' : undefined"
+      icon="$description" :variant="currentActive ? 'tonal' : 'text'" :color="currentActive ? 'warning' : undefined"
       :aria-label="label" :title="label" size="small" @click="showPlan()"
     />
     <span v-if="notice" class="d-sr-only" role="status">{{ notice }}</span>
@@ -203,7 +202,7 @@ watch(() => props.active, (active) => {
         <v-spacer />
         <v-btn
           v-if="view === 'current' && plan?.current"
-          :prepend-icon="mdiArchiveArrowDownOutline" :disabled="!canChangePlan"
+          prepend-icon="$archive" :disabled="!canChangePlan"
           :aria-busy="pendingOperation === 'archive'" variant="text" size="small" width="120" min-height="48"
           aria-label="Archive plan" title="Move this plan to History without marking it completed" @click="changePlan('archive')"
         >
@@ -211,21 +210,21 @@ watch(() => props.active, (active) => {
         </v-btn>
         <v-btn
           v-if="archiveId && !plan?.current"
-          :prepend-icon="mdiRestore" :disabled="!canChangePlan"
+          prepend-icon="$restartAlt" :disabled="!canChangePlan"
           :aria-busy="pendingOperation === 'restore'" variant="text" color="primary" size="small" width="128" min-height="48"
           aria-label="Make current" title="Move this archived plan back to Current plan and reopen it as Active" @click="changePlan('restore')"
         >
           {{ pendingOperation === 'restore' ? 'Restoring…' : 'Make current' }}
         </v-btn>
-        <v-btn :icon="mdiClose" variant="text" aria-label="Close plan" title="Close plan" @click="open = false" />
+        <v-btn icon="$close" variant="text" aria-label="Close plan" title="Close plan" @click="open = false" />
       </v-card-title>
       <v-tabs :model-value="view" color="primary" grow height="48" class="flex-grow-0 flex-shrink-0" aria-label="Plan views" @update:model-value="view = $event; archiveId = ''">
-        <v-tab value="current" :prepend-icon="mdiFileDocumentOutline">Current plan</v-tab>
-        <v-tab value="history" :prepend-icon="mdiHistory">History</v-tab>
+        <v-tab value="current" prepend-icon="$description">Current plan</v-tab>
+        <v-tab value="history" prepend-icon="$history">History</v-tab>
       </v-tabs>
       <v-divider />
       <v-sheet v-if="archiveId" color="surface" border="b" class="work-plan-archive-context px-4 py-3">
-        <v-btn :icon="mdiArrowLeft" variant="text" aria-label="Back to plan history" title="Back to plan history" @click="archiveId = ''" />
+        <v-btn icon="$arrowBack" variant="text" aria-label="Back to plan history" title="Back to plan history" @click="archiveId = ''" />
         <div class="work-plan-archive-copy">
           <v-chip color="primary" variant="tonal" size="small" class="mb-1">Archived · read-only</v-chip>
           <p class="text-body-small text-medium-emphasis">{{ selectedArchive ? `Archived ${selectedArchive.archivedDate}` : 'Saved snapshot' }}</p>
@@ -245,7 +244,7 @@ watch(() => props.active, (active) => {
             >
               <div class="d-flex align-start ga-2">
                 <v-list-item-title class="work-plan-history-title text-title-medium">{{ item.title }}</v-list-item-title>
-                <v-icon :icon="mdiChevronRight" class="flex-shrink-0" />
+                <v-icon icon="$chevronRight" class="flex-shrink-0" />
               </div>
               <p class="text-body-small text-medium-emphasis mt-1">Archived {{ item.archivedDate }}</p>
               <div class="d-flex align-center flex-wrap ga-2 mt-2">
@@ -257,7 +256,7 @@ watch(() => props.active, (active) => {
             </v-list-item>
           </v-list>
           <div v-else class="work-plan-empty text-center pa-4">
-            <v-icon :icon="mdiHistory" size="48" class="text-medium-emphasis mb-4" />
+            <v-icon icon="$history" size="48" class="text-medium-emphasis mb-4" />
             <p class="text-title-medium mb-2">No archived plans</p>
             <p class="text-body-medium text-medium-emphasis">Archive a plan to keep it here.</p>
           </div>
@@ -267,7 +266,7 @@ watch(() => props.active, (active) => {
           <div class="d-flex align-center flex-wrap ga-3 mb-5" role="status">
             <v-chip
               :color="plan.status === 'completed' ? 'success' : 'warning'" variant="tonal" size="small"
-              :prepend-icon="plan.status === 'completed' ? mdiCheckCircleOutline : undefined"
+              :prepend-icon="plan.status === 'completed' ? '$checkCircle' : undefined"
             >
               <span class="text-high-emphasis">{{ plan.status === 'completed' ? 'Completed' : archiveId ? 'Unfinished' : 'Active' }}</span>
             </v-chip>
@@ -294,7 +293,7 @@ watch(() => props.active, (active) => {
           </v-expansion-panels>
         </template>
         <div v-else-if="!resource.loadError.value" class="work-plan-empty text-center pa-4">
-          <v-icon :icon="mdiArchiveOutline" size="48" class="text-medium-emphasis mb-4" />
+          <v-icon icon="$inventory2" size="48" class="text-medium-emphasis mb-4" />
           <p class="text-title-medium mb-2">No current plan</p>
           <p class="text-body-medium text-medium-emphasis">Ask Senior in chat to create a plan or reopen one from History.</p>
         </div>

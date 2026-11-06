@@ -11,7 +11,6 @@ const logos = Object.fromEntries(
 
 <script setup>
 import { computed } from "vue";
-import { mdiConnection, mdiCreation } from "@mdi/js";
 
 const props = defineProps({ provider: { type: String, required: true } });
 const logo = computed(() => logos[props.provider]);
@@ -20,7 +19,7 @@ const logo = computed(() => logos[props.provider]);
 <template>
   <span class="integration-service-logo mr-3" aria-hidden="true">
     <img v-if="logo" :src="logo" alt="" width="28" height="28" loading="lazy">
-    <v-icon v-else :icon="provider === 'ai' ? mdiCreation : mdiConnection" size="28" color="grey-darken-3" />
+    <v-icon v-else :icon="provider === 'ai' ? '$autoAwesomeFilled' : '$cable'" size="28" color="grey-darken-3" />
   </span>
 </template>
 

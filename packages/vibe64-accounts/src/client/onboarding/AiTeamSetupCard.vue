@@ -1,5 +1,4 @@
 <script setup>
-import { mdiAccountGroupOutline, mdiAlertCircleOutline, mdiCheckCircle } from "@mdi/js";
 
 // The owner's guided team step: once Claude is the main AI, one DeepSeek key
 // (running inside Claude Code) gives team members their own models.
@@ -18,7 +17,7 @@ const emit = defineEmits(["add", "snooze", "review"]);
 <template>
   <section class="ai-team-card" :class="{ 'ai-team-card--ready': state === 'ready' }" aria-labelledby="ai-team-card-title" tabindex="-1">
     <span class="ai-team-card__icon" aria-hidden="true">
-      <v-icon :icon="state === 'ready' ? mdiCheckCircle : mdiAccountGroupOutline" size="24" />
+      <v-icon :icon="state === 'ready' ? '$checkCircleFilled' : '$group'" size="24" />
     </span>
     <div class="ai-team-card__body">
       <h2 id="ai-team-card-title" class="ai-team-card__title">{{ state === "ready" ? "Team AI is ready" : "Let your team use this workspace" }}</h2>
@@ -28,7 +27,7 @@ const emit = defineEmits(["add", "snooze", "review"]);
         Fix it with AI and helpers. You still approve what they send to main chat.
       </p>
       <p v-if="error" class="ai-team-card__error" role="alert">
-        <v-icon :icon="mdiAlertCircleOutline" size="18" aria-hidden="true" />{{ error }}
+        <v-icon icon="$error" size="18" aria-hidden="true" />{{ error }}
       </p>
       <div class="ai-team-card__actions">
         <v-btn v-if="state === 'ready'" color="primary" variant="tonal" @click="emit('review')">Review team models</v-btn>

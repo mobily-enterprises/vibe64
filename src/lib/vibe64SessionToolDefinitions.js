@@ -1,12 +1,3 @@
-import {
-  mdiDatabaseOutline,
-  mdiFileCompare,
-  mdiFileCodeOutline,
-  mdiGraphOutline,
-  mdiInformationOutline,
-  mdiRobotOutline,
-  mdiSourceRepository
-} from "@mdi/js";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { normalizeProjectRoutePath } from "./vibe64ProjectScope.js";
 
@@ -16,7 +7,7 @@ const VIBE64_ACTIVE_SESSION_NAV_OWNER = "vibe64-session";
 // guideId is the stable `data-vibe64-guide` id a lesson teacher's overlay can point at.
 const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
-    icon: mdiInformationOutline,
+    icon: "$info",
     id: "info",
     guideId: "session-info",
     label: "Session info",
@@ -25,7 +16,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "View paths and Git context for the active session"
   },
   {
-    icon: mdiFileCompare,
+    icon: "$difference",
     id: "changes",
     guideId: "changes",
     label: "Current changes",
@@ -34,7 +25,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "Review files changed in this session"
   },
   {
-    icon: mdiSourceRepository,
+    icon: "$book",
     id: "repository",
     guideId: "git-log",
     label: "Git log",
@@ -44,7 +35,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "Review the project's saved Git history"
   },
   {
-    icon: mdiFileCodeOutline,
+    icon: "$codeBlocks",
     id: "editor",
     guideId: "files",
     label: "Files",
@@ -53,7 +44,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "Browse, edit, and explain session source files"
   },
   {
-    icon: mdiDatabaseOutline,
+    icon: "$database",
     id: "database",
     guideId: "database",
     label: "Database",
@@ -62,7 +53,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "Query, edit, and map the active session database"
   },
   {
-    icon: mdiGraphOutline,
+    icon: "$hub",
     id: "system",
     guideId: "architecture",
     label: "Architecture",
@@ -71,7 +62,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     title: "Explore subsystem responsibilities, operations, and data"
   },
   {
-    icon: mdiRobotOutline,
+    icon: "$smartToy",
     id: "ai-terminal",
     label: "AI Terminal",
     order: 700,

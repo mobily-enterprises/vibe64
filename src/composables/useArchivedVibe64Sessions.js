@@ -4,11 +4,6 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { useRoute } from "vue-router";
 import {
-  mdiFileDocumentOutline,
-  mdiSourceBranch,
-  mdiSourceCommit
-} from "@mdi/js";
-import {
   VIBE64_ARCHIVED_SESSIONS_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
@@ -209,22 +204,22 @@ function metadataValue(session = {}, name = "") {
 function archiveFactRows(session = {}) {
   return [
     {
-      icon: mdiSourceBranch,
+      icon: "$forkRight",
       label: "Branch",
       value: session.branch || metadataValue(session, "source_recovery_branch")
     },
     {
-      icon: mdiSourceCommit,
+      icon: "$commit",
       label: "Head",
       value: metadataValue(session, "source_recovery_head") || metadataValue(session, "base_commit")
     },
     {
-      icon: mdiFileDocumentOutline,
+      icon: "$description",
       label: "Saved patch",
       value: metadataValue(session, "source_recovery_patch_artifact") || "No saved patch"
     },
     {
-      icon: mdiFileDocumentOutline,
+      icon: "$description",
       label: "Untracked files",
       value: metadataValue(session, "source_recovery_untracked_artifact") || "No saved untracked archive"
     }

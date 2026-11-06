@@ -4,7 +4,7 @@
     class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-overlay"
   >
     <div class="vibe64-launch-controls__preview-pulse">
-      <v-icon :icon="mdiWebClock" size="46" />
+      <v-icon icon="$update" size="46" />
     </div>
     <span>{{ previewInFlightText || "Opening preview." }}</span>
   </div>
@@ -15,7 +15,7 @@
   >
     <strong>Preview suspended</strong>
     <span>This page is unloaded. App servers and agents are unaffected. Unsaved page changes may be lost.</span>
-    <v-btn :prepend-icon="mdiPlayCircleOutline" variant="tonal" @click="resumePreview">Resume preview</v-btn>
+    <v-btn prepend-icon="$playCircle" variant="tonal" @click="resumePreview">Resume preview</v-btn>
   </div>
   <div
     v-else-if="previewNoticeVisible"
@@ -23,7 +23,7 @@
   >
     <v-icon
       class="vibe64-launch-controls__preview-diagnostic-icon"
-      :icon="mdiAlertCircleOutline"
+      icon="$error"
       size="38"
     />
     <strong>{{ previewNotice.title }}</strong>
@@ -44,7 +44,7 @@
         v-if="previewRecoveryVisible"
         :disabled="resourceRetryBusy"
         color="primary"
-        :prepend-icon="mdiRefresh"
+        prepend-icon="$refresh"
         size="small"
         variant="flat"
         @click="recoverEmbeddedPreview"
@@ -53,7 +53,7 @@
       </v-btn>
       <v-btn
         v-if="previewCanShowLog"
-        :prepend-icon="mdiConsoleLine"
+        prepend-icon="$terminal"
         size="small"
         variant="tonal"
         @click="showLaunchLog"
@@ -70,14 +70,14 @@
       class="vibe64-launch-controls__preview-pulse"
       :class="{ 'vibe64-launch-controls__preview-pulse--active': previewActivityVisible }"
     >
-      <v-icon :icon="mdiWebClock" size="46" />
+      <v-icon icon="$update" size="46" />
     </div>
     <span class="vibe64-launch-controls__preview-empty-text" :title="previewEmptyText">{{ previewEmptyText }}</span>
     <v-btn
       v-if="embeddedManualStartButtonVisible && !previewActivityVisible"
       :disabled="embeddedManualStartButtonDisabled"
       color="primary"
-      :prepend-icon="mdiPlayCircleOutline"
+      prepend-icon="$playCircle"
       size="small"
       variant="flat"
       @click="forceStartEmbeddedPreview"
@@ -89,7 +89,7 @@
       :disabled="operationBusy || loading"
       color="primary"
       data-vibe64-preview-setup-retry
-      :prepend-icon="mdiRefresh"
+      prepend-icon="$refresh"
       size="small"
       title="Run the session's declared setup steps again"
       variant="flat"
@@ -100,7 +100,7 @@
     <v-btn
       v-else-if="previewCheckAgainVisible"
       :disabled="operationBusy || loading"
-      :prepend-icon="mdiRefresh"
+      prepend-icon="$refresh"
       size="small"
       title="Check preview availability again"
       variant="tonal"
@@ -121,13 +121,6 @@
 // What the Preview shows instead of, or over, its page: opening, suspended,
 // a diagnostic with its recovery, or why there is no page yet.
 import { inject, ref } from "vue";
-import {
-  mdiAlertCircleOutline,
-  mdiConsoleLine,
-  mdiPlayCircleOutline,
-  mdiRefresh,
-  mdiWebClock
-} from "@mdi/js";
 import { NO_RESOURCE_RECOVERY_CONTROL, VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 
 const props = defineProps({

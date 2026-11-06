@@ -623,13 +623,13 @@ describe("session renewal dialog", () => {
     expect(autopilotSource).toContain('@click="requestSessionRenewal(sessionActionsTrigger?.$el)"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal($event.currentTarget)"');
     expect(autopilotSource).toContain("props.sessionRenewal.request({ returnFocusTarget });");
-    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 36px\)"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
+    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 36px\)"[\s\S]*?icon="\$autorenew"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
     expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="var\(--session-action-size, 36px\)"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
     expect(autopilotSource).toMatch(/@media \(pointer: coarse\) \{\s*\.studio-autopilot__session-header \{\s*--session-action-size: 44px;/u);
     expect(autopilotSource).toContain(":aria-label=\"sessionActionsLabel\"");
     expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
     expect(autopilotSource).toContain('].filter(Boolean).join(": ")');
-    expect(autopilotSource).toContain(':icon="mdiDotsVertical"');
+    expect(autopilotSource).toContain('icon="$moreVert"');
     expect(autopilotSource).toContain("studio-autopilot__session-action-item");
     expect(autopilotSource).toContain("headerActions.overflow.includes('renew')");
     expect(autopilotSource).not.toContain("v-if=\"smAndDown\"");

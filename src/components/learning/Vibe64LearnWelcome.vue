@@ -1,5 +1,4 @@
 <script setup>
-import { mdiSchoolOutline } from "@mdi/js";
 import Vibe64LearnerIllustration from "@/components/learning/Vibe64LearnerIllustration.vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
@@ -19,7 +18,7 @@ const learning = useVibe64Learning();
     <v-btn
       class="vibe64-learn-welcome__choose"
       data-test="choose-lesson"
-      :prepend-icon="mdiSchoolOutline"
+      prepend-icon="$school"
       rounded="pill"
       size="large"
       variant="flat"

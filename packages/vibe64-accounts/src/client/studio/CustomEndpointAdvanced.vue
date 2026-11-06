@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref } from "vue";
-import { mdiChevronDown, mdiRobotOutline } from "@mdi/js";
 
 // A custom endpoint is for advanced users, so each tool's provider picker keeps
 // it in this collapsed Advanced section with the API that tool needs.
@@ -23,7 +22,7 @@ const open = ref(false);
   <section class="custom-endpoint-advanced">
     <v-btn
       variant="text" size="small" class="custom-endpoint-advanced__toggle" :class="{ 'is-open': open }"
-      :append-icon="mdiChevronDown" :aria-expanded="String(open)" :aria-controls="bodyId" @click="open = !open"
+      append-icon="$expand" :aria-expanded="String(open)" :aria-controls="bodyId" @click="open = !open"
     >
       Advanced
     </v-btn>
@@ -41,7 +40,7 @@ const open = ref(false);
             >
               <template #prepend>
                 <v-avatar color="primary" size="44" variant="tonal">
-                  <v-icon :icon="mdiRobotOutline" size="22" />
+                  <v-icon icon="$smartToy" size="22" />
                 </v-avatar>
               </template>
               <template #append><span class="text-label-large text-primary">Connect</span></template>

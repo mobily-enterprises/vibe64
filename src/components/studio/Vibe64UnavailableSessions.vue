@@ -2,7 +2,7 @@
   <v-expansion-panels v-if="sessions.length" v-model="expanded" variant="accordion" class="studio-unavailable-sessions">
     <v-expansion-panel>
       <v-expansion-panel-title>
-        <v-icon :icon="mdiAlertCircleOutline" color="warning" class="mr-2" />
+        <v-icon icon="$error" color="warning" class="mr-2" />
         {{ sessions.length === 1 ? "1 session needs attention" : `${sessions.length} sessions need attention` }}
       </v-expansion-panel-title>
       <v-expansion-panel-text>
@@ -23,7 +23,6 @@
 
 <script setup>
 import { ref } from "vue";
-import { mdiAlertCircleOutline } from "@mdi/js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { writeClipboardText } from "@/lib/clipboard.js";

@@ -4,7 +4,6 @@
 // restore it, and delete it once archived.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { mdiArchiveArrowDownOutline, mdiArchiveArrowUpOutline, mdiDeleteOutline, mdiOpenInApp, mdiRefresh } from "@mdi/js";
 import { pageAppPath } from "../shared/pageLinks.js";
 import { usePageStars } from "./pageStars.js";
 import { archivePage, changeRefresh, deletePage, listPages, pageTime, refreshState, restorePage } from "./pagesRequests.js";
@@ -85,7 +84,7 @@ watch(() => props.projectSlug, refresh);
         <v-tab value="current" data-test="pages-tab-current">Current ({{ current.length }})</v-tab>
         <v-tab value="archived" data-test="pages-tab-archived">Archived ({{ archived.length }})</v-tab>
       </v-tabs>
-      <v-btn :icon="mdiRefresh" :loading="loading" aria-label="Refresh pages" title="Refresh" variant="text" @click="refresh" />
+      <v-btn icon="$refresh" :loading="loading" aria-label="Refresh pages" title="Refresh" variant="text" @click="refresh" />
     </div>
     <v-alert v-if="error" density="compact" type="error" variant="tonal" role="alert">{{ error }}</v-alert>
     <p v-if="loaded && !shown.length" class="vibe64-pages-list__empty text-body-medium" data-test="pages-empty">
@@ -152,14 +151,14 @@ watch(() => props.projectSlug, refresh);
           </td>
           <td class="vibe64-pages-list__row-actions">
             <div class="vibe64-pages-list__actions">
-              <v-btn :prepend-icon="mdiOpenInApp" size="small" variant="text" @click="router.push(pageAppPath(projectSlug, page.id))">
+              <v-btn prepend-icon="$openInBrowser" size="small" variant="text" @click="router.push(pageAppPath(projectSlug, page.id))">
                 Open
               </v-btn>
               <v-btn
                 v-if="!page.archived"
                 :disabled="Boolean(busyPageId)"
                 :loading="busyPageId === page.id"
-                :prepend-icon="mdiArchiveArrowDownOutline"
+                prepend-icon="$archive"
                 size="small"
                 variant="text"
                 @click="change(page, archivePage)"
@@ -170,7 +169,7 @@ watch(() => props.projectSlug, refresh);
                 <v-btn
                   :disabled="Boolean(busyPageId)"
                   :loading="busyPageId === page.id"
-                  :prepend-icon="mdiArchiveArrowUpOutline"
+                  prepend-icon="$unarchive"
                   size="small"
                   variant="text"
                   @click="change(page, restorePage)"
@@ -179,7 +178,7 @@ watch(() => props.projectSlug, refresh);
                 </v-btn>
                 <v-btn
                   :disabled="Boolean(busyPageId)"
-                  :prepend-icon="mdiDeleteOutline"
+                  prepend-icon="$delete"
                   color="error"
                   size="small"
                   variant="text"

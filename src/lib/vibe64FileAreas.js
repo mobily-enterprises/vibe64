@@ -1,29 +1,22 @@
-import {
-  mdiArchiveClockOutline,
-  mdiFolderArrowUpDownOutline,
-  mdiFolderLockOutline,
-  mdiSourceRepository,
-  mdiTrayArrowUp
-} from "@mdi/js";
 import { dataTransferItemEntry } from "@/lib/browser.js";
 
 // What each Files area is called and promises, in one place for the session
 // Files tool, the project Files page and the move-or-copy destinations.
 const VIBE64_FILE_AREAS = Object.freeze({
-  repo: { label: "Repo", icon: mdiSourceRepository, scope: "session",
+  repo: { label: "Repo", icon: "$book", scope: "session",
     description: "The session's project files · Changes appear in Current changes" },
-  "drop-zone": { label: "Session Dropzone", icon: mdiTrayArrowUp, scope: "session",
+  "drop-zone": { label: "Session Dropzone", icon: "$uploadArrow", scope: "session",
     description: "This session only · Deleted when the session is archived" },
-  session: { label: "Session", icon: mdiFolderLockOutline, scope: "session", readOnly: true,
+  session: { label: "Session", icon: "$folderManaged", scope: "session", readOnly: true,
     description: "Session runtime files · Read only" },
-  "project-drop-zone": { label: "Project Dropzone", icon: mdiFolderArrowUpDownOutline, scope: "project",
+  "project-drop-zone": { label: "Project Dropzone", icon: "$driveFileMove", scope: "project",
     description: "Shared by every session in this project · Files stay until you delete them" },
-  backups: { label: "Project Backups", icon: mdiArchiveClockOutline, scope: "project",
+  backups: { label: "Project Backups", icon: "$pendingActions", scope: "project",
     description: "Shared by every session in this project · Each file is deleted 2 weeks after its last change" }
 });
 
 function vibe64FileArea(area = "") {
-  return VIBE64_FILE_AREAS[area] || { label: "Files", icon: mdiFolderLockOutline, scope: "session", description: "" };
+  return VIBE64_FILE_AREAS[area] || { label: "Files", icon: "$folderManaged", scope: "session", description: "" };
 }
 
 // What a finished move or copy did, such as

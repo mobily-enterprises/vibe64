@@ -19,7 +19,7 @@
       <v-card-title class="studio-session-renewal__header">
         <span class="studio-session-renewal__heading">
           <span class="studio-session-renewal__icon" aria-hidden="true">
-            <v-icon :icon="mdiAutorenew" size="24" />
+            <v-icon icon="$autorenew" size="24" />
           </span>
           <span>
             <h2 :id="renewalTitleId" class="text-title-medium">Renew this session</h2>
@@ -33,7 +33,7 @@
           data-vibe64-session-renewal-close="icon"
           :disabled="dialogBusy"
           height="48"
-          :icon="mdiClose"
+          icon="$close"
           title="Close"
           variant="text"
           width="48"
@@ -48,7 +48,7 @@
           v-if="renewal.refreshError && renewal.phase !== 'load_error'"
           class="studio-session-renewal__notice"
           density="compact"
-          :icon="mdiInformationOutline"
+          icon="$info"
           role="status"
           type="warning"
           variant="tonal"
@@ -94,7 +94,7 @@
             v-if="renewal.advisoryPresentation?.attention"
             class="studio-session-renewal__notice"
             density="compact"
-            :icon="mdiInformationOutline"
+            icon="$info"
             :type="renewal.advisoryPresentation.color === 'warning' ? 'warning' : 'info'"
             variant="tonal"
           >
@@ -104,7 +104,7 @@
             </span>
           </v-alert>
           <v-sheet class="studio-session-renewal__assurance text-body-medium" color="surface-variant" rounded="lg">
-            <v-icon color="primary" :icon="mdiArchiveCheckOutline" size="22" />
+            <v-icon color="primary" icon="$inventory" size="22" />
             <span>
               <strong class="font-weight-medium">Your old session is kept until the handover is delivered.</strong>
               Once it reaches the fresh assistant conversation, renewal completes even if the model cannot answer.
@@ -130,7 +130,7 @@
             v-if="renewal.draftConflict"
             class="studio-session-renewal__notice"
             density="compact"
-            :icon="mdiInformationOutline"
+            icon="$info"
             role="alert"
             type="warning"
             variant="tonal"
@@ -152,7 +152,7 @@
             v-if="manualDraft"
             class="studio-session-renewal__notice"
             density="compact"
-            :icon="mdiInformationOutline"
+            icon="$info"
             type="info"
             variant="tonal"
           >
@@ -180,7 +180,7 @@
             v-else-if="renewal.renewal?.error?.message"
             class="studio-session-renewal__notice"
             density="compact"
-            :icon="mdiInformationOutline"
+            icon="$info"
             type="info"
             variant="tonal"
           >
@@ -239,7 +239,7 @@
 
         <template v-else-if="renewal.phase === 'completed'">
           <v-sheet class="studio-session-renewal__success text-body-medium" color="surface-variant" rounded="lg" role="status">
-            <v-icon color="success" :icon="mdiCheckCircleOutline" size="28" />
+            <v-icon color="success" icon="$checkCircle" size="28" />
             <span>
               <strong class="font-weight-medium">The fresh session is ready.</strong>
               {{ renewal.successorSelectionError ? "It is ready to open; the old session remains available in the archive." : "Opening it now; the old session remains available in the archive." }}
@@ -249,7 +249,7 @@
             v-if="renewal.maintenanceNeedsRetry"
             class="studio-session-renewal__notice"
             density="compact"
-            :icon="mdiInformationOutline"
+            icon="$info"
             role="status"
             type="warning"
             variant="tonal"
@@ -337,7 +337,7 @@
           color="primary"
           :disabled="renewal.busy"
           height="48"
-          :prepend-icon="mdiFileDocumentEditOutline"
+          prepend-icon="$editDocument"
           type="button"
           variant="flat"
           @click="renewal.requestDraft"
@@ -362,7 +362,7 @@
             color="primary"
             :disabled="!canConfirmRenewal"
             height="48"
-            :prepend-icon="mdiAutorenew"
+            prepend-icon="$autorenew"
             type="button"
             variant="flat"
             @click="confirmRenewal"
@@ -378,7 +378,7 @@
           color="primary"
           :disabled="renewal.busy"
           height="48"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           type="button"
           variant="flat"
           @click="renewal.retry"
@@ -392,7 +392,7 @@
             class="studio-session-renewal__action"
             :disabled="renewal.busy"
             height="48"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             type="button"
             variant="tonal"
             @click="renewal.retry"
@@ -421,15 +421,6 @@
 <script setup>
 import { computed, ref, useId } from "vue";
 import { useDisplay } from "vuetify";
-import {
-  mdiArchiveCheckOutline,
-  mdiAutorenew,
-  mdiCheckCircleOutline,
-  mdiClose,
-  mdiFileDocumentEditOutline,
-  mdiInformationOutline,
-  mdiRefresh
-} from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64RenewalAssistantSelector from "@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue";
 import Vibe64SessionRenewalProgress from "@/components/studio/vibe64-session/Vibe64SessionRenewalProgress.vue";

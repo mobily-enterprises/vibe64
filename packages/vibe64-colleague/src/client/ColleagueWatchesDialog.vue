@@ -1,6 +1,5 @@
 <script setup>
 // Colleague's ongoing watches and assignments, with Resume and Cancel for each watch.
-import { mdiClose, mdiEyeOutline } from "@mdi/js";
 
 defineProps({
   activator: { type: Object, default: undefined },
@@ -16,9 +15,9 @@ const open = defineModel({ type: Boolean, default: false });
   <v-dialog v-model="open" :activator="activator" :open-on-click="false" :fullscreen="fullscreen" max-width="620" scrollable aria-label="Watches and assignments">
     <v-card class="vibe64-colleague__watch-dialog">
       <v-card-title class="vibe64-colleague__watch-title d-flex align-center text-title-large">
-        <span class="vibe64-colleague__watch-badge" aria-hidden="true"><v-icon :icon="mdiEyeOutline" size="22" /></span>
+        <span class="vibe64-colleague__watch-badge" aria-hidden="true"><v-icon icon="$visibility" size="22" /></span>
         <span class="flex-grow-1">Watches and assignments</span>
-        <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="open = false" />
+        <v-btn icon="$close" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="open = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__watch-details">
         <section v-if="watches.length" class="vibe64-colleague__watch-card" aria-label="Watches">

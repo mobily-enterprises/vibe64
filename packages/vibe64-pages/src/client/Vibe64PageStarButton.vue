@@ -2,7 +2,6 @@
 // One page's star, on its chat card, its panel and its Pages list row: filled
 // when you starred it. Only you see your stars, in every session of the project.
 import { computed } from "vue";
-import { mdiStar, mdiStarOutline } from "@mdi/js";
 import { usePageStars } from "./pageStars.js";
 
 const props = defineProps({
@@ -19,7 +18,7 @@ const starred = computed(() => stars.isStarred(props.page.id));
     :aria-label="starred ? 'Unstar page' : 'Star page'"
     :aria-pressed="starred"
     :disabled="stars.pendingIds.value.includes(page.id)"
-    :icon="starred ? mdiStar : mdiStarOutline"
+    :icon="starred ? '$starFilled' : '$star'"
     data-test="page-star"
     size="small"
     :title="starred ? 'Unstar page' : 'Star page'"

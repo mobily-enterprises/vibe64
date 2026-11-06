@@ -1,7 +1,7 @@
 <template>
   <section class="database-overview" tabindex="-1" @keydown.esc="closeActor">
     <header class="database-overview__toolbar" aria-label="Data overview controls">
-      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back" :prepend-icon="mdiArrowLeft" variant="tonal" @click="closeActor">Back to data overview</v-btn>
+      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back" prepend-icon="$arrowBack" variant="tonal" @click="closeActor">Back to data overview</v-btn>
       <div class="database-overview__title">
         <strong>{{ activeGroup ? activeGroup.name : 'Data overview' }}</strong>
         <span v-if="activeGroup">{{ actorSchema.tables.length }} tables</span>
@@ -11,9 +11,9 @@
         <template v-if="!activeGroup">
           <v-btn v-if="graph.coverage.others.length" :disabled="!assistantAvailable" variant="tonal" @click="reviewUngrouped">Review {{ graph.coverage.others.length }} ungrouped tables</v-btn>
           <v-btn v-if="!overview.present" :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">Create with AI</v-btn>
-          <v-btn class="database-overview__icon-button" :icon="mdiImageFilterCenterFocus" size="small" variant="text" aria-label="Fit" title="Fit overview" @click="fit" />
+          <v-btn class="database-overview__icon-button" icon="$filterCenterFocus" size="small" variant="text" aria-label="Fit" title="Fit overview" @click="fit" />
           <v-menu v-model="overviewOptions" :close-on-content-click="false">
-            <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-overview__icon-button" :icon="mdiTuneVariant" size="small" variant="text" aria-label="Overview options" title="Overview options" /></template>
+            <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-overview__icon-button" icon="$tune" size="small" variant="text" aria-label="Overview options" title="Overview options" /></template>
             <v-sheet class="database-overview__options" rounded="lg" elevation="2" aria-label="Overview options">
               <span>Not yet reviewed: {{ graph.coverage.unreviewed.length }}</span>
               <v-switch v-if="overview.definition.mainRelationships" v-model="allRelationships" density="compact" hide-details label="All connections" />
@@ -146,7 +146,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiArrowLeft, mdiImageFilterCenterFocus, mdiTuneVariant } from "@mdi/js";
 import { Handle, Position, VueFlow } from "@vue-flow/core";
 import DatabaseErd from "./DatabaseErd.vue";
 import DatabaseTableList from "./DatabaseTableList.vue";

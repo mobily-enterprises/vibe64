@@ -49,14 +49,14 @@
             :href="fact.href"
             target="_blank"
             rel="noreferrer"
-            :icon="mdiOpenInNew"
+            icon="$openInNew"
             size="x-small"
             variant="text"
           />
           <v-btn
             v-if="fact.copyValue"
             :aria-label="`Copy ${fact.label}`"
-            :icon="mdiContentCopy"
+            icon="$contentCopy"
             size="x-small"
             variant="text"
             @click="emit('copy', fact.copyValue, fact.label)"
@@ -68,10 +68,6 @@
 </template>
 
 <script setup>
-import {
-  mdiContentCopy,
-  mdiOpenInNew
-} from "@mdi/js";
 
 defineProps({
   facts: {

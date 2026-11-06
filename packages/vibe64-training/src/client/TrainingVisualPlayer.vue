@@ -65,7 +65,7 @@ defineExpose({
   <section class="vibe64-training-visual" :class="`is-${state.phase}`" :aria-label="title">
     <div class="vibe64-training-visual__frame">
       <div class="vibe64-training-visual__bar">
-        <svg class="vibe64-training-visual__bar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m0 16H5V5h14v14M7 15l3-4 2 3 3-4 2 5H7Z" /></svg>
+        <v-icon class="vibe64-training-visual__bar-icon" icon="$image" size="18" aria-hidden="true" />
         <span class="vibe64-training-visual__bar-title">{{ title }}</span>
       </div>
       <div class="vibe64-training-visual__canvas">
@@ -75,7 +75,7 @@ defineExpose({
     </div>
     <p v-show="state.description" class="vibe64-training-visual__caption text-body-medium" role="status">{{ state.description }}</p>
     <div v-if="state.error" class="vibe64-training-visual__error" role="alert">
-      <svg class="vibe64-training-visual__error-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 13h-2V7h2m0 10h-2v-2h2M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /></svg>
+      <v-icon class="vibe64-training-visual__error-icon" icon="$error" size="24" aria-hidden="true" />
       <p class="text-body-medium">{{ state.error }}</p>
       <v-btn min-height="48" rounded="pill" variant="tonal" @click="reload">Reload diagram</v-btn>
     </div>
@@ -101,7 +101,7 @@ defineExpose({
   background: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05));
   border-bottom: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
 }
-.vibe64-training-visual__bar-icon { flex: 0 0 auto; width: 18px; height: 18px; fill: rgb(var(--v-theme-primary)); }
+.vibe64-training-visual__bar-icon { flex: 0 0 auto; color: rgb(var(--v-theme-primary)); }
 .vibe64-training-visual__bar-title {
   min-width: 0;
   overflow: hidden;
@@ -130,7 +130,7 @@ defineExpose({
   color: rgb(var(--v-theme-on-surface));
 }
 .vibe64-training-visual__error p { flex: 1 1 12rem; min-width: 0; }
-.vibe64-training-visual__error-icon { flex: 0 0 auto; width: 24px; height: 24px; fill: rgb(var(--v-theme-error)); }
+.vibe64-training-visual__error-icon { flex: 0 0 auto; color: rgb(var(--v-theme-error)); }
 .vibe64-training-visual__error .v-btn { letter-spacing: 0; text-transform: none; }
 @keyframes vibe64-training-visual-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vibe64-training-visual__frame { animation: none; } }

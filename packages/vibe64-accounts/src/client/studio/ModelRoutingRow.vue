@@ -39,7 +39,6 @@ export { defaultRunsIn, routeKey, routingSelectionText, TOOL_MARKS, toolLabel };
 
 <script setup>
 import { computed, ref } from "vue";
-import { mdiChevronDown } from "@mdi/js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { routingRunsInChoices } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
@@ -181,7 +180,7 @@ function chooseThinking(variantId) {
         <div class="routing-row__footer">
           <v-btn
             v-if="hasAdvanced" variant="text" size="small" class="routing-row__advanced-toggle" :class="{ 'is-open': advanced }"
-            :append-icon="mdiChevronDown" :aria-expanded="String(advanced)" :aria-controls="`${rowId}-advanced`" @click="advanced = !advanced"
+            append-icon="$expand" :aria-expanded="String(advanced)" :aria-controls="`${rowId}-advanced`" @click="advanced = !advanced"
           >
             Advanced
           </v-btn>

@@ -24,7 +24,7 @@
         :aria-label="data.pinned ? 'Unpin table' : 'Pin table'"
         :aria-pressed="data.pinned"
         class="nodrag"
-        :icon="data.pinned ? mdiPin : mdiPinOutline"
+        :icon="data.pinned ? '$keepFilled' : '$keep'"
         size="x-small"
         variant="text"
         @click.stop="data.onPin(id)"
@@ -33,7 +33,7 @@
         v-if="controlsVisible"
         :aria-label="data.collapsed ? 'Expand table' : 'Collapse table'"
         class="nodrag"
-        :icon="data.collapsed ? mdiChevronDown : mdiChevronUp"
+        :icon="data.collapsed ? '$expand' : '$collapse'"
         size="x-small"
         variant="text"
         @click.stop="data.onToggle(id)"
@@ -71,7 +71,6 @@
 </template>
 
 <script setup>
-import { mdiChevronDown, mdiChevronUp, mdiPin, mdiPinOutline } from "@mdi/js";
 import { ERD_NODE_WIDTH, ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, ERD_FOOTER_HEIGHT } from "../../shared/erdModel.js";
 
 defineProps({

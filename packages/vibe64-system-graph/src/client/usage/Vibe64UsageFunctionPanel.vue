@@ -5,10 +5,10 @@
         <h3 class="text-title-medium">{{ node.title }}</h3>
         <p class="text-body-small">{{ node.subtitle }}</p>
       </div>
-      <v-btn :icon="mdiClose" variant="text" size="small" aria-label="Close details" @click="emit('close')" />
+      <v-btn icon="$close" variant="text" size="small" aria-label="Close details" @click="emit('close')" />
     </header>
     <div class="usage-panel__actions">
-      <v-btn variant="tonal" :prepend-icon="mdiCodeTags" @click="openAt(node.start)">Open source</v-btn>
+      <v-btn variant="tonal" prepend-icon="$code" @click="openAt(node.start)">Open source</v-btn>
       <span v-if="ranText" class="text-body-medium">{{ ranText }}</span>
     </div>
     <p v-if="joinNote" class="usage-panel__note text-body-small" role="note">{{ joinNote }}</p>
@@ -32,7 +32,7 @@
               <v-list-item-subtitle class="usage-panel__callee"><code>{{ row.callee }}</code><span v-if="methodText(row)"> · {{ methodText(row) }}</span></v-list-item-subtitle>
               <template #append>
                 <v-chip size="x-small" :variant="row.certainty === 'exact' ? 'tonal' : 'outlined'" class="mr-1">{{ CERTAINTY_TEXT[row.certainty] }}</v-chip>
-                <v-btn v-if="row.start" :icon="mdiCodeTags" variant="text" size="x-small" :aria-label="`Open the ${row.method === 'renders' ? 'tag' : 'call'} at line ${row.start.line}`" @click.stop="openAt(row.start, row.site)" />
+                <v-btn v-if="row.start" icon="$code" variant="text" size="x-small" :aria-label="`Open the ${row.method === 'renders' ? 'tag' : 'call'} at line ${row.start.line}`" @click.stop="openAt(row.start, row.site)" />
               </template>
             </v-list-item>
           </v-list>
@@ -55,7 +55,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiClose, mdiCodeTags } from "@mdi/js";
 
 import { CERTAINTY_TEXT, NOT_IGNORED_TEXT, callGroups, callMethodText, coverageText, functionLabel, joinText } from "./usageModel.js";
 

@@ -1,5 +1,4 @@
 <script setup>
-import { mdiSchoolOutline } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // Courses in the project selector's menu, in Learn mode only: in Learn,
@@ -13,7 +12,7 @@ const learning = useVibe64Learning();
     v-if="learning.learnMode"
     data-test="learning-courses"
     data-vibe64-guide="courses"
-    :prepend-icon="mdiSchoolOutline"
+    prepend-icon="$school"
     subtitle="Start or continue a lesson"
     title="Courses"
     @click="learning.openCourses()"

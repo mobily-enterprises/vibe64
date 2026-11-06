@@ -2,7 +2,7 @@
   <section class="env-panel">
     <Vibe64DashboardPageHeader
       description="Values supplied to this project's development processes."
-      :icon="mdiFileCogOutline"
+      icon="$settingsApplications"
       title="Env"
     >
       <template #meta>
@@ -21,7 +21,7 @@
           <v-btn
             :disabled="envInitialLoading"
             :loading="downloadBusy"
-            :prepend-icon="mdiDownload"
+            prepend-icon="$download"
             rounded="pill"
             type="button"
             variant="tonal"
@@ -31,7 +31,7 @@
           </v-btn>
           <v-btn
             :loading="refreshBusy"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             rounded="pill"
             type="button"
             variant="tonal"
@@ -243,7 +243,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiDownload, mdiFileCogOutline, mdiRefresh } from "@mdi/js";
 import { useRoute } from "vue-router";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";

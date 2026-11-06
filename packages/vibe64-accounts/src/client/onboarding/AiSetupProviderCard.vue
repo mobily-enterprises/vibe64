@@ -1,8 +1,5 @@
 <script setup>
 import { useDisplay } from "vuetify";
-import {
-  mdiAlertCircleOutline, mdiCheckCircle, mdiChevronDown, mdiInformationOutline, mdiLaptop, mdiOpenInNew, mdiTuneVariant
-} from "@mdi/js";
 import ToolInstallRow from "/src/components/studio/ToolInstallRow.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import { injectAiSetupCards } from "./useAiSetupCards.js";
@@ -48,10 +45,10 @@ function meterLabel([aspect, rating]) {
   >
     <span v-if="card.crown" class="aio-card__ribbon">Recommended</span>
     <span v-if="card.connected" class="aio-card__connected">
-      <v-icon :icon="mdiCheckCircle" size="16" aria-hidden="true" />{{ connectedLabel(card) }}<slot name="connection-access" :card="card" place="badge" />
+      <v-icon icon="$checkCircleFilled" size="16" aria-hidden="true" />{{ connectedLabel(card) }}<slot name="connection-access" :card="card" place="badge" />
     </span>
     <span v-else-if="cardAction(card) === 'reconnect'" class="aio-card__connected aio-card__connected--warn">
-      <v-icon :icon="mdiAlertCircleOutline" size="16" aria-hidden="true" />Reconnect required
+      <v-icon icon="$error" size="16" aria-hidden="true" />Reconnect required
     </span>
     <component
       :is="collapsible(card) ? 'button' : 'div'" class="aio-card__head"
@@ -68,7 +65,7 @@ function meterLabel([aspect, rating]) {
         <span :id="`aio-card-${card.id}`" class="aio-card__name">{{ card.name }}</span>
         <span class="aio-card__tagline">{{ card.tagline }}</span>
       </span>
-      <v-icon v-if="collapsible(card)" :icon="mdiChevronDown" class="aio-card__chevron" aria-hidden="true" />
+      <v-icon v-if="collapsible(card)" icon="$expand" class="aio-card__chevron" aria-hidden="true" />
     </component>
     <slot v-if="card.connected" name="connection-access" :card="card" place="card" />
     <template v-if="expanded(card)">
@@ -89,7 +86,7 @@ function meterLabel([aspect, rating]) {
       </div>
       <div class="aio-card__note-row">
         <p v-if="cardNote(card)" class="aio-card__note">
-          <v-icon :icon="mdiInformationOutline" size="18" aria-hidden="true" />{{ cardNote(card) }}
+          <v-icon icon="$info" size="18" aria-hidden="true" />{{ cardNote(card) }}
         </p>
       </div>
       <div class="aio-card__offer">
@@ -125,7 +122,7 @@ function meterLabel([aspect, rating]) {
             </v-btn>
             <v-btn
               variant="text" color="primary" class="aio-card__link" :href="card.signUp.url" target="_blank" rel="noopener noreferrer"
-              :append-icon="mdiOpenInNew" @click="emit('connect', card, 'opened')"
+              append-icon="$openInNew" @click="emit('connect', card, 'opened')"
             >
               Get {{ card.name }}<span class="d-sr-only"> (opens in a new tab)</span>
             </v-btn>
@@ -134,7 +131,7 @@ function meterLabel([aspect, rating]) {
           <template v-else-if="cardAction(card) === 'get'">
             <v-btn
               color="primary" :variant="CTA_VARIANT[card.rank - 1]" size="large"
-              :href="card.signUp.url" target="_blank" rel="noopener noreferrer" :append-icon="mdiOpenInNew"
+              :href="card.signUp.url" target="_blank" rel="noopener noreferrer" append-icon="$openInNew"
               @click="emit('connect', card, 'opened')"
             >
               Get {{ card.name }}<span class="d-sr-only"> (opens in a new tab)</span>
@@ -142,17 +139,17 @@ function meterLabel([aspect, rating]) {
             <v-btn variant="text" color="primary" class="aio-card__link" @click="emit('connect', card, 'have')">{{ card.have }}</v-btn>
           </template>
           <v-btn
-            v-if="cardRows(card).length" variant="text" color="primary" class="aio-card__link" :prepend-icon="mdiTuneVariant"
+            v-if="cardRows(card).length" variant="text" color="primary" class="aio-card__link" prepend-icon="$tune"
             :aria-label="`Manage ${card.name}`" @click="emit('manage', card)"
           >
             Manage
           </v-btn>
         </div>
         <p v-if="toolReady(card)" class="aio-card__needs aio-card__needs--ready" :title="cardTool(card).path">
-          <v-icon :icon="mdiCheckCircle" size="18" aria-hidden="true" />Ready on this computer
+          <v-icon icon="$checkCircleFilled" size="18" aria-hidden="true" />Ready on this computer
         </p>
         <p v-else-if="neededTool(card) && !installFirst(card)" class="aio-card__needs">
-          <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card).label }} on this computer
+          <v-icon icon="$laptop" size="18" aria-hidden="true" />Needs {{ neededTool(card).label }} on this computer
         </p>
         <ToolInstallRow
           v-if="installOpen === card.id && cardTool(card)" :id="`aio-install-${card.id}`" class="aio-card__install"
@@ -163,10 +160,10 @@ function meterLabel([aspect, rating]) {
             <strong>{{ card.free.label }}</strong>
             <span>{{ card.free.connected ? "Connected." : card.free.detail }}</span>
             <span v-if="toolReady(card.free)" class="aio-card__needs aio-card__needs--ready" :title="cardTool(card.free).path">
-              <v-icon :icon="mdiCheckCircle" size="18" aria-hidden="true" />Ready on this computer
+              <v-icon icon="$checkCircleFilled" size="18" aria-hidden="true" />Ready on this computer
             </span>
             <span v-else-if="neededTool(card.free) && !installFirst(card.free)" class="aio-card__needs">
-              <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card.free).label }} on this computer
+              <v-icon icon="$laptop" size="18" aria-hidden="true" />Needs {{ neededTool(card.free).label }} on this computer
             </span>
           </p>
           <v-btn
@@ -177,7 +174,7 @@ function meterLabel([aspect, rating]) {
           </v-btn>
           <v-btn
             v-if="!card.free.connected" :variant="installFirst(card.free) ? 'text' : 'outlined'" color="primary" :href="card.free.signUp.url" target="_blank"
-            rel="noopener noreferrer" :append-icon="mdiOpenInNew" @click="emit('connect', card.free, 'opened')"
+            rel="noopener noreferrer" append-icon="$openInNew" @click="emit('connect', card.free, 'opened')"
           >
             Start free<span class="d-sr-only"> (opens Z.AI in a new tab)</span>
           </v-btn>
@@ -192,7 +189,7 @@ function meterLabel([aspect, rating]) {
           </v-btn>
           <v-btn
             v-if="cardRows(card.free).length && !cardRows(card).length" variant="text" color="primary" class="aio-card__link"
-            :prepend-icon="mdiTuneVariant" :aria-label="`Manage ${card.free.name}`" @click="emit('manage', card)"
+            prepend-icon="$tune" :aria-label="`Manage ${card.free.name}`" @click="emit('manage', card)"
           >
             Manage
           </v-btn>

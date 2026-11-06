@@ -13,7 +13,7 @@
         role="status"
         :title="sessionGithubActor.title"
       >
-        <v-icon :icon="mdiGithub" size="14" />
+        <v-icon icon="$github" size="14" />
         <span>{{ sessionGithubActor.displayLabel }}</span>
       </div>
     </Teleport>
@@ -54,7 +54,6 @@
 import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch, watchEffect } from "vue";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
 import { NO_RESOURCE_RECOVERY_CONTROL, VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
-import { mdiGithub } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import { Vibe64UsageRecordingIndicator } from "@local/vibe64-usage-recording/client";

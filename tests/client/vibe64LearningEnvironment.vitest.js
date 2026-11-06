@@ -1228,7 +1228,6 @@ describe("Courses overlay", () => {
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
       vue: Vue,
       "vue-router": { useRoute: () => route, useRouter: () => ({ replace }) },
-      "@mdi/js": { mdiArrowLeft: "left", mdiArrowRight: "right" },
       "@/lib/vibe64ProjectScope.js": { projectSlugFromRoute: value => String(value?.params?.slug || "") },
       "@/lib/vibe64Learning.js": LearningLib,
       "@jskit-ai/realtime/client/composables/useRealtimeEvent": { useRealtimeEvent: options => realtime.push(options) },
@@ -1367,7 +1366,7 @@ describe("Courses overlay", () => {
 describe("Courses → In progress and Archived", () => {
   async function mountAttempts(learning, archived) {
     const panel = compiledUi(path.resolve("src/components/learning/Vibe64LearningAttempts.vue"), {
-      vue: Vue, "@mdi/js": { mdiDeleteOutline: "trash" } });
+      vue: Vue });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, archived }) });
     for (const tag of ["v-btn", "v-alert", "v-progress-circular"]) app.component(tag, widget);
@@ -1617,7 +1616,7 @@ describe("Lesson finished screen", () => {
 
   async function mountFinished(learning, courses) {
     const finished = compiledUi(path.resolve("src/components/learning/Vibe64LearningFinished.vue"), {
-      vue: Vue, "@mdi/js": { mdiCheckCircle: "check" },
+      vue: Vue,
       "@local/vibe64-training/client/course-progress": await import("../../packages/vibe64-training/src/client/courseProgress.js")
     });
     const root = { children: [] };
@@ -1717,8 +1716,6 @@ const beatsLesson = () => {
   return value;
 };
 
-const STEP_BAR_ICONS = Object.freeze({ mdiApplicationOutline: "app", mdiBookOpenPageVariantOutline: "book", mdiCheck: "check",
-  mdiChevronLeft: "left", mdiChevronRight: "right", mdiPause: "pause", mdiPlay: "play", mdiSchoolOutline: "school" });
 // A tooltip stub that renders its activator.
 const tooltip = { inheritAttrs: false, setup: (_props, { attrs, slots }) => () => Vue.h("div", { "data-tooltip": attrs.text },
   slots.activator?.({ props: {} })) };
@@ -1728,9 +1725,9 @@ function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true
   { route = Vue.reactive({ path: "/app/project/practice-one" }), router = { push: vi.fn(async () => {}) } } = {}) {
   const learningImport = { useVibe64Learning: () => learning };
   const toggle = compiledUi(path.resolve("src/components/learning/Vibe64LessonToggle.vue"), {
-    vue: Vue, "@mdi/js": STEP_BAR_ICONS, "@/composables/useVibe64Learning.js": learningImport });
+    vue: Vue, "@/composables/useVibe64Learning.js": learningImport });
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
-    vue: Vue, "@mdi/js": STEP_BAR_ICONS, "vue-router": { useRoute: () => route, useRouter: () => router },
+    vue: Vue, "vue-router": { useRoute: () => route, useRouter: () => router },
     "@/lib/vibe64ProjectScope.js": ProjectScope, "./Vibe64LessonToggle.vue": { default: toggle },
     "@/composables/useVibe64Learning.js": learningImport, "@/lib/vibe64Learning.js": LearningLib,
     "@local/vibe64-accounts/client": accounts });

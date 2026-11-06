@@ -1,5 +1,4 @@
 <script setup>
-import { mdiChevronUp, mdiSchoolOutline } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import Vibe64LearningLessonPane from "./Vibe64LearningLessonPane.vue";
 
@@ -13,11 +12,11 @@ const learning = useVibe64Learning();
 <template>
   <div class="vibe64-lesson-sheet" data-test="lesson-sheet">
     <header class="vibe64-lesson-sheet__header">
-      <v-icon :icon="mdiSchoolOutline" size="18" />
+      <v-icon icon="$school" size="18" />
       <span class="vibe64-lesson-sheet__title">Lesson</span>
       <v-btn
         class="vibe64-lesson-sheet__hide" variant="tonal" rounded="pill" size="small" min-height="32"
-        :prepend-icon="mdiChevronUp" data-test="lesson-sheet-hide" @click="learning.hideLesson()"
+        prepend-icon="$collapse" data-test="lesson-sheet-hide" @click="learning.hideLesson()"
       >
         Hide lesson
       </v-btn>

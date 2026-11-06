@@ -49,7 +49,7 @@
           class="vibe64-codex-session__start-action"
           color="primary"
           :disabled="terminalStarting"
-          :prepend-icon="mdiRestart"
+          prepend-icon="$restartAlt"
           size="small"
           variant="flat"
           @click="restartTerminal"
@@ -71,7 +71,7 @@
           :aria-label="terminalAttachmentActionLabel"
           class="vibe64-codex-session__attachment-action"
           :disabled="!attachmentCanAddFiles"
-          :icon="mdiPaperclip"
+          icon="$attachFile"
           size="small"
           :title="terminalAttachmentActionLabel"
           type="button"
@@ -124,7 +124,6 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { mdiPaperclip, mdiRestart } from "@mdi/js";
 import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerminal.vue";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import Vibe64AgentTerminalDropOverlay from "@/components/studio/Vibe64AgentTerminalDropOverlay.vue";

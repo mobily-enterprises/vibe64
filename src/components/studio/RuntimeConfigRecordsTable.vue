@@ -32,7 +32,7 @@
             class="runtime-config-records-table__linked"
             :title="record.label"
           >
-            <v-icon class="runtime-config-records-table__linked-icon" :icon="mdiLinkVariant" size="16" />
+            <v-icon class="runtime-config-records-table__linked-icon" icon="$link" size="16" />
             <span class="runtime-config-records-table__linked-label">{{ record.label || "Linked" }}</span>
           </div>
           <div
@@ -132,7 +132,6 @@ function writeNothing() {}
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiLinkVariant } from "@mdi/js";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   recordIsSavedEnvValue,

@@ -40,12 +40,12 @@
           width="var(--session-action-size, 36px)"
           @click="requestSessionSaveWork"
         >
-          <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
+          <v-icon v-if="saveWorkRequiresUpdate" icon="$commit" />
           <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
-            <v-icon :icon="mdiContentSaveOutline" size="18" class="studio-autopilot__save-symbol-disk" />
-            <v-icon :icon="mdiSourceCommit" size="16" class="studio-autopilot__save-symbol-commit" />
+            <v-icon icon="$save" size="18" class="studio-autopilot__save-symbol-disk" />
+            <v-icon icon="$commit" size="16" class="studio-autopilot__save-symbol-commit" />
           </span>
-          <v-icon v-else :icon="mdiContentSaveOutline" />
+          <v-icon v-else icon="$save" />
         </v-btn>
       </template>
       <span role="status">Checking…</span>
@@ -56,7 +56,7 @@
       color="secondary"
       variant="tonal"
       size="small"
-      :prepend-icon="mdiClockOutline"
+      prepend-icon="$schedule"
       :aria-label="`${mainChatApprovals.waitingCount} ${mainChatApprovals.waitingCount === 1 ? 'message' : 'messages'} waiting for your approval`"
       @click="revealApprovals"
     >
@@ -75,7 +75,7 @@
           data-vibe64-header-action="temporary-ai"
           :disabled="!sessionId || props.sessionSelectionArchived"
           height="var(--session-action-size, 36px)"
-          :icon="mdiIncognito"
+          icon="$dominoMask"
           :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
           type="button"
           variant="text"
@@ -97,7 +97,7 @@
           data-vibe64-session-renew-action
           data-vibe64-header-action="renew"
           height="var(--session-action-size, 36px)"
-          :icon="mdiAutorenew"
+          icon="$autorenew"
           :title="sessionRenewalActionPresentation.reason"
           type="button"
           variant="text"
@@ -117,7 +117,7 @@
         v-if="headerActions.inline.includes('pull-request')"
         data-vibe64-header-action="pull-request"
         class="studio-autopilot__header-action"
-        :icon="mdiSourcePull" height="var(--session-action-size, 36px)" width="var(--session-action-size, 36px)" variant="text"
+        icon="$callMerge" height="var(--session-action-size, 36px)" width="var(--session-action-size, 36px)" variant="text"
         :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
         :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
         :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
@@ -131,7 +131,7 @@
         data-vibe64-header-action="prepare-workspace"
         :disabled="workspaceSetupRetryDisabled"
         height="var(--session-action-size, 36px)"
-        :icon="mdiWrenchOutline"
+        icon="$build"
         title="Prepare workspace: run all declared setup steps again"
         type="button"
         variant="text"
@@ -157,7 +157,7 @@
               class="studio-autopilot__header-action"
               data-vibe64-session-actions
               height="var(--session-action-size, 36px)"
-              :icon="mdiDotsVertical"
+              icon="$moreVert"
               title="Session actions"
               type="button"
               variant="text"
@@ -177,7 +177,7 @@
           >
             <template #prepend>
               <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages">
-                <v-icon :icon="mdiIncognito" />
+                <v-icon icon="$dominoMask" />
               </v-badge>
             </template>
           </v-list-item>
@@ -185,7 +185,7 @@
             v-if="headerActions.overflow.includes('renew')"
             class="studio-autopilot__session-action-item"
             data-vibe64-session-renew-action
-            :prepend-icon="mdiAutorenew"
+            prepend-icon="$autorenew"
             :subtitle="sessionRenewalActionPresentation.reason"
             :title="sessionRenewalActionPresentation.label"
             @click="requestSessionRenewal(sessionActionsTrigger?.$el)"
@@ -200,7 +200,7 @@
           />
           <v-list-item
             v-if="headerActions.overflow.includes('pull-request')" min-height="48"
-            :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
+            prepend-icon="$callMerge" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
             :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
             :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
             @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
@@ -210,7 +210,7 @@
             data-vibe64-prepare-workspace
             min-height="48"
             :disabled="workspaceSetupRetryDisabled"
-            :prepend-icon="mdiWrenchOutline"
+            prepend-icon="$build"
             subtitle="Run all declared setup steps again"
             title="Prepare workspace"
             @click="retryWorkspaceSetup"
@@ -223,16 +223,6 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import {
-  mdiAutorenew,
-  mdiClockOutline,
-  mdiContentSaveOutline,
-  mdiDotsVertical,
-  mdiIncognito,
-  mdiSourceCommit,
-  mdiSourcePull,
-  mdiWrenchOutline
-} from "@mdi/js";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";

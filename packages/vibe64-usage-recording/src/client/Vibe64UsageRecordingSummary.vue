@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiDeleteOutline } from "@mdi/js";
 import { usageRecordingEnd } from "./usageRecordingText.js";
 import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
 
@@ -47,7 +46,7 @@ async function deleteRecording() {
     <p class="usage-recording-summary__ended">{{ ended }}</p>
     <v-btn
       class="usage-recording-summary__delete"
-      :prepend-icon="mdiDeleteOutline"
+      prepend-icon="$delete"
       variant="text"
       @click="askToDelete"
     >

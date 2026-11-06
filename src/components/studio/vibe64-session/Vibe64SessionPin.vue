@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref } from "vue";
-import { mdiPin, mdiPinOutline } from "@mdi/js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
@@ -46,7 +45,7 @@ async function toggle() {
 <template>
   <v-list-item
     v-if="listItem"
-    :prepend-icon="pinned ? mdiPin : mdiPinOutline"
+    :prepend-icon="pinned ? '$keepFilled' : '$keep'"
     :title="pinned ? 'Unpin session' : 'Pin session'"
     :subtitle="pinned ? 'Stop using it as the project source' : label"
     :aria-pressed="pinned"
@@ -58,7 +57,7 @@ async function toggle() {
   <v-btn
     v-else
     class="studio-autopilot__header-action"
-    :icon="pinned ? mdiPin : mdiPinOutline"
+    :icon="pinned ? '$keepFilled' : '$keep'"
     :aria-label="label"
     :title="label"
     :aria-pressed="pinned"

@@ -40,7 +40,7 @@
           v-if="showAttachmentAction"
           :aria-label="`Attach files to ${assistantLabel} terminal`"
           :disabled="!attachmentCanAddFiles"
-          :icon="mdiPaperclip"
+          icon="$attachFile"
           size="small"
           :title="`Attach files to ${assistantLabel} terminal`"
           type="button"
@@ -68,7 +68,7 @@
           v-if="showStartPanel"
           :action-text="terminalStarting ? `Starting ${assistantLabel}…` : terminalExited ? `Restart ${assistantLabel}` : `Start ${assistantLabel}`"
           :action-visible="!sourcePending"
-          :icon="terminalExited ? mdiRestart : mdiPlayCircleOutline"
+          :icon="terminalExited ? '$restartAlt' : '$playCircle'"
           :message="sourcePending ? 'The terminal can start after the session source is ready.' : `Start an interactive ${assistantLabel} terminal for this session.`"
           :starting="terminalStarting"
           :title="terminalExited ? `${assistantLabel} terminal exited` : `${assistantLabel} terminal is off`"
@@ -93,7 +93,6 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { mdiPaperclip, mdiPlayCircleOutline, mdiRestart } from "@mdi/js";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import Vibe64AgentTerminalDropOverlay from "@/components/studio/Vibe64AgentTerminalDropOverlay.vue";
 import Vibe64AgentTerminalStartPanel from "@/components/studio/Vibe64AgentTerminalStartPanel.vue";

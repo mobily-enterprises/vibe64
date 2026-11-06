@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiClose, mdiSourcePull } from "@mdi/js";
 import { vibe64SessionDisplayTitle, vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
@@ -69,8 +68,8 @@ async function submit() {
   <v-dialog :model-value="modelValue" max-width="38rem" scrollable :persistent="pending" @update:model-value="emit('update:modelValue', $event)">
     <v-card rounded="xl">
       <div class="d-flex align-center justify-space-between ga-2 pa-5 pb-2">
-        <div class="d-flex align-center ga-3"><v-icon :icon="mdiSourcePull" color="primary" /><h2 class="text-title-large">Create pull request</h2></div>
-        <v-btn :icon="mdiClose" size="48" variant="text" aria-label="Close pull request dialog" :disabled="pending" @click="emit('update:modelValue', false)" />
+        <div class="d-flex align-center ga-3"><v-icon icon="$callMerge" color="primary" /><h2 class="text-title-large">Create pull request</h2></div>
+        <v-btn icon="$close" size="48" variant="text" aria-label="Close pull request dialog" :disabled="pending" @click="emit('update:modelValue', false)" />
       </div>
       <v-card-text class="d-flex flex-column ga-3">
         <v-sheet color="surface-light" rounded="lg" class="pa-3 pr-destination">

@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiClose, mdiLabelOutline, mdiPencilOutline, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
@@ -88,10 +87,10 @@ async function submit() {
     <v-card tag="form" rounded="xl" @submit.prevent="submit">
       <div class="d-flex align-center justify-space-between ga-3 pa-5 pb-2">
         <div class="d-flex align-center ga-3">
-          <v-icon :icon="editingLabels ? mdiLabelOutline : editing ? mdiPencilOutline : mdiPlus" color="primary" />
+          <v-icon :icon="editingLabels ? '$label' : editing ? '$edit' : '$add'" color="primary" />
           <h2 class="text-title-large">{{ heading }}</h2>
         </div>
-        <v-btn :icon="mdiClose" variant="text" size="48" aria-label="Close issue dialog" :disabled="pending" @click="emit('update:modelValue', false)" />
+        <v-btn icon="$close" variant="text" size="48" aria-label="Close issue dialog" :disabled="pending" @click="emit('update:modelValue', false)" />
       </div>
       <v-card-text class="d-flex flex-column ga-4">
         <p v-if="editingLabels" class="text-body-medium ma-0">#{{ issue.number }} · {{ issue.title }}</p>

@@ -14,7 +14,7 @@
       />
     </template>
     <p v-if="ready.length" class="setup-tools__found">
-      <v-icon :icon="mdiCheckCircle" size="16" />
+      <v-icon icon="$checkCircleFilled" size="16" />
       <span>
         {{ missing.length ? "Also used:" : "Tools this step used:" }}
         <span v-for="(tool, index) in ready" :key="tool.id" class="setup-tools__found-item">
@@ -29,7 +29,6 @@
 // After a workspace preparation step fails: the Stack runtimes it used, with
 // the install command for any that are missing or didn't run.
 import { computed, watch } from "vue";
-import { mdiCheckCircle } from "@mdi/js";
 import ToolInstallRow from "@/components/studio/ToolInstallRow.vue";
 import { useLocalToolRows } from "@/composables/useLocalToolRows.js";
 

@@ -12,7 +12,7 @@
     <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar-tools>
       <div ref="voiceToolsTarget" class="vibe64-main-conversation__voice-tools" :class="{ 'vibe64-main-conversation__voice-tools--opening': holdingVoice }">
         <v-btn
-          v-if="!voiceSession || holdingVoice" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? mdiMicrophone : mdiMicrophoneOff" variant="text" color="primary" width="40" min-width="40" min-height="44"
+          v-if="!voiceSession || holdingVoice" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? '$mic' : '$micOff'" variant="text" color="primary" width="40" min-width="40" min-height="44"
           :aria-label="holdingVoice ? 'Release to send' : 'Talk'" title="click or long press to talk"
           :aria-pressed="holdingVoice" :disabled="!voiceBinding.available"
           @pointerdown="voiceGesture.pointerDown" @pointerup="voiceGesture.pointerUp"
@@ -21,15 +21,15 @@
           @keydown.enter.prevent="voiceGesture.keyDown" @keyup.enter.prevent="voiceGesture.keyUp"
           @blur="voiceGesture.cancel" @contextmenu.prevent @click="voiceGesture.click"
         >
-          <span class="vibe64-main-conversation__voice-disc"><v-icon size="20" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? mdiMicrophone : mdiMicrophoneOff" /></span>
+          <span class="vibe64-main-conversation__voice-disc"><v-icon size="20" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? '$mic' : '$micOff'" /></span>
         </v-btn>
         <v-btn
-          v-if="!voiceSession || holdingVoice" :icon="readAloud ? mdiVolumeHigh : mdiVolumeOff" variant="text" color="primary" width="40" min-width="40" min-height="44"
+          v-if="!voiceSession || holdingVoice" :icon="readAloud ? '$volumeHigh' : '$volumeOff'" variant="text" color="primary" width="40" min-width="40" min-height="44"
           :aria-pressed="readAloud" :aria-label="readAloud ? 'Turn project agent read-aloud off' : 'Read project agent answers aloud'"
           :title="readAloud ? 'Spoken replies on' : 'Spoken replies off'" :disabled="!voiceBinding.available || readAloudChangePending"
           @click="toggleReadAloud"
         >
-          <span class="vibe64-main-conversation__voice-disc"><v-icon size="20" :icon="readAloud ? mdiVolumeHigh : mdiVolumeOff" /></span>
+          <span class="vibe64-main-conversation__voice-disc"><v-icon size="20" :icon="readAloud ? '$volumeHigh' : '$volumeOff'" /></span>
         </v-btn>
         <VoiceConversationSettings v-if="!voiceSession || holdingVoice" :voice="voiceSession?.voice" compact @error="voice.controller.state.error = $event.message">
           <template v-if="voice.Settings" #default="settings"><component :is="voice.Settings" v-bind="settings" :binding="voiceBinding" /></template>
@@ -38,10 +38,10 @@
     </template>
     <template v-if="voiceSession" #avatar-control="{ size }">
       <span v-if="size === 'hidden' && voiceSession.voice.listening.value && !voiceSession.microphoneMuted.value" role="img" aria-label="Listening" title="Listening" class="d-inline-flex align-center text-primary">
-        <v-icon size="20" :icon="mdiMicrophone" />
+        <v-icon size="20" icon="$mic" />
       </span>
       <span v-if="size === 'hidden' && voiceSession.voice.speaking.value" role="img" aria-label="Speaking" title="Speaking" class="d-inline-flex align-center text-primary">
-        <v-icon size="20" :icon="mdiVolumeHigh" />
+        <v-icon size="20" icon="$volumeHigh" />
       </span>
     </template>
     <template #system-message="{ message }">
@@ -54,7 +54,7 @@
         class="vibe64-conversation-log__sender text-label-small"
         :data-approval-id="turn.metadata.sender.approvalId"
       >
-        <v-icon :icon="mdiAccountCheckOutline" size="14" />
+        <v-icon icon="$personCheck" size="14" />
         {{ turn.metadata.sender.displayName }} · approved by {{ turn.metadata.sender.approvedBy }}
       </div>
       <v-chip v-if="turn.metadata?.source === 'lesson'" size="x-small" variant="tonal" class="mt-1 align-self-start" data-test="lesson-sent-chip">
@@ -163,7 +163,6 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings } from "@jskit-ai/assistant-voice/client";
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { Vibe64PageLinkCards } from "@local/vibe64-pages/client";
-import { mdiAccountCheckOutline, mdiMicrophone, mdiMicrophoneOff, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "./Vibe64ProjectMessage.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";

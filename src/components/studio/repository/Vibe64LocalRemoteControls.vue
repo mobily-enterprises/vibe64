@@ -39,12 +39,12 @@
             height="32"
             :icon="xs"
             :width="xs ? 48 : undefined"
-            :prepend-icon="xs ? undefined : mdiSourceBranch"
-            :append-icon="xs ? undefined : mdiChevronDown"
+            :prepend-icon="xs ? undefined : '$forkRight'"
+            :append-icon="xs ? undefined : '$expand'"
             :aria-label="`Git details for ${state?.branch || 'this repository'}. ${syncStatus.label}`"
             :title="`${state?.branch || 'Git details'} · ${syncStatus.label}`"
           >
-            <v-icon v-if="xs" :icon="mdiSourceBranch" />
+            <v-icon v-if="xs" icon="$forkRight" />
             <span v-else class="local-remotes__branch-name">{{ chipLabel }}</span>
           </v-btn>
         </v-badge>
@@ -53,7 +53,7 @@
         <div class="text-label-large mb-3">Version control</div>
         <div class="d-flex ga-3 align-start">
           <v-avatar color="warning" variant="tonal" size="40" rounded="lg">
-            <v-icon :icon="mdiSourceRepository" />
+            <v-icon icon="$book" />
           </v-avatar>
           <div class="min-w-0">
             <p class="text-body-large font-weight-medium ma-0">{{ gitUnavailable.title }}</p>
@@ -75,7 +75,7 @@
           variant="tonal"
           :loading="busy === 'fetch'"
           :disabled="isBusy"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           @click="checkAgain"
         >
           Check again
@@ -85,7 +85,7 @@
         <div class="text-label-large mb-3">Version control</div>
         <div class="d-flex ga-3 align-start">
           <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
-            <v-icon :icon="mdiSourceRepository" />
+            <v-icon icon="$book" />
           </v-avatar>
           <div class="min-w-0">
             <p class="text-body-large font-weight-medium ma-0">This folder isn't using Git yet.</p>
@@ -102,7 +102,7 @@
           variant="flat"
           :loading="busy === 'init'"
           :disabled="isBusy"
-          :prepend-icon="mdiSourceBranchPlus"
+          prepend-icon="$addBranch"
           @click="startVersionControl"
         >
           Start version control here
@@ -116,12 +116,12 @@
           <span>{{ syncStatus.label }}</span>
         </div>
         <div class="d-flex flex-column ga-1">
-          <v-btn height="48" variant="text" :prepend-icon="mdiSourceBranch" :disabled="isBusy || !state?.head" @click="openBranch('switch')">Switch branch…</v-btn>
-          <v-btn height="48" variant="text" :prepend-icon="mdiSourceBranch" :disabled="isBusy || !state?.head" @click="openBranch('create')">New branch…</v-btn>
+          <v-btn height="48" variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('switch')">Switch branch…</v-btn>
+          <v-btn height="48" variant="text" prepend-icon="$forkRight" :disabled="isBusy || !state?.head" @click="openBranch('create')">New branch…</v-btn>
           <v-btn
             height="48"
             variant="text"
-            :prepend-icon="mdiRefresh"
+            prepend-icon="$refresh"
             :aria-label="busy === 'fetch' ? 'Fetching remote changes' : 'Fetch remote changes'"
             :disabled="isBusy"
             @click="refresh(false)"
@@ -133,7 +133,7 @@
             height="48"
             color="primary"
             variant="flat"
-            :prepend-icon="mdiArrowDown"
+            prepend-icon="$arrowdown"
             :disabled="isBusy || Boolean(remoteError)"
             @click="review('pull')"
           >
@@ -145,7 +145,7 @@
             height="48"
             color="primary"
             :variant="state.incoming > 0 ? 'tonal' : 'flat'"
-            :prepend-icon="mdiArrowUp"
+            prepend-icon="$arrowup"
             :disabled="isBusy || Boolean(remoteError)"
             @click="review('push')"
           >
@@ -173,7 +173,7 @@
           variant="text"
           block
           height="48"
-          :prepend-icon="mdiCogOutline"
+          prepend-icon="$settings"
           :disabled="isBusy || !state?.branch"
           @click="openSettings"
         >
@@ -250,11 +250,6 @@
 <script setup>
 import { computed, onMounted, onScopeDispose, reactive, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
-import {
-  mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiCheckCircleOutline,
-  mdiChevronDown, mdiCogOutline, mdiHelpCircleOutline, mdiLinkVariantOff,
-  mdiRefresh, mdiSourceBranch, mdiSourceBranchPlus, mdiSourceRepository, mdiSwapVertical
-} from "@mdi/js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { scopedDevelopmentApiUrl, studioApiPath } from "@/lib/studioUrls.js";
@@ -294,18 +289,18 @@ const chipLabel = computed(() => gitUnavailable.value?.chip || (notRepository.va
   : state.value?.branch || (state.value ? "No branch" : "Repository")));
 const syncStatus = computed(() => {
   const current = state.value;
-  if (gitUnavailable.value) return { label: gitUnavailable.value.chip, icon: mdiAlertCircleOutline, color: "warning" };
-  if (remoteError.value) return { label: "Check failed", icon: mdiAlertCircleOutline, color: "error" };
-  if (notRepository.value) return { label: "No Git yet", icon: mdiSourceRepository };
-  if (!current) return { label: "Not checked", icon: mdiHelpCircleOutline };
-  if (!current.upstream && !current.push) return { label: current.remotes.length ? "Setup needed" : "Local only", icon: mdiLinkVariantOff };
+  if (gitUnavailable.value) return { label: gitUnavailable.value.chip, icon: "$error", color: "warning" };
+  if (remoteError.value) return { label: "Check failed", icon: "$error", color: "error" };
+  if (notRepository.value) return { label: "No Git yet", icon: "$book" };
+  if (!current) return { label: "Not checked", icon: "$help" };
+  if (!current.upstream && !current.push) return { label: current.remotes.length ? "Setup needed" : "Local only", icon: "$linkOff" };
   const changes = [];
   if (current.incoming > 0) changes.push(`${current.incoming} incoming`);
   if (current.outgoing > 0) changes.push(`${current.outgoing} outgoing`);
-  if (changes.length) return { label: changes.join(" · "), icon: mdiSwapVertical, color: "primary" };
-  if (!current.upstream || !current.push) return { label: "Setup needed", icon: mdiLinkVariantOff };
-  if (current.incoming === null || current.outgoing === null) return { label: "Not checked", icon: mdiHelpCircleOutline };
-  return { label: "Up to date", icon: mdiCheckCircleOutline, color: "success" };
+  if (changes.length) return { label: changes.join(" · "), icon: "$swapVert", color: "primary" };
+  if (!current.upstream || !current.push) return { label: "Setup needed", icon: "$linkOff" };
+  if (current.incoming === null || current.outgoing === null) return { label: "Not checked", icon: "$help" };
+  return { label: "Up to date", icon: "$checkCircle", color: "success" };
 });
 function destination(target) { return `${target.remote}/${target.branch}`; }
 function snapshot(value) { return JSON.parse(JSON.stringify(value)); }

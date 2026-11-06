@@ -10,7 +10,7 @@
     <header class="db-server__header">
       <div class="db-server__icon" aria-hidden="true">
         <v-progress-circular v-if="busy" indeterminate size="18" width="2" />
-        <v-icon v-else :icon="connected(database) ? mdiCheckCircle : mdiDatabaseAlertOutline" size="20" />
+        <v-icon v-else :icon="connected(database) ? '$checkCircleFilled' : '$databaseOff'" size="20" />
       </div>
       <div class="db-server__heading">
         <strong class="db-server__title">{{ title(database) }}</strong>
@@ -19,7 +19,7 @@
           v-if="connected(database) && !editing"
           class="db-server__finish"
           color="primary"
-          :prepend-icon="mdiRefresh"
+          prepend-icon="$refresh"
           rounded="pill"
           variant="flat"
           @click="emit('retry')"
@@ -53,7 +53,7 @@
           :class="{ 'db-server__status--fresh': fresh }"
           aria-live="polite"
         >
-          <v-icon :icon="connected(database) ? mdiCheckCircle : mdiAlertCircleOutline" size="16" />
+          <v-icon :icon="connected(database) ? '$checkCircleFilled' : '$error'" size="16" />
           <span>{{ statusText(database) }}</span>
         </p>
 
@@ -90,7 +90,7 @@
             <template v-if="field.secret" #append-inner>
               <v-icon
                 :aria-label="showSecret ? 'Hide password' : 'Show password'"
-                :icon="showSecret ? mdiEyeOffOutline : mdiEyeOutline"
+                :icon="showSecret ? '$visibilityOff' : '$visibility'"
                 role="button"
                 size="18"
                 tabindex="0"
@@ -103,7 +103,7 @@
             <v-btn
               color="primary"
               :loading="busy"
-              :prepend-icon="dirty ? mdiContentSaveOutline : mdiRefresh"
+              :prepend-icon="dirty ? '$save' : '$refresh'"
               rounded="pill"
               type="submit"
               variant="flat"
@@ -118,7 +118,7 @@
           <v-expansion-panel v-if="guide(database)?.install" value="server">
             <v-expansion-panel-title>
               <span class="db-server__help-title">
-                <v-icon :icon="mdiServerOutline" size="18" />
+                <v-icon icon="$dns" size="18" />
                 Install or start {{ guide(database).product }}
               </span>
             </v-expansion-panel-title>
@@ -134,12 +134,12 @@
                 </li>
               </ol>
               <p v-if="guide(database).install.note" class="db-server__note">
-                <v-icon :icon="mdiLockOutline" size="14" />
+                <v-icon icon="$lock" size="14" />
                 {{ guide(database).install.note }}
               </p>
               <a class="db-server__other" :href="guide(database).guideUrl" rel="noopener" target="_blank">
                 Other ways to install it
-                <v-icon :icon="mdiOpenInNew" size="13" />
+                <v-icon icon="$openInNew" size="13" />
               </a>
             </v-expansion-panel-text>
           </v-expansion-panel>
@@ -147,7 +147,7 @@
           <v-expansion-panel value="login">
             <v-expansion-panel-title>
               <span class="db-server__help-title">
-                <v-icon :icon="mdiAccountKeyOutline" size="18" />
+                <v-icon icon="$passkey" size="18" />
                 Create a login and database for this project
               </span>
             </v-expansion-panel-title>
@@ -162,7 +162,7 @@
                   label="Copy the command that creates the login and database"
                 />
                 <p v-if="createCommand(database).note" class="db-server__note">
-                  <v-icon :icon="mdiLockOutline" size="14" />
+                  <v-icon icon="$lock" size="14" />
                   {{ createCommand(database).note }}
                 </p>
               </template>
@@ -172,7 +172,7 @@
                 </p>
                 <v-btn
                   class="db-server__suggest"
-                  :prepend-icon="mdiAutoFix"
+                  prepend-icon="$autoFix"
                   rounded="pill"
                   size="small"
                   variant="tonal"
@@ -195,20 +195,6 @@
 // exact names the Stack declares), a real sign-in check, and the commands to
 // install, start and set it up. Vibe64 never runs the server or the commands.
 import { computed, reactive, ref, watch } from "vue";
-import {
-  mdiAccountKeyOutline,
-  mdiAlertCircleOutline,
-  mdiAutoFix,
-  mdiCheckCircle,
-  mdiContentSaveOutline,
-  mdiDatabaseAlertOutline,
-  mdiEyeOffOutline,
-  mdiEyeOutline,
-  mdiLockOutline,
-  mdiOpenInNew,
-  mdiRefresh,
-  mdiServerOutline
-} from "@mdi/js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";

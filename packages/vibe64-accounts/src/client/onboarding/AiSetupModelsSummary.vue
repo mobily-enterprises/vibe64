@@ -1,5 +1,4 @@
 <script setup>
-import { mdiTuneVariant } from "@mdi/js";
 
 // The overview's one-line Models summary, with Review models ("open").
 defineProps({
@@ -17,7 +16,7 @@ const emit = defineEmits(["open"]);
         <div v-for="[label, value] in rows" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
       </dl>
     </div>
-    <v-btn color="primary" variant="tonal" :prepend-icon="mdiTuneVariant" class="aio-models__open" @click="emit('open')">Review models</v-btn>
+    <v-btn color="primary" variant="tonal" prepend-icon="$tune" class="aio-models__open" @click="emit('open')">Review models</v-btn>
   </section>
 </template>
 

@@ -1,5 +1,4 @@
 <script setup>
-import { mdiEyeOffOutline, mdiEyeOutline, mdiLockOutline, mdiRobotOutline } from "@mdi/js";
 import AiPersonalUse from "./AiPersonalUse.vue";
 import AiWaitStatus from "./AiWaitStatus.vue";
 import { injectAiConnectionManager } from "../composables/useAiConnectionManager.js";
@@ -26,7 +25,7 @@ const {
   <v-card-text :aria-busy="editorPreparing ? 'true' : undefined">
     <v-sheet class="vibe64-provider-editor__provider" rounded="lg">
       <v-avatar color="primary" size="44" variant="tonal">
-        <v-icon :icon="mdiRobotOutline" size="24" />
+        <v-icon icon="$smartToy" size="24" />
       </v-avatar>
       <span>
         <strong>{{ editorLabel }}</strong>
@@ -72,7 +71,7 @@ const {
         <v-btn
           :aria-label="editorApiKeyVisible ? 'Hide API key' : 'Show API key'"
           :disabled="editorSaving"
-          :icon="editorApiKeyVisible ? mdiEyeOffOutline : mdiEyeOutline"
+          :icon="editorApiKeyVisible ? '$visibilityOff' : '$visibility'"
           type="button"
           variant="text"
           @click="editorApiKeyVisible = !editorApiKeyVisible"
@@ -82,7 +81,7 @@ const {
 
     <AiWaitStatus :active="editorPreparing || editorSaving" :label="editorVerificationCopy" />
     <div v-if="!editorPreparing && !editorSaving" aria-live="polite" class="vibe64-provider-editor__security">
-      <v-icon :icon="mdiLockOutline" size="18" />
+      <v-icon icon="$lock" size="18" />
       <span>{{ editorVerificationCopy }}</span>
     </div>
 

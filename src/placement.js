@@ -1,18 +1,6 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import { githubProjectAvailable } from "./lib/vibe64GithubProject.js";
 import {
-  mdiAccountKeyOutline,
-  mdiCogOutline,
-  mdiConnection,
-  mdiFileCogOutline,
-  mdiFileDocumentMultipleOutline,
-  mdiFolderMultipleOutline,
-  mdiHeartPulse,
-  mdiHistory,
-  mdiPackageVariantClosed,
-  mdiGithub
-} from "@mdi/js";
-import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
   VIBE64_ACTIVE_SESSION_NAV_TARGET,
   VIBE64_SESSION_TOOL_DEFINITIONS,
@@ -146,7 +134,7 @@ addPlacement({
   id: "vibe64.issues.link", target: "page.section-nav", owner: "app-dashboard", kind: "link",
   surfaces: ["app"], order: 325,
   props: {
-    label: "Issues/PR", icon: mdiGithub, surface: "app",
+    label: "Issues/PR", icon: "$github", surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/issues", unscopedSuffix: "/project/[slug]/dashboard/issues",
     visibleWhen: githubProjectVisible
   },
@@ -162,7 +150,7 @@ addPlacement({
   order: 250,
   props: {
     label: "Project settings",
-    icon: mdiCogOutline,
+    icon: "$settings",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/settings",
     unscopedSuffix: "/project/[slug]/dashboard/settings",
@@ -179,7 +167,7 @@ addPlacement({
   order: 290,
   props: {
     label: "Pages",
-    icon: mdiFileDocumentMultipleOutline,
+    icon: "$fileCopy",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/pages",
     unscopedSuffix: "/project/[slug]/dashboard/pages",
@@ -196,7 +184,7 @@ addPlacement({
   order: 295,
   props: {
     label: "Project files",
-    icon: mdiFolderMultipleOutline,
+    icon: "$folderCopy",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/project-files",
     unscopedSuffix: "/project/[slug]/dashboard/project-files",
@@ -214,7 +202,7 @@ addPlacement({
     order: 300,
     props: {
       label: "Env",
-      icon: mdiFileCogOutline,
+      icon: "$settingsApplications",
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/env",
       unscopedSuffix: "/project/[slug]/dashboard/env",
@@ -231,7 +219,7 @@ addPlacement({
   order: 350,
   props: {
     label: "Integrations",
-    icon: mdiConnection,
+    icon: "$cable",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/integrations",
     unscopedSuffix: "/project/[slug]/dashboard/integrations",
@@ -247,7 +235,7 @@ addPlacement({
   order: 400,
   props: {
     label: "App access",
-    icon: mdiAccountKeyOutline,
+    icon: "$passkey",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/access",
     unscopedSuffix: "/project/[slug]/dashboard/access",
@@ -264,7 +252,7 @@ addPlacement({
   props: {
     label: "Publish",
     guideId: "publish",
-    icon: mdiPackageVariantClosed,
+    icon: "$package2",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/publish",
     unscopedSuffix: "/project/[slug]/dashboard/publish",
@@ -282,7 +270,7 @@ addPlacement({
     order: 600,
     props: {
       label: "Session History",
-      icon: mdiHistory,
+      icon: "$history",
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/history",
       unscopedSuffix: "/project/[slug]/dashboard/history",
@@ -299,7 +287,7 @@ addPlacement({
   order: 700,
   props: {
     label: "Health",
-    icon: mdiHeartPulse,
+    icon: "$monitorHeart",
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/health",
     unscopedSuffix: "/project/[slug]/dashboard/health",

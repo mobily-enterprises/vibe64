@@ -28,7 +28,7 @@
       <v-text-field
         :model-value="search"
         label="Search requests"
-        :prepend-inner-icon="mdiMagnify"
+        prepend-inner-icon="$search"
         variant="outlined"
         density="comfortable"
         maxlength="80"
@@ -76,7 +76,7 @@
             @click="emit('update:interactionId', group.interaction.id)"
           >
             <template #prepend>
-              <v-chip size="small" variant="tonal" label class="usage-recordings__method"><v-icon :icon="mdiCursorDefaultClickOutline" size="small" /></v-chip>
+              <v-chip size="small" variant="tonal" label class="usage-recordings__method"><v-icon icon="$adsClick" size="small" /></v-chip>
             </template>
             <v-list-item-title class="text-body-medium">{{ interactionRunTitle(group.interaction) }}</v-list-item-title>
             <v-list-item-subtitle v-if="group.interaction.requestCount">{{ countLabel(group.interaction.requestCount, 'request') }}</v-list-item-subtitle>
@@ -117,7 +117,6 @@
 <script setup>
 import { Vibe64UsageRecordingSummary } from "@local/vibe64-usage-recording/client";
 import { computed } from "vue";
-import { mdiCogOutline, mdiConsoleLine, mdiCursorDefaultClickOutline, mdiHeartPulse, mdiMagnify } from "@mdi/js";
 
 import { BACKGROUND_TEXT, countLabel, interactionRunTitle, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestCount, requestGroups, requestTitle } from "./usageModel.js";
 
@@ -163,9 +162,9 @@ const footerText = computed(() => {
 // process's start-up and other work outside requests, the launch readiness
 // check, and a command's run.
 const MARKS = {
-  background: { icon: mdiCogOutline, label: "Start-up" },
-  readiness: { icon: mdiHeartPulse, label: "Readiness check" },
-  run: { icon: mdiConsoleLine, label: "Command run" }
+  background: { icon: "$settings", label: "Start-up" },
+  readiness: { icon: "$monitorHeart", label: "Readiness check" },
+  run: { icon: "$terminal", label: "Command run" }
 };
 const markOf = (request) => (isBackgroundRequest(request) ? MARKS.background : isReadinessRequest(request) ? MARKS.readiness
   : /^run_/u.test(String(request.id)) ? MARKS.run : null);

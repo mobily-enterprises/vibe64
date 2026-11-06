@@ -4,7 +4,6 @@
 // and tells the chat ("opened"), so a phone brings the page forward.
 import { computed, watch } from "vue";
 import { useRouter } from "vue-router";
-import { mdiFileDocumentOutline } from "@mdi/js";
 import { pageLinksInText } from "../shared/pageLinks.js";
 import { pageLinkAnswers as answers, readPageLink } from "./pageLinkAnswers.js";
 import { pageTime } from "./pagesRequests.js";
@@ -40,7 +39,7 @@ watch(() => links.value.map((link) => link.path).join("\n"), () => {
       variant="outlined"
     >
       <div class="vibe64-page-link-card__body">
-        <v-icon :icon="mdiFileDocumentOutline" color="primary" size="22" />
+        <v-icon icon="$description" color="primary" size="22" />
         <div class="vibe64-page-link-card__copy">
           <span class="vibe64-page-link-card__title text-title-small">
             {{ answers[link.path]?.page?.title || (answers[link.path]?.error ? "Page" : "Loading page…") }}

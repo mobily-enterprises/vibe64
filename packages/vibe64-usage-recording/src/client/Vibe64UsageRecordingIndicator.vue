@@ -2,7 +2,6 @@
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { VMenu } from "vuetify/components/VMenu";
-import { mdiAlertCircleOutline, mdiClose, mdiInformationOutline, mdiOpenInNew, mdiStop } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { usageRecordingEnd, usageRecordingFailure } from "./usageRecordingText.js";
 import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
@@ -177,7 +176,7 @@ function openFromStrip() {
           >
             <v-progress-circular v-if="busy" indeterminate :size="16" :width="2" />
             <span v-else-if="shown === 'recording'" class="usage-recording-indicator__dot" aria-hidden="true" />
-            <v-icon v-else-if="shown === 'failed'" :icon="mdiAlertCircleOutline" size="18" />
+            <v-icon v-else-if="shown === 'failed'" icon="$error" size="18" />
             <span v-if="!pillText.includes('Recording')" class="usage-recording-indicator__hidden">Recording: </span>
             <span class="usage-recording-indicator__text">{{ pillText }}</span>
             <span v-if="phone" class="usage-recording-indicator__hidden">, {{ shown === 'failed' ? 'show details' : 'open results' }}</span>
@@ -195,7 +194,7 @@ function openFromStrip() {
             <v-btn
               v-if="active"
               color="error"
-              :prepend-icon="mdiStop"
+              prepend-icon="$stop"
               variant="tonal"
               @click="stopRecording"
             >
@@ -210,7 +209,7 @@ function openFromStrip() {
           v-if="compact"
           aria-label="Stop recording"
           class="usage-recording-indicator__action"
-          :icon="mdiStop"
+          icon="$stop"
           size="small"
           variant="tonal"
           @click="stopRecording"
@@ -219,7 +218,7 @@ function openFromStrip() {
           v-else
           aria-label="Stop recording"
           class="usage-recording-indicator__action"
-          :prepend-icon="mdiStop"
+          prepend-icon="$stop"
           rounded="pill"
           size="small"
           :variant="phone ? 'text' : 'tonal'"
@@ -233,7 +232,7 @@ function openFromStrip() {
           v-if="compact"
           aria-label="Open results"
           class="usage-recording-indicator__action"
-          :icon="mdiOpenInNew"
+          icon="$openInNew"
           size="small"
           variant="text"
           @click="openResults"
@@ -247,7 +246,7 @@ function openFromStrip() {
           v-if="compact"
           aria-label="Recording failure details"
           class="usage-recording-indicator__action"
-          :icon="mdiInformationOutline"
+          icon="$info"
           size="small"
           variant="text"
           @click="detailsOpen = true"
@@ -260,7 +259,7 @@ function openFromStrip() {
         v-if="shown === 'stopped' || shown === 'failed'"
         aria-label="Dismiss recording"
         class="usage-recording-indicator__action"
-        :icon="mdiClose"
+        icon="$close"
         size="small"
         variant="text"
         @click="dismissRecording"

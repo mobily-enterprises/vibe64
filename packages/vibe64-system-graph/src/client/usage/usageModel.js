@@ -1,27 +1,16 @@
-import {
-  mdiApi,
-  mdiBookOpenPageVariantOutline,
-  mdiClockOutline,
-  mdiConsoleLine,
-  mdiFileDocumentOutline,
-  mdiFlaskOutline,
-  mdiLightningBoltOutline,
-  mdiPackageVariantClosed,
-  mdiPuzzleOutline
-} from "@mdi/js";
 
 // The usage view's presentation model. It shapes server answers for display
 // and never derives facts the server did not return.
 const USAGE_ENTRY_KINDS = Object.freeze([
-  { kind: "page", label: "Page", plural: "Pages", icon: mdiFileDocumentOutline },
-  { kind: "component", label: "Component", plural: "Components", icon: mdiPuzzleOutline },
-  { kind: "route", label: "Route", plural: "Routes", icon: mdiApi },
-  { kind: "action", label: "Action", plural: "Actions", icon: mdiLightningBoltOutline },
-  { kind: "library-export", label: "Library export", plural: "Library exports", icon: mdiPackageVariantClosed },
-  { kind: "cli-command", label: "Command", plural: "Commands", icon: mdiConsoleLine },
-  { kind: "job", label: "Job", plural: "Jobs", icon: mdiClockOutline },
-  { kind: "program-operation", label: "Program operation", plural: "Program operations", icon: mdiBookOpenPageVariantOutline },
-  { kind: "test", label: "Test file", plural: "Test files", icon: mdiFlaskOutline }
+  { kind: "page", label: "Page", plural: "Pages", icon: "$description" },
+  { kind: "component", label: "Component", plural: "Components", icon: "$extension" },
+  { kind: "route", label: "Route", plural: "Routes", icon: "$api" },
+  { kind: "action", label: "Action", plural: "Actions", icon: "$bolt" },
+  { kind: "library-export", label: "Library export", plural: "Library exports", icon: "$package2" },
+  { kind: "cli-command", label: "Command", plural: "Commands", icon: "$terminal" },
+  { kind: "job", label: "Job", plural: "Jobs", icon: "$schedule" },
+  { kind: "program-operation", label: "Program operation", plural: "Program operations", icon: "$menuBook" },
+  { kind: "test", label: "Test file", plural: "Test files", icon: "$science" }
 ].map(Object.freeze));
 const USAGE_MODES = Object.freeze([
   Object.freeze({ value: "imports", title: "Imports" }),
@@ -35,7 +24,7 @@ const MORE_NODES = 1000;
 const SEARCH_DELAY_MS = 200;
 
 function entryKind(kind) {
-  return USAGE_ENTRY_KINDS.find((item) => item.kind === kind) || { kind, label: kind, plural: kind, icon: mdiFileDocumentOutline };
+  return USAGE_ENTRY_KINDS.find((item) => item.kind === kind) || { kind, label: kind, plural: kind, icon: "$description" };
 }
 
 const text = (value) => (typeof value === "string" ? value.trim() : Array.isArray(value) ? text(value[0]) : "");

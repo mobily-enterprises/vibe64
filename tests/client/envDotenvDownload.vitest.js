@@ -82,7 +82,7 @@ describe("Env .env download", () => {
     const { template: markup } = template("src/components/studio/EnvPanel.vue");
     const script = readFileSync(new URL("../../src/composables/useVibe64ProjectEnv.js", import.meta.url), "utf8");
 
-    expect(markup).toMatch(/<template v-if="projectEnvTabActive">\s+<v-btn\s+:disabled="envInitialLoading"\s+:loading="downloadBusy"\s+:prepend-icon="mdiDownload"\s+rounded="pill"\s+type="button"\s+variant="tonal"\s+@click="downloadDotenv"\s+>\s+Download \.env\s+<\/v-btn>\s+<v-btn\s+:loading="[a-zA-Z]+"\s+:prepend-icon="mdiRefresh"/u);
+    expect(markup).toMatch(/<template v-if="projectEnvTabActive">\s+<v-btn\s+:disabled="envInitialLoading"\s+:loading="downloadBusy"\s+prepend-icon="\$download"\s+rounded="pill"\s+type="button"\s+variant="tonal"\s+@click="downloadDotenv"\s+>\s+Download \.env\s+<\/v-btn>\s+<v-btn\s+:loading="[a-zA-Z]+"\s+prepend-icon="\$refresh"/u);
     expect(markup).toMatch(/<v-alert\s+v-if="downloadError"\s+class="env-panel__alert"\s+closable[\s\S]*?type="error"[\s\S]*?\{\{ downloadError \}\}/u);
     expect(script).toContain("apiSuffix: VIBE64_ENV_DOWNLOAD_API_SUFFIX");
     expect(script).toMatch(/method: "POST",\s+path: ENV_DOWNLOAD_ENDPOINT/u);
