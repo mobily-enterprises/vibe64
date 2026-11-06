@@ -218,7 +218,7 @@ const {
   assistantFixRestrictionMessage, checkpointFailure, checkpointFailureReason, checkpointFailureVisible,
   connectionRecoveryVisible, createPullRequestOpen, dismissCheckpointFailure, dismissSaveWorkActivity,
   dismissWorkspaceSetupActivity, githubProject,
-  projectSlug, props, requestSessionRenewal, resourceRecoveryControl,
+  props, requestSessionRenewal, resourceRecoveryControl,
   retrySaveWork, retryWorkspaceSetup, reviewResolvedUpdate, saveWorkActivityDismissed,
   saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithAi,
   saveWorkConnectedResults, saveWorkDisabled, saveWorkError, saveWorkFailure, saveWorkOperationActive,
